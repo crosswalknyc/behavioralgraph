@@ -218,7 +218,7 @@ class OnePageList(unittest.TestCase):
         self.assertTrue(any(r[2].startswith('Feature screening norm ') for r in card['rows']), 'the norm beside the number, named')
         self.assertEqual(card['body'][-1], 'No comedy norm yet; it fills as tests are filed under comedy, 0 of 5 so far.')
         self.assertTrue(any(h.startswith('If released, ') for h in heads), 'the forecast')
-        q1 = next(p for p in pages if p['kind'] == 'question' and 'keep watching' in p['sub'])
+        q1 = next(p for p in pages if p['kind'] == 'question' and 'keep watching' in p['header'])
         self.assertEqual(q1['knew'][0], 'The show was ordered to series in May.')
         self.assertEqual(q1['talk'][0], 'People online keep posting the diner fight clip.')
         self.assertTrue(any(h.startswith('Mae rates ') or 'Mae' in h for h in heads), 'the characters')
@@ -232,7 +232,13 @@ class OnePageList(unittest.TestCase):
             self.assertNotIn(tok, blob, tok)
         for tok in BANNED_NEW:
             self.assertNotIn(tok, _blob([ro, mo]), tok)
+        asked = {q['q'] for q in sess['questions']}
         for p in pages:
+            if p['kind'] == 'question':
+                # a question page's header is the question as asked, whole, with 'Question N' as its eyebrow (Jenna 2026-11-05)
+                self.assertIn(p['header'], asked, p['header'])
+                self.assertRegex(p['eyebrow'], r'^Question \d+$')
+                continue
             self.assertLessEqual(len(p['header'].split()), 16, p['header'])
             self.assertTrue(p['header'].endswith('.') or p['kind'] == 'cover', p['header'])
 

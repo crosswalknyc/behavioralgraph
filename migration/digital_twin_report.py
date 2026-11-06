@@ -27,6 +27,7 @@ from typing import Optional
 from migration.digital_twin_engine import human_people, pct1
 from migration.digital_twin_exports import (
     GRAPHITE, SLATE, OFFWHITE, GREEN, OLIVE, ORCHID, PAVEMENT, BODY_DARK, MUTED_DARK, BODY_LIGHT, MUTED_LIGHT, _words, _pct, _clock, _scorecard_rows, _quadrant_rows, _norm_note, build_deck, _Doc, _fin,
+    question_header, question_lead_line, fit_quote,
 )
 # the room pages ride inside report_pages so every format carries them (2026-11-04)
 from migration.digital_twin_exports import room_pages as _room_pages, moments_pages as _moments_pages, draw_roster_pdf as _draw_roster_pdf
@@ -369,19 +370,11 @@ def _sorted_questions(session: dict) -> list:
     return sorted(qs, key=lambda q: str(q.get('asked_at') or q.get('started_at') or ''))
 
 
-def _question_header(rec: dict, rows: list) -> str:
-    """One plain sentence on the lead answer, twelve words or fewer:
-    'The silence itself took 46.2% of the room.'"""
-    lead = _q_lead(rows)
-    if lead is None:
-        return _words(str(rec.get('q') or 'What the room said'))
-    label = lead['label']
-    if len(label.split()) > 7:
-        return f"The lead answer took {_pct(lead['pct'])} of the room."
-    return _words(f"{label[0].upper() + label[1:]} took {_pct(lead['pct'])} of the room.")
-
-
-def _question_page(rec: dict, session: dict, dark: bool) -> dict:
+def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None) -> dict:
+    """One question's page: the eyebrow 'Question N', the header the
+    question as the moderator asked it (Jenna 2026-11-05: never a
+    sentence drawn from the lead answer), the sub when it was asked and
+    the lead answer with its share and people."""
     rows = _q_rows(rec)
     seats_total = rec.get('seats_total') or len(((session or {}).get('group') or {}).get('roster') or [])
     split = []
@@ -396,7 +389,9 @@ def _question_page(rec: dict, session: dict, dark: bool) -> dict:
             continue
         who = ', '.join(str(x) for x in (v.get('name'), v.get('age'), v.get('city')) if x not in (None, ''))
         voices.append(_clean(f"{who}: {v['line']}" if who else str(v['line'])))
-    return {'kind': 'question', 'header': _clean(_question_header(rec, rows)), 'sub': _clean(f"{_q_when(rec, session)}. {rec.get('q')}"),
+    lead_line = question_lead_line(rows, people_fmt=human_people)
+    return {'kind': 'question', 'eyebrow': f"Question {n}" if n else 'Question', 'header': _clean(question_header(rec.get('q'))),
+            'sub': _clean(f"{_q_when(rec, session)}." + (f" {lead_line}" if lead_line else '')),
             'framing': _clean(str(rec.get('framing') or '')), 'head': ('Answer', 'Share', 'People and seats'), 'rows': split,
             'read': _clean(str(rec.get('read') or '')), 'voices': voices,
             'knew': [_clean(str(f)) for f in (rec.get('facts_used') or [])[:KNEW_ON_PAGE] if str(f or '').strip()],
@@ -443,8 +438,9 @@ def _question_pages(session: dict) -> list:
         pages.append({'kind': 'table', 'header': _words(header), 'sub': 'Each question has its own page: the split, the read, the voices and what the room knew.' if done else '',
                       'head': ('Clock and question', 'Lead share', 'Lead answer'), 'rows': rows[:12], 'body': [_clean(x) for x in notes], 'dark': True})
     opener = bool(pages)     # the opener is dark; the question pages alternate from the other ground
+    number = {id(q): k + 1 for k, q in enumerate(qs)}     # 'Question N' counts every question as asked, so the numbers match the room
     for i, q in enumerate(done):
-        pages.append(_question_page(q, session, dark=(i % 2 == 1) if opener else (i % 2 == 0)))
+        pages.append(_question_page(q, session, dark=(i % 2 == 1) if opener else (i % 2 == 0), n=number.get(id(q))))
     return pages
 
 
@@ -868,7 +864,12 @@ def _draw_question_pdf(d: _Doc, pg: dict, y: float) -> float:
     if voices and yl > PDF_FLOOR + 24:
         yl = _eyebrow(d, 'In their words', x, yl)
         for v in voices:
-            if yl < PDF_FLOOR + 12:
+            room = int((yl - PDF_FLOOR) // (10 * 1.42))     # the lines left above the floor
+            if room < 1:
+                break
+            # a quote holds three lines: a longer one ends at the last complete sentence that fits, never mid-word
+            v = fit_quote(v, lambda t: len(d._wrap(t, d.f['regular'], 10, lw)), min(3, room))
+            if not v:
                 break
             yl = _fit_para(d, v, x, yl, lw, 10, body, max_lines=3) - 5
     for label, items in (('What the room knew', knew), ('What people were saying', talk)):
@@ -928,7 +929,7 @@ def build_report_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
         if pg['kind'] == 'cover':
             d.new_page(True, 'Pilot Testing', pg['header'], pg.get('sub') or '')
             continue
-        y = d.new_page(dark, 'Pilot Testing', pg['header'], pg.get('sub') or '')
+        y = d.new_page(dark, pg.get('eyebrow') or 'Pilot Testing', pg['header'], pg.get('sub') or '')     # a question page's eyebrow is 'Question N'
         if pg['kind'] == 'question':
             _draw_question_pdf(d, pg, y)
         elif pg['kind'] == 'talent':

@@ -432,6 +432,9 @@ class Surfaces(unittest.TestCase):
         for w in BANNED:
             self.assertNotIn(w, blob, w)
         for p in pages:
+            if p['kind'] == 'question':     # a question page's header is the question as asked, whole, first letter capitalized (Jenna 2026-11-05)
+                self.assertIn(p['header'].lower(), {str(q.get('q')).lower() for q in sess.get('questions') or []}, p['header'])
+                continue
             self.assertLessEqual(len(str(p.get('header') or '').split()), 12, p.get('header'))
 
     def test_deck_and_pdf_build_with_the_page(self):

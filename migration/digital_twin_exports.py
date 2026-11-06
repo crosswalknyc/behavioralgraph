@@ -17,6 +17,18 @@ pages this module adds (``room_pages``: the faces, the segments;
 ``moments_pages``: the strongest reactions seat by seat) ride inside
 that list, so a block added to the report lands in the deck, the PDF
 and the CSV alike, and nothing the older room export carried is lost.
+
+Question pages (2026-11-05, Jenna: "on the export for focus group the
+header on each page should just be the question"): on the Focus Group
+IQ export, the pilot report and the twin deck's focus group page the
+eyebrow is 'Question N' and the header is the question as asked (whole,
+wrapped, never shortened; ``question_header``), with the lead answer
+and its share under it (``question_lead_line``). Quotes are measured:
+one that does not fit what is left of the page moves whole, with who
+said it, to 'Question N, continued'; one longer than its space ends at
+the last complete sentence that fits (``fit_quote``); a line the room
+cut at its character cap ends at a sentence or a word (``clean_quote``).
+Nothing is cut mid-word.
 """
 from __future__ import annotations
 
@@ -69,6 +81,124 @@ def _words(s: str, n: int = 12) -> str:
     if out and not out.endswith(('.', '?', '!')):
         out += '.'
     return out
+
+
+_TERMINAL = ('.', '?', '!', '"', "'", '\u201d', '\u2019', ')')
+_QUESTION_OPENERS = frozenset('who whom whose what when where why how which did do does is are was were would will can could should have has had am'.split())
+_SENTENCE_END = re.compile(r'[.!?]["\'\u201d\u2019)]*(?=\s)')
+QUOTE_CAP = 520     # the room stores a seat's line to this many characters (digital_twin_room); a line that long was cut there
+
+
+def question_header(q: str) -> str:
+    """The header of a question page: the question as the moderator
+    asked it (Jenna 2026-11-05: "the header on each page should just be
+    the question"), whitespace collapsed, the first letter capitalized,
+    the question mark kept, never shortened. A question typed with no
+    end mark gets one ('?' when it opens like a question, else a full
+    stop)."""
+    s = ' '.join(str(q or '').split())
+    if not s:
+        return 'What the room was asked.'
+    s = s[0].upper() + s[1:]
+    if not s.endswith(_TERMINAL):
+        first = re.sub(r'[^a-z]', '', s.split()[0].lower())
+        s += '?' if first in _QUESTION_OPENERS else '.'
+    return s
+
+
+def question_lead_line(distribution: list, people_fmt=None) -> str:
+    """The subhead of a question page: the lead answer with its share of
+    the room and its people ('Lead answer: Yes, 58.3% of the room,
+    4,812,311 people.'); '' when there is no split."""
+    people_fmt = people_fmt or (lambda n: f"{int(n):,}")
+    rows = []
+    for r in (distribution or []):
+        if not isinstance(r, dict) or not str(r.get('label') or '').strip():
+            continue
+        try:
+            pct = float(r.get('pct') or 0)
+        except (TypeError, ValueError):
+            pct = 0.0
+        try:
+            people = int(float(r.get('people') or 0))
+        except (TypeError, ValueError):
+            people = 0
+        rows.append((pct, people, ' '.join(str(r['label']).split())))
+    if not rows:
+        return ''
+    pct, people, label = max(rows, key=lambda t: t[0])
+    out = f"Lead answer: {label}, {_pct(pct)} of the room"
+    if people:
+        out += f", {people_fmt(people)} people"
+    return out + '.'
+
+
+def _sentence_prefixes(text: str) -> list:
+    """The prefixes of ``text`` that end at a sentence boundary followed
+    by more text, longest first."""
+    ends = [m.end() for m in _SENTENCE_END.finditer(text)]
+    return [text[:e].rstrip() for e in reversed(ends)]
+
+
+def _end_clean(prefix: str) -> str:
+    """``prefix`` ended cleanly: trailing commas and the like dropped, a
+    full stop added when it has no end mark."""
+    s = str(prefix or '').rstrip(' ,;:-')
+    if not s:
+        return ''
+    return s if s.endswith(_TERMINAL) else s + '.'
+
+
+_ATTRIBUTION = re.compile(r'^[^:]{1,80}: ')     # 'Yara, 42, Kansas City: ' in front of a quote
+
+
+def clean_quote(line: str, cap: int = QUOTE_CAP) -> str:
+    """A seat's line as it prints. The room keeps a line to ``cap``
+    characters, so one that long may stop mid-word ('not someb'): it
+    ends at its last complete sentence when that keeps at least half of
+    it, else at its last complete word with a full stop. A shorter line
+    with no end mark gets a full stop. Whitespace collapsed; never
+    mid-word."""
+    raw = str(line or '')
+    s = ' '.join(raw.split())
+    if not s:
+        return ''
+    if s.endswith(_TERMINAL):
+        return s
+    if len(raw.rstrip('\n')) >= cap - 1:     # at the cap (the cut may have left a trailing space)
+        pres = _sentence_prefixes(s)
+        if pres and len(pres[0]) >= len(s) * 0.5:
+            return pres[0]
+        s = s.rsplit(' ', 1)[0] if ' ' in s else s
+    return _end_clean(s)
+
+
+def fit_quote(text: str, lines_of, max_lines: int) -> str:
+    """The longest clean prefix of ``text`` that ``lines_of(prefix)``
+    measures at ``max_lines`` lines or fewer: the whole text when it
+    fits, else the last complete sentence that does, else the most
+    complete words that do, ending in a full stop. Never mid-word; ''
+    when not even the first word of the quote fits (the attribution
+    alone never prints)."""
+    s = ' '.join(str(text or '').split())
+    if not s or max_lines < 1:
+        return ''
+    if lines_of(s) <= max_lines:
+        return s
+    m = _ATTRIBUTION.match(s)
+    head = m.end() if m else 0     # a prefix must reach past 'who said it'
+    for pre in _sentence_prefixes(s):
+        if len(pre) > head and lines_of(pre) <= max_lines:
+            return pre
+    words = s.split()
+    for k in range(len(words) - 1, 0, -1):
+        raw = ' '.join(words[:k])
+        if len(raw) <= head:
+            return ''
+        pre = _end_clean(raw)
+        if pre and lines_of(pre) <= max_lines:
+            return pre
+    return ''
 
 
 def _fin(data: bytes, ext: str) -> bytes:
@@ -130,9 +260,11 @@ def _pages(payload: dict) -> list:
         qs = ps.get('questions') or []
         if qs:
             q = qs[-1]
-            pages.append({'kind': 'table', 'header': _words(q.get('read') or q.get('q')), 'sub': f"Focus Group IQ, {ps.get('title')}: {q.get('q')}",
+            # the header is the question as asked, never a sentence drawn from the read (Jenna 2026-11-05)
+            lead = question_lead_line(q.get('distribution'))
+            pages.append({'kind': 'table', 'eyebrow': f"Question {len(qs)}", 'header': question_header(q.get('q')), 'sub': f"Focus Group IQ, {ps.get('title')}." + (f" {lead}" if lead else ''),
                           'rows': [(r['label'], f"{r['pct']}%", f"{r['people']:,} people") for r in (q.get('distribution') or [])[:8]], 'head': ('Answer', 'Share', 'People'),
-                          'body': [f"{v['name']}, {v['age']}, {v['city']}: {v['line']}" for v in (q.get('voices') or [])[:3]], 'dark': True})
+                          'body': [f"{v['name']}, {v['age']}, {v['city']}: {clean_quote(v.get('line'))}" for v in (q.get('voices') or [])[:3]], 'dark': True})
     pages.append({'kind': 'bullets', 'header': 'What to do next.', 'sub': '', 'body': list(rd.get('what_to_do') or [])[:4], 'dark': False})
     return pages
 
@@ -230,7 +362,7 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
                 slide.shapes.add_picture(str(logo), Inches(L), Inches(0.45), height=Inches(0.26))
         except Exception:
             pass
-        text(slide, 9.4, 0.47, 3.0, 0.3, 'DIGITAL TWINS IQ', 8.5, accent, 'Medium', PP_ALIGN.RIGHT)
+        text(slide, 8.4, 0.47, 4.0, 0.3, str(pg.get('eyebrow') or 'DIGITAL TWINS IQ').upper(), 8.5, accent, 'Medium', PP_ALIGN.RIGHT)     # a question page's eyebrow is 'Question N'
         text(slide, L, 7.02, 6.0, 0.3, FOOTER, 7.5, muted, 'Regular')
         slidenum(slide, 11.4, 7.02, 1.0, 0.3, 7.5, muted)
         if pg['kind'] == 'cover':
@@ -405,7 +537,11 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
                 text(slide, L, yl, lw, 0.22, 'IN THEIR WORDS', 8, muted, 'Medium')
                 yl += 0.26
                 for v in voices:
-                    h = 0.175 * min(3, lines_of(v, 10, lw)) + 0.06
+                    # a quote holds three lines: a longer one ends at the last complete sentence that fits, never mid-word
+                    v = fit_quote(v, lambda t: lines_of(t, 10, lw), 3)
+                    if not v:
+                        continue
+                    h = 0.175 * lines_of(v, 10, lw) + 0.06
                     if yl + h > bottom:
                         break
                     text(slide, L, yl, lw, h, v, 10, body, 'Regular')
@@ -610,7 +746,7 @@ def build_pdf(payload: dict) -> bytes:
         if pg['kind'] == 'cover':
             d.new_page(True, 'Digital Twins IQ', pg['header'], pg.get('sub') or '')
             continue
-        y = d.new_page(dark, 'Digital Twins IQ', pg['header'], pg.get('sub') or '')
+        y = d.new_page(dark, pg.get('eyebrow') or 'Digital Twins IQ', pg['header'], pg.get('sub') or '')
         width = d.right - d.m
         if pg['kind'] == 'bullets':
             d.bullets(pg.get('body') or [], d.m, y, width)
@@ -672,11 +808,16 @@ def _draw_round_portrait(c, img, x, y, size):
         return False
 
 
+PANEL_FLOOR = 0.78 * 72     # nothing on a Focus Group IQ page is drawn below this line; the footer sits under it
+
+
 def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
-    """The Focus Group IQ session: the room, then one page per question with
-    the % table and the voices. ``portrait_fn(hash) -> JPEG bytes`` puts
-    the twins' portraits on the room page and beside each voice; without
-    it (or when a face is absent) the text stands alone."""
+    """The Focus Group IQ session: the room, then one page per question
+    (the eyebrow 'Question N', the header the question as asked, the lead
+    answer under it) with the % table and the voices. ``portrait_fn(hash)
+    -> JPEG bytes`` puts the twins' portraits on the room page and beside
+    each voice; without it (or when a face is absent) the text stands
+    alone."""
     d = _Doc()
     m = payload.get('meta') or {}
     g = session.get('group') or {}
@@ -707,18 +848,47 @@ def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
     d.paragraph('In the room: ' + roster, d.m, y - 8, d.right - d.m, size=9.5)
     by_seat = {r.get('seat'): r for r in (g.get('roster') or [])}
     by_name = {str(r.get('name')): r for r in (g.get('roster') or [])}
+    # one page per question (Jenna 2026-11-05: the eyebrow is 'Question N', the header is the question as asked, never a
+    # sentence drawn from the read); the lead answer and its share under it, the split, then the voices. Each quote is
+    # measured: one that does not fit in what is left of the page moves whole, with who said it, to 'Question N,
+    # continued'; one longer than a page ends at the last complete sentence that fits. Nothing is cut mid-word and nothing
+    # is drawn under the footer line.
+    size, pic, floor = 10, 0.34 * 72, PANEL_FLOOR
+    lead = size * 1.42
+    font = d.f['medium']
     for i, q in enumerate(session.get('questions') or []):
-        y = d.new_page(i % 2 == 1, 'Focus Group IQ', _words(q.get('read') or q.get('q')), f"Question {i + 1}: {q.get('q')}")
-        y = d.table([(r['label'], f"{r['pct']}%", f"{int(r['people']):,} people") for r in (q.get('distribution') or [])[:8]], d.m, y, d.right - d.m, head=('Answer', 'Share', 'People'))
+        n = i + 1
+        header = question_header(q.get('q'))
+        y = d.new_page(i % 2 == 1, f"Question {n}", header, question_lead_line(q.get('distribution')))
+        rows = [(r['label'], f"{r['pct']}%", f"{int(r['people']):,} people") for r in (q.get('distribution') or [])[:8]]
+        if rows:
+            y = d.table(rows, d.m, y, d.right - d.m, head=('Answer', 'Share', 'People'))
+        fresh = False     # True right after a continuation page opened: a quote that still does not fit is trimmed, not moved again
         for v in (q.get('voices') or [])[:4]:
+            quote = clean_quote(v.get('line'))
+            if not quote:
+                continue
             seat = by_seat.get(v.get('seat')) or by_name.get(str(v.get('name') or '')) or {}
             img = read(seat.get('portrait_hash'))
-            x = d.m
+            x = d.m + (pic + 8 if img is not None else 0)
+            width = d.right - x
+            text = f"{v['name']}, {v['age']}, {v['city']}: {quote}"
+            lines = d._wrap(text, font, size, width)
+            need = 6 + max(len(lines) * lead, pic if img is not None else 0)
+            if y - need < floor and not fresh:
+                y = d.new_page(d.dark, f"Question {n}, continued", header, '')
+                fresh = True
+            room = int((y - 6 - floor) // lead)
+            if len(lines) > room:
+                text = fit_quote(text, lambda t: len(d._wrap(t, font, size, width)), room)
+                if not text:
+                    break
+                lines = d._wrap(text, font, size, width)
             if img is not None:
-                size = 0.34 * 72
-                _draw_round_portrait(d.c, img, d.m, y - 6 - size + 9, size)
-                x = d.m + size + 8
-            y = d.paragraph(f"{v['name']}, {v['age']}, {v['city']}: {v['line']}", x, y - 6, d.right - x, size=10, color=OFFWHITE if d.dark else GRAPHITE, font=d.f['medium'])
+                _draw_round_portrait(d.c, img, d.m, y - 6 - pic + 9, pic)
+            yy = d.paragraph(text, x, y - 6, width, size=size, color=OFFWHITE if d.dark else GRAPHITE, font=font)
+            y = min(yy, y - 6 - pic + 9 - 8) if img is not None else yy
+            fresh = False
     return _fin(d.finish(), '.pdf')
 
 
@@ -1077,4 +1247,5 @@ def pilot_deck_filename(payload: dict, session: dict) -> str:
 
 __all__ = ['build_deck', 'deck_filename', 'build_pdf', 'pdf_filename', 'build_panel_pdf', 'panel_pdf_filename',
            'build_pilot_pdf', 'pilot_pdf_filename', 'build_pilot_deck', 'pilot_deck_filename',
-           'room_pages', 'moments_pages', 'segment_shares', 'draw_roster_pdf', 'ROSTER_FACES', 'MOMENTS_ON_PAGE']
+           'room_pages', 'moments_pages', 'segment_shares', 'draw_roster_pdf', 'ROSTER_FACES', 'MOMENTS_ON_PAGE',
+           'question_header', 'question_lead_line', 'clean_quote', 'fit_quote', 'QUOTE_CAP', 'PANEL_FLOOR']

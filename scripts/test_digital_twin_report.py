@@ -105,7 +105,8 @@ class QuestionPages(unittest.TestCase):
         pages = R.report_pages({'meta': twin['meta']}, sess)
         qp = [p for p in pages if p['kind'] == 'question']
         self.assertEqual(len(qp), 3, 'three answered; the one still answering has no page')
-        self.assertEqual([p['sub'].split('. ', 1)[1][:24] for p in qp], ['Did the opening hold you', 'Would you keep watching ', 'For those who drifted du'])
+        self.assertEqual([p['header'][:24] for p in qp], ['Did the opening hold you', 'Would you keep watching ', 'For those who drifted du'])
+        self.assertEqual([p['eyebrow'] for p in qp], ['Question 1', 'Question 2', 'Question 3'], 'numbered as asked; the one still answering is Question 4')
         # the section sits after the dial and scene pages and before the recruit, forecast and conclusions pages
         kinds = [p['kind'] for p in pages]
         first_q = kinds.index('question')
@@ -119,10 +120,13 @@ class QuestionPages(unittest.TestCase):
     def test_each_page_carries_the_fields(self):
         twin, sess = _session()
         pages = R.report_pages({'meta': twin['meta']}, sess)
-        q1 = next(p for p in pages if p['kind'] == 'question' and 'keep watching' in p['sub'])
-        self.assertEqual(q1['header'], 'Yes took 58.3% of the room.')
+        q1 = next(p for p in pages if p['kind'] == 'question' and 'keep watching' in p['header'])
+        # the header is the question as asked, the eyebrow its number; the lead answer rides in the sub (Jenna 2026-11-05)
+        self.assertEqual(q1['header'], 'Would you keep watching after this scene?')
+        self.assertEqual(q1['eyebrow'], 'Question 2')
         self.assertTrue(q1['sub'].startswith('At 5:10'), q1['sub'])
-        self.assertIn('Would you keep watching after this scene?', q1['sub'])
+        self.assertTrue(q1['sub'].endswith('. Lead answer: Yes, 58.3% of the room, 4.81M people.'), q1['sub'])
+        self.assertNotIn('took', q1['header'] + q1['sub'])
         self.assertTrue(q1['framing'].startswith('At 5:10 we just came off the diner fight'))
         self.assertEqual(q1['head'], ('Answer', 'Share', 'People and seats'))
         self.assertEqual(q1['rows'][0], ('Yes', '58.3%', '4.81M people, 7 of 12 in the room'))
@@ -141,9 +145,11 @@ class QuestionPages(unittest.TestCase):
     def test_a_question_after_the_wrap_says_so(self):
         twin, sess = _session()
         pages = R.report_pages({'meta': twin['meta']}, sess)
-        q2 = next(p for p in pages if p['kind'] == 'question' and 'silent ending' in p['sub'])
-        self.assertEqual(q2['header'], 'The silence itself took 46.2% of the room.')
+        q2 = next(p for p in pages if p['kind'] == 'question' and 'silent ending' in p['header'])
+        self.assertEqual(q2['header'], 'For those who drifted during the silent ending, was it the silence itself or the length of the skyline shots that lost you?', 'a long question is the header whole, never shortened')
+        self.assertEqual(q2['eyebrow'], 'Question 3')
         self.assertTrue(q2['sub'].startswith('After the wrap, at 10:00'), q2['sub'])
+        self.assertTrue(q2['sub'].endswith('Lead answer: The silence itself, 46.2% of the room, 3.81M people.'), q2['sub'])
         self.assertEqual(q2['rows'][1], ('The length of the skyline shots', '31.1%', '2.57M people, 4 of 12 in the room'))
         self.assertEqual(q2['framing'], '')
         self.assertEqual(q2['knew'], [])
@@ -153,10 +159,12 @@ class QuestionPages(unittest.TestCase):
     def test_the_deterministic_record_renders_from_its_distribution(self):
         twin, sess = _session()
         pages = R.report_pages({'meta': twin['meta']}, sess)
-        q4 = next(p for p in pages if p['kind'] == 'question' and 'opening hold' in p['sub'])
-        self.assertEqual(q4['header'], 'Yes took 61.4% of the room.')
+        q4 = next(p for p in pages if p['kind'] == 'question' and 'opening hold' in p['header'])
+        self.assertEqual(q4['header'], 'Did the opening hold you?')
+        self.assertEqual(q4['eyebrow'], 'Question 1')
         self.assertEqual(q4['rows'], [('Yes', '61.4%', '5.07M people'), ('No', '38.6%', '3.19M people')])
         self.assertTrue(q4['sub'].startswith('At 1:35'))
+        self.assertTrue(q4['sub'].endswith('Lead answer: Yes, 61.4% of the room, 5.07M people.'), q4['sub'])
 
     def test_opener_lists_every_question_and_names_the_one_still_answering(self):
         twin, sess = _session()
@@ -172,11 +180,18 @@ class QuestionPages(unittest.TestCase):
         self.assertIn('still answering when this report was made', op['body'][0])
         self.assertIn('Would you tell a friend?', op['body'][0])
 
-    def test_headers_obey_the_twelve_word_rule_and_no_banned_words(self):
+    def test_headers_are_the_questions_and_no_banned_words(self):
         twin, sess = _session()
         pages = R.report_pages({'meta': twin['meta']}, sess)
+        asked = {q['q'] for q in sess['questions']}
         for p in pages:
-            if p['kind'] in ('question',) or p['header'].startswith('The room answered'):
+            if p['kind'] == 'question':
+                # the header is the question verbatim and the eyebrow its number (Jenna 2026-11-05); never a sentence on the lead answer
+                self.assertIn(p['header'], asked, p['header'])
+                self.assertRegex(p['eyebrow'], r'^Question \d+$')
+                self.assertTrue(p['header'].endswith('?'), p['header'])
+                self.assertNotIn(' took ', p['header'])
+            elif p['header'].startswith('The room answered'):
                 words = p['header'].split()
                 self.assertLessEqual(len(words), 12, p['header'])
                 self.assertTrue(p['header'].endswith('.'), p['header'])
@@ -238,15 +253,18 @@ class Files(unittest.TestCase):
         import io
         prs = Presentation(io.BytesIO(deck))
         slides = [' '.join(sh.text_frame.text for sh in sl.shapes if sh.has_text_frame) for sl in prs.slides]
-        q1 = next(s for s in slides if 'Yes took 58.3% of the room.' in s)
-        self.assertIn('Would you keep watching after this scene?', q1)
-        for tok in ("PROMETHEUS'S READ", 'Most of the room stays.', 'IN THEIR WORDS', 'I want to see her win the town back.',
+        self.assertEqual(sum(1 for s in slides if s.startswith('QUESTION ')), 3, 'one question page per answered question, its eyebrow the question number')
+        q1 = next(s for s in slides if s.startswith('QUESTION 2 '))
+        self.assertIn('Would you keep watching after this scene?', q1, 'the header is the question as asked (Jenna 2026-11-05)')
+        self.assertNotIn('took 58.3%', q1, 'no sentence drawn from the lead answer on the page')
+        for tok in ("PROMETHEUS'S READ", 'Most of the room stays.', 'IN THEIR WORDS', 'I want to see her win the town back.', 'Lead answer: Yes, 58.3% of the room, 4.81M people.',
                     'WHAT THE ROOM KNEW', 'The show was ordered to series in May.', 'WHAT PEOPLE WERE SAYING', 'People online keep posting the diner fight clip.', '7 of 12 in the room'):
             self.assertIn(tok, q1, tok)
-        q2 = next(s for s in slides if 'The silence itself took 46.2% of the room.' in s)
+        q2 = next(s for s in slides if s.startswith('QUESTION 3 '))
+        self.assertIn('For those who drifted during the silent ending, was it the silence itself or the length of the skyline shots that lost you?', q2, 'the long question whole')
         self.assertIn('After the wrap, at 10:00', q2)
         self.assertNotIn('WHAT THE ROOM KNEW', q2)
-        blob = ' '.join(s for s in slides if 'took ' in s and 'of the room.' in s or 'The room answered' in s).lower()
+        blob = ' '.join(s for s in slides if 'QUESTION ' in s or 'The room answered' in s).lower()
         for tok in BANNED:
             self.assertNotIn(tok, blob, tok)
         try:
@@ -363,10 +381,10 @@ class PeopleAndCopy(unittest.TestCase):
         q = next(x for x in sess['questions'] if x['id'] == 'q2')
         q['stimulus']['window']['frame'] = 'CBS logo animation glows on a black screen, marking the end of the episode'
         pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
-        pg = next(p for p in pages if p['kind'] == 'question' and 'silent ending' in p['sub'])
+        pg = next(p for p in pages if p['kind'] == 'question' and 'silent ending' in p['header'])
         self.assertTrue(pg['sub'].startswith('After the wrap, CBS logo animation glows'), pg['sub'])
         q['stimulus']['window']['frame'] = 'The CBS logo comes up'
-        pg = next(p for p in R.report_pages({'meta': twin['meta']}, sess, with_chart=False) if p['kind'] == 'question' and 'silent ending' in p['sub'])
+        pg = next(p for p in R.report_pages({'meta': twin['meta']}, sess, with_chart=False) if p['kind'] == 'question' and 'silent ending' in p['header'])
         self.assertTrue(pg['sub'].startswith('After the wrap, the CBS logo comes up'), pg['sub'])
 
     def test_forecast_tile_label_fits_and_the_base_is_named_under_it(self):
