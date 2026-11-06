@@ -649,8 +649,8 @@ class PartnerSurface(unittest.TestCase):
         body = r.get_json()
         self.assertTrue(body['success'])
         self.assertEqual(body['mode'], 'concept')
-        self.assertTrue(charges, 'the concept price was taken')
-        self.assertEqual(charges[-1]['pull_type'], 'Digital Twins IQ Concept Test')
+        self.assertTrue(charges, 'the group price was taken')
+        self.assertEqual(charges[-1]['pull_type'], 'Digital Twins IQ Group (Individual, 1-20 questions)')   # one group at the plan rate (2026-11-05)
         sid = body['screening_id']
         r2 = c.get(f'/api/v1/screenings/{sid}')
         self.assertEqual(r2.status_code, 200)
@@ -764,10 +764,10 @@ class GreenlightLane(unittest.TestCase):
         ask2 = L.run_greenlight(f'Test a concept in Greenlight on the {name} twin', {}, [], user, {}, '')
         self.assertIn('Paste the logline', ask2['reply'])
         self.assertEqual(ask2['action_hint']['tab'], 'concept')
-        # the concept: opens the test, free until Play, lands on Greenlight under Concept
+        # the concept: opens the test as one group (2026-11-05), lands on Greenlight under Concept
         out = L.run_greenlight(f'Test this concept in Greenlight on the {name} twin: ' + LOGLINE, {}, [], user, {}, '')
         self.assertIn('Concept test', out['reply'])
-        self.assertIn('charged on Play', out['reply'])
+        self.assertIn('one group, 1-20 questions', out['reply'])
         self.assertEqual(out['action_hint']['tab'], 'concept')
         stored = SYN.load_twin(s3, k1)
         sess = next(s for s in stored['pilot_sessions'] if s['id'] == out['action_hint']['session_id'])
@@ -880,11 +880,12 @@ class Pricing(unittest.TestCase):
         twin = _beals()
         want = {'pilot': 'digital_twin_pilot', 'feature': 'digital_twin_pilot', 'episode': 'digital_twin_pilot', 'binge': 'digital_twin_pilot', 'trailer': 'digital_twin_trailer',
                 'spot': 'digital_twin_trailer', 'title': 'digital_twin_title', 'key_art': 'digital_twin_key_art', 'concept': 'digital_twin_concept', 'script': 'digital_twin_script'}
+        from migration import digital_twin_pricing as PR
         for mode, key in want.items():
             sess = PI.open_session([twin], title='t', in_room=12, mode=mode)
-            self.assertEqual(PI.charge_due(sess), key, mode)
-            self.assertEqual(DT.PRICING[key], {'digital_twin_pilot': 5500.0, 'digital_twin_trailer': 2500.0, 'digital_twin_title': 1500.0, 'digital_twin_key_art': 1500.0,
-                                               'digital_twin_concept': 2500.0, 'digital_twin_script': 3500.0}[key])
+            self.assertEqual(PI.charge_due(sess), key, mode)                # the legacy key still labels the mode
+            self.assertNotIn(key, DT.PRICING)                              # but carries no price: every mode is one group (2026-11-05)
+            self.assertEqual(PR.rate('individual', 20), 750.0)
             PI.mark_play_paid(sess)
             self.assertIsNone(PI.charge_due(sess))
             sess['questions'] = [{'q': str(i)} for i in range(12)]
@@ -892,9 +893,10 @@ class Pricing(unittest.TestCase):
         recut = PI.open_session([twin], title='Cut B', in_room=12)
         recut['lineage'] = {'parent': 'abc', 'label': 'Cut B'}
         self.assertEqual(PI.charge_due(recut), 'digital_twin_recut')
-        self.assertEqual(DT.PRICING['digital_twin_recut'], 2750.0)
+        self.assertNotIn('digital_twin_recut', DT.PRICING)
         for k in ('digital_twin_trailer', 'digital_twin_title', 'digital_twin_key_art', 'digital_twin_concept', 'digital_twin_script', 'digital_twin_recut'):
             self.assertIn(k, DT.PULL_TYPES)
+            self.assertIn(k, PR.RETIRED_KEYS)
 
     def test_how_to_items_for_every_tab(self):
         ids = [it['id'] for it in DT.how_to()['items']]
@@ -913,16 +915,19 @@ class Pricing(unittest.TestCase):
         self.assertIn('Greenlight.', DT.how_to_text('how do I run a script read'))
         self.assertIn('Greenlight.', DT.how_to_text('how do I run a concept test'))
 
-    def test_rate_card_carries_the_modes(self):
+    def test_rate_card_carries_the_group(self):
+        # Jenna 2026-11-05: every mode is one group at the plan rate; the per-mode lines are retired from the card
         from prometheus import rate_card as RC
         text = RC.render()
-        for frag in ('Trailer or TV spot test', 'Title or logline test', 'Key art test', 'Greenlight Concept test', 'Greenlight Script read', 'Recut re-test', 'with its first two runs'):
+        for frag in ('Digital Twins IQ focus group or pilot test (one group, any mode)', '$750 a group for 1-20 questions or $1,000 for 1-40',
+                     'package rate $500 / $750 a group on a $5,000 deposit', 'enterprise $200 a group (1-40) at $20,000 a month', 'the twin and its first two runs are included'):
             self.assertIn(frag, text)
-        for gone in ('Greenlight, Launch', 'first three runs'):
+        for gone in ('Greenlight, Launch', 'first three runs', 'Trailer or TV spot test', 'Recut re-test', '5,500', 'panelist'):
             self.assertNotIn(gone, text)
-        self.assertEqual(RC.default('digital_twin_trailer'), 2500.0)
-        self.assertEqual(RC.default('digital_twin_concept'), 2500.0)
-        self.assertEqual(RC.default('digital_twin_script'), 3500.0)
+        self.assertEqual(RC.default('digital_twin_group_individual_20'), 750.0)
+        self.assertEqual(RC.default('digital_twin_group_package_40'), 750.0)
+        self.assertEqual(RC.default('digital_twin_group_enterprise'), 200.0)
+        self.assertEqual(RC.default('digital_twin_trailer'), 0.0)
         self.assertNotIn('\u2014', text)
 
 

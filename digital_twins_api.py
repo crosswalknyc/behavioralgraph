@@ -31,20 +31,22 @@ app.py so app.py stays small.
   GET  /api/digital-twins/<key>/panel/<sid>          the session; the roster carries portrait_url once the faces exist (re-poll)
   PATCH /api/digital-twins/<key>/panel/<sid>         rename the room (title, 120 chars)
   POST /api/digital-twins/<key>/panel/<sid>/rename   the same for clients that post
-  POST /api/digital-twins/<key>/panel/<sid>/ask      ask the room (synchronous, seconds; the session price on the first question)
+  POST /api/digital-twins/<key>/panel/<sid>/ask      ask the room (synchronous, seconds; the tier cap, the upgrade offer at twenty)
+  POST /api/digital-twins/<key>/panel/<sid>/upgrade  move a 1-20 room to 1-40 for the difference at the plan rate (2026-11-05)
   DELETE /api/digital-twins/<key>/panel/<sid>        delete a room (creator or admin; 30-day undo copy under system/digital_twins/deleted_rooms/)
   POST /api/digital-twins/<key>/panel/<sid>/delete   the same for clients that cannot send DELETE
   DELETE /api/digital-twins/<key>                    delete a twin (creator or admin; 30-day undo copy under system/digital_twins/deleted_twins/)
   POST /api/digital-twins/<key>/delete               the same for clients that cannot send DELETE
   GET  /api/digital-twins/<key>/panel/<sid>/export.csv
   GET  /api/digital-twins/<key>/panel/<sid>/export.pdf
-  POST /api/digital-twins/<key>/pilot/open           open a Pilot Testing session (free; charge on first Play). watch_url = any streamer or digital link
+  POST /api/digital-twins/<key>/pilot/open           open a Pilot Testing session (one GROUP, charged at open at the plan rate; 2026-11-05). watch_url = any streamer or digital link
   POST /api/digital-twins/<key>/pilot/<sid>/frame    a frame off the mirrored screen at clock t; the room reads it and reacts (live watch-link tests)
   GET  /api/digital-twins/<key>/pilot/<sid>          the test
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename
   POST /api/digital-twins/<key>/pilot/<sid>/upload   the cut (mp4 / mov / webm)
   POST /api/digital-twins/<key>/pilot/<sid>/prepare  the room watches the cut: a file goes to the read worker (job_id; poll /jobs/<id>), a slate runs here
-  POST /api/digital-twins/<key>/pilot/<sid>/play     first Play charges; then the room is live on the clock (409 preparing while the worker watches)
+  POST /api/digital-twins/<key>/pilot/<sid>/play     Play (the group was charged at open); the room is live on the clock (409 preparing while the worker watches)
+  POST /api/digital-twins/<key>/pilot/<sid>/upgrade  move a 1-20 test to 1-40 for the difference at the plan rate (2026-11-05)
   POST /api/digital-twins/<key>/pilot/<sid>/ask      a question at the playhead; it carries the last 60 to 90 seconds of what played
   POST /api/digital-twins/<key>/pilot/<sid>/stop     stop, keep the scorecard, add the test to the norms, remove the file when the test asked for it
   GET  /api/digital-twins/<key>/pilot/<sid>/minute   ?t=<seconds>&mode=room|cohort|person&id=<cohort key or seat>: the minute under the pointer
@@ -66,7 +68,7 @@ app.py so app.py stays small.
   GET  /api/digital-twins/pilot-norms/all?genre=      every format's cells for the Norms tab, with our test count per cell
   POST /api/digital-twins/<key>/pilot/<sid>/assets    a further trailer, an episode, key art (image) or a script file (text)
   POST /api/digital-twins/<key>/pilot/<sid>/stimulus  options (titles), logline, text, cast, comps, quotas, mode flags, watch_url
-  POST /api/digital-twins/<key>/pilot/<sid>/recut     cut B on the same room (lineage; the recut price on first Play)
+  POST /api/digital-twins/<key>/pilot/<sid>/recut     cut B on the same room (lineage; a new group, charged at open)
   GET  /api/digital-twins/<key>/pilot/<sid>/compare   cut A against cut B; two audiences on one cut
   GET|POST /api/digital-twins/<key>/pilot/<sid>/comps the comp set and the versus-comps column
   POST /api/digital-twins/<key>/pilot/<sid>/critics   the critics room (reseats before Play)
@@ -81,7 +83,11 @@ app.py so app.py stays small.
 Access: ``has_digital_twins_iq_access`` or admin / super_admin; the
 creator always sees their own; ``allowed_digital_twin_runs`` defaults
 to ['*']. Charges go through the pay-per-use ledger by pull type;
-super admins are free. On top of the priced steps, every model call a
+super admins are free. Pricing is PER GROUP (Jenna 2026-11-05): one
+focus group room or one pilot test, any mode, charged as it opens at the
+company's plan rate (individual / package / enterprise) for its tier
+(1-20 or 1-40 questions), through migration/digital_twin_pricing. The
+twin build carries no charge of its own. On top of the priced steps, every model call a
 build, a run or a room question makes carries the seat's pay-per-use
 attribution (``_usage_extras``), so Prometheus usage is metered at the
 published rate like any other Prometheus work (Jenna 2026-10-27:
@@ -102,6 +108,7 @@ from flask import Blueprint, Response, g, jsonify, request, session
 
 from migration import digital_twins as DT
 from migration import digital_twin_company as CO
+from migration import digital_twin_pricing as PR
 from migration import digital_twin_synthesis as SYN
 
 bp = Blueprint('digital_twins_api', __name__)
@@ -109,6 +116,8 @@ PREFIX = '/api/digital-twins'
 CREDITS = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3, 'digital_twin_panelist': 1,
            'digital_twin_pilot': 4, 'digital_twin_pilot_more': 3,
            'digital_twin_trailer': 3, 'digital_twin_title': 2, 'digital_twin_key_art': 2, 'digital_twin_concept': 3, 'digital_twin_script': 3, 'digital_twin_recut': 3}
+# the per-group lines (Jenna 2026-11-05): one focus group room or one pilot test, any mode, at the company's plan rate
+CREDITS.update(PR.CREDITS)
 
 
 # ---------------------------------------------------------------- host
@@ -257,9 +266,112 @@ def _price_fn(username):
 def _price_label(key, username):
     try:
         from prometheus.legacy.watch import _pm_usd_label, _pm_usd
-        return _pm_usd_label(_pm_usd(key, DT.PRICING[key], username), username)
+        return _pm_usd_label(_pm_usd(key, DT.PRICING.get(key, 0.0), username), username)
     except Exception:
-        return f"${DT.PRICING[key]:,.0f}"
+        return f"${DT.PRICING.get(key, 0.0):,.0f}"
+
+
+def _money_symbol(username):
+    try:
+        from prometheus.legacy.watch import _pm_money_symbol
+        return _pm_money_symbol(username) or '$'
+    except Exception:
+        return '$'
+
+
+def _plan(user):
+    """The seat's company plan (individual / package / enterprise) the
+    group rates read from (migration/digital_twin_pricing)."""
+    try:
+        return PR.plan_for_user(user, _uname(user))
+    except Exception:
+        return PR.DEFAULT_PLAN
+
+
+def _group_charge_fn(user):
+    """``charge_fn(tool_key, description, job_id)`` for the pricing
+    module: the host's consume_credit through _charge (staff free)."""
+    return lambda key, desc, job_id: _charge(user, key, desc, job_id)
+
+
+def _group_refund_fn(user):
+    return lambda credits, reason, job_id, amount_usd, pull_type: _refund(user, credits, reason, job_id=job_id, amount_usd=amount_usd, pull_type=pull_type)
+
+
+def _open_gate(user, tier, plan=None):
+    """The individual plan's card-and-balance gate before a group opens
+    (None when it may open, else the 402 reply with the add-funds link)."""
+    try:
+        ok, reply = PR.gate_open(user, _uname(user), plan=plan if plan is not None else _plan(user), tier=tier,
+                                 price_fn=_price_fn(_uname(user)), symbol=_money_symbol(_uname(user)))
+    except Exception:
+        traceback.print_exc()
+        return None
+    if ok:
+        return None
+    return jsonify(reply), 402
+
+
+def _group_card(user):
+    """What the page needs to quote a group (Jenna 2026-11-05): the seat's
+    plan, the tiers it may choose, the live rate per tier, the upgrade
+    price and one quote line per tier."""
+    uname = _uname(user)
+    plan = _plan(user)
+    pf = _price_fn(uname)
+    sym = _money_symbol(uname)
+    try:
+        return {'plan': plan, 'plan_label': PR.plan_label(plan), 'tiers': list(PR.tiers_for(plan)), 'default_tier': PR.default_tier(plan),
+                'rates': {str(t): PR.rate(plan, t, pf) for t in PR.tiers_for(plan)}, 'labels': {str(t): PR.money(PR.rate(plan, t, pf), sym) for t in PR.tiers_for(plan)},
+                'upgrade_usd': PR.upgrade_rate(plan, pf), 'upgrade_label': PR.money(PR.upgrade_rate(plan, pf), sym),
+                'quote': {str(t): PR.quote_line(plan, t, pf, sym) for t in PR.tiers_for(plan)}, 'free': PR.seat_is_free(user, uname),
+                'card': PR.rate_card_lines(pf, sym), 'twin_included': True}
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _charge_group(user, payload, sess, *, kind, tier=None, plan=None):
+    """Charge one group at open (the room id is the run id). None when
+    charged, free or already paid; else the funds reply."""
+    return PR.charge_group_open(user, payload, sess, plan=plan if plan is not None else _plan(user), tier=tier, charge_fn=_group_charge_fn(user),
+                                username=_uname(user), kind=kind, by=_uname(user))
+
+
+def _refund_group(user, sess, reason):
+    try:
+        return PR.refund_group_open(user, sess, refund_fn=_group_refund_fn(user), reason=reason)
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def _question_gate(user, payload, sess, body=None, *, kind='panel'):
+    """Before a question runs: a group never charged (a room opened free
+    before 2026-11-05, or one whose open could not charge) is charged
+    now; then the tier cap. At twenty questions a 1-20 group is offered
+    the move to 1-40 for the difference (402 with the offer) and the
+    twenty-first waits until the body carries ``accept_upgrade``; at
+    forty the group is full (409). None when the question may run."""
+    body = body or {}
+    plan = _plan(user)
+    if not PR.group_paid(sess):
+        tier = body.get('tier') if body.get('tier') is not None else sess.get('group_tier')
+        funds = _charge_group(user, payload, sess, kind=kind, tier=tier, plan=plan)
+        if funds is not None:
+            return funds
+    uname = _uname(user)
+    verdict, offer = PR.question_gate(sess, plan, accept_upgrade=bool(body.get('accept_upgrade')), price_fn=_price_fn(uname), symbol=_money_symbol(uname))
+    if verdict == 'ok':
+        return None
+    if verdict == 'accept':
+        funds = PR.accept_tier_upgrade(user, payload, sess, plan=plan, charge_fn=_group_charge_fn(user), username=uname, by=uname)
+        return funds
+    if verdict == 'offer':
+        return jsonify({'success': False, 'guidance': True, 'upgrade': offer, 'error': offer['line'], 'questions_asked': PR.questions_asked(sess),
+                        'question_cap': PR.question_cap(sess, plan), 'session_id': str(sess.get('id') or '')}), 402
+    return jsonify({'success': False, 'guidance': True, 'cap': True, 'error': PR.cap_reply(sess, plan), 'questions_asked': PR.questions_asked(sess),
+                    'question_cap': PR.question_cap(sess, plan), 'session_id': str(sess.get('id') or '')}), 409
 
 
 def _charge(user, key, description, job_id, quantity=1):
@@ -396,7 +508,7 @@ def dt_list():
     except Exception:
         traceback.print_exc()
     out = {'success': True, 'runs': vis, 'is_admin': DT.is_admin(user), 'allow_all': DT.is_admin(user) or '*' in DT.allowed_keys(user),
-           'pricing': DT.pricing_lines(_price_fn(_uname(user))),
+           'pricing': DT.pricing_lines(_price_fn(_uname(user))), 'group_card': _group_card(user),
            'company': CO.caller_company(user, _uname(user)), 'is_staff': staff}
     if staff:
         # the company filter for staff (default: every company) and, for a super admin, the assign control's choices
@@ -449,7 +561,13 @@ def dt_pricing():
     user, err = _gate()
     if err:
         return err
-    return jsonify({'success': True, 'lines': DT.pricing_lines(_price_fn(_uname(user))), 'defaults': DT.PRICING})
+    uname = _uname(user)
+    plan = _plan(user)
+    pf = _price_fn(uname)
+    return jsonify({'success': True, 'lines': DT.pricing_lines(pf), 'defaults': DT.PRICING, 'plan': plan, 'plan_label': PR.plan_label(plan),
+                    'rates': {f"{p}_{t}": PR.rate(p, t, pf) for (p, t) in PR.RATES}, 'upgrade_usd': PR.upgrade_rate(plan, pf),
+                    'tiers': list(PR.tiers_for(plan)), 'default_tier': PR.default_tier(plan), 'card': PR.rate_card_lines(pf, _money_symbol(uname)),
+                    'quote': {str(t): PR.quote_line(plan, t, pf, _money_symbol(uname)) for t in PR.tiers_for(plan)}})
 
 
 _PROFILE_TS_RX = re.compile(r"_\d{2}_\d{2}_\d{4}(?:_\d{2}_\d{2})?\.csv$", re.I)
@@ -1001,10 +1119,12 @@ def dt_panel_open(key):
         in_room = 0
     in_room = in_room or DT.panelists_for(payload)       # the seats chosen when the twin was built, else the twelve a session covers
     title = str(body.get('title') or '')[:120]
-    # Opening a room is free; the session price is taken on the first
-    # question (2026-10-26). An empty room with the same twins, segments
-    # and seats is reused instead of opening another (Jenna: repeated
-    # clicks on Open the room left four empty 'Room: Gilmore Girls').
+    # A room is one GROUP, charged as it opens at the company's plan rate for the tier chosen here (1-20 or 1-40
+    # questions; Jenna 2026-11-05, the per-group card). An empty room with the same twins, segments and seats is
+    # reused instead of opening another (Jenna: repeated clicks on Open the room left four empty 'Room: Gilmore
+    # Girls'); a reused room already paid is not charged again.
+    plan = _plan(user)
+    tier = PR.normalize_tier(body.get('tier'), plan)
     reused = P.find_reusable_session(payload, twins, segments, in_room, created_by=_uname(user), title=title)
     if reused is not None:
         sess = reused
@@ -1012,29 +1132,49 @@ def dt_panel_open(key):
             P.rebuild_group(sess, twins, seed=str(sess.get('id') or ''))
         P.ensure_seat_stands_for(sess)
     else:
+        gate = _open_gate(user, tier, plan)
+        if gate is not None:
+            return gate
         sess = P.open_session(twins, segments=segments, in_room=in_room, title=title, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
+        PR.record_tier(sess, tier, plan)
+    funds = _charge_group(user, payload, sess, kind='panel', tier=tier, plan=plan)     # the group, at open (a paid room charges nothing)
+    if funds is not None:
+        if reused is not None:
+            doc = funds[0].get_json() or {}
+            doc['session'] = sess
+            return jsonify(doc), funds[1]
+        return funds                     # nothing is saved: the room never opened
+    if reused is None:
         payload.setdefault('panel_sessions', []).insert(0, sess)
     try:
-        ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
-    except Exception:
-        traceback.print_exc()
-    PT = _portraits()
-    if PT is not None:
         try:
-            PT.attach_portraits(sess, _s3())      # seats already pictured (a second room with the same twins) carry their url at once
+            ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
         except Exception:
-            pass
-    DT.save_twin(_s3(), key, payload)
+            traceback.print_exc()
+        PT = _portraits()
+        if PT is not None:
+            try:
+                PT.attach_portraits(sess, _s3())      # seats already pictured (a second room with the same twins) carry their url at once
+            except Exception:
+                pass
+        DT.save_twin(_s3(), key, payload)
+    except Exception:
+        # the room did not open: the group's charge goes back (refund_credit by the room id)
+        traceback.print_exc()
+        _refund_group(user, sess, 'Focus group room did not open')
+        if reused is None:
+            payload['panel_sessions'] = [x for x in payload.get('panel_sessions') or [] if x is not sess]
+        return jsonify({'success': False, 'error': 'The room could not be opened. Nothing was charged; try again in a moment.'}), 500
     if reused is None:
         _team_notice('notify_room_opened', payload, sess, username=_uname(user), via='dashboard')   # a new room, once (never a question)
     first_q = str(body.get('q') or body.get('question') or '').strip()
     rec = None
     if first_q:
-        funds = _charge_question(user, payload, sess)
+        funds = _question_gate(user, payload, sess, body, kind='panel')
         if funds is not None:
             doc = funds[0].get_json() or {}
-            doc['session'] = sess        # the room stays open and free; the question waits on funds
+            doc['session'] = sess        # the room stays open; the question waits
             return jsonify(doc), funds[1]
         rec = P.ask(sess, twins_by_key, first_q, options=body.get('options'), stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
                     voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key, usage_extras=_usage_extras(user))
@@ -1053,48 +1193,30 @@ def dt_panel_open(key):
                     'extra_panelists': DT.extra_panelists((sess.get('group') or {}).get('in_room'))})
 
 
-def _charge_question(user, payload, sess):
-    """The price the next question carries, if any: the session on its
-    first question (plus the panelists past the twelve a session seats,
-    at the per-panelist price, once per room), a further block when the
-    paid questions are used up. None when nothing is due or it was
-    charged (or free)."""
-    from migration import digital_twin_panel as P
-    due = P.charge_due(sess, DT.PANEL_QUESTIONS_INCLUDED)
-    if not due:
-        return None
-    name = (payload.get('meta') or {}).get('name')
-    sid = str(sess.get('id') or '')
-    asked = len(sess.get('questions') or [])
-    extra = DT.extra_panelists((sess.get('group') or {}).get('in_room')) if due == 'digital_twin_panel' and not sess.get('panelists_paid') else 0
-    if extra:
-        # the extra seats first (the smaller line), then the session; a session that cannot be covered hands the seats back
-        funds = _charge(user, 'digital_twin_panelist', f"Focus Group IQ, {extra} extra panelist{'s' if extra != 1 else ''}: {name}", f"{sid}-seats", quantity=extra)
-        if funds is not None:
-            return funds
-        sess['panelists_paid'] = extra
-    desc = f"Focus Group IQ session: {name}" if due == 'digital_twin_panel' else f"Focus Group IQ, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {name}"
-    funds = _charge(user, due, desc, sid if due == 'digital_twin_panel' else f"{sid}-{asked}")
-    if funds is not None:
-        if extra:
-            sess.pop('panelists_paid', None)
-            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"Focus Group IQ seats returned, the session could not be covered: {name}", job_id=f"{sid}-seats")
-        return funds
-    P.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
-    return None
+def _charge_question(user, payload, sess, body=None):
+    """Before a room answers: the group's charge if the room was never
+    charged (opened free before 2026-11-05), then the tier cap and the
+    upgrade offer (``_question_gate``). None when the question may run."""
+    return _question_gate(user, payload, sess, body, kind='panel')
 
 
-def _refund(user, credits, reason, job_id=''):
+def _refund(user, credits, reason, job_id='', amount_usd=None, pull_type=''):
     """Hand a charge back through the host's refund_credit (the unit the
-    charge took, idempotent by `job_id`: the seats' charge id)."""
+    charge took, idempotent by `job_id`: the group's room id, the seats'
+    charge id). `amount_usd` pins the dollars on a wallet seat."""
     a = _app()
     if a is None or not hasattr(a, 'refund_credit') or _role(user) == 'super_admin':
         return
     try:
+        kw = {}
+        if amount_usd:
+            kw['amount_usd'] = float(amount_usd)
+        if pull_type:
+            kw['pull_type'] = str(pull_type)
         if job_id:
-            a.refund_credit(_uname(user), credits=credits, reason=reason, job_id=str(job_id))
+            a.refund_credit(_uname(user), credits=credits, reason=reason, job_id=str(job_id), **kw)
         else:
-            a.refund_credit(_uname(user), credits=credits, reason=reason)
+            a.refund_credit(_uname(user), credits=credits, reason=reason, **kw)
     except Exception:
         traceback.print_exc()
 
@@ -1172,8 +1294,9 @@ def dt_panel_ask(key, sid):
             DT.save_twin(_s3(), key, payload)
             return jsonify({'success': True, 'question': dup, 'duplicate': True, 'note': dup.get('note'), 'session_id': sid, 'questions_asked': len(sess['questions']),
                             'questions_paid': sess.get('questions_paid'), 'job_id': dup.get('job_id'), 'stage': dup.get('stage')})
-    funds = _charge_question(user, payload, sess)      # the session on its first question, a further block after twelve
+    funds = _charge_question(user, payload, sess, body)      # the group if never charged, then the tier cap and the upgrade
     if funds is not None:
+        DT.save_twin(_s3(), key, payload)          # an accepted upgrade or a late group charge is on the record either way
         return funds
     twins_by_key = {}
     for tk in sess.get('twin_keys') or [key]:
@@ -1196,7 +1319,34 @@ def dt_panel_ask(key, sid):
                 voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key, ask_again=ask_again, usage_extras=_usage_extras(user))
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid'),
+                    'question_cap': PR.question_cap(sess, _plan(user)), 'group_tier': PR.group_tier(sess, _plan(user)),
                     'job_id': rec.get('job_id'), 'stage': rec.get('stage')})
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/upgrade', methods=['POST'])
+def dt_panel_upgrade(key, sid):
+    """Move a 1-20 room to 1-40 for the difference at the company's plan
+    rate (Jenna 2026-11-05). The twenty-first question runs once this
+    has been accepted; a room already at 1-40 is left alone."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    plan = _plan(user)
+    if not PR.group_paid(sess):
+        funds = _charge_group(user, payload, sess, kind='panel', plan=plan)
+        if funds is not None:
+            return funds
+    funds = PR.accept_tier_upgrade(user, payload, sess, plan=plan, charge_fn=_group_charge_fn(user), username=_uname(user), by=_uname(user))
+    if funds is not None:
+        return funds
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'session': sess, **PR.public_fields(sess, plan)}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['DELETE'])
@@ -1218,6 +1368,9 @@ def dt_panel_delete(key, sid):
     from migration import digital_twin_panel as P
     if not P.can_delete_room(sess, _uname(user), DT.is_admin(user)):
         return jsonify({'success': False, 'error': 'Only the person who opened this room, or an admin, can delete it.'}), 403
+    if not (sess.get('questions') or []):
+        # the group never ran: its open charge goes back (marked on the record before the 30-day copy is kept)
+        _refund_group(user, sess, 'Focus group room deleted before its first question')
     removed = P.delete_room(_s3(), key, payload, sid, deleted_by=_uname(user))
     if removed is None:
         return jsonify({'success': False, 'error': 'session not found'}), 404
@@ -1232,10 +1385,10 @@ def dt_panel_duplicate(key, sid):
     """Duplicate a room (Jenna, 2026-11-04: "duplicate a room with all of
     the input if you want to so if you just want to change one thing you
     can"): a new room, first on the twin, with the same twins, cohorts
-    and seat count, the name with a copy suffix, no questions and nothing
-    paid. Opening is free, as from the form; the session price waits for
-    the first question. The source room is untouched. Anyone who can see
-    the twin may duplicate a room on it; the new room is theirs."""
+    and seat count, the name with a copy suffix and no questions. A
+    duplicate is a new group, charged as it opens at the company's plan
+    rate (Jenna 2026-11-05). The source room is untouched. Anyone who
+    can see the twin may duplicate a room on it; the new room is theirs."""
     user, err = _gate()
     if err:
         return err
@@ -1255,20 +1408,37 @@ def dt_panel_duplicate(key, sid):
             hydrate_identity_from_profile(t, s3)
         except Exception:
             traceback.print_exc()
+    body = request.get_json(silent=True) or {}
+    plan = _plan(user)
+    tier = PR.normalize_tier(body.get('tier') if body.get('tier') is not None else src.get('group_tier'), plan)
+    gate = _open_gate(user, tier, plan)
+    if gate is not None:
+        return gate
     sess = P.duplicate_room(payload, list(twins_by_key.values()), sid, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
     if sess is None:
         return jsonify({'success': False, 'error': 'session not found'}), 404
+    PR.record_tier(sess, tier, plan)
+    funds = _charge_group(user, payload, sess, kind='duplicate', tier=tier, plan=plan)     # a duplicate is a new group
+    if funds is not None:
+        payload['panel_sessions'] = [x for x in payload.get('panel_sessions') or [] if x is not sess]
+        return funds
     try:
-        ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
+        try:
+            ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
+        except Exception:
+            traceback.print_exc()
+        PT = _portraits()
+        if PT is not None:
+            try:
+                PT.attach_portraits(sess, s3)
+            except Exception:
+                pass
+        DT.save_twin(s3, key, payload)
     except Exception:
         traceback.print_exc()
-    PT = _portraits()
-    if PT is not None:
-        try:
-            PT.attach_portraits(sess, s3)
-        except Exception:
-            pass
-    DT.save_twin(s3, key, payload)
+        _refund_group(user, sess, 'Duplicate room did not open')
+        payload['panel_sessions'] = [x for x in payload.get('panel_sessions') or [] if x is not sess]
+        return jsonify({'success': False, 'error': 'The room could not be opened. Nothing was charged; try again in a moment.'}), 500
     _team_notice('notify_room_opened', payload, sess, username=_uname(user), via='dashboard')   # a duplicate is a new room
     if PT is not None:
         try:
@@ -1330,49 +1500,36 @@ _MODE_DESC = {'digital_twin_pilot': 'Pilot Testing session', 'digital_twin_trail
               'digital_twin_concept': 'Concept test', 'digital_twin_script': 'Script read', 'digital_twin_recut': 'Recut re-test'}
 
 
-def _charge_pilot(user, payload, sess, *, for_play=False):
-    """First Play carries the mode's price (the session price for a
-    watch, the per-asset trailer price, the title / key art / concept /
-    script price, the recut price for cut B on the same room), plus the
-    extra panelists once; a further question block after the included
-    twelve. None when nothing is due."""
+def _pilot_kind(sess):
+    """The group kind a test is charged as: a recut (cut B on a prior
+    test's room) or a pilot (any screening mode)."""
+    if (sess or {}).get('lineage') and ((sess or {}).get('lineage') or {}).get('parent'):
+        return 'recut'
+    return 'pilot'
+
+
+def _charge_pilot(user, payload, sess, *, for_play=False, body=None):
+    """A test is one GROUP (Jenna 2026-11-05), charged when it opens at
+    the company's plan rate for its tier; first Play then charges
+    nothing. A test opened before the card (or whose open could not
+    charge) pays the group on first Play, the moment it used to pay.
+    Questions on the clock count toward the tier: at twenty a 1-20 group
+    is offered the move to 1-40, at forty the group is full. None when
+    nothing is due (or it was charged, or the seat is free)."""
     from migration import digital_twin_pilot as PI
-    due = PI.charge_due(sess)
-    if not due:
-        return None
-    is_play = due in _PLAY_KEYS
-    if is_play and not for_play:
-        return None
-    if due == 'digital_twin_pilot_more' and for_play:
-        return None
-    name = (payload.get('meta') or {}).get('name')
-    sid = str(sess.get('id') or '')
-    extra = DT.extra_panelists((sess.get('group') or {}).get('in_room')) if is_play and not sess.get('panelists_paid') else 0
-    label = _MODE_DESC.get(due, 'Pilot Testing session')
-    if extra:
-        funds = _charge(user, 'digital_twin_panelist', f"{label}, {extra} extra panelist{'s' if extra != 1 else ''}: {name}", f"{sid}-seats", quantity=extra)
+    if for_play:
+        if sess.get('play_charged'):
+            return None
+        funds = _charge_group(user, payload, sess, kind=_pilot_kind(sess), tier=(body or {}).get('tier') if (body or {}).get('tier') is not None else sess.get('group_tier'))
         if funds is not None:
             return funds
-        sess['panelists_paid'] = extra
-    qty = PI.play_quantity(sess) if is_play else 1
-    if is_play:
-        desc = f"{label}: {name}" + (f" ({qty} assets)" if qty > 1 else '')
-    else:
-        desc = f"Pilot Testing, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {name}"
-    asked = len(sess.get('questions') or [])
-    funds = _charge(user, due, desc, sid if is_play else f"{sid}-q{asked}", quantity=qty) if qty > 1 else _charge(user, due, desc, sid if is_play else f"{sid}-q{asked}")
-    if funds is not None:
-        if extra:
-            sess.pop('panelists_paid', None)
-            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"{label} seats returned, the session could not be covered: {name}", job_id=f"{sid}-seats")
-        return funds
-    if is_play:
-        PI.mark_play_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
-        sess['play_price_key'] = due
-        sess['play_quantity'] = qty
-    else:
-        PI.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
-    return None
+        PI.mark_play_paid(sess, PR.question_cap(sess, _plan(user)))
+        sess['play_price_key'] = str(PR.group_charge(sess).get('tool_key') or '')
+        sess['play_quantity'] = 1
+        return None
+    if not sess.get('play_charged'):
+        return None
+    return _question_gate(user, payload, sess, body, kind=_pilot_kind(sess))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/open', methods=['POST'])
@@ -1429,6 +1586,15 @@ def dt_pilot_open(key):
     reused = PI.find_reusable_session(payload, twins, title=title, created_by=_uname(user)) if mode == 'pilot' and not body.get('text') and not body.get('options') and not watch_url else None
     if reused is not None and str(reused.get('mode') or 'pilot') != mode:
         reused = None
+    # a test is one GROUP, charged as it opens at the company's plan rate for the tier chosen here (1-20 or 1-40
+    # questions on the clock; Jenna 2026-11-05). First Play then charges nothing. A test deleted before it ever
+    # started hands the group back.
+    plan = _plan(user)
+    tier = PR.normalize_tier(body.get('tier'), plan)
+    if reused is None or not PR.group_paid(reused):
+        gate = _open_gate(user, tier, plan)
+        if gate is not None:
+            return gate
     if reused is not None:
         sess = reused
         if setup is not None and not (sess.get('media') or {}).get('s3_key'):
@@ -1463,22 +1629,39 @@ def dt_pilot_open(key):
                 CMP.apply_quotas(sess, twins, body['quotas'], seed=f"recruit|{sess['id']}")
             except Exception:
                 traceback.print_exc()
+        PR.record_tier(sess, tier, plan)
+    funds = _charge_group(user, payload, sess, kind='pilot', tier=tier, plan=plan)      # the group, at open
+    if funds is not None:
+        if reused is not None:
+            doc = funds[0].get_json() or {}
+            doc['session'] = PI.public_session(sess)
+            return jsonify(doc), funds[1]
+        return funds                     # nothing is saved: the test never opened
+    if reused is None:
         payload.setdefault('pilot_sessions', []).insert(0, sess)
     if 'genre' in body:
         # the Compare-to field on the setup form (Jenna 2026-11-04): the norm the test is read against; a pre-filled
         # guess the person left alone keeps following the frames' vote, a value they touched is theirs
         PI.set_norm(sess, str(body.get('genre') or ''), by_user=bool(body.get('genre_set_by_user')))
     try:
-        ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
-    except Exception:
-        traceback.print_exc()
-    PT = _portraits()
-    if PT is not None:
         try:
-            PT.attach_portraits(sess, _s3())
+            ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
         except Exception:
-            pass
-    DT.save_twin(_s3(), key, payload)
+            traceback.print_exc()
+        PT = _portraits()
+        if PT is not None:
+            try:
+                PT.attach_portraits(sess, _s3())
+            except Exception:
+                pass
+        DT.save_twin(_s3(), key, payload)
+    except Exception:
+        # the test did not open: the group's charge goes back (refund_credit by the test id)
+        traceback.print_exc()
+        _refund_group(user, sess, 'Pilot test did not open')
+        if reused is None:
+            payload['pilot_sessions'] = [x for x in payload.get('pilot_sessions') or [] if x is not sess]
+        return jsonify({'success': False, 'error': 'The test could not be opened. Nothing was charged; try again in a moment.'}), 500
     if reused is None:
         # a test created (the form, a saved setup run, a duplicate run); a reused empty room is not a new test
         _team_notice('notify_pilot_created', payload, sess, username=_uname(user), via='dashboard')
@@ -1860,7 +2043,7 @@ def dt_pilot_play(key, sid):
     if LIVE.is_live(sess) and not ((sess.get('live') or {}).get('finished_at')):
         if not (sess.get('live') or {}).get('on'):
             LIVE.seat_live(sess, _twins_for(payload, key, sess))
-        funds = _charge_pilot(user, payload, sess, for_play=True)
+        funds = _charge_pilot(user, payload, sess, for_play=True, body=request.get_json(silent=True) or {})
         if funds is not None:
             return funds
         try:   # the cast's faces, resolved before the room goes live (digital_twin_cast); the frames then read them at once
@@ -1892,12 +2075,39 @@ def dt_pilot_play(key, sid):
         PI.prepare_watch(sess, twins_by_key, duration_s=duration,
                          title=str((sess.get('media') or {}).get('title') or sess.get('title') or ''),
                          transcript=sess.get('transcript'), usage_extras=_usage_extras(user), s3=_s3())
-    funds = _charge_pilot(user, payload, sess, for_play=True)
+    funds = _charge_pilot(user, payload, sess, for_play=True, body=request.get_json(silent=True) or {})
     if funds is not None:
         return funds
     PI.mark_playing(sess)
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'session': PI.public_session(sess), 'charged': True})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/upgrade', methods=['POST'])
+def dt_pilot_upgrade(key, sid):
+    """Move a 1-20 test to 1-40 for the difference at the company's plan
+    rate (Jenna 2026-11-05); the twenty-first question on the clock runs
+    once this has been accepted."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    plan = _plan(user)
+    if not PR.group_paid(sess):
+        funds = _charge_group(user, payload, sess, kind=_pilot_kind(sess), plan=plan)
+        if funds is not None:
+            return funds
+    funds = PR.accept_tier_upgrade(user, payload, sess, plan=plan, charge_fn=_group_charge_fn(user), username=_uname(user), by=_uname(user))
+    if funds is not None:
+        return funds
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), **PR.public_fields(sess, plan)}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/frame', methods=['POST'])
@@ -1956,8 +2166,9 @@ def dt_pilot_ask(key, sid):
         return jsonify({'success': False, 'error': 'Ask the room something.'}), 400
     if not sess.get('play_charged'):
         return jsonify({'success': False, 'error': 'Press Play first. The room answers once the cut is running.'}), 400
-    funds = _charge_pilot(user, payload, sess, for_play=False)
+    funds = _charge_pilot(user, payload, sess, for_play=False, body=body)      # the tier cap and the upgrade
     if funds is not None:
+        DT.save_twin(_s3(), key, payload)
         return funds
     twins_by_key = {}
     for tk in sess.get('twin_keys') or [key]:
@@ -2075,6 +2286,9 @@ def dt_pilot_delete(key, sid):
         return jsonify({'success': False, 'error': 'test not found'}), 404
     if not PI.can_delete(sess, _uname(user), DT.is_admin(user)):
         return jsonify({'success': False, 'error': 'Only the person who opened this test, or an admin, can delete it.'}), 403
+    if not sess.get('play_charged') and not (sess.get('questions') or []):
+        # the pilot never started: its open charge goes back (marked on the record before the 30-day copy is kept)
+        _refund_group(user, sess, 'Pilot test deleted before it started')
     removed = PI.delete_session(_s3(), key, payload, sid, deleted_by=_uname(user))
     if removed is None:
         return jsonify({'success': False, 'error': 'test not found'}), 404
@@ -2494,8 +2708,8 @@ def dt_pilot_stimulus(key, sid):
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/recut', methods=['POST'])
 def dt_pilot_recut(key, sid):
     """Cut B on the same room: a new test with the same seats and
-    personas, the lineage pointing back. Opening is free; first Play
-    carries the recut price."""
+    personas, the lineage pointing back. A recut is a new group, charged
+    as it opens at the company's plan rate (Jenna 2026-11-05)."""
     user, err = _gate()
     if err:
         return err
@@ -2508,17 +2722,32 @@ def dt_pilot_recut(key, sid):
     if not parent:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     body = request.get_json(silent=True) or {}
+    plan = _plan(user)
+    tier = PR.normalize_tier(body.get('tier') if body.get('tier') is not None else parent.get('group_tier'), plan)
+    gate = _open_gate(user, tier, plan)
+    if gate is not None:
+        return gate
     twins = list(_twins_for(payload, key, parent).values())
     sess = CMP.open_recut(parent, twins, created_by=_uname(user), title=str(body.get('title') or '')[:120], session_id=uuid.uuid4().hex[:10])
     sess['twin_keys'] = list(parent.get('twin_keys') or [key])
+    PR.record_tier(sess, tier, plan)
+    funds = _charge_group(user, payload, sess, kind='recut', tier=tier, plan=plan)       # cut B is a new group (Jenna 2026-11-05)
+    if funds is not None:
+        return funds
     payload.setdefault('pilot_sessions', []).insert(0, sess)
-    PT = _portraits()
-    if PT is not None:
-        try:
-            PT.attach_portraits(sess, _s3())
-        except Exception:
-            pass
-    DT.save_twin(_s3(), key, payload)
+    try:
+        PT = _portraits()
+        if PT is not None:
+            try:
+                PT.attach_portraits(sess, _s3())
+            except Exception:
+                pass
+        DT.save_twin(_s3(), key, payload)
+    except Exception:
+        traceback.print_exc()
+        _refund_group(user, sess, 'Recut test did not open')
+        payload['pilot_sessions'] = [x for x in payload.get('pilot_sessions') or [] if x is not sess]
+        return jsonify({'success': False, 'error': 'The test could not be opened. Nothing was charged; try again in a moment.'}), 500
     _team_notice('notify_pilot_created', payload, sess, username=_uname(user), via='dashboard')   # cut B is a new test on the same room
     return jsonify({'success': True, 'session': PI.public_session(sess), 'parent_id': parent.get('id')})
 

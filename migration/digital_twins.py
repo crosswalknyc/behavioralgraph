@@ -58,29 +58,36 @@ PRODUCT_LABEL = 'Digital Twins IQ'
 # pay-per-use attribution, so the session sweep bills them at the
 # published meter like any other Prometheus work.
 PRICING = {
-    'digital_twins_iq': 750.0,          # a twin build: the twin and its first two runs (the old Greenlight run left the seed 2026-10-28)
+    # Jenna 2026-11-05: Digital Twins is priced PER GROUP (one focus group room or one pilot test, any mode), at the
+    # plan's rate: individual $750 (1-20 questions) / $1,000 (1-40); package $500 / $750 on a $5,000 deposit;
+    # enterprise $200 (1-40) at $20K a month on a 12-month term. The table and the plan logic live in
+    # migration/digital_twin_pricing.py (RATES); the twin build carries no separate charge (the group is the
+    # unit), so digital_twins_iq reads 0 and the walkthrough says 'included'. The runs and the Spend Engine are
+    # not groups and keep their lines. The old session, per-mode and per-panelist lines are retired.
+    'digital_twins_iq': 0.0,            # a twin build: included (the group is the unit, 2026-11-05)
     'digital_twin_run': 100.0,          # each further Launch, content, pricing, platform or compare run
     'digital_twin_spend': 250.0,        # Spend Engine plan activation for the plan window, daily runs included
-    'digital_twin_panel': 5500.0,       # a Focus Group IQ session, 12 questions included (Jenna 2026-10-26: 'A session is $5,500 (twelve questions, any room)')
-    'digital_twin_panel_more': 5500.0,  # each further 12 questions is another session at the session price
-    'digital_twin_panelist': 550.0,     # each panelist beyond the 12 a room seats, billed with the session (Jenna 2026-10-27: 'extra panelists for an extra $550 x panelist')
-    'digital_twin_pilot': 5500.0,       # a Pilot Testing session, same as a Focus Group IQ session (Jenna 2026-10-28)
-    'digital_twin_pilot_more': 5500.0,  # each further 12 questions in a Pilot Testing session
-    # The screening modes (Jenna 2026-10-28, 'price where you think it makes sense'): each one runs on the
-    # Pilot Testing room and is priced for what it tests. A trailer or TV spot is priced per asset; titles and
-    # key art carry up to six options at one price; a recut re-test keeps the same room at half the session.
-    'digital_twin_trailer': 2500.0,     # a trailer or TV spot test, per asset (up to three side by side)
-    'digital_twin_title': 1500.0,       # a title / logline test, up to six options
-    'digital_twin_key_art': 1500.0,     # a key art test, up to six options
-    'digital_twin_concept': 2500.0,     # Greenlight, Concept: a concept test (logline, synopsis, one-sheet or deck text)
-    'digital_twin_script': 3500.0,      # Greenlight, Script read: the script text or a recorded table read
-    'digital_twin_recut': 2750.0,       # a recut re-test on the same room (cut B after cut A)
 }
+try:
+    from migration.digital_twin_pricing import RATES as GROUP_RATES, UPGRADE_RATES as GROUP_UPGRADE_RATES, TOOL_KEYS as GROUP_TOOL_KEYS
+    PRICING.update({GROUP_TOOL_KEYS[k]: v for k, v in GROUP_RATES.items()})
+    PRICING.update({'digital_twin_group_upgrade_individual': GROUP_UPGRADE_RATES['individual'], 'digital_twin_group_upgrade_package': GROUP_UPGRADE_RATES['package']})
+except Exception:   # pragma: no cover - the table is in the repo
+    pass
 PANEL_QUESTIONS_INCLUDED = 12
-PANEL_SEATS_INCLUDED = 12               # panelists a session covers; every seat past this is a priced panelist
+PANEL_SEATS_INCLUDED = 12               # the default seats in a room (the seats are part of the group price since 2026-11-05)
 PANEL_SEATS_MAX = 40
 PULL_TYPES = {
     'digital_twins_iq': 'Digital Twins IQ', 'digital_twin_run': 'Digital Twins IQ Run', 'digital_twin_spend': 'Digital Twins IQ Spend',
+    # the per-group lines (2026-11-05)
+    'digital_twin_group_individual_20': 'Digital Twins IQ Group (Individual, 1-20 questions)',
+    'digital_twin_group_individual_40': 'Digital Twins IQ Group (Individual, 1-40 questions)',
+    'digital_twin_group_package_20': 'Digital Twins IQ Group (Package, 1-20 questions)',
+    'digital_twin_group_package_40': 'Digital Twins IQ Group (Package, 1-40 questions)',
+    'digital_twin_group_enterprise': 'Digital Twins IQ Group (Enterprise, 1-40 questions)',
+    'digital_twin_group_upgrade_individual': 'Digital Twins IQ Group Upgrade (Individual, to 1-40 questions)',
+    'digital_twin_group_upgrade_package': 'Digital Twins IQ Group Upgrade (Package, to 1-40 questions)',
+    # retired 2026-11-05 (the labels stay so old ledger rows still read)
     'digital_twin_panel': 'Digital Twins IQ Focus Group', 'digital_twin_panel_more': 'Digital Twins IQ Focus Group More',
     'digital_twin_panelist': 'Digital Twins IQ Focus Group Panelist',
     'digital_twin_pilot': 'Digital Twins IQ Pilot Testing', 'digital_twin_pilot_more': 'Digital Twins IQ Pilot Testing More',
@@ -88,7 +95,7 @@ PULL_TYPES = {
     'digital_twin_key_art': 'Digital Twins IQ Key Art Test', 'digital_twin_concept': 'Digital Twins IQ Concept Test',
     'digital_twin_script': 'Digital Twins IQ Script Read', 'digital_twin_recut': 'Digital Twins IQ Recut Re-test',
 }
-# the price each screening mode carries on first Play (the session price for the watch modes)
+# the mode -> legacy price key map (kept for old session records; every mode is one group since 2026-11-05)
 MODE_PRICE_KEY = {
     'pilot': 'digital_twin_pilot', 'feature': 'digital_twin_pilot', 'episode': 'digital_twin_pilot', 'binge': 'digital_twin_pilot',
     'trailer': 'digital_twin_trailer', 'spot': 'digital_twin_trailer', 'title': 'digital_twin_title', 'key_art': 'digital_twin_key_art',
@@ -97,8 +104,9 @@ MODE_PRICE_KEY = {
 
 
 def extra_panelists(in_room) -> int:
-    """How many seats in a room are priced panelists: the seats past the
-    included twelve, never negative."""
+    """How many seats in a room sit past the default twelve, never
+    negative. Informational since 2026-11-05: the seats are part of the
+    group price and carry no charge of their own."""
     try:
         n = int(in_room or 0)
     except (TypeError, ValueError):
@@ -692,8 +700,11 @@ def deck_context(run: dict, payload: dict) -> dict:
 
 # ---------------------------------------------------------------- how to
 def pricing_lines(price_fn=None) -> list:
-    """The twin pricing lines in the seat's currency; defaults without
-    a price function."""
+    """The pricing lines in the seat's currency (defaults without a
+    price function): the per-group card (Jenna 2026-11-05), the twin
+    included, the runs and the Spend Engine on their own lines."""
+    from migration import digital_twin_pricing as PR
+
     def p(key):
         d = PRICING[key]
         if price_fn is None:
@@ -717,19 +728,11 @@ def pricing_lines(price_fn=None) -> list:
             return v if v > 0 else d
         except Exception:
             return d
-    return [f"Digital Twin - {money(p('digital_twins_iq'))} for the twin and its first two runs",
+    return ["Digital Twin - included; the twin and its first two runs carry no charge of their own (each group you open on it is priced below)",
             f"Audience build - {money(audience_build())} when the twin's subject has no audience on file yet; it is pulled first, then the twin is built from it",
+            *PR.rate_card_lines(price_fn),
             f"Each further Launch, content, pricing, platform or compare run - {money(p('digital_twin_run'))}",
-            f"Spend Engine - {money(p('digital_twin_spend'))} to activate a plan for its window, daily runs included",
-            f"Focus Group IQ - {money(p('digital_twin_panel'))} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(p('digital_twin_panel_more'))} for each further {PANEL_QUESTIONS_INCLUDED}",
-            f"Pilot Testing - {money(p('digital_twin_pilot'))} a session with {PANEL_QUESTIONS_INCLUDED} questions on the clock, then {money(p('digital_twin_pilot_more'))} for each further {PANEL_QUESTIONS_INCLUDED} (same as Focus Group IQ); a feature, an episode, a binge test or a critics room is a session at this price",
-            f"Trailers - {money(p('digital_twin_trailer'))} per trailer or TV spot, up to three side by side",
-            f"Titles and Key Art - {money(p('digital_twin_title'))} for a title or logline test and {money(p('digital_twin_key_art'))} for a key art test, up to six options each",
-            f"Greenlight Concept - {money(p('digital_twin_concept'))} a concept test",
-            f"Greenlight Script read - {money(p('digital_twin_script'))} a script read",
-            f"Recut re-test - {money(p('digital_twin_recut'))} for cut B on the same room",
-            f"Extra panelist - {money(p('digital_twin_panelist'))} for each panelist past the {PANEL_SEATS_INCLUDED} a session seats, billed with the session",
-            "Prometheus usage - metered at the published rate on top of these, for the build and for every question in a room"]
+            f"Spend Engine - {money(p('digital_twin_spend'))} to activate a plan for its window, daily runs included"]
 
 
 HOW_TO = [
@@ -740,7 +743,7 @@ HOW_TO = [
                    'A named subject sits on its Total Universe. If none is on file, one is pulled first and that file is what the twin and every room use. '
                    'The seats in a room match that file\'s mix (gender, orientation, education, occupation) and each persona is built from those attributes. '
                    'Or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for, '
-                   f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced). Or type the ask to Prometheus with a window if it is not the last 12 months.'),
+                   f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} by default, up to {PANEL_SEATS_MAX}; the seats are part of the group price). Or type the ask to Prometheus with a window if it is not the last 12 months.'),
         'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of women 25 to 44 in Dallas who shop at Target'],
         'attach': 'Nothing is needed. If you have a brief or a deck on the subject, attach it with the paper clip and the twin reads it.',
         'comes_back': ('The twin lands on the Twins tab in a few minutes, with its first two runs. Prometheus confirms in the chat; there is no email. '
@@ -766,9 +769,9 @@ HOW_TO = [
         'comes_back': ('The test opens on the Greenlight tab under its option, Script read or Concept, and sits in that option\'s past tests; Prometheus confirms in the chat '
                        'with a chip to open it. Script read: the dial scene by scene, the notes per scene, the scorecard with its norm, the characters rated, pace '
                        'and confusion by act, and the scenes liked best and least. Concept: the concept read with the norm beside every number and the pick by quadrant.'),
-        'options': [{'id': 'script', 'title': 'Script read', 'cost_key': 'digital_twin_script', 'line': 'Paste or upload a script; the room reads it scene by scene with story, structure and character notes.'},
-                    {'id': 'concept', 'title': 'Concept', 'cost_key': 'digital_twin_concept', 'line': 'A logline, synopsis or one-sheet; interest, stands out, who it is for, would watch, strongest element, biggest doubt.'}],
-        'cost_key': 'digital_twin_concept', 'export': 'Greenlight tab: CSV, PDF, Deck or Report on the test.',
+        'options': [{'id': 'script', 'title': 'Script read', 'cost_key': 'group', 'line': 'Paste or upload a script; the room reads it scene by scene with story, structure and character notes.'},
+                    {'id': 'concept', 'title': 'Concept', 'cost_key': 'group', 'line': 'A logline, synopsis or one-sheet; interest, stands out, who it is for, would watch, strongest element, biggest doubt.'}],
+        'cost_key': 'group', 'export': 'Greenlight tab: CSV, PDF, Deck or Report on the test.',
     },
     {
         'id': 'launch', 'title': 'Launch Lab',
@@ -794,13 +797,13 @@ HOW_TO = [
         'id': 'panel', 'title': 'Focus Group IQ',
         'answers': 'A focus group Prometheus moderates for you (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and Prometheus runs the room: the %s and people counts, the split by segment, a one-line read and a few panelist voices, in a minute or two. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
         'put_in': (f'A name for the room (you can change it later on the room page), the twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), '
-                   f'how many panelists sit in the room ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced and billed with the session), then your questions. '
+                   f'how many panelists sit in the room ({PANEL_SEATS_INCLUDED} by default, up to {PANEL_SEATS_MAX}; the seats are part of the group price), whether the group answers 1-20 or 1-40 questions, then your questions. '
                    'The seats match the twin\'s profile (the gender split, orientation, education and the rest); each persona is built from those attributes.'),
         'type_this': ['Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box', 'Ask them why', 'Show of hands, who watched season 1?',
                       'Ask the room: trailer A vs trailer B', 'Re-ask at $19'],
         'attach': 'Nothing is needed. Attach a trailer link, two loglines or a price sheet if the question is about them.',
         'comes_back': 'The % table, the voices and the read in the chat and on the Focus Group IQ tab, where the room, the live bars and the transcript sit. The session is saved on the twin and resumes where you left it.',
-        'cost_key': 'digital_twin_panel', 'export': 'Focus Group IQ tab: Export (CSV or PDF) on the session.',
+        'cost_key': 'group', 'export': 'Focus Group IQ tab: Export (CSV or PDF) on the session.',
     },
     {
         'id': 'pilot', 'title': 'Pilot Testing',
@@ -813,7 +816,7 @@ HOW_TO = [
                     '(women and men, under and over 35), the dial split by any group in the room (age, ethnicity, orientation, education, '
                     'where they are with the title, avid or casual), the favorite moment, the dead spot, the transcript.'),
         'put_in': (f'A name for the test, the twin (or a second twin) in the room, how many panelists sit '
-                   f'({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced), and the cut: upload an mp4, mov or webm, '
+                   f'({PANEL_SEATS_INCLUDED} by default, up to {PANEL_SEATS_MAX}; the seats are part of the group price), whether the group answers 1-20 or 1-40 questions, and the cut: upload an mp4, mov or webm, '
                    'paste a watch link from any streamer, or type a title and a runtime if the file is not in hand yet. The seats match the twin\'s profile '
                    '(gender, orientation, education, occupation); each persona is built from those attributes. '
                    'The genre is read from the cut; change it with the chip on the test if it reads wrong.'),
@@ -829,7 +832,7 @@ HOW_TO = [
         'protect': ('How we protect your cut: the file plays through links that expire after ten minutes and only for the person who '
                     'uploaded it, your name sits on every frame while it plays, and a switch on the test removes the file the moment the '
                     'scorecard is final (the read, the dial and the transcript stay).'),
-        'cost_key': 'digital_twin_pilot', 'export': 'Pilot Testing tab: Export CSV, PDF, Deck or the full Report on the test.',
+        'cost_key': 'group', 'export': 'Pilot Testing tab: Export CSV, PDF, Deck or the full Report on the test.',
     },
     {
         'id': 'trailer', 'title': 'Trailers',
@@ -842,7 +845,7 @@ HOW_TO = [
         'attach': 'Upload each trailer on the Trailers tab. The title and logline are what the room reads before the first one plays.',
         'comes_back': 'The dial and the moments for each asset, the interest before and after, the lift, the winner and why, by quadrant. Everything a Pilot Testing session carries (questions on the clock, splits, the moderator guide) is here too.',
         'protect': 'Trailers play through links that expire after ten minutes and only for the person who uploaded them, with your name on every frame.',
-        'cost_key': 'digital_twin_trailer', 'export': 'Trailers tab: CSV, PDF, Deck or Report on the test.',
+        'cost_key': 'group', 'export': 'Trailers tab: CSV, PDF, Deck or Report on the test.',
     },
     {
         'id': 'titles', 'title': 'Titles and Key Art',
@@ -853,7 +856,7 @@ HOW_TO = [
         'type_this': ['Test these six titles on the Gilmore Girls twin: ...', 'Which key art sells the show to women under 35?'],
         'attach': 'Upload the art on the Titles and Key Art tab; titles are typed in. Images play through expiring links like a cut.',
         'comes_back': 'A ranked list of the options with the share who prefer each, the reasons in the room\'s own words, appeal and fit per option, and the pick by quadrant.',
-        'cost_key': 'digital_twin_title', 'export': 'Titles and Key Art tab: CSV, PDF, Deck or Report on the test.',
+        'cost_key': 'group', 'export': 'Titles and Key Art tab: CSV, PDF, Deck or Report on the test.',
     },
     {
         'id': 'norms', 'title': 'Norms',
@@ -872,6 +875,7 @@ def how_to(price_fn=None) -> dict:
     what to put in, the lines to type, how to attach, what comes back,
     the cost and how to export. The dashboard renders it; Prometheus
     reads it aloud."""
+    from migration import digital_twin_pricing as PR
     prices = {}
     for k, d in PRICING.items():
         v = d
@@ -884,35 +888,30 @@ def how_to(price_fn=None) -> dict:
 
     def money(v):
         return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+    # one group (a room or a test, any mode) at the plan's rate; the card's three plans in one line (Jenna 2026-11-05)
+    group = (f"one group at your plan's rate: {money(PR.rate('individual', 20, price_fn))} a group for 1-20 questions or {money(PR.rate('individual', 40, price_fn))} for 1-40 "
+             f"({money(PR.rate('package', 20, price_fn))} / {money(PR.rate('package', 40, price_fn))} on the {money(PR.PACKAGE_DEPOSIT_USD)} package deposit, "
+             f"{money(PR.rate('enterprise', 40, price_fn))} a group on an enterprise agreement), charged when the group opens; the seats are included; Prometheus usage metered on top")
     items = []
     for it in HOW_TO:
         row = dict(it)
         if it['id'] == 'panel':
-            row['cost'] = (f"{money(prices['digital_twin_panel'])} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(prices['digital_twin_panel_more'])} for each further {PANEL_QUESTIONS_INCLUDED}; "
-                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
+            row['cost'] = f"A focus group room is {group}"
         elif it['id'] == 'pilot':
-            row['cost'] = (f"{money(prices['digital_twin_pilot'])} a session (same as Focus Group IQ), charged on first Play, with {PANEL_QUESTIONS_INCLUDED} questions on the clock, "
-                           f"then {money(prices['digital_twin_pilot_more'])} for each further {PANEL_QUESTIONS_INCLUDED}; "
-                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
+            row['cost'] = f"A pilot test (a feature, an episode, a binge test, a rough cut or a critics room) is {group}; a recut on the same room is a new group"
         elif it['id'] == 'twin':
-            row['cost'] = f"{money(prices['digital_twins_iq'])}, with its first two runs included; Prometheus usage on the build metered on top"
+            row['cost'] = "Included: the twin and its first two runs carry no charge of their own; each group you open on it is priced per group. Prometheus usage on the build metered on top"
         elif it['id'] == 'spend':
             row['cost'] = f"{money(prices['digital_twin_spend'])} for the plan window, daily runs included"
         elif it['id'] == 'trailer':
-            row['cost'] = (f"{money(prices['digital_twin_trailer'])} per trailer or TV spot, charged on first Play, with {PANEL_QUESTIONS_INCLUDED} questions on the clock; "
-                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
+            row['cost'] = f"A trailer or TV spot test (up to three assets side by side in the same room) is {group}"
         elif it['id'] == 'titles':
-            row['cost'] = (f"{money(prices['digital_twin_title'])} for a title test and {money(prices['digital_twin_key_art'])} for a key art test, up to six options each, charged on first Play; "
-                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
+            row['cost'] = f"A title test or a key art test (up to six options) is {group}"
         elif it['id'] == 'greenlight':
-            seat = f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top"
-            option_cost = {
-                'script': f"{money(prices['digital_twin_script'])} a script read, charged on first Play, with {PANEL_QUESTIONS_INCLUDED} questions on the clock; {seat}",
-                'concept': f"{money(prices['digital_twin_concept'])} a concept test, charged on first Play; {seat}",
-            }
-            row['options'] = [dict(o, cost=option_cost.get(o['id'], ''), price=money(prices[o['cost_key']])) for o in it.get('options') or []]
-            row['cost'] = (f"Concept {money(prices['digital_twin_concept'])} a concept test; Script read {money(prices['digital_twin_script'])} a script read; "
-                           f"each charged on first Play; {seat}")
+            option_cost = {'script': f"A script read is {group}", 'concept': f"A concept test is {group}"}
+            price_word = f"{money(PR.rate('individual', 20, price_fn))} to {money(PR.rate('individual', 40, price_fn))} a group"
+            row['options'] = [dict(o, cost=option_cost.get(o['id'], ''), price=price_word) for o in it.get('options') or []]
+            row['cost'] = f"A concept test or a script read is {group}"
         elif it['id'] == 'norms':
             row['cost'] = 'Nothing. The norms come with every test.'
         else:
@@ -982,7 +981,7 @@ def is_how_to_ask(text: str) -> bool:
 
 
 __all__ = ['list_runs', 'load_twin', 'save_twin', 'has_access', 'is_admin', 'can_open', 'visible_runs', 'allowed_keys', 'find_twin', 'csv_rows', 'csv_text', 'csv_filename',
-           'view_summary', 'twin_lines', 'deck_context', 'how_to', 'how_to_text', 'is_how_to_ask', 'pricing_lines', 'PRICING', 'PULL_TYPES', 'MODE_PRICE_KEY', 'PANEL_QUESTIONS_INCLUDED',
+           'view_summary', 'twin_lines', 'deck_context', 'how_to', 'how_to_text', 'is_how_to_ask', 'pricing_lines', 'PRICING', 'PULL_TYPES', 'MODE_PRICE_KEY', 'PANEL_QUESTIONS_INCLUDED', 'GROUP_RATES',
            'product_runs', 'is_retired_run', 'RETIRED_RUN_KINDS', 'GREENLIGHT_RETIRED_LINE',
            'PANEL_SEATS_INCLUDED', 'PANEL_SEATS_MAX', 'extra_panelists', 'panelists_for',
            'can_delete_twin', 'delete_twin', 'deleted_twin_key', 'deleted_twin_sidecar_key', 'drop_twin_from_allowed_runs',

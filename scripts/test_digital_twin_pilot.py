@@ -226,19 +226,23 @@ class Copy(unittest.TestCase):
         blob = json.dumps(it, ensure_ascii=False) + doc['where']
         self.assertIn('Play', it['answers'])
         self.assertIn('dial', it['answers'])
-        self.assertIn('$5,500', it['cost'])
-        self.assertIn('Focus Group IQ', it['cost'])
+        self.assertIn('$750 a group for 1-20 questions', it['cost'])     # one group at the plan rate (Jenna 2026-11-05)
+        self.assertIn('charged when the group opens', it['cost'])
         self.assertNotIn('\u2014', blob)
         for tok in ('synth', 'synthetic', 'modeled', 'claude', 'hostmap', 'pipeline'):
             self.assertNotIn(tok, blob.lower())
         self.assertIn('Pilot Testing tab', doc['where'])
 
     def test_pricing_line(self):
+        # priced per group since 2026-11-05: a pilot test is one group at the plan rate, the same as a focus group room
         lines = DT.pricing_lines()
-        self.assertTrue(any(l.startswith('Pilot Testing - $5,500') for l in lines))
-        self.assertEqual(DT.PRICING['digital_twin_pilot'], 5500.0)
-        self.assertEqual(DT.PRICING['digital_twin_pilot_more'], 5500.0)
-        self.assertEqual(DT.PULL_TYPES['digital_twin_pilot'], 'Digital Twins IQ Pilot Testing')
+        self.assertTrue(any(l.startswith('Individual groups - $750 a group for 1-20 questions, $1,000 a group for 1-40') for l in lines))
+        self.assertTrue(any('one focus group room or one pilot test' in l and 'Same rates for both' in l for l in lines))
+        self.assertFalse(any('5,500' in l for l in lines))
+        self.assertEqual(DT.PRICING['digital_twin_group_individual_20'], 750.0)
+        self.assertEqual(DT.PRICING['digital_twin_group_individual_40'], 1000.0)
+        self.assertNotIn('digital_twin_pilot', DT.PRICING)                  # the session line is retired
+        self.assertEqual(DT.PULL_TYPES['digital_twin_pilot'], 'Digital Twins IQ Pilot Testing')   # the label stays for old ledger rows
 
     def test_tab_id_on_the_page(self):
         with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
@@ -815,7 +819,7 @@ class UIStrings(unittest.TestCase):
             self.assertNotIn(tok, it['protect'].lower(), tok)
         self.assertIn('expire', it['protect'])
         self.assertIn('every frame', it['protect'])
-        self.assertIn('$5,500', it['cost'])
+        self.assertIn('$750 a group for 1-20 questions', it['cost'])
         self.assertIn('norm', it['answers'])
         text = DT.how_to_text('pilot testing')
         self.assertIn('How we protect your cut', text)

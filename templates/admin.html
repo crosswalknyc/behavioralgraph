@@ -2907,6 +2907,43 @@
                         <div style="font-size: 1.5rem; font-weight: 700; color: #58a6ff;" id="cdPrometheusCost">--</div>
                         <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.1rem;" id="cdPrometheusActions">0 actions</div>
                     </div>
+                    <!-- Digital Twins IQ plan (Jenna 2026-11-05: priced per group at the company's plan rate) -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;" id="cdTwinPlanCard" title="Digital Twins IQ is priced per group (a focus group room or a pilot test). The plan sets the rate every seat on this company pays when a group opens.">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem; display:flex; align-items:center; justify-content:space-between; gap:0.4rem;">
+                            <span>Digital Twins plan</span>
+                            <a href="#" onclick="_cdOpenTwinPlan(event)" style="font-size:0.65rem; color:#C7F23E; text-transform:none; letter-spacing:normal; text-decoration:underline;">Change</a>
+                        </div>
+                        <div style="font-size: 1.1rem; font-weight: 700; color: #C7F23E;" id="cdTwinPlanLabel">--</div>
+                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.1rem;" id="cdTwinPlanDetail"></div>
+                    </div>
+                </div>
+
+                <!-- Digital Twins plan (hidden by default; Jenna 2026-11-05) -->
+                <div id="twinPlanRow" style="display:none; margin-bottom:1rem; padding:0.65rem 0.85rem; border:1px solid #C7F23E; border-radius:8px; background:rgba(199,242,62,0.05);">
+                    <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.4rem;">Digital Twins IQ is priced per group: one focus group room or one pilot test, any mode, 1-20 or 1-40 questions. Individual groups $750 / $1,000 a group (a card on file; we recommend a $2,000 balance). Package rate $500 / $750 a group; it switches on by itself when a $5,000 deposit lands on the company wallet, or set it here. Enterprise $200 a group at $20,000 a month on a 12-month term. Crosswalk staff seats are never charged.</div>
+                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                        <label style="font-size:0.8rem;color:var(--text-secondary);">Plan:</label>
+                        <select id="twinPlanSelect" onchange="_cdTwinPlanFields()" style="padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);">
+                            <option value="individual">Individual groups ($750 / $1,000)</option>
+                            <option value="package">Package rate ($500 / $750, $5,000 deposit)</option>
+                            <option value="enterprise">Enterprise agreement ($200, $20K a month)</option>
+                        </select>
+                        <span id="twinPlanPackageFields" style="display:none; align-items:center; gap:0.4rem;">
+                            <label style="font-size:0.8rem;color:var(--text-secondary);">Deposit $</label>
+                            <input type="number" id="twinPlanDeposit" value="5000" min="0" step="100" style="width:90px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);">
+                        </span>
+                        <span id="twinPlanEnterpriseFields" style="display:none; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+                            <label style="font-size:0.8rem;color:var(--text-secondary);">Monthly $</label>
+                            <input type="number" id="twinPlanMonthly" value="20000" min="0" step="100" style="width:90px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);">
+                            <label style="font-size:0.8rem;color:var(--text-secondary);">Months</label>
+                            <input type="number" id="twinPlanMonths" value="12" min="1" max="60" style="width:60px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);">
+                            <label style="font-size:0.8rem;color:var(--text-secondary);">Starts</label>
+                            <input type="date" id="twinPlanStart" style="padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);">
+                        </span>
+                        <button class="btn btn-primary btn-small" onclick="_cdSaveTwinPlan()">Save</button>
+                        <button class="btn btn-small btn-secondary" onclick="document.getElementById('twinPlanRow').style.display='none'" style="margin-left:auto;">Close</button>
+                    </div>
+                    <div id="twinPlanStatus" style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.4rem;"></div>
                 </div>
 
                 <!-- Adjust Credits (hidden by default) -->
@@ -5702,6 +5739,67 @@
             loadCompanyEmployees(companyName);
             loadCompanyReport(companyName);
             loadCompanyDefaults(companyName);
+            const _tpr = document.getElementById('twinPlanRow'); if (_tpr) _tpr.style.display = 'none';
+            _cdLoadTwinPlan(companyName);
+        }
+
+        // ---- Digital Twins IQ plan (Jenna 2026-11-05): individual / package / enterprise, per company ----
+        let _cdTwinPlan = null;
+        async function _cdLoadTwinPlan(companyName) {
+            const lab = document.getElementById('cdTwinPlanLabel'), det = document.getElementById('cdTwinPlanDetail');
+            if (!lab || !det) return;
+            lab.textContent = '--'; det.textContent = '';
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(companyName)}/digital-twins-plan`, { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success) { lab.textContent = 'Individual'; det.textContent = data.error || ''; _cdTwinPlan = null; return; }
+                _cdTwinPlan = data;
+                const labels = data.labels || {};
+                lab.textContent = (labels[data.plan] || data.plan || 'Individual') + (data.active === false ? ' (lapsed)' : '');
+                det.textContent = data.status || '';
+            } catch (e) { lab.textContent = 'Individual'; det.textContent = ''; _cdTwinPlan = null; }
+        }
+        function _cdTwinPlanFields() {
+            const v = (document.getElementById('twinPlanSelect') || {}).value || 'individual';
+            const pk = document.getElementById('twinPlanPackageFields'), en = document.getElementById('twinPlanEnterpriseFields');
+            if (pk) pk.style.display = v === 'package' ? 'inline-flex' : 'none';
+            if (en) en.style.display = v === 'enterprise' ? 'inline-flex' : 'none';
+        }
+        function _cdOpenTwinPlan(ev) {
+            if (ev) ev.preventDefault();
+            const row = document.getElementById('twinPlanRow');
+            if (!row) return;
+            const d = _cdTwinPlan || {}, meta = d.meta || {};
+            const sel = document.getElementById('twinPlanSelect'); if (sel) sel.value = d.plan || 'individual';
+            const dep = document.getElementById('twinPlanDeposit'); if (dep) dep.value = meta.package_deposit_usd || d.package_deposit_usd || 5000;
+            const mo = document.getElementById('twinPlanMonthly'); if (mo) mo.value = meta.enterprise_monthly_usd || d.enterprise_monthly_usd || 20000;
+            const ms = document.getElementById('twinPlanMonths'); if (ms) ms.value = meta.enterprise_term_months || d.enterprise_term_months || 12;
+            const st = document.getElementById('twinPlanStart'); if (st) st.value = meta.enterprise_started_at || '';
+            const status = document.getElementById('twinPlanStatus'); if (status) status.textContent = d.status || '';
+            _cdTwinPlanFields();
+            row.style.display = '';
+        }
+        async function _cdSaveTwinPlan() {
+            if (!_currentCompany) return;
+            const plan = (document.getElementById('twinPlanSelect') || {}).value || 'individual';
+            const body = { plan: plan };
+            if (plan === 'package') body.package_deposit_usd = parseFloat((document.getElementById('twinPlanDeposit') || {}).value || '5000') || 5000;
+            if (plan === 'enterprise') {
+                body.enterprise_monthly_usd = parseFloat((document.getElementById('twinPlanMonthly') || {}).value || '20000') || 20000;
+                body.enterprise_term_months = parseInt((document.getElementById('twinPlanMonths') || {}).value || '12', 10) || 12;
+                const st = (document.getElementById('twinPlanStart') || {}).value || '';
+                if (st) body.enterprise_started_at = st;
+            }
+            const status = document.getElementById('twinPlanStatus');
+            if (status) status.textContent = 'Saving...';
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/digital-twins-plan`, {
+                    method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Could not save the plan');
+                if (status) status.textContent = data.status || 'Saved.';
+                await _cdLoadTwinPlan(_currentCompany);
+            } catch (e) { if (status) status.textContent = e.message || 'Could not save the plan'; }
         }
 
         let _companyPoolInfo = null;

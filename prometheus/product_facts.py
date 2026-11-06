@@ -11,6 +11,9 @@ reads today, with the live prices:
               "how do I pull profiles for everyone on a spreadsheet"
   valuation   "how do I value a partnership", "how does the brand
               partnership valuation work", "what is Brand Partnership IQ"
+  twin_pricing "what does a focus group cost", "how much is a pilot
+              test", "digital twins pricing": the per-group card
+              (Jenna 2026-11-05, migration/digital_twin_pricing)
 
 Boundaries (an order wins over this lane):
   * a bulk order with a names sheet on the thread ("pull profiles for
@@ -36,7 +39,7 @@ from . import rate_card as _rc
 
 __all__ = ['FAMILIES', 'enabled', 'looks_like', 'family_of', 'answer', 'price_fn_for', 'thread_has_names', 'facts']
 
-FAMILIES = ('overview', 'bulk_list', 'valuation')
+FAMILIES = ('overview', 'bulk_list', 'valuation', 'twin_pricing')
 _MAX_LEN = 320
 
 _LEAD = r"^\W*(?:(?:hi|hey|hello|ok|okay|so|and|also|prometheus|quick question|one more|one more thing)[,!.:\s]+)*"
@@ -105,8 +108,16 @@ def _names_a_subject(t):
     return False
 
 
+def _twin_pricing_ask(t):
+    try:
+        from migration.digital_twin_pricing import is_pricing_ask
+        return bool(is_pricing_ask(t))
+    except Exception:
+        return False
+
+
 def family_of(text):
-    """'overview' | 'bulk_list' | 'valuation' | None."""
+    """'overview' | 'bulk_list' | 'valuation' | 'twin_pricing' | None."""
     if not enabled():
         return None
     t = _clean(text)
@@ -116,6 +127,8 @@ def family_of(text):
         return 'overview'
     if _STATUS_RX.search(t):
         return None
+    if _twin_pricing_ask(t):
+        return 'twin_pricing'
     if _BULK_RX.search(t) and not _TWIN_RX.search(t):
         return 'bulk_list'
     if _VALUATION_RX.search(t) and not _names_a_subject(t):
@@ -196,6 +209,11 @@ def answer(text, *, price_fn=None, has_names_list=None):
                  f"several at a time); say 'Queue the list' and the builds run as capacity allows, each profile landing in Select Profile as it "
                  f"finishes, with a summary email as the list progresses. Ask 'how is my list going' any time.")
         return {'reply': reply, 'followups': ['How is my list going?'], 'family': fam}
+    if fam == 'twin_pricing':
+        from migration.digital_twin_pricing import rate_card_text
+        reply = (rate_card_text(price_fn) + "\n\nThe plan is set per company; every seat on the company opens groups at that rate, and the group is charged "
+                 "to the company wallet when it opens. Open a room on the Focus Group IQ tab or a test on the Pilot Testing tab, or say 'Open a focus group with the <subject> twin'.")
+        return {'reply': reply, 'followups': ['Open a focus group', 'Open Pilot Testing', 'How do I use Digital Twins IQ?'], 'family': fam}
     if fam == 'valuation':
         reply = (f"Say 'Value a brand partnership' and I walk you through it one question at a time: the talent or property, the campaign, "
                  f"its dates, the attribution window (the campaign dates plus 30 days, or your own), whether to include a control group, and "

@@ -487,8 +487,8 @@ class Charging(unittest.TestCase):
         charged, err = NP.charge({'username': 'carolyn'}, 'carolyn', SUBJECT, pull=True, profile_run_id='run_named', twin_job_id='job1',
                                  consume_credit=consume, is_free=lambda u, n: False)
         self.assertIsNone(err)
-        self.assertEqual(charged, {'profile': NP.PROFILE_CREDITS, 'twin': NP.TWIN_CREDITS})
-        self.assertEqual(charges, [('Chatbot Profile IQ (new_build)', 5, 'run_named'), ('Digital Twins IQ', 15, 'job1')])
+        self.assertEqual(charged, {'profile': NP.PROFILE_CREDITS, 'twin': 0})           # the twin is included (2026-11-05): the audience build alone
+        self.assertEqual(charges, [('Chatbot Profile IQ (new_build)', 5, 'run_named')])
 
     def test_a_subject_on_file_charges_the_twin_alone(self):
         charges = []
@@ -498,18 +498,19 @@ class Charging(unittest.TestCase):
             return True
         charged, err = NP.charge({'username': 'carolyn'}, 'carolyn', SUBJECT, pull=False, twin_job_id='job1', consume_credit=consume, is_free=lambda u, n: False)
         self.assertIsNone(err)
-        self.assertEqual(charged, {'profile': 0, 'twin': NP.TWIN_CREDITS})
-        self.assertEqual(charges, [('Digital Twins IQ', 15, 'job1')])
+        self.assertEqual(charged, {'profile': 0, 'twin': 0})                             # nothing: the twin is included (2026-11-05)
+        self.assertEqual(charges, [])
 
     def test_funds_short_charges_nothing_and_says_so(self):
         charged, err = NP.charge({'username': 'carolyn'}, 'carolyn', SUBJECT, pull=True, profile_run_id='r', twin_job_id='j',
                                  consume_credit=lambda *a, **k: False, is_free=lambda u, n: False)
         self.assertEqual(charged, {'profile': 0, 'twin': 0})
         self.assertIn('cannot cover it right now', err)
-        self.assertIn('$1,050', err)
+        self.assertIn('$300', err)                                          # the audience build; the twin is included (2026-11-05)
+        self.assertIn('the twin is included', err)
         charged2, err2 = NP.charge({'username': 'carolyn'}, 'carolyn', SUBJECT, pull=False, twin_job_id='j', consume_credit=lambda *a, **k: False, is_free=lambda u, n: False)
         self.assertEqual(charged2, {'profile': 0, 'twin': 0})
-        self.assertIn('$750', err2)
+        self.assertIsNone(err2)                                             # nothing to charge for a twin on file
 
     def test_a_free_seat_is_never_charged(self):
         charged, err = NP.charge({'username': 'jenna', 'role': 'super_admin'}, 'jenna', SUBJECT, pull=True, profile_run_id='r', twin_job_id='j',
@@ -526,13 +527,13 @@ class Copy(unittest.TestCase):
         parsed = {'subject': SUBJECT, 'subject_kind': 'talent', 'purpose': 'a podcast launch', 'window': dict(WINDOW)}
         card = lane.confirm_reply(parsed, on_file='')
         self.assertIn(f"- Audience: no {SUBJECT} audience is on file yet, so it is pulled first (usually under an hour), then the twin is built from it", card)
-        self.assertIn('- Price: $1,050 charged now ($300 for the audience build and $750 for the twin with its first two runs); each further run $100.', card)
+        self.assertIn('- Price: $300 charged now for the audience build; the twin and its first two runs are included (each group you open on it is priced per group); each further run $100.', card)
         self.assertIn("Say 'Build the twin'", card)
         for b in self.BANNED:
             self.assertNotIn(b, card.lower())
         card2 = lane.confirm_reply(parsed, on_file='Testy_McSubject_11_01_2026_10_00.csv')
         self.assertIn(f"- Audience: built on the {SUBJECT} audience already on file", card2)
-        self.assertIn('- Price: $750 for the twin and its first two runs; each further run $100', card2)
+        self.assertIn('- Price: the twin and its first two runs are included (each group you open on it is priced per group); each further run $100', card2)
         self.assertNotIn('$1,050', card2)
 
     def test_an_idea_and_a_demographic_group_are_never_pulled(self):
@@ -546,14 +547,14 @@ class Copy(unittest.TestCase):
         self.assertTrue(NP.pullable({'subject': SUBJECT, 'subject_kind': 'talent'}))
         card = lane.confirm_reply({'subject': 'A dating show set in Antarctica', 'subject_kind': 'idea', 'purpose': 'a pitch', 'window': dict(WINDOW)})
         self.assertNotIn('- Audience:', card)
-        self.assertIn('- Price: $750 for the twin and its first two runs', card)
+        self.assertIn('- Price: the twin and its first two runs are included (each group you open on it is priced per group); each further run $100', card)
         started, charges = [], []
         job_id, line, err = lane.start_build({'username': 'carolyn'}, 'carolyn', {'subject': 'A dating show set in Antarctica', 'subject_kind': 'idea', 'purpose': 'a pitch'},
                                              start_fn=lambda kind, job_id, username, inputs, extras, sw, runner: started.append(inputs) or {'job_id': job_id},
                                              consume_credit=lambda uname, **kw: charges.append(kw.get('pull_type')) or True, is_free=lambda u, n: False)
         self.assertIsNone(err)
         self.assertIs(started[0]['pull_audience'], False)
-        self.assertEqual(charges, ['Digital Twins IQ'])
+        self.assertEqual(charges, [])                                                     # the twin is included (2026-11-05)
 
     def test_the_prometheus_confirm_charges_both_and_queues_the_pull(self):
         from prometheus import digital_twin_lane as lane
@@ -578,11 +579,11 @@ class Copy(unittest.TestCase):
         self.assertEqual((kind, jid, username), ('twin_build', job_id, 'carolyn'))
         self.assertIs(inputs['pull_audience'], True)
         self.assertTrue(inputs['profile_run_id'])
-        self.assertEqual(inputs['charged'], {'profile': 5, 'twin': 15})
+        self.assertEqual(inputs['charged'], {'profile': 5, 'twin': 0})                   # the audience build; the twin is included (2026-11-05)
         self.assertEqual(inputs['requester_email'], 'carolyn@example.com')
-        self.assertEqual([c[0] for c in charges], ['Chatbot Profile IQ (new_build)', 'Digital Twins IQ'])
+        self.assertEqual([c[0] for c in charges], ['Chatbot Profile IQ (new_build)'])
         self.assertEqual(charges[0][2], inputs['profile_run_id'])   # the audience charge carries the run id the engine refunds by
-        self.assertEqual(charges[1][2], job_id)
+        self.assertEqual(len(charges), 1)                            # no twin line: the twin is included (2026-11-05)
         for b in self.BANNED:
             self.assertNotIn(b, line.lower())
         # a subject on file: the twin alone, built on that audience
@@ -594,7 +595,7 @@ class Copy(unittest.TestCase):
         self.assertTrue(line2.startswith('On it. Building the Testy McSubject twin now'))
         self.assertIs(started[0][3]['pull_audience'], False)
         self.assertEqual(started[0][3]['profile_key'], 'Testy_McSubject_11_01_2026_10_00.csv')
-        self.assertEqual([c[0] for c in charges], ['Digital Twins IQ'])
+        self.assertEqual([c[0] for c in charges], [])                 # a twin on an audience on file charges nothing (included, 2026-11-05)
 
     def test_funds_short_on_the_prometheus_door_queues_nothing(self):
         from prometheus import digital_twin_lane as lane
@@ -620,18 +621,19 @@ class Copy(unittest.TestCase):
             page = fh.read()
         self.assertIn("profile: /^audience build\\b/i", page)
         self.assertIn("<i>The audience</i>, pulled first (usually under an hour)</span><b>' + usd(pa) + '</b>", page)
-        self.assertIn("Charged now</span><b>' + usd(pt + pa) + '</b>", page)
+        self.assertIn("Charged now</span><b>' + usd(pa) + '</b>", page)                 # the audience build alone; the twin is included (2026-11-05)
+        self.assertIn("<i>The twin</i>, with its first two runs</span><b>Included</b>", page)
         self.assertIn('The audience is pulled first (usually under an hour), then the twin is built from it; both land on the Twins tab and Prometheus confirms in the chat and by email.', page)
-        self.assertIn('If this audience is already on file, only the twin is charged.', page)
+        self.assertIn('If this audience is already on file, nothing is charged now.', page)
         self.assertIn('waited < 7200000', page)
 
     def test_the_pricing_lines_carry_the_audience_build(self):
         from migration import digital_twins as DT
         lines = DT.pricing_lines()
         self.assertTrue(any(l.startswith("Audience build - $300 when the twin's subject has no audience on file yet") for l in lines))
-        self.assertTrue(lines[0].startswith('Digital Twin - $750'))     # the twin price stays the first line the tab reads
+        self.assertTrue(lines[0].startswith('Digital Twin - included'))     # the twin line stays the first line the tab reads; the group is the priced unit (2026-11-05)
         pr = NP.price()
-        self.assertEqual((pr['profile_usd'], pr['twin_usd'], pr['total_usd']), (300.0, 750.0, 1050.0))
+        self.assertEqual((pr['profile_usd'], pr['twin_usd'], pr['total_usd']), (300.0, 0.0, 300.0))
 
     def test_waiting_and_ready_copy(self):
         self.assertEqual(NP.waiting_stage(SUBJECT), f"pulling the {SUBJECT} audience first (usually under an hour); the twin follows")

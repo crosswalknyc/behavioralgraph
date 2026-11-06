@@ -5,7 +5,9 @@ concept from its own tools, the way the partner API builds a profile:
 a prompt and a file in, a status and the results out.
 
   POST /api/v1/screenings               open the test on the twin the prompt names, add the file or the
-                                        words, start the watch, take the price. Returns a screening id.
+                                        words, start the watch, take the price: one GROUP at the company's plan
+                                        rate for its tier (``questions``: 20 or 40; Jenna 2026-11-05). Returns a
+                                        screening id.
   GET  /api/v1/screenings/<id>          status and, once the room has watched, the results.
   GET  /api/v1/screenings/<id>/report.pdf | report.pptx | dial.png   the report and the dial chart.
   GET  /api/v1/screenings               the caller's screenings, newest first.
@@ -260,7 +262,9 @@ def _result(sess: dict, twin_name: str) -> dict:
            'genre': scrub_text(sess.get('genre'), 40), 'format': scrub_text(sc.get('format') or sess.get('format'), 20),
            'seats': int((sess.get('group') or {}).get('in_room') or len((sess.get('group') or {}).get('roster') or [])), 'people': people,
            'runtime_s': (sess.get('media') or {}).get('runtime_s'), 'created_at': sess.get('created_at'), 'updated_at': sess.get('updated_at'),
-           'price_usd': sess.get('price_usd'), 'progress': scrub_text(sess.get('prepare_stage') or sess.get('prepare_note'), 120) if status != 'complete' else 'complete'}
+           'price_usd': sess.get('price_usd'), 'questions': int(sess.get('group_tier') or sess.get('questions_paid') or 0) or None,
+           'questions_asked': len(sess.get('questions') or []),
+           'progress': scrub_text(sess.get('prepare_stage') or sess.get('prepare_note'), 120) if status != 'complete' else 'complete'}
     if status not in ('ready', 'complete') or head.get('total_positive_pct') is None and sc.get('overall_like') is None:
         return out
     out['scorecard'] = {'excellent_pct': _num(head.get('excellent_pct')), 'total_positive_pct': _num(head.get('total_positive_pct')), 'definitely_recommend_pct': _num(head.get('definitely_recommend_pct')),
@@ -440,9 +444,17 @@ def v1_screening_open():
     text = str(body.get('text') or body.get('script') or body.get('concept') or '')
     if mode == 'concept' and not text:
         text = prompt
+    # the group's tier (1-20 or 1-40 questions on the clock) and the individual plan's card-and-balance gate, before anything is stored
+    from migration import digital_twin_pricing as PR
+    plan = A._plan(user)
+    tier = PR.normalize_tier(body.get('questions') if body.get('questions') is not None else body.get('tier'), plan)
+    gate = A._open_gate(user, tier, plan)
+    if gate is not None:
+        return gate
     sess = PI.open_session([payload], in_room=in_room, title=title, created_by=A._uname(user) or _key_id(user), session_id=uuid.uuid4().hex[:10], mode=mode,
                            logline=str(body.get('logline') or ''), text=text, options=options or None, rough_cut=str(body.get('rough_cut') or '').lower() in ('1', 'true', 'yes'))
     sess['twin_keys'] = [key]
+    PR.record_tier(sess, tier, plan)
     sess['screening_id'] = f"scr_{uuid.uuid4().hex[:14]}"
     sess['via'] = 'api'
     if body.get('genre'):
@@ -511,15 +523,14 @@ def v1_screening_open():
         runtime_in = 0.0
     if runtime_in and not (sess.get('media') or {}).get('runtime_s'):
         sess['media']['runtime_s'] = runtime_in
-    # the price, on the first Play a key caller never presses: it is taken now, before the watch
-    funds = A._charge_pilot(user, payload, sess, for_play=True)
+    # the price: one group at the company's plan rate, taken now (a key caller never presses Play), then the watch
+    funds = A._charge_pilot(user, payload, sess, for_play=True, body={'tier': tier})
     if funds is not None:
         payload['pilot_sessions'] = [s for s in payload.get('pilot_sessions') or [] if s.get('id') != sess['id']]
         return funds
     try:
-        from migration.digital_twins import PRICING
-        qty = int(sess.get('play_quantity') or 1)
-        sess['price_usd'] = round(float(PRICING.get(str(sess.get('play_price_key') or 'digital_twin_pilot'), 0.0)) * qty, 2)
+        gc = PR.group_charge(sess)
+        sess['price_usd'] = round(float(gc.get('usd') or 0.0) if gc else PR.rate(plan, tier), 2)
     except Exception:
         pass
     DT.save_twin(s3, key, payload)

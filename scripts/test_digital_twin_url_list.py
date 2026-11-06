@@ -257,7 +257,7 @@ class PrometheusDoor(unittest.TestCase):
         self.assertIn('US people who watched, read or visited this content in the window', card['reply'])
         self.assertIn('- Window: Trailing 12 months (', card['reply'])
         self.assertIn('- Category: STREAMING/PLATFORM', card['reply'])
-        self.assertIn('Price: $1,050 charged now ($300 for the audience build and $750 for the twin with its first two runs); each further run $100.', card['reply'])
+        self.assertIn('Price: $300 charged now for the audience build; the twin and its first two runs are included (each group you open on it is priced per group); each further run $100.', card['reply'])
         self.assertIn("Say 'Build the twin'", card['reply'])
         self.assertEqual(card['followups'], ['Build the twin', 'Cancel'])
         self.assertTrue(card['twin_list_confirm_payload']['list_key'].startswith(T.LIST_PREFIX))
@@ -277,9 +277,9 @@ class PrometheusDoor(unittest.TestCase):
         self.assertTrue(inputs['profile_run_id'])
         self.assertEqual(inputs['charged'], {'profile': T.PROFILE_CREDITS, 'twin': T.TWIN_CREDITS})
         self.assertEqual(inputs['requester_email'], 'carolyn@example.com')
-        self.assertEqual([c[1] for c in self.charges], ['Chatbot Profile IQ (new_build)', 'Digital Twins IQ'])
+        self.assertEqual([c[1] for c in self.charges], ['Chatbot Profile IQ (new_build)'])   # the twin is included (2026-11-05)
         self.assertEqual(self.charges[0][3], inputs['profile_run_id'])   # the audience charge carries the run id the engine refunds by
-        self.assertEqual(self.charges[1][3], job_id)
+        self.assertEqual(inputs['charged']['twin'], 0)
 
     def test_name_and_window_in_the_order_go_straight_to_the_card(self):
         card = self._hook('Build a twin from the attached list for calendar 2025 and call it Ranch drama fans.')

@@ -58,10 +58,13 @@ MAX_URLS = 5000
 LIST_TTL_S = 7 * 24 * 3600
 BUCKET = 'dashboard-inputs'
 PROFILE_PRICE_KEY, PROFILE_PRICE_DEFAULT = 'api_chatbot_profile_iq_build', 300.0
-TWIN_PRICE_KEY, TWIN_PRICE_DEFAULT = 'digital_twins_iq', 750.0
+# Jenna 2026-11-05: the twin build carries no charge of its own (the GROUP is the unit; every focus group room or
+# pilot test is priced per group through migration/digital_twin_pricing). The key stays so a company override in
+# the billing panel still reads; 0 means included and nothing is consumed for it.
+TWIN_PRICE_KEY, TWIN_PRICE_DEFAULT = 'digital_twins_iq', 0.0
 RUN_PRICE_KEY, RUN_PRICE_DEFAULT = 'digital_twin_run', 100.0
 PROFILE_CREDITS = 5          # _V1_CREDITS['new_build']; the wallet prices the pull type live
-TWIN_CREDITS = 15            # digital_twins_api.CREDITS['digital_twins_iq']
+TWIN_CREDITS = 0             # the twin is included (was 15 before 2026-11-05)
 PROFILE_PULL_TYPE = 'Chatbot Profile IQ (new_build)'
 
 ASK_NAME = ("What should I call this audience? A plain name is best, like 'Yellowstone and Landman viewers' "
@@ -591,6 +594,13 @@ def _usd(key, dflt, username):
         return float(dflt)
 
 
+def twin_included(username=None):
+    """True when the twin build carries no charge (the standing card
+    since 2026-11-05; a company override above 0 in the billing panel
+    brings a twin line back for that company)."""
+    return _usd(TWIN_PRICE_KEY, TWIN_PRICE_DEFAULT, username) <= 0
+
+
 def _label(v, username):
     if os.environ.get('REGRESSION_TEST_MODE') != '1':
         try:
@@ -609,8 +619,12 @@ def price(username=None):
     r = _usd(RUN_PRICE_KEY, RUN_PRICE_DEFAULT, username)
     out = {'profile_usd': p, 'twin_usd': t, 'run_usd': r, 'total_usd': p + t,
            'profile_label': _label(p, username), 'twin_label': _label(t, username), 'run_label': _label(r, username), 'total_label': _label(p + t, username)}
-    out['line'] = (f"Price: {out['total_label']} charged now ({out['profile_label']} for the audience build and {out['twin_label']} for the twin "
-                   f"with its first two runs); each further run {out['run_label']}.")
+    if t <= 0:
+        out['line'] = (f"Price: {out['profile_label']} charged now for the audience build; the twin and its first two runs are included "
+                       f"(each group you open on it is priced per group); each further run {out['run_label']}.")
+    else:
+        out['line'] = (f"Price: {out['total_label']} charged now ({out['profile_label']} for the audience build and {out['twin_label']} for the twin "
+                       f"with its first two runs); each further run {out['run_label']}.")
     return out
 
 
@@ -1073,9 +1087,14 @@ def charge_both(user, uname, name, *, profile_run_id, twin_job_id, consume_credi
         traceback.print_exc()
         ok = False
     if not ok:
+        if pr['twin_usd'] <= 0:
+            return charged, (f"That build runs {pr['profile_label']} for the audience (the twin is included) "
+                             f"and your account cannot cover it right now. Add funds or ask your admin, and it runs the moment you are set.")
         return charged, (f"That build runs {pr['total_label']} ({pr['profile_label']} for the audience and {pr['twin_label']} for the twin) "
                          f"and your account cannot cover it right now. Add funds or ask your admin, and it runs the moment you are set.")
     charged['profile'] = PROFILE_CREDITS
+    if pr['twin_usd'] <= 0 or TWIN_CREDITS <= 0:
+        return charged, None          # the twin is included (2026-11-05): nothing more is consumed
     try:
         from migration.digital_twins import PULL_TYPES
         ok = bool(consume_credit(uname, description=f"Digital Twin: {name}", pull_type=PULL_TYPES['digital_twins_iq'],

@@ -160,27 +160,27 @@ DEFAULT_PRICING = {
         # front through the user's chosen end date; no refunds).
         "attribution_iq_setup": 500.0,
         "attribution_iq_daily": 100.0,
-        # 2026-10-26 (Jenna): Digital Twins IQ. The twin (with its
-        # first two runs since 2026-10-28) $750; each further run $100;
-        # a Spend Engine plan $250 for its window; a Focus Group IQ session
-        # $150 with 12 questions, then $100 per further 12. One line
-        # each; the admin billing panel overrides them.
-        "digital_twins_iq": 750.0,
+        # 2026-11-05 (Jenna): Digital Twins IQ is priced PER GROUP (one
+        # focus group room or one pilot test, any mode) at the company's
+        # plan rate for the tier chosen at open: individual $750 (1-20
+        # questions) / $1,000 (1-40); package $500 / $750 on a $5,000
+        # deposit; enterprise $200 (1-40) at $20K a month, 12 months.
+        # Moving a 1-20 group to 1-40 is the difference. The twin build
+        # carries no charge of its own (0); each further run $100; a
+        # Spend Engine plan $250 for its window. The table of record is
+        # migration/digital_twin_pricing.py (RATES); the billing panel
+        # overrides a line per company. The 2026-10-26 session, per-mode
+        # and per-panelist lines are retired (RETIRED_TOOL_KEYS).
+        "digital_twins_iq": 0.0,
         "digital_twin_run": 100.0,
         "digital_twin_spend": 250.0,
-        "digital_twin_panel": 5500.0,
-        "digital_twin_panel_more": 5500.0,
-        # each panelist past the twelve a session seats (Jenna 2026-10-27)
-        "digital_twin_panelist": 550.0,
-        "digital_twin_pilot": 5500.0,
-        "digital_twin_pilot_more": 5500.0,
-        # the screening modes on the Pilot Testing room (Jenna 2026-10-28)
-        "digital_twin_trailer": 2500.0,
-        "digital_twin_title": 1500.0,
-        "digital_twin_key_art": 1500.0,
-        "digital_twin_concept": 2500.0,
-        "digital_twin_script": 3500.0,
-        "digital_twin_recut": 2750.0,
+        "digital_twin_group_individual_20": 750.0,
+        "digital_twin_group_individual_40": 1000.0,
+        "digital_twin_group_package_20": 500.0,
+        "digital_twin_group_package_40": 750.0,
+        "digital_twin_group_enterprise": 200.0,
+        "digital_twin_group_upgrade_individual": 250.0,
+        "digital_twin_group_upgrade_package": 250.0,
         "flywheel_conversion": 0.0,
         "intent_iq": 0.0,
         "share_of_time": 0.0,
@@ -342,6 +342,13 @@ RETIRED_TOOL_KEYS = frozenset({
     # still folded as 'Other' orphans; filter them permanently.
     "chatbot_analysis",
     "chatbot_deck",
+    # Digital Twins session, per-mode and per-panelist lines, replaced by
+    # the per-group card on 2026-11-05 (Jenna). A stale per_tool_usd entry
+    # never fires; the pull_type map keeps them so old ledger rows read.
+    "digital_twin_panel", "digital_twin_panel_more", "digital_twin_panelist",
+    "digital_twin_pilot", "digital_twin_pilot_more",
+    "digital_twin_trailer", "digital_twin_title", "digital_twin_key_art",
+    "digital_twin_concept", "digital_twin_script", "digital_twin_recut",
 })
 
 
@@ -561,35 +568,27 @@ MODULE_CATALOG = [
      "modules", 5, 500.0, "has_intent_iq_access"),
     ("attribution_iq_daily",       "Attribution IQ - Daily Refresh",
      "modules", 1, 100.0, "has_intent_iq_access"),
-    # ---------- Digital Twins IQ (2026-10-26, Jenna) ----------
-    ("digital_twins_iq",           "Digital Twins IQ - Twin",
-     "modules", 15, 750.0, "has_digital_twins_iq_access"),
+    # ---------- Digital Twins IQ (2026-11-05, Jenna: priced per group) ----------
+    ("digital_twins_iq",           "Digital Twins IQ - Twin (included; the group is the unit)",
+     "modules", 15, 0.0, "has_digital_twins_iq_access"),
     ("digital_twin_run",           "Digital Twins IQ - Run (Launch, content, pricing, platform or compare)",
      "modules", 3, 100.0, "has_digital_twins_iq_access"),
     ("digital_twin_spend",         "Digital Twins IQ - Spend Engine Plan",
      "modules", 5, 250.0, "has_digital_twins_iq_access"),
-    ("digital_twin_panel",         "Digital Twins IQ - Focus Group IQ Session",
-     "modules", 4, 5500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_panel_more",    "Digital Twins IQ - Focus Group IQ, 12 More Questions",
-     "modules", 3, 5500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_panelist",       "Digital Twins IQ - Focus Group IQ, Extra Panelist (each past 12)",
-     "modules", 1, 550.0, "has_digital_twins_iq_access"),
-    ("digital_twin_pilot",          "Digital Twins IQ - Pilot Testing Session",
-     "modules", 4, 5500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_pilot_more",     "Digital Twins IQ - Pilot Testing, 12 More Questions",
-     "modules", 3, 5500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_trailer",        "Digital Twins IQ - Trailer or TV Spot Test (per asset)",
-     "modules", 3, 2500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_title",          "Digital Twins IQ - Title Test (up to six options)",
-     "modules", 2, 1500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_key_art",        "Digital Twins IQ - Key Art Test (up to six options)",
-     "modules", 2, 1500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_concept",        "Digital Twins IQ - Greenlight Concept Test",
-     "modules", 3, 2500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_script",         "Digital Twins IQ - Greenlight Script Read",
-     "modules", 3, 3500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_recut",          "Digital Twins IQ - Recut Re-test (cut B on the same room)",
-     "modules", 3, 2750.0, "has_digital_twins_iq_access"),
+    ("digital_twin_group_individual_20", "Digital Twins IQ - Group, Individual, 1-20 questions (a focus group room or a pilot test)",
+     "modules", 15, 750.0, "has_digital_twins_iq_access"),
+    ("digital_twin_group_individual_40", "Digital Twins IQ - Group, Individual, 1-40 questions",
+     "modules", 20, 1000.0, "has_digital_twins_iq_access"),
+    ("digital_twin_group_package_20", "Digital Twins IQ - Group, Package rate ($5,000 deposit), 1-20 questions",
+     "modules", 10, 500.0, "has_digital_twins_iq_access"),
+    ("digital_twin_group_package_40", "Digital Twins IQ - Group, Package rate ($5,000 deposit), 1-40 questions",
+     "modules", 15, 750.0, "has_digital_twins_iq_access"),
+    ("digital_twin_group_enterprise", "Digital Twins IQ - Group, Enterprise agreement ($20K a month, 12 months), 1-40 questions",
+     "modules", 4, 200.0, "has_digital_twins_iq_access"),
+    ("digital_twin_group_upgrade_individual", "Digital Twins IQ - Group upgrade to 1-40 questions, Individual",
+     "modules", 5, 250.0, "has_digital_twins_iq_access"),
+    ("digital_twin_group_upgrade_package", "Digital Twins IQ - Group upgrade to 1-40 questions, Package rate",
+     "modules", 5, 250.0, "has_digital_twins_iq_access"),
     ("share_of_time",              "Share of Time - View",
      "modules", 0, 0.0, "has_share_of_time_access"),
     ("share_of_time_run",          "Share of Time - Run",
@@ -1560,6 +1559,14 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "digital twins iq script read":  "digital_twin_script",
     "digital twins iq greenlight script read": "digital_twin_script",
     "digital twins iq recut re-test": "digital_twin_recut",
+    # the per-group lines (2026-11-05); the pull_type carries the plan and the tier
+    "digital twins iq group (individual, 1-20 questions)": "digital_twin_group_individual_20",
+    "digital twins iq group (individual, 1-40 questions)": "digital_twin_group_individual_40",
+    "digital twins iq group (package, 1-20 questions)":    "digital_twin_group_package_20",
+    "digital twins iq group (package, 1-40 questions)":    "digital_twin_group_package_40",
+    "digital twins iq group (enterprise, 1-40 questions)": "digital_twin_group_enterprise",
+    "digital twins iq group upgrade (individual, to 1-40 questions)": "digital_twin_group_upgrade_individual",
+    "digital twins iq group upgrade (package, to 1-40 questions)":    "digital_twin_group_upgrade_package",
     # ---- Digital Journey / Intent / Sentiment ----
     "digital journey iq":            "journey_iq",
     "journey iq":                    "journey_iq",
@@ -2539,6 +2546,14 @@ def apply_wallet_topup(user: dict, amount_usd: float, *,
         user["wallet_lifetime_topups_usd"] = round(
             float(user.get("wallet_lifetime_topups_usd", 0.0) or 0.0)
             + amt, 2)
+        # Digital Twins package rate (Jenna 2026-11-05): a deposit of the
+        # package size on this wallet unlocks the package rate on every
+        # group while it is drawn down. Never raises into a top-up.
+        try:
+            from migration.digital_twin_pricing import note_deposit as _dt_note_deposit
+            _dt_note_deposit(user, amt)
+        except Exception:
+            pass
     txn = {
         "ts": _now_iso(),
         "kind": kind,

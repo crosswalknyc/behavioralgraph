@@ -7538,6 +7538,70 @@ def api_update_company_credits(company_name):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/companies/<path:company_name>/digital-twins-plan', methods=['GET'])
+@requires_admin
+def api_company_digital_twins_plan(company_name):
+    """The company's Digital Twins IQ plan (Jenna 2026-11-05): individual /
+    package / enterprise with the deposit or the term, and whether it is
+    active today. ``user:<username>`` reads a seat with no company."""
+    try:
+        from migration import digital_twin_pricing as PR
+        data = load_users()
+        rec = PR.plan_holder(data, company_name)
+        if rec is None:
+            return jsonify({'success': False, 'error': 'company not found'}), 404
+        out = PR.plan_record(rec)
+        out.update({'success': True, 'company': company_name, 'plans': list(PR.PLANS), 'labels': dict(PR.PLAN_LABELS),
+                    'rates': {f"{p}_{t}": v for (p, t), v in PR.RATES.items()}, 'upgrade_rates': dict(PR.UPGRADE_RATES),
+                    'package_deposit_usd': PR.PACKAGE_DEPOSIT_USD, 'enterprise_monthly_usd': PR.ENTERPRISE_MONTHLY_USD,
+                    'enterprise_term_months': PR.ENTERPRISE_TERM_MONTHS})
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/digital-twins-plan', methods=['PUT'])
+@requires_admin
+def api_set_company_digital_twins_plan(company_name):
+    """Set the company's Digital Twins IQ plan (Jenna 2026-11-05: the
+    per-group card). Body: ``plan`` (individual | package | enterprise),
+    and for enterprise ``enterprise_monthly_usd`` (default $20,000),
+    ``enterprise_term_months`` (default 12) and ``enterprise_started_at``
+    (YYYY-MM-DD, default today); for package ``package_deposit_usd``
+    (default $5,000). Written under compare-and-swap; the plan is what
+    every group opened by a seat on the company is charged at."""
+    try:
+        from migration import digital_twin_pricing as PR
+        req = request.get_json(silent=True) or {}
+        plan = str(req.get('plan') or '').strip().lower().replace('-', '_').replace(' ', '_')
+        if plan not in PR.PLANS:
+            return jsonify({'success': False, 'error': f"plan must be one of {', '.join(PR.PLANS)}"}), 400
+        actor = str((get_current_user() or {}).get('username') or session.get('username') or '')
+        result = {}
+
+        def _set(data):
+            try:
+                result.update(PR.set_company_plan(data, company_name, plan, by=actor, package_deposit_usd=req.get('package_deposit_usd'),
+                                                  enterprise_monthly_usd=req.get('enterprise_monthly_usd'), enterprise_term_months=req.get('enterprise_term_months'),
+                                                  enterprise_started_at=req.get('enterprise_started_at'), note=str(req.get('note') or '')))
+            except ValueError:
+                result['missing'] = True
+                return None
+            return data
+        _users_cas_mutate(_set)
+        if result.get('missing'):
+            return jsonify({'success': False, 'error': 'company not found'}), 404
+        try:
+            from migration import digital_twin_company as CO
+            CO.reset_cache()
+        except Exception:
+            pass
+        result.update({'success': True, 'company': company_name})
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/companies/<path:company_name>/consulting-hours', methods=['PUT'])
 @requires_admin
 def api_update_company_consulting_hours(company_name):

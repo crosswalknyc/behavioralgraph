@@ -23,9 +23,10 @@ THE WATCH (2026-10-28)
   still run (the regression path), so Play never dead-ends.
 
 Reactions are deterministic per (twin, seat, media hash, beat). Two
-subjects never pin the same dial. Counts keep messy last digits. Opening
-a test is free; the session price is taken on first Play. User-facing
-copy never names how the room is produced.
+subjects never pin the same dial. Counts keep messy last digits. A test
+is one group, charged as it opens at the company's plan rate for its tier
+(migration/digital_twin_pricing, 2026-11-05). User-facing copy never
+names how the room is produced.
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ MODES = ('pilot', 'feature', 'episode', 'binge', 'trailer', 'spot', 'title', 'ke
 MEDIA_PREFIX = 'digital-twins/pilot-tests/'
 DELETED_PILOT_PREFIX = 'system/digital_twins/deleted_pilots/'
 DELETED_PILOT_KEEP_DAYS = 30
-QUESTIONS_INCLUDED = 12
+QUESTIONS_INCLUDED = 12          # the legacy block (pre 2026-11-05 sessions); a group's cap is its tier (digital_twin_pricing)
 MIN_RUNTIME_S = 15
 MAX_RUNTIME_S = 4 * 60 * 60
 WINDOW_BACK_S = 75          # the moment a question carries: the last 60 to 90 seconds
@@ -77,9 +78,10 @@ ALLOWED_UPLOAD = frozenset({
 })
 ALLOWED_EXT = frozenset({'.mp4', '.mov', '.webm', '.m4v'})
 
-# Phase 2 price lines (decided 2026-10-28, not live): trailer or TV spot $2,500 an asset;
-# title/logline $1,500 (up to six); key art $1,500 (up to six); concept $2,500; script read
-# $3,500; recut re-test on the same room $2,750. The live price stays digital_twin_pilot.
+# Pricing (Jenna 2026-11-05): a test is one GROUP, charged as it opens at the company's plan rate for its tier (1-20
+# or 1-40 questions on the clock), the same card as a Focus Group IQ room; see migration/digital_twin_pricing.py. The
+# per-mode lines of 2026-10-28 (trailer, title, key art, concept, script, recut) are retired; the keys below only
+# label old session records.
 PHASE2_PRICE_NOTES = {'trailer': 2500.0, 'spot': 2500.0, 'title': 1500.0, 'key_art': 1500.0, 'concept': 2500.0, 'script': 3500.0, 'recut': 2750.0}
 
 _COMEDY = re.compile(r"\b(comedy|sitcom|funny|laugh|romcom|rom-com|sketch|spoof|parody)\b", re.I)
@@ -2663,6 +2665,8 @@ def setup_from_session(sess: dict, name: str) -> dict:
         in_room = 0
     if in_room:
         fields['dtwPiRoom'] = str(in_room)
+    if sess.get('group_tier'):
+        fields['dtwPiTier'] = str(sess.get('group_tier'))      # the tier the source test opened on (2026-11-05)
     quotas = sess.get('quotas') if isinstance(sess.get('quotas'), dict) else None
     if quotas is None and isinstance(sess.get('recruit'), dict) and isinstance(sess['recruit'].get('quotas'), dict):
         quotas = sess['recruit']['quotas']
@@ -3142,6 +3146,12 @@ def public_session(sess: dict) -> dict:
         public_view(sess, out)
     except Exception as e:
         print(f"[pilot] talent read view skipped: {e}")
+    # the group's billing (Jenna 2026-11-05): the tier, the cap, the questions used, the upgrade offer at the cap
+    try:
+        from migration.digital_twin_pricing import public_fields
+        out.update(public_fields(sess))
+    except Exception as e:
+        print(f"[pilot] group view skipped: {e}")
     return out
 
 

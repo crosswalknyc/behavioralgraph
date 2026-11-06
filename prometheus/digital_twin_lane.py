@@ -142,24 +142,43 @@ def _price_label(key, username):
     try:
         from prometheus.legacy.watch import _pm_usd, _pm_usd_label
         from migration.digital_twins import PRICING
-        return _pm_usd_label(_pm_usd(key, PRICING[key], username), username)
+        return _pm_usd_label(_pm_usd(key, PRICING.get(key, 0.0), username), username)
     except Exception:
         from migration.digital_twins import PRICING
-        return f"${PRICING[key]:,.0f}"
+        return f"${PRICING.get(key, 0.0):,.0f}"
+
+
+def _price_fn(username):
+    try:
+        from prometheus.legacy.watch import _pm_usd
+        return lambda key, dflt: _pm_usd(key, dflt, username)
+    except Exception:
+        return None
+
+
+def _symbol(username):
+    try:
+        from prometheus.legacy.watch import _pm_money_symbol
+        return _pm_money_symbol(username) or '$'
+    except Exception:
+        return '$'
 
 
 def _charge(user, key, description, job_id):
     """None when charged or free (super admins), else the funds payload."""
     from migration.digital_twins import PULL_TYPES
+    from migration.digital_twin_pricing import CREDITS as GROUP_CREDITS
     credits = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3,
                'digital_twin_pilot': 4, 'digital_twin_pilot_more': 3, 'digital_twin_panelist': 1}
+    credits.update(GROUP_CREDITS)
+    if _is_super(user):
+        return None
     try:
         from prometheus.priced_read import seat_is_free
         if seat_is_free(user, _uname(user), host):
             return None
     except Exception:
-        if _is_super(user):
-            return None
+        pass
     if not host.has('consume_credit'):
         return None
     try:
@@ -170,6 +189,91 @@ def _charge(user, key, description, job_id):
     if ok:
         return None
     return _payload(f"That step runs {_price_label(key, _uname(user))} and your account cannot cover it right now. Add funds or ask your admin, and it runs the moment you are set.")
+
+
+# ------------------------------------------------------- the group price
+# Jenna 2026-11-05: a focus group room or a pilot test is one GROUP, charged as it opens at the company's plan rate
+# (individual / package / enterprise) for its tier (1-20 or 1-40 questions). The twin build carries no charge.
+def _plan(user):
+    from migration import digital_twin_pricing as PR
+    try:
+        return PR.plan_for_user(user, _uname(user))
+    except Exception:
+        return PR.DEFAULT_PLAN
+
+
+def _group_tier(text, user):
+    """The tier the words ask for ('1-40', 'forty questions', '40 questions'),
+    else the plan's default (1-20; enterprise is always 1-40)."""
+    from migration import digital_twin_pricing as PR
+    low = _low(text)
+    if re.search(r"\b(?:1\s*-\s*40|forty questions|40 questions|up to 40|the 40|large group|big group)\b", low):
+        return PR.normalize_tier(40, _plan(user))
+    if re.search(r"\b(?:1\s*-\s*20|twenty questions|20 questions|up to 20|the 20|small group)\b", low):
+        return PR.normalize_tier(20, _plan(user))
+    return PR.default_tier(_plan(user))
+
+
+def _open_gate(user, tier, plan=None):
+    """The individual plan's card-and-balance gate before a group opens:
+    None when it may open, else the plain payload with the add-funds link."""
+    from migration import digital_twin_pricing as PR
+    uname = _uname(user)
+    try:
+        ok, reply = PR.gate_open(user, uname, plan=plan if plan is not None else _plan(user), tier=tier, price_fn=_price_fn(uname), symbol=_symbol(uname))
+    except Exception:
+        traceback.print_exc()
+        return None
+    if ok:
+        return None
+    return _payload(str((reply or {}).get('error') or 'Add funds to open this group.'), ['Add funds'])
+
+
+def _charge_group(user, payload, sess, *, kind, tier=None, plan=None):
+    """Charge one group at open (the room id is the run id); None when
+    charged, free or already paid, else the funds payload."""
+    from migration import digital_twin_pricing as PR
+    uname = _uname(user)
+    return PR.charge_group_open(user, payload, sess, plan=plan if plan is not None else _plan(user), tier=tier,
+                                charge_fn=lambda key, desc, job_id: _charge(user, key, desc, job_id), username=uname, kind=kind, by=uname)
+
+
+def _refund_group(user, sess, reason):
+    from migration import digital_twin_pricing as PR
+    try:
+        return PR.refund_group_open(user, sess, refund_fn=lambda credits, why, job_id, usd, pull_type: _refund(user, credits, why, job_id=job_id), reason=reason)
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def _refund(user, credits, reason, job_id=''):
+    """Hand a charge back through the host's refund_credit (idempotent by job id)."""
+    if _is_super(user) or not host.has('refund_credit') or int(credits or 0) <= 0:
+        return
+    try:
+        host.refund_credit(_uname(user), credits=int(credits), reason=reason, job_id=str(job_id or ''))
+    except Exception:
+        traceback.print_exc()
+
+
+def group_quote(user, kind='group', tier=None):
+    """One line for a confirm card: what this group costs on the seat's plan."""
+    from migration import digital_twin_pricing as PR
+    uname = _uname(user)
+    plan = _plan(user)
+    return PR.quote_line(plan, tier if tier is not None else PR.default_tier(plan), _price_fn(uname), _symbol(uname), kind=kind)
+
+
+def pricing_answer(user):
+    """The per-group card, in the seat's currency, for 'what does a focus
+    group cost' and the like."""
+    from migration import digital_twin_pricing as PR
+    uname = _uname(user)
+    plan = _plan(user)
+    text = PR.rate_card_text(_price_fn(uname), _symbol(uname))
+    text += f"\n\nYour company is on {PR.plan_label(plan).lower()}: {group_quote(user, 'group')}"
+    return text
 
 
 # -------------------------------------------------------------- intents
@@ -356,7 +460,7 @@ def confirm_reply(parsed, username=None, on_file=None):
     if pullable:
         lines.append(_TNP.audience_line(parsed.get('subject'), on_file))
     if on_file or not pullable:
-        lines.append(f"- Price: {_price_label('digital_twins_iq', username)} for the twin and its first two runs; each further run {_price_label('digital_twin_run', username)}")
+        lines.append(f"- Price: the twin and its first two runs are included (each group you open on it is priced per group); each further run {_price_label('digital_twin_run', username)}")
     else:
         lines.append(_TNP.price_line(username, pull=True))
     lines.append(f"Say '{RUN_LABEL}' and I will line it up.")
@@ -517,11 +621,11 @@ def _which_twin(runs, what='run this', text=''):
     names = [str(r.get('name') or r.get('subject')) for r in runs[:5]]
     asked = _asked_twin_name(text)
     if asked:
-        return _payload(f"There is no {asked} twin in your company's library. Say 'Build a twin of {asked}' and I will build one ({_price_label('digital_twins_iq', None)}, with its first two runs)."
+        return _payload(f"There is no {asked} twin in your company's library. Say 'Build a twin of {asked}' and I will build one (included, with its first two runs; each group you open on it is priced per group)."
                         + (f" Twins you can {what} on now: " + ', '.join(names) + '.' if names else ''),
                         [f"Build a twin of {asked}"] + [f"The {n} twin" for n in names[:3]])
     if not names:
-        return _payload(f"There is no twin in your company's library yet. Say 'Build a twin of <subject>' and I will build one ({_price_label('digital_twins_iq', None)}, with its first two runs).",
+        return _payload(f"There is no twin in your company's library yet. Say 'Build a twin of <subject>' and I will build one (included, with its first two runs; each group you open on it is priced per group).",
                         ['Build a twin of Gilmore Girls Hulu viewers'])
     return _payload(f"Which twin should I {what} on? " + ', '.join(names) + '.', [f"The {n} twin" for n in names[:4]])
 
@@ -802,9 +906,10 @@ def _team_notice(fn_name, *args, **kw):
 
 def panel_reply(payload, session, rec, key, user):
     from migration import digital_twin_panel as P
+    from migration import digital_twin_pricing as PR
     asked = len(session.get('questions') or [])
-    paid = int(session.get('questions_paid') or 12)
-    tail = f" ({asked} of {paid} questions in this session used.)" if asked >= paid - 2 else ''
+    paid = PR.question_cap(session, session.get('group_plan') or _plan(user))
+    tail = f" ({asked} of {paid} questions in this group used.)" if asked >= paid - 2 else ''
     if rec and rec.get('note'):
         tail = f" {rec['note']}" + tail      # asked again: the earlier record comes back with the note
     if rec and rec.get('stage') == 'failed':
@@ -831,24 +936,29 @@ def panel_reply(payload, session, rec, key, user):
                     open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': session.get('id')})
 
 
-def _charge_panel_question(user, payload, sess):
-    """The session price on the room's first question, a further block
-    when the paid questions are used up; None when nothing is due or it
-    was charged (opening a room is free, 2026-10-26)."""
-    from migration import digital_twins as DT
-    from migration import digital_twin_panel as P
-    due = P.charge_due(sess, DT.PANEL_QUESTIONS_INCLUDED)
-    if not due:
+def _charge_panel_question(user, payload, sess, text=''):
+    """Before a room answers (Jenna 2026-11-05): a room never charged (one
+    opened free before the per-group card) pays its group now; then the
+    tier cap. At twenty questions a 1-20 group is offered the move to
+    1-40 for the difference, and 'upgrade' / 'yes, move it to 40' in the
+    words accepts it; at forty the group is full. None when the question
+    may run, else the payload to send back."""
+    from migration import digital_twin_pricing as PR
+    plan = _plan(user)
+    uname = _uname(user)
+    if not PR.group_paid(sess):
+        funds = _charge_group(user, payload, sess, kind='panel', plan=plan)
+        if funds is not None:
+            return funds
+    accept = bool(re.search(r"\b(upgrade|move (?:it|the room|the group) to (?:1-)?40|yes,? (?:move|upgrade)|forty questions|1-40)\b", _low(text)))
+    verdict, offer = PR.question_gate(sess, plan, accept_upgrade=accept, price_fn=_price_fn(uname), symbol=_symbol(uname))
+    if verdict == 'ok':
         return None
-    name = (payload.get('meta') or {}).get('name')
-    sid = str(sess.get('id') or '')
-    asked = len(sess.get('questions') or [])
-    desc = f"Focus Group IQ session: {name}" if due == 'digital_twin_panel' else f"Focus Group IQ, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {name}"
-    funds = _charge(user, due, desc, sid if due == 'digital_twin_panel' else f"{sid}-{asked}")
-    if funds is not None:
-        return funds
-    P.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
-    return None
+    if verdict == 'accept':
+        return PR.accept_tier_upgrade(user, payload, sess, plan=plan, charge_fn=lambda key, desc, job_id: _charge(user, key, desc, job_id), username=uname, by=uname)
+    if verdict == 'offer':
+        return _payload(offer['line'] + " Say 'upgrade this room to 1-40' to move it, or open a new room.", [f"Upgrade this room to 1-40 ({offer['label']})", 'Open a new room'])
+    return _payload(PR.cap_reply(sess, plan), ['Open a new room', 'Open Focus Group IQ'])
 
 
 def run_panel(text, body, history, user, ppu=None):
@@ -886,8 +996,9 @@ def run_panel(text, body, history, user, ppu=None):
                 DT.save_twin(s3, active['key'], payload)
                 set_active_session(user, active['key'], sess['id'])
                 return panel_reply(payload, sess, dup, active['key'], user)
-        funds = _charge_panel_question(user, payload, sess)      # the session on its first question, a further block after twelve
+        funds = _charge_panel_question(user, payload, sess, text)      # the group if never charged, then the tier cap and the upgrade
         if funds is not None:
+            DT.save_twin(s3, active['key'], payload)         # an accepted upgrade or a late group charge is on the record
             return funds
         twins_by_key = {active['key']: payload}
         for tk in sess.get('twin_keys') or []:
@@ -921,14 +1032,28 @@ def run_panel(text, body, history, user, ppu=None):
     if m:
         in_room = int(m.group(1))
     segments = panel_segments(text, found)
-    # opening is free (the session price rides the first question); an
-    # empty room with the same twins, segments and seats is reused
+    # a room is one GROUP, charged as it opens at the company's plan rate for its tier (Jenna 2026-11-05); an
+    # empty room with the same twins, segments and seats is reused (a paid one charges nothing again)
+    from migration import digital_twin_pricing as PR
+    plan = _plan(user)
+    tier = _group_tier(text, user)
     sess = P.find_reusable_session(payload, twins, segments, in_room, created_by=uname)
     opened = sess is None
+    if sess is None or not PR.group_paid(sess):
+        gate = _open_gate(user, tier, plan)
+        if gate is not None:
+            return gate
     if sess is None:
         sid = uuid.uuid4().hex[:10]
         sess = P.open_session(twins, segments=segments, in_room=in_room, created_by=uname, session_id=sid)
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
+        PR.record_tier(sess, tier, plan)
+    funds = _charge_group(user, payload, sess, kind='panel', tier=tier, plan=plan)
+    if funds is not None:
+        if not opened:
+            DT.save_twin(s3, key, payload)
+        return funds
+    if opened:
         payload.setdefault('panel_sessions', []).insert(0, sess)
     sid = str(sess['id'])
     twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
@@ -940,9 +1065,9 @@ def run_panel(text, body, history, user, ppu=None):
     q = panel_question(text) if re.search(r"\bask\b", low) else ''
     rec = None
     if q:
-        funds = _charge_panel_question(user, payload, sess)
+        funds = _charge_panel_question(user, payload, sess, text)
         if funds is not None:
-            DT.save_twin(s3, key, payload)        # the room stays open and free
+            DT.save_twin(s3, key, payload)        # the room stays open; the question waits
             set_active_session(user, key, sid)
             return funds
         rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text), voices_fn=_voices_fn(), asked_by=uname,
@@ -969,15 +1094,18 @@ def run_panel(text, body, history, user, ppu=None):
     g = sess['group']
     roster = ', '.join(f"{r['name']} ({r['age']}, {r['city']})" for r in g['roster'][:8])
     return _payload(f"The room is open: {g['in_room']} twins standing for {g['size_people']:,} people, "
-                    + '; '.join(f"{s['label']} {s['share_pct']}%" for s in g['segments']) + f". In the room: {roster}. What should I ask them?",
+                    + '; '.join(f"{s['label']} {s['share_pct']}%" for s in g['segments']) + f". In the room: {roster}. "
+                    + f"One group, {PR.tier_label(PR.group_tier(sess, plan))}" + (" (charged at open)" if PR.group_charge(sess) and not _is_super(user) else '') + ". What should I ask them?",
                     ['Would you watch a new season?', 'Would you pay $29 for the box?', 'Show of hands, who watched season 1?', 'Open Focus Group IQ'],
                     panel_session={'key': key, 'sid': sid}, open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': sid})
 
 
 def run_pilot(text, body, history, user, ppu=None):
-    """Open a Pilot Testing session on a twin. Charge stays on first Play."""
+    """Open a Pilot Testing session on a twin: one group, charged as it
+    opens at the company's plan rate (Jenna 2026-11-05)."""
     from migration import digital_twins as DT
     from migration import digital_twin_pilot as PI
+    from migration import digital_twin_pricing as PR
     low = _low(text)
     if not _PILOT_OPEN_RX.search(low):
         return None
@@ -999,11 +1127,24 @@ def run_pilot(text, body, history, user, ppu=None):
     m = re.search(r"(?:play|watch|test)\s+(?:the\s+)?(.{3,80}?)(?:\s+pilot|\s+cut|\s+trailer|\s+episode)?\s*$", str(text or ''), re.I)
     if m:
         title = m.group(1).strip()[:120]
+    plan = _plan(user)
+    tier = _group_tier(text, user)
     sess = PI.find_reusable_session(payload, twins, title=title, created_by=uname)
     opened = sess is None
+    if sess is None or not PR.group_paid(sess):
+        gate = _open_gate(user, tier, plan)
+        if gate is not None:
+            return gate
     if sess is None:
         sess = PI.open_session(twins, title=title or 'Pilot test', created_by=uname, session_id=uuid.uuid4().hex[:10])
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
+        PR.record_tier(sess, tier, plan)
+    funds = _charge_group(user, payload, sess, kind='pilot', tier=tier, plan=plan)      # the group, at open
+    if funds is not None:
+        if not opened:
+            DT.save_twin(s3, key, payload)
+        return funds
+    if opened:
         payload.setdefault('pilot_sessions', []).insert(0, sess)
     try:
         from migration import digital_twin_room as ROOM
@@ -1015,7 +1156,14 @@ def run_pilot(text, body, history, user, ppu=None):
         _PT.attach_portraits(sess, s3)
     except Exception:
         _PT = None
-    DT.save_twin(s3, key, payload)
+    try:
+        DT.save_twin(s3, key, payload)
+    except Exception:
+        traceback.print_exc()
+        _refund_group(user, sess, 'Pilot test did not open')
+        if opened:
+            payload['pilot_sessions'] = [x for x in payload.get('pilot_sessions') or [] if x is not sess]
+        return _payload('The test could not be opened. Nothing was charged; try again in a moment.')
     if opened:
         _team_notice('notify_pilot_created', payload, sess, username=uname, via=_via(user), s3=s3)   # a test created from the chat
     if _PT is not None:
@@ -1028,6 +1176,7 @@ def run_pilot(text, body, history, user, ppu=None):
     return _payload(
         f"Pilot Testing is open on {payload['meta'].get('name')}: {g.get('in_room') or 12} twins in the room"
         + (f" ({roster})" if roster else '')
+        + f". One group, {PR.tier_label(PR.group_tier(sess, plan))}" + (" (charged at open)" if PR.group_charge(sess) and not _is_super(user) else '')
         + ". Upload the cut on the Pilot Testing tab and press Play. The dial and the laughs land on the clock from that moment. You can ask them a question at any timestamp.",
         ['Open Pilot Testing', 'Ask the room at 12:40: would you keep watching?'],
         open_view='digitalTwinsIQ', twin_key=key,
@@ -1103,11 +1252,13 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
     """Open one of Greenlight's two options on a twin from the words: a
     Script read (the attached or pasted script) or a Concept test (the
     logline, synopsis or one-sheet). Two named twins sit in one room.
-    Opening is free; the option's price lands on first Play. Neither
-    option named: one line asking which, with two chips. (Jenna
-    2026-10-28: Greenlight is these two options; the odds run is gone.)"""
+    The test is one group, charged as it opens at the company's plan
+    rate (Jenna 2026-11-05). Neither option named: one line asking which,
+    with two chips. (Jenna 2026-10-28: Greenlight is these two options;
+    the odds run is gone.)"""
     from migration import digital_twins as DT
     from migration import digital_twin_pilot as PI
+    from migration import digital_twin_pricing as PR
     s3, _b = _s3()
     uname = _uname(user)
     found, runs = resolve_twins(text, body, history, user, limit=2)
@@ -1120,21 +1271,20 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
     name = str((payload.get('meta') or {}).get('name') or found[0].get('name') or found[0].get('subject'))
     doc_text = attached_text(uname, thread_id, limit=60000)
     option = option if option in ('script', 'concept') else greenlight_option(text, doc_text)
-    script_price = _price_label('digital_twin_script', uname)
-    concept_price = _price_label('digital_twin_concept', uname)
+    script_price = concept_price = group_quote(user, 'group')
     if option not in ('script', 'concept'):
-        return _payload(f"Greenlight on the {name} twin runs two ways: a Script read ({script_price}; paste or attach the script and the room reads it scene by scene) "
-                        f"or a Concept test ({concept_price}; a logline, a synopsis or a one-sheet). Which one?",
+        return _payload(f"Greenlight on the {name} twin runs two ways: a Script read (paste or attach the script and the room reads it scene by scene) "
+                        f"or a Concept test (a logline, a synopsis or a one-sheet). Each is one group. {script_price} Which one?",
                         [f"Read this script in Greenlight on the {name} twin", f"Test a concept in Greenlight on the {name} twin"],
                         open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'greenlight', 'twin_key': key})
     stim = greenlight_text(text, option, doc_text)
     if not stim:
         if option == 'script':
-            return _payload(f"Attach the script with the paper clip (pdf or txt), or paste it after 'script:', and I will open the Script read on the {name} twin "
-                            f"({script_price}, charged when you press Play).",
+            return _payload(f"Attach the script with the paper clip (pdf or txt), or paste it after 'script:', and I will open the Script read on the {name} twin. "
+                            f"{script_price}",
                             [f"Read this script in Greenlight on the {name} twin"], open_view='digitalTwinsIQ', twin_key=key,
                             action_hint={'view': 'digitalTwinsIQ', 'tab': 'script', 'twin_key': key})
-        return _payload(f"Paste the logline or synopsis, or attach the one-sheet, and I will put it to the {name} twin ({concept_price}, charged when you press Play). "
+        return _payload(f"Paste the logline or synopsis, or attach the one-sheet, and I will put it to the {name} twin. {concept_price} "
                         f"For example: \"Test this concept in Greenlight on the {name} twin: a chef returns to her hometown diner after a scandal\".",
                         [f"Test a concept in Greenlight on the {name} twin"], open_view='digitalTwinsIQ', twin_key=key,
                         action_hint={'view': 'digitalTwinsIQ', 'tab': 'concept', 'twin_key': key})
@@ -1146,8 +1296,17 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
     for t, r in zip(twins, found):
         twins_by_key[str((t.get('meta') or {}).get('key') or r.get('key') or '')] = t
     title = _greenlight_title(text, option, stim)
+    plan = _plan(user)
+    tier = _group_tier(text, user)
+    gate = _open_gate(user, tier, plan)
+    if gate is not None:
+        return gate
     sess = PI.open_session(twins, title=title, created_by=uname, session_id=uuid.uuid4().hex[:10], mode=option, text=stim)
     sess['twin_keys'] = list(twins_by_key)
+    PR.record_tier(sess, tier, plan)
+    funds = _charge_group(user, payload, sess, kind='pilot', tier=tier, plan=plan)      # the group, at open
+    if funds is not None:
+        return funds
     payload.setdefault('pilot_sessions', []).insert(0, sess)
     try:
         from migration import digital_twin_room as ROOM
@@ -1163,7 +1322,13 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
         PI.prepare_watch(sess, twins_by_key, title=sess.get('title') or title, usage_extras=ppu or {}, s3=s3)
     except Exception:
         traceback.print_exc()
-    DT.save_twin(s3, key, payload)
+    try:
+        DT.save_twin(s3, key, payload)
+    except Exception:
+        traceback.print_exc()
+        _refund_group(user, sess, 'Greenlight test did not open')
+        payload['pilot_sessions'] = [x for x in payload.get('pilot_sessions') or [] if x is not sess]
+        return _payload('The test could not be opened. Nothing was charged; try again in a moment.')
     _team_notice('notify_pilot_created', payload, sess, username=uname, via=_via(user), s3=s3)   # a Script read or Concept test created from the chat
     if _PT is not None:
         try:
@@ -1177,13 +1342,13 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
     g = sess.get('group') or {}
     others = [str((t.get('meta') or {}).get('name') or '') for t in twins[1:] if (t.get('meta') or {}).get('name')]
     what = 'Script read' if option == 'script' else 'Concept test'
-    price = script_price if option == 'script' else concept_price
+    price = f"one group, {PR.tier_label(PR.group_tier(sess, plan))}" + (", charged at open" if PR.group_charge(sess) and not _is_super(user) else '')
     room = f"{g.get('in_room') or 12} in the room" + (f", the {' and '.join(others)} twin{'s' if len(others) > 1 else ''} seated too" if others else '')
     ready = str(sess.get('status') or '') == 'ready'
     return _payload(
         f"Greenlight opened a {what} on the {name} twin: {sess.get('title') or title or what}, {room}. "
         + ("The room has read it. " if ready else '')
-        + f"Press Play on the Greenlight tab, under {'Script read' if option == 'script' else 'Concept'}, to run it ({price}, charged on Play; nothing is charged before that)."
+        + f"Press Play on the Greenlight tab, under {'Script read' if option == 'script' else 'Concept'}, to run it ({price})."
         + (" Ask them anything at any point on the clock." if option == 'script' else ''),
         [OPEN_CHIP, 'Open a focus group with the ' + name + ' twin'],
         open_view='digitalTwinsIQ', twin_key=key,
@@ -1335,7 +1500,7 @@ def catalog_reply(text, user):
         return _payload(line, [f"Test a concept in Greenlight on the {r.get('name')} twin", f"Open a focus group with the {r.get('name')} twin", OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ',
                         action_hint={'view': 'digitalTwinsIQ', 'tab': 'twins', 'twin_key': r.get('key')})
     subj = re.sub(r".*\btwins?\s+(?:of|for|on)\s+", '', str(text or ''), flags=re.I).strip(' ?.')
-    return _payload(f"No twin for {subj or 'that'} yet. Say 'Build a twin of {subj or '<subject>'}' and I will build it ({_price_label('digital_twins_iq', _uname(user))}, with its first two runs).",
+    return _payload(f"No twin for {subj or 'that'} yet. Say 'Build a twin of {subj or '<subject>'}' and I will build it (included, with its first two runs; each group you open on it is priced per group).",
                     [f"Build a twin of {subj}"] if subj else ['Build a twin of Gilmore Girls Hulu viewers'])
 
 
@@ -1484,6 +1649,11 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
                 if re.match(r"^\s*(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$", low):
                     return _payload('No problem, nothing was charged. Ask me anything else when ready.')
                 return g['_pm_intake_turn'](FLOW, t, body, history, user, ppu, first=False)
+        from migration import digital_twin_pricing as _PR
+        if _PR.is_pricing_ask(t):
+            # 2b. what a focus group or a pilot test costs: the per-group card on the seat's plan (Jenna 2026-11-05)
+            return _payload(pricing_answer(user), ['Open a focus group', 'Open Pilot Testing', OPEN_CHIP], open_view='digitalTwinsIQ',
+                            action_hint={'view': 'digitalTwinsIQ', 'tab': 'howto'})
         if not twin_intent(t) and not (active_session(user) and _PANEL_ASK_RX.search(t)) and not (DT.is_how_to_ask(t)):
             # a free question on an open twin that maps to a run
             key = _open_twin_key(body)

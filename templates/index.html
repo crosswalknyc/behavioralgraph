@@ -20354,6 +20354,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <tr><td>Ad Attribution</td><td>$500 for the initial pull, plus an optional $100 per day to track each campaign</td></tr>
                     <tr><td>Custom Ask</td><td>$500</td></tr>
                     <tr><td>Pull not based on pre-pulled data</td><td>$100 for the first ask, then $50 for each follow-up</td></tr>
+                    <tr><td>Digital Twins focus group or pilot test (one group, 1-40 questions)</td><td>$750 a group for 1-20 questions or $1,000 for 1-40; $500 / $750 on a $5,000 package deposit; $200 a group on an enterprise agreement ($20K a month, 12 months)</td></tr>
                 </tbody>
             </table>
             <div class="pricing-short">
@@ -52219,6 +52220,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <textarea id="dtwPnSegments" class="dtw-in" placeholder="women 25 to 44&#10;lapsed subscribers in Dallas"></textarea>
                 <label class="dtw-field">Panelists in the room</label>
                 <input id="dtwPnRoom" class="dtw-in" value="12" inputmode="numeric" oninput="dtwPnSeatsNote()">
+                <label class="dtw-field">Questions this group answers</label>
+                <select id="dtwPnTier" class="dtw-in" onchange="dtwPnSeatsNote()"><option value="20">1-20 questions</option><option value="40">1-40 questions</option></select>
                 <div class="dtw-fg-price" id="dtwPnSeats"></div>
                 <div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" data-dtw-run onclick="dtwPanelOpen()">Open the room</button><button type="button" class="dtw-clip" onclick="dtwAttach('panel')" title="Attach a trailer link, two loglines or a price sheet">&#128206; Attach a file</button></div>
                 <div class="dtw-fg-price" id="dtwPnPrice"></div>
@@ -52283,8 +52286,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             async function api(path, opts) {
                 var r = await fetch('/api/digital-twins' + path, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }, opts || {}));
                 var d = null; try { d = await r.json(); } catch (_) { d = null; }
-                if (!r.ok || !d || d.success === false) { throw new Error((d && d.error) || ('Request failed (' + r.status + ')')); }
+                if (!r.ok || !d || d.success === false) { var err = new Error((d && d.error) || ('Request failed (' + r.status + ')')); err.doc = d || {}; err.status = r.status; throw err; }
                 return d;
+            }
+            // ---- the per-group card (Jenna 2026-11-05): S.card from /list carries the seat's plan, tiers, rates and quote lines
+            function groupCard() { return S.card || null; }
+            function groupTierDefault() { var c = groupCard(); return c && c.default_tier ? String(c.default_tier) : '20'; }
+            function groupTierOptions(sel) {
+                var c = groupCard(), tiers = (c && c.tiers && c.tiers.length) ? c.tiers : [20, 40], cur = String(sel || groupTierDefault());
+                return tiers.map(function(t) { var lab = (c && c.labels && c.labels[String(t)]) ? ' (' + c.labels[String(t)] + ')' : ''; return '<option value="' + t + '"' + (String(t) === cur ? ' selected' : '') + '>1-' + t + ' questions' + lab + '</option>'; }).join('');
+            }
+            function groupQuote(tier) {
+                var c = groupCard(); if (!c) return '';
+                if (c.free) return 'Crosswalk seats are never charged.';
+                return (c.quote && c.quote[String(tier || groupTierDefault())]) || '';
             }
             function bar(label, v, max, alt, suffix) { var w = max > 0 ? Math.max(1, Math.min(100, v / max * 100)) : 0; return '<div class="dtw-bar"><span title="' + esc(label) + '">' + esc(label) + '</span><div class="t"><div class="f' + (alt ? ' alt' : '') + '" style="width:' + w.toFixed(1) + '%"></div></div><span class="n">' + esc(suffix != null ? suffix : pct(v)) + '</span></div>'; }
             // The figures strip: [value, label, sub?, lead?]. One lead figure in the accent, the rest in ink.
@@ -52449,10 +52464,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var BW_INCLUDED = 12, BW_MAX = 40;
             function bwFresh() { return { step: 0, source: '', subject: '', profile_key: '', profile_name: '', profile_cat: '', q: '', results: null, loading: false, demo: {}, markets: '', interests: '', purpose: '', chip: '', panelists: BW_INCLUDED, busy: false, job: null, err: '' }; }
             function bwPrice(which) {
-                var lines = S.pricing || [], rx = { twin: /^digital twin\b/i, session: /^focus group iq\b/i, panelist: /^extra panelist/i, profile: /^audience build\b/i }[which];
+                // the twin is included (2026-11-05); a group is priced at the plan rate (S.card); the audience build keeps its line
+                if (which === 'twin' || which === 'panelist') return 0;
+                if (which === 'session') { var c = groupCard(); return (c && c.rates && c.rates[groupTierDefault()] != null) ? Number(c.rates[groupTierDefault()]) : 750; }
+                var lines = S.pricing || [], rx = { profile: /^audience build\b/i }[which];
                 var line = lines.filter(function(x) { return rx.test(x); })[0] || '';
                 var m = /\$([0-9,]+(?:\.\d+)?)/.exec(line);
-                return m ? parseFloat(m[1].replace(/,/g, '')) : { twin: 750, session: 5500, panelist: 550, profile: 300 }[which];
+                return m ? parseFloat(m[1].replace(/,/g, '')) : { profile: 300 }[which];
             }
             function usd(v) { v = Number(v || 0); return '$' + v.toLocaleString('en-US', { minimumFractionDigits: (Math.round(v) === v) ? 0 : 2, maximumFractionDigits: 2 }); }
             window.dtwBuildOpen = function(on) {
@@ -52569,8 +52587,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function bwStepPanelists() {
                 var b = S.bw, n = b.panelists, extra = Math.max(0, n - BW_INCLUDED), p = bwPrice('panelist'), dots = '';
                 for (var i = 0; i < n; i++) dots += '<span class="dtw-bw-seat ' + (i < BW_INCLUDED ? 'inc' : 'extra') + '"></span>';
-                var line = extra ? '<b>' + BW_INCLUDED + ' come with every session.</b> ' + extra + ' more at ' + usd(p) + ' each adds <b>' + usd(extra * p) + '</b> to each session, billed with the room\'s first question.'
-                                 : '<b>' + n + ' panelists.</b> ' + BW_INCLUDED + ' come with every session; add more at ' + usd(p) + ' each, billed with the room\'s first question.';
+                var line = '<b>' + n + ' panelists</b> in every room on this twin, seated from its audience. The seats are part of each group\'s price; nothing more is charged for them.';
                 return '<div class="dtw-bw-q">How many panelists?</div><div class="dtw-bw-sub">The panelists are the people in every focus group room on this twin, seated from its audience. Twelve is a full table; more gives a wider spread of voices.</div>'
                     + '<div class="dtw-bw-stepper"><button type="button" onclick="dtwBwSeats(-1)"' + (n <= 2 ? ' disabled' : '') + ' aria-label="One fewer">&minus;</button><input id="dtwBwSeatsIn" value="' + n + '" inputmode="numeric" onchange="dtwBwSeatsSet(this.value)" aria-label="Panelists"><button type="button" onclick="dtwBwSeats(1)"' + (n >= BW_MAX ? ' disabled' : '') + ' aria-label="One more">+</button></div>'
                     + '<div class="dtw-bw-seats">' + dots + '</div><div class="dtw-bw-line">' + line + '</div>' + bwNav(true, 'Next');
@@ -52581,16 +52598,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var pull = b.source !== 'demographics' && !b.profile_key && !!b.subject, pa = pull ? bwPrice('profile') : 0;
                 var rows = [['Source', b.source === 'demographics' ? 'A group shaped by demographics' : (b.profile_key ? 'A defined group, from the profile you picked' : 'A defined group; no audience on file yet, so Prometheus pulls it first'), 0],
                             ['Audience', bwAudienceLabel(), 1], ['Purpose', (b.chip ? b.chip : '') + (b.purpose.trim() ? (b.chip ? '. ' : '') + b.purpose.trim() : '') || 'Open', 2],
-                            ['Panelists', b.panelists + ' in every room' + (extra ? ' (' + extra + ' past the ' + BW_INCLUDED + ' a session seats)' : ''), 3]];
+                            ['Panelists', b.panelists + ' in every room (the seats are part of each group)', 3]];
                 var sum = '<div class="dtw-bw-sum">' + rows.map(function(r) { return '<div class="r"><span class="k">' + r[0] + '</span><span class="v">' + esc(r[1]) + '<button type="button" class="dtw-link" onclick="dtwBwGo(' + r[2] + ')">Change</button></span></div>'; }).join('') + '</div>';
+                var gc = groupCard(), gl = (gc && gc.labels) || {}, glab = (gl['20'] && gl['40']) ? (gl['20'] + ' (1-20 questions) or ' + gl['40'] + ' (1-40)') : (gl['40'] ? gl['40'] + ' (1-40 questions)' : usd(ps));
                 var price = '<div class="dtw-bw-price">'
                     + (pull ? '<div class="r"><span><i>The audience</i>, pulled first (usually under an hour)</span><b>' + usd(pa) + '</b></div>' : '')
-                    + '<div class="r"><span><i>The twin</i>, with its first two runs</span><b>' + usd(pt) + '</b></div>'
-                    + '<div class="r"><span><i>Each focus group session</i>, ' + BW_INCLUDED + ' questions</span><b>' + usd(ps) + '</b></div>'
-                    + (extra ? '<div class="r"><span><i>Extra panelists</i>, ' + extra + ' x ' + usd(pp) + ', with each session</span><b>' + usd(extra * pp) + '</b></div>' : '')
+                    + '<div class="r"><span><i>The twin</i>, with its first two runs</span><b>Included</b></div>'
+                    + '<div class="r"><span><i>Each group</i> you open on it (a focus group room or a pilot test' + (gc && gc.plan_label ? ', ' + esc(gc.plan_label.toLowerCase()) : '') + ')</span><b>' + esc(glab) + '</b></div>'
                     + '<div class="r"><span><i>Prometheus</i>, the build and every question</span><b>Metered</b></div>'
-                    + '<div class="r total"><span>Charged now</span><b>' + usd(pt + pa) + '</b></div>'
-                    + '<div class="m">' + (pull ? 'If this audience is already on file, only the twin is charged. ' : '') + 'Sessions and extra panelists bill when a room asks its first question. Prometheus usage is billed at the published rate on top.</div></div>';
+                    + '<div class="r total"><span>Charged now</span><b>' + usd(pa) + '</b></div>'
+                    + '<div class="m">' + (pull ? 'If this audience is already on file, nothing is charged now. ' : '') + 'Each group is charged to your company when it opens; the seats are part of it. Prometheus usage is billed at the published rate on top.</div></div>';
                 var when = pull ? 'The audience is pulled first (usually under an hour), then the twin is built from it; both land on the Twins tab and Prometheus confirms in the chat and by email.' : 'The twin lands on the Twins tab in a few minutes.';
                 return '<div class="dtw-bw-q">Ready to build.</div><div class="dtw-bw-sub">Check the four lines, then build. ' + when + '</div>' + sum + price
                     + (b.err ? '<div class="dtw-bw-err">' + esc(b.err) + '</div>' : '') + bwNav(!b.busy, b.busy ? 'Building...' : 'Build the twin');
@@ -52787,13 +52804,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwUlOpenTwin = function() { var j = S.ul && S.ul.job; dtwListOpen(false); if (j && j.key) { dtwLoadList(true).then(function() { dtwOpen(j.key); }); } };
             window.dtwUlAnother = function() { S.ul = ulFresh(); renderUl(); };
             window.dtwUlRetry = function() { var u = S.ul; u.job = null; renderUl(); };
-            // the New room drawer: the seats default to the twin's panelists; the line under the field prices any past twelve
+            // the New room drawer: the seats default to the twin's panelists; the line under the field quotes the group at the
+            // company's plan rate for the tier picked (Jenna 2026-11-05: priced per group, the seats are part of it)
             window.dtwPnSeatsNote = function() {
                 var n = parseInt((el('dtwPnRoom') || {}).value || '', 10), h = el('dtwPnSeats'); if (!h) return;
                 if (!isFinite(n)) n = BW_INCLUDED;
-                var extra = Math.max(0, Math.min(n, BW_MAX) - BW_INCLUDED), p = bwPrice('panelist');
-                h.innerHTML = extra ? BW_INCLUDED + ' come with the session. ' + extra + ' more at ' + usd(p) + ' each adds <b>' + usd(extra * p) + '</b>, billed with the room\'s first question.'
-                                    : BW_INCLUDED + ' panelists come with the session. Add more at ' + usd(p) + ' each; the price shows here.';
+                var sel = el('dtwPnTier'); if (sel && sel.options.length && groupCard()) { var cur = sel.value; sel.innerHTML = groupTierOptions(cur); }
+                var tier = (sel && sel.value) || groupTierDefault();
+                h.innerHTML = '<b>' + Math.max(2, Math.min(n, BW_MAX)) + ' panelists</b>, seated from the twin; the seats are part of the group. ' + esc(groupQuote(tier));
             };
             window.dtwAttach = function(kind) {
                 var nm = twinName() || '[twin]';
@@ -52805,7 +52823,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwLoadList = async function(force) {
                 if (S.loaded && !force) return S.runs;
                 // Company scope (2026-11-05): the list is the seat's company's library. Crosswalk staff see every company and can narrow to one.
-                try { var d = await api('/list' + (S.companyFilter ? '?company=' + encodeURIComponent(S.companyFilter) : '')); S.runs = d.runs || []; S.pricing = d.pricing || []; S.loaded = true;
+                try { var d = await api('/list' + (S.companyFilter ? '?company=' + encodeURIComponent(S.companyFilter) : '')); S.runs = d.runs || []; S.pricing = d.pricing || []; S.card = d.group_card || null; S.loaded = true;
                       S.isStaff = !!d.is_staff; S.canAssign = !!d.can_assign; S.companies = d.companies || []; S.company = d.company || ''; }
                 catch (e) { if (el('dtwLibrary')) el('dtwLibrary').innerHTML = '<div class="dtw-card dtw-muted" style="grid-column:1/-1">' + esc(e.message) + '</div>'; return []; }
                 renderLibrary(); fillTwinSelects(); fillCompanyFilter(); renderPrices(); syncInputCards();
@@ -52843,7 +52861,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (el('dtwGlConceptPrice')) el('dtwGlConceptPrice').textContent = find('greenlight concept');
                 if (el('dtwLaPrice')) el('dtwLaPrice').textContent = find('each further');
                 if (el('dtwSpPrice')) el('dtwSpPrice').textContent = find('spend engine');
-                if (el('dtwPnPrice')) el('dtwPnPrice').textContent = find('focus group iq');
+                if (el('dtwPnPrice')) el('dtwPnPrice').textContent = groupQuote((el('dtwPnTier') || {}).value) || find('individual groups');
             }
             function fillTwinSelects() {
                 var sw = el('dtwTwinSwitch');
@@ -53836,7 +53854,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     out += '<div class="dtw-fg-land-hero"><h2 class="dtw-fg-land-h">Pick a twin <b>first.</b></h2><p class="dtw-fg-land-sub">A focus group runs on a twin, the audience its seats stand for. Prometheus moderates. ' + (runs.length ? 'Pick one here, then open a room.' : 'Build the first one with Build a twin, then open a room.') + '</p><div class="dtw-fg-land-acts">' + (runs.length ? '<select class="dtw-in" aria-label="Pick a twin" onchange="dtwSwitchTwin(this.value)"><option value="">Pick a twin</option>' + runs.map(function(r) { return '<option value="' + esc(r.key) + '">' + esc(r.name || r.subject) + '</option>'; }).join('') + '</select><button type="button" class="dtw-fg-act" onclick="dtwBuildTwin()">Build a twin</button>' : '<button type="button" class="dtw-fg-act go" onclick="dtwBuildTwin()">Build a twin</button>') + '</div></div>';
                 }
                 out += '<div class="dtw-fg-steps"><div class="dtw-fg-step"><span class="n">01</span><b>Open a room</b><span>Name it, then choose the twins or cohorts and how many seats.</span></div><div class="dtw-fg-step"><span class="n">02</span><b>Ask</b><span>Yes/no, multiple choice, rating, price, A vs B, show of hands, open question, probes.</span></div><div class="dtw-fg-step"><span class="n">03</span><b>Read the split</b><span>Percentages and people, who said what and why, the facts the room knew.</span></div></div>';
-                out += '<div class="dtw-fg-land-foot"><span>' + esc(String(it.cost || '$5,500 a session with 12 questions, then $5,500 for each further 12').replace(/\.$/, '')) + '.</span><button type="button" class="dtw-link" onclick="dtwHowtoOpen(true)">Full directions</button></div>';
+                out += '<div class="dtw-fg-land-foot"><span>' + esc(String((groupCard() && groupQuote(groupTierDefault()).replace(/^This group/, 'A room')) || it.cost || 'A room is one group at the plan rate, charged when it opens').replace(/\.$/, '')) + '.</span><button type="button" class="dtw-link" onclick="dtwHowtoOpen(true)">Full directions</button></div>';
                 if (t && ss.length) {
                     var when = function(s) { return String(s.updated_at || s.created_at || ''); };
                     var live = ss.filter(function(s) { return (s.questions || []).length; }).sort(function(a, b) { return when(b).localeCompare(when(a)); }), empty = ss.filter(function(s) { return !(s.questions || []).length; });
@@ -53896,6 +53914,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // the note under the composer; when it appears the composer grows, so a thread that sat at its end stays there
             function liveNote(text) { var live = el('dtwPnLive'); if (!live) return; live.textContent = text || ''; }
+            function liveNoteHtml(html) { var live = el('dtwPnLive'); if (!live) return; live.innerHTML = html || ''; }
+            // a 1-20 room at twenty questions: move it to 1-40 for the difference at the company's plan rate, then the waiting question runs (Jenna 2026-11-05)
+            window.dtwPanelUpgrade = async function() {
+                if (!S.key || !S.session) return;
+                liveNote('Moving this room to 1-40 questions...');
+                try { var d = await api('/' + S.key + '/panel/' + S.session.id + '/upgrade', { method: 'POST', body: '{}' }); }
+                catch (e) { liveNote(e.message); if (e.doc && e.doc.add_funds_url) liveNoteHtml(esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'); return; }
+                if (d.session) { S.session.questions_paid = d.session.questions_paid; S.session.group_tier = d.session.group_tier; }
+                liveNote('This room now answers up to 40 questions.');
+                var pending = S.fg.pendingQ; S.fg.pendingQ = '';
+                if (pending) { try { await dtwPanelAsk(pending); } catch (_) {} }
+            };
             function fgShown() { fgLayoutSeats(); fgDockSize(); if (S.fg.seat != null) placePop(); }
             window.dtwFgToggle = function(qid) { S.fg.open[qid] = !S.fg.open[qid]; fgRefresh(); var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (blk && S.fg.open[qid]) fgScrollTo(blk); };
             window.dtwFgEarlier = function(qid, on) { S.fg.earlier[qid] = !!on; fgRefresh(); if (!on) { var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (blk) fgScrollTo(blk); } };
@@ -54039,9 +54069,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!title) { if (st) st.textContent = 'Name the room first.'; var tn = el('dtwPnTitle'); if (tn) { try { tn.focus(); } catch (_) {} } return; }
                 var segs = ((el('dtwPnSegments') || {}).value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean).map(function(s) { return { label: s }; });
                 var other = (el('dtwPnTwin2') || {}).value;
-                var body = { segments: segs.length ? segs : null, in_room: parseInt((el('dtwPnRoom') || {}).value || '12', 10) || 12, title: title, twins: other && other !== key ? [other] : [] };
+                var body = { segments: segs.length ? segs : null, in_room: parseInt((el('dtwPnRoom') || {}).value || '12', 10) || 12, title: title, twins: other && other !== key ? [other] : [], tier: parseInt((el('dtwPnTier') || {}).value || groupTierDefault(), 10) || 20 };
                 if (st) st.textContent = 'Seating the room...';
-                try { var d = await api('/' + key + '/panel/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) st.textContent = e.message; return; }
+                try { var d = await api('/' + key + '/panel/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) { st.textContent = e.message; if (e.doc && e.doc.add_funds_url) st.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } return; }
                 if (st) st.textContent = d.reused ? 'That room was already open; here it is.' : 'The room is open.';
                 dtwNewRoomOpen(false);
                 await dtwOpen(key, null, d.session.id, null, 'panel');
@@ -54067,7 +54097,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 liveNote('Asking the room...');
                 if (inp && !presetQ) inp.value = '';
                 try { var d = await api('/' + S.key + '/panel/' + S.session.id + '/ask', { method: 'POST', body: JSON.stringify(body) }); }
-                catch (e) { S.asking = false; setAskEnabled(true); liveNote(e.message); if (inp && !presetQ && !inp.value) inp.value = q; return; }
+                catch (e) {
+                    S.asking = false; setAskEnabled(true); liveNote(e.message); if (inp && !presetQ && !inp.value) inp.value = q;
+                    if (e.doc && e.doc.upgrade) { S.fg.pendingQ = q; liveNoteHtml(esc(e.doc.upgrade.line || e.message) + ' <button type="button" class="dtw-link" onclick="dtwPanelUpgrade()">Move it to 1-40 for ' + esc(e.doc.upgrade.label || '') + '</button>'); }
+                    else if (e.doc && e.doc.add_funds_url) { liveNoteHtml(esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'); }
+                    return;
+                }
                 S.asking = false;
                 S.session.questions = S.session.questions || [];
                 if (d.duplicate && d.question) {
@@ -54233,7 +54268,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             S.pilotClock = S.pilotClock || { raf: 0, t: 0, t0: 0, slate: false, bound: '' };
             var PI_EVT = { love: 'Loved it', laugh: 'Laughed', 'lean-in': 'Leaned in', confuse: 'Lost', 'check-out': 'Checked out', wow: 'Wow' };
             function clockFmt(t) { t = Math.max(0, Math.round(Number(t) || 0)); var m = Math.floor(t / 60), s = t % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
-            function pilotPrice() { var it = ((S.howto || {}).items || []).filter(function(x) { return x.id === 'pilot'; })[0]; return it ? String(it.cost || '') : '$5,500 a session (same as Focus Group IQ), charged on first Play'; }
+            function pilotPrice() { var c = groupCard(); if (c && c.quote) { return groupQuote(groupTierDefault()).replace(/^This group/, 'A test'); } var it = ((S.howto || {}).items || []).filter(function(x) { return x.id === 'pilot'; })[0]; return it ? String(it.cost || '') : 'One group at the plan rate, charged when the test opens'; }
+            window.piTierNote = function() { var n = el('dtwPiTierNote'); if (n) n.textContent = groupQuote((el('dtwPiTier') || {}).value).replace(/^This group/, 'This test'); };
             S.piTab = S.piTab || 'pilot'; S.piMode = S.piMode || 'pilot'; S.pilotCompare = S.pilotCompare || null;
             function adoptPilot(sess) {
                 if (!sess) return;
@@ -54807,6 +54843,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<label class="dtw-field" for="dtwPiTitle">Name this test</label><input id="dtwPiTitle" class="dtw-in" placeholder="' + esc({ pilot: 'Season 2 pilot', trailer: 'Trailer A vs B', titles: 'Six titles', script: 'Second Helping, draft 3', concept: 'Second Helping' }[tab]) + '" maxlength="120" autocomplete="off">'
                     + '<label class="dtw-field">Add a second twin (optional; two audiences on one cut)</label><select id="dtwPiTwin2" class="dtw-in"><option value="">Just this twin</option>' + others + '</select>'
                     + '<label class="dtw-field">Panelists in the room</label><input id="dtwPiRoom" class="dtw-in" value="12" inputmode="numeric">'
+                    + '<label class="dtw-field">Questions this group answers</label><select id="dtwPiTier" class="dtw-in" onchange="piTierNote()">' + groupTierOptions() + '</select><div class="dtw-fg-price" id="dtwPiTierNote">' + esc(groupQuote(groupTierDefault()).replace(/^This group/, 'This test')) + '</div>'
                     + piCohortBuilderHtml()
                     + quotas
                     + (tab === 'pilot' || tab === 'trailer' || tab === 'script' ? '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurgeNew"> Remove the file when the test is done</label>' : '')
@@ -56708,7 +56745,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (mode === 'concept' && !text) { if (st) st.textContent = 'Paste the concept first.'; return; }
                 if (mode === 'script' && !text && !file && !carried) { if (st) st.textContent = 'Paste the script or upload it.'; return; }
                 var watchUrl = ((el('dtwPiWatchUrl') || {}).value || '').trim();
-                var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [], mode: mode };
+                var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [], mode: mode, tier: parseInt((el('dtwPiTier') || {}).value || groupTierDefault(), 10) || 20 };
                 if (carried) body.setup_id = S.piSetupId;
                 var cohorts = piReadCohorts();
                 if (cohorts === null) { if (st) st.textContent = 'Pick at least one demographic for every cohort (at least two cohorts).'; return; }
@@ -56729,7 +56766,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (el('dtwPiNorm')) { body.genre = (el('dtwPiNorm').value || ''); body.genre_set_by_user = ((el('dtwPiNormTouched') || {}).value === '1'); }
                 var prior = (el('dtwPiPrior') || {}).value;
                 if (st) st.textContent = 'Seating the room...';
-                try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) st.textContent = e.message; return; }
+                try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) { st.textContent = e.message; if (e.doc && e.doc.add_funds_url) st.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } return; }
                 adoptPilot(d.session);
                 piLocalClear(); S.piPending = null;      // the test is open; the saved setup (if any) stays on the twin for next time
                 S.pilotMedia = null; S.pilotCompare = null;
@@ -56866,7 +56903,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var d = await api('/' + S.key + '/pilot/' + s.id + '/ask', { method: 'POST', body: JSON.stringify(body) });
                     if (d.session) adoptPilot(d.session);
                     else if (d.question) { s.questions = s.questions || []; s.questions.push(d.question); }
-                } catch (e) { if (note) note.textContent = e.message; if (inp && !inp.value) inp.value = q; return; }
+                } catch (e) {
+                    if (note) { note.textContent = e.message; if (e.doc && e.doc.upgrade) { S.piPendingQ = { q: q, t: t }; note.innerHTML = esc(e.doc.upgrade.line || e.message) + ' <button type="button" class="dtw-link" onclick="dtwPilotUpgrade()">Move it to 1-40 for ' + esc(e.doc.upgrade.label || '') + '</button>'; } else if (e.doc && e.doc.add_funds_url) { note.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } }
+                    if (inp && !inp.value) inp.value = q; return;
+                }
                 renderPilotConsole();
                 dtwPilotSeek(t);
                 if (note) note.textContent = 'Asked at ' + clockFmt(t) + '. The twins answer in the chat as they go.';
@@ -56874,6 +56914,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (v && mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
                 else if (wasLive && S.pilotLive && S.pilotLive.stream) { S.pilotClock.t = t; startLiveClock(); }
                 else if (wasSlate) { S.pilotClock.slate = true; S.pilotClock.t0 = Date.now() - t * 1000; dtwPilotPlay(true); }
+            };
+            // a 1-20 test at twenty questions: move it to 1-40 for the difference at the company's plan rate, then the waiting question runs (Jenna 2026-11-05)
+            window.dtwPilotUpgrade = async function() {
+                var s = S.pilot, note = el('dtwPiNote'); if (!S.key || !s) return;
+                if (note) note.textContent = 'Moving this test to 1-40 questions...';
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/upgrade', { method: 'POST', body: '{}' }); if (d.session) adoptPilot(d.session); }
+                catch (e) { if (note) { note.textContent = e.message; if (e.doc && e.doc.add_funds_url) note.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } return; }
+                if (note) note.textContent = 'This test now answers up to 40 questions.';
+                var p = S.piPendingQ; S.piPendingQ = null;
+                if (p && p.q) { var inp = el('dtwPiQ'); if (inp) inp.value = p.q; try { await dtwPilotAsk(p.t); } catch (_) {} }
             };
             function pollPilotQuestions() {
                 var s = S.pilot; if (!s || !S.key) return;

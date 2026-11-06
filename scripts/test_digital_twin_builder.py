@@ -199,14 +199,15 @@ class Build(unittest.TestCase):
 
 
 class Panelists(unittest.TestCase):
-    def test_seats_past_twelve_are_priced(self):
+    def test_seats_past_twelve_are_counted_not_priced(self):
+        # the seats are part of the group since 2026-11-05 (Jenna: priced per group); the count still reads
         self.assertEqual(DT.extra_panelists(12), 0)
         self.assertEqual(DT.extra_panelists(16), 4)
         self.assertEqual(DT.extra_panelists(2), 0)
         self.assertEqual(DT.extra_panelists(99), DT.PANEL_SEATS_MAX - 12)
         self.assertEqual(DT.extra_panelists('x'), 0)
-        self.assertEqual(DT.PRICING['digital_twin_panelist'], 550.0)
-        self.assertEqual(DT.PULL_TYPES['digital_twin_panelist'], 'Digital Twins IQ Focus Group Panelist')
+        self.assertNotIn('digital_twin_panelist', DT.PRICING)                 # the per-panelist line is retired
+        self.assertEqual(DT.PULL_TYPES['digital_twin_panelist'], 'Digital Twins IQ Focus Group Panelist')   # old ledger rows still read
 
     def test_rooms_open_on_the_twins_panelists(self):
         self.assertEqual(DT.panelists_for({'meta': {'panelists': 16}}), 16)
@@ -216,18 +217,19 @@ class Panelists(unittest.TestCase):
 
     def test_pricing_lines_and_how_to_say_it(self):
         lines = DT.pricing_lines()
-        self.assertTrue(any(l.startswith('Extra panelist - $550') and '12' in l for l in lines))
-        self.assertTrue(any(l.startswith('Prometheus usage - metered') for l in lines))
+        self.assertFalse(any(l.startswith('Extra panelist') for l in lines))         # the seats are part of the group (2026-11-05)
+        self.assertTrue(any(l.startswith('Prometheus usage is metered') for l in lines))
         doc = DT.how_to()
         panel = next(it for it in doc['items'] if it['id'] == 'panel')
         self.assertIn('Prometheus moderates', panel['answers'])
-        self.assertIn('$550', panel['cost'])
+        self.assertIn('$750 a group for 1-20 questions', panel['cost'])
+        self.assertIn('the seats are included', panel['cost'])
         twin = next(it for it in doc['items'] if it['id'] == 'twin')
         self.assertIn('walks you through it', twin['put_in'])
         self.assertIn('metered', twin['cost'])
         self.assertIn('first two runs', twin['cost'])
         self.assertIn('first two runs', twin['comes_back'])
-        self.assertTrue(any(l.startswith('Digital Twin - $750 for the twin and its first two runs') for l in lines))
+        self.assertTrue(any(l.startswith('Digital Twin - included; the twin and its first two runs') for l in lines))
         self.assertFalse(any('three runs' in l for l in lines))
 
     def test_greenlight_how_to_is_the_two_options(self):
@@ -242,27 +244,27 @@ class Panelists(unittest.TestCase):
         self.assertEqual(gl['title'], 'Greenlight')
         self.assertEqual([o['id'] for o in gl['options']], ['script', 'concept'])
         self.assertEqual([o['title'] for o in gl['options']], ['Script read', 'Concept'])
-        self.assertEqual([o['price'] for o in gl['options']], ['$3,500', '$2,500'])
+        self.assertEqual([o['price'] for o in gl['options']], ['$750 to $1,000 a group', '$750 to $1,000 a group'])   # one group each (2026-11-05)
         self.assertIn('Script read', gl['answers'])
         self.assertIn('Concept', gl['answers'])
-        self.assertIn('$2,500', gl['cost'])
-        self.assertIn('$3,500', gl['cost'])
+        self.assertIn('$750 a group for 1-20 questions', gl['cost'])
+        self.assertIn('charged when the group opens', gl['cost'])
         blob = json.dumps(gl, ensure_ascii=False).lower()
         for tok in ('odds', 'clears your goal', 'greenlight lab', 'levers', 'package to run', '\u2014', '\u2013', 'synth', 'claude', 'pipeline'):
             self.assertNotIn(tok, blob, tok)
         self.assertTrue(any(t.startswith('Test this concept in Greenlight on the Gilmore Girls twin') for t in gl['type_this']))
         self.assertTrue(any(t.startswith('Read this script in Greenlight on the Mark Rober twin') for t in gl['type_this']))
         lines = DT.pricing_lines()
-        self.assertTrue(any(l.startswith('Greenlight Concept - $2,500') for l in lines))
-        self.assertTrue(any(l.startswith('Greenlight Script read - $3,500') for l in lines))
+        self.assertTrue(any('script, concept' in l and 'Same rates for both' in l for l in lines))   # a concept test or a script read is one group (2026-11-05)
+        self.assertFalse(any('Greenlight Concept - $2,500' in l or 'Greenlight Script read - $3,500' in l for l in lines))
         self.assertFalse(any('Greenlight, Launch' in l for l in lines))
         self.assertIn('Greenlight tab', doc['where'])
         for ask in ('how do I use Greenlight on a twin', 'how do I run a script read', 'how do I run a concept test'):
             self.assertTrue(DT.is_how_to_ask(ask), ask)
             text = DT.how_to_text(ask)
             self.assertIn('Greenlight.', text)
-            self.assertIn('Script read ($3,500)', text)
-            self.assertIn('Concept ($2,500)', text)
+            self.assertIn('Script read ($750 to $1,000 a group)', text)
+            self.assertIn('Concept ($750 to $1,000 a group)', text)
             self.assertNotIn('odds', text.lower())
 
     def test_retired_greenlight_runs_are_hidden_not_deleted(self):

@@ -328,7 +328,10 @@ class OnlyTheHelperWritesRefunds(unittest.TestCase):
         self.assertIn('job_id=f"offer-{oid}-{i}"', off)
         with open(os.path.join(ROOT, 'digital_twins_api.py'), encoding='utf-8') as fh:
             dta = fh.read()
-        self.assertEqual(dta.count('job_id=f"{sid}-seats"'), 2)
+        # the per-group card (2026-11-05): a group's open charge is refunded by the room id it was charged under, with its dollars
+        self.assertIn("lambda credits, reason, job_id, amount_usd, pull_type: _refund(user, credits, reason, job_id=job_id, amount_usd=amount_usd, pull_type=pull_type)", dta)
+        self.assertIn("refund_fn=_group_refund_fn(user)", dta)
+        self.assertNotIn('job_id=f"{sid}-seats"', dta)          # the per-panelist line is retired
 
 
 if __name__ == '__main__':

@@ -177,6 +177,8 @@ def price_line(username=None, pull=True):
     pr = price(username)
     if pull:
         return f"- {pr['line']}"
+    if pr['twin_usd'] <= 0:
+        return f"- Price: the twin and its first two runs are included (each group you open on it is priced per group); each further run {pr['run_label']}"
     return f"- Price: {pr['twin_label']} for the twin and its first two runs; each further run {pr['run_label']}"
 
 
@@ -214,6 +216,8 @@ def charge(user, uname, subject, *, pull, profile_run_id='', twin_job_id='', con
     free, consume_credit = _TUL.billing(user, uname, consume_credit=consume_credit, is_free=is_free)
     if free or consume_credit is None:
         return charged, None
+    if _TUL.twin_included(uname) or TWIN_CREDITS <= 0:
+        return charged, None          # the twin is included (Jenna 2026-11-05): the group is the unit
     try:
         from migration.digital_twins import PULL_TYPES
         ok = bool(consume_credit(uname, description=f"Digital Twin: {subject}", pull_type=PULL_TYPES['digital_twins_iq'],
