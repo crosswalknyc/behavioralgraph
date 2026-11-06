@@ -244,8 +244,16 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
         for g in groups:
             g.sort(key=rank)
             m = len(g)
-            extra = 1 if _unit('tie', seed, rows[g[0]].get('label'), m) < 0.5 else 0   # the group's first row takes one more tenth on a salted coin
-            offs = [(m - 1 - 2 * i) + (extra if i == 0 else 0) for i in range(m)]
+            # the tied rows spread on salted, uneven steps of one or two tenths (never an even ladder), the first in rank on top
+            gaps = [1 + (1 if _unit('gap', seed, rows[g[i]].get('label'), i, m) < 0.45 else 0) for i in range(m - 1)]
+            if m >= 4 and len(set(gaps)) == 1:   # four or more tied rows never land on an even ladder
+                j = int(_unit('flip', seed, m) * (m - 1))
+                gaps[j] = 3 - gaps[j]
+            pos = [0]
+            for gp in gaps:
+                pos.append(pos[-1] + gp)
+            centre = pos[-1] // 2   # integer tenths, so the uneven gaps survive (a rounded half would even them out again)
+            offs = [(pos[-1] - pos[i]) - centre for i in range(m)]
             lo = min(t[g[i]] + offs[i] for i in range(m))
             if lo < 1:
                 offs = [o + (1 - lo) for o in offs]
