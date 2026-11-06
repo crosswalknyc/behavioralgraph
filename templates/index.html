@@ -51179,6 +51179,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-btn-primary { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); }
         #digitalTwinsIQView .dtw-btn-primary:hover { color: var(--dtw-accent-ink); filter: brightness(1.05); }
         #digitalTwinsIQView .dtw-btn:disabled { opacity: 0.45; cursor: default; filter: none; }
+        /* ---- busy state (Jenna 2026-11-05: 'something needs to show an indication that it is working'). dtwBusy() puts .dtw-busy on
+           the clicked control: a Signal Green ring spinner (Olive on the light ground), the working label, siblings held; .dtw-busy-line is the
+           stage line under the row. CSS only, no images. */
+        @keyframes dtwSpin { to { transform: rotate(360deg); } }
+        #digitalTwinsIQView .dtw-spin { display: inline-block; width: 0.85em; height: 0.85em; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; vertical-align: -0.12em; margin-right: 0.4rem; color: var(--dtw-accent); animation: dtwSpin .7s linear infinite; }
+        #digitalTwinsIQView .dtw-busy, #digitalTwinsIQView .dtw-busy:hover, #digitalTwinsIQView button.dtw-busy:disabled { display: inline-flex; align-items: center; gap: 0.4rem; background: transparent; color: var(--dtw-accent); border-color: var(--dtw-accent); opacity: 1; filter: none; cursor: progress; pointer-events: none; }
+        #digitalTwinsIQView .dtw-busy > .dtw-spin { margin-right: 0; }
+        #digitalTwinsIQView .dtw-fg-send.dtw-busy, #digitalTwinsIQView .dtw-fg-send.working.dtw-busy { background: transparent; color: var(--dtw-accent); box-shadow: inset 0 0 0 1px var(--dtw-accent); }
+        #digitalTwinsIQView a.dtw-held { opacity: 0.45; pointer-events: none; }
+        #digitalTwinsIQView .dtw-busy-line { flex: 0 0 100%; font-size: 0.76rem; color: var(--dtw-body); padding: 0.45rem 0 0; min-height: 1.1em; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-busy-line.err, #digitalTwinsIQView .dtw-status.err, #digitalTwinsIQView .dtw-pi-note.err, #digitalTwinsIQView .dtw-fg-saved.err, #digitalTwinsIQView .dtw-fg-note.err { color: var(--dtw-ink); }
+        @media (prefers-reduced-motion: reduce) { #digitalTwinsIQView .dtw-spin { animation-duration: 1.8s; } }
         #digitalTwinsIQView .dtw-btn-sm { padding: 0.36rem 0.7rem; font-size: 0.6rem; }
         #digitalTwinsIQView .dtw-link { appearance: none; background: transparent; border: 0; padding: 0; color: var(--dtw-body); font-size: 0.72rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
         #digitalTwinsIQView .dtw-link:hover { color: var(--dtw-ink); }
@@ -52289,6 +52301,92 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!r.ok || !d || d.success === false) { var err = new Error((d && d.error) || ('Request failed (' + r.status + ')')); err.doc = d || {}; err.status = r.status; throw err; }
                 return d;
             }
+            // ---- busy buttons (Jenna 2026-11-05: 'when you click on this something needs to show an indication that it is working because
+            // I can't tell if it is or I need to click again'). dtwBusy(btn, label, line) disables the control at once, swaps its label for a
+            // working label with a spinner, holds the other buttons in the same row, and opens the stage line (an existing status element,
+            // or true for a line made under the row); dtwStage(tok, text) moves the line as the request moves; dtwIdle(tok, err) puts everything
+            // back and, on a failure, prints what happened in plain words. dtwBusy returns false when the control is already working, so a
+            // handler that starts with `if (tok === false) return;` can never run twice for one click. dtwBtn() finds the clicked control.
+            var DTW_BUSY_ROWS = '.dtw-lab-run, .dtw-actions, .dtw-bw-nav, .dtw-pi-askrow, .dtw-pi-controls, .dtw-assign, .dtw-fg-field, .dtw-fg-acts, .dtw-fg-nextp, .dtw-pi-editing, .dtw-fg-land-acts';
+            function dtwBusyHtml(label) { return '<span class="dtw-spin" aria-hidden="true"></span>' + esc(label || 'Working'); }
+            function dtwBusyLineHtml(text) { return '<div class="dtw-busy-line" aria-live="polite">' + dtwBusyHtml(text || 'Working') + '</div>'; }
+            function dtwIsBusy(b) { return !!(b && b.classList && b.classList.contains('dtw-busy')); }
+            function dtwBtn(fallback) {
+                var ev = null, t = null;
+                try { ev = window.event; } catch (_) { ev = null; }
+                if (ev) { try { t = (ev.currentTarget && ev.currentTarget.nodeType === 1) ? ev.currentTarget : ev.target; } catch (_) { t = null; } }
+                if (t && t.closest) { var b = t.closest('button, a'); if (b && (b.ownerDocument !== document || b.closest('#digitalTwinsIQView'))) return b; }
+                if (!fallback) return null;
+                var q = null, p = S.roomPop;
+                if (p && p.win && !p.win.closed) { try { q = p.win.document.querySelector(fallback); } catch (_) { q = null; } }
+                if (!q) { try { q = document.querySelector('#digitalTwinsIQView ' + fallback); } catch (_) { q = null; } }
+                return q;
+            }
+            function dtwBusy(b, label, line) {
+                if (b && dtwIsBusy(b)) return false;
+                var tok = { btn: b || null, html: '', wasDisabled: false, held: [], line: null, made: false };
+                var row = (b && b.closest) ? b.closest(DTW_BUSY_ROWS) : null;
+                if (b) {
+                    tok.html = b.innerHTML; tok.wasDisabled = !!b.disabled;
+                    b.classList.add('dtw-busy'); b.setAttribute('aria-busy', 'true');
+                    if (b.tagName !== 'A') b.disabled = true;
+                    b.innerHTML = dtwBusyHtml(label);
+                    var scope = row || b.parentNode;
+                    if (scope && scope.querySelectorAll) scope.querySelectorAll('button, a.dtw-btn, a.dtw-fg-act').forEach(function(o) {
+                        if (o === b || dtwIsBusy(o)) return;
+                        if (o.tagName === 'A') { if (o.classList.contains('dtw-held')) return; o.classList.add('dtw-held'); o.setAttribute('aria-disabled', 'true'); }
+                        else { if (o.disabled) return; o.disabled = true; }
+                        tok.held.push(o);
+                    });
+                }
+                if (line === true) {
+                    if (row && row.parentNode) {
+                        var nx = row.nextElementSibling;
+                        if (nx && nx.classList && nx.classList.contains('dtw-busy-line')) tok.line = nx;
+                        else { var d = (row.ownerDocument || document).createElement('div'); d.className = 'dtw-busy-line'; d.setAttribute('aria-live', 'polite'); row.parentNode.insertBefore(d, row.nextSibling); tok.line = d; }
+                        tok.made = true;
+                    }
+                } else if (line) { tok.line = (typeof line === 'string') ? el(line) : line; }
+                if (tok.line) { tok.line.classList.remove('err'); tok.line.innerHTML = dtwBusyHtml('Working'); }
+                return tok;
+            }
+            function dtwStage(tok, text) { if (!tok || !tok.line) return; tok.line.classList.remove('err'); tok.line.innerHTML = dtwBusyHtml(text || 'Working'); }
+            // what the reader sees on a failure: the request's own line when it is plain, else one calm sentence
+            function dtwSafeErr(e, fallback) {
+                var m = (e == null) ? '' : (typeof e === 'string' ? e : String(e.message || ''));
+                m = m.replace(/[\u2014\u2013]/g, '-').trim();
+                if (!m || /^request failed/i.test(m) || /<\/?[a-z][^>]*>/i.test(m) || /traceback|internal server error|exception|stack/i.test(m) || m.length > 320) m = fallback || 'That did not go through. Try again in a moment.';
+                return m;
+            }
+            function dtwIdle(tok, err) {
+                if (!tok) return;
+                var b = tok.btn;
+                if (b) { b.classList.remove('dtw-busy'); b.removeAttribute('aria-busy'); b.innerHTML = tok.html; if (b.tagName !== 'A') b.disabled = tok.wasDisabled; }
+                tok.held.forEach(function(o) { if (o.tagName === 'A') { o.classList.remove('dtw-held'); o.removeAttribute('aria-disabled'); } else o.disabled = false; });
+                tok.held = [];
+                var line = tok.line; if (!line) return;
+                if (err != null && err !== false) { line.classList.add('err'); line.textContent = dtwSafeErr(err); }
+                else if (tok.made) { if (line.parentNode) line.parentNode.removeChild(line); }
+                else { line.classList.remove('err'); line.textContent = ''; }
+            }
+            // the export links: the file is fetched while the link shows it is working, then saved under the name the server gives it
+            window.dtwDownload = async function(a, ev) {
+                if (ev && ev.preventDefault) ev.preventDefault();
+                if (!a || dtwIsBusy(a)) return false;
+                var href = a.getAttribute('href'); if (!href) return false;
+                var tok = dtwBusy(a, 'Preparing the file', true);
+                try {
+                    var r = await fetch(href, { credentials: 'same-origin' });
+                    if (!r.ok) { var d = null; try { d = await r.json(); } catch (_) { d = null; } throw new Error((d && d.error) || 'The file could not be prepared. Try again in a moment.'); }
+                    var blob = await r.blob();
+                    var cd = r.headers.get('Content-Disposition') || '', m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+                    var name = m ? decodeURIComponent(m[1]) : (href.split('/').pop().split('?')[0] || 'download');
+                    var url = URL.createObjectURL(blob), t = document.createElement('a'); t.href = url; t.download = name; t.style.display = 'none'; document.body.appendChild(t); t.click();
+                    setTimeout(function() { try { document.body.removeChild(t); } catch (_) {} try { URL.revokeObjectURL(url); } catch (_) {} }, 1500);
+                    dtwIdle(tok);
+                } catch (e) { dtwIdle(tok, (e && e.message) || 'The file could not be prepared. Try again in a moment.'); }
+                return false;
+            };
             // ---- the per-group card (Jenna 2026-11-05): S.card from /list carries the seat's plan, tiers, rates and quote lines
             function groupCard() { return S.card || null; }
             function groupTierDefault() { var c = groupCard(); return c && c.default_tier ? String(c.default_tier) : '20'; }
@@ -52310,7 +52408,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function twinName() { return ((S.twin || {}).meta || {}).name || ((S.twin || {}).meta || {}).subject || ''; }
             function exportRow(label) {
                 if (!S.key) return '';
-                return card(label || 'Export', 'The twin and every run on it, in the format you need.', '<div class="dtw-actions"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwChatSend(\'Build a deck of the ' + esc(jsq(twinName())) + ' twin\')">Deck via Prometheus</button></div>');
+                return card(label || 'Export', 'The twin and every run on it, in the format you need.', '<div class="dtw-actions"><a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/export.csv">CSV</a><a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/export.pdf">PDF</a><a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwChatSend(\'Build a deck of the ' + esc(jsq(twinName())) + ' twin\')">Deck via Prometheus</button></div>');
             }
             function chatSend(text) { try { if (typeof window.prometheusExpand === 'function') window.prometheusExpand(); } catch (_) {} try { if (typeof synthChatChipSend === 'function') synthChatChipSend(text); } catch (_) {} }
             function chatFill(text) { try { if (typeof window.prometheusExpand === 'function') window.prometheusExpand(); } catch (_) {} try { if (typeof synthChatChipFill === 'function') synthChatChipFill(text); } catch (_) {} }
@@ -52486,9 +52584,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }).join('') + '</div>';
             }
             function bwNav(canNext, nextLabel) {
-                var b = S.bw;
-                return '<div class="dtw-bw-nav">' + (b.step > 0 ? '<button type="button" class="dtw-btn" onclick="dtwBwGo(' + (b.step - 1) + ')">Back</button>' : '') +
-                    '<button type="button" class="dtw-btn dtw-btn-primary dtw-right"' + (canNext ? '' : ' disabled') + ' onclick="dtwBwNext()">' + esc(nextLabel || 'Next') + '</button></div>';
+                var b = S.bw, busy = !!b.busy;
+                return '<div class="dtw-bw-nav">' + (b.step > 0 ? '<button type="button" class="dtw-btn"' + (busy ? ' disabled' : '') + ' onclick="dtwBwGo(' + (b.step - 1) + ')">Back</button>' : '') +
+                    '<button type="button" class="dtw-btn dtw-btn-primary dtw-right' + (busy ? ' dtw-busy" aria-busy="true"' : '"') + (canNext && !busy ? '' : ' disabled') + ' onclick="dtwBwNext()">' + (busy ? dtwBusyHtml(nextLabel || 'Working') : esc(nextLabel || 'Next')) + '</button></div>' + (busy ? dtwBusyLineHtml('Working') : '');
             }
             function bwMarkets() { return String(S.bw.markets || '').split(/,|;|\n/).map(function(s) { return s.trim(); }).filter(Boolean); }
             function bwSpans(picks, parse) {
@@ -52610,7 +52708,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="m">' + (pull ? 'If this audience is already on file, nothing is charged now. ' : '') + 'Each group is charged to your company when it opens; the seats are part of it. Prometheus usage is billed at the published rate on top.</div></div>';
                 var when = pull ? 'The audience is pulled first (usually under an hour), then the twin is built from it; both land on the Twins tab and Prometheus confirms in the chat and by email.' : 'The twin lands on the Twins tab in a few minutes.';
                 return '<div class="dtw-bw-q">Ready to build.</div><div class="dtw-bw-sub">Check the four lines, then build. ' + when + '</div>' + sum + price
-                    + (b.err ? '<div class="dtw-bw-err">' + esc(b.err) + '</div>' : '') + bwNav(!b.busy, b.busy ? 'Building...' : 'Build the twin');
+                    + (b.err ? '<div class="dtw-bw-err">' + esc(b.err) + '</div>' : '') + bwNav(!b.busy, b.busy ? 'Starting the build' : 'Build the twin');
             }
             function bwProgress() {
                 var j = S.bw.job || {};
@@ -52717,7 +52815,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="dtw-bw-q" style="margin-top:1rem;">Window</div><div class="dtw-bw-sub">Trailing 12 months unless you change it.</div>'
                     + '<div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="date" class="dtw-in" style="flex:1; min-width:150px;" value="' + esc(u.ws) + '" onchange="dtwUlField(\'ws\', this.value)" aria-label="Window start"><input type="date" class="dtw-in" style="flex:1; min-width:150px;" value="' + esc(u.we) + '" onchange="dtwUlField(\'we\', this.value)" aria-label="Window end"></div>'
                     + (u.err ? '<div class="dtw-bw-err">' + esc(u.err) + '</div>' : '')
-                    + '<div class="dtw-bw-nav"><button type="button" class="dtw-btn dtw-btn-primary dtw-right"' + (ulHasList() && !u.busy ? '' : ' disabled') + ' onclick="dtwUlPreview()">' + (u.busy ? 'Reading the list...' : 'Read the list') + '</button></div>';
+                    + '<div class="dtw-bw-nav"><button type="button" class="dtw-btn dtw-btn-primary dtw-right' + (u.busy ? ' dtw-busy" aria-busy="true"' : '"') + (ulHasList() && !u.busy ? '' : ' disabled') + ' onclick="dtwUlPreview()">' + (u.busy ? dtwBusyHtml('Reading the list') : 'Read the list') + '</button></div>' + (u.busy ? dtwBusyLineHtml('Working') : '');
             }
             function ulPreview() {
                 var u = S.ul, p = u.preview || {}, pr = p.price || {}, k = p.kinds || {}, hosts = p.hosts || [];
@@ -52739,7 +52837,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var nameIn = u.name ? '' : '<label class="dtw-field">Name the audience</label><input class="dtw-in" value="" placeholder="Yellowstone and Landman viewers" oninput="dtwUlField(\'name\', this.value, true)">';
                 return '<div class="dtw-bw-q">Here is the list, read back.</div><div class="dtw-bw-sub">Check the lines, then build.</div>' + sum + nameIn + price
                     + (u.err ? '<div class="dtw-bw-err">' + esc(u.err) + '</div>' : '')
-                    + '<div class="dtw-bw-nav"><button type="button" class="dtw-btn" onclick="dtwUlBack()">Change the list</button><button type="button" class="dtw-btn dtw-btn-primary dtw-right"' + (u.busy ? ' disabled' : '') + ' onclick="dtwUlBuild()">' + (u.busy ? 'Starting...' : 'Build the twin') + '</button></div>';
+                    + '<div class="dtw-bw-nav"><button type="button" class="dtw-btn"' + (u.busy ? ' disabled' : '') + ' onclick="dtwUlBack()">Change the list</button><button type="button" class="dtw-btn dtw-btn-primary dtw-right' + (u.busy ? ' dtw-busy" aria-busy="true"' : '"') + (u.busy ? ' disabled' : '') + ' onclick="dtwUlBuild()">' + (u.busy ? dtwBusyHtml('Starting the build') : 'Build the twin') + '</button></div>' + (u.busy ? dtwBusyLineHtml('Working') : '');
             }
             function ulProgress() {
                 var j = S.ul.job || {};
@@ -52850,9 +52948,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwAssignTwin = async function(key) {
                 var sel = el('dtwAssignCompany'), note = el('dtwAssignNote'), co = sel ? sel.value : '';
                 if (!co) { if (note) note.textContent = 'Pick a company first.'; return; }
-                if (note) note.textContent = 'Assigning...';
-                try { var d = await api('/' + key + '/company', { method: 'POST', body: JSON.stringify({ company: co }) }); if (note) note.textContent = d.message || 'Assigned.'; S.loaded = false; await dtwLoadList(true); if (S.key === key) { await dtwOpen(key, null, null, null, S.tab); } }
-                catch (e) { if (note) note.textContent = e.message; }
+                var tok = dtwBusy(dtwBtn('.dtw-assign .dtw-btn'), 'Assigning', note); if (tok === false) return;
+                dtwStage(tok, 'Assigning');
+                try { var d = await api('/' + key + '/company', { method: 'POST', body: JSON.stringify({ company: co }) }); dtwIdle(tok); if (note) note.textContent = d.message || 'Assigned.'; S.loaded = false; await dtwLoadList(true); if (S.key === key) { await dtwOpen(key, null, null, null, S.tab); } }
+                catch (e) { dtwIdle(tok, e); }
             };
             function renderPrices() {
                 var p = S.pricing || [];
@@ -53035,7 +53134,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!t) { h.innerHTML = ''; return; }
                 var m = t.meta || {}, ident = t.identity || {}, key = m.key || S.key, lc = t.lifecycle || {};
                 var kn = esc(jsq(key)), nm = m.name || m.subject || 'this twin';
-                var out = '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTwinDeleteAsk(\'' + kn + '\', null, \'dtwTwinDelP-\')">Delete</button>' + assignControl(key) + twinPageConfirm(key, nm) + '</div>';
+                var out = '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTwinDeleteAsk(\'' + kn + '\', null, \'dtwTwinDelP-\')">Delete</button>' + assignControl(key) + twinPageConfirm(key, nm) + '</div>';
                 // Identity
                 var idb = '<div class="dtw-two"><div>';
                 [['gender', 'Gender'], ['age', 'Age'], ['sexual_orientation', 'Orientation'], ['education', 'Education'], ['occupation', 'Occupation'], ['income', 'Income'], ['ethnicity', 'Ethnicity'], ['relationship', 'Relationship']].forEach(function(c) { var rows = demoRows(c[0]); if (rows.length) { idb += '<h4>' + c[1] + '</h4>' + rows.slice(0, 8).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1)); }).join(''); } });
@@ -53254,7 +53353,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var ho = p.holdout || {};
                 out += '<div class="dtw-two">' + card('Tests to run inside the flight', 'A/B tests the first days can settle.', (p.tests || []).map(function(t) { return '<div class="dtw-run" style="cursor:default;"><div class="q">' + esc(t.name) + '</div><div class="m">' + esc(t.what) + ' Split: ' + esc(t.split) + '. ' + t.days + ' days. ' + esc(t.why) + '</div></div>'; }).join('') || '<p class="dtw-muted">No tests proposed.</p>') + card('Lift read against the holdout', 'The smallest group held out that still proves lift.', figs([[fmtN(ho.size), 'Matched people held out'], [fmtMoney(ho.spend), 'Lowest spend that proves lift'], [pct(ho.expected_lift_pct), 'Lift it can read']]) + '<p class="dtw-p">' + esc(ho.lift_read || '') + '</p>') + '</div>';
                 out += card('The read', 'Where the plan stands today.', '<p class="dtw-p">' + esc(led.read || '') + '</p>');
-                out += card('Export and hand off', 'The approved moves for your buyers; Attribution IQ measures the plan.', '<div class="dtw-actions"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/spend/' + esc(p.plan_id) + '/moves.csv">Export moves (CSV)</a><button type="button" class="dtw-btn" onclick="dtwSpendHandoff()">Hand off to Attribution IQ</button></div>');
+                out += card('Export and hand off', 'The approved moves for your buyers; Attribution IQ measures the plan.', '<div class="dtw-actions"><a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/spend/' + esc(p.plan_id) + '/moves.csv">Export moves (CSV)</a><button type="button" class="dtw-btn" onclick="dtwSpendHandoff()">Hand off to Attribution IQ</button></div>');
                 h.innerHTML = out;
             }
             window.dtwConnectRequest = async function() {
@@ -53393,7 +53492,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return focusQ();
             }
-            function setAskEnabled(on) { var b = el('dtwPnAskBtn'); if (!b) return; var busy = !on || anyInFlight(); b.disabled = busy; b.classList.toggle('working', busy); b.innerHTML = busy ? 'Working...' : 'Ask the room<span class="arr"></span>'; }
+            function setAskEnabled(on) { var b = el('dtwPnAskBtn'); if (!b) return; var busy = !on || anyInFlight(); b.disabled = busy; b.classList.toggle('working', busy); b.classList.toggle('dtw-busy', busy); if (busy) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy'); b.innerHTML = busy ? dtwBusyHtml(S.asking ? 'Asking the room' : 'Working') : 'Ask the room<span class="arr"></span>'; }
             function clearRoomPoll() { if (S.roomPollTimer) { clearTimeout(S.roomPollTimer); S.roomPollTimer = null; } if (S.roomTick) { clearInterval(S.roomTick); S.roomTick = null; } }
             function adoptQuestion(fq, force) {
                 if (!fq || !fq.id || !S.session) return false;
@@ -53818,7 +53917,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function actsHtml(s) {
                 var n = ((S.twin || {}).panel_sessions || []).length;
                 var acts = '<span class="dtw-fg-saved" id="dtwPnSaved"></span><button type="button" class="dtw-fg-act" onclick="dtwRoomsOpen(true)">Rooms<b id="dtwFgRoomsN">' + n + '</b></button><button type="button" class="dtw-fg-act" onclick="dtwNewRoomOpen(true)">New room</button>';
-                if (s) acts += '<button type="button" class="dtw-fg-act" onclick="dtwPanelSave()">Save</button><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a><button type="button" class="dtw-fg-act" title="Duplicate this room: the same twins, cohorts and seats, no questions yet" onclick="dtwPanelDuplicate(\'' + esc(s.id) + '\')">Duplicate</button><button type="button" class="dtw-fg-act close" title="Close this room (Escape). It stays under Rooms." aria-label="Close room" onclick="dtwPanelClose()"><span class="x" aria-hidden="true">&#215;</span>Close room</button>';
+                if (s) acts += '<button type="button" class="dtw-fg-act" onclick="dtwPanelSave()">Save</button><a class="dtw-fg-act" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-fg-act" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a><button type="button" class="dtw-fg-act" title="Duplicate this room: the same twins, cohorts and seats, no questions yet" onclick="dtwPanelDuplicate(\'' + esc(s.id) + '\')">Duplicate</button><button type="button" class="dtw-fg-act close" title="Close this room (Escape). It stays under Rooms." aria-label="Close room" onclick="dtwPanelClose()"><span class="x" aria-hidden="true">&#215;</span>Close room</button>';
                 return acts;
             }
             function syncFgActs() {
@@ -54059,11 +54158,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwPanelDuplicate = async function(sid) {
                 if (!S.key || !sid) return;
                 var src = ((S.twin || {}).panel_sessions || []).filter(function(s) { return s.id === sid; })[0] || null;
-                fgNote('Duplicating the room...');
+                var tok = dtwBusy(dtwBtn(), 'Duplicating', el('dtwFgNote')); if (tok === false) return;
+                dtwStage(tok, 'Duplicating the room');
                 try { var d = await api('/' + S.key + '/panel/' + encodeURIComponent(sid) + '/duplicate', { method: 'POST', body: '{}' }); }
-                catch (e) { fgNote(''); fgToast(e && e.message ? e.message : 'The room could not be duplicated.'); return; }
+                catch (e) { dtwIdle(tok); fgToast(e && e.message ? e.message : 'The room could not be duplicated.'); return; }
+                dtwStage(tok, 'Opening the room');
                 dtwRoomsOpen(false);
-                await dtwOpen(S.key, null, d.session.id, null, 'panel');
+                try { await dtwOpen(S.key, null, d.session.id, null, 'panel'); } finally { dtwIdle(tok); }
                 fgToast('Duplicated ' + ((src && roomTitle(src)) || 'the room') + ' as ' + roomTitle(d.session) + '. Same twins, cohorts and seats, no questions yet. Rename it here if you like.');
             };
             window.dtwPanelResume = function(sid) {
@@ -54080,11 +54181,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var segs = ((el('dtwPnSegments') || {}).value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean).map(function(s) { return { label: s }; });
                 var other = (el('dtwPnTwin2') || {}).value;
                 var body = { segments: segs.length ? segs : null, in_room: parseInt((el('dtwPnRoom') || {}).value || '12', 10) || 12, title: title, twins: other && other !== key ? [other] : [], tier: parseInt((el('dtwPnTier') || {}).value || groupTierDefault(), 10) || 20 };
-                if (st) st.textContent = 'Seating the room...';
-                try { var d = await api('/' + key + '/panel/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) { st.textContent = e.message; if (e.doc && e.doc.add_funds_url) st.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } return; }
-                if (st) st.textContent = d.reused ? 'That room was already open; here it is.' : 'The room is open.';
+                var tok = dtwBusy(dtwBtn('[onclick^="dtwPanelOpen("]'), 'Opening the room', st); if (tok === false) return;
+                dtwStage(tok, 'Seating the room');
+                try { var d = await api('/' + key + '/panel/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { dtwIdle(tok, e); if (st && e.doc && e.doc.add_funds_url) st.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; return; }
+                dtwStage(tok, 'Opening the room');
                 dtwNewRoomOpen(false);
-                await dtwOpen(key, null, d.session.id, null, 'panel');
+                try { await dtwOpen(key, null, d.session.id, null, 'panel'); } catch (e) { dtwIdle(tok, e); return; }
+                dtwIdle(tok);
+                if (st) st.textContent = d.reused ? 'That room was already open; here it is.' : 'The room is open.';
             };
             window.dtwPanelKind = function(k) { S.panelKind = (S.panelKind === k) ? '' : k; document.querySelectorAll('#dtwPnKinds .dtw-fg-chip').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-k') === S.panelKind); }); var o = el('dtwPnOptions'); if (o) o.style.display = (S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none'; var q = el('dtwPnQ'); if (q) { try { q.focus(); } catch (_) {} } };
             window.dtwPanelAsk = async function(presetQ, askAgain) {
@@ -54104,7 +54208,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (askAgain) body.ask_again = true;
                 var optsRaw = (el('dtwPnOptions') || {}).value || '';
                 if (optsRaw.trim()) body.options = optsRaw.split(/\n|,/).map(function(s) { return s.trim(); }).filter(Boolean);
-                liveNote('Asking the room...');
+                liveNoteHtml(dtwBusyHtml('Asking the room'));
                 if (inp && !presetQ) inp.value = '';
                 try { var d = await api('/' + S.key + '/panel/' + S.session.id + '/ask', { method: 'POST', body: JSON.stringify(body) }); }
                 catch (e) {
@@ -54264,13 +54368,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
             window.dtwPanelSave = async function() {
                 if (!S.session || !S.key) return;
-                var n = el('dtwPnSaved'); if (n) n.textContent = 'Saving...';
+                var tok = dtwBusy(dtwBtn('[onclick^="dtwPanelSave("]'), 'Saving', el('dtwPnSaved')); if (tok === false) return;
+                dtwStage(tok, 'Saving');
                 try {
                     var d = await api('/' + S.key + '/panel/' + S.session.id);
                     if (d.session) { var ss = (S.twin || {}).panel_sessions || []; for (var i = 0; i < ss.length; i++) { if (ss[i].id === d.session.id) ss[i] = d.session; } S.session = d.session; }
+                    dtwIdle(tok);
                     renderPanelConsole(); renderPanelSessions();
                     var n2 = el('dtwPnSaved'); if (n2) n2.textContent = 'Saved on the twin.';
-                } catch (e) { var n3 = el('dtwPnSaved'); if (n3) n3.textContent = e.message; }
+                } catch (e) { dtwIdle(tok, e); }
             };
 
             S.pilot = S.pilot || null;
@@ -56164,7 +56270,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var purge = '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurge"' + (s.purge_media_after ? ' checked' : '') + ' onchange="dtwPilotPurgeToggle(this.checked)"> Remove the file when the test is done' + ((s.media || {}).purged_at ? ' <span class="dtw-muted">(removed; the read stays)</span>' : '') + '</label>';
                 // one report in every format (Jenna 2026-11-04): the deck, the PDF and the CSV are drawn from the same pages, the room
                 // included, so nothing differs between them but the file type; the older PDF and Deck buttons pointed at a thinner export and are gone
-                var exp = S.key ? ('<div class="dtw-actions"><a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx" title="The full report as a deck: the scorecard against its norm, the dial, the room, every question, the forecast and the conclusions">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf" title="The same report as a PDF">Report (PDF)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv" title="Every number in the report, block by block, plus the dial second by second and every reaction">CSV</a><button type="button" class="dtw-btn" onclick="dtwPilotDuplicate()" title="Duplicate this test">Duplicate this test</button><button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
+                var exp = S.key ? ('<div class="dtw-actions"><a class="dtw-btn dtw-btn-primary" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx" title="The full report as a deck: the scorecard against its norm, the dial, the room, every question, the forecast and the conclusions">Report (deck)</a><a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf" title="The same report as a PDF">Report (PDF)</a><a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv" title="Every number in the report, block by block, plus the dial second by second and every reaction">CSV</a><button type="button" class="dtw-btn" onclick="dtwPilotDuplicate()" title="Duplicate this test">Duplicate this test</button><button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
                 var scoredNow = s.status === 'stopped' && !!s.scorecard;
                 var full = scoredNow ? renderScorecard(s) : '', diag = scoredNow ? (renderModeRead(s) + renderDiagnostics(s)) : '', extras = renderPilotExtras(s);
                 var guide = renderGuide(s);
@@ -56624,15 +56730,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var name = title || String((snap.fields || {}).dtwPiCutTitle || '').trim();
                 if (!name) { if (st) st.textContent = 'Name the test first, so the setup has a name.'; var tn = el('dtwPiTitle'); if (tn) { try { tn.focus(); } catch (_) {} } return; }
                 var body = { id: asNew ? '' : (S.piSetupId || ''), name: name, tab: snap.tab, mode: snap.mode, fields: snap.fields, options: snap.options, cohorts: snap.cohorts.filter(function(c) { return (c.name || c.composition || '').trim(); }), cohort_n: snap.cohort_n, cohort_custom: snap.cohort_custom, file_name: snap.file_name, files: snap.files };
-                if (st) st.textContent = 'Saving the setup...';
+                var tok = dtwBusy(dtwBtn(asNew ? '[onclick^="dtwPilotSaveSetup(true"]' : '[onclick="dtwPilotSaveSetup()"]'), 'Saving', st); if (tok === false) return;
+                dtwStage(tok, 'Saving the setup');
                 try {
                     var d = await api('/' + key + '/pilot/setups', { method: 'POST', body: JSON.stringify(body) });
                     if (S.twin) S.twin.pilot_setups = d.setups || [];
                     S.piSetupId = (d.setup || {}).id || S.piSetupId;
                     piLocalSave();
                     fgToast('Saved as ' + name + '. It is under Saved setups on the left; open it any time to edit or start the test.');
+                    dtwIdle(tok);
                     renderPilotConsole();
-                } catch (e) { if (st) st.textContent = e.message || 'The setup could not be saved.'; }
+                } catch (e) { dtwIdle(tok, e.message || 'The setup could not be saved.'); }
             };
             window.dtwPilotLoadSetup = function(id) {
                 var x = (((S.twin || {}).pilot_setups) || []).filter(function(s) { return s.id === id; })[0];
@@ -56704,14 +56812,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             window.dtwPilotDuplicateSetup = async function(id) {
                 var key = S.key; if (!key || !id) return;
+                var tok = dtwBusy(dtwBtn(), 'Duplicating'); if (tok === false) return;
                 try { var d = await api('/' + key + '/pilot/setups/' + encodeURIComponent(id) + '/duplicate', { method: 'POST', body: '{}' }); }
-                catch (e) { fgToast(e && e.message ? e.message : 'The setup could not be duplicated.'); return; }
+                catch (e) { dtwIdle(tok); fgToast(e && e.message ? e.message : 'The setup could not be duplicated.'); return; }
+                dtwIdle(tok);
                 piAdoptDuplicate(d, false);
             };
             window.dtwPilotDuplicateId = async function(sid) {
                 var key = S.key; if (!key || !sid) return;
+                var tok = dtwBusy(dtwBtn(), 'Duplicating'); if (tok === false) return;
                 try { var d = await api('/' + key + '/pilot/' + encodeURIComponent(sid) + '/duplicate', { method: 'POST', body: '{}' }); }
-                catch (e) { fgToast(e && e.message ? e.message : 'The test could not be duplicated.'); return; }
+                catch (e) { dtwIdle(tok); fgToast(e && e.message ? e.message : 'The test could not be duplicated.'); return; }
+                dtwIdle(tok);
                 piAdoptDuplicate(d, !!(S.pilot && S.pilot.id === sid && S.pilot.status === 'playing'));
             };
             window.dtwPilotDuplicate = function() { var s = S.pilot; if (!s) return; return dtwPilotDuplicateId(s.id); };
@@ -56779,8 +56891,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if ((el('dtwPiCritics') || {}).checked) body.critics_room = true;
                 if (el('dtwPiNorm')) { body.genre = (el('dtwPiNorm').value || ''); body.genre_set_by_user = ((el('dtwPiNormTouched') || {}).value === '1'); }
                 var prior = (el('dtwPiPrior') || {}).value;
-                if (st) st.textContent = 'Seating the room...';
-                try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) { st.textContent = e.message; if (e.doc && e.doc.add_funds_url) st.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } return; }
+                var tok = dtwBusy(dtwBtn('[onclick^="dtwPilotOpen("]'), 'Starting the test', st); if (tok === false) return;
+                dtwStage(tok, 'Seating the room');
+                try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { dtwIdle(tok, e); if (st && e.doc && e.doc.add_funds_url) st.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; return; }
                 adoptPilot(d.session);
                 piLocalClear(); S.piPending = null;      // the test is open; the saved setup (if any) stays on the twin for next time
                 S.pilotMedia = null; S.pilotCompare = null;
@@ -56793,7 +56906,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try {
                     if (file) {
                         var isVideo = /\.(mp4|mov|webm|m4v)$/i.test(file.name || '');
-                        if (st) st.textContent = isVideo ? 'Uploading the cut...' : 'Reading the file...';
+                        dtwStage(tok, isVideo ? 'Uploading the cut' : 'Reading the file');
                         if (isVideo && mode !== 'key_art') {
                             var fd = new FormData(); fd.append('file', file); fd.append('title', cutTitle || title);
                             var r = await fetch('/api/digital-twins/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(sid) + '/upload', { method: 'POST', credentials: 'same-origin', body: fd });
@@ -56807,7 +56920,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                     }
                     for (var i = 0; i < more.length && i < 6; i++) {
-                        if (st) st.textContent = 'Uploading ' + (i + 1) + ' of ' + more.length + '...';
+                        dtwStage(tok, 'Uploading ' + (i + 1) + ' of ' + more.length);
                         var kind = mode === 'key_art' ? 'image' : 'video';
                         var slot = mode === 'key_art' ? i : (file ? i + 1 : i);
                         var lab = mode === 'key_art' ? ('Art ' + String.fromCharCode(65 + i)) : (mode === 'binge' ? ('Episode ' + (slot + 1)) : ('Trailer ' + String.fromCharCode(65 + slot)));
@@ -56815,11 +56928,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         adoptPilot(ua.session);
                     }
                 } catch (e) { if (st) st.textContent = e.message; }
-                if (st) st.textContent = 'Preparing...';
+                dtwStage(tok, 'Preparing');
                 try {
                     var p = await api('/' + key + '/pilot/' + sid + '/prepare', { method: 'POST', body: JSON.stringify({ title: cutTitle || title, runtime_s: body.runtime_s || 0 }) });
                     adoptPilot(p.session);
                 } catch (e) { if (st) st.textContent = e.message || 'Preparing'; }
+                dtwIdle(tok);
                 renderPilotConsole();
             };
             // resume=true is the automatic restart after an Ask: the clock picks up where it paused and the streamer tab the room is already watching is left alone.
@@ -56877,15 +56991,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 stopLiveMirror();
                 var v = el('dtwPiVideo'); if (v) { try { v.pause(); } catch (_) {} }
                 if (!S.pilot || !S.key) { renderPilotConsole(); return; }
+                var tok = dtwBusy(dtwBtn('[onclick^="dtwPilotStop("]'), 'Stopping', el('dtwPiNote')); if (tok === false) return;
+                dtwStage(tok, 'Stopping the room');
                 var removed = false, finishing = false;
                 try {
                     var d = await api('/' + S.key + '/pilot/' + S.pilot.id + '/stop', { method: 'POST', body: '{}' });
                     adoptPilot(d.session); removed = !!d.media_removed; finishing = !!d.finishing;
                 } catch (_) {}
+                dtwIdle(tok);
                 if (removed) { S.pilotMedia = null; }
                 renderPilotConsole();
                 if (fromEnd && !finishing) revealPilot(Number((S.pilot.media || {}).runtime_s || playheadNow()));
-                var note = el('dtwPiNote'); if (note) note.textContent = finishing ? 'The room is scoring what it watched.' : (removed ? 'Stopped. The file was removed; the read stays.' : (wasLive ? 'Stopped.' : 'Stopped. The scorecard is in.'));
+                var note = el('dtwPiNote'); if (note) { if (finishing) note.innerHTML = dtwBusyHtml('The room is scoring what it watched'); else note.textContent = removed ? 'Stopped. The file was removed; the read stays.' : (wasLive ? 'Stopped.' : 'Stopped. The scorecard is in.'); }
             };
             window.dtwPilotSeek = function(t) {
                 t = Number(t || 0);
@@ -56906,10 +57023,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var inp = el('dtwPiQ'); var q = (inp && inp.value || '').trim();
                 if (!q) { if (inp) try { inp.focus(); } catch (_) {} return; }
                 var note = el('dtwPiAskNote');
+                var tok = dtwBusy(dtwBtn('[onclick^="dtwPilotAsk("]'), 'Asking', note); if (tok === false) return;
                 var v = el('dtwPiVideo'); if (v) { try { v.pause(); } catch (_) {} }
                 var wasSlate = S.pilotClock.slate, wasLive = !!(S.pilotLive && S.pilotLive.running); S.pilotClock.slate = false; pauseLiveClock(); stopPilotClock();
                 var t = (atT != null && isFinite(atT)) ? Number(atT) : playheadNow();
-                if (note) note.textContent = 'Asking the room at ' + clockFmt(t) + '...';
+                dtwStage(tok, 'Asking the room at ' + clockFmt(t));
                 var body = { q: q, playhead_s: t };
                 if (S.pilotKind) body.kind = S.pilotKind;
                 if (inp) inp.value = '';
@@ -56918,9 +57036,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (d.session) adoptPilot(d.session);
                     else if (d.question) { s.questions = s.questions || []; s.questions.push(d.question); }
                 } catch (e) {
-                    if (note) { note.textContent = e.message; if (e.doc && e.doc.upgrade) { S.piPendingQ = { q: q, t: t }; note.innerHTML = esc(e.doc.upgrade.line || e.message) + ' <button type="button" class="dtw-link" onclick="dtwPilotUpgrade()">Move it to 1-40 for ' + esc(e.doc.upgrade.label || '') + '</button>'; } else if (e.doc && e.doc.add_funds_url) { note.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } }
+                    dtwIdle(tok, e);
+                    if (note) { if (e.doc && e.doc.upgrade) { S.piPendingQ = { q: q, t: t }; note.innerHTML = esc(e.doc.upgrade.line || e.message) + ' <button type="button" class="dtw-link" onclick="dtwPilotUpgrade()">Move it to 1-40 for ' + esc(e.doc.upgrade.label || '') + '</button>'; } else if (e.doc && e.doc.add_funds_url) { note.innerHTML = esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>'; } }
                     if (inp && !inp.value) inp.value = q; return;
                 }
+                dtwIdle(tok);
                 renderPilotConsole();
                 dtwPilotSeek(t);
                 if (note) note.textContent = 'Asked at ' + clockFmt(t) + '. The twins answer in the chat as they go.';
@@ -57180,28 +57300,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             window.dtwPilotRecut = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
-                var note = el('dtwPiNote'); if (note) note.textContent = 'Opening the recut on the same room...';
-                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/recut', { method: 'POST', body: '{}' }); adoptPilot(d.session); S.pilotCompare = null; S.pilotMedia = null; renderPilotConsole(); if (el('dtwPiNote')) el('dtwPiNote').textContent = 'Add ' + (d.session.cut_label || 'Cut B') + ' with the upload below the player, or press Play on a slate.'; }
-                catch (e) { if (note) note.textContent = e.message; }
+                var note = el('dtwPiNote');
+                var tok = dtwBusy(dtwBtn('[onclick^="dtwPilotRecut("]'), 'Opening the recut', note); if (tok === false) return;
+                dtwStage(tok, 'Opening the recut on the same room');
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/recut', { method: 'POST', body: '{}' }); adoptPilot(d.session); S.pilotCompare = null; S.pilotMedia = null; dtwIdle(tok); renderPilotConsole(); if (el('dtwPiNote')) el('dtwPiNote').textContent = 'Add ' + (d.session.cut_label || 'Cut B') + ' with the upload below the player, or press Play on a slate.'; }
+                catch (e) { dtwIdle(tok, e); }
             };
             window.dtwPilotCompare = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
-                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/compare'); S.pilotCompare = { sid: s.id, data: d }; renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+                var tok = dtwBusy(dtwBtn(), 'Comparing', true); if (tok === false) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/compare'); S.pilotCompare = { sid: s.id, data: d }; dtwIdle(tok); renderPilotConsole(); } catch (e) { dtwIdle(tok, e); }
             };
             window.dtwPilotComps = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
                 var comps = ((el('dtwPiCompsIn') || {}).value || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
-                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/comps', { method: 'POST', body: JSON.stringify({ comps: comps }) }); s.comps = comps.map(function(c) { return { title: c }; }); s.comp_set = d.comps; renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+                var tok = dtwBusy(dtwBtn(), 'Placing it', true); if (tok === false) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/comps', { method: 'POST', body: JSON.stringify({ comps: comps }) }); s.comps = comps.map(function(c) { return { title: c }; }); s.comp_set = d.comps; dtwIdle(tok); renderPilotConsole(); } catch (e) { dtwIdle(tok, e); }
             };
             window.dtwPilotCritics = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
-                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/critics', { method: 'POST', body: '{}' }); adoptPilot(d.session); renderPilotConsole(); var n = el('dtwPiNote'); if (n) n.textContent = d.critics_twin ? ('The room is critics and journalists. A critics twin also exists: ' + d.critics_twin.name + '.') : 'The room is critics and journalists. Press Play.'; } catch (e) { var n2 = el('dtwPiNote'); if (n2) n2.textContent = e.message; }
+                var tok = dtwBusy(dtwBtn(), 'Seating the critics', true); if (tok === false) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/critics', { method: 'POST', body: '{}' }); adoptPilot(d.session); dtwIdle(tok); renderPilotConsole(); var n = el('dtwPiNote'); if (n) n.textContent = d.critics_twin ? ('The room is critics and journalists. A critics twin also exists: ' + d.critics_twin.name + '.') : 'The room is critics and journalists. Press Play.'; } catch (e) { dtwIdle(tok, e); }
             };
             window.dtwPilotTalent = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
                 var name = ((el('dtwPiTalentIn') || {}).value || '').trim(); if (!name) return;
                 var role = (el('dtwPiTalentRole') || {}).value || 'lead';
-                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/talent-attach', { method: 'POST', body: JSON.stringify({ talent: name, role: role }) }); if (d.session) adoptPilot(d.session); renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+                var tok = dtwBusy(dtwBtn(), 'Attaching', true); if (tok === false) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/talent-attach', { method: 'POST', body: JSON.stringify({ talent: name, role: role }) }); if (d.session) adoptPilot(d.session); dtwIdle(tok); renderPilotConsole(); } catch (e) { dtwIdle(tok, e); }
             };
             window.dtwPilotBrief = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
