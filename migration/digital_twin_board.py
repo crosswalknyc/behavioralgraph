@@ -191,9 +191,10 @@ def seat_priority(opts_out: list, plan: Optional[dict] = None) -> dict:
     for o in opts_out or []:
         k = o.get('id')
         score = float(o.get('seats_n') or len(o.get('seats') or []))
-        if k in targets:
+        tk = k if k in targets else (o.get('label') if o.get('label') in targets else None)   # a stored anchor keys its targets by label
+        if tk is not None:
             try:
-                score += 1000.0 + float(targets[k])
+                score += 1000.0 + float(targets[tk])
             except (TypeError, ValueError):
                 score += 1000.0
         pr[k] = score
@@ -806,7 +807,7 @@ def code_board(models, q: str, kind: str, framing: str, options: list, answers: 
                                       'line': a.get('line'), 'reason': a.get('reason'), 'confidence': a.get('confidence')} for a in answers or []],
                            'what_people_have_been_saying': talk}, default=str)[:12000]
         try:
-            data, call = models.call('moderator', CODER_SYSTEM, user, max_tokens=1400, temperature=0.2, tools=None)
+            data, call = models.call('moderator', CODER_SYSTEM, user, max_tokens=2400, temperature=0.2, tools=None)   # a board plus a line per seat (sixteen seats run long)
         except Exception as e:
             print(f"[twin-board] coder call failed: {str(e)[:120]}")
             data, call = None, None
