@@ -149,9 +149,18 @@ def previous_deliverable(history, page=''):
                 out.update(kind='question', text=txt)
                 idx = i
             continue
-        if meta.get('read_job_id') or _READ_HEAD_RX.match(txt):
-            m = _READ_HEAD_RX.match(txt)
-            who = (m.group('who').strip() if m else '') or str(meta.get('subject') or '')
+        m = _READ_HEAD_RX.match(txt)
+        head = (m.group('who').strip() if m else '')
+        if head.lower() == 'it':
+            # "On it: reading X now." is the promise, not a read on a
+            # subject named "it" (a correction after it read "This is it
+            # on its own"); the promise branch below names X
+            m, head = None, ''
+        if meta.get('read_job_id') or m:
+            who = head or str(meta.get('subject') or '')
+            if not who:
+                pm = re.match(r"^On it:\s*reading\s+(?P<what>.+?)\s+now\.?", txt, re.I)
+                who = pm.group('what').strip() if pm else ''
             out.update(kind='read', subject=who, job_id=str(meta.get('read_job_id') or ''), text=txt)
             idx = i
             break
