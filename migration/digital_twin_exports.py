@@ -29,15 +29,30 @@ said it, to 'Question N, continued'; one longer than its space ends at
 the last complete sentence that fits (``fit_quote``); a line the room
 cut at its character cap ends at a sentence or a word (``clean_quote``).
 Nothing is cut mid-word.
+
+The logo (2026-11-05, Jenna: "use our real logo in the digital twins
+exports. this is a bad rendering of it"): every page of every export
+(the deck, the PDF, the Focus Group IQ session, the pilot report in both
+formats) carries the real lockup from the design pack through ONE
+helper, ``draw_logo``: the white file on a dark ground, the black file
+on Off-White and on the Signal Green closing page, at the file's own
+proportions in the top-left corner at ``LOGO_HEIGHT``. The old
+``static/crosswalk-logo-deck.png`` (a 199 by 33 pixel stand-in, three
+bars and the word in a bold sans) is not drawn anywhere. When the pack
+file is missing the wordmark is set in Crosswalk Inter and a warning is
+logged; the export never fails over its logo.
 """
 from __future__ import annotations
 
 import io
+import logging
 import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from migration.digital_twin_engine import fmt_money, fmt_people, human_people, product_runs
+
+_log = logging.getLogger(__name__)
 
 GRAPHITE = '#0C1618'
 SLATE = '#15252A'
@@ -52,10 +67,10 @@ MUTED_DARK = '#7C878A'
 BODY_LIGHT = '#5C6560'
 MUTED_LIGHT = '#888C89'
 FOOTER = 'CROSSWALK  /  BEHAVIORAL INTELLIGENCE ENGINE'
+LOGO_HEIGHT = 0.26      # inches; the house cover lockup (2.1 by 0.266 in the deck template) and what every export page carried before
+LOGO_TOP = 0.45         # inches from the top of the page; the eyebrow sits on the same line at the right
 
 _ROOT = Path(__file__).resolve().parents[1]
-_LOGO_WHITE = _ROOT / 'static' / 'crosswalk-logo-white-transparent.png'
-_LOGO_BLACK = _ROOT / 'static' / 'crosswalk-logo-deck.png'
 
 
 def _design():
@@ -72,6 +87,106 @@ def _face(weight='Regular') -> str:
         return ds.family_name(weight) if ds is not None else 'Crosswalk Inter'
     except Exception:
         return 'Crosswalk Inter'
+
+
+# ------------------------------------------------------------------ logo
+_LOGO_CACHE: dict = {}
+
+
+def logo_file(ground: str = 'light') -> Optional[Path]:
+    """The real lockup for a ground from the design pack
+    (``design_skill.logo_path``): the white file for ``'dark'``, the black
+    file for ``'light'`` (Off-White and the Signal Green page). None when
+    the pack is missing on this machine."""
+    variant = 'white' if str(ground or 'light').lower() == 'dark' else 'black'
+    ds = _design()
+    try:
+        p = ds.logo_path(variant) if ds is not None else None
+    except Exception:
+        p = None
+    if not p:
+        return None
+    p = Path(p)
+    return p if p.is_file() else None
+
+
+def _logo_reader(path: Path):
+    """One reportlab ImageReader per file, so every page of a PDF shares
+    the same decoded image (reportlab writes the XObject once)."""
+    from reportlab.lib.utils import ImageReader
+    key = str(path)
+    if key not in _LOGO_CACHE:
+        _LOGO_CACHE[key] = ImageReader(key)
+    return _LOGO_CACHE[key]
+
+
+def draw_logo(target, x: float, y: float, height: float = LOGO_HEIGHT, ground: str = 'light') -> Optional[Path]:
+    """The Crosswalk lockup on a page. ``target`` is a python-pptx slide or
+    a reportlab canvas; ``(x, y)`` is the lockup's top-left corner in
+    inches from the top-left of the page, ``height`` its height in inches.
+    The width follows the file's own proportions: the file is placed,
+    never stretched, outlined, rotated, recolored or redrawn, and the
+    slashes stay with the wordmark. ``ground='dark'`` places the white
+    lockup, ``'light'`` the black one. Returns the path placed. When the
+    file is missing the wordmark is set in Crosswalk Inter at the same
+    height, a warning is logged and None comes back. Never raises."""
+    ground = 'dark' if str(ground or 'light').lower() == 'dark' else 'light'
+    path = logo_file(ground)
+    is_slide = hasattr(target, 'shapes')
+    is_canvas = hasattr(target, 'drawImage')
+    if not (is_slide or is_canvas):
+        _log.warning('Crosswalk logo: %s is neither a slide nor a canvas; nothing placed', type(target).__name__)
+        return None
+    if path is not None:
+        try:
+            if is_slide:
+                from pptx.util import Inches
+                target.shapes.add_picture(str(path), Inches(x), Inches(y), height=Inches(height))     # python-pptx keeps the file's aspect when only the height is given
+                return path
+            if is_canvas:
+                reader = _logo_reader(path)
+                pw, ph = reader.getSize()
+                h_pt = float(height) * 72.0
+                w_pt = h_pt * (float(pw) / float(ph))
+                page_h = float((getattr(target, '_pagesize', None) or (0, 8.5 * 72))[1])
+                target.drawImage(reader, float(x) * 72.0, page_h - (float(y) + float(height)) * 72.0, width=w_pt, height=h_pt, mask='auto')
+                return path
+        except Exception as e:     # a bad read never fails an export; the wordmark stands in below
+            _log.warning('Crosswalk logo could not be placed from %s (%s); the wordmark stands in', path, e)
+    else:
+        _log.warning('Crosswalk logo file missing for the %s ground; the wordmark stands in', ground)
+    _draw_wordmark(target, x, y, height, ground, is_slide, is_canvas)
+    return None
+
+
+def _draw_wordmark(target, x, y, height, ground, is_slide, is_canvas) -> None:
+    """The fallback when the pack file is absent: 'Crosswalk' in Crosswalk
+    Inter Bold, the ink of the ground, the caps about the lockup's height."""
+    ink = OFFWHITE if ground == 'dark' else GRAPHITE
+    size_pt = float(height) * 72.0 * 0.92
+    try:
+        if is_slide:
+            from pptx.dml.color import RGBColor
+            from pptx.util import Inches, Pt
+            tb = target.shapes.add_textbox(Inches(x), Inches(y), Inches(height * 8.0), Inches(height * 1.2))
+            tf = tb.text_frame
+            tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+            run = tf.paragraphs[0].add_run()
+            run.text = 'Crosswalk'
+            run.font.name = _face('Bold')
+            run.font.bold = True
+            run.font.size = Pt(size_pt)
+            run.font.color.rgb = RGBColor(int(ink[1:3], 16), int(ink[3:5], 16), int(ink[5:7], 16))
+        elif is_canvas:
+            from reportlab.lib import colors
+            page_h = float((getattr(target, '_pagesize', None) or (0, 8.5 * 72))[1])
+            target.saveState()
+            target.setFont(_fonts()['bold'], size_pt)
+            target.setFillColor(colors.HexColor(ink))
+            target.drawString(float(x) * 72.0, page_h - (float(y) + float(height)) * 72.0 + size_pt * 0.18, 'Crosswalk')
+            target.restoreState()
+    except Exception as e:
+        _log.warning('Crosswalk wordmark could not be drawn (%s)', e)
 
 
 def _words(s: str, n: int = 12) -> str:
@@ -356,12 +471,7 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
         ink, body, muted, accent = (OFFWHITE, BODY_DARK, MUTED_DARK, GREEN) if dark else (GRAPHITE, BODY_LIGHT, MUTED_LIGHT, OLIVE)
         if alt:
             ink, body, muted, accent = GRAPHITE, '#1F2B2E', '#2E3A3D', GRAPHITE
-        logo = _LOGO_WHITE if dark else _LOGO_BLACK
-        try:
-            if logo.exists():
-                slide.shapes.add_picture(str(logo), Inches(L), Inches(0.45), height=Inches(0.26))
-        except Exception:
-            pass
+        draw_logo(slide, L, LOGO_TOP, LOGO_HEIGHT, ground='dark' if dark else 'light')     # the real lockup; black on the Signal Green page too
         text(slide, 8.4, 0.47, 4.0, 0.3, str(pg.get('eyebrow') or 'DIGITAL TWINS IQ').upper(), 8.5, accent, 'Medium', PP_ALIGN.RIGHT)     # a question page's eyebrow is 'Question N'
         text(slide, L, 7.02, 6.0, 0.3, FOOTER, 7.5, muted, 'Regular')
         slidenum(slide, 11.4, 7.02, 1.0, 0.3, 7.5, muted)
@@ -641,13 +751,7 @@ class _Doc:
         c = self.c
         c.setFillColor(colors.HexColor(GRAPHITE if dark else OFFWHITE))
         c.rect(0, 0, self.W, self.H, stroke=0, fill=1)
-        try:
-            from reportlab.lib.utils import ImageReader
-            logo = _LOGO_WHITE if dark else _LOGO_BLACK
-            if logo.exists():
-                c.drawImage(ImageReader(str(logo)), self.m, self.H - 0.72 * 72, width=1.25 * 72, height=0.26 * 72, preserveAspectRatio=True, anchor='sw', mask='auto')
-        except Exception:
-            pass
+        draw_logo(c, self.m / 72.0, LOGO_TOP, LOGO_HEIGHT, ground='dark' if dark else 'light')     # the real lockup, top-left, the same corner and height on every page
         c.setFont(self.f['medium'], 8.5)
         c.setFillColor(colors.HexColor(GREEN if dark else OLIVE))
         c.drawRightString(self.right, self.H - 0.62 * 72, str(eyebrow).upper())
