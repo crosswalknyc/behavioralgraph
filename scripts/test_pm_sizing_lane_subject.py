@@ -32,6 +32,30 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 
+
+class _NoAppModule:
+    """A meta-path finder that refuses a fresh ``import app`` for this
+    process. The priced read's seat lookup (``priced_read.live_user``)
+    falls back to the app module when the host binds no ``load_users``,
+    which is the case on the bare host the Routing class calls
+    ``work_gate`` against and was the case for the stub host below. On a
+    worker with the full dependency set that import succeeds and app.py's
+    tail runs ``prometheus.init_app``, which binds the production host
+    (the live read registry, users.json, the thread store, the model)
+    into this process; a later ``host.bind`` merges over it and the
+    production ``recent_read`` stays. Jenna's question then replayed a
+    landed read ('read_replay') instead of leaving as the offer. Here the
+    import fails the way it does on a machine without the webapp's
+    dependencies. A module already in sys.modules is never consulted."""
+
+    def find_spec(self, name, path=None, target=None):
+        if name == 'app':
+            raise ImportError('app is not importable inside this hermetic suite')
+        return None
+
+
+sys.meta_path.insert(0, _NoAppModule())
+
 from prometheus import priced_read as P    # noqa: E402
 from prometheus import sizing_lane as SZ   # noqa: E402
 
@@ -189,12 +213,40 @@ class LedgerReplay(unittest.TestCase):
         self.assertTrue(il._chain_titles_ok(self.ENTRY, 'how big is the Fightland audience'))   # no chain: the gate stays open
 
 
+class _NoS3:
+    """An S3 client with no credentials: every call raises, which is what
+    the hermetic runner's environment does. Injected everywhere a module
+    builds its own client, so the case reads the same on a machine that
+    holds AWS credentials as on one that does not."""
+
+    def __getattr__(self, name):
+        def _call(*a, **k):
+            from botocore.exceptions import NoCredentialsError
+            raise NoCredentialsError()
+        return _call
+
+
 class ServiceEndToEnd(unittest.TestCase):
     """service.ask with a stub host: Jenna's question leaves through the
-    work gate's content-journey offer, not through either sizing lane."""
+    work gate's content-journey offer, not through either sizing lane.
+
+    Hermetic by construction (2026-11-05: the case flickered once on a
+    live registry hit). ``host.bind`` merges, so the class starts from an
+    empty host and restores whatever the process had bound before. Every
+    seam that reaches outside the process is pinned: the seat lookup gets
+    a ``load_users`` and the registry a ``recent_read`` on the host, the
+    sandbox-owner cache never reads users.json, the insights ledger and
+    the corpus catalog hold a client that has no credentials, any other
+    boto3 client is that same client, a fresh ``import app`` is refused
+    (module level, see _NoAppModule), and no socket connects."""
 
     @classmethod
     def setUpClass(cls):
+        import socket
+        import boto3
+        import insights_ledger as _il
+        from migration import corpus_catalog as _cc
+        from prometheus import probe_identity as _pid
         from prometheus.host import host
         cls.calls = []
 
@@ -206,6 +258,12 @@ class ServiceEndToEnd(unittest.TestCase):
             cls.calls.append(('interpret', text))
             return {'success': True, 'reply': 'draft', 'draft': {'subject': 'x'}}
 
+        # the host is exactly this class's stubs: nothing an earlier suite
+        # in the process bound (a production recent_read, a real s3_client)
+        # rides along, and it all goes back in tearDownClass
+        cls._host_before = dict(host._b)
+        cls._host_bound_before = host.bound
+        host._b.clear()
         host.bind(analyze_core=_analyze_core, interpret_core=_interpret_core,
                   deck_core=lambda *a: {'success': True, 'reply': 'deck'},
                   ask_hint=lambda **k: None, gate_analyze=lambda u: True, gate_pull=lambda u: True,
@@ -216,10 +274,55 @@ class ServiceEndToEnd(unittest.TestCase):
                   thread_key=lambda u, t: f'{u}/{t}', threads_index_key=lambda u: u,
                   thread_title_from=lambda t: t[:30], bucket='x', s3_client=None,
                   job_owner_ok=lambda a, b: True,
-                  claude_data=lambda *a, **k: {})
+                  claude_data=lambda *a, **k: {},
+                  # the billed seat, from the host and never from an `import app`
+                  load_users=lambda: {'users': {'admin': {'username': 'admin', 'role': 'user'}}},
+                  # the caller's read registry: nothing landed, nothing running
+                  recent_read=lambda u, t: None)
+        # the sandbox-owner lookup (turn_gate -> probe_identity) never reads users.json
+        _pid.set_sandbox_owners(())
+        # the insights ledger (and prometheus_memory, which shares its client)
+        # and the corpus catalog hold a credential-less client and no cached index
+        cls._il_before = (_il._s3, dict(_il._index_cache))
+        _il._s3 = _NoS3()
+        _il._index_cache.update({'ts': 0.0, 'doc': None})
+        cls._cc_before = dict(_cc._state)
+        _cc.set_client(_NoS3())
+        # any other module that builds its own client gets the same one
+        cls._boto_before = (boto3.client, boto3.resource, boto3.session.Session.client)
+        boto3.client = lambda *a, **k: _NoS3()
+        boto3.resource = lambda *a, **k: _NoS3()
+        boto3.session.Session.client = lambda self, *a, **k: _NoS3()
+        # no socket connects: a reach that got past every stub above fails
+        # here the way it does with no network
+        cls._socket_before = (socket.socket.connect, socket.create_connection, socket.getaddrinfo)
+
+        def _blocked(*a, **k):
+            raise OSError('no network inside this hermetic case')
+
+        socket.socket.connect = _blocked
+        socket.create_connection = _blocked
+        socket.getaddrinfo = _blocked
         from prometheus import service
         cls.service = service
         cls.user = {'username': 'admin'}
+
+    @classmethod
+    def tearDownClass(cls):
+        import socket
+        import boto3
+        import insights_ledger as _il
+        from migration import corpus_catalog as _cc
+        from prometheus.host import host
+        socket.socket.connect, socket.create_connection, socket.getaddrinfo = cls._socket_before
+        boto3.client, boto3.resource, boto3.session.Session.client = cls._boto_before
+        _cc._state.clear()
+        _cc._state.update(cls._cc_before)
+        _il._s3, _cache = cls._il_before
+        _il._index_cache.update(_cache)
+        host._b.clear()
+        host._b.update(cls._host_before)
+        host.bound = cls._host_bound_before
 
     def _ask(self, text):
         self.calls.clear()
