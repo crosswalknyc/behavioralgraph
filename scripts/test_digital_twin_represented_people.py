@@ -265,6 +265,10 @@ class TheTitle(unittest.TestCase):
         partial = PI.cut_of({'demos': {'AGE': ['45-54']}})
         self.assertEqual(SZ.skew_index(twin, partial, res['skews']), 1.0, 'a bucket the research did not publish moves nothing')
         self.assertEqual(SZ.skew_index(twin, women, {}), 1.0)
+        # only a median age on record (the NCIS franchise, about 60): the 45-and-older share is read off it, low
+        self.assertEqual(SZ.skews_filled({'median_age': 60.0})['age_45_plus_pct'], 65.0)
+        self.assertIsNone(SZ.skews_filled({'median_age': 40.0}).get('age_45_plus_pct'))
+        self.assertAlmostEqual(SZ.skew_index(twin, old, {'median_age': 60.0}), 0.65 / 0.315, places=2)
 
 
 class TheSurfaces(unittest.TestCase):

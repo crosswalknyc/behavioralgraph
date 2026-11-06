@@ -267,9 +267,7 @@ def _franchise_skews(doc: dict, title: str, *, platform: str = '', model_fn=None
             skews['median_age'] = float(data.get('median_age')) if data.get('median_age') not in (None, '') else None
         except (TypeError, ValueError):
             skews['median_age'] = None
-        if skews.get('age_45_plus_pct') is None and skews.get('median_age') and skews['median_age'] >= 55:
-            # a median of 55 or more puts well over half the audience past 45; the low end of what that implies
-            skews['age_45_plus_pct'] = round(clamp(50.0 + (skews['median_age'] - 50.0) * 1.5, 55.0, 80.0), 1)
+        skews = skews_filled(skews)
         if any(v is not None for v in skews.values()):
             doc['skews'] = skews
             doc['skews_basis'] = str(data.get('basis') or 'franchise')[:120]
@@ -279,13 +277,29 @@ def _franchise_skews(doc: dict, title: str, *, platform: str = '', model_fn=None
 
 
 # ------------------------------------------------------- the cuts' share
+def skews_filled(skews: Optional[dict]) -> dict:
+    """The published skews with the 45-and-older share read off the
+    median age when only the median is on record (a median of 55 or more
+    puts well over half the audience past 45; the low end of what that
+    implies, per calibrate-low-anchor-to-actuals.mdc)."""
+    sk = dict(skews or {})
+    if sk.get('age_45_plus_pct') is None:
+        try:
+            med = float(sk.get('median_age')) if sk.get('median_age') not in (None, '') else None
+        except (TypeError, ValueError):
+            med = None
+        if med is not None and med >= 55:
+            sk['age_45_plus_pct'] = round(clamp(50.0 + (med - 50.0) * 1.5, 55.0, 80.0), 1)
+    return sk
+
+
 def skew_index(twin: dict, cut: dict, skews: dict) -> float:
     """How much more (or less) of the title's audience a cut holds than
     of the twin: the title's published share over the twin's own, one
     factor per dimension the research gave (gender, age, ethnicity),
     1.0 where it gave nothing."""
     from migration.digital_twin_pilot import cut_share
-    skews = skews or {}
+    skews = skews_filled(skews)
     idx = 1.0
     demos = cut.get('demos') or {}
 
