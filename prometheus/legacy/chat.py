@@ -14718,6 +14718,23 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 'deck_angle': None, '_held': True, '_family': fam0,
                 '_stages_ms': stages}
     stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
+    # Arithmetic coherence (2026-11-05, the Jeopardy Volume 2 read: "38.4%
+    # (132,414 people)" of a 95,274 group). Every 'X% (N people)' pair is
+    # checked against the base its own sentence names and the count is
+    # recomputed when it sits on another base; a partition of shares that
+    # misses 100 is noted. The trail carries it; the reader sees the
+    # corrected figure and nothing else.
+    _arith_trail = ''
+    try:
+        from prometheus import arith_coherence as _arith
+        reply, _arith_info = _arith.apply(reply, res, subject=str(res.get('subject') or ''))
+        _arith_trail = _arith.trail(_arith_info)
+        if _arith_trail:
+            print(f"[pm-verify] arithmetic coherence: {_arith_trail[:700]}")
+        if _arith_info.get('fixes'):
+            stages['arith_fixed'] = len(_arith_info['fixes'])
+    except Exception:
+        traceback.print_exc()
     # Bound purchase facts (2026-10-06): measured figures in place.
     if _purchase_facts and pmv is not None:
         try:
@@ -14739,6 +14756,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _verify_stamp = pmv.stamp(verdict, revised=verify_revised)
         except Exception as _fx:
             _faults.note('chat', _fx)
+    if _verify_stamp is not None and _arith_trail:
+        _verify_stamp['arith'] = {'fixed': int(stages.get('arith_fixed') or 0), 'trail': _arith_trail[:800]}
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:3]
@@ -14810,7 +14829,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             f"research=web_search; "
             f"playbook="
             f"{'panel_report' if _is_panel else ('strategy' if is_strategy else 'standard')}"
-            + _verify_note)
+            + _verify_note
+            + (f"; {_arith_trail}" if _arith_trail else ''))
         # Every figure is stored with what it counted (the universe the
         # opener named, each metric's definition) and the unprojected
         # count behind it, so a later reconcile ask reads the record
@@ -14964,6 +14984,18 @@ def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=N
     from prometheus import figure_binding as _fb
     from prometheus import methodology as _meth
     reply = pma.format_generated_metrics_reply(res)
+    # the same arithmetic coherence pass the single read gets (2026-11-05)
+    _arith_trail = ''
+    try:
+        from prometheus import arith_coherence as _arith
+        reply, _ai = _arith.apply(reply, res, subject=str(res.get('subject') or ''))
+        _arith_trail = _arith.trail(_ai)
+        if _arith_trail:
+            print(f"[pm-matrix] arithmetic coherence: {_arith_trail[:700]}")
+        if _ai.get('fixes') and isinstance(verify, dict):
+            verify = dict(verify, arith={'fixed': len(_ai['fixes']), 'trail': _arith_trail[:800]})
+    except Exception:
+        traceback.print_exc()
     _aud = _meth.audience_label(res, '')
     if _aud and _aud.lower() not in str(reply or '')[:90].lower():
         reply = f"On {_aud}:\n\n{reply}"
@@ -14988,7 +15020,8 @@ def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=N
                    window_end=res.get('window_end'), window_label=res.get('window_label'),
                    reply=reply, followups=followups,
                    base_profile_key=base.get('s3_key') or (base.get('subject') if str(base.get('source') or '') == 'view' else ''),
-                   cohort=_pc, breakdown=res.get('breakdown'), derivation=derivation or 'matrix read, pieces assembled',
+                   cohort=_pc, breakdown=res.get('breakdown'),
+                   derivation=(derivation or 'matrix read, pieces assembled') + (f"; {_arith_trail}" if _arith_trail else ''),
                    verify=verify, universe=_aud)
     except Exception:
         traceback.print_exc()

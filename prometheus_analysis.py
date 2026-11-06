@@ -6503,7 +6503,7 @@ def _coherent_breakdown(bd):
     resid = round(100.0 - sum(r['share_pct'] for r in rows), 4)
     rows[0]['share_pct'] = round(rows[0]['share_pct'] + resid, 4)
     return {
-        'dimension': str(bd.get('dimension') or 'Category').strip()[:60],
+        'dimension': clean_dimension(bd.get('dimension')),
         'share_basis': str(bd.get('share_basis')
                            or 'share of the cohort').strip()[:120],
         'rows': rows,
@@ -6514,6 +6514,54 @@ def _fmt_metric_value(m):
     if m.get('unit') in _PCT_UNITS:
         return f"{m['value']:.1f}%"
     return f"{m['value']:,}"
+
+
+DIMENSION_LABEL_MAX = 80
+_DIM_QUALIFIER_RX = re.compile(r'^(?P<title>.*?)\s*\((?P<label>[^()]*)\)?\s*$')
+
+
+def clean_dimension(value, default='Category', limit=DIMENSION_LABEL_MAX):
+    """A breakdown's dimension label, whole: cut on a word boundary when
+    it runs long, never inside a parenthetical, every '(' it keeps closed.
+    The Jeopardy Volume 2 read (2026-11-05) carried 'Discovery path to the
+    YouTube edition of Jeopardy Volume 2 (first touch)' and a 60-character
+    cut left it ending in '(' on the chat header, the ledger and the CSV."""
+    s = ' '.join(str(value or '').split())
+    if len(s) > limit:
+        cut = s[:limit]
+        if ' ' in cut and not s[limit].isspace():
+            cut = cut[:cut.rfind(' ')]
+        s = cut
+    while s.count('(') > s.count(')'):
+        i = s.rfind('(')
+        inner = s[i + 1:].strip(' ,;:-')
+        s = (s[:i].rstrip() + f' ({inner})') if inner else s[:i].rstrip()
+    s = s.strip(' ,;:-')
+    return s or default
+
+
+def breakdown_header(bd, win):
+    """The mix block's title line. A dimension that ends in a qualifier
+    folds it into the window parenthetical ('Discovery path to the YouTube
+    edition of Jeopardy Volume 2 (first touch mix, Nov 5 2025 to Nov 5
+    2026)'); an empty qualifier or an unclosed '(' prints nothing (the
+    read that shipped '... Volume 2 ( mix, Nov 5 2025 to Nov 5 2026');
+    the share basis follows in its own parenthetical only when there is
+    one. Every parenthesis opened here is closed."""
+    bd = bd if isinstance(bd, dict) else {}
+    dim = ' '.join(str(bd.get('dimension') or '').split())
+    basis = ' '.join(str(bd.get('share_basis') or '').split())
+    win = ' '.join(str(win or '').split())
+    m = _DIM_QUALIFIER_RX.match(dim) if '(' in dim else None
+    if m and m.group('title').strip():
+        title = m.group('title').strip(' ,;:-')
+        label = m.group('label').strip(' ,;:-')
+        head = f"{title} ({label} mix, {win})" if label else f"{title} mix, {win}"
+    else:
+        head = f"{dim.strip(' ()') or 'Category'} mix, {win}"
+    if basis:
+        head += f" ({basis})"
+    return head
 
 
 def format_generated_metrics_reply(res):
@@ -6543,8 +6591,7 @@ def format_generated_metrics_reply(res):
         if ctx_bits:
             lines.append(', '.join(ctx_bits) + '.')
             lines.append('')
-        lines.append(f"{bd['dimension']} mix, {win} "
-                     f"({bd['share_basis']})")
+        lines.append(breakdown_header(bd, win))
         all_rows = list(bd['rows'] or [])
         # the chat stays readable: the top rows here, every row in the
         # file (never a silent cut; the line below says where the rest is)
