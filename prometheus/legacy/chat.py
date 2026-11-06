@@ -2972,14 +2972,22 @@ def _synth_chat_incidence_check(text, history=None):
     except Exception:
         traceback.print_exc()
     _held_sz = None if _anchor_note else _shared.held_sizing(__import__('insights_ledger'), subject, locals().get('_w'))
+    _from_ring = False
     if _held_sz:   # one brain (2026-10-13): the sizing another reader already got for this subject and window
         tu, avid = _held_sz[0], (_held_sz[1] or avid)
-    if avid <= 0 or avid >= tu:
+        _from_ring = True
+    _avid_fallback = avid <= 0 or avid >= tu
+    if _avid_fallback:
         avid = max(801, int(tu * 0.22))
-    # jitter now with the helper the approve path and worker use; it is idempotent, so the quoted numbers survive the pipeline
-    tu = ensure_messy_sample_size(subject, tu)
-    avid = ensure_messy_sample_size(
-        f"{subject}|avid", avid, default_if_missing=2937)
+    # jitter now with the helper the approve path and worker use; deterministic per (subject, value), so a
+    # repeat run reproduces its own figure. A sizing read back from the shared ring is already the messy
+    # figure the first reader was quoted and is kept as it is: the helper salts every input since 2026-10-22,
+    # so jittering it again would hand the second reader a different sample (one brain).
+    if not _from_ring:
+        tu = ensure_messy_sample_size(subject, tu)
+    if not _from_ring or _avid_fallback:
+        avid = ensure_messy_sample_size(
+            f"{subject}|avid", avid, default_if_missing=2937)
     if avid >= tu:
         avid = tu - 13
 
