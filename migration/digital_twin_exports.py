@@ -1085,17 +1085,119 @@ def _draw_round_portrait(c, img, x, y, size):
 PANEL_FLOOR = 0.78 * 72     # nothing on a Focus Group IQ page is drawn below this line; the footer sits under it
 
 
-def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
+def _asset_image_reader(asset_image_fn, session: dict):
+    """(rec) -> [ImageReader] for a content read's page: the image itself
+    or up to four frames of a video, through ``asset_image_fn(asset, n)
+    -> bytes`` when given, else straight from storage. Memoized per record;
+    every failure is an empty list."""
+    cache = {}
+
+    def images(rec):
+        key = str((rec or {}).get('id') or '')
+        if key in cache:
+            return cache[key]
+        out = []
+        try:
+            from migration import digital_twin_assets as A
+            from reportlab.lib.utils import ImageReader
+            asset = A.asset_by_id(session, str((rec or {}).get('asset_id') or ''))
+            if asset:
+                raws = []
+                if asset_image_fn is not None:
+                    n_max = 1 if asset.get('kind') == 'image' else A.PAGE_FRAMES
+                    for n in range(0 if asset.get('kind') == 'image' else 1, (1 if asset.get('kind') == 'image' else n_max + 1)):
+                        try:
+                            b = asset_image_fn(asset, n)
+                        except Exception:
+                            b = None
+                        if b:
+                            raws.append(b)
+                else:
+                    try:
+                        from migration.digital_twin_room import _s3_default
+                        raws = A.page_images(_s3_default(), session, rec)
+                    except Exception:
+                        raws = []
+                for b in raws:
+                    try:
+                        out.append(ImageReader(io.BytesIO(b)))
+                    except Exception:
+                        continue
+        except Exception:
+            out = []
+        cache[key] = out
+        return out
+    return images
+
+
+def _draw_asset_block(d: '_Doc', session: dict, q: dict, y: float, images: list) -> float:
+    """What a content read's page carries over a question page: the image
+    or the frame strip, the transcript excerpt for audio, the clarity, what
+    stood out and what fell flat. Returns the new y."""
+    from reportlab.lib import colors
+    from migration import digital_twin_assets as A
+    body_color = OFFWHITE if d.dark else GRAPHITE
+    muted = MUTED_DARK if d.dark else MUTED_LIGHT
+    width = d.right - d.m
+    if images:
+        n = len(images)
+        gap = 8
+        h = 1.35 * 72 if n > 1 else 1.9 * 72
+        w = (width - gap * (n - 1)) / float(n) if n > 1 else min(width, h * 1.78)
+        yy = y - 6 - h
+        for i, img in enumerate(images):
+            try:
+                d.c.drawImage(img, d.m + i * (w + gap), yy, width=w, height=h, preserveAspectRatio=True, anchor='sw', mask='auto')
+            except Exception:
+                continue
+        y = yy - 10
+    excerpt = A.transcript_for_page(session, q, 420)
+    asset = A.asset_by_id(session, str(q.get('asset_id') or ''))
+    if asset is not None and asset.get('kind') == 'audio' and excerpt:
+        y = d.paragraph('Heard: ' + excerpt, d.m, y - 2, width, size=9.5, color=muted, font=d.f['regular']) - 4
+    cl = q.get('clarity') or {}
+    bits = []
+    if cl.get('about'):
+        bits.append(f"What the room took it to be about: {cl['about']}")
+    if cl.get('for_whom'):
+        bits.append(f"Who the room took it to be for: {cl['for_whom']}")
+    if q.get('stood_out'):
+        bits.append('What stood out: ' + '; '.join(str(x) for x in q['stood_out'][:4]) + '.')
+    if q.get('fell_flat'):
+        bits.append('What fell flat: ' + '; '.join(str(x) for x in q['fell_flat'][:3]) + '.')
+    for sr in (q.get('lean_by_segment') or [])[:4]:
+        if isinstance(sr, dict) and sr.get('line'):
+            bits.append(str(sr['line']))
+    for b in bits:
+        if y < PANEL_FLOOR + 30:
+            break
+        y = d.paragraph(b, d.m, y - 2, width, size=9.5, color=body_color, font=d.f['regular']) - 3
+    return y
+
+
+def build_panel_pdf(payload: dict, session: dict, portrait_fn=None, asset_image_fn=None) -> bytes:
     """The Focus Group IQ session: the room, then one page per question
     (the eyebrow 'Question N', the header the question as asked, the lead
     answer under it) with the % table and the voices. ``portrait_fn(hash)
     -> JPEG bytes`` puts the twins' portraits on the room page and beside
     each voice; without it (or when a face is absent) the text stands
-    alone."""
+    alone. A content read (a video, an image or an audio file the room
+    was shown; Jenna 2026-11-05) prints as its own page under 'What the
+    room made of <label>' with the image or a strip of frames (the
+    transcript excerpt for audio), the appeal split, the clarity, what
+    stood out and fell flat, and the voices; an A/B comparison of two
+    pieces of content prints as its own page under the question with the
+    eyebrow 'A or B'. ``asset_image_fn(asset, n) -> bytes`` supplies the
+    pictures; without it they come from storage."""
     d = _Doc()
     m = payload.get('meta') or {}
     g = session.get('group') or {}
     read = _portrait_reader(portrait_fn)
+    asset_images = _asset_image_reader(asset_image_fn, session)
+    try:
+        from migration import digital_twin_assets as A
+    except Exception:
+        A = None
     try:   # a room sized to its cuts says what it stands for (Jenna 2026-11-05)
         from migration.digital_twin_sizing import sizing_line
         stands = sizing_line(g.get('sizing')) if isinstance(g.get('sizing'), dict) else ''
@@ -1138,8 +1240,13 @@ def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
     kn = known_names(session, payload)     # a name the record knows prints in its own casing, however it was typed
     for i, q in enumerate(session.get('questions') or []):
         n = i + 1
-        header = question_header(q.get('q'), **kn)
-        y = d.new_page(i % 2 == 1, f"Question {n}", header, question_lead_line(q.get('distribution')))
+        is_asset = bool(A is not None and A.is_asset_read(q))
+        is_ab = bool(A is not None and A.is_ab_read(q))
+        header = A.page_header(q) if is_asset else question_header(q.get('q'), **kn)
+        eyebrow = f"Question {n}" + (', content' if is_asset else (', A or B' if is_ab else ''))
+        y = d.new_page(i % 2 == 1, eyebrow, header, question_lead_line(q.get('distribution')))
+        if is_asset:
+            y = _draw_asset_block(d, session, q, y, asset_images(q))
         rows = [(r['label'], f"{r['pct']}%", f"{int(r['people']):,} people") for r in (q.get('distribution') or [])[:8]]
         if rows:
             y = d.table(rows, d.m, y, d.right - d.m, head=('Answer', 'Share', 'People'))
@@ -1156,7 +1263,7 @@ def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
             lines = d._wrap(text, font, size, width)
             need = 6 + max(len(lines) * lead, pic if img is not None else 0)
             if y - need < floor and not fresh:
-                y = d.new_page(d.dark, f"Question {n}, continued", header, '')
+                y = d.new_page(d.dark, eyebrow + ', continued', header, '')
                 fresh = True
             room = int((y - 6 - floor) // lead)
             if len(lines) > room:

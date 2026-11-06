@@ -556,7 +556,21 @@ def question_cap(sess, plan=DEFAULT_PLAN) -> int:
 
 
 def questions_asked(sess) -> int:
+    """Every record on the room counts as one question: the questions put
+    to it, each content read (``kind: 'asset_read'``, the room's reaction
+    to a video, an image or an audio file added to it; Jenna 2026-11-05)
+    and an A/B comparison of two pieces of content. Content itself costs
+    nothing beyond the group; counting its reads keeps the 1-20 and 1-40
+    tiers meaningful."""
     return len((sess or {}).get('questions') or [])
+
+
+ASSET_READ_COUNTS_AS_QUESTION = True
+
+
+def asset_reads(sess) -> int:
+    """How many of the room's questions are content reads."""
+    return len([q for q in ((sess or {}).get('questions') or []) if isinstance(q, dict) and str(q.get('kind') or '') == 'asset_read'])
 
 
 def record_tier(sess, tier, plan=DEFAULT_PLAN) -> int:
@@ -744,7 +758,7 @@ def public_fields(sess, plan=None) -> dict:
     p = normalize_plan(plan if plan is not None else (sess or {}).get('group_plan'))
     t = group_tier(sess, p)
     gc = group_charge(sess)
-    out = {'group_tier': t, 'question_cap': t, 'questions_asked': questions_asked(sess), 'group_plan': p, 'group_paid': group_paid(sess),
+    out = {'group_tier': t, 'question_cap': t, 'questions_asked': questions_asked(sess), 'asset_reads': asset_reads(sess), 'group_plan': p, 'group_paid': group_paid(sess),
            'group_charge': {k: gc.get(k) for k in ('usd', 'tier', 'plan', 'charged_at', 'refunded_at', 'kind', 'free') if k in gc} if gc else None}
     offer = offer_tier_upgrade(sess, p)
     if offer is not None and questions_asked(sess) >= t:
@@ -757,5 +771,5 @@ __all__ = ['PLANS', 'DEFAULT_PLAN', 'TIERS', 'TIER_SMALL', 'TIER_LARGE', 'RATES'
            'ADD_FUNDS_URL', 'RETIRED_KEYS', 'normalize_plan', 'normalize_tier', 'tiers_for', 'default_tier', 'tier_label', 'plan_label', 'tool_key', 'upgrade_tool_key',
            'pull_type', 'credits', 'rate', 'upgrade_rate', 'money', 'rate_card_lines', 'rate_card_text', 'quote_line', 'is_pricing_ask',
            'plan_holder', 'plan_record', 'plan_for_company', 'company_for_user', 'plan_for_user', 'set_plan', 'set_company_plan', 'note_deposit',
-           'seat_is_free', 'group_charge', 'legacy_paid', 'group_paid', 'group_tier', 'question_cap', 'questions_asked', 'record_tier', 'charge_group_open', 'refund_group_open',
+           'seat_is_free', 'group_charge', 'legacy_paid', 'group_paid', 'group_tier', 'question_cap', 'questions_asked', 'asset_reads', 'ASSET_READ_COUNTS_AS_QUESTION', 'record_tier', 'charge_group_open', 'refund_group_open',
            'offer_tier_upgrade', 'question_gate', 'accept_tier_upgrade', 'cap_reply', 'gate_open', 'public_fields']

@@ -936,6 +936,100 @@ def panel_reply(payload, session, rec, key, user):
                     open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': session.get('id')})
 
 
+# ---- content in the room from chat (Jenna 2026-11-05: "upload content into the focus group ... and it should assess it"). 'Test
+# this image in the room', 'put this trailer to the group', 'show them this thumbnail https://...': the newest image attached to the
+# thread, or a direct link to a video, image or audio file, goes into the active room through the same intake as the room page.
+_ASSET_INTAKE_RX = re.compile(r"\b(test|put|show|add|run|try|upload|drop|play|assess|react to|what do they (?:make|think) of)\b[^.?!]{0,80}?"
+                              r"\b(image|picture|photo|thumbnail|thumb|video|clip|trailer|spot|ad|key art|art|poster|cover|song|track|audio|mp3|music|content|file|asset)\b", re.I)
+_ASSET_LABEL_RX = re.compile(r"\b(?:as|call it|label(?:ed)?|named?)\s+(?:option\s+)?([A-Z]|\"[^\"]{1,30}\"|'[^']{1,30}')(?![A-Za-z])")
+_VIDEO_PAGE_RX = re.compile(r"\b(youtube\.com|youtu\.be|vimeo\.com|tiktok\.com|instagram\.com)\b", re.I)
+
+
+def asset_intake_intent(text):
+    """True when the words ask to put a piece of content to the room."""
+    low = str(text or '')
+    if not _ASSET_INTAKE_RX.search(low):
+        return False
+    return bool(re.search(r"\b(room|group|panel|focus group|them|the twins?|seats)\b", low, re.I)) or bool(re.search(r"https?://", low))
+
+
+def _asset_label_in(text):
+    m = _ASSET_LABEL_RX.search(str(text or ''))
+    if not m:
+        return ''
+    return m.group(1).strip('"\'')
+
+
+def _newest_media_attachment(uname, tid):
+    """The newest image attached to the thread (chat attachments carry
+    png / jpg / webp), or None."""
+    if not tid:
+        return None
+    try:
+        from . import documents as _docs
+        s3, bucket = _s3()
+        recs = [r for r in _docs.attachments(uname, tid, s3, bucket) if isinstance(r, dict) and r.get('kind') == 'image' and r.get('file_key')]
+        return recs[-1] if recs else None
+    except Exception:
+        return None
+
+
+def run_asset_intake(text, body, history, user, ppu=None, thread_id=''):
+    """Put the content named in the words to the active room. None when
+    the words are not that ask."""
+    if not asset_intake_intent(text):
+        return None
+    from migration import digital_twins as DT
+    from migration import digital_twin_assets as A
+    s3, _b = _s3()
+    uname = _uname(user)
+    active = active_session(user)
+    if not active:
+        return _payload('Open a room first, then put the content to it: "open a focus group with the <twin> twin", then "test this image in the room".',
+                        ['Open a focus group', 'Open Focus Group IQ'])
+    payload = DT.load_twin(s3, active['key'])
+    if payload and not DT.can_open(user, str(active['key']), None, payload):
+        payload = None
+    sess = next((x for x in (payload or {}).get('panel_sessions') or [] if x.get('id') == active['sid']), None) if payload else None
+    if not payload or not sess:
+        return _payload('The room this thread was using is gone. Open a room first, then put the content to it.', ['Open a focus group', 'Open Focus Group IQ'])
+    url = A.chat_intake_url(text)
+    att = None if url else _newest_media_attachment(uname, thread_id or str((body or {}).get('thread_id') or ''))
+    if not url and att is None:
+        page = _VIDEO_PAGE_RX.search(str(text or ''))
+        if page:
+            return _payload(f"That link is a page on {page.group(1)}, not the file itself. Paste a direct link to the video, image or audio file, or add it from the room page (Add content) and I will read it there.",
+                            ['Open Focus Group IQ'], panel_session={'key': active['key'], 'sid': sess['id']}, open_view='digitalTwinsIQ', twin_key=active['key'])
+        return _payload('Attach the image to this thread, or paste a direct link to the video, image or audio file (https://...), and I put it to the room. Videos and audio go in from the room page too (Add content).',
+                        ['Open Focus Group IQ'], panel_session={'key': active['key'], 'sid': sess['id']}, open_view='digitalTwinsIQ', twin_key=active['key'])
+    funds = _charge_panel_question(user, payload, sess, text)      # the read is one question on the cap
+    if funds is not None:
+        DT.save_twin(s3, active['key'], payload)
+        return funds
+    label = _asset_label_in(text)
+    if url:
+        asset, err = A.store_url(s3, sess, twin_key=active['key'], url=url, label=label, added_by=uname)
+    else:
+        asset, err = A.store_s3_copy(s3, sess, twin_key=active['key'], src_key=str(att.get('file_key')), filename=str(att.get('name') or 'image.jpg'), label=label, added_by=uname)
+    if asset is None:
+        return _payload(err or A.FAILED_LINE, ['Open Focus Group IQ'], panel_session={'key': active['key'], 'sid': sess['id']}, open_view='digitalTwinsIQ', twin_key=active['key'])
+    DT.save_twin(s3, active['key'], payload)
+    try:
+        A.start_processing(s3, active['key'], sess['id'], asset, username=uname, usage_extras=ppu or None)
+    except Exception as e:
+        print(f"[twin-lane] asset processing skipped: {str(e)[:160]}")
+    DT.save_twin(s3, active['key'], payload)
+    set_active_session(user, active['key'], sess['id'])
+    others = [a.get('label') for a in A.ready_assets(sess) if a.get('id') != asset.get('id')]
+    chips = ([f"Which do you prefer, {others[-1]} or {asset['label']}?"] if others else []) + ['What would make you click?', 'Who is this for?', 'Open Focus Group IQ']
+    noun = {'video': 'video', 'image': 'image', 'audio': 'audio'}.get(asset.get('kind'), 'content')
+    return _payload(f"{asset['label']} is in the room: the {noun}" + (f" {asset.get('filename')}" if asset.get('source') != 'url' and asset.get('filename') else '')
+                    + f". The room takes it in now and its read lands in Focus Group IQ in a minute or two, under 'What the room made of {asset['label']}'. "
+                    + f"Then ask about it in plain words (\"would you click {asset['label']}?\"" + (f", \"which do you prefer, {others[-1]} or {asset['label']}?\"" if others else '') + ").",
+                    chips, panel_session={'key': active['key'], 'sid': sess['id']}, open_view='digitalTwinsIQ', twin_key=active['key'],
+                    action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': active['key'], 'session_id': sess['id']})
+
+
 def _charge_panel_question(user, payload, sess, text=''):
     """Before a room answers (Jenna 2026-11-05): a room never charged (one
     opened free before the per-group card) pays its group now; then the
@@ -972,6 +1066,10 @@ def run_panel(text, body, history, user, ppu=None):
     opening = bool(_PANEL_OPEN_RX.search(low))
     active = active_session(user)
     if not opening:
+        if active and asset_intake_intent(text):
+            got = run_asset_intake(text, body, history, user, ppu, thread_id=str((body or {}).get('thread_id') or ''))
+            if got is not None:
+                return got
         if not active or not _PANEL_ASK_RX.search(str(text or '').strip()):
             return None
         payload = DT.load_twin(s3, active['key'])

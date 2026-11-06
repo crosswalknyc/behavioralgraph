@@ -916,6 +916,13 @@ def _room_body(payload: dict, sess: dict, st: dict, via: str, s3=None) -> str:
         lines.append(_stands_for_line(sess))
     if sess.get('duplicated_from'):
         lines.append('Opened as a duplicate of an earlier room.')
+    try:   # the content in the room (a video, an image, an audio file; Jenna 2026-11-05), when there is any
+        from migration.digital_twin_assets import assets_line
+        al = assets_line(sess)
+        if al:
+            lines.append(al)
+    except Exception:
+        pass
     lines.append(f"Opened through: {VIA_WORDS.get(via, VIA_WORDS['dashboard'])}")
     lines.append(f"Opened: {_when(sess.get('created_at'))}")
     lines.append('')

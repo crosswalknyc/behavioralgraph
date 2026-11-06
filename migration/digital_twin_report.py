@@ -394,11 +394,32 @@ def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None
         who = ', '.join(str(x) for x in (v.get('name'), v.get('age'), v.get('city')) if x not in (None, ''))
         voices.append(_clean(f"{who}: {v['line']}" if who else str(v['line'])))
     lead_line = question_lead_line(rows, people_fmt=human_people)
-    return {'kind': 'question', 'eyebrow': f"Question {n}" if n else 'Question', 'header': _clean(question_header(rec.get('q'), kn.get('names') or (), kn.get('labels') or ())),
+    # a content read (a video, an image or an audio file the room was shown; Jenna 2026-11-05) is headed 'What the room made of
+    # <label>' and its eyebrow says so; an A/B of two pieces of content carries 'A or B'. Both print like a question page.
+    header, eyebrow, extra = question_header(rec.get('q'), kn.get('names') or (), kn.get('labels') or ()), (f"Question {n}" if n else 'Question'), []
+    try:
+        from migration import digital_twin_assets as A
+        if A.is_asset_read(rec):
+            header = A.page_header(rec)
+            eyebrow += ', content'
+            cl = rec.get('clarity') or {}
+            if cl.get('about'):
+                extra.append(f"What the room took it to be about: {cl['about']}")
+            if cl.get('for_whom'):
+                extra.append(f"Who the room took it to be for: {cl['for_whom']}")
+            if rec.get('stood_out'):
+                extra.append('What stood out: ' + '; '.join(str(x) for x in rec['stood_out'][:4]) + '.')
+            if rec.get('fell_flat'):
+                extra.append('What fell flat: ' + '; '.join(str(x) for x in rec['fell_flat'][:3]) + '.')
+        elif A.is_ab_read(rec):
+            eyebrow += ', A or B'
+    except Exception:
+        pass
+    return {'kind': 'question', 'eyebrow': eyebrow, 'header': _clean(header),
             'sub': _clean(f"{_q_when(rec, session)}." + (f" {lead_line}" if lead_line else '')),
             'framing': _clean(str(rec.get('framing') or '')), 'head': ('Answer', 'Share', 'People and seats'), 'rows': split,
             'read': _clean(str(rec.get('read') or '')), 'voices': voices,
-            'knew': [_clean(str(f)) for f in (rec.get('facts_used') or [])[:KNEW_ON_PAGE] if str(f or '').strip()],
+            'knew': [_clean(str(f)) for f in (rec.get('facts_used') or [])[:KNEW_ON_PAGE] if str(f or '').strip()] + [_clean(x) for x in extra],
             'talk': [_clean(str(t)) for t in (rec.get('talk') or [])[:TALK_ON_PAGE] if str(t or '').strip()],
             'seats_total': seats_total, 'dark': dark}
 
