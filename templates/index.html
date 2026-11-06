@@ -56034,23 +56034,43 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (S.pilot) renderPilotConsole();
             };
             window.addEventListener('beforeunload', function() { if (piRoomPopped()) { try { S.roomPop.win.close(); } catch (_) {} } });
-            // ---- the test takes the screen while it scrolls (Jenna 2026-11-03): the twin masthead folds away once the
-            // body has scrolled, the test bar stays locked at the top; the top of the page, or the Show button, brings it back
-            function piFocusScroll() {
+            // ---- the test takes the screen once, when play starts (Jenna 2026-11-05: "when this locks it never allows me to
+            // scroll to where i see the top of this window it alwasy just bounces back to here ... allow me to keep scrolling
+            // if I need to"). Until then the masthead folded on every body scroll past 56px and unfolded only at the very top;
+            // each fold resized the scroller by the masthead's height, so the page kept snapping back to the player view and the
+            // top of the window could not be reached. Now Play (and the PLAYING button) settles the page on the player once: the
+            // masthead folds and the test bar sits at the top. After that the page scrolls freely and nothing refolds it until
+            // the next Play. The reader's own move back to the top (scrolling up to it, a wheel up while there) or the masthead
+            // button brings the twin and its tabs back. A repaint never changes the fold, and the chat follows inside its own box.
+            function piFocusScroll(settle) {
                 var v = el('digitalTwinsIQView'); if (!v) return;
                 var body = v.querySelector('.dtw-body'); if (!body) return;
                 var on = !!S.pilot && !!PI_HOST[piTab()] && !!document.querySelector('.dtw-pane.active .dtw-pi-head');
                 if (!on) { v.classList.remove('dtw-focus'); return; }
-                var st = body.scrollTop, room = body.scrollHeight - body.clientHeight;
-                if (!v.classList.contains('dtw-focus')) { if (st > 56 && room > 220) v.classList.add('dtw-focus'); }
-                else if (st <= 2) v.classList.remove('dtw-focus');
+                if (settle === true) { v.classList.add('dtw-focus'); S.piSettleAt = Date.now(); body.scrollTop = 0; }
+            }
+            function piFocusUnfold(e) {
+                piFocusScroll();   // no test on the pane: the twin shows
+                var v = el('digitalTwinsIQView'), body = v && v.querySelector('.dtw-body'); if (!v || !body) return;
+                var st = body.scrollTop, was = S.piScrollLast == null ? st : S.piScrollLast; S.piScrollLast = st;
+                if (!v.classList.contains('dtw-focus') || Date.now() - (S.piSettleAt || 0) < 800) return;
+                var up = (e && e.type === 'wheel') ? (e.deltaY < 0 && st <= 0 && !piInnerScroller(e.target, body)) : (st <= 2 && was > 2);
+                if (up) v.classList.remove('dtw-focus');
+            }
+            function piInnerScroller(t, body) {
+                // a wheel inside a box that scrolls on its own (the chat, a card) is that box's, not the page's
+                for (; t && t !== body && t.nodeType === 1; t = t.parentNode) {
+                    var o = getComputedStyle(t).overflowY;
+                    if ((o === 'auto' || o === 'scroll') && t.scrollHeight > t.clientHeight + 1) return true;
+                }
+                return false;
             }
             window.dtwPilotUnfocus = function() {
                 var v = el('digitalTwinsIQView'), body = v && v.querySelector('.dtw-body');
                 if (v) v.classList.remove('dtw-focus');
                 if (body) { try { body.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { body.scrollTop = 0; } }
             };
-            (function() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b && !b._piFocusWired) { b._piFocusWired = true; b.addEventListener('scroll', piFocusScroll, { passive: true }); } })();
+            (function() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b && !b._piFocusWired) { b._piFocusWired = true; b.addEventListener('scroll', piFocusUnfold, { passive: true }); b.addEventListener('wheel', piFocusUnfold, { passive: true }); } })();
             // ---- what the reader opened, and where they scrolled, survive a repaint (Jenna 2026-11-04: "these dont stay open
             // when I click one if something else is happening they should"). The test is repainted whole whenever its session
             // refreshes: a question the room was answering lands, a forecast attaches, the norm changes, the room pops out or
@@ -56162,7 +56182,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.piPainted = S.pilot.id;
                 if (piRoomPopped() && S.roomPopHtml) piPaintPopout(S.roomPopHtml);
                 piScrollRestore(h, keep);
-                piFocusScroll();
+                piFocusScroll(!keep && S.pilot.status === 'playing');   // a test already playing when it is first shown settles once; a repaint leaves the fold alone
                 bindPilotMedia();
                 schedulePilotPortraits();
                 revealPilot(playheadNow());
@@ -56800,6 +56820,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (note) note.textContent = (r.data || {}).error || 'Play did not start.'; return;
                 }
                 adoptPilot(r.data.session);
+                if (!resume || s.status !== 'playing') piFocusScroll(true);   // play starts, or PLAYING is pressed: the page settles on the player once (a resume after a question never moves it)
                 var v = el('dtwPiVideo');
                 var wm = watchMedia(S.pilot);
                 if (v && hasMedia(S.pilot)) {
