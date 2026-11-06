@@ -80,6 +80,7 @@ _APP_BINDINGS = {
     'audience_range': '_estimated_audience_range',      # (sample) -> {'low','high'} | None
     # golden set (audit item 2, 2026-10-14): the build server's shared secret
     'queue_secret': 'SYNTH_QUEUE_SECRET',
+    'queue_url': 'SYNTH_QUEUE_URL',        # the build engine's listener; the build-fix lane stops a wrong run (2026-11-06)
     'route_guard': '_chatbot_route_guard',   # (label) -> decorator
     'ask_logged': '_ask_logged',             # (surface) -> decorator
     'error_email': '_chatbot_error_email',   # (label, err, tb=None)
@@ -89,7 +90,7 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate', 'price_table_for',
+_OPTIONAL = {'queue_url', 'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate', 'price_table_for',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

@@ -1394,6 +1394,32 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * A Subscriber IQ request NEVER matches an existing Profile "
         "IQ catalog entry - do not emit existing_match for it.\n\n"
 
+        # ── Whole-subject identity (2026-11-06, Sydney McLain / WME:
+        # 'Build a new profile on Tomorrow x Together' was matched to
+        # the catalog's 'Hurry Up Tomorrow Movie' on the word 'Tomorrow'
+        # and shipped as a cut named 'Together').
+        "CATALOG MATCH IDENTITY (MANDATORY - 2026-11-06):\n"
+        "  * A catalog entry (existing_match, time_shifted_refresh, or "
+        "the parent of a derive_cut) is the same subject ONLY when the "
+        "WHOLE catalog subject is present in the request, every word of "
+        "its name, as a span ('Hurry Up Tomorrow female fans' names "
+        "'Hurry Up Tomorrow'; 'Tomorrow x Together' does NOT). One "
+        "shared word is never identity. When in doubt, new_build on the "
+        "subject as the user typed it.\n"
+        "  * The leftover words of a request NEVER become a cut name "
+        "unless the request itself asked for a cut (a gender, an age "
+        "band, 'avid', a market, a behavioral cohort). 'Together' in "
+        "'Tomorrow x Together' is part of the entity, not a cut.\n"
+        "  * A connector 'x', 'X', '&' or '+' between words binds ONE "
+        "entity name: 'Tomorrow x Together' is one K-pop group, 'Gunna x "
+        "Nike' is one partnership subject, 'Ben & Jerry's' is one brand. "
+        "Never split a name at a connector into a parent and a cut.\n"
+        "  * When the request names what the subject IS ('the K-pop "
+        "group', 'the band', 'the movie', 'the series', 'the podcast'), "
+        "carry that type: set brand_category from it and never match a "
+        "catalog entry of a different type. A film and a group that "
+        "share a word are different subjects.\n\n"
+
         f"DEFAULT DATE RANGE - trailing 12 months ending today "
         f"({_today_iso}), unless the user's request explicitly names "
         f"a different window:\n"
@@ -6381,12 +6407,21 @@ def _pm_interpret_core(user, body, text, history):
         # operand (whole-prompt scores buried "Vizio TV Owners" under
         # the Spider-Man cohort tokens), and renames the deliverable
         # to '{Parent} - {Cut Label}'.
+        _pre_promo_subject = str(spec_draft.get('subject') or '').split(' - ', 1)[0].strip()
         try:
             _H._maybe_promote_intersect_to_derive_cut(
                 spec_draft, text, candidates, catalog=catalog)
         except Exception as _int_err:
             print(f"[synth-chat interpret] intersect-cut error: "
                   f"{_int_err}")
+        # Whole-subject identity backstop (2026-11-06, Sydney McLain /
+        # WME): 'Tomorrow x Together' was promoted to a cut of 'Hurry Up
+        # Tomorrow Movie' on one shared word. No promoter may hand the
+        # build to a catalog subject the user did not name.
+        try:
+            _H._guard_catalog_identity(spec_draft, text, _pre_promo_subject)
+        except Exception as _gi_err:
+            print(f"[synth-chat interpret] identity backstop error: {_gi_err}")
 
         # Parent-link question (2026-08-20 Jenna directive): if the
         # ask still looks like a cut of something but no parent was

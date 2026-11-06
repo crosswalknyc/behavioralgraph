@@ -466,7 +466,7 @@ def accept_offered_run(history, text):
 # the source order to this tuple.
 LANE_ORDER = (
     'intake_cancel',
-    'bpiq_wizard',
+    'bpiq_wizard', 'build_fix',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
     'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
@@ -481,12 +481,12 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
+    'build_fix', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'reconcile',
     'us_scope'))
-NEVER_PRICED_LANES = frozenset(('intake_cancel', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'reconcile', 'us_scope'))
 
@@ -720,6 +720,58 @@ def ask(user, body, *, via='session'):
                 return env, 200
     except Exception as e:
         _faults.note('service.bpiq_wizard', e)
+
+    # lane: build_fix
+    # "please adjust" / "that's the wrong subject" / "wrong profile" right
+    # after a build started is a correction of the build, never a priced
+    # read (Jenna 2026-11-06, Sydney McLain at WME: her "please adjust"
+    # after "Hurry Up Tomorrow Movie - Together is building" drew a $100
+    # read offer). The wrong run is stopped while it runs, a finished one
+    # is flagged for removal and refund, the intended subject is taken
+    # from the words or asked for in one line, and the right build goes
+    # through the normal brief flow. Nothing here is ever priced.
+    try:
+        from . import build_fix as _bfx
+        _bf_pending = _bfx.pending_fix(history)
+        if _bf_pending and not _bfx.wants_build_fix(text):
+            _bf_rw = _bfx.rewrite_pending_subject(text, _bf_pending)
+            if _bf_rw:
+                text = _bf_rw
+                body = dict(body, text=_bf_rw)
+        else:
+            _bf_raw = _bfx.answer(text, uname, tid, history, host=host, user=user)
+            if _bf_raw:
+                decision = {'surface': 'analyze', 'mode': None, 'reason': 'build_fix', 'client_hint': None}
+                try:
+                    host.ask_hint(route='build_fix', outcome='rebuild' if _bf_raw.get('rebuild_text') else 'asked_subject',
+                                  subject=str(_bf_raw.get('build_fix', {}).get('intended') or '') or None)
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                _bf_rebuild = str(_bf_raw.get('rebuild_text') or '').strip()
+                if _bf_rebuild and persist and tid:
+                    # the words named the subject: the fix line lands on the
+                    # thread and the right build order runs in this same turn
+                    _bf_env = envelope.wrap(_bf_raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+                    _persist_turn(persist, uname, tid, history, text, _bf_env, _bf_raw, 'analyze')
+                    history = list(history) + [{'role': 'user', 'text': text, 'ts': _now()},
+                                               {'role': 'agent', 'text': str(_bf_env.get('text') or _bf_raw.get('reply') or ''),
+                                                'ts': _now(), 'meta': {'kind': _bf_env.get('kind') or 'answer', 'surface': 'analyze',
+                                                                       'build_fix': _bf_raw.get('build_fix')}}]
+                    text = _bf_rebuild
+                    body = dict(body, text=_bf_rebuild)
+                else:
+                    _out = dict(_bf_raw)
+                    if _bf_rebuild:
+                        _out['followups'] = [_bf_rebuild]
+                    _bf_cs = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
+                    if _bf_cs == 'interpret':
+                        _out = dict(_interpret_shape(_out), followups=list(_out.get('followups') or []),
+                                    build_fix=_bf_raw.get('build_fix'))
+                    env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
+                    _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+                    return env, 200
+    except Exception as e:
+        _faults.note('service.build_fix', e)
 
     # lane: offer_acceptance
     # Accepting an offered run (2026-10-06, Eliot / Gunna): the build-
@@ -3068,6 +3120,8 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['link'] = {'url': str(raw['file_link']['url']), 'label': str(raw['file_link'].get('label') or 'Download CSV')}   # the CSV link survives a reload (2026-10-26)
         if isinstance(raw, dict) and isinstance(raw.get('bpiq_wizard'), dict):
             meta['bpiq_wizard'] = raw['bpiq_wizard']
+        if isinstance(raw, dict) and isinstance(raw.get('build_fix'), dict):
+            meta['build_fix'] = raw['build_fix']   # the build-fix lane's question waits for the subject (2026-11-06)
         turns.append({'role': 'agent', 'text': env['text'],
                       'ts': _now(), 'meta': meta})
         save_thread(uname, tid, turns)

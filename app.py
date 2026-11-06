@@ -45604,14 +45604,240 @@ _COMMON_CATEGORY_TOKENS = {
 }
 
 
+# --------------------------------------------------------------------
+# Whole-subject identity (2026-11-06, Sydney McLain / WME: "Build a new
+# profile on Tomorrow x Together" was read as an intersect of the
+# catalog's 'Hurry Up Tomorrow Movie' and a cut named 'Together', on the
+# single shared word 'tomorrow'). A catalog subject matches an ask only
+# when the WHOLE catalog subject is in the ask, every identity token, as
+# a span (or the ask's own subject is a span of the catalog name: 'Jennie'
+# against 'Jennie (BLACKPINK)'). One shared word is never identity. The
+# leftover words of an ask never become a cut name unless the ask itself
+# asked for a cut. A connector 'x' / 'X' / '&' between words binds one
+# entity name. An entity type the ask names ('the K-pop group', 'the
+# movie') travels with the identity so a title and a group that share a
+# word never collide.
+# --------------------------------------------------------------------
+
+_ENTITY_CONNECTOR_RE = None
+
+# Words an ask uses to say WHAT the subject is. Each maps to the BRAND
+# CATEGORY values (upper-cased catalog `category`) it is compatible with.
+_ASK_ENTITY_TYPES = (
+    (r'k[\s-]*pop\s+(?:boy\s+|girl\s+)?(?:group|band|act|idols?)|(?:boy|girl)\s*band|(?:boy|girl)\s+group|'
+     r'\b(?:the\s+)?(?:band|music\s+group|musical\s+group|musical\s+act|rapper|singer|songwriter|musician|'
+     r'dj|pop\s+star|pop\s+group|rock\s+band|duo|trio|quartet|orchestra|idol\s+group)\b',
+     ('MUSICIAN/BAND', 'MUSICIAN', 'BAND', 'STREAMING MUSIC')),
+    (r'\b(?:the\s+)?(?:movie|film|feature\s+film|motion\s+picture|documentary)\b',
+     ('MOVIE', 'MOVIE THEATER')),
+    (r'\b(?:the\s+)?(?:tv\s+)?(?:series|show|sitcom|drama\s+series|limited\s+series|reality\s+show)\b',
+     ('SERIES',)),
+    (r'\b(?:the\s+)?(?:podcast|podcaster)\b', ('PODCAST', 'PODCASTER')),
+    (r'\b(?:the\s+)?(?:actor|actress)\b', ('ACTOR',)),
+    (r'\b(?:the\s+)?(?:athlete|player|quarterback|pitcher|golfer|boxer|fighter|driver)\b', ('ATHLETE',)),
+    (r'\b(?:the\s+)?(?:comedian|comic)\b', ('COMEDIAN',)),
+    (r'\b(?:the\s+)?(?:youtuber|creator|influencer|streamer|tiktoker|vlogger)\b',
+     ('INFLUENCER/CREATOR', 'CREATOR/INFLUENCER', 'EMERGING TALENT')),
+    (r'\b(?:the\s+)?(?:author|writer|novelist|director|filmmaker|artist|painter)\b',
+     ('WRITER/DIRECTOR/AUTHOR/ARTIST',)),
+    (r'\b(?:the\s+)?(?:video\s+game|game\s+franchise|mobile\s+game)\b', ('GAMES', 'GAME PLAYERS', 'GAMES - PLAYERS')),
+)
+
+
+def _ask_entity_type(prompt):
+    """The entity type an ask names, as the tuple of compatible BRAND
+    CATEGORY values, or None when the ask names none. 'Tomorrow x
+    Together, the K-pop group' -> the MUSICIAN/BAND family; 'the Hurry Up
+    Tomorrow movie' -> MOVIE. Never raises."""
+    try:
+        import re as _re
+        t = ' '.join(str(prompt or '').split())
+        if not t:
+            return None
+        for pat, cats in _ASK_ENTITY_TYPES:
+            if _re.search(pat, t, _re.IGNORECASE):
+                return tuple(cats)
+        return None
+    except Exception:
+        return None
+
+
+def _entity_type_compatible(ask_type, candidate_category):
+    """False only when the ask names an entity type AND the candidate's
+    catalog category is known AND they disagree (a 'K-pop group' ask
+    against a MOVIE catalog entry). Unknown on either side is
+    compatible: never block on missing data."""
+    try:
+        if not ask_type:
+            return True
+        cat = str(candidate_category or '').strip().upper()
+        if not cat:
+            return True
+        for ok in ask_type:
+            ok_u = str(ok).upper()
+            if cat == ok_u or cat.startswith(ok_u + ' ') or cat.startswith(ok_u + '-') \
+                    or cat.startswith(ok_u + '/') or cat.startswith(ok_u + ' -'):
+                return True
+        return False
+    except Exception:
+        return True
+
+
+def _identity_span_tokens(text):
+    """The ordered identity tokens of a subject or ask: normalized,
+    with request filler, audience nouns, universe qualifiers and bare
+    category words ('movie', 'music') dropped, so 'Hurry Up Tomorrow
+    Movie' reads ['hurry', 'up', 'tomorrow'] and 'Build a new profile on
+    Tomorrow x Together' reads ['tomorrow', 'together'] (the connector
+    is punctuation to the identity). Short glue words stay in order so
+    a span is a span; a lone short token never counts as identity."""
+    import re as _re
+    s = str(text or '')
+    s = _re.sub(r'\s+(?:x|X|&|\+|vs\.?|and)\s+', ' ', s)          # connectors bind, they are not words
+    s = _re.sub(r'\([^)]*\)', ' ', s)                              # '(BLACKPINK)' disambiguators are optional
+    toks = []
+    for t in _normalize_for_match(s).split():
+        if t in _IDENTITY_STOP_TOKENS or t in _UNIVERSE_QUALIFIER_TOKENS \
+                or t in _COMMON_CATEGORY_TOKENS or t in _TU_GENERIC_PARENT_TOKENS:
+            continue
+        if t in ('new', 'please', 'run', 'pull', 'make', 'create', 'need', 'want', 'profile', 'iq', 'on',
+                 'about', 'of', 'for', 'a', 'an', 'me', 'us', 'our', 'my', 'your', 'kpop', 'pop'):
+            continue
+        toks.append(t)
+    return toks
+
+
+def _span_in(needle, hay):
+    """True when the token list `needle` appears contiguous, in order,
+    inside the token list `hay`."""
+    n, h = list(needle or []), list(hay or [])
+    if not n or len(n) > len(h):
+        return False
+    for i in range(len(h) - len(n) + 1):
+        if h[i:i + len(n)] == n:
+            return True
+    return False
+
+
+def _whole_subject_in_ask(candidate_entity, ask_text):
+    """Rule (a): the WHOLE catalog subject is present in the ask as a
+    span. Every identity token of the candidate's entity name, in
+    order, contiguous in the ask. 'Hurry Up Tomorrow' is in 'Hurry Up
+    Tomorrow female fans' and is NOT in 'Tomorrow x Together'."""
+    try:
+        cand = _identity_span_tokens(str(candidate_entity or '').split(' - ', 1)[0])
+        ask = _identity_span_tokens(ask_text)
+        real = [t for t in cand if len(t) >= 3]
+        if not real:
+            return False
+        return _span_in(cand, ask) or (_span_in(real, [t for t in ask if len(t) >= 3]))
+    except Exception:
+        return False
+
+
+def _subject_span_match(ask_subject, candidate_entity):
+    """Either the whole catalog subject is in the ask (rule a) or the
+    ask's own subject is a span of the catalog name with at least half
+    of its identity tokens ('Jennie' against 'Jennie (BLACKPINK)'). A
+    single shared word in the middle of two different names is never a
+    match ('Tomorrow x Together' against 'Hurry Up Tomorrow')."""
+    try:
+        cand = _identity_span_tokens(str(candidate_entity or '').split(' - ', 1)[0])
+        ask = _identity_span_tokens(ask_subject)
+        cand_real = [t for t in cand if len(t) >= 3]
+        ask_real = [t for t in ask if len(t) >= 3]
+        if not cand_real or not ask_real:
+            return False
+        if _span_in(cand, ask) or _span_in(cand_real, ask_real):
+            return True
+        if (_span_in(ask, cand) or _span_in(ask_real, cand_real)) \
+                and len(ask_real) * 2 >= len(cand_real):
+            return True
+        return False
+    except Exception:
+        return False
+
+
+# Words that make the right operand of an intersect read as a COHORT
+# the user asked to cut (rule b). Anything else on the right is part of
+# the entity name, never a cut label.
+_CUT_LABEL_WORDS = {
+    'female', 'male', 'women', 'men', 'woman', 'man', 'girls', 'boys', 'ladies', 'guys',
+    'avid', 'casual', 'superfans', 'superfan', 'heavy', 'light',
+    'gen', 'genz', 'millennial', 'millennials', 'boomer', 'boomers', 'zoomers', 'xers',
+    'teen', 'teens', 'teenagers', 'adults', 'kids', 'children', 'parents', 'moms', 'dads', 'mothers', 'fathers',
+    'seniors', 'students', 'college', 'hispanic', 'latino', 'latina', 'latinx', 'black', 'asian', 'white',
+    'lgbtq', 'lgbt', 'queer', 'married', 'single', 'affluent', 'hhi', 'income',
+    'owners', 'owner', 'buyers', 'buyer', 'users', 'user', 'subscribers', 'subscriber', 'players', 'player',
+    'watchers', 'watcher', 'shoppers', 'shopper', 'viewers', 'viewer', 'fans', 'fan', 'consumers', 'consumer',
+    'listeners', 'listener', 'customers', 'customer', 'audience', 'eaters', 'eater', 'drinkers', 'drinker',
+    'renters', 'renter', 'purchasers', 'purchaser', 'members', 'member', 'households', 'moviegoers', 'goers',
+    'streamers', 'readers', 'reader', 'gamers', 'gamer', 'travelers', 'traveler', 'switchers', 'switcher',
+    'intenders', 'enthusiasts', 'enthusiast', 'visitors', 'visitor', 'attendees', 'ticket', 'holders',
+    'bettors', 'donors', 'voters', 'commuters', 'drivers', 'homeowners', 'renting', 'cord', 'cutters',
+    'dma', 'market', 'metro', 'region', 'state', 'city', 'national', 'urban', 'rural', 'suburban',
+}
+
+
+def _reads_as_cut_label(label):
+    """Rule (b): True only when the words read as a cohort the user asked
+    to cut: a demographic (female, 18-24, Gen Z, under 17), an intensity
+    tier (avid, casual), a market (Los Angeles, a DMA, a state), a
+    behavioral cohort (TVOD renters, Netflix subscribers, EST buyers), or
+    an arrow cut. 'Together' alone is none of these."""
+    try:
+        import re as _re
+        s = str(label or '').strip()
+        if not s:
+            return False
+        if '->' in s or '\u2192' in s:
+            return True
+        if _re.search(r'\b\d{2}\s*(?:-|\u2013|to)\s*\d{2}\b|\b\d{2}\s*\+|\bunder\s+\d{1,2}\b|\b\d{1,2}\s+(?:and|or)\s+(?:under|over|older)\b'
+                      r'|\bages?\s+\d{1,2}\b|\bgen\s*[zxy]\b|\b(?:18|21|25|35|45|55|65)\s*(?:plus|and\s+up)\b', s, _re.IGNORECASE):
+            return True
+        toks = set(_normalize_for_match(s).split())
+        if toks & _CUT_LABEL_WORDS:
+            return True
+        if toks & _UNIVERSE_QUALIFIER_TOKENS:
+            return True
+        try:
+            from migration import us_regions as _ur
+            for fn in ('detect_region', 'detect_city'):
+                f = getattr(_ur, fn, None)
+                if not callable(f):
+                    continue
+                hit = f(s)
+                if isinstance(hit, (tuple, list)):
+                    hit = any(h for h in hit)
+                if hit:
+                    return True
+        except Exception:
+            pass
+        if _re.search(r'\b(?:los angeles|new york|chicago|dallas|houston|atlanta|miami|boston|seattle|denver|'
+                      r'phoenix|philadelphia|detroit|washington|minneapolis|tampa|orlando|san francisco|'
+                      r'san diego|las vegas|nashville|charlotte|portland|sacramento|austin|california|texas|'
+                      r'florida|new jersey|ohio|georgia|illinois|arizona|nevada|colorado|carolina|michigan|'
+                      r'pennsylvania|virginia|tennessee|washington|oregon|massachusetts|hawaii|alaska)\b', s, _re.IGNORECASE):
+            return True
+        return False
+    except Exception:
+        return False
+
+
 def _subject_identity_mismatch(prompt, subject, candidate_display):
     """True when the picked candidate's ENTITY name (before any ' - '
     cut suffix) is not the ask's subject. Generic filler, audience
     nouns, and universe-qualifier tokens do not count as identity; a
     shared CATEGORY word (travel, clothing, music) does not either,
-    unless the ask carries most of the candidate's name. An empty
-    candidate-identity set means we cannot judge, so it is NOT a
-    mismatch (leave that call to the qualifier gate). Never raises."""
+    unless the ask carries most of the candidate's name. One shared
+    word inside two different names is not identity either (2026-11-06,
+    rule a: 'Tomorrow x Together' is not 'Hurry Up Tomorrow'): the whole
+    catalog subject has to sit in the ask as a span, or the ask's own
+    subject has to be a span of the catalog name. An entity type the
+    ask names ('the K-pop group') that disagrees with the candidate's
+    catalog category is a mismatch (rule d). An empty candidate-identity
+    set means we cannot judge, so it is NOT a mismatch (leave that call
+    to the qualifier gate). Never raises."""
     try:
         cand_entity = str(candidate_display or '').split(' - ', 1)[0]
         cand_toks = {
@@ -45628,13 +45854,63 @@ def _subject_identity_mismatch(prompt, subject, candidate_display):
                   if ct in hay_toks or (len(ct) >= 5 and ct in hay)}
         if not shared:
             return True
+        # Rule (d): a named entity type that the candidate's category
+        # contradicts is never the same subject, however many words match.
+        try:
+            ask_type = _ask_entity_type(prompt)
+            if ask_type:
+                cat = _catalog_category_for_display(candidate_display)
+                if cat and not _entity_type_compatible(ask_type, cat):
+                    return True
+        except Exception:
+            pass
         if shared - _COMMON_CATEGORY_TOKENS:
-            return False
+            # Rule (a): shared distinctive words still have to form the
+            # whole subject, on one side or the other, as a span.
+            ask_subject = str(subject or '').split(' - ', 1)[0]
+            if _subject_span_match(ask_subject, cand_entity) or _whole_subject_in_ask(cand_entity, prompt):
+                return False
+            try:
+                from prometheus.subject_rules import explicit_build_subject as _ebs
+                typed = str(_ebs(prompt) or '').strip()
+            except Exception:
+                typed = ''
+            if typed and _subject_span_match(typed, cand_entity):
+                return False
+            # Collapsed-spelling / one-typo equality still counts as the
+            # same entity (SHARKNINJA / Shark Ninja).
+            try:
+                if _collapsed_same_entity(_collapse_for_match(ask_subject), _collapse_for_match(cand_entity)):
+                    return False
+            except Exception:
+                pass
+            return True
         # Only category words in common: the ask has to carry most of
         # the candidate's name for it to be the same subject.
         return len(shared) < max(2, (len(cand_toks) + 1) // 2)
     except Exception:
         return False
+
+
+def _catalog_category_for_display(candidate_display):
+    """The BRAND CATEGORY the catalog carries for a display name, or ''.
+    Reads the persisted profile cache; never raises, never blocks."""
+    try:
+        disp = str(candidate_display or '').strip().lower()
+        if not disp:
+            return ''
+        try:
+            jobs = list((globals().get('s3_cache') or {}).get('jobs') or [])
+        except Exception:
+            jobs = []
+        for j in jobs:
+            if not isinstance(j, dict):
+                continue
+            if str(j.get('display_name') or j.get('project_name') or '').strip().lower() == disp:
+                return str(j.get('category') or '').strip()
+        return ''
+    except Exception:
+        return ''
 
 
 def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
@@ -53428,18 +53704,21 @@ def _intersect_ops_re():
     #   <left> ' for ' <right>
     #   <left> ' → ' <right>       (unicode arrow)
     #   <left> ' -> ' <right>
-    #   <left> ' x ' <right>       (only when both sides look like Names)
     #   <left> ' who also ' <right>
     #   <left> ' who ' <verb> <right>   e.g. "netflix subs who watch f1"
-    #   <left> ' & ' <right>
-    #   <left> ' + ' <right>       when left is a proper subject
+    # 'x' / 'X' / '&' / '+' are NOT operators (2026-11-06, rule c): a
+    # connector between words binds ONE entity name. 'Tomorrow x
+    # Together' is a K-pop group, 'Gunna x Nike' is a partnership, 'Ben &
+    # Jerrys' is a brand. Reading 'x' as an intersect split 'Tomorrow x
+    # Together' into the catalog's 'Hurry Up Tomorrow Movie' plus a cut
+    # named 'Together' (Sydney McLain, WME).
     # We require the LEFT operand to be at least 2 tokens with a leading
-    # capital / all-cap word so we don't fire on "for Q3 2026" or "x 3
-    # times". The caller must further validate that <left> matches a
-    # candidate in the profile catalog.
+    # capital / all-cap word so we don't fire on "for Q3 2026". The caller
+    # must further validate that <left> matches a candidate in the
+    # profile catalog.
     pat = (
         r'^(?P<left>[A-Z][^\n]{2,80}?)\s+'
-        r'(?:for|->|→|x|&|\+|who\s+also|who\s+watch|who\s+watched|'
+        r'(?:for|->|→|who\s+also|who\s+watch|who\s+watched|'
         r'who\s+bought|who\s+shop|who\s+use|who\s+viewed|'
         r'who\s+stream|who\s+listen|who\s+rent)\s+'
         r'(?P<right>.{2,200})$'
@@ -53613,6 +53892,19 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
     left_tokens = set(t for t in left_norm.split() if len(t) >= 3)
     if not left_tokens:
         return None
+    # Rule (b) (2026-11-06): the right operand becomes the cut NAME, so
+    # it has to read as a cohort the user asked to cut (a demographic, an
+    # intensity tier, a market, a behavioral cohort, an arrow). A 'who
+    # <verb>' operator is itself the cut. Leftover words of an entity
+    # name ('Together') never become a cut.
+    try:
+        _op_is_who = bool(__import__('re').search(r'\bwho\s+\w+\s+' + __import__('re').escape(right[:40]),
+                                                   prompt, __import__('re').IGNORECASE))
+    except Exception:
+        _op_is_who = False
+    if not _op_is_who and not _reads_as_cut_label(right):
+        return None
+    _ask_type = _ask_entity_type(prompt)
 
     # Left-operand rescore (2026-08-20): the caller's candidates were
     # scored against the whole prompt, which drowns the parent in
@@ -53693,6 +53985,19 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
                              'that', 'this'}
         if not any(len(t) >= 4 and t not in _stopwords_check
                     for t in overlap):
+            continue
+        # Rule (a) (2026-11-06): the WHOLE catalog subject must be in
+        # the left operand as a span. Left coverage measures the wrong
+        # direction: 'Tomorrow' is fully covered by 'Hurry Up Tomorrow
+        # Movie' and is not that film. Every identity token of the
+        # parent, in order, contiguous in what the user typed.
+        _parent_entity = str(c.get('display_name') or c.get('subject') or '').split(' - ', 1)[0]
+        if not _is_prefix_parent and not _whole_subject_in_ask(_parent_entity, left):
+            continue
+        # Rule (d): an entity type the ask names has to agree with the
+        # parent's catalog category ('the K-pop group' never parents
+        # off a MOVIE).
+        if _ask_type and not _entity_type_compatible(_ask_type, c.get('category') or _catalog_category_for_display(c.get('display_name'))):
             continue
         try:
             print(f"[intersect-cut] promote to derive_cut: "
@@ -53803,6 +54108,16 @@ def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates,
     if not hit:
         return draft
     parent_key, parent_display, cut_label = hit
+    # Identity backstop (2026-11-06, rule a + d): the parent has to BE
+    # the subject the user typed. The promoter renames the draft to the
+    # parent, so this is the last read of the typed subject.
+    try:
+        if _subject_identity_mismatch(prompt, draft.get('subject') or prompt, parent_display):
+            print(f"[intersect-cut] parent {parent_display!r} is not the typed subject "
+                  f"{str(draft.get('subject') or '')!r}; no promotion")
+            return draft
+    except Exception:
+        pass
     # Recover the full cohort label when the intersect split left part
     # of it inside the left operand (2026-08-20 Marvel TVOD fix).
     cut_label = _upgrade_cut_label_with_residual(
@@ -53827,6 +54142,58 @@ def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates,
         draft['subject'] = new_name
         draft['name'] = new_name
     return draft
+
+
+def _guard_catalog_identity(draft, prompt, typed_subject=''):
+    """Backstop after every promoter (2026-11-06, Sydney McLain / WME):
+    a derive_cut, existing_match or time_shifted_refresh whose catalog
+    candidate is not the subject the user typed (whole-subject span,
+    rule a; named entity type, rule d) is demoted to new_build on the
+    typed subject, the parent fields blanked and the leftover-word cut
+    name dropped (rule b). Returns True when it acted. Never raises."""
+    try:
+        if not isinstance(draft, dict):
+            return False
+        decision = str(draft.get('decision') or '').strip().lower()
+        if decision not in ('derive_cut', 'existing_match', 'time_shifted_refresh'):
+            return False
+        disp = str(draft.get('existing_match_display_name') or draft.get('parent_display_name') or '').strip()
+        if not disp:
+            return False
+        typed = str(typed_subject or '').strip()
+        if not typed:
+            try:
+                from prometheus.subject_rules import explicit_build_subject as _ebs
+                typed = str(_ebs(prompt) or '').strip()
+            except Exception:
+                typed = ''
+        subj = str(draft.get('subject') or '').split(' - ', 1)[0].strip()
+        # the draft may already carry the candidate's own name; judge the
+        # typed words first, the draft's subject only when nothing was typed
+        probe_subject = typed or subj
+        if not _subject_identity_mismatch(prompt, probe_subject, disp):
+            return False
+        # an embedded-cut promotion off the SAME entity is not a mismatch
+        # (Go-GURT 18-24 off Go-GURT): only act when the entity differs
+        print(f"[catalog-identity] {decision} on {disp!r} is not the typed subject "
+              f"{probe_subject!r}; new_build on the typed subject")
+        draft['related_profile_display_name'] = disp
+        draft['decision'] = 'new_build'
+        for k in ('existing_match_s3_key', 'existing_match_display_name', 'existing_match_days_old',
+                  'existing_match_last_modified', 'parent_display_name', 'cut_label'):
+            if k in draft:
+                draft[k] = '' if k != 'existing_match_days_old' else None
+        if str(draft.get('derive_type') or '') in ('intersect_cut', 'other', 'addon_cuts'):
+            draft['derive_type'] = ''
+        if typed:
+            draft['subject'] = typed
+            draft['name'] = typed
+        elif subj:
+            draft['subject'] = subj
+            draft['name'] = subj
+        return True
+    except Exception:
+        return False
 
 
 # --------------------------------------------------------------------
@@ -57091,6 +57458,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
 
     # Promoters - identical order on both routes (this order is part of
     # the verdict; do not reorder on one route only).
+    _typed_subject_pre = str(draft.get('subject') or '').split(' - ', 1)[0].strip()
     try:
         _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates)
     except Exception:
@@ -57101,6 +57469,12 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     _drop_degenerate_addon_cuts(draft)
     _maybe_promote_embedded_cuts_to_parent(draft,
                                            allow_existing_match=False)
+    # Whole-subject identity backstop (2026-11-06): no promoter may hand
+    # the build to a catalog subject the user did not name.
+    try:
+        _guard_catalog_identity(draft, prompt, _typed_subject_pre)
+    except Exception:
+        pass
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
     # Stale-cut guard (2026-08-28 client finding #1b): a matched CUT
