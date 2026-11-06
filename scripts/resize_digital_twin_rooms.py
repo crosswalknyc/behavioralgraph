@@ -63,6 +63,27 @@ def _snapshot(sess):
             'headline_people': [q.get('headline_people') for q in (sess.get('questions') or []) if isinstance(q, dict) and q.get('headline_people')][:3]}
 
 
+def _save_if_unchanged(s3, key: str, payload: dict, etag: str) -> bool:
+    """``save_twin`` guarded by the ETag the record was read with: the
+    write lands only if nobody else wrote the twin in between (a test
+    playing on the page saves its own ticks). False on a lost race."""
+    import io
+    from migration.digital_twin_synthesis import strip_ip_lifetime_value, update_index
+    strip_ip_lifetime_value(payload)
+    payload.setdefault('meta', {})['key'] = key
+    body = io.BytesIO()
+    with gzip.GzipFile(fileobj=body, mode='wb') as gz:
+        gz.write(json.dumps(payload, ensure_ascii=False, default=str).encode('utf-8'))
+    try:
+        s3.put_object(Bucket=BUCKET, Key=key, Body=body.getvalue(), ContentType='application/json', ContentEncoding='gzip', IfMatch=etag)
+    except Exception as e:
+        if 'PreconditionFailed' in str(e) or '412' in str(e):
+            return False
+        raise
+    update_index(s3, key, payload)
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--twin', help='one twin key')
@@ -73,7 +94,7 @@ def main():
     import boto3
     from migration import digital_twin_sizing as SZ
     from migration.digital_twin_forecast import load_ledger
-    from migration.digital_twin_synthesis import load_twin, save_twin
+    from migration.digital_twin_synthesis import load_twin
     s3 = boto3.client('s3')
     ledger = load_ledger(s3)
     ts = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
@@ -86,8 +107,12 @@ def main():
             for sess in (warm or {}).get('pilot_sessions') or []:
                 if isinstance(sess, dict) and isinstance(sess.get('group'), dict):
                     SZ.size_session(warm, sess, s3=s3, research=True)
-        raw = s3.get_object(Bucket=BUCKET, Key=key)['Body'].read()
-        twin = load_twin(s3, key)
+        obj = s3.get_object(Bucket=BUCKET, Key=key)
+        raw, etag = obj['Body'].read(), obj.get('ETag')
+        twin = json.loads(gzip.decompress(raw).decode('utf-8'))
+        from migration.digital_twin_synthesis import strip_ip_lifetime_value
+        strip_ip_lifetime_value(twin)
+        twin.setdefault('meta', {})['key'] = key
         if not twin:
             continue
         name = (twin.get('meta') or {}).get('name')
@@ -125,8 +150,10 @@ def main():
             base = key.rsplit('/', 1)[-1].replace('.json.gz', '')
             bkey = f"{PREFIX}_backups/{base}.pre_sizing_{ts}.json.gz"
             s3.put_object(Bucket=BUCKET, Key=bkey, Body=raw, ContentType='application/json', ContentEncoding='gzip')
-            save_twin(s3, key, twin)
-            print(f"[{name}] saved; backup {bkey}; sessions changed: {changed}")
+            if _save_if_unchanged(s3, key, twin, etag):
+                print(f"[{name}] saved; backup {bkey}; sessions changed: {changed}")
+            else:
+                print(f"[{name}] NOT saved: the twin was written by someone else while this ran (a test on the page); run again")
         elif changed:
             print(f"[{name}] dry run; would change {changed}")
         else:
