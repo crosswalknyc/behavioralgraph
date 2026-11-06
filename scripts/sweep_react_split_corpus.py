@@ -20,7 +20,7 @@ For every tracker CSV in s3://svod-acquisition/:
      stale touchpoint / conversion / monthly percentages recouple everywhere.
 
 Fix-in-place: same dated key, pre-sweep copy at
-historic/<name>.pre_react_sweep_20261008.csv, idempotency asserted per file.
+historic/<name>.pre_ep_coherence_20261105.csv, idempotency asserted per file.
 """
 import ast
 import csv
@@ -38,7 +38,7 @@ sys.path.insert(0, str(HERE))
 import svod_output_hygiene as H  # noqa: E402
 
 BUCKET = "svod-acquisition"
-STAMP = "pre_react_sweep_20261008"
+STAMP = "pre_ep_coherence_20261105"
 GP_RATIO = 32.99
 
 # Saturation bands per tier (matches the corrected reasoner prompt).
