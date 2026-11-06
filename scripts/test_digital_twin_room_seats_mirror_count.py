@@ -171,7 +171,7 @@ class Headline(unittest.TestCase):
         self.assertNotEqual(people % 10, 0)
         self.assertTrue(text.startswith('About one in twenty of the 6.09M P-Valley viewers, roughly 329.1K people, are a yes'), text)
         self.assertIn('one of the twelve seats', text)
-        self.assertIn('Almost nine in ten, roughly 5.61M people', text)
+        self.assertIn('About nine in ten, roughly 5.61M people', text)   # 92.1 is over nine in ten, so never 'almost'
         self.assertNotIn('0 people', text)
         self.assertEqual(ROOM.has_banned(text), [])
         self.assertNotIn('\u2014', text)
@@ -223,7 +223,7 @@ class Coherence(unittest.TestCase):
         self.assertEqual(ROOM.cohere_read(draft, opts, 12), draft)
         self.assertEqual(ROOM.plain_share(0.0), 'none')
         self.assertEqual(ROOM.plain_share(5.4), 'about one in twenty')
-        self.assertEqual(ROOM.plain_share(1.1), 'about one in a hundred')
+        self.assertEqual(ROOM.plain_share(1.1), 'about one in ninety')   # the closest fraction within ten percent (Jenna 2026-11-05)
 
     def test_all_twelve_of_something_else_is_left_alone(self):
         out = ROOM.cohere_read('They watched all twelve episodes of the last season.', self.OPTS, 12)

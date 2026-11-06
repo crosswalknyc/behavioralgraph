@@ -36,6 +36,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import sys
 import unittest
 
@@ -346,17 +347,44 @@ class Derived(unittest.TestCase):
         a4 = copy.deepcopy(a); a4['ceilings'].pop('share')
         self.assertAlmostEqual(ROOM.derived_plan(self.OPTS, a4, PEOPLE, seed='s')['targets']['a'], 3.0 + 4.0 / 3.0, places=1, msg='no share, no share ceiling')
 
-    def test_the_records_own_overlap_count_caps_the_engaged_rows(self):
-        a = copy.deepcopy(ANALYST)
-        a['options'][1].update(low_pct=12.0, high_pct=16.0)   # started: 13.3%, with the yes row 16.2% engaged against a counted 679,241 (11.1%)
-        a['ceilings']['share'].update(placement='over', reason='the counted overlap runs past the platform share')
-        plan = ROOM.derived_plan(self.OPTS, a, PEOPLE, record_reach=1872084, seed='s', record_overlap=679241)
-        self.assertLessEqual(plan['targets']['a'] + plan['targets']['b'], 679241 / PEOPLE * 100.0 + 0.01)
-        ro = next(c for c in plan['basis']['ceilings'] if c['ceiling'] == 'record overlap')
-        self.assertTrue(ro['applied']); self.assertIn('679,241', ro['basis'])
-        self.assertEqual(plan['basis']['record_overlap_people'], 679241)
-        plan2 = ROOM.derived_plan(self.OPTS, copy.deepcopy(ANALYST), PEOPLE, record_reach=1872084, seed='s', record_overlap=679241)
-        self.assertFalse(next(c for c in plan2['basis']['ceilings'] if c['ceiling'] == 'record overlap')['applied'], 'under it, nothing moves')
+    def test_the_house_read_pins_the_engaged_total(self):
+        # Jenna 2026-11-05 on the overlap read: "make sure it matches this". 679,241 of 6,094,342 is 11.1455%: the engaged rows
+        # together land on it whether the analyst's ranges run high or low; the research decides only the split within it
+        pin = 679241 / PEOPLE * 100.0
+        house = {'people': 679241, 'subject': 'P-Valley Viewers and S.W.A.T. Exiles overlap on Starz', 'definition': 'distinct US people with at least one play of each', 'window': ''}
+        high = copy.deepcopy(ANALYST)
+        high['options'][1].update(low_pct=12.0, high_pct=16.0)   # the analyst runs high: 16.2% engaged
+        plan = ROOM.derived_plan(self.OPTS, high, PEOPLE, record_reach=1872084, seed='s', house=house)
+        self.assertEqual(plan['kind'], 'house')
+        self.assertAlmostEqual(plan['targets']['a'] + plan['targets']['b'], pin, places=2, msg='pinned to the house figure, never under it')
+        self.assertEqual(plan['pinned'], ['a', 'b']); self.assertEqual(plan['down'], [])
+        self.assertEqual(plan['house']['people'], 679241); self.assertAlmostEqual(plan['house']['pct'], pin, places=3)
+        low = copy.deepcopy(ANALYST)   # the analyst runs low: 7.2% engaged (the first live rerun)
+        plan2 = ROOM.derived_plan(self.OPTS, low, PEOPLE, record_reach=1872084, seed='s', house=house)
+        self.assertAlmostEqual(plan2['targets']['a'] + plan2['targets']['b'], pin, places=2, msg='pinned to the house figure, never over it')
+        # the split within the pin keeps the analyst's own proportions (2.83 : 4.33)
+        self.assertAlmostEqual(plan2['targets']['a'] / plan2['targets']['b'], (2.0 + 2.5 / 3.0) / (3.0 + 4.0 / 3.0), places=2)
+        self.assertGreater(plan2['targets']['a'], 4.0); self.assertGreater(plan2['targets']['b'], 6.0)
+        hr = next(c for c in plan2['basis']['ceilings'] if c['ceiling'] == 'house read')
+        self.assertTrue(hr['applied']); self.assertIn('679,241', hr['basis'])
+        for name in ('reach', 'share of audience', 'neighbor'):
+            c = next(c for c in plan2['basis']['ceilings'] if c['ceiling'] == name)
+            self.assertFalse(c['applied'], name); self.assertIn('superseded by the house read', c['basis'])
+        self.assertEqual(plan2['basis']['record_overlap_people'], 679241)
+        self.assertIn('about one in nine', plan2['line']); self.assertIn('679', plan2['line'])
+        # the current reach still bounds the live row inside the pin; what it gives up moves to the started row, the total holds
+        tight = copy.deepcopy(ANALYST)
+        tight['ceilings']['current_reach'].update(low_people=150000, high_people=200000)   # 3.28% of the audience
+        plan3 = ROOM.derived_plan(self.OPTS, tight, PEOPLE, record_reach=1872084, seed='s', house=house)
+        self.assertLessEqual(plan3['targets']['a'], 200000 / PEOPLE * 100.0 + 0.01)
+        self.assertAlmostEqual(plan3['targets']['a'] + plan3['targets']['b'], pin, places=2)
+        cr = next(c for c in plan3['basis']['ceilings'] if c['ceiling'] == 'current reach')
+        self.assertTrue(cr['applied']); self.assertIn('moves to the other engaged rows', cr['basis'])
+        # record_overlap alone (no row detail) pins the same way; no house read, no pin
+        plan4 = ROOM.derived_plan(self.OPTS, copy.deepcopy(ANALYST), PEOPLE, record_reach=1872084, seed='s', record_overlap=679241)
+        self.assertEqual(plan4['kind'], 'house'); self.assertAlmostEqual(plan4['targets']['a'] + plan4['targets']['b'], pin, places=2)
+        plan5 = ROOM.derived_plan(self.OPTS, copy.deepcopy(ANALYST), PEOPLE, record_reach=1872084, seed='s')
+        self.assertEqual(plan5['kind'], 'derived'); self.assertNotIn('pinned', plan5)
 
     def test_an_answer_that_cannot_place_the_board_is_no_plan(self):
         self.assertEqual(ROOM.derived_plan(self.OPTS, None, PEOPLE), {})
@@ -403,6 +431,115 @@ class Study(unittest.TestCase):
         self.assertFalse(s3b.get('_cached')); self.assertEqual(len(SEEN['study']), 2, 'force re-searches')
 
 
+class PlainShare(unittest.TestCase):
+    """Jenna 2026-11-05: the read called 7.0% 'about one in twenty' and the headline called 7.6% the same. A 'one in N'
+    phrase only when the share sits within about ten percent of 1/N; otherwise the percent."""
+
+    def test_the_fraction_fits_the_share(self):
+        self.assertEqual(ROOM.plain_share(7.0), 'about one in fourteen')
+        self.assertEqual(ROOM.plain_share(7.6), 'about one in thirteen')
+        self.assertEqual(ROOM.plain_share(11.1), 'about one in nine')
+        self.assertEqual(ROOM.plain_share(2.2), 'about one in fifty')
+        self.assertEqual(ROOM.plain_share(46.7), 'about half')
+        for p in (5.0, 5.2, 5.4, 5.5):
+            self.assertEqual(ROOM.plain_share(p), 'about one in twenty', p)
+        self.assertNotEqual(ROOM.plain_share(7.0), 'about one in twenty')
+        self.assertNotEqual(ROOM.plain_share(7.6), 'about one in twenty')
+        self.assertEqual(ROOM.plain_share(5.6), 'about 6%', 'no fraction within ten percent: the percent itself')
+        self.assertEqual(ROOM.plain_share(4.4), 'about one in twenty-five')
+        self.assertEqual(ROOM.plain_share(12.6), 'about one in eight')
+        self.assertEqual(ROOM.plain_share(33.7), 'about one in three')
+        self.assertEqual(ROOM.plain_share(40.5), 'about two in five')
+        self.assertEqual(ROOM.plain_share(66.7), 'about two in three')
+        self.assertEqual(ROOM.plain_share(92.1), 'about nine in ten')
+        self.assertEqual(ROOM.plain_share(0.4), 'under 1%')
+        self.assertEqual(ROOM.plain_share(0.0), 'none')
+        self.assertEqual(ROOM.plain_share(96.0), 'nearly everyone')
+        for p in (1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 13.0, 17.0, 23.0, 29.0, 36.0, 44.0, 57.0, 63.0, 71.0, 78.0, 86.0):
+            w = ROOM.plain_share(p)
+            m = re.match(r"about (one|two|three|four|seven|nine) in ([a-z -]+)$", w)
+            if m:
+                num = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'seven': 7, 'nine': 9}[m.group(1)]
+                den = {v: k for k, v in [(100.0 / n, ROOM._n_in_words(n)) for n in list(range(2, 17)) + [20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100]]}.get(m.group(2))
+                den_n = {ROOM._n_in_words(n): n for n in list(range(2, 17)) + [20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100]}.get(m.group(2))
+                self.assertIsNotNone(den_n, w)
+                value = 100.0 * num / den_n
+                self.assertLessEqual(abs(p - value) / value, ROOM.PLAIN_SHARE_TOLERANCE + 1e-9, f"{p} -> {w}")
+            else:
+                self.assertTrue(w in ('about half',) or re.match(r"about \d+%$", w), f"{p} -> {w}")
+
+    def test_the_read_and_the_headline_carry_the_right_fraction(self):
+        opts = [{'id': 'a', 'label': LABELS['a'], 'lean': 'yes', 'pct': 2.2, 'people': 136_072, 'seats': [], 'seats_n': 0},
+                {'id': 'b', 'label': LABELS['b'], 'lean': 'yes', 'pct': 4.8, 'people': 291_969, 'seats': [10], 'seats_n': 1},
+                {'id': 'c', 'label': LABELS['c'], 'lean': 'maybe', 'pct': 12.6, 'people': 768_914, 'seats': [2], 'seats_n': 1},
+                {'id': 'd', 'label': LABELS['d'], 'lean': 'no', 'pct': 46.7, 'people': 2_845_996, 'seats': [4, 5, 6, 7, 8, 12], 'seats_n': 6},
+                {'id': 'e', 'label': LABELS['e'], 'lean': 'no', 'pct': 33.7, 'people': 2_051_391, 'seats': [1, 3, 9, 11], 'seats_n': 4}]
+        head, people = ROOM.headline_for(opts, PEOPLE, 12, 'P-Valley viewers')
+        self.assertTrue(head.startswith('About one in fourteen of the 6.09M P-Valley viewers, roughly 428.0K people, are a yes'), head)
+        self.assertEqual(people, 428_041)
+        self.assertIn('About half, roughly 2.85M people', head)
+        # the live rerun's draft: 7.0% called 'about one in twenty' is rewritten to the yes total's own phrase; a phrase that fits a row stays
+        draft = ('Only about one in twenty of these P-Valley viewers, roughly 428,000 people, are a yes on S.W.A.T. Exiles, and that comes down to a single seat. '
+                 'About half looked at the tile and decided it is not their kind of show. The share that shows up live as each episode drops is thinner, about one in fifty, roughly 136,000 people. '
+                 'She is half on her phone while it plays.')
+        out = ROOM.cohere_read(draft, opts, 12)
+        self.assertTrue(out.startswith('Only about one in fourteen of these P-Valley viewers'), out)
+        self.assertIn('About half looked at the tile', out)
+        self.assertIn('about one in fifty, roughly 136,000 people', out)
+        self.assertIn('She is half on her phone', out, 'half that is not a share is left alone')
+        self.assertNotIn('one in twenty', out)
+        # a 7.6 headline reads one in thirteen (the room-4 headline called it one in twenty)
+        opts2 = [dict(o) for o in opts]
+        opts2[0].update(pct=7.6, people=463_171, seats=[1], seats_n=1); opts2[1].update(pct=0.7, people=42_664, seats=[], seats_n=0)
+        opts2[2].update(pct=88.5, people=5_393_489); opts2[3].update(pct=1.6, people=97_509, seats=[], seats_n=0); opts2[4].update(pct=1.6, people=97_509, seats=[], seats_n=0)
+        head2, _ = ROOM.headline_for(opts2, PEOPLE, 12, 'P-Valley viewers')
+        self.assertTrue(head2.startswith('About one in twelve of the 6.09M P-Valley viewers, roughly 505.8K people, are a yes'), head2)   # 8.3% is the yes total here
+        one = [dict(o) for o in opts2]; one[1].update(lean='maybe')
+        head3, _ = ROOM.headline_for(one, PEOPLE, 12, 'P-Valley viewers')
+        self.assertTrue(head3.startswith('About one in thirteen of the 6.09M P-Valley viewers, roughly 463.2K people, are a yes'), head3)
+        self.assertIn('About nine in ten, roughly 5.39M people', head3)
+        # a fraction followed by a people figure is checked against the figure: 563.4K of 6.09M is one in eleven, whatever row 'one in twenty' happens to fit
+        out2 = ROOM.cohere_read('The small middle is real too: about one in twenty across the two catch-up answers, roughly 563.4K people, and the two seats holding it are Ethan and Rachel.', opts, 12)
+        self.assertIn('about one in eleven across the two catch-up answers, roughly 563.4K people', out2)
+        self.assertIn('about one in fifty of this audience, roughly 136,072 people', ROOM.cohere_read('Only about one in fifty of this audience, roughly 136,072 people, keep up weekly.', opts, 12).lower())
+        self.assertIn('About half, roughly 2.85M people', ROOM.cohere_read('About half, roughly 2.85M people, passed on it.', opts, 12))
+        # a fraction that fits no row at all is rewritten to the row the sentence names; one that fits some row is left alone
+        self.assertIn('about one in eight have the tile on their list', ROOM.cohere_read('Then about one in thirty have the tile on their list for later.', opts, 12))
+        self.assertIn('about one in twenty', ROOM.cohere_read('They said about one in twenty of the cast was familiar.', opts, 12), 'fits row b, no yes talk: left as written')
+        # a sentence about the seats or about something else is never touched
+        self.assertEqual(ROOM.cohere_read('One in twelve seats said so. They were one in a million.', opts, 12).startswith('One in twelve seats said so.'), True)
+
+    def test_a_seat_claimed_for_a_row_the_count_seats_nobody_on_is_rewritten(self):
+        # the live chat line of 2026-11-05: 'About one in fifty ... are watching Exiles weekly, and one seat in the room is one of them' with the yes row at 0 of 12
+        opts = [{'id': 'a', 'label': 'Yes, keeping up with it weekly on Fridays', 'lean': 'yes', 'pct': 2.0, 'people': 121_838, 'seats': [], 'seats_n': 0},
+                {'id': 'b', 'label': 'Watched a few episodes, behind but plan to catch up', 'lean': 'maybe', 'pct': 9.1, 'people': 557_288, 'seats': [9], 'seats_n': 1},
+                {'id': 'c', 'label': "It's in my list, haven't pressed play yet", 'lean': 'maybe', 'pct': 9.8, 'people': 598_363, 'seats': [2], 'seats_n': 1},
+                {'id': 'd', 'label': 'No, not my kind of show', 'lean': 'no', 'pct': 40.9, 'people': 2_488_767, 'seats': [3, 8, 10, 11, 12], 'seats_n': 5},
+                {'id': 'e', 'label': 'No, my Starz is off until P-Valley comes back', 'lean': 'no', 'pct': 38.2, 'people': 2_328_086, 'seats': [1, 4, 5, 6, 7], 'seats_n': 5}]
+        out = ROOM.cohere_read('About one in fifty, roughly 121.8K people, are watching Exiles weekly, and one seat in the room is one of them. The reason repeated: the Pynk, not a cop show.', opts, 12)
+        self.assertIn('and no seat in the room is among them', out)
+        self.assertNotIn('one seat in the room', out)
+        kept = ROOM.cohere_read('About one in eleven have started and fallen behind, and one seat in the room is one of them.', opts, 12)
+        self.assertIn('one seat in the room is one of them', kept, 'the catch-up row holds a seat, so its claim stands')
+        self.assertIn('Only one seat', ROOM.cohere_read('Only one seat changed its mind on the episode.', opts, 12), 'a seat claim about nothing on the board is left alone')
+        neg = ROOM.cohere_read('About one in fifty are keeping up weekly, and not one of the twelve seats here is among them.', opts, 12)
+        self.assertIn('and not one of the twelve seats here is among them', neg, 'a negated claim already says none; never a double negative')
+        self.assertNotIn('not none', neg)
+        neg = ROOM.cohere_read('About one in fifty are keeping up weekly, and not one of the twelve seats here is among them.', opts, 12)
+        self.assertIn('and not one of the twelve seats here is among them', neg, 'a negated claim already says none; never a double negative')
+        self.assertNotIn('not none', neg)
+
+    def test_a_long_read_ends_on_a_sentence(self):
+        text = ' '.join(f'Sentence number {i} runs on for a while to fill the read with words.' for i in range(1, 60))
+        cut = ROOM._whole_sentences(text, 1400)
+        self.assertLessEqual(len(cut), 1400); self.assertTrue(cut.endswith('.')); self.assertTrue(cut.endswith('words.'))
+        self.assertEqual(ROOM._whole_sentences('Short.', 1400), 'Short.')
+        quoted = 'She said "the Pynk, not a cop show." ' * 60
+        q = ROOM._whole_sentences(quoted, 500)
+        self.assertTrue(q.endswith('show."'), q[-20:])
+        self.assertTrue(len(ROOM._today()) == 10 and ROOM._today()[4] == '-')
+
+
 class Room(unittest.TestCase):
     def _ask(self, q='are you currently watching swat exiles?', fake=fake_model, sess=None, twin=None):
         twin = twin or _pvalley()
@@ -439,7 +576,49 @@ class Room(unittest.TestCase):
         self.assertIn('study', SEEN['options'][0]['facts_brief'])
 
     def test_the_count_lands_at_the_anchor_and_the_seats_mirror_it(self):
+        # the record holds the house's own read on this audience and this title: the engaged total is pinned to it (679,241, 11.1%)
         _reset()
+        sess, rec = self._ask()
+        self.assertEqual(rec['trail']['anchor_status'], 'house')
+        self.assertEqual(rec['anchor']['kind'], 'house')
+        by = {o['id']: o for o in rec['options']}
+        engaged_people = by['a']['people'] + by['b']['people']
+        self.assertLessEqual(abs(engaged_people - 679241), 300, f"679,241-class figures, the jitter in the trailing digits only ({engaged_people:,})")
+        self.assertNotEqual(engaged_people, 679241, 'salted in the trailing digits')
+        self.assertAlmostEqual(by['a']['pct'] + by['b']['pct'], 11.1, places=1, msg='the engaged rows print 11.1 together')
+        self.assertEqual(ROOM.plain_share(by['a']['pct'] + by['b']['pct']), 'about one in nine')
+        self.assertLess(by['a']['pct'], 11.0); self.assertGreater(by['a']['pct'], 3.0)
+        self.assertEqual({o['id']: o['seats_n'] for o in rec['options']}, ROOM.allocate_seats({o['id']: o['pct'] for o in rec['options']}, 12), 'the seats mirror the count')
+        self.assertIn(by['a']['seats_n'] + by['b']['seats_n'], (1, 2), 'with twelve seats and 11.1% engaged, one or two seats sit on the engaged side')
+        self.assertGreaterEqual(by['c']['seats_n'], 7)
+        self.assertEqual(sum(o['people'] for o in rec['options']), PEOPLE)
+        self.assertAlmostEqual(sum(o['pct'] for o in rec['options']), 100.0, places=1)
+        for o in rec['options']:
+            self.assertNotEqual(o['people'] % 10, 0, o['label'])
+        self.assertEqual(rec['headline_people'], by['a']['people'], 'the headline leads with the yes-lean row (this board codes the catch-up row as maybe), its people from the share')
+        self.assertIn(ROOM.plain_share(by['a']['pct']).capitalize(), rec['headline'])
+        self.assertTrue(rec['headline'].startswith(f"About one in nine of the 6.09M PValley on Starz Viewers, roughly {ROOM.human_people(engaged_people)} people, have watched any of it: "), rec['headline'])
+        self.assertIn('have watched any of it: two of the twelve seats.', rec['headline'])
+        self.assertTrue(ROOM._opens_on_split(rec['read'], rec['options']), 'the fake read opens on a share in words, so it keeps its own opening')
+        self.assertTrue(rec['headline'].startswith(f"About one in nine of the 6.09M PValley on Starz Viewers, roughly {ROOM.human_people(engaged_people)} people, have watched any of it: "), rec['headline'])
+        self.assertIn('have watched any of it: two of the twelve seats.', rec['headline'])
+        tr = rec['trail']['anchor']
+        self.assertEqual(tr['status'], 'house')
+        self.assertEqual(tr['house']['people'], 679241)
+        self.assertEqual(tr['engaged_people'], engaged_people); self.assertEqual(tr['engaged_pct'], 11.1)
+        self.assertEqual(rec['watched_any']['published_pct'], 11.1); self.assertEqual(rec['watched_any']['in_words'], 'about one in nine')
+        self.assertEqual(rec['watched_any']['people'], engaged_people)
+        self.assertEqual(SEEN['read'][-1]['watched_any']['in_words'], 'about one in nine', 'the read is told the watched-any total')
+        self.assertEqual(tr['basis']['record_reach_people'], 1872084)
+        self.assertEqual({c['ceiling'] for c in tr['basis']['ceilings']}, {'house read', 'current reach', 'reach', 'share of audience', 'neighbor'})
+        self.assertTrue(next(c for c in tr['basis']['ceilings'] if c['ceiling'] == 'house read')['applied'])
+        self.assertIn(LABELS['a'], rec['anchor']['targets'])
+        self.assertIn('the count', rec['trail']['prior']['note'])
+        self.assertEqual(ROOM.has_banned(rec['read']), [])
+        # without a house read on the record the research anchors, calibrated low, exactly as before
+        _reset()
+        bare = {k: v for k, v in copy.deepcopy(LEDGER).items() if k not in ('p_valley_viewers_and_w_a_t_exiles_overlap',)}
+        ROOM.set_ledger_fn(lambda: copy.deepcopy(bare))
         sess, rec = self._ask()
         self.assertEqual(rec['trail']['anchor_status'], 'derived')
         self.assertEqual(rec['anchor']['kind'], 'derived')
@@ -451,21 +630,16 @@ class Room(unittest.TestCase):
         self.assertLess(by['a']['pct'], 3.5, 'twelve free yes votes do not move the published count off the derived anchor')
         self.assertEqual({o['id']: o['seats_n'] for o in rec['options']}, ROOM.allocate_seats({o['id']: o['pct'] for o in rec['options']}, 12), 'the seats mirror the count')
         self.assertEqual(by['a']['seats_n'], 0, 'under half a seat of the room, the yes row holds no seat')
-        self.assertGreaterEqual(by['c']['seats_n'], 7)
         self.assertEqual(len(rec['trail']['mirror']['moved']), 12)
-        self.assertEqual(sum(o['people'] for o in rec['options']), PEOPLE)
-        self.assertAlmostEqual(sum(o['pct'] for o in rec['options']), 100.0, places=1)
-        self.assertEqual(rec['headline_people'], by['a']['people'], 'the headline people are the share, never the tally')
+        self.assertEqual(rec['headline_people'], by['a']['people'], 'the headline people are the yes row\'s share, never the tally')
         self.assertIn('0 of 12', by['a']['tally'])
         tr = rec['trail']['anchor']
         self.assertEqual(tr['status'], 'derived')
         self.assertEqual(tr['basis']['neighbor']['rate_pct'], 22.9)
-        self.assertEqual(tr['basis']['record_reach_people'], 1872084)
-        self.assertEqual({c['ceiling'] for c in tr['basis']['ceilings']}, {'current reach', 'share of current audience', 'reach', 'share of audience', 'record overlap', 'neighbor'})
+        self.assertEqual({c['ceiling'] for c in tr['basis']['ceilings']}, {'current reach', 'share of current audience', 'reach', 'share of audience', 'neighbor'})
         self.assertEqual(tr['basis']['share']['placement'], 'under')
-        self.assertEqual(tr['basis']['record_overlap_people'], 679241, "the record's overlap read rode into the room's ceilings")
-        self.assertIn(LABELS['a'], rec['anchor']['targets'])
-        self.assertIn('the count', rec['trail']['prior']['note'])
+        self.assertIsNone(tr['basis']['record_overlap_people'])
+        self.assertNotIn('watched_any', rec, 'no house read, no pinned total to state')
 
     def test_a_cached_subject_is_not_re_searched_the_same_day(self):
         _reset()
@@ -475,7 +649,7 @@ class Room(unittest.TestCase):
         self.assertEqual(len(SEEN['study']), 1, 'the second question on the same subject rides the first study')
         self.assertTrue(rec2['trail']['study']['cached'])
         self.assertEqual(rec2['trail']['study']['key'], rec1['trail']['study']['key'])
-        self.assertEqual(rec2['trail']['anchor_status'], 'derived', 'the anchor is derived again for the new board')
+        self.assertEqual(rec2['trail']['anchor_status'], 'house', 'the anchor is derived again for the new board, on the house read')
         self.assertEqual(len(SEEN['anchor']), 2)
         sess, rec3 = self._ask('are you watching fightland?', sess=sess)
         self.assertEqual(len(SEEN['study']), 2, 'another subject is its own study')

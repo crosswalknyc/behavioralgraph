@@ -86,12 +86,18 @@ we don't have anything to anchor on internally ... it has to be smarter")
   sits in the bottom third of its range (we are always lower than we think), the engaged rows together never exceed the
   thing's reach (the analyst's high or the record's own count, whichever is lower), the current rows never exceed its
   current reach, and the engaged rows sit under a counted neighbor's rate unless the analyst placed this audience as more
-  adjacent for a stated reason. A counted event or a poll still wins (``anchor_plan``); the derived anchor fills every
-  other question about a title, a person, a brand or an event. ``anchor_rows`` pulls the published count to it (the
-  engaged rows jitter downward only), ``mirror_seats`` allocates the seats to it, ``cohere_read`` keeps the read on one
-  split. trail.anchor carries the targets, the basis, the ceilings and the study; trail.anchor_status is result | poll |
-  derived | prior (a star scale, a probe, a question on the clock) | unresearched (the study failed twice) | unanchored
-  (the study landed but the analyst could not place the board). The read never names where any of it came from.
+  adjacent for a stated reason. The order of authority (Jenna 2026-11-05, the overlap read: "make sure it matches this"):
+  a counted result or poll (``anchor_plan``) > the house's own read on exactly this audience and this thing
+  (``house_read``: the engaged rows together are PINNED to its figure, 679,241 people and 11.1% for P-Valley viewers on
+  S.W.A.T. Exiles, the jitter in the trailing digits only; the research decides the split within it, the current rows
+  still under the thing's current reach, and the shape of the rest) > a counted neighbor's rate as a cross-check >
+  the outside research > the prior. ``anchor_rows`` pulls the published count to it (pinned rows take the figure,
+  ``_pin_rows`` / ``_pin_pcts``; research-anchored engaged rows jitter downward only), ``mirror_seats`` allocates the
+  seats to it, ``cohere_read`` keeps the read on one split and every 'one in N' phrase accurate (``plain_share``: a
+  fraction only within about ten percent of the share, else 'about 7%'). trail.anchor carries the targets, the basis,
+  the ceilings, the house read and the study; trail.anchor_status is result | poll | house | derived | prior (a star
+  scale, a probe, a question on the clock) | unresearched (the study failed twice) | unanchored (the study landed but
+  the analyst could not place the board). The read never names where any of it came from.
 
 OUTPUT SHAPE (the question record on session['questions']; the UI reads this)
   {id, q, kind, framing,
@@ -245,6 +251,19 @@ def model_available(model_fn: Optional[Callable] = None) -> bool:
 
 def _now():
     return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+
+def _today() -> str:
+    """The desks' 'today', on US Eastern time: a US audience's Friday
+    episode has not aired at 7pm Pacific because the clock in London
+    says Saturday (2026-11-05: 'seven of ten are out and episode seven
+    drops tonight'). The day caches key on the same date."""
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+    except Exception:
+        return time.strftime('%Y-%m-%d', time.gmtime())
 
 
 def _slug(s: str) -> str:
@@ -551,7 +570,7 @@ def research_key(subject: str, q: str) -> str:
 
 def media_key(subject: str, q: str, day: str = '') -> str:
     """The media brief's key: subject + topic + the day it was gathered."""
-    day = day or time.strftime('%Y-%m-%d', time.gmtime())
+    day = day or _today()
     return f"{MEDIA_PREFIX}{_slug(subject)}/{day}/{topic_hash(q, subject)}.json"
 
 
@@ -590,7 +609,7 @@ def asked_hash(q: str, subject: str = '') -> str:
 
 def study_key(subject: str, q: str, day: str = '') -> str:
     """The study desk's cache key: twin subject + the thing asked about + the day."""
-    day = day or time.strftime('%Y-%m-%d', time.gmtime())
+    day = day or _today()
     return f"{STUDY_PREFIX}{_slug(subject)}/{day}/{asked_hash(q, subject)}.json"
 
 
@@ -785,7 +804,7 @@ def persona_base(twin: dict, *, models=None, usage_extras: Optional[dict] = None
     diag = ((twin or {}).get('diagnostics') or {}).get('research') or {}
     user = json.dumps({'subject': m.get('name') or m.get('subject'), 'base_class': klass, 'format': m.get('format'), 'platform_home': m.get('platform_home'),
                        'subject_kind': m.get('subject_kind'), 'what_we_know': str(diag.get('notes') or '')[:400],
-                       'today': time.strftime('%Y-%m-%d', time.gmtime())})
+                       'today': _today()})
     try:
         M = models or Models(usage_extras=usage_extras)
         data, _rec = M.call('research', PERSONA_BASE_SYSTEM, user, max_tokens=2000, temperature=0.2)
@@ -1498,10 +1517,10 @@ You are also given what people like you have been hearing and saying lately; let
 Return JSON only: {"line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
 READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), a headline, the split by segment, every seat's answer, the facts brief and a prior note.
-The published share is the count: the whole audience, in percent and people. The seats in the room are allocated to that count (a share worth half a seat or more holds a seat), so the tally and the count tell one story; the seats are the voices. People always come from the share, never from the tally: 'about one in twenty, roughly 329K people' is right, '0 people' is wrong unless the count itself is zero. Say shares in plain words first ('about two in three', 'about one in ten', 'about one in twenty', 'a sliver') and cite the raw count second when it helps ('one of the twelve seats'); never print a percentage with a decimal in the read.
+The published share is the count: the whole audience, in percent and people. The seats in the room are allocated to that count (a share worth half a seat or more holds a seat), so the tally and the count tell one story; the seats are the voices. People always come from the share, never from the tally: 'about one in twenty, roughly 329K people' is right, '0 people' is wrong unless the count itself is zero. Say shares in plain words first and cite the raw count second when it helps ('one of the twelve seats'); never print a percentage with a decimal in the read. Use the published_in_words phrase given for each option and for each lean total EXACTLY as given ('about one in nine' for 11.1%, 'about one in fourteen' for 7.0%, 'about 4%' when no fraction fits); never round a share to a looser fraction of your own (7% is not 'one in twenty').
 State one split, once, and never contradict it: when the count gives a side a share, never write nobody, no one, none, not one, zero or 0 for that side, and never write all twelve or every seat when a seat sits elsewhere.
 Write:
-- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Open with the headline's fact in your own words (the share in plain words, the people it comes to, then the seats). When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take); when a small side holds a seat, that seat's own words are what makes the small share real. Vary the sentence shapes. Never name a source, a publication or a ratings service; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data, calibrated, anchored, benchmark, published, reported, according to. What the room knows (the schedule, the premiere, the finale date, who is in it, when the audience's own show returns) is the room's own knowledge, said as plain fact with no word on where it came from. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
+- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Open with the headline's fact in your own words (the share in plain words, the people it comes to, then the seats). When watched_any is given (the rows that mean the person has watched any of it, added together), state that total once, early, in its own in_words phrase with its people ('about one in nine, roughly 679K people, have watched any of it'), then the split within it. When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take); when a small side holds a seat, that seat's own words are what makes the small share real. Vary the sentence shapes. Never name a source, a publication or a ratings service; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data, calibrated, anchored, benchmark, published, reported, according to. What the room knows (the schedule, the premiere, the finale date, who is in it, when the audience's own show returns) is the room's own knowledge, said as plain fact with no word on where it came from. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
 - chat: the read for the room's chat, two or three sentences: the headline's share in words and people, and the one reason that carried it. No clock, no scene, no preamble; it opens with what the room said.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
 - probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
@@ -1623,7 +1642,7 @@ def media_desk(models: Models, twin: dict, q: str, kind: str, stimulus: Optional
     'democracy is not for sale' line that ran through the state). Cached
     per subject + topic + day; {} when nothing could be gathered."""
     subject = str(_meta(twin).get('subject') or _twin_name(twin))
-    today = time.strftime('%Y-%m-%d', time.gmtime())
+    today = _today()
     mkey = media_key(subject, q, today)
     cached = _get_json(s3, mkey) if (s3 is not None and not force) else None
     if isinstance(cached, dict) and cached.get('media') and (time.time() - float(cached.get('at') or 0)) < MEDIA_CACHE_TTL_S:
@@ -1704,7 +1723,7 @@ def research(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[d
         return brief
     facts_doc = _get_json(s3, fkey) if s3 is not None else None
     tb = _twin_brief(twin)
-    user = json.dumps({'question': q, 'kind': kind, 'stimulus': stimulus or {}, 'today': time.strftime('%Y-%m-%d', time.gmtime()),
+    user = json.dumps({'question': q, 'kind': kind, 'stimulus': stimulus or {}, 'today': _today(),
                        'subject': {'name': tb['name'], 'subject': tb['subject'], 'kind': tb['kind'], 'format': tb['format'], 'stage': tb['stage'], 'platform_home': tb['platform_home'],
                                    'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'window': tb['window']},
                        'subject_facts_on_file': (facts_doc or {}).get('subject_status') if isinstance(facts_doc, dict) else None,
@@ -1762,6 +1781,7 @@ STUDY_RETRY_SUFFIX = ("\nThis is the second attempt: the first pass returned not
                       "with whatever they return, even when it is thin; a partial answer with its not_found list is the right answer, an empty one is not.")
 
 ANCHOR_SYSTEM = """You are the study desk's analyst for Prometheus, the focus group moderator. The room is about to publish what share of an audience lands on each answer to a question. You derive that split from evidence, before the seats are counted: the study desk's findings, the counted reads the record already holds, and the audience's own size and makeup. You reason like a senior analyst sizing a funnel from the outside in, and you land low: when the evidence gives a range, the room takes the bottom third of it, because a share that is too high is the one error a client can catch.
+What anchors the split, in this order of authority: (1) a counted result or a poll on the question itself (the room applies that before you are asked); (2) the house's own read on exactly this audience and this thing, given to you as house_read when the record holds one: the engaged rows TOGETHER land on it, to the figure, never under it and never over it; you decide only how it splits between the current rows and the other engaged rows (the current reach ceiling still bounds the current rows) and the shape of the rest of the board; (3) a counted neighbor audience's rate onto the thing, as a cross-check; (4) outside evidence from the study; (5) the room's habit-based leaning. When house_read is given, the engaged rows' lows and highs each add up to its share.
 Method, in order:
 1. Name the thing asked about and the audience, and state the audience's size in US people (given).
 2. Ceilings, each with its number and basis:
@@ -1870,11 +1890,16 @@ def record_reach_people(neighbors: list) -> Optional[float]:
     return best
 
 
-def record_overlap_people(neighbors: list, subject: str) -> Optional[float]:
-    """The record's own count of THIS audience's people who watched the
-    thing asked about (an overlap or shared-audience read that names
-    both): the engaged rows may never exceed it. The smallest such count
-    when there are several; None when the record holds none."""
+def house_read(neighbors: list, subject: str) -> Optional[dict]:
+    """The house's own read on exactly THIS audience and the thing asked
+    about (an overlap or shared-audience read that names both: 679,241
+    P-Valley viewers with a S.W.A.T. Exiles play). Jenna 2026-11-05: "now
+    the focus group room would have this to anchor to internally and
+    should but if this didn't exist it would need to do that deep
+    research. make sure it matches this." The engaged rows together land
+    ON it, never under it. {'people', 'subject', 'metric', 'definition',
+    'window'} for the smallest such count when there are several; None
+    when the record holds none."""
     # the audience's own distinctive words (never the platform's name: a Fightland x Exiles overlap 'on Starz' is not this audience's)
     subj = {w for w in _text_stems(subject) if w not in _TOPIC_STOP and w not in ('viewer', 'fan', 'audience', 'people', 'the', 'on', 'app') and w not in _PLATFORM_NAMES and len(w) >= 4}
     if not subj:
@@ -1894,9 +1919,15 @@ def record_overlap_people(neighbors: list, subject: str) -> Optional[float]:
             v = float(r.get('value'))
         except (TypeError, ValueError):
             continue
-        if v > 0 and (best is None or v < best):
-            best = v
+        if v > 0 and (best is None or v < best['people']):
+            best = {'people': v, 'subject': str(r.get('subject') or '')[:80], 'metric': str(r.get('metric') or '')[:80], 'definition': str(r.get('definition') or '')[:200], 'window': str(r.get('window') or '')[:40]}
     return best
+
+
+def record_overlap_people(neighbors: list, subject: str) -> Optional[float]:
+    """The people in the house read (``house_read``), or None."""
+    h = house_read(neighbors, subject)
+    return float(h['people']) if h else None
 
 
 def _study_fig(r, about: str = '') -> Optional[dict]:
@@ -2000,7 +2031,7 @@ def research_pass(models: Models, twin: dict, q: str, kind: str, stimulus: Optio
     record of a pass that still has nothing carries _failed so the
     question is marked unresearched on its trail."""
     subject = str(_meta(twin).get('subject') or _twin_name(twin))
-    today = time.strftime('%Y-%m-%d', time.gmtime())
+    today = _today()
     key = study_key(subject, q, today)
     if not force:
         mem = _STUDY_MEM.get(key)
@@ -2075,22 +2106,28 @@ def merge_study(brief: dict, study: dict) -> dict:
 
 def derive_anchor(models: Models, twin: dict, q: str, kind: str, options: list, study: dict, neighbors: list, total_people: int, prior: Optional[dict] = None, log=None) -> Optional[dict]:
     """The analyst's derivation: the count's anchor reasoned from the
-    study and the record, with ceilings. The model's answer (a dict) or
-    None after one retry."""
+    study and the record, with ceilings; the house's own read on this
+    audience and this thing, when the record holds one, is handed over
+    as the figure the engaged rows land on. The model's answer (a dict)
+    or None after one retry."""
     tb = _twin_brief(twin)
     by_id = {o['id']: o for o in options}
-    body = {'question': q, 'kind': kind, 'today': time.strftime('%Y-%m-%d', time.gmtime()),
+    subject = str(_meta(twin).get('subject') or _twin_name(twin))
+    house = house_read(neighbors, subject)
+    body = {'question': q, 'kind': kind, 'today': _today(),
             'options': [{'id': o['id'], 'label': o['label'], 'lean': o.get('lean') or 'other'} for o in options],
             'audience': {'name': tb['name'], 'subject': tb['subject'], 'class': subject_class(twin), 'people_us': int(total_people), 'avid_share_pct': tb['avid_share_pct'], 'platform_home': tb['platform_home'],
                          'read': tb.get('identity_read'), 'lifecycle': tb.get('lifecycle_read'), 'window': tb['window'],
                          'demographics': {k: v for k, v in (tb.get('demographics') or {}).items() if k in ('age', 'gender', 'ethnicity')}, 'anchors_on_file': tb.get('anchors')},
+            'house_read': ({'people': int(house['people']), 'share_of_this_audience_pct': round(float(house['people']) / float(total_people) * 100.0, 2), 'what_was_counted': house['definition'] or house['metric'],
+                            'window': house.get('window') or '', 'rule': 'the engaged rows together land on this figure; you decide the split within it and the shape of the rest'} if (house and total_people) else None),
             'study': {k: v for k, v in (study or {}).items() if not k.startswith('_') and k != 'searches_run'},
             'the_record_holds': (neighbors or [])[:14],
             'the_rooms_habit_leaning_weak_prior': {by_id[k]['label']: round(float(v) * 100.0, 1) for k, v in (prior or {}).items() if k in by_id}}
     user = json.dumps(body, default=str)[:16000]
     for attempt in (1, 2):
-        # room for the reasoning in the bases (the first live run cut a 2,400-token answer short and fell to the next model)
-        data, call = models.call('anchor', ANCHOR_SYSTEM, user, max_tokens=4800, temperature=0.2, tools=None)
+        # room for the reasoning in the bases (2,400 and then 4,800 tokens cut the strong model's answer short and fell to the next model)
+        data, call = models.call('anchor', ANCHOR_SYSTEM, user, max_tokens=8000, temperature=0.2, tools=None)
         if log:
             log('anchor', call)
         if isinstance(data, dict) and data.get('options'):
@@ -2110,18 +2147,27 @@ def _engaged_fallback(options: list) -> tuple:
     return eng, cur
 
 
-def derived_plan(options: list, data: Optional[dict], total_people: int, record_reach: Optional[float] = None, seed: str = '', record_overlap: Optional[float] = None) -> dict:
-    """The derived anchor from the analyst's answer, enforced: each engaged
-    row sits in the bottom third of its range; the engaged rows together
-    never exceed the thing's reach (the analyst's high, or the record's
-    own count when it holds one, whichever is lower), the current rows
-    never exceed its current reach, and the engaged rows sit under a
-    counted neighbor's rate unless the analyst placed this audience as
-    more adjacent for a stated reason; the rest of the board shares what
-    is left in proportion to its own ranges. {'kind': 'derived',
-    'targets': {id: pct}, 'weight': None, 'fill_voting': None, 'down':
-    [engaged ids], 'line', 'basis': {...}} or {} when the answer cannot
-    place the board."""
+def derived_plan(options: list, data: Optional[dict], total_people: int, record_reach: Optional[float] = None, seed: str = '', record_overlap: Optional[float] = None,
+                 house: Optional[dict] = None) -> dict:
+    """The anchor from the analyst's answer, enforced in this order of
+    authority (Jenna 2026-11-05): the house's own read on exactly this
+    audience and this thing PINS the engaged rows together to its figure
+    (``house`` or ``record_overlap``: 679,241 P-Valley viewers with an
+    Exiles play, 11.1%); the research then decides only the split within
+    it (the current rows still bounded by the thing's current reach) and
+    the shape of the rest. Without a house read the research anchors:
+    each engaged row sits in the bottom third of its range; the engaged
+    rows together never exceed the thing's reach (the analyst's high, or
+    the record's own count when it holds one, whichever is lower), the
+    current rows never exceed its current reach, the audience's share of
+    the thing's audience never exceeds its share of the platform unless
+    placed over for a stated reason, and the engaged rows sit under a
+    counted neighbor's rate unless placed more adjacent for a stated
+    reason; the rest of the board shares what is left in proportion to
+    its own ranges. {'kind': 'house'|'derived', 'targets': {id: pct},
+    'weight': None, 'fill_voting': None, 'down': [engaged ids] (research
+    only), 'pinned': [engaged ids] + 'house' {...} (house read only),
+    'line', 'basis': {...}} or {} when the answer cannot place the board."""
     if not isinstance(data, dict) or not options or int(total_people or 0) <= 0:
         return {}
     ids = [o['id'] for o in options]
@@ -2147,6 +2193,13 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
     lead = data.get('lead_option_id') if data.get('lead_option_id') in ids else (engaged[0] if engaged else max(rows, key=lambda k: rows[k]['high']))
     if not engaged:
         return {}
+    house_people = None
+    if isinstance(house, dict) and house.get('people'):
+        house_people = float(house['people'])
+    elif record_overlap and float(record_overlap) > 0:
+        house_people = float(record_overlap)
+        house = {'people': house_people}
+    pinned = bool(house_people and house_people > 0)
     target = {}
     for i in ids:
         r = rows.get(i)
@@ -2161,18 +2214,20 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
             return None
     ceilings = []
 
-    def _cap(subset, cap_pct, name, basis):
+    def _cap(subset, cap_pct, name, basis, superseded: bool = False):
         subset = [i for i in subset if target.get(i) is not None]
         s = sum(target[i] for i in subset)
-        applied = bool(subset) and cap_pct is not None and s > cap_pct and s > 0
+        applied = bool(subset) and cap_pct is not None and s > cap_pct and s > 0 and not superseded
         if applied:
             f = cap_pct / s
             for i in subset:
                 target[i] *= f
-        ceilings.append({'ceiling': name, 'cap_pct': (round(cap_pct, 2) if cap_pct is not None else None), 'rows': [labels[i] for i in subset], 'was_pct': round(s, 2), 'applied': applied, 'basis': basis[:240]})
+        ceilings.append({'ceiling': name, 'cap_pct': (round(cap_pct, 2) if cap_pct is not None else None), 'rows': [labels[i] for i in subset], 'was_pct': round(s, 2), 'applied': applied,
+                         'basis': (('superseded by the house read; ' if superseded else '') + basis)[:240]})
     # the audience's share of the platform's people, and how it sits in the thing's audience against that share: a less
     # adjacent audience (under) holds a smaller share of the thing's viewers than of the platform; an even one about its
-    # share; over only for a stated reason (then the share ceiling does not bind)
+    # share; over only for a stated reason (then the share ceiling does not bind). A house read supersedes it: the house
+    # counted this audience on the thing.
     sh = c.get('share') if isinstance(c.get('share'), dict) else {}
     share_pct = _ppl(sh, 'audience_share_of_platform_pct')
     if share_pct is not None and share_pct > 100.0:
@@ -2188,24 +2243,52 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
             share_f = share_pct / 100.0 * ANCHOR_NEIGHBOR_MARGIN
     share_why = f"{share_pct}% of the platform's people ({placement or 'under'}): {sh.get('reason') or ''}" if share_pct else ''
     cur_hi = _ppl(c.get('current_reach'), 'high_people')
-    if cur_hi and current:
-        _cap(current, cur_hi / float(total_people) * 100.0, 'current reach', f"{int(cur_hi):,} people: " + str((c.get('current_reach') or {}).get('basis') or ''))
-        if share_f is not None:
-            _cap(current, cur_hi * share_f / float(total_people) * 100.0, 'share of current audience', f"{int(cur_hi):,} current people x " + share_why)
+    pin_pct = (house_people / float(total_people) * 100.0) if pinned else None
+    if pinned:
+        # 1. the house read: the engaged rows together land on it; the analyst's own split within it holds, in proportion
+        e_sum = sum(target[i] for i in engaged if target.get(i) is not None)
+        known_e = [i for i in engaged if target.get(i) is not None]
+        if not known_e:
+            return {}
+        for i in known_e:
+            target[i] = (target[i] / e_sum * pin_pct) if e_sum > 0 else pin_pct / len(known_e)
+        ceilings.append({'ceiling': 'house read', 'cap_pct': round(pin_pct, 2), 'rows': [labels[i] for i in known_e], 'was_pct': round(e_sum, 2), 'applied': True,
+                         'basis': f"the house's own read: {int(house_people):,} of this audience watched it ({round(pin_pct, 1)}%); the engaged rows together land on it"[:240]})
+        # 2. the current rows still sit under the thing's current reach; what they give up stays inside the pin
+        cur_known = [i for i in current if target.get(i) is not None]
+        others_e = [i for i in known_e if i not in cur_known]
+        if cur_hi and cur_known:
+            cap = cur_hi / float(total_people) * 100.0
+            s_cur = sum(target[i] for i in cur_known)
+            if s_cur > cap and others_e:
+                freed = s_cur - cap
+                for i in cur_known:
+                    target[i] *= cap / s_cur
+                o_sum = sum(target[i] for i in others_e) or 1.0
+                for i in others_e:
+                    target[i] += freed * (target[i] / o_sum)
+                ceilings.append({'ceiling': 'current reach', 'cap_pct': round(cap, 2), 'rows': [labels[i] for i in cur_known], 'was_pct': round(s_cur, 2), 'applied': True,
+                                 'basis': (f"{int(cur_hi):,} people: " + str((c.get('current_reach') or {}).get('basis') or '') + '; the rest of the pin moves to the other engaged rows')[:240]})
+            else:
+                ceilings.append({'ceiling': 'current reach', 'cap_pct': round(cap, 2), 'rows': [labels[i] for i in cur_known], 'was_pct': round(s_cur, 2), 'applied': False,
+                                 'basis': (f"{int(cur_hi):,} people: " + str((c.get('current_reach') or {}).get('basis') or ''))[:240]})
+    else:
+        if cur_hi and current:
+            _cap(current, cur_hi / float(total_people) * 100.0, 'current reach', f"{int(cur_hi):,} people: " + str((c.get('current_reach') or {}).get('basis') or ''))
+            if share_f is not None:
+                _cap(current, cur_hi * share_f / float(total_people) * 100.0, 'share of current audience', f"{int(cur_hi):,} current people x " + share_why)
+    # the thing's reach, the platform share and the counted neighbor: the research's own ceilings, or the cross-checks a house read supersedes
     reach_hi = _ppl(c.get('reach'), 'high_people')
     caps = [x for x in (reach_hi, record_reach) if x]
     if caps:
         cap_people = min(caps)
         why = ("the record's own count of " + f"{int(record_reach):,}" if (record_reach and cap_people == record_reach) else f"{int(cap_people):,} people: " + str((c.get('reach') or {}).get('basis') or ''))
-        _cap(engaged, cap_people / float(total_people) * 100.0, 'reach', why)
+        _cap(engaged, cap_people / float(total_people) * 100.0, 'reach', why, superseded=pinned)
         if share_f is not None:
-            _cap(engaged, cap_people * share_f / float(total_people) * 100.0, 'share of audience', f"{int(cap_people):,} people x " + share_why)
+            _cap(engaged, cap_people * share_f / float(total_people) * 100.0, 'share of audience', f"{int(cap_people):,} people x " + share_why, superseded=pinned)
     if share_pct and share_f is None:
         ceilings.append({'ceiling': 'share of audience', 'cap_pct': None, 'rows': [labels[i] for i in engaged], 'was_pct': round(sum(target[i] for i in engaged if target.get(i) is not None), 2),
                          'applied': False, 'basis': ('over its platform share for a stated reason: ' + str(sh.get('reason') or ''))[:240]})
-    if record_overlap and record_overlap > 0:
-        # the record's own count of this audience's people who watched the thing: the engaged rows never exceed it
-        _cap(engaged, float(record_overlap) / float(total_people) * 100.0, 'record overlap', f"the record's own count of {int(record_overlap):,} of this audience who watched it")
     nb = c.get('neighbor') if isinstance(c.get('neighbor'), dict) else {}
     try:
         nb_rate = float(nb.get('rate_pct')) if nb.get('rate_pct') not in (None, '') else None
@@ -2219,7 +2302,7 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
                              'basis': f"above {nb.get('name') or 'the neighbor'} ({nb_rate}%) for a stated reason: {reason}"[:240]})
         else:
             cap = nb_rate if rel == 'comparable' else nb_rate * ANCHOR_NEIGHBOR_MARGIN
-            _cap(engaged, cap, 'neighbor', f"{nb.get('name') or 'the neighbor'} at {nb_rate}% ({rel or 'less adjacent'}): {reason}")
+            _cap(engaged, cap, 'neighbor', f"{nb.get('name') or 'the neighbor'} at {nb_rate}% ({rel or 'less adjacent'}): {reason}", superseded=pinned)
     eng_sum = sum(target[i] for i in engaged if target.get(i) is not None)
     rest = [i for i in ids if i not in engaged]
     if rest:
@@ -2238,15 +2321,27 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
     else:
         tot = sum(v for v in target.values() if v) or 1.0
         target = {i: (target[i] or 0.0) / tot * 100.0 for i in ids}
-    targets = {i: round(max(0.0, float(target.get(i) or 0.0)), 2) for i in ids}
+    targets = {i: round(max(0.0, float(target.get(i) or 0.0)), 4 if pinned else 2) for i in ids}
     lead_pct = targets.get(lead, 0.0)
     lead_people = int(round(lead_pct / 100.0 * float(total_people)))
-    line = (f"The split is the room's count for this audience, settled before the seats spoke: {labels[lead]} near {round(lead_pct, 1)}% (about {human_people(lead_people)} people), "
-            f"with the whole board placed the same way. The seats are allocated to the count and voice it; say what they show that the count does not.")
-    return {'kind': 'derived', 'targets': targets, 'weight': None, 'fill_voting': None, 'down': list(engaged), 'line': line, 'lead': lead,
+    if pinned:
+        eng_people = int(round(sum(targets[i] for i in engaged) / 100.0 * float(total_people)))
+        line = (f"The split is the room's count for this audience: {plain_share(sum(targets[i] for i in engaged))}, about {human_people(eng_people)} people, have watched some of it, "
+                f"{labels[lead]} near {round(lead_pct, 1)}% (about {human_people(lead_people)} people) within that, and the rest of the board placed the same way. "
+                f"The seats are allocated to the count and voice it; say what they show that the count does not.")
+    else:
+        line = (f"The split is the room's count for this audience, settled before the seats spoke: {labels[lead]} near {round(lead_pct, 1)}% (about {human_people(lead_people)} people), "
+                f"with the whole board placed the same way. The seats are allocated to the count and voice it; say what they show that the count does not.")
+    plan = {'kind': 'house' if pinned else 'derived', 'targets': targets, 'weight': None, 'fill_voting': None, 'down': ([] if pinned else list(engaged)), 'line': line, 'lead': lead,
             'basis': {'options': {labels[i]: dict(rows[i], target_pct=targets[i]) for i in ids if i in rows}, 'engaged': [labels[i] for i in engaged], 'current': [labels[i] for i in current],
                       'ceilings': ceilings, 'reach': c.get('reach') or {}, 'current_reach': c.get('current_reach') or {}, 'parent': c.get('parent') or {}, 'neighbor': nb, 'share': sh,
-                      'record_reach_people': record_reach, 'record_overlap_people': record_overlap, 'note': str(data.get('note') or '')[:600]}}
+                      'record_reach_people': record_reach, 'record_overlap_people': (house_people if pinned else None), 'note': str(data.get('note') or '')[:600]}}
+    if pinned:
+        plan['pinned'] = [i for i in engaged if targets.get(i) is not None]
+        plan['house'] = {'people': int(round(house_people)), 'pct': round(pin_pct, 4), 'rows': list(plan['pinned']), 'subject': str((house or {}).get('subject') or '')[:80],
+                         'definition': str((house or {}).get('definition') or '')[:200], 'window': str((house or {}).get('window') or '')[:40]}
+        plan['basis']['house'] = plan['house']
+    return plan
 
 
 def _default_options(kind: str, opts: list) -> list:
@@ -2877,10 +2972,13 @@ def anchor_rows(opts_out: list, by_segment: list, plan: dict, total_people: int,
         targets = {k: v / tsum * max(0.0, 100.0 - rest_cur) for k, v in targets.items()}
     new = {}
     down = set(plan.get('down') or ())   # a derived anchor's engaged rows jitter downward only: a ceiling is never crossed by the jitter
+    pinned = set(plan.get('pinned') or ())   # a house read's rows take their target to the figure; the jitter is in the trailing digits of the people (_pin_rows)
     if w is None:
         for k, v in targets.items():
             j = (unit('anchor', seed, k) - 0.5) * 2.0 * ANCHOR_RESULT_JITTER
-            if k in down:
+            if k in pinned:
+                j = 0.0
+            elif k in down:
                 j = -abs(j) * 0.5
             new[k] = max(0.1, v + j)
     else:
@@ -2916,54 +3014,143 @@ def anchor_rows(opts_out: list, by_segment: list, plan: dict, total_people: int,
             j = max(range(len(sr['distribution'])), key=lambda i: int(sr['distribution'][i].get('people') or 0))
             sr['distribution'][j]['people'] = max(0, int(sr['distribution'][j]['people']) + (want - have))
     _room_from_segments(by_segment, len(ids), int(total_people), n_seats, seed + '|anchor')
+    house = plan.get('house') if isinstance(plan.get('house'), dict) else None
+    if house and house.get('people') and pinned:
+        _pin_rows(by_segment, ids, [k for k in ids if k in pinned], int(house['people']), seed)
     for i, o in enumerate(opts_out):
         o['people'] = sum(int(sr['distribution'][i]['people']) for sr in by_segment)
     _pcts_from_people(opts_out, int(total_people))
+    if house and house.get('people') and pinned:
+        _pin_pcts(opts_out, [k for k in ids if k in pinned], int(house['people']), int(total_people))
     for sr in by_segment:
         _pcts_from_people(sr['distribution'], int(sr.get('people') or 0))
         sr['yes_pct'] = round(sum(float(r['pct']) for r, o in zip(sr['distribution'], opts_out) if (o.get('lean') or 'other') == 'yes'), 1)
     return True
 
 
+HOUSE_PIN_JITTER = 0.0003   # the house figure's trailing digits move by up to three in ten thousand (about 200 people on 679,241), never its level
+
+
+def _pin_rows(by_segment: list, ids: list, pinned_ids: list, want: int, seed: str) -> None:
+    """The pinned rows' people together land on the house figure, with a
+    seed-salted nudge in the trailing digits only (in place, inside the
+    largest segment, against its largest unpinned row); neither row ends
+    on a 0."""
+    if not by_segment or not pinned_ids or want <= 0:
+        return
+    n_rows = len(ids)
+    pin_idx = [i for i, k in enumerate(ids) if k in pinned_ids]
+    rest_idx = [i for i in range(n_rows) if i not in pin_idx]
+    if not pin_idx or not rest_idx:
+        return
+    big = max(by_segment, key=lambda sr: int(sr.get('people') or 0))
+    rows_big = big['distribution']
+
+    def _room(i):
+        return sum(int(sr['distribution'][i]['people']) for sr in by_segment)
+    j = int(round((unit('house-pin', seed, 'people') - 0.5) * 2.0 * HOUSE_PIN_JITTER * want))
+    goal = max(1, int(want) + j)
+    delta = goal - sum(_room(i) for i in pin_idx)
+    a = max(pin_idx, key=lambda i: int(rows_big[i]['people']))
+    b = max(rest_idx, key=lambda i: int(rows_big[i]['people']))
+    d = int(max(-int(rows_big[a]['people']) + 1, min(delta, int(rows_big[b]['people']) - 1)))
+    for extra in (0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8, 9, -9):
+        dd = d + extra
+        if int(rows_big[a]['people']) + dd < 1 or int(rows_big[b]['people']) - dd < 1:
+            continue
+        if (_room(a) + dd) % 10 != 0 and (_room(b) - dd) % 10 != 0:
+            rows_big[a]['people'] = int(rows_big[a]['people']) + dd
+            rows_big[b]['people'] = int(rows_big[b]['people']) - dd
+            return
+
+
+def _pin_pcts(opts_out: list, pinned_ids: list, want: int, total_people: int) -> None:
+    """The pinned rows' one-decimal shares add up to the house figure's
+    own share (11.1 for 679,241 of 6,094,342), the row rounding moved by
+    a tenth where it would print 11.0 or 11.2; the largest unpinned row
+    takes the tenth back so the board still sums to 100.0."""
+    if not opts_out or total_people <= 0:
+        return
+    pin = [o for o in opts_out if o['id'] in pinned_ids]
+    rest = [o for o in opts_out if o['id'] not in pinned_ids]
+    if not pin or not rest:
+        return
+    goal = round(float(want) / float(total_people) * 100.0, 1)
+    have = round(sum(float(o['pct']) for o in pin), 1)
+    diff = round(goal - have, 1)
+    if abs(diff) < 0.05 or abs(diff) > 0.3:
+        return
+    big_p = max(pin, key=lambda o: float(o['pct']))
+    big_r = max(rest, key=lambda o: float(o['pct']))
+    if float(big_r['pct']) - diff < 0.1 or float(big_p['pct']) + diff < 0.1:
+        return
+    big_p['pct'] = round(float(big_p['pct']) + diff, 1)
+    big_r['pct'] = round(float(big_r['pct']) - diff, 1)
+
+
+_NUM_WORDS = ('no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+              'seventeen', 'eighteen', 'nineteen', 'twenty')
+PLAIN_SHARE_TOLERANCE = 0.10   # a 'one in N' phrase only when the share sits within about ten percent relative of 1/N (Jenna 2026-11-05)
+_TENS_WORDS = {20: 'twenty', 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty', 90: 'ninety'}
+
+
+def _n_in_words(n: int) -> str:
+    n = int(n)
+    if n < len(_NUM_WORDS):
+        return _NUM_WORDS[n]
+    if n < 100:
+        tens, ones = (n // 10) * 10, n % 10
+        return _TENS_WORDS[tens] + (f"-{_NUM_WORDS[ones]}" if ones else '')
+    if n == 100:
+        return 'a hundred'
+    if n == 1000:
+        return 'a thousand'
+    if n % 100 == 0 and n < 1000:
+        return f"{_NUM_WORDS[n // 100]} hundred"
+    if n < 1000:
+        return f"{_n_in_words((n // 100) * 100)} and {_n_in_words(n % 100)}".replace('a hundred and', 'a hundred and')
+    return str(n)
+
+
+def _share_phrases() -> list:
+    """(value, phrase) for every phrase the read may use: 'one in N' for N
+    two to twenty and the round Ns past that, and the X-in-Y phrases for
+    the large shares."""
+    out = []
+    # two to sixteen, then the round Ns: nobody says 'one in nineteen', so 5.4 reads as one in twenty (8 percent off) and 5.6 as 'about 6%'
+    for n in list(range(2, 17)) + [20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100, 150, 200, 250, 300, 400, 500, 1000]:
+        out.append((100.0 / n, 'about half' if n == 2 else f"about one in {_n_in_words(n)}"))
+    out += [(30.0, 'about three in ten'), (40.0, 'about two in five'), (60.0, 'about three in five'), (200.0 / 3.0, 'about two in three'), (70.0, 'about seven in ten'),
+            (75.0, 'about three in four'), (80.0, 'about four in five'), (90.0, 'about nine in ten')]
+    return out
+
+
+_SHARE_PHRASES = _share_phrases()
+
+
 def plain_share(pct: float) -> str:
-    """A share in plain words for the read: 'about two in three', 'a
-    sliver'."""
+    """A share in plain words for the read, accurate to the figure (Jenna
+    2026-11-05: 7.0% was called 'about one in twenty'): the 'one in N'
+    (or X in Y) phrase whose value sits within about ten percent of the
+    share, the closest one when several do (7.0 is one in fourteen, 11.1
+    one in nine, 5.0 to 5.5 one in twenty, 46.7 about half); when none
+    does, the percent itself ('about 4%'); 'nearly everyone' at 95 and
+    over, 'under 1%' below one, 'none' at zero."""
     p = float(pct or 0)
+    if p <= 0:
+        return 'none'
     if p >= 95:
         return 'nearly everyone'
-    if p >= 85:
-        return 'almost nine in ten'
-    if p >= 78:
-        return 'about four in five'
-    if p >= 70:
-        return 'about three in four'
-    if p >= 62:
-        return 'about two in three'
-    if p >= 55:
-        return 'about three in five'
-    if p >= 45:
-        return 'about half'
-    if p >= 37:
-        return 'about two in five'
-    if p >= 30:
-        return 'about one in three'
-    if p >= 22:
-        return 'about one in four'
-    if p >= 16:
-        return 'about one in five'
-    if p >= 8:
-        return 'about one in ten'
-    if p >= 4:
-        return 'about one in twenty'
-    if p >= 2.5:
-        return 'about one in thirty'
-    if p >= 1.5:
-        return 'about one in fifty'
-    if p >= 0.7:
-        return 'about one in a hundred'
-    if p > 0:
-        return 'a sliver'
-    return 'none'
+    if p < 1.0 and abs(p - 1.0) / 1.0 > PLAIN_SHARE_TOLERANCE:
+        return 'under 1%'
+    best, best_err = None, None
+    for value, phrase in _SHARE_PHRASES:
+        err = abs(p - value) / value
+        if err <= PLAIN_SHARE_TOLERANCE + 1e-9 and (best_err is None or err < best_err - 1e-9):
+            best, best_err = phrase, err
+    if best:
+        return best
+    return f"about {int(round(p))}%"
 
 
 # ------------------------------------------- the seats mirror the count
@@ -2977,8 +3164,6 @@ def plain_share(pct: float) -> str:
 #      holding half a seat's worth of the audience holds a seat and speaks;
 #   3. the read states one split, once; a nobody / none / all twelve claim
 #      against a non-zero count is rewritten.
-_NUM_WORDS = ('no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
-              'seventeen', 'eighteen', 'nineteen', 'twenty')
 _LEAN_RANK = {'yes': 0.0, 'maybe': 1.0, 'other': 1.5, 'no': 2.0}
 
 
@@ -3181,7 +3366,7 @@ def _seats_words(n: int, of: int) -> str:
     return f"{num_word(n)} of the {num_word(of)} seats"
 
 
-def headline_for(opts_out: list, total_people: int, n_seats: int, audience: str) -> tuple:
+def headline_for(opts_out: list, total_people: int, n_seats: int, audience: str, watched_any: Optional[dict] = None) -> tuple:
     """The headline and its people: the lead side's share in plain words,
     of the people the room stands for, the people that share comes to
     (never the seat tally), the option in the board's words, then the
@@ -3212,6 +3397,13 @@ def headline_for(opts_out: list, total_people: int, n_seats: int, audience: str)
         rn = int(rest.get('seats_n') or len(rest.get('seats') or []))
         tail += f": {_seats_words(rn, n_seats)}." if n_seats else '.'
         head += tail
+    if isinstance(watched_any, dict) and watched_any.get('people') and len(watched_any.get('rows') or []) > 1:
+        # the rows that mean the person has watched any of it, together (a house read's figure: 11.1%, about one in nine, 679K)
+        wa = str(watched_any.get('in_words') or plain_share(float(watched_any.get('published_pct') or 0.0)))
+        seats_wa = str(watched_any.get('in_the_room') or '')
+        n_wa = int(seats_wa.split(' of ')[0]) if re.match(r"^\d+ of \d+$", seats_wa) else None
+        lead_in = f"{wa[0].upper()}{wa[1:]} of {size}, roughly {human_people(int(watched_any['people']))} people, have watched any of it" + (f": {_seats_words(n_wa, n_seats)}." if (n_seats and n_wa is not None) else '.')
+        head = lead_in + ' ' + head
     return scrub(head), int(lead['people'])
 
 
@@ -3253,12 +3445,129 @@ def _claim_row(sentence: str, opts_out: list, lead_ids: list) -> Optional[dict]:
     return scored[0] if _label_hits(sentence, scored[0].get('label')) > 0 else None
 
 
+_FRACTION_DENOM = (r"(?:a\s+hundred|a\s+thousand|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty(?:-(?:one|two|three|four|five|six|seven|eight|nine))?"
+                   r"|thirty|forty|fifty|sixty|seventy(?:-five)?|eighty|ninety|\d{1,4})")
+_FRACTION_RX = re.compile(r"\b(about|almost|nearly|roughly|around|some|just|only|under|over)?\s*((?:one|two|three|four|five|six|seven|eight|nine)\s+in\s+" + _FRACTION_DENOM + r"|half)\b(?!\s+(?:seats?|of the (?:twelve|\d{1,2}) seats))", re.I)
+_FRACTION_OPEN_RX = re.compile(r"\b(?:about|almost|nearly|roughly|around|just|only|under|over)?\s*(?:one|two|three|four|five|six|seven|eight|nine)\s+in\s+" + _FRACTION_DENOM + r"\b", re.I)   # a split opener, seats included
+_ONE_SEAT_RX = re.compile(r"(?<!not )(?<!never )(?<!even )(?<!nor )\b(one|a single|just one|only one|a lone)\s+(seat\b|of the (?:twelve|sixteen|ten|eight|six|four|\d{1,2}) seats\b)", re.I)   # 'not one of the twelve seats' already says none
+_YES_TOTAL_RX = re.compile(r"\b(?:are|were|is|was|count(?:s|ed)? as|come(?:s)? (?:in|out) as|say|said|land(?:s|ed)? on) (?:a )?yes\b|\byes side\b|\bthe yes(?:es)?\b|\btaken together\b|\ball told\b|\bin all\b", re.I)
+
+
+def _share_core(phrase: str) -> str:
+    return re.sub(r"^(?:about|almost|nearly|roughly|around|some|just|only|under|over)\s+", '', str(phrase or '').strip().lower())
+
+
+_PEOPLE_FIG_RX = re.compile(r"\b(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(K|M|k|m|thousand|million)?\s+(?:people|viewers|of them|of this audience|of these)\b")
+
+
+def _people_figures(text: str) -> list:
+    """[(start, people)] for every people figure a sentence carries:
+    'roughly 563.4K people', '2.15M people', '121,838 people'."""
+    out = []
+    for m in _PEOPLE_FIG_RX.finditer(str(text or '')):
+        try:
+            v = float(m.group(1).replace(',', ''))
+        except ValueError:
+            continue
+        unit = (m.group(2) or '').lower()
+        v *= 1000.0 if unit in ('k', 'thousand') else (1000000.0 if unit in ('m', 'million') else 1.0)
+        if v >= 100:
+            out.append((m.start(), v))
+    return out
+
+
+def _accurate_fractions(sentence: str, opts_out: list, lead_ids: list, lead_pct: float, yes_pct: Optional[float], first: bool, total_people: int = 0) -> str:
+    """A 'one in N' (or X in Y, or half) phrase that matches no row's own
+    share is rewritten to the share of the row the sentence is about
+    (Jenna 2026-11-05: the read called 7.0% 'about one in twenty'). A
+    phrase followed by a people figure is checked against that figure
+    first ('about one in twenty ... roughly 563.4K people' of 6.09M is
+    one in eleven). Otherwise the row is the yes total when the sentence
+    speaks of the yes side, else the row whose label words sit in the
+    sentence, else the lead when the sentence opens the read; a phrase
+    about nothing on the board is left alone."""
+    cores = {o['id']: _share_core(plain_share(float(o.get('pct') or 0.0))) for o in opts_out}
+    yes_core = _share_core(plain_share(yes_pct)) if yes_pct is not None else None
+    about_yes = bool(yes_pct is not None and _YES_TOTAL_RX.search(sentence))
+    figures = _people_figures(sentence) if total_people > 0 else []
+    fraction_starts = [fm.start() for fm in _FRACTION_RX.finditer(sentence)]
+
+    def _figure_after(pos: int) -> Optional[float]:
+        """The people figure this phrase states, when one follows it before the next phrase and within reach."""
+        nxt = min([p for p in fraction_starts if p > pos], default=len(sentence) + 1)
+        cands = [v for (start, v) in figures if pos < start < nxt and start - pos <= 110]
+        return cands[0] if len(cands) == 1 else None
+
+    def _fix(m):
+        qual, core = (m.group(1) or '').strip(), re.sub(r"\s+", ' ', m.group(2).lower())
+        if core == 'half' and qual.lower() not in ('about', 'roughly', 'around', 'nearly', 'almost'):
+            return m.group(0)   # 'half on her phone', 'the other half of the season': not a share
+        fig = _figure_after(m.end())
+        if fig is not None:
+            # the figure names a row (or the yes total) when it sits within two percent of its people: that row's own published
+            # share is the share to say; a figure that is no row (a sum of two) is read against the audience
+            pct = fig / float(total_people) * 100.0
+            near = [(abs(fig - float(o.get('people') or 0)) / max(1.0, float(o.get('people') or 0)), float(o.get('pct') or 0.0)) for o in opts_out if float(o.get('people') or 0) > 0]
+            if yes_pct is not None:
+                yes_people = sum(float(o.get('people') or 0) for o in opts_out if (o.get('lean') or 'other') == 'yes')
+                if yes_people > 0:
+                    near.append((abs(fig - yes_people) / yes_people, yes_pct))
+            near = [n for n in near if n[0] <= 0.02]
+            if near:
+                pct = min(near)[1]
+            words = plain_share(pct)
+            if _share_core(words) == core:
+                return m.group(0)
+            return f"{qual} {words}" if qual.lower() in ('just', 'only') else words
+        # the phrase fits a row the sentence names, or the yes total the sentence speaks of: it stands
+        if any(cores[o['id']] == core and _label_hits(sentence, o.get('label')) > 0 for o in opts_out):
+            return m.group(0)
+        if about_yes and yes_core == core:
+            return m.group(0)
+        target = None
+        if about_yes:
+            target = yes_pct   # a sentence about the yes side carries the yes total's own phrase (7.0% is one in fourteen, not one in twenty)
+        elif any(cores[o['id']] == core for o in opts_out) or yes_core == core:
+            return m.group(0)   # fits some row on the board: left as written (a label-word guess would risk the wrong row)
+        else:
+            row = _claim_row(sentence, opts_out, [])
+            if row is not None:
+                target = float(row.get('pct') or 0.0)
+            elif first:
+                target = lead_pct
+        if target is None:
+            return m.group(0)
+        words = plain_share(target)   # carries its own 'about'; 'under 1%', 'nearly everyone', 'none' stand alone
+        if _share_core(words) == core:
+            return m.group(0)
+        return f"{qual} {words}" if qual.lower() in ('just', 'only') else words
+    return _FRACTION_RX.sub(_fix, sentence)
+
+
+def _row_for(sentence: str, opts_out: list, lead: dict) -> Optional[dict]:
+    """The non-lead row a sentence is about: the one whose own share the
+    sentence states in words ('about one in fifty' names the 2.0% row),
+    else the one whose label words sit in the sentence."""
+    low = str(sentence or '').lower()
+    named = []
+    for o in opts_out:
+        if o is lead:
+            continue
+        core = _share_core(plain_share(float(o.get('pct') or 0.0)))
+        if (' in ' in core or core == 'half') and re.search(r"\b" + re.escape(core) + r"\b", low):
+            named.append(o)
+    if len(named) == 1:
+        return named[0]
+    return _claim_row(sentence, opts_out, [lead['id']])
+
+
 def cohere_read(text: str, opts_out: list, n_seats: int, headline: str = '') -> str:
     """One split, stated once. A nobody / no one / none / not one / 0
     people claim about a side the count gives a share becomes that share
     in plain words; a no seat / 0 of twelve claim becomes the seats it
     holds; all twelve / every seat / the whole room becomes the lead's
-    own tally when a seat sits elsewhere. A read that does not open on
+    own tally when a seat sits elsewhere; a 'one in N' phrase that fits
+    no row's share becomes the right one. A read that does not open on
     the split opens with the headline. A zero count keeps its none."""
     s = str(text or '').strip()
     if not s or not opts_out:
@@ -3267,16 +3576,28 @@ def cohere_read(text: str, opts_out: list, n_seats: int, headline: str = '') -> 
     lead = rows[0]
     lead_n = int(lead.get('seats_n') or len(lead.get('seats') or []))
     all_rx = _all_seats_rx(n_seats) if n_seats else None
+    head_row, _rest = _lead_rows(opts_out)
+    head_pct = float((head_row or {}).get('pct') or lead.get('pct') or 0.0)
+    yes_total = sum(float(o.get('pct') or 0.0) for o in opts_out if (o.get('lean') or 'other') == 'yes') if any((o.get('lean') or 'other') == 'yes' for o in opts_out) else None
+    total_people = sum(int(o.get('people') or 0) for o in opts_out)
     out = []
-    for sent in _SENT_SPLIT_RX.split(s):
+    for si, sent in enumerate(_SENT_SPLIT_RX.split(s)):
         t = sent
+        if _FRACTION_RX.search(t):
+            t = _accurate_fractions(t, opts_out, [lead['id']], head_pct, yes_total, first=(si == 0), total_people=total_people)
+        if _ONE_SEAT_RX.search(t):
+            # 'one seat in the room is one of them' about a row the count seats nobody on (the chat line of 2026-11-05)
+            row = _row_for(t, opts_out, lead)
+            if row is not None and int(row.get('seats_n') or len(row.get('seats') or [])) == 0 and float(row.get('pct') or 0.0) > 0:
+                t = _ONE_SEAT_RX.sub(lambda m: ('no seat' if m.group(2).lower().startswith('seat') else f"none of the {num_word(n_seats)} seats"), t)
+                t = re.sub(r"\b(no seat(?: in the room)?|none of the [a-z]+ seats) (?:is|was) one of them\b", r"\1 is among them", t)
         if _ZERO_PEOPLE_RX.search(t):
-            row = _claim_row(t, opts_out, [lead['id']])
+            row = _row_for(t, opts_out, lead)
             if row is not None and (float(row.get('pct') or 0.0) > 0 or int(row.get('people') or 0) > 0):
                 words = plain_share(float(row.get('pct') or 0.0))
                 t = _ZERO_PEOPLE_RX.sub(lambda m: (words + ' of them') if m.group(0).lower().startswith('none of') else words, t)
         if _ZERO_SEATS_RX.search(t):
-            row = _claim_row(t, opts_out, [lead['id']])
+            row = _row_for(t, opts_out, lead)
             if row is not None:
                 n = int(row.get('seats_n') or len(row.get('seats') or []))
                 if n > 0:
@@ -3305,9 +3626,9 @@ def _opens_on_split(text: str, opts_out: list) -> bool:
         return False
     if re.search(r"\d+(?:\.\d+)?\s*%|\bof the (?:twelve|sixteen|ten|eight|six|four|\d{1,2}) seats\b|\b(?:in|of) the room\b", head):
         return True
+    if _FRACTION_OPEN_RX.search(head) or re.search(r"\b(?:nearly everyone|about half|under 1%|a sliver|none of)\b", head):
+        return True
     words = {plain_share(float(o.get('pct') or 0.0)) for o in opts_out}
-    words |= {'nearly everyone', 'almost nine in ten', 'about four in five', 'about three in four', 'about two in three', 'about three in five', 'about half', 'about two in five',
-              'about one in three', 'about one in four', 'about one in five', 'about one in ten', 'about one in twenty', 'a sliver', 'none of'}
     return any(w in head for w in words if w)
 
 
@@ -3406,6 +3727,21 @@ def short_read(text: str, n: int = 2) -> str:
     return ' '.join(out)
 
 
+def _whole_sentences(text: str, limit: int) -> str:
+    """A read cut to the limit ends on a sentence, never mid-word (the
+    2026-11-05 read ended '... not paying for Starz this'). A single
+    sentence longer than the limit is kept whole."""
+    t = str(text or '').strip()
+    if len(t) <= limit:
+        return t
+    head = t[:limit]
+    cut = max(head.rfind('. '), head.rfind('! '), head.rfind('? '), head.rfind('." '), head.rfind('.\u201d '))
+    if cut < limit // 3:
+        end = re.search(r"[.!?][\"\u201d]?(?=\s|$)", t[limit:])
+        return t[:limit + (end.end() if end else 0)].strip() if end else t
+    return t[:cut + 1 + (1 if head[cut + 1:cut + 2] in ('"', '\u201d') else 0)].strip()
+
+
 def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, opts_out: list, by_segment: list, answers: list, brief: dict, prior: dict, roster: list, log=None, in_cut: bool = False,
                    headline: str = '') -> dict:
     """The synthesis: read, read_short (the chat's version), voices,
@@ -3422,6 +3758,7 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
                        'by_segment': [{k: v for k, v in sr.items() if k != 'tally'} for sr in by_segment],
                        'answers': [{'seat': a['seat'], 'name': a['name'], 'option': a['option_label'], 'confidence': a['confidence'], 'line': a['line'], 'reason': a['reason']} for a in answers],
                        'facts_brief': {k: v for k, v in (brief or {}).items() if not k.startswith('_')}, 'prior_note': prior.get('note') if prior else None,
+                       'watched_any': (prior or {}).get('watched_any'),
                        'audience': {'name': tb['name'], 'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'lifecycle': tb['lifecycle_read']}}, default=str)[:14000]
     data, call = models.call('moderator', READ_SYSTEM, user, max_tokens=2400, temperature=0.4, tools=None)
     if log:
@@ -3429,14 +3766,14 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
     by_seat = {int(a['seat']): a for a in answers}
     out = {'read': '', 'read_short': '', 'voices': [], 'probes_next': [], 'facts_used': [], 'fallback': False}
     if isinstance(data, dict) and str(data.get('read') or '').strip():
-        out['read'] = scrub(str(data['read']).strip())[:1400]
-        out['read_short'] = scrub(str(data.get('chat') or '').strip())[:600]
+        out['read'] = _whole_sentences(scrub(str(data['read']).strip()), 1400)
+        out['read_short'] = _whole_sentences(scrub(str(data.get('chat') or '').strip()), 600)
         if in_cut:   # a question on the clock: the read opens with the room, never the clock and the scene
             out['read'] = _drop_clock_opening(out['read'])
             out['read_short'] = _drop_clock_opening(out['read_short'])
-        out['read'] = cohere_read(out['read'], opts_out, len(roster), headline)[:1600]
+        out['read'] = _whole_sentences(cohere_read(out['read'], opts_out, len(roster), headline), 1600)
         if out['read_short']:
-            out['read_short'] = cohere_read(out['read_short'], opts_out, len(roster), short_read(headline, 1) if headline else '')[:700]
+            out['read_short'] = _whole_sentences(cohere_read(out['read_short'], opts_out, len(roster), short_read(headline, 1) if headline else ''), 700)
         picks = []
         for v in (data.get('voices') or [])[:VOICES_N + 1]:
             try:
@@ -3841,12 +4178,12 @@ def run_question(ctx: dict) -> dict:
                 print(f"[twin-room] anchor desk skipped: {str(e)[:120]}")
                 derived_data = None
             try:
-                plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=seed, record_overlap=record_overlap_people(neighbors, subject))
+                plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=seed, house=house_read(neighbors, subject))
             except Exception as e:
                 traceback.print_exc()
                 print(f"[twin-room] derived anchor skipped: {str(e)[:120]}")
                 plan = {}
-            trail['anchor_status'] = 'derived' if plan else 'unanchored'
+            trail['anchor_status'] = (plan.get('kind') or 'derived') if plan else 'unanchored'
         else:
             trail['anchor_status'] = 'prior' if not anchor_eligible else ('unresearched' if not study_ok(study) else 'unanchored')
         if _apool is not None:
@@ -3856,10 +4193,14 @@ def run_question(ctx: dict) -> dict:
             if plan and anchor_rows(opts_out, by_segment, plan, total_people, len(roster), seed):
                 rec['anchor'] = {'kind': plan['kind'], 'line': plan['line'], 'targets': {next((o['label'] for o in opts_out if o['id'] == k), k): v for k, v in plan['targets'].items()}}
                 trail['anchor'] = dict(rec['anchor'], status=trail.get('anchor_status'))
-                if plan.get('kind') == 'derived':
+                if plan.get('kind') in ('derived', 'house'):
                     trail['anchor']['basis'] = plan.get('basis') or {}
                     trail['anchor']['study_key'] = study.get('_key')
                     trail['anchor']['study_cached'] = bool(study.get('_cached'))
+                    if plan.get('house'):
+                        trail['anchor']['house'] = plan['house']
+                        trail['anchor']['engaged_people'] = sum(int(o.get('people') or 0) for o in opts_out if o['id'] in set(plan.get('pinned') or ()))
+                        trail['anchor']['engaged_pct'] = round(sum(float(o.get('pct') or 0.0) for o in opts_out if o['id'] in set(plan.get('pinned') or ())), 1)
             else:
                 if plan:
                     trail['anchor_status'] = 'unanchored'
@@ -3915,17 +4256,27 @@ def run_question(ctx: dict) -> dict:
         rec['seats_total'] = len(roster)
         rec['tally'] = [{'label': o['label'], 'seats': o['seats_n'], 'of': len(roster), 'room_pct': o['room_pct']} for o in opts_out]
         rec['yes_pct'] = round(sum(float(o['pct']) for o in opts_out if o['lean'] == 'yes'), 1) if any(o['lean'] == 'yes' for o in opts_out) else None
-        rec['headline'], rec['headline_people'] = headline_for(opts_out, total_people, len(roster), _twin_name(twin))
+        watched_any = None
+        if plan and plan.get('kind') == 'house' and plan.get('pinned'):
+            # the read and the headline state the watched-any total once (Jenna 2026-11-05: 11.1%, about one in nine, 679,241-class people)
+            _pin_rows_out = [o for o in opts_out if o['id'] in set(plan['pinned'])]
+            _pin_pct = round(sum(float(o.get('pct') or 0.0) for o in _pin_rows_out), 1)
+            watched_any = {'rows': [o['label'] for o in _pin_rows_out], 'published_pct': _pin_pct, 'in_words': plain_share(_pin_pct),
+                           'people': sum(int(o.get('people') or 0) for o in _pin_rows_out), 'in_the_room': f"{sum(int(o.get('seats_n') or 0) for o in _pin_rows_out)} of {len(roster)}"}
+            rec['watched_any'] = dict(watched_any)
+        rec['headline'], rec['headline_people'] = headline_for(opts_out, total_people, len(roster), _twin_name(twin), watched_any=watched_any)
         prior = prior_note(twin, base_q, kind, opts_out, stim, last, seed)
         if plan:
             prior = dict(prior or {})
             prior['anchor'] = {'kind': plan['kind'], 'line': plan['line']}
-            if plan.get('kind') == 'derived':
+            if plan.get('kind') in ('derived', 'house'):
                 # the count is the room's own, settled from the evidence: the habit-based leaning is kept on the trail
                 # for the operator, never put to the read as a gap to explain away
                 prior['habit_note'] = str(prior.get('note') or '')
                 prior['departed'] = False
                 prior['note'] = plan['line']
+            if watched_any:
+                prior['watched_any'] = dict(watched_any)
             else:
                 prior['note'] = (plan['line'] + ' ' + str(prior.get('note') or '')).strip()
         trail['prior'] = prior
@@ -4096,5 +4447,6 @@ __all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX',
            # room-5: the study desk and the derived anchor
-           'research_pass', 'merge_study', 'study_ok', 'derive_anchor', 'derived_plan', 'ledger_neighbors', 'record_reach_people', 'set_ledger_fn', 'asked_tokens', 'asked_hash', 'study_key',
+           'research_pass', 'merge_study', 'study_ok', 'derive_anchor', 'derived_plan', 'ledger_neighbors', 'record_reach_people', 'record_overlap_people', 'house_read', 'set_ledger_fn', 'asked_tokens', 'asked_hash', 'study_key',
+           'PLAIN_SHARE_TOLERANCE', 'HOUSE_PIN_JITTER',
            'narrower_queries', 'STUDY_SYSTEM', 'ANCHOR_SYSTEM', 'STUDY_PREFIX', 'STUDY_MIN_SEARCHES', 'STUDY_MAX_SEARCHES', 'ANCHOR_LOW_POSITION', 'ANCHOR_NEIGHBOR_MARGIN', 'ANCHOR_SKIP_KINDS']
