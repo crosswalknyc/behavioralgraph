@@ -21,10 +21,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.trends_scrapers import netflix as nf  # noqa: E402
+from scripts.trends_scrapers import _base as _nb  # noqa: E402
 
 _REAL_LOADER = nf._load_previous_daily
 _REAL_PARSER = nf._extract_top10_rows
 _REAL_RENDER = nf._run_netflix_playwright
+# the daily path first asks S3 whether netflix.com cookies were donated
+# and skips itself when none were; the test answers that locally so the
+# guard is exercised with no S3 read (a live donation is not a fixture)
+_REAL_STATUS = _nb.cookie_donation_status
+# with no previous daily capture the missing rail is filled from the
+# published weekly file (2026-09-23: a Netflix day never ships with one
+# rail missing); that fetch is a network call and is stubbed here
+_REAL_WEEKLY = nf._fetch_weekly_tsv
+WEEKLY = {
+    'source_path': 'weekly_tsv',
+    'us_films': [{'rank': i, 'title': f'W{i}', 'source': 'weekly_tsv',
+                  'weekly_views': 1_000_003 * i} for i in range(1, 11)],
+    'us_tv': [],
+}
+_DONATED = {'domain': 'netflix.com', 'donated': True, 'count': 12,
+            'age_hours': 1.0, 'fresh': True}
 
 PREV = {
     'source_path': 'authenticated_daily',
@@ -55,22 +72,25 @@ def check(name: str, got, want) -> None:
         print(f'         expected {want}')
 
 
-def shape(parsed_tv, parsed_films, prev):
+def shape(parsed_tv, parsed_films, prev, weekly=None):
     """Run the daily path with everything external stubbed out."""
     nf._run_netflix_playwright = lambda: '<html>Top 10</html>'
     nf._extract_top10_rows = lambda html: (list(parsed_tv), list(parsed_films))
     nf._load_previous_daily = lambda: prev
+    nf._fetch_weekly_tsv = lambda: json.loads(json.dumps(weekly or {}))
+    _nb.cookie_donation_status = lambda domain: dict(_DONATED, domain=domain)
     try:
         out = nf._fetch_authenticated_daily()
     finally:
         nf._run_netflix_playwright = _REAL_RENDER
         nf._extract_top10_rows = _REAL_PARSER
         nf._load_previous_daily = _REAL_LOADER
+        nf._fetch_weekly_tsv = _REAL_WEEKLY
+        _nb.cookie_donation_status = _REAL_STATUS
     if out is None:
         return None
-    stale = sorted({r['category_display']
-                    for r in out['us_films'] + out['us_tv']
-                    if r.get('stale_from_previous')})
+    stale = sorted(label for label, key in (('Film', 'us_films'), ('TV', 'us_tv'))
+                   if any(r.get('stale_from_previous') for r in out[key]))
     return (len(out['us_films']), len(out['us_tv']),
             len(out['national']), stale, out)
 
@@ -120,8 +140,14 @@ def main() -> int:
     check('TV rail misses: previous TV carried, films untouched',
           r[:4], (10, 10, 20, ['TV']))
 
+    r = shape(TV, [], {}, weekly=WEEKLY)
+    check('films miss with no previous daily: the published weekly file fills the rail',
+          r[:4], (10, 10, 20, ['Film']))
+    check('weekly rows carried that way say where they came from',
+          {x['source'] for x in r[4]['us_films']}, {'weekly_tsv'})
+
     r = shape(TV, [], {})
-    check('films miss with no usable previous: ships without it, no crash',
+    check('films miss with no usable previous at all: ships without it, no crash',
           r[:4], (0, 10, 10, []))
 
     check('both rails miss: falls through to the weekly path',
@@ -133,6 +159,9 @@ def main() -> int:
                      'us_films': PREV['us_films']}), {})
     check('daily-path previous is accepted',
           load_with(PREV).get('source_path'), 'authenticated_daily')
+    check("today's daily stamp (rail + weekly figures) is accepted too",
+          load_with(dict(PREV, source_path='daily_rail+weekly_figures')
+                    ).get('source_path'), 'daily_rail+weekly_figures')
     check('S3 failure degrades to empty rather than raising',
           load_with(None, boom=True), {})
     check('non-dict payload degrades to empty', load_with([1, 2, 3]), {})

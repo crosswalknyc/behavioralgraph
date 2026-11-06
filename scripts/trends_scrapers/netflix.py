@@ -363,7 +363,10 @@ def _load_previous_daily() -> dict:
         d = json.loads(o['Body'].read().decode('utf-8'))
         if not isinstance(d, dict):
             return {}
-        return d if d.get('source_path') == ('authenticated_daily', 'daily_rail+weekly_figures') else {}
+        # both daily stamps count (the older 'authenticated_daily' and
+        # today's 'daily_rail+weekly_figures'); a string compared to the
+        # tuple itself never matched, so no previous day was ever carried
+        return d if d.get('source_path') in ('authenticated_daily', 'daily_rail+weekly_figures') else {}
     except Exception as e:
         logger.info("netflix: could not read previous snapshot: %s", e)
         return {}
