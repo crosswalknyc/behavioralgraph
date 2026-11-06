@@ -6392,14 +6392,20 @@ def build_insights_deck_user_prompt(subject, partner, digest_bundle,
 _PCT_UNITS = {'pct', 'percent', 'percentage', '%'}
 
 
-def enforce_metrics_coherence(data, so_what=False, multi=None):
+def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False):
     """Exactify a reasoned measurement read: counts messy (last digit
     1-9), percentages one decimal and bounded, labels and definitions
     capped. Returns the cleaned dict. `so_what` (2026-10-06) marks the
-    result so the formatter renders a plan instead of a read."""
+    result so the formatter renders a plan instead of a read. `plan`
+    (2026-11-06): a social, search or media plan asked for beside the
+    figures gets room for its moves (nine reads, each up to 1,200
+    characters); the 480-character clip cut Jenna's plan at four of
+    five flights and two of three angles, and dropped the search terms."""
     if not isinstance(data, dict):
         raise ValueError('measurement payload is not a dict')
     subj = str(data.get('subject') or 'subject').strip() or 'subject'
+    _read_cap = 9 if plan else (7 if (so_what or multi) else 5)
+    _read_len = 1200 if plan else 480
     out = {
         'subject': _clip_label(subj),
         'metric_family': str(data.get('metric_family')
@@ -6408,8 +6414,8 @@ def enforce_metrics_coherence(data, so_what=False, multi=None):
         'window_start': str(data.get('window_start') or '').strip()[:12],
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'headline': _clip_text(data.get('headline'), 300),
-        'reads': [_clip_text(r, 480)
-                  for r in (data.get('reads') or []) if str(r).strip()][:7 if (so_what or multi) else 5],
+        'reads': [_clip_text(r, _read_len)
+                  for r in (data.get('reads') or []) if str(r).strip()][:_read_cap],
     }
     metrics, seen = [], set()
     for i, row in enumerate(data.get('metrics') or []):

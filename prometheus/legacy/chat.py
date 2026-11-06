@@ -14585,8 +14585,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _is_so_what = pma.is_so_what_ask(text)  # so-what asks answer as a plan
     if _is_so_what:
         extra_blocks.append(pma.SO_WHAT_GUIDANCE)
+    _is_plan = False
     try:   # a social / search / media plan asked for beside the figures (2026-11-06)
-        if pma.is_media_plan_ask(text) and not _is_so_what:
+        _is_plan = bool(pma.is_media_plan_ask(text)) and not _is_so_what
+        if _is_plan:
             extra_blocks.append(pma.MEDIA_PLAN_GUIDANCE)
     except Exception as _fx:
         _faults.note('chat', _fx)
@@ -14649,7 +14651,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _stage_note('composing the answer')
     _t_stage = time.monotonic()
     try:
-        res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs), _ds_series)
+        res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)
         # a creator-fit read is held to the subject's universe (the catalog's
         # projected US people, the thread's banked figure, Gen Pop) so it can
         # never disagree with the subject's profile (2026-10-20, Mark's
@@ -14752,7 +14754,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                   if isinstance(d, dict)), {})
                 if str(data2.get('action') or '').strip().lower() \
                         != 'decline':
-                    res2 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data2, so_what=_is_so_what, multi=_multi_qs), _ds_series)
+                    res2 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data2, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)
                     reply2 = pma.format_generated_metrics_reply(res2)
                     fam2 = ('strategy' if is_strategy
                             else res2.get('metric_family'))
@@ -14790,7 +14792,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                       if isinstance(d, dict)), {})
                     if str(data3.get('action') or '').strip().lower() \
                             != 'decline':
-                        res3 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data3, so_what=_is_so_what, multi=_multi_qs), _ds_series)
+                        res3 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data3, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)
                         reply3 = pma.format_generated_metrics_reply(
                             res3)
                         fam3 = ('strategy' if is_strategy
@@ -14835,7 +14837,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _trm = pmv.trim_unverified(
                 _ld, _last_verdict or verdict, base_lookup=_v_lookup, question=text,
                 recompute=lambda d: (lambda r: (r, pma.format_generated_metrics_reply(r)))(
-                    pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs), _ds_series)),
+                    pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)),
                 prior_entries=_pm_verify_prior_entries(_ld[1], _ld[3], led) if _ld[1] else [],
                 bound_facts=_purchase_facts, family=_ld[3] or fam0)
             if _trm:
@@ -14856,7 +14858,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                     _cmp = pmv.complete_cells(
                         _ld, (data, res, reply), question=text, dropped_labels=_dropped,
                         recompute=lambda d: (lambda r: (r, pma.format_generated_metrics_reply(r)))(
-                            pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs), _ds_series)),
+                            pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)),
                         model_json=lambda p: (lambda r: (r.get('data') if r.get('success') else None))(
                             _pm_claude_json(pmv.COMPLETE_CELLS_SYSTEM_PROMPT, p, max_tokens=2500,
                                             temperature=0.1, usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])),

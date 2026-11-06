@@ -354,6 +354,27 @@ class ThePlanHalf(unittest.TestCase):
         self.assertIn('pma.is_media_plan_ask(text)', src)
         self.assertIn('extra_blocks.append(pma.MEDIA_PLAN_GUIDANCE)', src)
 
+    def test_a_plan_gets_room_for_its_moves(self):
+        """The 480-character clip and the five-read cap cut the first
+        landed plan at four of five flights and two of three angles and
+        dropped the search terms. A plan read keeps nine reads of up to
+        1,200 characters; an ordinary read keeps its shape."""
+        import prometheus_analysis as PMA
+        reads = [f"MOVE {i}. " + ' '.join(['Put the weight on the window that carries the starts, with the number beside it.'] * 12)
+                 for i in range(9)]
+        data = {'subject': 'potential Paw Patrol consumers', 'headline': 'h', 'reads': reads,
+                'metrics': [{'name': 'starters', 'label': 'Christmas toy shopping starters, 2025 season', 'unit': 'people',
+                             'value': 11643479, 'definition': 'potential Paw Patrol consumers whose first toy signal landed in the season'}]}
+        plan = PMA.enforce_metrics_coherence(dict(data), plan=True)
+        self.assertEqual(len(plan['reads']), 9)
+        self.assertTrue(all(len(r) > 480 for r in plan['reads']), [len(r) for r in plan['reads']])
+        self.assertTrue(all(len(r) <= 1200 for r in plan['reads']))
+        plain = PMA.enforce_metrics_coherence(dict(data))
+        self.assertEqual(len(plain['reads']), 5)
+        self.assertTrue(all(len(r) <= 480 for r in plain['reads']))
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        self.assertEqual(src.count('plan=_is_plan)'), 5)
+
 
 class TheRetiredTurn(unittest.TestCase):
     """Re-asking the question on the thread runs it again: the promise line
