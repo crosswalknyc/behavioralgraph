@@ -378,18 +378,13 @@ def subjects(text, ctx=None):
     return res[:4]
 
 
-# The pronoun as the thing being sized: "how big is it", "how many people
-# are in this", "the size of that one", "size this", "incidence of the open
-# profile". Never a determiner ("that season", "this show", "it rolled").
-_PAGE_POINTER_RX = re.compile(
-    r"\bhow (?:big|large|many)(?: (?:people|users|panelists|individuals|folks|of them|of these|of those))?(?: (?:is|are|was|were|does|do|did))?"
-    r"(?: (?:in|inside|within|for|on))?(?: (?:the|this|that))? (?P<p>it|this|that|here|this one|that one|the open (?:one|profile|page|file)|"
-    r"(?:this|that) (?:one|profile|page|audience|file|universe|pull|data ?set))\b(?!\s+(?:season|series|show|episode|title|film|movie|book|brand|campaign))|"
-    r"\b(?:sizes?|sizing|incidence|headcount|head count|reach|sample[- ]size|audience[- ]size|universe[- ]size|projected band|band) (?:of|for|on) "
-    r"(?P<q>it|this|that|here|this one|that one|the open (?:one|profile|page|file)|(?:this|that) (?:one|profile|page|audience|file|universe|pull|data ?set))\b"
-    r"(?!\s+(?:season|series|show|episode|title|film|movie|book|brand|campaign))|"
-    r"\b(?:it|this|that|this one|that one)(?:'s| is| has|’s) (?:a |an |the )?(?:total |projected |overall )?(?:sizes?|incidence|headcount|head count|sample[- ]size|audience[- ]size|universe[- ]size|band|reach)\b|"
-    r"^\W*(?:(?:please |can you |could you )?(?:sizes?|sizing|size (?:it|this|that|this one)|incidence|how big|how large|how many|headcount|sample size|audience size)\W*)$", re.I)
+# The page pointer lives in prometheus.question_universe since 2026-11-06
+# (one copy for the sizing lane and the reasoned read lane): a pronoun as
+# the thing being sized ("how big is it", "how many people are in this",
+# "size this"), never a determiner ("that season", "this show").
+from .question_universe import points_at_page, _PAGE_POINTER_RX   # noqa: E402,F401  (re-exported for the callers that import them from here)
+
+
 def _fold_subject(s):
     s = strip_audience_nouns(str(s or '')) or str(s or '')
     s = re.sub(r"\b(?:season|series|s)\s*\d+\b", ' ', s, flags=re.I)
@@ -435,27 +430,6 @@ def names_other_subject(text, sized, ctx=None, history=None):
     except Exception:
         pass
     return False
-
-
-def points_at_page(text):
-    """True when a sizing ask points at the open page and names nothing
-    else: a pronoun in the subject slot, or a bare size word."""
-    t = ' '.join(str(text or '').split())
-    if not t or len(t) > 240:
-        return False
-    if not _PAGE_POINTER_RX.search(t):
-        return False
-    # a title word or a named thing beside the pronoun means the words
-    # name their own subject ("how big is that season of Fightland")
-    rest = _PAGE_POINTER_RX.sub(' ', t)
-    rest = re.sub(r"\b(?:how (?:big|large|many)|sizes?|sizing|incidence|headcount|head count|sample[- ]size|audience[- ]size|universe[- ]size|band|reach|"
-                  r"people|users|panelists|individuals|folks|audience|profile|page|file|open|one|the|a|an|of|for|on|in|is|are|was|were|does|do|did|"
-                  r"what|whats|what's|tell|give|show|me|us|please|thanks|projected|total|overall|exactly|roughly|about|now|again|and|also|so|just|"
-                  r"this|that|it|here|these|those|them|its|be|would|could|can|i|we|you|have|has|get|know|see|want|need|sample|size|data|set|dataset|universe|"
-                  r"pull|count|number|figure|figures|numbers|band|window|year|months?|trailing|last|past|days?|weeks?|within|inside|hold|holds|contain|contains|"
-                  r"big|large|many|much|up|out|there|then|currently|selected|current|loaded|displayed|shown|showing|whole|entire|full|same|own|my|our|your|their)\b", ' ', rest, flags=re.I)
-    rest = re.sub(r"[^A-Za-z]+", ' ', rest).strip()
-    return not any(len(w) >= 3 for w in rest.split())
 
 
 # ------------------------------------------------------------ resolve

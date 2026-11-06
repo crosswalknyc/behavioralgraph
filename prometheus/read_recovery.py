@@ -630,7 +630,7 @@ def resume_record(*, text, history, base, panel_charge=None, probe=False,
     }
     if base.get('subject') or base.get('s3_key'):
         rec['base'] = {k: (str(base.get(k) or '')[:300] if not isinstance(base.get(k), (int, float, bool)) else base.get(k))
-                       for k in ('subject', 's3_key', 'source', 'view_id', 'product', 'domain') if base.get(k) not in (None, '')}
+                       for k in ('subject', 's3_key', 'source', 'view_id', 'product', 'domain', 'universe', 'bound') if base.get(k) not in (None, '')}
     vc = base.get('view_context') if str(base.get('source') or '') == 'view' else None
     cvc = _compact_view_context(vc)
     if cvc:

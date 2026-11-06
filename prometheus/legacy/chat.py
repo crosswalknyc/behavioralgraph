@@ -40,6 +40,7 @@ from prometheus import deck_sources as _deck_sources   # a deck of something alr
 from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: intake, labs, Focus Group IQ, catalog, status, directions (2026-10-26)
 from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation wizard (2026-10-28)
 from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
+from prometheus import question_universe as _question_universe   # the base is the universe the question names; the page only when pointed at (2026-11-06)
 import io
 import hashlib
 import time
@@ -12556,6 +12557,26 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         if pk:
             page_base = {'subject': nm or pk, 's3_key': pk,
                          'source': 'page'}
+    # The base is the universe the question names (Jenna 2026-11-06, her
+    # holiday toy shopping question ran "in the Starz audience"): a
+    # question that names its own universe ("people who ...", "potential
+    # <brand> consumers", "<brand> buyers", "US households", "when people
+    # start ...") is read on that universe. The page is not its base, and
+    # no file is guessed in for it below (the partial-name tier and the
+    # typo tier stand down); only a library subject the words name in
+    # full binds. The page stays when the words point at it or name it
+    # (prometheus.question_universe.question_universe).
+    _qu_named = _qu_explicit = False
+    try:
+        _qu = _question_universe.question_universe(text, str((page_base or {}).get('subject') or ''))
+        _qu_named = bool(_qu.kind == 'named') and not bound
+        _qu_explicit = _qu_named and bool(_qu.explicit)   # an audience named outright: no file is guessed in for it
+    except Exception as _fx:
+        _faults.note('chat', _fx)
+    if page_base is not None and _qu_named:
+        print(f"[pm-base] the ask names its own universe ({_qu.label!r}); the open page "
+              f"{page_base.get('subject')!r} is not its base")
+        page_base = None
 
     def _tokens(s):
         # Distinct: 'BEST OF THE BEST' is one ordinary word (2026-10-22)
@@ -12747,15 +12768,21 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         best, partial = None, None
     if best:
         return best
+    if partial and _qu_explicit:
+        print(f"[pm-base] the ask names its own universe; the partial-name tier's {partial.get('subject')!r} is not its base")
+        partial = None
     if partial:
         return partial
     # 2b. Fuzzy tier (2026-09-28, Phase 1): a unique one-typo-away
     # catalog subject binds instead of falling through to a duplicate
     # build offer. Ambiguity never binds. A long ask never binds by a
-    # typo (2026-11-04: 'tracked' is not 'Tracker').
+    # typo (2026-11-04: 'tracked' is not 'Tracker'). A question that
+    # names its own audience outright binds by a typo only inside that
+    # audience's own words ("cotsco members" is Costco; "start" in "when
+    # people start ... shopping" was never "Starz", 2026-11-06).
     try:
         fz = None if _long_ask else _pm_fuzzy_catalog_subject(
-            f"{text or ''} {subject_hint or ''}")
+            ' '.join(_qu.phrases) if _qu_explicit else f"{text or ''} {subject_hint or ''}")
         if fz and fz.get('s3_key'):
             print(f"[pm-base] fuzzy catalog bind: {fz['subject']!r}")
             return {'subject': fz['subject'], 's3_key': fz['s3_key'],
@@ -13675,6 +13702,29 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 digest_block = ''   # the profile's rows never ride the prompt as the anchor of a title read
         except Exception:
             traceback.print_exc()
+    # The base is the universe the question names (Jenna 2026-11-06): a
+    # page or library base the question did not name never carries a
+    # question that named its own universe ("potential Paw Patrol
+    # consumers", "when people start holiday toy shopping"). The read runs
+    # on that universe (US people) below; the page's rows never ride the
+    # prompt as its anchor, and no "On <page> instead" chip is offered,
+    # since the page was never a candidate.
+    _qu_page = str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
+    try:
+        _qu = _question_universe.question_universe(text, _qu_page)
+    except Exception as _fx:
+        _faults.note('chat', _fx); _qu = _question_universe.NONE
+    _qu_bound = bool(bind_subject) and _H._normalize_for_match(str(bind_subject).split(' - ')[0]) == \
+        _H._normalize_for_match(str((base or {}).get('subject') or '').split(' - ')[0])   # a chip or an approved quote chose this base: it stands
+    if base and not _pinned_base and not _qu_bound and str(base.get('source') or '') in ('page', 'catalog') \
+            and not str(base.get('s3_key') or '').startswith('subiq:') \
+            and _question_universe.names_other_universe(text, base.get('subject'), page=_qu_page):
+        print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} dropped: the question names its own "
+              f"universe ({_qu.label!r}, base {_qu.base!r})")
+        base = None
+        digest_block = ''
+    elif base and _qu_bound and not base.get('bound'):
+        base = dict(base, bound=True)   # the reader's own choice rides to the read core and the resume record
     if not base:
         # RESOLUTION LADDER, last rung (2026-08-27, Jenna: "if I go
         # back and ask for toy white space it can say do you mean for
@@ -13848,6 +13898,14 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         subj_name = _qs or (subj_hint or pma.guess_subject_from_text(text) or '').strip()
         if subj_name and not _qs and _page_default.not_a_subject(subj_name, text, _pm_plausible_subject, history):
             subj_name = ''   # ordinary words, a prose fragment, or a place in a list of places ("at Amazon, Walmart and Target"), 2026-10-24
+        # The universe the question names is the subject the offer quotes
+        # and the read runs on (Jenna 2026-11-06): "potential Paw Patrol
+        # consumers" over the router's paraphrase of the question ("When
+        # People Start Christmas Holiday Toy Shopping"); a population
+        # ("US households", "when people start ...") is the whole US unless
+        # the words also name a title or brand as the thing consumed.
+        if not _qs and _qu.kind == 'named':
+            subj_name = _question_universe.subject_for(_qu, subj_name, text)
         subj_name = subj_name if _page_default.is_everyone(subj_name) else _pm_entity_core_bind(subj_name)[0]
         if subj_name:
             try:
@@ -13918,6 +13976,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 _pm_ask_hint(outcome=('panel_offer' if _state == 'offer' else 'panel_out_of_credits'), subject=subj_name)
                 return jsonify(_pl)
             base = {'subject': subj_name, 's3_key': '', 'source': 'panel'}
+            if _qu.kind == 'named':
+                base['universe'] = _qu.base   # the figures describe US people (or the named audience), never a page
+                digest_block = ''             # the open profile's rows are not the anchor of a read on another universe
             panel_charge = _pl
             print(f"[pm-panel] charged {_pl.get('credits')} credits to {_pm_user} for {subj_name}")
     if not base:
@@ -14257,7 +14318,8 @@ def _pm_verify_prior_entries(res, family, led):
 
 def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                            anchors_block, led, pm_user, pm_ppu,
-                           stage_cb=None, switch_page=None, bank=True):
+                           stage_cb=None, switch_page=None, bank=True,
+                           universe_guard=True):
     """Fresh generated read - the operating loop (2026-08-27, Jenna:
     "it truly needs to be really smart"). Request-context free so it
     runs identically inline and inside a background read job.
@@ -14315,6 +14377,33 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
 
     _stage_note('reading the data')
     stages = {}
+    # The base is the universe the question names (Jenna 2026-11-06). A
+    # read that reaches the core on a page or library base the question
+    # never named, while the question named its own universe (a job
+    # resumed from before the rule, a direct caller), runs on that
+    # universe instead: the panel, US people, the named audience as the
+    # subject. The page's rows do not ride the prompt. The same reading
+    # frames the prompt and guards the reply below.
+    _qu = _question_universe.NONE
+    _qu_dash = [str(switch_page or '')]   # dashboard audiences a named-universe reply may never frame itself on
+    try:
+        if str(base.get('source') or '') in ('page', 'catalog'):
+            _qu_dash.append(str(base.get('subject') or ''))
+        _qu = _question_universe.question_universe(text, '')
+        if _qu.kind == 'named' and str(base.get('source') or '') in ('page', 'catalog') \
+                and not base.get('bound') \
+                and not str(base.get('s3_key') or '').startswith('subiq:') \
+                and _question_universe.names_other_universe(text, base.get('subject')):
+            print(f"[pm-loop] base {base.get('subject')!r} ({base.get('source')}) is not the universe the question "
+                  f"names ({_qu.label!r}); reading on {_qu.base!r}")
+            base = _question_universe.panel_base(_qu)
+            digest_block = ''
+        elif _qu.kind == 'named' and str(base.get('source') or '') == 'panel':
+            base = dict(base, universe=str(base.get('universe') or _qu.base))
+            if _qu.explicit:
+                digest_block = ''
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     _t_stage = time.monotonic()
     if not anchors_block:
         try:
@@ -14441,6 +14530,15 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _is_panel = str(base.get('source') or '') == 'panel'
     if _is_panel:
         extra_blocks.append(pma.PANEL_REPORT_GUIDANCE)
+    if _qu.kind == 'named' and _qu.explicit and _is_panel:
+        # the universe the question names frames the read: its base is US
+        # people (or the named audience), never a file on the dashboard
+        try:
+            _qu_block = _question_universe.framing_block(_qu, text)
+            if _qu_block:
+                extra_blocks.append(_qu_block)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
     # A title-viewing read on a person (Jenna 2026-11-04): the universe
     # is the people who watched the titles, anchored on title viewing
     # (the tracker figures and public title-viewing anchors), never the
@@ -14538,6 +14636,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _cw = __import__('prometheus.campaign_drilldown', fromlist=['window_for_base']).window_for_base(base)
             if _cw:   # the campaign's own window, never a profile's and never a default (2026-10-26)
                 res.update(window_label=_cw['label'], window_start=_cw['start'], window_end=_cw['end'])
+        if _qu.kind == 'named' and _qu.explicit and _is_panel and not str(res.get('universe') or '').strip():
+            res['universe'] = _question_universe.universe_label(_qu)   # the opener names the universe the question named (2026-11-06)
         # Stored figures bind this pass (2026-11-04, Liz's gender by door):
         # a figure already reported for the same subject, definition and
         # window is kept, and the reply says so in one line. The same on
@@ -14559,6 +14659,23 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         _pm_ask_hint(outcome='error')
         return _H._chatbot_calm_payload()
     stages['coherence'] = int((time.monotonic() - _t_stage) * 1000)
+    # Output guard (Jenna 2026-11-06): a reply framed on a dashboard
+    # audience the question never named ("Paw Patrol toy buyers in the
+    # Starz audience"), while the question named its own universe, never
+    # ships. It is read again, once, on the named universe.
+    if universe_guard and _qu.kind == 'named' and _qu.explicit:
+        try:
+            _leak = _question_universe.base_leak(reply, res, _qu_dash, text=text)
+        except Exception as _fx:
+            _faults.note('chat', _fx); _leak = ''
+        if _leak:
+            print(f"[pm-loop] reply framed on {_leak!r}, an audience the question never named; "
+                  f"reading again on {_qu.base!r} ({_qu.label!r})")
+            _stage_note('reading the data')
+            return _pm_generate_read_core(
+                text=text, history=history, mr=mr, base=_question_universe.panel_base(_qu),
+                digest_block='', anchors_block=anchors_block, led=led, pm_user=pm_user, pm_ppu=pm_ppu,
+                stage_cb=stage_cb, switch_page=None, bank=bank, universe_guard=False)
     # ---- Verification pass (2026-08-28, p3-verify): anchor recompute
     # against the base rows, ledger coherence, scrub residue. ONE
     # self-revision on failure; a second failure holds the read (never

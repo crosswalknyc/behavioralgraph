@@ -865,6 +865,14 @@ def fuzzy_catalog_subject(text, catalog, *, normalize, typo_eq, expand_alias,
             continue
         rows.append((entry, subj, st))
     spoken_for = {w for _e, _s, st in rows for w in st if w in q_tokens and len(w) >= 4}
+    # An ordinary English word the reader wrote is spoken for by English:
+    # "start" is never a one-letter misspelling of "Starz" (2026-11-06,
+    # Jenna's holiday toy shopping question ran on the Starz profile).
+    try:
+        from .question_universe import ordinary_word as _ordinary
+        spoken_for |= {qt for qt in q_tokens if _ordinary(qt)}
+    except Exception:
+        pass
     hits = {}
     for entry, subj, st in rows:
         needed_typo = False
