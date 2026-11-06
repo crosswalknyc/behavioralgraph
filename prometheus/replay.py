@@ -301,9 +301,16 @@ def in_child():
 
 
 def _ensure_paths():
-    for p in (WEBAPP, os.path.join(REPO_ROOT, 'scripts'), REPO_ROOT):
+    # bg-webapp leads; the parent repo and its scripts/ sit behind
+    # everything else. With the repo root in front, the parent repo's own
+    # `migration` package shadowed bg-webapp/migration inside the replay
+    # harness (digital_twin_lane could not import migration.digital_twins).
+    for p in (REPO_ROOT, os.path.join(REPO_ROOT, 'scripts')):
         if p not in sys.path:
-            sys.path.insert(0, p)
+            sys.path.append(p)
+    if WEBAPP in sys.path:
+        sys.path.remove(WEBAPP)
+    sys.path.insert(0, WEBAPP)
 
 
 # ---------------------------------------------------------------------------
