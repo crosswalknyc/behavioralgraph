@@ -3399,8 +3399,14 @@ def _resolve_target_billing_subject(target_username: str):
         return None
     subject, subject_kind, subject_key = wallet.resolve_billing_subject(
         u, data)
-    display = (f"{u.get('first_name', '')} "
-               f"{u.get('last_name', '')}").strip() or target_username
+    # A link that funds a company wallet is addressed to the company on
+    # the public page, never to the seat it was minted for (the 2026-09-10
+    # contract; the branch fell out on 2026-09-25 without a note).
+    if subject_kind == "company" and subject_key:
+        display = str(subject_key)
+    else:
+        display = (f"{u.get('first_name', '')} "
+                   f"{u.get('last_name', '')}").strip() or target_username
     return {
         "user": u,
         "uname": target_username,
