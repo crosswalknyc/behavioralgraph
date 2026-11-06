@@ -56374,7 +56374,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // PLAYING button) settles the page on the player once. A repaint never changes the fold; the chat follows inside
             // its own box.
             function piFocusOn() { return !!S.pilot && !!PI_HOST[piTab()] && !!document.querySelector('.dtw-pane.active .dtw-pi-head'); }
-            function piFocusQuiet(body, ms) { S.piScrollLast = body.scrollTop; S.piQuietUntil = Date.now() + ms; }   // our own scroll writes never read as the reader's move
+            function piFocusQuiet(body, ms) { S.piScrollLast = body.scrollTop; S.piUpRun = 0; S.piQuietUntil = Date.now() + ms; }   // our own scroll writes never read as the reader's move
             function piFocusScroll(settle) {
                 var v = el('digitalTwinsIQView'); if (!v) return;
                 var body = v.querySelector('.dtw-body'); if (!body) return;
@@ -56395,13 +56395,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var v = el('digitalTwinsIQView'), body = v && v.querySelector('.dtw-body'); if (!v || !body) return;
                 if (!piFocusOn()) { v.classList.remove('dtw-focus'); return; }   // no test on the pane: the twin shows
                 var st = body.scrollTop, was = S.piScrollLast == null ? st : S.piScrollLast; S.piScrollLast = st;
-                if (Date.now() < (S.piQuietUntil || 0)) return;
+                if (Date.now() < (S.piQuietUntil || 0)) { S.piUpRun = 0; return; }
+                S.piUpRun = st < was ? (S.piUpRun || 0) + (was - st) : (st > was ? 0 : (S.piUpRun || 0));   // how far the reader has come up since they last went down
                 var folded = v.classList.contains('dtw-focus');
                 if (e && e.type === 'wheel') {
                     if (folded && e.deltaY < 0 && st <= 0 && !piInnerScroller(e.target, body)) { v.classList.remove('dtw-focus'); piFocusQuiet(body, 400); }
                     return;
                 }
-                if (folded) { if (st <= 2 && was > 8) { v.classList.remove('dtw-focus'); piFocusQuiet(body, 400); } return; }   // the reader scrolled up to the top (a nudge of a few px right after a fold is not that)
+                if (folded) { if (st <= 2 && S.piUpRun > 8) { v.classList.remove('dtw-focus'); piFocusQuiet(body, 400); } return; }   // the reader scrolled up to the top (a nudge of a few px right after a fold is not that; a slowing fling that ends there is)
                 var spine = v.querySelector('.dtw-spine');
                 if (st > Math.max(56, spine ? spine.offsetHeight : 0)) piFoldHeld(v, body);   // past the masthead's own height: below that a held fold has no room
             }
