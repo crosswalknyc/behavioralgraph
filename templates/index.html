@@ -56361,28 +56361,49 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (S.pilot) renderPilotConsole();
             };
             window.addEventListener('beforeunload', function() { if (piRoomPopped()) { try { S.roomPop.win.close(); } catch (_) {} } });
-            // ---- the test takes the screen once, when play starts (Jenna 2026-11-05: "when this locks it never allows me to
-            // scroll to where i see the top of this window it alwasy just bounces back to here ... allow me to keep scrolling
-            // if I need to"). Until then the masthead folded on every body scroll past 56px and unfolded only at the very top;
-            // each fold resized the scroller by the masthead's height, so the page kept snapping back to the player view and the
-            // top of the window could not be reached. Now Play (and the PLAYING button) settles the page on the player once: the
-            // masthead folds and the test bar sits at the top. After that the page scrolls freely and nothing refolds it until
-            // the next Play. The reader's own move back to the top (scrolling up to it, a wheel up while there) or the masthead
-            // button brings the twin and its tabs back. A repaint never changes the fold, and the chat follows inside its own box.
+            // ---- the test takes the screen while the reader is in it (Jenna 2026-11-03; 2026-11-05: "this part is supposed to
+            // not be there when I scroll"). Once the body has scrolled past the masthead's own height the masthead folds, the
+            // test bar locks at the top and the page scrolls freely; scrolling back up to the very top (or a wheel up while
+            // there, or the masthead button) brings the twin and its tabs back, and nothing refolds until the reader has
+            // scrolled past the masthead again. A fold never moves what is under the reader's eyes: the body's top edge rises by
+            // the masthead's height, so the scroll position drops by the same amount in the same frame, with the masthead's
+            // transition off for that frame. (The first version folded at 56px with the transition on, which pushed the page by
+            // the masthead's height on every fold and unfolded only at an exact top the reader could not hold: the bounce. The
+            // one after it never refolded, so the masthead stuck once the top had been visited.) At the top the masthead takes
+            // its room back and the test slides down under it; the reader is at the top, so nothing refolds. Play (and the
+            // PLAYING button) settles the page on the player once. A repaint never changes the fold; the chat follows inside
+            // its own box.
+            function piFocusOn() { return !!S.pilot && !!PI_HOST[piTab()] && !!document.querySelector('.dtw-pane.active .dtw-pi-head'); }
+            function piFocusQuiet(body, ms) { S.piScrollLast = body.scrollTop; S.piQuietUntil = Date.now() + ms; }   // our own scroll writes never read as the reader's move
             function piFocusScroll(settle) {
                 var v = el('digitalTwinsIQView'); if (!v) return;
                 var body = v.querySelector('.dtw-body'); if (!body) return;
-                var on = !!S.pilot && !!PI_HOST[piTab()] && !!document.querySelector('.dtw-pane.active .dtw-pi-head');
-                if (!on) { v.classList.remove('dtw-focus'); return; }
-                if (settle === true) { v.classList.add('dtw-focus'); S.piSettleAt = Date.now(); body.scrollTop = 0; }
+                if (!piFocusOn()) { v.classList.remove('dtw-focus'); return; }
+                if (settle === true) { v.classList.add('dtw-focus'); body.scrollTop = 0; piFocusQuiet(body, 800); }
             }
-            function piFocusUnfold(e) {
-                piFocusScroll();   // no test on the pane: the twin shows
+            function piFoldHeld(v, body) {
+                // the masthead folds with the page held still: the body's top edge is measured, the masthead folds without its
+                // transition, and the scroll position moves by the exact shift of that edge before the frame paints
+                var spine = v.querySelector('.dtw-spine'), top0 = body.getBoundingClientRect().top;
+                if (spine) spine.style.transition = 'none';
+                v.classList.add('dtw-focus');
+                body.scrollTop += body.getBoundingClientRect().top - top0;
+                piFocusQuiet(body, 400);
+                if (spine) requestAnimationFrame(function() { spine.style.transition = ''; });
+            }
+            function piFocusOnScroll(e) {
                 var v = el('digitalTwinsIQView'), body = v && v.querySelector('.dtw-body'); if (!v || !body) return;
+                if (!piFocusOn()) { v.classList.remove('dtw-focus'); return; }   // no test on the pane: the twin shows
                 var st = body.scrollTop, was = S.piScrollLast == null ? st : S.piScrollLast; S.piScrollLast = st;
-                if (!v.classList.contains('dtw-focus') || Date.now() - (S.piSettleAt || 0) < 800) return;
-                var up = (e && e.type === 'wheel') ? (e.deltaY < 0 && st <= 0 && !piInnerScroller(e.target, body)) : (st <= 2 && was > 2);
-                if (up) v.classList.remove('dtw-focus');
+                if (Date.now() < (S.piQuietUntil || 0)) return;
+                var folded = v.classList.contains('dtw-focus');
+                if (e && e.type === 'wheel') {
+                    if (folded && e.deltaY < 0 && st <= 0 && !piInnerScroller(e.target, body)) { v.classList.remove('dtw-focus'); piFocusQuiet(body, 400); }
+                    return;
+                }
+                if (folded) { if (st <= 2 && was > 8) { v.classList.remove('dtw-focus'); piFocusQuiet(body, 400); } return; }   // the reader scrolled up to the top (a nudge of a few px right after a fold is not that)
+                var spine = v.querySelector('.dtw-spine');
+                if (st > Math.max(56, spine ? spine.offsetHeight : 0)) piFoldHeld(v, body);   // past the masthead's own height: below that a held fold has no room
             }
             function piInnerScroller(t, body) {
                 // a wheel inside a box that scrolls on its own (the chat, a card) is that box's, not the page's
@@ -56395,9 +56416,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwPilotUnfocus = function() {
                 var v = el('digitalTwinsIQView'), body = v && v.querySelector('.dtw-body');
                 if (v) v.classList.remove('dtw-focus');
-                if (body) { try { body.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { body.scrollTop = 0; } }
+                if (body) { body.scrollTop = 0; piFocusQuiet(body, 800); }   // to the top at once: a smooth scroll is cut short while the masthead's return resizes the body, and its own scroll never refolds
             };
-            (function() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b && !b._piFocusWired) { b._piFocusWired = true; b.addEventListener('scroll', piFocusUnfold, { passive: true }); b.addEventListener('wheel', piFocusUnfold, { passive: true }); } })();
+            (function() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b && !b._piFocusWired) { b._piFocusWired = true; b.addEventListener('scroll', piFocusOnScroll, { passive: true }); b.addEventListener('wheel', piFocusOnScroll, { passive: true }); } })();
             // ---- what the reader opened, and where they scrolled, survive a repaint (Jenna 2026-11-04: "these dont stay open
             // when I click one if something else is happening they should"). The test is repainted whole whenever its session
             // refreshes: a question the room was answering lands, a forecast attaches, the norm changes, the room pops out or
