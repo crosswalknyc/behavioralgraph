@@ -275,6 +275,25 @@ class TheOutputGuard(unittest.TestCase):
         self.assertTrue(NS.page_named(JENNA, label, _norm, C._PM_CLARIFY_STOP_TOKENS))      # the cohort's words are in the question
         self.assertFalse(NS.page_named(JENNA, 'Starz', _norm, C._PM_CLARIFY_STOP_TOKENS))   # the subject is not
 
+    def test_the_named_universe_survives_the_display_step(self):
+        """With the Reader's reading in hand the binder reads the words as
+        'When People Start Christmas Holiday Toy Shopping'; that paraphrase
+        is a question fragment at the price gate ('Which subject should
+        this be on?'). The named universe is the subject the offer quotes."""
+        from prometheus import subject_rules as SR
+        reading = {'intent': 'analyze', 'confidence': 0.74, 'flags': [],
+                   'subjects': [{'as_written': 'when people start christmas holiday toy shopping', 'catalog': '', 'kind': 'audience'},
+                                {'as_written': 'potential paw patrol consumers', 'catalog': '', 'kind': 'audience'}]}
+        para = SR.display_for('potential Paw Patrol consumers', JENNA, page='', reading=reading)
+        self.assertFalse(P.looks_like_subject(para), para)                  # the paraphrase would draw the clarify
+        self.assertTrue(P.looks_like_subject('potential Paw Patrol consumers'))
+        self.assertTrue(QU.same_name('Potential Paw Patrol Consumers', 'potential Paw Patrol consumers'))
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        i = src.index('def _pm_generate_metrics_response(')
+        body = src[i:src.index('\ndef ', i + 10)]
+        self.assertIn("_question_universe.same_name(subj_name, _qu.label)", body)
+        self.assertIn("if not _qu_keep:\n            subj_name = _subject_rules.display_for(", body)
+
 
 class SizingLaneStillHolds(unittest.TestCase):
     """The sizing lane imports the shared pointer; its cases still pass."""

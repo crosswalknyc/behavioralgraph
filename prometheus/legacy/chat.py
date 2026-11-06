@@ -13950,7 +13950,16 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 traceback.print_exc()
         if not subj_name and _bf_subj:
             subj_name = _bf_subj
-        subj_name = _subject_rules.display_for(subj_name, text, page=str(((ctx or {}).get('primary') or {}).get('name') or ''))   # I1: never 'Unique', never a wrapper
+        # The universe the question names is already how a reader writes
+        # it; the binder's reading of the words (the Reader's paraphrase,
+        # 'When People Start Christmas Holiday Toy Shopping') never
+        # replaces it (2026-11-06: that paraphrase reads as a question
+        # fragment at the price gate and drew 'Which subject should this
+        # be on?').
+        _qu_keep = bool(_qu.kind == 'named' and _qu.explicit and subj_name
+                        and _question_universe.same_name(subj_name, _qu.label))
+        if not _qu_keep:
+            subj_name = _subject_rules.display_for(subj_name, text, page=str(((ctx or {}).get('primary') or {}).get('name') or ''))   # I1: never 'Unique', never a wrapper
         _is_derived = str((metric_request or {}).get('metric_family') or '') == 'dimension split' or (isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') == 'derived')
         # I2 (2026-10-20, Bria on The Office US): a different metric or
         # breakdown asked back at a landed read is the derived read on

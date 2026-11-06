@@ -36,7 +36,8 @@ import re
 from collections import namedtuple
 
 __all__ = ['Universe', 'question_universe', 'named_universe', 'page_pointer', 'points_at_page',
-           'names_page', 'names_other_universe', 'ordinary_word', 'panel_base', 'US_PEOPLE']
+           'names_page', 'names_other_universe', 'ordinary_word', 'panel_base', 'US_PEOPLE', 'subject_for',
+           'universe_label', 'framing_block', 'base_leak', 'same_name', 'EVERYONE']
 
 US_PEOPLE = 'US people'
 
@@ -501,6 +502,11 @@ def subject_for(universe, current='', text=''):
     if u.label and u.label != US_PEOPLE:
         return u.label
     return EVERYONE
+
+
+def same_name(a, b):
+    """One name under two casings or punctuations."""
+    return bool(_norm(a)) and _norm(a) == _norm(b)
 
 
 def panel_base(universe):
