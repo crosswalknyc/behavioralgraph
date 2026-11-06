@@ -257,6 +257,24 @@ class TheOutputGuard(unittest.TestCase):
         self.assertLess(body.index('names_other_universe('), body.index('RESOLUTION LADDER, last rung'))
         self.assertIn("base['universe'] = _qu.base", body)
 
+    def test_cross_session_memory_never_names_a_universe_the_question_named(self):
+        """The second run of Jenna's question bound Starz again: memory
+        remembered subject Starz with the cohort 'Paw Patrol toy buyers in
+        the Starz audience', and the cohort's words matched the question.
+        The ladder binds a remembered SUBJECT the words name, never a
+        cohort, and never runs when the question names its own universe."""
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        i = src.index('def _pm_generate_metrics_response(')
+        body = src[i:src.index('\ndef ', i + 10)]
+        ladder = body[body.index('RESOLUTION LADDER, last rung'):body.index('TWO-BASE READS')]
+        self.assertIn("if _qu.kind == 'named' and _qu.explicit:\n                _named = _named or _qu.label", ladder)
+        self.assertIn("text, o['subject'], _H._normalize_for_match", ladder)
+        self.assertNotIn("text, o['label'], _H._normalize_for_match", ladder)
+        from prometheus import named_subject as NS
+        label = 'Starz (Paw Patrol toy buyers in the Starz audience)'
+        self.assertTrue(NS.page_named(JENNA, label, _norm, C._PM_CLARIFY_STOP_TOKENS))      # the cohort's words are in the question
+        self.assertFalse(NS.page_named(JENNA, 'Starz', _norm, C._PM_CLARIFY_STOP_TOKENS))   # the subject is not
+
 
 class SizingLaneStillHolds(unittest.TestCase):
     """The sizing lane imports the shared pointer; its cases still pass."""

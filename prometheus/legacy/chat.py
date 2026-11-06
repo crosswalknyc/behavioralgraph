@@ -13761,6 +13761,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _named = (subj_hint
                       or str(pma.guess_subject_from_text(text)
                              or '').strip())
+            # A question that names its own universe outright has its
+            # subject (Jenna 2026-11-06): cross-session memory never names
+            # it, never binds it and never asks which remembered audience
+            # it meant. The no-base path below quotes the named universe.
+            if _qu.kind == 'named' and _qu.explicit:
+                _named = _named or _qu.label
             if _pm_user and not _named:
                 _refs = pmm.recent_referents(_pm_user, k=2)
                 _opts = []
@@ -13771,9 +13777,13 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                       'subject': _r['subject'],
                                       'cohort': _r.get('cohort')})
                 # The ask names one of the remembered subjects: bind it
-                # (never offer it back as a chip). 2026-10-08.
+                # (never offer it back as a chip). 2026-10-08. The SUBJECT
+                # has to be named: a remembered cohort is often the earlier
+                # question's own words ('Paw Patrol toy buyers in the Starz
+                # audience' bound Starz to a question about Paw Patrol toy
+                # buyers, 2026-11-06), so the cohort alone never binds.
                 _hit = [o for o in _opts if _ns_mod.page_named(
-                    text, o['label'], _H._normalize_for_match,
+                    text, o['subject'], _H._normalize_for_match,
                     _PM_CLARIFY_STOP_TOKENS)]
                 if len(_hit) == 1 and not bind_subject:
                     _pm_ask_hint(route='memory_bind',
