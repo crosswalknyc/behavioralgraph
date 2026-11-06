@@ -1529,6 +1529,7 @@ The published share is the count: the whole audience, in percent and people. The
 State one split, once, and never contradict it: when the count gives a side a share, never write nobody, no one, none, not one, zero or 0 for that side, and never write all twelve or every seat when a seat sits elsewhere.
 Write:
 - read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Open with the headline's fact in your own words (the share in plain words, the people it comes to, then the seats). When watched_any is given (the rows that mean the person has watched any of it, added together), state that total once, early, in its own in_words phrase with its people ('about one in nine, roughly 679K people, have watched any of it'), then the split within it. When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take); when a small side holds a seat, that seat's own words are what makes the small share real. Vary the sentence shapes. Never name a source, a publication or a ratings service; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data, calibrated, anchored, benchmark, published, reported, according to. What the room knows (the schedule, the premiere, the finale date, who is in it, when the audience's own show returns) is the room's own knowledge, said as plain fact with no word on where it came from. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
+When mentions is given (the question asked for several things, so a seat could name more than one), say once that people could name more than one and that those shares add past 100, then name the most-named option with its in_words phrase; the options' own split stays the first thing each named.
 - chat: the read for the room's chat, two or three sentences: the headline's share in words and people, and the one reason that carried it. No clock, no scene, no preamble; it opens with what the room said.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
 - probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
@@ -3936,7 +3937,7 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
                        'by_segment': [{k: v for k, v in sr.items() if k != 'tally'} for sr in by_segment],
                        'answers': [{'seat': a['seat'], 'name': a['name'], 'option': a['option_label'], 'confidence': a['confidence'], 'line': a['line'], 'reason': a['reason']} for a in answers],
                        'facts_brief': {k: v for k, v in (brief or {}).items() if not k.startswith('_')}, 'prior_note': prior.get('note') if prior else None,
-                       'watched_any': (prior or {}).get('watched_any'),
+                       'watched_any': (prior or {}).get('watched_any'), 'mentions': (prior or {}).get('mentions'),
                        'audience': {'name': tb['name'], 'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'lifecycle': tb['lifecycle_read']}}, default=str)[:14000]
     data, call = models.call('moderator', READ_SYSTEM, user, max_tokens=2400, temperature=0.4, tools=None)
     if log:
@@ -4336,6 +4337,26 @@ def run_question(ctx: dict) -> dict:
             if a.get('fallback') and f"seat {a['seat']} late" not in fallbacks:
                 fallbacks.append(f"seat {a['seat']}")
         timings['seats_s'] = round(time.time() - t, 2)
+        # 3b. the coder (Jenna 2026-11-05, "It cant ever have all the same answers"): a seat that answered beside the board is
+        #     coded onto it; an open question's board is built from what the seats named; Other holds at most 15% of the seats
+        t = time.time()
+        try:
+            from migration import digital_twin_board as BOARD
+            coded = BOARD.code_board(models, q, kind, rec.get('framing') or '', options, rec['answers'], brief, seed, fixed=bool(mo.get('fixed')), log=log)
+        except Exception as e:
+            traceback.print_exc()
+            print(f"[twin-room] coder skipped: {str(e)[:120]}")
+            coded = {'changed': False, 'options': options, 'trail': {'mode': None, 'error': str(e)[:160]}}
+        if coded.get('changed'):
+            options = coded['options']
+            rec['option_labels'] = [o['label'] for o in options]
+            rec['options'] = [{'id': o['id'], 'label': o['label'], 'lean': o['lean'], 'pct': 0.0, 'people': 0, 'seats': []} for o in options]
+            if coded.get('multi'):
+                rec['multi_select'] = True
+            if coded.get('fallback'):
+                fallbacks.append('coding')
+        trail['coding'] = coded.get('trail') or {'mode': None}
+        timings['coding_s'] = round(time.time() - t, 2)
         # 4. the arithmetic: the seat votes smoothed with each segment twin's prior over the moderator's options
         base_q = q if kind != 'probe' else str((last or {}).get('q') or q)
         priors = {}
@@ -4406,6 +4427,17 @@ def run_question(ctx: dict) -> dict:
             print(f"[twin-room] anchor skipped: {str(e)[:120]}")
             trail['anchor_status'] = 'unanchored'
             plan = {}
+        # 4a. the board guard (digital_twin_board): no two options share a share or a people figure, Other never leads; the
+        #     seats are then mirrored to the guarded count
+        try:
+            from migration import digital_twin_board as BOARD
+            trail['board_guard'] = BOARD.guard_board(opts_out, by_segment, total_people, len(roster), seed, priority=BOARD.seat_priority(opts_out, plan), answers=rec['answers'])
+            if rec.get('multi_select'):
+                rec['mentions'] = BOARD.mentions(opts_out, rec['answers'], len(roster), total_people, seed)
+        except Exception as e:
+            traceback.print_exc()
+            print(f"[twin-room] board guard skipped: {str(e)[:120]}")
+            fallbacks.append('board')
         # 4b. the seats mirror the count (Jenna 2026-11-05): the published split is the count; the seats are allocated to it
         #     by largest remainder with a seat for any side worth half a seat, and a moved seat argues its stance in character
         t = time.time()
@@ -4476,6 +4508,9 @@ def run_question(ctx: dict) -> dict:
                 prior['watched_any'] = dict(watched_any)
             else:
                 prior['note'] = (plan['line'] + ' ' + str(prior.get('note') or '')).strip()
+        if rec.get('mentions'):   # a question that asked for several things: the read says people could name more than one
+            prior = dict(prior or {})
+            prior['mentions'] = [{'label': m['label'], 'named_pct': m['pct'], 'in_words': plain_share(float(m['pct'])), 'people': m['people'], 'in_the_room': f"{m['seats_n']} of {len(roster)}"} for m in rec['mentions']]
         trail['prior'] = prior
         # 5. the moderator reads the room
         t = time.time()
@@ -4567,10 +4602,16 @@ def _deterministic_fill(ctx: dict):
     old = P.ask(scratch, ctx['twins_by_key'], rec['q'], kind=rec['kind'], options=rec.get('option_labels') or None, stimulus=rec.get('stimulus') or None, room=False)
     rows = old.get('distribution') or []
     rec['options'] = [{'id': chr(97 + i), 'label': r['label'], 'lean': 'other', 'pct': r['pct'], 'people': r['people'], 'seats': [], 'seats_n': 0, 'tally': '', 'room_pct': None} for i, r in enumerate(rows)]
+    rec['by_segment'] = old.get('by_segment') or []
+    try:   # the board guard holds on the deterministic answer too: no two rows alike, Other never the lead
+        from migration import digital_twin_board as BOARD
+        rec.setdefault('trail', {})['board_guard'] = BOARD.guard_board(rec['options'], rec['by_segment'], int(sum(int(r.get('people') or 0) for r in rows)), len(ctx.get('roster') or []), ctx.get('seed') or '')
+    except Exception as e:
+        print(f"[twin-room] board guard skipped on the deterministic fill: {str(e)[:120]}")
+    rows = [{'label': o['label'], 'pct': o['pct'], 'people': o['people']} for o in rec['options']]
     rec['option_labels'] = [r['label'] for r in rows]
     rec['distribution'] = rows
     rec['tally'] = []
-    rec['by_segment'] = old.get('by_segment') or []
     try:
         rec['headline'], rec['headline_people'] = headline_for(rec['options'], int(sum(int(sg.get('people') or 0) for sg in (session.get('group') or {}).get('segments') or [])), 0, _twin_name(ctx.get('twin') or {}))
     except Exception:
