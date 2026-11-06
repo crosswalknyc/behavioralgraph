@@ -1905,6 +1905,10 @@ def partition_frame(draft_data, trimmed_res, cells, question=''):
         frame['window'] = str(res2.get('window_label') or '').strip() or (
             f"{res2.get('window_start')} to {res2.get('window_end')}"
             if res2.get('window_start') and res2.get('window_end') else '')
+        # a window fragment is never cut mid-token (2026-11-05): the
+        # completion prompt and the ops note carry it whole or rebuilt
+        # from the read's dates
+        frame['window'] = _whole_window(frame['window'], res2)
         counts = _count_metrics(res2)
         missing_norms = {_norm(c['label']) for c in cells}
         row_cells = [c for c in cells if c['where'] == 'rows']
@@ -2013,6 +2017,29 @@ def partition_frame(draft_data, trimmed_res, cells, question=''):
     except Exception:
         traceback.print_exc()
     return frame
+
+
+def _whole_window(label, res=None):
+    """A window label whole, or rebuilt from the read's dates when it
+    reads cut (prometheus.window_label, 2026-11-05)."""
+    try:
+        from prometheus import window_label as _wl
+        res = res if isinstance(res, dict) else {}
+        t = str(label or '').strip()
+        if t and _wl.cut_mid_token(t):
+            return _wl.repair_window_label(t, res.get('window_start'), res.get('window_end')) or t
+        return t
+    except Exception:
+        return str(label or '').strip()
+
+
+def _whole_window_lines(reply, res=None):
+    """Every ``Window:`` line of a completed reply printed whole."""
+    try:
+        from prometheus import window_label as _wl
+        return _wl.repair_window_lines(reply, res)
+    except Exception:
+        return reply
 
 
 def completion_prompt(question, trimmed_res, cells, frame):
@@ -2507,6 +2534,7 @@ def complete_cells(last_draft, trimmed, *, question, dropped_labels, recompute, 
                         v['definition'] = _cell_definition(c, frame)
                 d3 = apply_cells(d2, data0, cells, filled, frame)
                 res3, reply3 = recompute(d3)
+                reply3 = _whole_window_lines(reply3, res3)
                 if reply3:
                     verdict3 = verify_read(reply=reply3, res=res3, family=family or fam, base_lookup=base_lookup,
                                            prior_entries=prior_entries or [], question=question, bound_facts=bound_facts)
@@ -2525,6 +2553,7 @@ def complete_cells(last_draft, trimmed, *, question, dropped_labels, recompute, 
             return None
         d3 = apply_cells(d2, data0, cells, filled, frame)
         res3, reply3 = recompute(d3)
+        reply3 = _whole_window_lines(reply3, res3)
         if not reply3:
             return None
         verdict3 = verify_read(reply=reply3, res=res3, family=family or fam, base_lookup=base_lookup,
@@ -2538,6 +2567,7 @@ def complete_cells(last_draft, trimmed, *, question, dropped_labels, recompute, 
                 filled['values'][c['label']]['definition'] = f"those in {parent_label} who fall in {c['label']}"
             d3 = apply_cells(d2, data0, cells, filled, frame)
             res3, reply3 = recompute(d3)
+            reply3 = _whole_window_lines(reply3, res3)
             if not reply3:
                 return None
             verdict3 = verify_read(reply=reply3, res=res3, family=family or fam, base_lookup=base_lookup,

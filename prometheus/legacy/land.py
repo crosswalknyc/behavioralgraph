@@ -95,44 +95,37 @@ def _pm_settle_ask(job_id, outcome, reply='', started_at=None):
 
 
 def _pm_append_read_to_history(username, job_id, payload, held=False, started_at=None):
-    """Append a finished read to the requester's chat thread so it is
+    """Land a finished read in the requester's chat thread so it is
     waiting when they return, even if the tab that started it is gone.
-    Uses the existing per-user history store; idempotent by
-    read_job_id so it never doubles a turn the widget also delivered.
-    Settles the promise in the ask log either way."""
+    The server's landing is the authoritative copy (2026-11-05,
+    prometheus.read_landing): the payload fills the ack turn that
+    carries the job id (the promise a persisting session wrote: "On it:
+    reading X now") or is appended when no ack is in the thread, and
+    nothing is written when a turn already carries the payload text or
+    the landed mark. A job id alone never counts as landed; that reading
+    left a finished read in the job payload and out of the thread.
+    Settles the promise in the ask log either way. Returns 'already',
+    'filled', 'appended' or None."""
     if not username:
-        return
+        return None
     try:
         reply = str((payload or {}).get('reply') or '').strip()
         _pm_settle_ask(job_id, 'held' if held else 'landed', reply, started_at)
         if not reply:
-            return
+            return None
+        from prometheus import read_landing as _rl
         _tid = _C._pm_thread_for_job(username, job_id)
         history = _C._pm_load_thread_or_active(username, _tid)
-        if _C._pm_history_has_job_turn(history, 'read_job_id', job_id):
-            return
-        followups = [f for f in ((payload or {}).get('followups') or [])
-                     if isinstance(f, str)][:6]
-        _meta = {'read_job_id': job_id, 'kind': 'read',
-                 'options': [{'label': f, 'send': f} for f in followups]}
-        for _k in ('file_link', 'chart'):   # the CSV link and the chart survive a reload
-            if isinstance((payload or {}).get(_k), dict) and (payload or {})[_k].get('url'):
-                _meta['link' if _k == 'file_link' else 'chart'] = dict((payload or {})[_k])
-        if (payload or {}).get('profile'):
-            _meta['subject'] = str((payload or {}).get('profile'))[:120]
-        # the read's figure ledger rides on the turn so "where does this
-        # number come from" can answer from the thread (2026-10-30)
-        try:
-            _figs = [f for f in ((payload or {}).get('figures') or []) if isinstance(f, dict) and f.get('value') is not None]
-            if _figs:
-                _meta['figures'] = [{'value': f.get('value'), 'kind': f.get('kind'), 'label': str(f.get('label') or '')[:120],
-                                     'source': str(f.get('source') or '')[:40]} for f in _figs[:40]]
-        except Exception:
-            pass
-        history.append({'role': 'agent', 'text': reply, 'ts': _C._pm_iso_now(), 'meta': _meta})
+        _meta = _rl.read_meta(job_id, payload)
+        history, how = _rl.land(history, 'read_job_id', job_id, reply, _meta, ts=_C._pm_iso_now())
+        if how == 'already':
+            return how
         _C._pm_save_thread_or_active(username, _tid, history)
+        print(f"[pm-land] read {job_id} {how} in thread {_tid or 'active'} for {username}")
+        return how
     except Exception:
         traceback.print_exc()
+        return None
 
 
 def _pm_append_deck_to_history(username, job_id, status):

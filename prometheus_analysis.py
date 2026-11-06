@@ -3783,6 +3783,20 @@ def _clip_label(text, limit=120):
     return cut.rstrip(' ,;:-(')
 
 
+def _clip_window_label(text, limit=None):
+    """A window label whole, or its longest whole head (2026-11-05): the
+    raw [:80] slice here shipped 'Window: Nov 5 2025 to Nov 5 2026
+    (S.W.A.T. Exiles Season 1 to date, Sep 25 to Oct 29 202.' on a
+    Subscriber IQ overlap read, the year cut to three digits and the
+    parenthesis never closed. prometheus.window_label never cuts inside
+    a token, a parenthesis or a year."""
+    try:
+        from prometheus import window_label as _wl
+        return _wl.clip_window_label(text, limit or _wl.WINDOW_LABEL_MAX)
+    except Exception:
+        return _clip_label(text, limit or 200)
+
+
 def _messy(subject, kpi, value):
     """Deterministic messy count: last digit 1-9, never ends in 0
     (no-round-numbers rule). Idempotent for a given (subject, kpi,
@@ -3845,7 +3859,7 @@ def enforce_demand_coherence(data):
         'subject': _clip_label(subj),
         'platform': str(data.get('platform') or '').strip()[:80],
         'rival': (str(data.get('rival') or '').strip()[:80] or None),
-        'window_label': str(data.get('window_label') or '').strip()[:80],
+        'window_label': _clip_window_label(data.get('window_label')),
         'window_start': str(data.get('window_start') or '').strip()[:12],
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'cohort_label': str(data.get('cohort_label') or '').strip()[:160],
@@ -6341,7 +6355,7 @@ def enforce_metrics_coherence(data, so_what=False, multi=None):
         'subject': _clip_label(subj),
         'metric_family': str(data.get('metric_family')
                              or 'audience').strip().lower()[:32],
-        'window_label': str(data.get('window_label') or '').strip()[:80],
+        'window_label': _clip_window_label(data.get('window_label')),
         'window_start': str(data.get('window_start') or '').strip()[:12],
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'headline': _clip_text(data.get('headline'), 300),

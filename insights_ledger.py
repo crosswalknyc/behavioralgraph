@@ -468,7 +468,7 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'ws': str(window_start or '')[:12],
         'we': str(window_end or '')[:12],
-        'wl': str(window_label or '')[:80],
+        'wl': _clip_window_label(window_label),
         'metrics': clean_metrics,
         'anchors': [str(a)[:120] for a in (anchors or []) if str(a)][:6],
         'base': str(base_profile_key or '')[:220],
@@ -497,6 +497,17 @@ def make_entry(*, subject, metric_family, question, route, metrics,
                                          else str(v)[:40])
                            for k, v in list(verify.items())[:8]}
     return entry
+
+
+def _clip_window_label(window_label):
+    """The window label stored whole (2026-11-05): a raw [:80] here
+    carried the cut 'Sep 25 to Oct 29 202' a Subscriber IQ overlap read
+    shipped, so every replay of the entry read the same cut line."""
+    try:
+        from prometheus import window_label as _wl
+        return _wl.clip_window_label(window_label)
+    except Exception:
+        return str(window_label or '')[:200]
 
 
 def _clean_breakdown(breakdown):

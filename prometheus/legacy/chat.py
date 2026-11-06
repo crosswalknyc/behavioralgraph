@@ -15076,13 +15076,30 @@ def _pm_req_thread_set(body):
 
 
 def _pm_job_bind_thread(job_id, username=None):
+    """The thread a job lands in, pinned at launch. Every entry path
+    resolves one (2026-11-05): the request's own thread first (the body
+    the widget, an operator session or the partner API named), then the
+    thread the service stashed on the request (``g._pm_thread_id``),
+    then the user's active thread, then their first. A job document
+    without a thread_id is how a finished read landed in whatever thread
+    was active when the worker got to it."""
     tid = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
+    if not tid:
+        try:
+            from flask import g as _g_bind, has_app_context as _has_ctx
+            if _has_ctx():
+                tid = str(getattr(_g_bind, '_pm_thread_id', '') or '')
+        except Exception:
+            tid = ''
     if not tid and username:
         # Dashboard launch (2026-10-01): pin the thread that is active
         # now, so idle rotation while the job runs never moves the
         # finished read or deck into the fresh chat.
         try:
-            tid = str(_load_threads_index(username).get('active') or '')
+            idx = _load_threads_index(username)
+            tid = str(idx.get('active') or '')
+            if not tid and idx.get('threads'):
+                tid = str((idx['threads'][0] or {}).get('id') or '')
         except Exception:
             tid = ''
     if tid and job_id:
@@ -15414,13 +15431,17 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _fl = payload.get('file_link') if isinstance(payload.get('file_link'), dict) else {}
             if _fl.get('key') and _fl.get('name'):
                 _done['files'] = {'csv': {'key': str(_fl['key']), 'name': str(_fl['name'])}}
-            _pm_read_status_write(job_id, _done)
             # Land the finished read in the requester's chat thread so
             # it is waiting when they return, and (if they opted in)
             # email them the read itself. A held read still lands in
             # the thread as its calm one-liner, but carries no output
-            # to email, so only a clean read fires the notify.
+            # to email, so only a clean read fires the notify. The
+            # thread is written BEFORE the job reads done (2026-11-05):
+            # the widget's poll refreshes the thread on done and finds
+            # the server's copy, so the server is the writer and the
+            # widget's own copy is the fallback, not the other way round.
             _pm_append_read_to_history(pm_user, job_id, payload, held=held, started_at=head.get('started_at'))
+            _pm_read_status_write(job_id, _done)
             _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
                              via=__import__('prometheus.service', fromlist=['job_doc_field']).job_doc_field(job_id, 'via'))
             if not held and not probe:

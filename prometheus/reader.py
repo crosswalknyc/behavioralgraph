@@ -462,8 +462,13 @@ def _normalize(d, text, cands):
         if aw or cat:
             subs.append({'as_written': aw or cat, 'catalog': cat, 'kind': str(s.get('kind') or 'unknown')[:16]})
     flags = [str(f)[:60] for f in (d.get('flags') or []) if str(f).strip()][:8]
+    try:
+        from . import window_label as _wl
+        _win = _wl.clip_window_label(d.get('window'))   # whole, never cut inside a date (2026-11-05)
+    except Exception:
+        _win = str(d.get('window') or '')[:200]
     return {'intent': intent, 'confidence': round(conf, 2), 'subjects': subs,
-            'window': str(d.get('window') or '')[:80], 'platform': str(d.get('platform') or '')[:60],
+            'window': _win, 'platform': str(d.get('platform') or '')[:60],
             'wants': str(d.get('wants') or '')[:240], 'answer_shape': str(d.get('answer_shape') or '')[:20],
             'restate': str(d.get('restate') or '')[:240], 'flags': flags, 'text': text[:400]}
 

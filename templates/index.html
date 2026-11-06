@@ -87478,12 +87478,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _pmTurnTextKey(t) {
             return String((t && t.text) || '').replace(/\s+/g, ' ').trim();
         }
+        // one job, one turn (2026-11-05): the ack the server persisted and the payload that
+        // filled it, or this tab's own copy and the server's, are two readings of one turn
+        var _PM_JOB_MARKS = ['read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id', 'aiq_job_id',
+                             'tlist_job_id', 'twin_job_id'];
+        function _pmTurnJobKey(t) {
+            var m = (t && t.meta) || {};
+            if (String((t && t.role) || '') !== 'agent') return '';
+            for (var i = 0; i < _PM_JOB_MARKS.length; i++) { if (m[_PM_JOB_MARKS[i]]) return _PM_JOB_MARKS[i] + ':' + String(m[_PM_JOB_MARKS[i]]); }
+            return '';
+        }
+        var _PM_PROMISE_RX = /^\s*(?:On it\b|Already on it\b|Working on it\b)|\bthe read will land right here\b|\blands right here (?:when|the moment) it is ready\b/i;
+        function _pmTurnIsLanded(t) {
+            // the payload is on the turn: the server's landed mark, or a text that is not the promise
+            var m = (t && t.meta) || {};
+            if (m.landed_at) return true;
+            var txt = String((t && t.text) || '');
+            return !!txt.trim() && !_PM_PROMISE_RX.test(txt.slice(0, 400));
+        }
+        function _pmHistoryJobTurnIndex(metaKey, jobId) {
+            if (!jobId) return -1;
+            for (var i = 0; i < synthChatHistory.length; i++) {
+                var t = synthChatHistory[i];
+                if (t && t.meta && t.meta[metaKey] === jobId) return i;
+            }
+            return -1;
+        }
         function _pmTurnSame(a, b) {
             // the same turn seen twice: one id, or one moment and role with one text; the same
             // moment and role with a different text is still one turn when one side is the
             // server's correction, the server's own turn or a blank the server filled
             if (!a || !b) return false;
             if (a.turn_id && b.turn_id && a.turn_id === b.turn_id) return true;
+            var ja = _pmTurnJobKey(a);
+            if (ja && ja === _pmTurnJobKey(b)) return true;
             if (String(a.role || '') !== String(b.role || '')) return false;
             var ea = _pmTurnEpoch(a), eb = _pmTurnEpoch(b);
             if (!(ea && eb ? ea === eb : String(a.ts || '') === String(b.ts || ''))) return false;
@@ -87514,8 +87542,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!local) { synthChatHistory.push(s); added++; continue; }
                 var sm = s.meta || {}, lm = local.meta || {};
                 if (!local.turn_id && s.turn_id) local.turn_id = s.turn_id;
-                // the server's correction and the server's own turn are the current text of a turn the tab holds
+                // the server's correction, the server's landing (the payload filled into the ack this tab
+                // holds, 2026-11-05) and the server's own turn are the current text of a turn the tab holds
                 if ((sm.corrected_at && String(sm.corrected_at) > String(lm.corrected_at || '')) ||
+                        (sm.landed_at && !lm.landed_at && _pmTurnTextKey(s) !== _pmTurnTextKey(local)) ||
                         (_pmIsServerTurn(s) && !_pmIsServerTurn(local) && _pmTurnTextKey(s) !== _pmTurnTextKey(local))) {
                     local.text = s.text;
                     local.meta = Object.assign({}, lm, sm);
@@ -88698,11 +88728,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmReadIndicatorHide(jobId);
                     _pmUntrackReadJob(jobId);
                     _pmHideNotifyOffer(jobId);
-                    // The server also lands this read in the thread on
-                    // completion so it survives a closed tab. If that
-                    // copy is already here, rerender and stop; do not
-                    // double the turn.
-                    if (_pmHistoryHasJob('read_job_id', jobId)) {
+                    // The server lands this read in the thread before the
+                    // job reads done (2026-11-05), so it survives a closed
+                    // tab. This tab refreshes its copy of the thread and
+                    // shows the server's turn; it writes its own copy only
+                    // when the server's has not arrived yet, and then the
+                    // server folds the two into one turn by job id. A turn
+                    // that carries the job id alone is the ack, not the read.
+                    var _lix = _pmHistoryJobTurnIndex('read_job_id', jobId);
+                    if (_lix >= 0 && _pmTurnIsLanded(synthChatHistory[_lix])) {
+                        synthChatRerender();
+                        return;
+                    }
+                    try { await _pmRefreshLandedRead(jobId, 2); } catch (_) {}
+                    _lix = _pmHistoryJobTurnIndex('read_job_id', jobId);
+                    if (_lix >= 0 && _pmTurnIsLanded(synthChatHistory[_lix])) {
                         synthChatRerender();
                         return;
                     }
@@ -88723,6 +88763,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         _rjMeta.chart = { url: String(p.chart.url), alt: String(p.chart.alt || 'Chart') };
                     }
                     try { _synthChatMaybeSaveFile(p); } catch (_) {}
+                    if (_lix >= 0) {
+                        // the ack this tab holds carries the job id: fill it, never add a second turn
+                        var _ack = synthChatHistory[_lix];
+                        _ack.text = _synthChatAgentText('agent', p.reply);
+                        _ack.meta = Object.assign({}, _ack.meta || {}, _rjMeta);
+                        _synthChatBumpActivity();
+                        synthChatRerender();
+                        _pmHistorySave();
+                        return;
+                    }
                     _synthChatPushTurnWithMeta('agent', p.reply, _rjMeta);
                     return;
                 }
@@ -88736,6 +88786,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             _pmReadIndicatorHide(jobId);
             _pmUntrackReadJob(jobId);
+        }
+        async function _pmRefreshLandedRead(jobId, tries) {
+            // This tab's own thread, read by id, with the server's landing folded in; a second
+            // pull a moment later covers the server still writing when the first came back.
+            // True when a turn carrying the job id now carries the payload.
+            var n = 0, max = tries || 1;
+            while (n < max) {
+                var tid = (_pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '';
+                if (!tid) return false;
+                var mine = synthChatHistory;
+                try {
+                    var r = await fetch('/api/brief-chat/history?thread_id=' + encodeURIComponent(tid),
+                        { credentials: 'same-origin' });
+                    var d = r.ok ? await r.json() : null;
+                    if (d && Array.isArray(d.history) && mine === synthChatHistory &&
+                            String(d.thread_id || tid) === tid) {
+                        var changed = _pmHistoryMergeIn(d.history, { quiet: true });
+                        if (d.rev && !changed) _pmHistoryRev = String(d.rev);
+                        var ix = _pmHistoryJobTurnIndex('read_job_id', jobId);
+                        if (ix >= 0 && _pmTurnIsLanded(synthChatHistory[ix])) return true;
+                    }
+                } catch (_) {}
+                n++;
+                if (n < max) await new Promise(function (res) { setTimeout(res, 1500); });
+            }
+            return false;
         }
         // Server turns land without a refresh (2026-10-30 audit, item 14):
         // a read or deck finished on the server, a note banked into the

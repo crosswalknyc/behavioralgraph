@@ -44,6 +44,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 import time
 from datetime import datetime
 
@@ -51,6 +52,14 @@ from datetime import datetime
 # a correction). The widget pulls these in; it never mints them.
 SERVER_TURN_MARKS = ('corrected_at', 'read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id',
                      'aiq_job_id', 'tlist_job_id', 'files', 'server_note', 'delivery')
+# One job, one turn (2026-11-05, prometheus.read_landing): two agent turns
+# carrying the same job id are two readings of one landing (the ack the
+# server persisted and the payload that filled it, the widget's own copy
+# and the server's), never two turns. The landed reading (meta.landed_at,
+# the payload on it) keeps its text; a newer landing replaces an older.
+JOB_MARKS = ('read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id', 'aiq_job_id',
+             'tlist_job_id', 'twin_job_id')
+LANDED_MARK = 'landed_at'
 CALM_LINE = "Working on it. Confirmed your task is in progress and I will email you when it completes."
 MAX_TURNS = 200
 _TERMINAL = ('complete', 'error', 'failed')
@@ -76,6 +85,34 @@ def _meta(t):
 def is_server_turn(t):
     return isinstance(t, dict) and str(t.get('role') or '') in ('agent', 'assistant') \
         and any(_meta(t).get(k) for k in SERVER_TURN_MARKS)
+
+
+def job_key(t):
+    """('read_job_id', '<id>') for an agent turn carrying a job mark,
+    else None."""
+    if not isinstance(t, dict) or str(t.get('role') or '') not in ('agent', 'assistant'):
+        return None
+    m = _meta(t)
+    for k in JOB_MARKS:
+        v = m.get(k)
+        if v:
+            return (k, str(v))
+    return None
+
+
+def landed_at(t):
+    return str(_meta(t).get(LANDED_MARK) or '')
+
+
+# the ack's own words (the promise the job will land): a reading that says
+# this is the ack, the other reading of the same job is the payload
+_PROMISE_RX = re.compile(
+    r"^\s*(?:On it\b|Already on it\b|Working on it\b)|\bthe read will land right here\b|"
+    r"\blands right here (?:when|the moment) it is ready\b|\bwill confirm here when it is (?:ready|live)\b", re.I)
+
+
+def is_promise(t):
+    return bool(_PROMISE_RX.search(str((t or {}).get('text') or '')[:400]))
 
 
 def fill_blank_agent_turns(turns, line=CALM_LINE):
@@ -121,6 +158,13 @@ def same_turn(a, b):
     ia, ib = a.get('turn_id'), b.get('turn_id')
     if ia and ib and str(ia) == str(ib):
         return 2
+    ja, jb = job_key(a), job_key(b)
+    if ja is not None and ja == jb:
+        # one job, one turn: the same payload is one reading, the ack and
+        # its landing (or two landings) are two readings of one turn
+        return 2 if text_key(a.get('text')) == text_key(b.get('text')) else 1
+    if ja is not None and jb is not None and ja != jb:
+        return 0          # two jobs, two turns, whatever their moment and words
     if stamp(a) != stamp(b):
         return 0
     if text_key(a.get('text')) == text_key(b.get('text')):
@@ -154,7 +198,26 @@ def _resolve(base, inc):
     back from done (one tab's poller may lag another's)."""
     bm, im = _meta(base), _meta(inc)
     bc, ic = str(bm.get('corrected_at') or ''), str(im.get('corrected_at') or '')
-    if ic and ic > bc:
+    bl, il = landed_at(base), landed_at(inc)
+    if (il and not bl) or (il and bl and il > bl):
+        # the landing fills the ack (or replaces an older landing): its
+        # text and its marks win; the ack's other meta rides underneath
+        out, meta = dict(inc), dict(bm)
+        meta.update(im)
+    elif bl and not il:
+        # a stale copy of the ack (or the widget's own reading) never
+        # writes over the landed payload
+        out, meta = dict(base), dict(im)
+        meta.update(bm)
+    elif job_key(base) is not None and job_key(base) == job_key(inc) and is_promise(base) != is_promise(inc):
+        # one job, two unmarked readings: the payload over the promise
+        if is_promise(base):
+            out, meta = dict(inc), dict(bm)
+            meta.update(im)
+        else:
+            out, meta = dict(base), dict(im)
+            meta.update(bm)
+    elif ic and ic > bc:
         out, meta = dict(inc), dict(bm)
         meta.update(im)
     elif bc or is_server_turn(base):
@@ -183,7 +246,11 @@ def _collapse(turns):
     for t in turns:
         if not isinstance(t, dict):
             continue
-        keys = [('k',) + stamp(t) + (text_key(t.get('text')),)]
+        jk = job_key(t)
+        # one job, one turn: a turn carrying a job id is known by that id
+        # (and its turn_id), never by its moment and words, so two jobs
+        # acked in the same moment stay two turns
+        keys = [('j',) + jk] if jk is not None else [('k',) + stamp(t) + (text_key(t.get('text')),)]
         if t.get('turn_id'):
             keys.append(('i', str(t['turn_id'])))
         hit = next((seen[k] for k in keys if k in seen), None)

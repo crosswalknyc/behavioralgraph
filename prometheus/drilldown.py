@@ -904,18 +904,20 @@ def _job_write(s3, bucket, job_id, doc):
 
 
 def _append_turn(uname, tid, reply, job_id, followups):
-    """Land the built answer in the asker's thread (idempotent by job id,
-    the same contract the widget's read poll relies on)."""
+    """Land the built answer in the asker's thread: it fills the ack turn
+    that carries the job id (a persisting session wrote one) or is
+    appended; a turn already carrying the payload or the landed mark is
+    left alone (prometheus.read_landing, 2026-11-05)."""
     try:
         from . import service as _svc
+        from . import read_landing as _rl
         history = _svc.load_thread(uname, tid) if tid else []
-        for t in history:
-            if (t.get('meta') or {}).get('read_job_id') == job_id:
-                return
-        history.append({'role': 'agent', 'text': reply,
-                        'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-                        'meta': {'read_job_id': job_id, 'kind': 'read',
-                                 'options': [{'label': f, 'send': f} for f in followups]}})
+        history, how = _rl.land(history, 'read_job_id', job_id, reply,
+                                {'read_job_id': job_id, 'kind': 'read',
+                                 'options': [{'label': f, 'send': f} for f in followups]},
+                                ts=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+        if how == 'already':
+            return
         if tid:
             _svc.save_thread(uname, tid, history)
     except Exception:

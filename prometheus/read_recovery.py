@@ -804,11 +804,16 @@ def finalize_faulted(job_id, status, cause, rr=None, reply=None):
     try:
         if uname and not status.get('probe') and not rr.get('probe'):
             # the line waits in the thread; the promise settles as faulted, once
+            # the line fills the ack the thread holds for this job, or is
+            # appended; a turn already carrying it is left alone
+            # (prometheus.read_landing, 2026-11-05)
+            from prometheus import read_landing as _rl
             tid = c._pm_thread_for_job(uname, job_id)
             history = c._pm_load_thread_or_active(uname, tid)
-            if not c._pm_history_has_job_turn(history, 'read_job_id', job_id):
-                history.append({'role': 'agent', 'text': line, 'ts': c._pm_iso_now(),
-                                'meta': {'read_job_id': job_id, 'kind': 'read', 'faulted': str(cause or '')[:40]}})
+            history, how = _rl.land(history, 'read_job_id', job_id, line,
+                                    {'read_job_id': job_id, 'kind': 'read', 'faulted': str(cause or '')[:40]},
+                                    ts=c._pm_iso_now())
+            if how != 'already':
                 c._pm_save_thread_or_active(uname, tid, history)
     except Exception:
         traceback.print_exc()
@@ -960,16 +965,27 @@ def is_stale(status, now=None, after=RECOVER_AFTER):
 
 
 def carry_resume(job_id, head):
-    """The job body's head keeps the resume record (and attempt count)
-    the launch wrote, so every stage write preserves it."""
+    """The job body's head keeps what the launch wrote on the document,
+    so every stage write preserves it: the resume record (and attempt
+    count), and the thread the job lands in plus the door it came
+    through (2026-11-05: the body's fresh head carried neither, so the
+    first stage write dropped thread_id and via from the document; on
+    the read worker, another process, the landing then read no thread
+    for the job and went to whatever thread was active)."""
     try:
         s3, bucket = _s3()
         prev = json.loads(s3.get_object(
             Bucket=bucket, Key=f"{_prefix()}{job_id}.json")['Body'].read())
+        head = dict(head)
         if isinstance(prev.get('resume'), dict):
-            head = dict(head)
             head['resume'] = prev['resume']
             head['resume_attempts'] = prev.get('resume_attempts') or 0
+        for k in ('thread_id', 'via', 'subject'):
+            # the launch's record wins: a resumed copy's own guess at the
+            # thread is the worker's active one, not where the ask was made
+            v = prev.get(k) or head.get(k)
+            if v:
+                head[k] = v
     except Exception:
         pass
     return head

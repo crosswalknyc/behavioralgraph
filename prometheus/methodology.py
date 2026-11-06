@@ -218,6 +218,16 @@ def block(window_start=None, window_end=None, window_label='',
     win = str(window_label or '').strip()
     if not win and window_start and window_end:
         win = f"{_fmt_date(window_start)} to {_fmt_date(window_end)}"
+    # The window prints whole or not at all (2026-11-05): a label that
+    # reads cut (an open parenthesis, a three-digit year, a trailing
+    # 'to') is rebuilt from the read's dates or trimmed to its last
+    # whole token before it reaches the reader.
+    try:
+        from . import window_label as _wl
+        if win and _wl.cut_mid_token(win):
+            win = _wl.repair_window_label(win, window_start, window_end) or win
+    except Exception:
+        pass
     lines = [HEADER]
     if win:
         lines.append(f"- Window: {win}.")
