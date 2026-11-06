@@ -5,7 +5,7 @@
 Crosswalk Technologies, Inc. serves studios, streamers, brands, agencies, and finance teams. Prometheus answers audience questions in plain English from the same panel. Clients receive group statistics projected to the US population; no individual is identified.
 
 ## Products
-- [Twin IQ](https://www.crosswalknyc.com/digital-twins.html): Twin IQ builds a digital twin of each of the 10 million US people in Crosswalk's 30 million-person panel, from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.
+- [Twin IQ](https://www.crosswalknyc.com/digital-twins.html): Twin IQ builds a digital twin of each of the 10 million US people in the Crosswalk panel, from observed behavior, not surveys. Test a plan, a title, or a price first.
 - [Attribution IQ](https://www.crosswalknyc.com/attribution-iq.html): Attribution IQ reads the same people across every touch, paid and organic, and splits the credit along the path they actually took. Refreshed daily while the campaign runs.
 - [Brand Partnership IQ](https://www.crosswalknyc.com/brand-partnership-iq.html): Brand Partnership IQ puts a dollar figure on a partnership after it runs: earned media, brand engagement, brand lift, and conversion on the same people, each priced.
 - [Digital Journey IQ](https://www.crosswalknyc.com/digital-journey-iq.html): Digital Journey IQ lays out the steps people took around a campaign, a title, or a launch, in order, across their entire digital life, not just the last click.

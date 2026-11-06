@@ -58,7 +58,7 @@ PRODUCTS_CRUMB = ("Products", "products.html")
 PAGES = {
     "index.html": dict(
         title="Crosswalk | Audience data from what 30 million people actually do",
-        description="Ask Prometheus any audience question. It answers from 30 million opted-in people worldwide, 10 million in the US, and their entire digital life: who they are, what they watch, what they buy.",
+        description="Ask Prometheus any audience question. It answers from 30 million opted-in people worldwide, 10 million in the US, and their entire digital life: what they watch and buy.",
         kind="home"),
     "products.html": dict(
         title="Products and report pricing | Crosswalk",
@@ -102,7 +102,7 @@ PAGES = {
         kind="product", name="Fin IQ"),
     "digital-twins.html": dict(
         title="Digital Twins and Synthetic Data from Real Behavior | Crosswalk",
-        description="Twin IQ builds a digital twin of each of the 10 million US people in Crosswalk's 30 million-person panel, from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.",
+        description="Twin IQ builds a digital twin of each of the 10 million US people in the Crosswalk panel, from observed behavior, not surveys. Test a plan, a title, or a price first.",
         kind="product", name="Twin IQ", crumb_label="Digital twins",
         og_image="assets/images/og-digital-twins.png"),
     "micro-series.html": dict(
