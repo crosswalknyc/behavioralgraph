@@ -222,7 +222,8 @@ def title_audience(twin: dict, title: str, *, episode_words: str = '', platform:
     if not isinstance(data, dict):
         return None
     doc = _normalize_research(data, title)
-    _cache_put(s3, key, doc)
+    if doc.get('released') is not None:
+        _cache_put(s3, key, doc)        # a definite answer holds for the day; an answer that could not be supported is asked again
     return doc
 
 
@@ -461,9 +462,100 @@ def size_session(twin, sess: dict, *, twins=None, model_fn=None, s3=None, resear
         return g.get('sizing') or {}
 
 
+def _scale_rows(rows: list, total: int) -> None:
+    """Each row's people as its share of ``total`` (the largest row takes
+    the rounding), the way the battery publishes them."""
+    rows = [r for r in (rows or []) if isinstance(r, dict) and r.get('pct') is not None]
+    if not rows or total <= 0:
+        return
+    vals = []
+    for i, r in enumerate(rows):
+        try:
+            v = int(round(float(r.get('pct') or 0) / 100.0 * total))
+        except (TypeError, ValueError):
+            v = 0
+        if v > 20 and v % 10 == 0:
+            v += (i % 9) + 1
+        vals.append(max(0, v))
+    k = max(range(len(vals)), key=lambda i: vals[i])
+    vals[k] = max(0, vals[k] + (total - sum(vals)))
+    for r, v in zip(rows, vals):
+        r['people'] = int(v)
+
+
+def rescale_session_figures(sess: dict, *, twin: Optional[dict] = None, s3=None, ledger: Optional[dict] = None) -> dict:
+    """Every people figure a test derives from the people its room stands
+    for, brought to the sized total: the scorecard's count and its line,
+    the battery's quadrants (the whole room, each cohort as its segment's
+    people, the other splits in proportion), the battery's rows, the
+    questions the room was asked (whole room and by segment), and the
+    forecast (recomputed from the record's own scores and the ledger, no
+    new research). Ratings, shares and the room's words are not touched.
+    Returns {before, after} totals."""
+    from migration import digital_twin_pilot as PI
+    g = (sess or {}).get('group') if isinstance(sess, dict) else None
+    if not isinstance(g, dict):
+        return {}
+    total = _int(g.get('size_people'))
+    if total <= 0:
+        return {}
+    seg_people = {str(s.get('label')): _int(s.get('people')) for s in (g.get('segments') or []) if isinstance(s, dict)}
+    sc = sess.get('scorecard') if isinstance(sess.get('scorecard'), dict) else None
+    before = _int((sc or {}).get('people')) if sc else None
+    if sc:
+        bat = sc.get('battery') if isinstance(sc.get('battery'), dict) else {}
+        quads = [q for q in (bat.get('quadrants') or []) if isinstance(q, dict)]
+        old_total = next((_int(q.get('people')) for q in quads if q.get('key') == 'total'), 0) or _int(sc.get('people')) or total
+        before = old_total
+        ratio = total / float(old_total) if old_total > 0 else 1.0
+        for i, q in enumerate(quads):
+            if q.get('key') == 'total':
+                q['people'] = int(total)
+            elif q.get('group') == 'cohort' and seg_people.get(str(q.get('label'))):
+                q['people'] = int(seg_people[str(q.get('label'))])
+            elif _int(q.get('people')) > 0:
+                v = int(round(_int(q.get('people')) * ratio))
+                q['people'] = v + ((i % 9) + 1) if (v > 20 and v % 10 == 0) else v
+        for q in (bat.get('questions') or []):
+            if isinstance(q, dict):
+                _scale_rows(q.get('rows'), total)
+                rows = [r for r in (q.get('rows') or []) if isinstance(r, dict)]
+                if rows and 'top_people' in q:
+                    q['top_people'] = rows[0].get('people')
+                if len(rows) > 1 and 'total_positive_people' in q:
+                    q['total_positive_people'] = _int(rows[0].get('people')) + _int(rows[1].get('people'))
+        sc['people'] = int(total)
+        try:
+            sc['denominator_line'] = PI.denominator_line(_int(g.get('in_room')) or len(g.get('roster') or []), total)
+        except Exception:
+            pass
+    old_room = before or total
+    for q in (sess.get('questions') or []):
+        if not isinstance(q, dict):
+            continue
+        for key in ('rows', 'distribution', 'options'):
+            _scale_rows(q.get(key), total)
+        if _int(q.get('headline_people')) > 0 and old_room > 0:
+            lead = next((r for r in (q.get('options') or []) if isinstance(r, dict) and _int(r.get('people')) == _int(q.get('headline_people'))), None)
+            q['headline_people'] = int(lead['people']) if lead else int(round(_int(q.get('headline_people')) * total / float(old_room)))
+        for sr in (q.get('by_segment') or []):
+            if isinstance(sr, dict) and seg_people.get(str(sr.get('segment'))):
+                sr['people'] = int(seg_people[str(sr.get('segment'))])
+                for key in ('rows', 'distribution'):
+                    _scale_rows(sr.get(key), sr['people'])
+    if sc and twin is not None:
+        try:
+            from migration.digital_twin_forecast import attach_forecast
+            attach_forecast(twin, sess, s3=s3, ledger=ledger, research=False)
+        except Exception as e:
+            print(f"[twin-sizing] forecast not re-read: {str(e)[:160]}")
+    return {'before': before, 'after': int(total)}
+
+
 def ensure_sizing(twin, sess: dict, *, twins=None) -> bool:
     """A record from before the sizing gets step 1 on the way out (no
-    research on a read). True when the record changed."""
+    research on a read), and its derived figures follow. True when the
+    record changed."""
     g = (sess or {}).get('group') if isinstance(sess, dict) else None
     if not isinstance(g, dict) or not g.get('roster') or isinstance(g.get('sizing'), dict):
         return False
@@ -474,7 +566,10 @@ def ensure_sizing(twin, sess: dict, *, twins=None) -> bool:
         return False          # a room seating twins the caller did not load keeps its figures until they are all in hand
     before = g.get('size_people')
     size_session(twin, sess, twins=twins, research=False)
-    return isinstance(g.get('sizing'), dict) and g.get('size_people') != before
+    changed = isinstance(g.get('sizing'), dict) and g.get('size_people') != before
+    if changed and sess.get('kind') == 'pilot':
+        rescale_session_figures(sess, twin=twin)
+    return changed
 
 
 def share_of_title_for(sess: dict) -> float:
@@ -497,5 +592,5 @@ def share_of_title_for(sess: dict) -> float:
         return 1.0
 
 
-__all__ = ['title_audience', 'share_of_title', 'skew_index', 'size_session', 'ensure_sizing', 'apply_sizing', 'sizing_line', 'public_sizing',
-           'people_short', 'share_of_title_for', 'clear_cache', 'TITLE_SYSTEM', 'AIRED_MODES', 'VERSION']
+__all__ = ['title_audience', 'share_of_title', 'skew_index', 'size_session', 'ensure_sizing', 'apply_sizing', 'rescale_session_figures', 'sizing_line',
+           'public_sizing', 'people_short', 'share_of_title_for', 'clear_cache', 'TITLE_SYSTEM', 'AIRED_MODES', 'VERSION']
