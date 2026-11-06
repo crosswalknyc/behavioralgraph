@@ -2393,8 +2393,9 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
     # the room stands for its cuts, and for a title that has aired no more than that title's own audience in those
     # cuts (Jenna 2026-11-05); a reused room is sized again for this test's title
     try:
-        from migration.digital_twin_sizing import size_session
-        size_session(twins[0] if twins else {}, sess, twins=twins, model_fn=model_fn, s3=s3, research=research, seed=seed)
+        from migration.digital_twin_sizing import RESEARCH_WAIT_S, size_session
+        size_session(twins[0] if twins else {}, sess, twins=twins, model_fn=model_fn, s3=s3, research=research, seed=seed,
+                     wait_s=(None if model_fn is not None else RESEARCH_WAIT_S))      # a room opening in a request does not wait on the web for long
     except Exception as e:
         print(f"[pilot] sizing skipped: {e}")
     sess['cohorts'] = [{'label': str(sg.get('label') or ''), 'composition': str(sg.get('composition') or ''), 'seats': int(sg.get('seats') or 0),

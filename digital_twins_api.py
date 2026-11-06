@@ -1082,7 +1082,7 @@ def _session(payload, sid):
     if sess:
         try:   # the room stands for its cuts (Jenna 2026-11-05); a room from before the sizing gets it here, then every seat says who it stands for
             from migration import digital_twin_sizing as SZ
-            SZ.ensure_sizing(payload, sess)
+            SZ.ensure_sizing(payload, sess, s3=_s3())
             from migration import digital_twin_panel as P
             P.ensure_seat_stands_for(sess)
         except Exception:
@@ -1870,7 +1870,7 @@ def dt_pilot_get(key, sid):
     dirty = False
     try:   # a test from before the sizing stands for its cuts from here on (Jenna 2026-11-05)
         from migration import digital_twin_sizing as SZ
-        dirty = SZ.ensure_sizing(payload, sess) or dirty
+        dirty = SZ.ensure_sizing(payload, sess, s3=_s3()) or dirty
     except Exception:
         pass
     if sess.get('status') == 'preparing':

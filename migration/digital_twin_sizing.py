@@ -55,6 +55,9 @@ VERSION = 1
 AUDIENCE_MIN_PEOPLE = 50_000          # a count under this is noise, not an audience
 AUDIENCE_MAX_PEOPLE = 330_000_000
 LOW_THIRD_POSITION = 1.0 / 6.0        # the middle of the bottom third of a range
+RESEARCH_WAIT_S = 45.0                # how long a room opening in a request waits for the title research; a later answer lands on the next read
+RESEARCH_MAX_TOKENS = 2500            # the searches' turns count against the budget; 700 truncated every answer
+RESEARCH_SEARCHES = 4
 SKEW_INDEX_MIN, SKEW_INDEX_MAX = 0.2, 5.0
 AIRED_MODES = ('pilot', 'feature', 'episode', 'binge')
 _OLD = {'45-54', '55-64', '65 or Older'}
@@ -65,12 +68,14 @@ TITLE_SYSTEM = """You size the US audience of a television series, a season or a
 What to find, when the title has been released:
 - the AVERAGE AUDIENCE PER EPISODE (for a film, its audience) in US people across every screen (linear plus streaming) within the first seven days of each release, from the network's or platform's own published counts, Nielsen (including its cross-platform and streaming reads), Samba TV, Luminate, Parrot Analytics, or trade press reporting those counts. Give a low (the smallest well-supported figure, for example live plus same-day only) and a high (the widest well-supported multi-platform figure) and say what each measures. For a season still running, the season to date.
 - the PLATFORM'S US PEOPLE: the US people who use the network or platform it runs on (people, not accounts; about 1.8 to 2.0 people use one streaming account).
-- the AUDIENCE SKEWS the measurement services or the network published for the title: the share of its audience that is female, 45 or older, under 35, Hispanic, Black, and its median age. Only figures actually published for this title; null otherwise.
+- the AUDIENCE SKEWS the measurement services or the network published for the title: the share of its audience that is female, 45 or older, under 35, Hispanic, Black, and its median age. When nothing is published for this title itself, use the published profile of its parent franchise or its most recent prior season (a spin-off reads like its franchise) and say which in skews_basis; null only when neither exists.
+Keep the answer short: no preamble, no commentary, the JSON alone.
 Return JSON only:
 {"released": true|false|null, "title": "<proper name>", "released_on": "YYYY-MM-DD"|null,
  "audience": {"low": <people or null>, "high": <people or null>, "typical": <people or null>, "measure": "<what the figures count, plain words>", "window": "<first seven days per episode|season average|first week|other>", "as_of": "YYYY-MM-DD"|null, "source_class": "<platform published|Nielsen|Samba TV|Luminate|Parrot Analytics|trade press|other>"},
  "platform_people": {"value": <US people or null>, "measure": "<plain words>", "as_of": "YYYY-MM-DD"|null},
  "skews": {"female_pct": <0-100 or null>, "age_45_plus_pct": <0-100 or null>, "age_under_35_pct": <0-100 or null>, "hispanic_pct": <0-100 or null>, "black_pct": <0-100 or null>, "median_age": <years or null>},
+ "skews_basis": "<this title|its franchise <name>|its prior season|none>",
  "note": "<one plain sentence>"}"""
 
 _MEMO: dict = {}
@@ -189,14 +194,17 @@ def _normalize_research(data: dict, title: str) -> dict:
             'measure': str(aud.get('measure') or '')[:200], 'window': str(aud.get('window') or '')[:60], 'as_of': str(aud.get('as_of') or '')[:10],
             'source_class': str(aud.get('source_class') or '')[:40],
             'platform_people': (pv if AUDIENCE_MIN_PEOPLE <= pv <= AUDIENCE_MAX_PEOPLE else None), 'skews': skews,
+            'skews_basis': str(data.get('skews_basis') or '')[:120],
             'note': str(data.get('note') or '')[:240], 'researched_at': _now()}
 
 
-def title_audience(twin: dict, title: str, *, episode_words: str = '', platform: str = '', model_fn=None, s3=None, day: str = '') -> Optional[dict]:
+def title_audience(twin: dict, title: str, *, episode_words: str = '', platform: str = '', model_fn=None, s3=None, day: str = '', cache_only: bool = False) -> Optional[dict]:
     """The title's researched audience, cached per (twin, title, day).
     None when no model answers or the title is blank; a title that has
     not been released comes back with ``released`` False (cached too, so
-    the day's later rooms do not ask again)."""
+    the day's later rooms do not ask again). ``cache_only`` reads the
+    day's cache and never calls the model (the page's later reads pick
+    up an answer that landed after the room opened)."""
     title = ' '.join(str(title or '').split())
     if not title:
         return None
@@ -205,6 +213,8 @@ def title_audience(twin: dict, title: str, *, episode_words: str = '', platform:
     hit = _cache_get(s3, key)
     if hit is not None:
         return hit
+    if cache_only:
+        return None
     try:
         from migration.digital_twin_room import Models, model_available
     except Exception:
@@ -214,8 +224,17 @@ def title_audience(twin: dict, title: str, *, episode_words: str = '', platform:
     user = json.dumps({'title': title, 'episode': episode_words or None, 'network_or_platform': platform or str(_meta(twin).get('platform_home') or _meta(twin).get('name') or '') or None,
                        'today': day, 'question': 'Has this been released to the public in the US? If so, on average how many US people watch an episode of it (every screen, first seven days), who is its audience, and how many US people use the platform it runs on?'},
                       ensure_ascii=False)
+    tools = None
     try:
-        data, _rec = Models(model_fn=model_fn).call('research', TITLE_SYSTEM, user, max_tokens=700, temperature=0.1)
+        # the web_search tool in its first form answers this ask in under a minute where the newer form runs several
+        # minutes; the chain still falls back to the newer form and then to no tool. The budget covers the searches'
+        # own turns (700 tokens truncated every answer on 2026-11-06).
+        import prometheus_analysis as _pma
+        tools = [dict(getattr(_pma, 'WEB_SEARCH_TOOL_LEGACY', None) or _pma.WEB_SEARCH_TOOL, max_uses=RESEARCH_SEARCHES)]
+    except Exception:
+        tools = None
+    try:
+        data, _rec = Models(model_fn=model_fn).call('research', TITLE_SYSTEM, user, max_tokens=RESEARCH_MAX_TOKENS, temperature=0.1, tools=tools)
     except Exception as e:
         print(f"[twin-sizing] title research failed: {str(e)[:160]}")
         return None
@@ -416,13 +435,40 @@ def _title_words(twin: dict, sess: dict) -> tuple:
         return str(media.get('title') or sess.get('title') or ''), ''
 
 
-def size_session(twin, sess: dict, *, twins=None, model_fn=None, s3=None, research: bool = True, seed: str = '') -> dict:
+def _research_bounded(fn, wait_s: Optional[float]):
+    """``fn()`` on the calling thread when no bound is given; else on a
+    daemon thread, waited on for ``wait_s`` seconds. A late answer is not
+    lost: ``title_audience`` writes the day's cache when it lands, and
+    the next read of the record picks it up (``cache_only``)."""
+    if not wait_s or wait_s <= 0:
+        return fn()
+    import threading
+    box = {}
+
+    def run():
+        try:
+            box['out'] = fn()
+        except Exception as e:
+            print(f"[twin-sizing] research thread: {str(e)[:160]}")
+    t = threading.Thread(target=run, daemon=True, name='twin-sizing-research')
+    t.start()
+    t.join(float(wait_s))
+    if t.is_alive():
+        print(f"[twin-sizing] title research still running after {wait_s:.0f}s; the room opens on its cuts and reads the answer later")
+        return None
+    return box.get('out')
+
+
+def size_session(twin, sess: dict, *, twins=None, model_fn=None, s3=None, research: bool = True, seed: str = '', wait_s: Optional[float] = None,
+                 cache_only: bool = False) -> dict:
     """Size a test or a room to what it stands for and write it onto the
     record. Step 1 always (the cuts' union from the twin's composition);
     step 2 for a pilot, episode, feature or binge test whose title has
     aired (the title's researched audience times the cuts' share of it,
-    taken low), when ``research`` is on and a model answers. Returns the
-    sizing; never raises."""
+    taken low), when ``research`` is on and a model answers. ``wait_s``
+    bounds the wait for the research (a room opening in a request);
+    ``cache_only`` applies an answer already on the day's cache and
+    never calls the model. Returns the sizing; never raises."""
     from migration import digital_twin_pilot as PI
     g = (sess or {}).get('group') if isinstance(sess, dict) else None
     if not isinstance(g, dict):
@@ -438,11 +484,12 @@ def size_session(twin, sess: dict, *, twins=None, model_fn=None, s3=None, resear
         basis = {'step': 'cuts' if sz.get('is_cut') else 'twin', 'union_share': sz.get('share_of_twin'), 'by_twin': sz.get('by_twin')}
         if research and sess.get('kind') == 'pilot' and str(sess.get('mode') or 'pilot') in AIRED_MODES:
             show, ep = _title_words(tw[0], sess)
-            res = title_audience(tw[0], show, episode_words=ep, model_fn=model_fn, s3=(s3 if s3 is not None else _default_s3()))
+            s3c = s3 if s3 is not None else _default_s3()
+            res = _research_bounded(lambda: title_audience(tw[0], show, episode_words=ep, model_fn=model_fn, s3=s3c, cache_only=cache_only), wait_s)
             if isinstance(res, dict):
                 basis['title'] = {'name': res.get('title'), 'released': res.get('released'), 'released_on': res.get('released_on'), 'audience_low': res.get('audience_low'),
                                   'audience_range': res.get('audience_range'), 'measure': res.get('measure'), 'window': res.get('window'), 'as_of': res.get('as_of'),
-                                  'source_class': res.get('source_class'), 'platform_people': res.get('platform_people'), 'skews': res.get('skews'),
+                                  'source_class': res.get('source_class'), 'platform_people': res.get('platform_people'), 'skews': res.get('skews'), 'skews_basis': res.get('skews_basis'),
                                   'note': res.get('note'), 'researched_at': res.get('researched_at')}
                 if res.get('released') and _int(res.get('audience_low')) > 0:
                     share = share_of_title(tw, segs, res)
@@ -543,7 +590,9 @@ def rescale_session_figures(sess: dict, *, twin: Optional[dict] = None, s3=None,
                 sr['people'] = int(seg_people[str(sr.get('segment'))])
                 for key in ('rows', 'distribution'):
                     _scale_rows(sr.get(key), sr['people'])
-    if sc and twin is not None:
+    if sc and twin is not None and isinstance(sess.get('forecast'), dict) and (s3 is not None or isinstance(ledger, dict)):
+        # the forecast is re-read from the record's own scores against the ledger (its calibration stays); without the
+        # ledger in hand it is left as it was, for the next stop or read that has it
         try:
             from migration.digital_twin_forecast import attach_forecast
             attach_forecast(twin, sess, s3=s3, ledger=ledger, research=False)
@@ -552,23 +601,32 @@ def rescale_session_figures(sess: dict, *, twin: Optional[dict] = None, s3=None,
     return {'before': before, 'after': int(total)}
 
 
-def ensure_sizing(twin, sess: dict, *, twins=None) -> bool:
-    """A record from before the sizing gets step 1 on the way out (no
-    research on a read), and its derived figures follow. True when the
-    record changed."""
+def ensure_sizing(twin, sess: dict, *, twins=None, s3=None) -> bool:
+    """On a read: a record from before the sizing gets step 1 (no model
+    call), and a test whose title research had not answered when it
+    opened picks the answer up from the day's cache. The derived figures
+    follow. True when the record changed."""
     g = (sess or {}).get('group') if isinstance(sess, dict) else None
-    if not isinstance(g, dict) or not g.get('roster') or isinstance(g.get('sizing'), dict):
+    if not isinstance(g, dict) or not g.get('roster'):
         return False
     tw = [t for t in (twins or [twin]) if isinstance(t, dict)]
     have = {str(_meta(t).get('key') or '') for t in tw}
     need = {str(s.get('twin') or '') for s in (g.get('segments') or []) if isinstance(s, dict) and s.get('twin')}
     if need - have:
         return False          # a room seating twins the caller did not load keeps its figures until they are all in hand
-    before = g.get('size_people')
-    size_session(twin, sess, twins=twins, research=False)
-    changed = isinstance(g.get('sizing'), dict) and g.get('size_people') != before
+    sz = g.get('sizing') if isinstance(g.get('sizing'), dict) else None
+    before = (g.get('size_people'), bool(((sz or {}).get('basis') or {}).get('title')))
+    if sz is None:
+        size_session(twin, sess, twins=twins, research=False)
+    elif sess.get('kind') == 'pilot' and str(sess.get('mode') or 'pilot') in AIRED_MODES and not before[1]:
+        size_session(twin, sess, twins=twins, s3=s3, research=True, cache_only=True)
+    else:
+        return False
+    sz = g.get('sizing') if isinstance(g.get('sizing'), dict) else {}
+    after = (g.get('size_people'), bool((sz.get('basis') or {}).get('title')))
+    changed = after != before
     if changed and sess.get('kind') == 'pilot':
-        rescale_session_figures(sess, twin=twin)
+        rescale_session_figures(sess, twin=twin, s3=s3)
     return changed
 
 
