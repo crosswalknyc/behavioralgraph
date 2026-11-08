@@ -75,10 +75,15 @@ def _deck():
     return pma.DECK_PLAN_SYSTEM_PROMPT
 
 
+# Standing policy for every budget below: budget = current size (re-baselined 2026-11-08 for the Nov 6 catalog-identity
+# and question-universe rules Jenna mandated); only shrinks from here except for a new rule Jenna mandates, which
+# re-baselines with a dated note.
 REGISTRY = {
     'interpret.rulebook.full': {
         'version': '2026.10.14', 'owner': 'build drafting', 'loader': lambda: _rulebook(candidates=[{'s3_key': 'x', 'display_name': 'X'}], reading=None),
-        'budget_tokens': 13181, 'target_tokens': 9000,   # ratchet reset to current size, 2026-11-05; only shrinks from here
+        # budget = current size (re-baselined 2026-11-08 for the Nov 6 catalog-identity and question-universe rules Jenna mandated);
+        # only shrinks from here except for a new rule Jenna mandates, which re-baselines with a dated note
+        'budget_tokens': 13405, 'target_tokens': 9000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'the whole rulebook with candidates (worst case); 19,838 before the 2026-10-14 diet'},
     'interpret.rulebook.plain': {
@@ -91,7 +96,9 @@ REGISTRY = {
                         'invariants': ('MULTIPLE QUESTIONS',), 'note': 'the page analyst'},
     'metrics.system': {'version': '2026.10.14', 'owner': 'reasoned reads', 'loader': _metrics, 'budget_tokens': 4062, 'target_tokens': 2500,   # ratchet reset to current size, 2026-11-05; only shrinks from here
                        'invariants': ('SUBSCRIPTION CHURN, RETENTION, REACTIVATION AND COHORT DURABILITY ARE DIGITAL BEHAVIORS',), 'note': 'the reasoned-metrics read'},
-    'reader.charter': {'version': '2026.10.14', 'owner': 'the Reader', 'loader': _reader, 'budget_tokens': 1317, 'target_tokens': 1000,   # ratchet reset to current size, 2026-11-05; only shrinks from here
+    # budget = current size (re-baselined 2026-11-08 for the Nov 6 catalog-identity and question-universe rules Jenna mandated);
+    # only shrinks from here except for a new rule Jenna mandates, which re-baselines with a dated note
+    'reader.charter': {'version': '2026.10.14', 'owner': 'the Reader', 'loader': _reader, 'budget_tokens': 1392, 'target_tokens': 1000,
                        'invariants': ('A question is a question', 'Return JSON only'), 'note': 'one understanding step'},
     'journey.research': {'version': '2026.10.14', 'owner': 'Digital Journey', 'loader': _journey, 'budget_tokens': 3200, 'target_tokens': 2500,
                          'invariants': ('CONVERSION NORMS',), 'note': 'journey research'},
