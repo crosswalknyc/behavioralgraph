@@ -998,10 +998,10 @@ _CONDITION_TAIL_RX = re.compile(
     r"with\s+ads|ad[- ]free|digitally|online|legally|in\s+(?:the\s+)?(?:last|past|trailing)\s+\d+\s+(?:days|weeks|months|years))\s*$", re.I)
 _SERIES_ON_RX = re.compile(
     r"^(?:the\s+)?(?P<name>.+?)\s+(?P<kind>series|show|film|movie|title|podcast|book|game|franchise)\s+on\s+(?P<platform>[A-Za-z0-9+&' .-]{2,40})$", re.I)
-_NESTED_RX = re.compile(
-    r"\b(?:people|viewers|users|those|folks|subscribers|accounts|anyone|everyone|audiences?|panelists|respondents|members|adults|americans|households|consumers|customers|fans|readers|listeners|players|shoppers|buyers)\s+(?:who|that)\s+"
-    r"(?:also\s+)?(?P<act>watch(?:ed|es)?|stream(?:ed|s)?|view(?:ed|s)?|read|reads|listen(?:ed|s)?\s+to|play(?:ed|s)?|bought|buy|purchased?|"
-    r"subscribed?\s+to|follow(?:ed|s)?|binge(?:d|s)?|saw|started|drink|drinks|drank|eat|eats|ate|use|uses|used|own|owns|wear|wears|drive|drives|shop\s+at)\s+"
+_NESTED_ACT = (
+    r"(?P<act>watch(?:ed|es)?|stream(?:ed|s)?|view(?:ed|s)?|read|reads|listen(?:ed|s)?\s+to|play(?:ed|s)?|bought|buy|purchased?|"
+    r"subscribed?\s+to|follow(?:ed|s)?|binge(?:d|s)?|saw|started|drink|drinks|drank|eat|eats|ate|use|uses|used|own|owns|wear|wears|drive|drives|shop\s+at)\s+")
+_NESTED_OBJ = (
     r"(?P<obj>(?:the\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
     r"(?:\s+on\s+(?P<platform>[A-Z][A-Za-z0-9+&' .-]{1,30}?|paramount\+|hulu|netflix|peacock|max|prime video|amazon prime video|disney\+|apple tv\+|tubi|roku))?"
     # a stop word ends the title only when what follows is not more title
@@ -1014,7 +1014,19 @@ _NESTED_RX = re.compile(
     r"(?=\s*[?.,;!]|\s+(?-i:in|during|over|within|since|last|this|between|from|and|or|but|who|that|which|when|while|after|before|also|too)\b"
     r"(?(platform)|(?!\s+(?:the\s+)?(?-i:(?!(?:January|February|March|April|May|June|July|August|September|October|November|December|Q[1-4]|US|UK)\b)[A-Z][A-Za-z0-9'&:!.-]*)))"
     # a named platform ends at the next lowercase word too ('on Netflix watch next' is Netflix)
-    r"|(?(platform)\s+(?-i:[a-z])|(?!))|$)", re.I)
+    r"|(?(platform)\s+(?-i:[a-z])|(?!))|$)")
+_NESTED_WHO = (
+    r"\b(?:people|viewers|users|those|folks|subscribers|accounts|anyone|everyone|audiences?|panelists|respondents|members|adults|americans|households|consumers|customers|fans|readers|listeners|players|shoppers|buyers)\s+(?:who|that)\s+"
+    r"(?:also\s+)?")
+_NESTED_RX = re.compile(_NESTED_WHO + _NESTED_ACT + _NESTED_OBJ, re.I)
+# "How many US people watched the Hazbin Hotel pilot on YouTube between
+# ..." names the same audience as "people who watched the Hazbin Hotel
+# pilot on YouTube" (Grace Yin 2026-11-08: the count question bound
+# YouTube, the platform, and the offer read "watched YouTube").
+_HOW_MANY_ACT_RX = re.compile(
+    r"\bhow\s+many\s+(?:(?:us|u\.s\.|american)\s+)?(?:people|viewers|users|folks|subscribers|accounts|adults|americans|households|consumers|customers|fans|readers|listeners|players|shoppers|buyers)"
+    r"(?:\s+in\s+the\s+(?:us|u\.s\.|united\s+states))?\s+(?:have\s+|had\s+)?"
+    + _NESTED_ACT + _NESTED_OBJ, re.I)
 _QUALIFIED_AUDIENCE_RX = re.compile(
     r"^(?P<name>[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)\s+(?P<verb>viewers|readers|listeners|players|watchers|buyers|shoppers|users|fans|subscribers|customers)"
     r"(?:\s+on\s+(?P<platform>[A-Za-z0-9+&' .-]{2,40}?))?"
@@ -1162,10 +1174,17 @@ _NEVER_LABEL = frozenset((
     'q1', 'q2', 'q3', 'q4', 'last year', 'this year', 'approve the run'))
 
 
+def _nested_match(text):
+    """The nested-audience match: 'people who watched X on Y' first, then
+    the count question 'how many people watched X on Y'."""
+    t = str(text or '')
+    return _NESTED_RX.search(t) or _HOW_MANY_ACT_RX.search(t)
+
+
 def nested_audience(text):
     """'people who watched the Among Us series on Paramount+' ->
     (name, platform, kind). ('', '', '') when the words carry none."""
-    m = _NESTED_RX.search(str(text or ''))
+    m = _nested_match(text)
     if not m:
         return '', '', ''
     obj = m.group('obj').strip()
@@ -1178,6 +1197,10 @@ def nested_audience(text):
         km = re.match(r"^(?:the\s+)?(?P<name>.+?)\s+(?P<kind>series|show|film|movie|title|podcast|book|game)$", obj, re.I)
         if km:
             obj, kind = km.group('name'), km.group('kind')
+        elif re.match(r"^the\s+[A-Z]", obj) and len(obj.split()) >= 4:
+            # 'the Hazbin Hotel pilot' is the Hazbin Hotel pilot; a short
+            # title that starts with The ('the Office') keeps its article
+            obj = obj[4:].strip()
     name = clean_display(obj)
     if not name:
         return '', '', ''
@@ -1193,7 +1216,7 @@ _ACT_NOUN = (('listen', 'listeners'), ('read', 'readers'), ('play', 'players'), 
 def nested_audience_verb(text):
     """The audience noun for a nested audience's act: 'people who drink
     Mountain Dew' -> drinkers; watch / stream / view / binge -> viewers."""
-    m = _NESTED_RX.search(str(text or ''))
+    m = _nested_match(text)
     act = (m.group('act') if m else '') or ''
     act = act.lower()
     for stem, noun in _ACT_NOUN:
@@ -1286,6 +1309,24 @@ def _reading_candidates(reading, page, norm, text=''):
             continue
         n = norm(name.split(' - ')[0])
         if page_n and (n == page_n or n in page_n or page_n in n):
+            # The words name the open page's own subject (Grace Yin
+            # 2026-11-08, the Hazbin Hotel Season 1 sign-ups profile open:
+            # "paid sign-ups for Hazbin Hotel Season 1" was asked which
+            # subject it meant, and "watched the Hazbin Hotel pilot on
+            # YouTube" bound YouTube because the title's catalog match was
+            # the page's and got dropped). A candidate written as the
+            # page's subject is the page; one that only shares the page's
+            # catalog entry ("Hazbin Hotel pilot") keeps its own written
+            # name. Nothing is skipped.
+            aw_n = norm(aw.split(' - ')[0]) if aw else ''
+            if aw_n and page and (aw_n == page_n or (page_n.startswith(aw_n) and len(aw_n) >= 8
+                                                      and len(aw.split()) >= 3)):
+                out.append((str(page), 'audience', 0.85))
+                continue
+            own = clean_display(aw)
+            if own and norm(own) != page_n:
+                k = kind if kind in ('title', 'brand', 'person', 'audience') else 'title'
+                out.append((own, k, 0.7))
             continue
         if places and (norm(aw) in places or n in places):
             continue
@@ -1361,9 +1402,18 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
         return Subject()
     if definition_turn(t, reading, page):
         return Subject('none', '', '', {}, 'none', 0.0, True)
-    # a pointer at the page
+    # a pointer at the page. "are these people new sign ups" with the
+    # profile open points at it as plainly as "this audience" does
+    # (Grace Yin 2026-11-08: the question quoted the open file's own
+    # cohort figure and window and was asked which audience to run on);
+    # the Reader's refers_to_page flag is the same pointer read by the
+    # model.
     pointed = bool(re.search(r"\b(?:this|that|it|these|those)\b", t, re.I)) and bool(re.search(
-        r"\b(?:this|that)\s+(?:audience|profile|data|file|view|page|one|cohort|group)\b|\b(?:the|this)\s+(?:open\s+)?profile\b|\bit\b", t, re.I))
+        r"\b(?:this|that)\s+(?:audience|profile|data|file|view|page|one|cohort|group)\b|\b(?:the|this)\s+(?:open\s+)?profile\b|\bit\b"
+        r"|\b(?:these|those)\s+(?:people|viewers|users|members|folks|consumers|customers|subscribers|accounts|"
+        r"sign[- ]?ups|signups|fans|buyers|shoppers|individuals|persons)\b", t, re.I))
+    if not pointed and isinstance(reading, dict) and 'refers_to_page' in (reading.get('flags') or []):
+        pointed = True
     # 1. an explicit build order names its subject
     eb = explicit_build_subject(t)
     if eb:
@@ -1438,6 +1488,9 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
         return Subject('audience', name, f"{name} {verb}", quals, 'words', 0.8)
     # 6. the Reader's subjects for these words
     for name, kind, conf in _reading_candidates(reading, page, norm, text=t):
+        if page and name == page:
+            # the words name the open page's own subject: the page, as labelled
+            return Subject('audience', page, page, quals, 'words', conf, True)
         disp = clean_display(name, t, casing) or name
         if disp:
             return Subject(kind, disp, disp, quals, 'words', conf)

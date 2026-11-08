@@ -1556,7 +1556,14 @@ _PROVENANCE_RX = re.compile(
     r"|\bis (?:this|that|the|your) data (?:real|accurate|reliable|first[- ]party|observed|measured|modell?ed|estimated|synthetic|made up)\b"
     r"|\bhow (?:accurate|reliable) (?:is|are) (?:this|that|the|your|these)\b"
     r"|\b(?:your|the|this) methodology\b|\bhow (?:is|was) (?:this|that|the|it) (?:calculated|computed|derived|measured|modell?ed|estimated)\b(?![^.?!]{0,40}\b(?:rate|share|index|figure|conversion|number)\b)"
-    r"|\bwhere (?:is|are) (?:this|the|these) (?:data|numbers?) from\b|\bwho (?:collects|measures|provides) (?:this|the|your) data\b", re.I)
+    r"|\bwhere (?:is|are) (?:this|the|these) (?:data|numbers?) from\b|\bwho (?:collects|measures|provides) (?:this|the|your) data\b"
+    # "are any of these figures modeled or imputed rather than directly
+    # counted", "how do you detect when someone activated a membership",
+    # "how is a play detected" (Grace Yin 2026-11-08: the first came back
+    # as "which subject should this be on", the others as a reconciliation)
+    r"|\b(?:are|is|were|was) (?:any of |all of |some of )?(?:these|those|the|your|this|that) (?:figures?|numbers?|counts?|reads?|data|results?) "
+    r"(?:(?:\w+ ){0,3}?)(?:modell?ed|estimated|imputed|simulated|extrapolated|projected|inferred|directly counted|counted|measured|observed|real)\b"
+    r"|\bhow (?:do you|does crosswalk|does prometheus|do we|is (?:a|an|the|this|that)|are|was|were) (?:\w+ ){0,4}?(?:detect(?:ed)?|identif(?:y|ied)|determin(?:e|ed)|captur(?:e|ed)|track(?:ed)?|record(?:ed)?|observ(?:e|ed)|measur(?:e|ed))\b", re.I)
 
 PROVENANCE_REPLY = (
     "Every figure here is a direct count from Crosswalk's own first-party data: the digital activity of 10 million US consumers "

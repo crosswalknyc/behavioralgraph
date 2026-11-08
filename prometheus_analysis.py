@@ -2965,6 +2965,26 @@ def is_cohort_churn_ask(text):
     return bool(_COHORT_CHURN_RE.search(t) and _COHORT_FRAME_RE.search(t))
 
 
+_SIGNUP_COUNT_RE = re.compile(
+    r"\b(?:how many|number of|count of|what (?:share|percent(?:age)?|fraction) of|share of|percent(?:age)? of)\b", re.I)
+_SIGNUP_ACT_RE = re.compile(
+    r"\b(?:signed up|signs? up|sign[- ]?ups?|signups?|subscribed|joined|activated|new (?:members|subscribers|subs|accounts|sign[- ]?ups)|"
+    r"became (?:a )?(?:members?|subscribers?)|started (?:a |their )?(?:membership|subscription|free trial|trial))\b", re.I)
+
+
+def is_signup_count_ask(text):
+    """True for a QUESTION that counts a sign-up cohort ("how many US
+    consumers signed up for Amazon Prime and Hazbin Hotel Season 1 was the
+    first thing they watched"). A count is answered as a read; it is never
+    handed to the build flow (Grace Yin 2026-11-08: the question came back
+    twice as a new profile on the default window, the second time with
+    the very profile it needed already open on her screen)."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    return bool(_SIGNUP_COUNT_RE.search(t) and _SIGNUP_ACT_RE.search(t))
+
+
 COHORT_CHURN_GUIDANCE = (
     'COHORT CHURN (this ask is the churn of a signup cohort, derived):\n'
     '1. The Subscriber IQ evidence carries the cohort size (new and '

@@ -17278,8 +17278,13 @@ def _pm_analyze_core(user, body, text, history):
                 # and the Subscriber IQ view being open both count:
                 # the open read (or the library) is the base and the
                 # deeper pass derives what the read does not carry.
+                # A count of a sign-up cohort is a question too (Grace
+                # Yin 2026-11-08: "how many US consumers signed up for
+                # Amazon Prime and Hazbin Hotel Season 1 was the first
+                # thing they watched" was handed to the build flow twice).
                 if (_subiq_fork or _sq_view_open
                         or _pma_sq.is_cohort_churn_ask(text)
+                        or _pma_sq.is_signup_count_ask(text)
                         or _pma_sq.find_subiq_titles_in_text(
                             _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, text)):
                     _subiq_answerable = True
@@ -17991,6 +17996,21 @@ def _pm_analyze_core(user, body, text, history):
                     print(f"[projection] analyze reply fixed: {_pj_detail}")
         except Exception:
             _pm_swallow('projection audit')
+    # Arithmetic coherence on the page read (2026-11-08, Grace Yin's exec
+    # summary: "31.4% of the file, 42,957,147 people" on a 1,368,062-person
+    # file). Every share/count pair is checked against the file's own
+    # audience; a count on the wrong base is recomputed in place.
+    if action == 'answer' and reply and p_meta.get('proj'):
+        try:
+            from prometheus import arith_coherence as _arith
+            _ai = _arith.check(reply, counts=[('the file', int(p_meta['proj']))],
+                               subject=str(p_meta.get('name') or ''))
+            if _ai.get('changed'):
+                reply = _ai['text']
+                _pm_ask_stage('arith_fix', count=len(_ai.get('fixes') or []))
+                print(f"[analyze] arithmetic coherence: {_arith.trail(_ai)[:400]}")
+        except Exception:
+            _pm_swallow('arithmetic coherence')
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]

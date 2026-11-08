@@ -64,6 +64,14 @@ _PAIR_N_FIRST = re.compile(
 _PAIR_OF_THE = re.compile(
     r'(?<![\d,.$])(?P<n>' + _COUNT + r')\s+of\s+(?:the|its|their|those|these|all|that|his|her)\s+(?P<m>' + _COUNT + r')'
     r"(?:\s+[A-Za-z][\w'’-]*){0,3}?\s*\((?P<pct>" + _PCT + r')\s*%\)')
+# 'X% of the file, N people': the share of the whole audience and its count
+# (Grace Yin 2026-11-08, the exec summary: "31.4% of the file, 42,957,147
+# people" on a 1,368,062-person file; the count was the share times the
+# file without the division by 100)
+_PAIR_PCT_OF_WHOLE = re.compile(
+    r'(?P<pct>' + _PCT + r')\s*%\s+of\s+(?:the|this|that|its)\s+(?:whole\s+|entire\s+|full\s+)?'
+    r'(?P<whole>file|profile|audience|cohort|universe|base|total)\s*,\s*(?:or\s+|about\s+|roughly\s+|some\s+|around\s+)?'
+    r'(?P<n>' + _COUNT + r')(?P<noun>\s+(?:' + _NOUNS + r'))')
 _LABELLED = re.compile(r'(?P<label>[A-Za-z][^:\n]{1,90}?):\s*(?P<n>' + _COUNT + r')(?![\d,]*\s*%)')
 _OF_ITS = re.compile(r'(?P<n>' + _COUNT + r')\s+of\s+(?:its|the|their|those|all|these|that)\s+(?P<m>' + _COUNT + r')')
 _ANY_COUNT = re.compile(r'(?<![\d,.$])' + _COUNT + r'(?![\d,]*\s*%)')
@@ -215,12 +223,14 @@ def _pairs(text):
         out.append({'start': m.start(), 'end': m.end(), 'n_pos': m.start('n'), 'n': m.group('n'),
                     'pct': m.group('pct'), 'm': m, 'base': int(_num(m.group('m'))), 'base_pos': m.start('m')})
     taken = [(p['start'], p['end']) for p in out]
-    for rx in (_PAIR_PCT_FIRST, _PAIR_N_FIRST):
+    for rx in (_PAIR_PCT_FIRST, _PAIR_N_FIRST, _PAIR_PCT_OF_WHOLE):
         for m in rx.finditer(text):
             if any(a <= m.start() < b or a < m.end() <= b for a, b in taken):
                 continue
             out.append({'start': m.start(), 'end': m.end(), 'n_pos': m.start('n'), 'n': m.group('n'),
-                        'pct': m.group('pct'), 'm': m, 'base': None, 'base_pos': None})
+                        'pct': m.group('pct'), 'm': m, 'base': None, 'base_pos': None,
+                        'whole': rx is _PAIR_PCT_OF_WHOLE})
+            taken.append((m.start(), m.end()))
     out.sort(key=lambda p: p['start'])
     return out
 
@@ -421,6 +431,14 @@ def _check_line(line, offset, stated, subject, info):
         hard = []
         if p['base'] and p['base'] != n:
             hard.append({'label': '', 'value': p['base'], 'pos': offset + p['base_pos'], 'kind': 'written'})
+        if p.get('whole'):
+            # 'of the file': the whole audience is the largest count the
+            # read's own figures carry (the universe), when the caller
+            # passed one
+            wholes = [c for c in stated if c['kind'] == 'metric' and c['value'] != n]
+            if wholes:
+                w = max(wholes, key=lambda c: c['value'])
+                hard.append({'label': w.get('label') or 'the file', 'value': w['value'], 'pos': offset, 'kind': 'written'})
         hard.extend(c for c in _group_counts(prefix, stated, offset) if c['value'] != n and c not in hard)
         named = _named_base(prefix, stated, n)
         if named is not None and named not in hard:
@@ -467,7 +485,13 @@ def _check_line(line, offset, stated, subject, info):
                 info['unresolved'].append(m.group(0))
             continue
         exact = x / 100.0 * base['value']
-        if exact <= 0 or max(n / exact, exact / n) > HARD_CAP:
+        ratio = max(n / exact, exact / n) if exact > 0 else 0
+        # a share applied as a factor (the count is the share times the
+        # base with no division by 100) sits a hundredfold off; that slip
+        # is corrected like any other (Grace Yin 2026-11-08, 42,957,147
+        # people for 31.4% of a 1,368,062-person file)
+        slip = exact > 0 and abs(ratio - 100.0) <= 1.0
+        if exact <= 0 or (ratio > HARD_CAP and not slip):
             info['unresolved'].append(m.group(0))
             continue
         new_n = messy_count(pct_text, base['value'], _salt(subject, pct_text, base['value'], a))

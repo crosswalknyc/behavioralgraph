@@ -57,6 +57,11 @@ APPROVE_CHIP = "Approve"
 CANCEL_CHIP = "Cancel"
 ACCEPT_CHIP, DECLINE_CHIP = APPROVE_CHIP, CANCEL_CHIP   # historic names, same chips
 STAFF_ACCEPT_CHIP = "Approve ({price}, not billed to a staff account)"
+# A client seat the plan covers (an unlimited company seat) sees the
+# price and that it is included; it is never called a staff account
+# (Grace Yin at Amazon, 2026-11-08, read "not billed to a staff
+# account" twice on her own offers).
+COVERED_ACCEPT_CHIP = "Approve ({price}, included in your plan)"
 # Kept under its historic name for callers that import it; the offer text
 # no longer carries a refusal sentence.
 CONFIRM = ""
@@ -962,7 +967,13 @@ def compose_offer(lead, price_label, question, offer_body, staff=False):
     not billed to them."""
     price = str(price_label or '').strip() or _label(CUSTOM_DEFAULT)
     reply = (str(lead or '').strip() + ' ' + OFFER_LINE.format(price=price)).strip()
-    chips = [STAFF_ACCEPT_CHIP.format(price=price) if staff else ACCEPT_CHIP, DECLINE_CHIP]
+    if staff == 'covered':
+        accept = COVERED_ACCEPT_CHIP.format(price=price)
+    elif staff:
+        accept = STAFF_ACCEPT_CHIP.format(price=price)
+    else:
+        accept = ACCEPT_CHIP
+    chips = [accept, DECLINE_CHIP]
     body = dict(offer_body or {})
     body.setdefault('price_label', price)
     return reply, chips, body
@@ -1317,7 +1328,10 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                         '(one line is enough) and I will take it from there.')
             return 'offer', {'success': True, 'action': 'answer', 'reply': line, 'followups': [],
                              'offer_deck': False, 'deck_angle': None, 'subject': '', 'subject_unclear': True}
-    staff = staff_user(user) or seat_is_free(user, username, host)
+    is_staff = staff_user(user)
+    # a covered client seat (unlimited, never billed) is not staff: its
+    # chip says the read is included in the plan
+    staff = True if is_staff else ('covered' if seat_is_free(user, username, host) else False)
     if kind not in ('sizing', 'derived') and custom_price(username, history, subj).get('metered'):
         # a follow-up on a subject this thread already paid for (custom or viewership): metered, never quoted (Jenna 2026-10-30)
         return 'charged', {'user': username, 'credits': 0, 'subject': subj, 'kind': kind,
@@ -1350,9 +1364,10 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
         return 'charged', rc
     desc = charge_description(kind, subj, text, dimension=dimension, years=int(years or 1))
     if staff:
-        # Crosswalk staff see the offer and are never billed
+        # Crosswalk staff and covered seats see the offer and are never billed
         return 'charged', {'user': username, 'credits': 0, 'subject': subj, 'kind': kind,
-                           'pull_type': pull_type, 'label': label, 'staff': True}
+                           'pull_type': pull_type, 'label': label, 'staff': bool(is_staff),
+                           'covered': staff == 'covered'}
     fn = consume
     if fn is None and host is not None and hasattr(host, 'consume_credit'):
         fn = host.consume_credit
@@ -1586,6 +1601,25 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
             from . import view_base as _vb
             _vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
             if _vb.view_base(_vc) and _vb.names_view(words, _vc):
+                return None
+        except Exception:
+            pass
+        # A question about the open profile's own read ("are these people
+        # new sign ups", read as a definition that refers to the page) is
+        # on the page: the lanes answer it there, metered, never the
+        # which-audience question (Grace Yin 2026-11-08, the Hazbin Hotel
+        # Season 1 sign-ups profile open; she quoted the file's own cohort
+        # figure and window and was asked to pick an audience).
+        try:
+            page = _page_name(ctx)
+            rd = reading
+            if rd is None:
+                from . import subject_rules as _sr
+                rd = _sr._request_reading()
+            pointed = ('refers_to_page' in (rd.get('flags') or [])) if isinstance(rd, dict) \
+                else bool(_POINTS_AT_PAGE_RX.search(words))
+            if page and pointed:
+                body['bind_subject'] = page
                 return None
         except Exception:
             pass

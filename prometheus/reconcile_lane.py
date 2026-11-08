@@ -61,7 +61,13 @@ _ONE_HEADER = 'One definition from here:'
 _STRONG_RX = re.compile(
     r"\bone (?:universe|audience|base|population|cohort) (?:definition|and (?:one )?window)\b|"
     r"\bstate (?:one|a single|the) (?:universe|definition|window|base|audience)\b|"
-    r"\bunprojected\b|\bbefore projection\b|\b(?:same|single|one) (?:universe|definition) (?:and|,) (?:one |the same |a single )?window\b", re.I)
+    r"\b(?:same|single|one) (?:universe|definition) (?:and|,) (?:one |the same |a single )?window\b", re.I)
+# "unprojected" / "before projection" reconcile the figures the ask
+# quotes or the answers it points back to; alone, in a question about
+# how a count is made ("what is the raw count before projection?"), they
+# are a methodology question and the provenance answer takes it (Grace
+# Yin 2026-11-08).
+_UNPROJECTED_RX = re.compile(r"\bunprojected\b|\bbefore projection\b", re.I)
 # cues that need two quoted figures or a reference to earlier answers
 _CUE_RX = re.compile(
     r"\breconcil(?:e|ed|ing|iation)\b|"
@@ -156,11 +162,25 @@ def wants_reconcile(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 900 or _NOT_RX.search(t):
         return False
+    # A numbered list of two or more questions is several asks; each
+    # routes on its own through prometheus.multi_ask (Grace Yin
+    # 2026-11-08: four numbered questions on how a Prime activation and
+    # a play are detected were taken whole as a reconciliation because
+    # one of them said "before projection", and came back as the record
+    # of one figure).
+    try:
+        from . import multi_ask as _ma
+        if len(_ma.numbered_items(text)) >= 2:
+            return False
+    except Exception:
+        pass
     if _STRONG_RX.search(t):
         return True
+    figs = quoted_figures(t)
+    if _UNPROJECTED_RX.search(t):
+        return bool(figs) or bool(_PRIOR_RX.search(t))
     if not _CUE_RX.search(t):
         return False
-    figs = quoted_figures(t)
     return len(figs) >= 2 or bool(_PRIOR_RX.search(t))
 
 
@@ -391,6 +411,11 @@ def _sample_people(fig, rec):
     sp = m.get('sample_people')
     if isinstance(sp, (int, float)) and sp > 0:
         return int(sp)
+    if str(fig.get('kind') or '') == 'pct' or _is_pct_unit(m.get('unit')):
+        # a share has no people count of its own ("100%" is not 3 people;
+        # Grace Yin 2026-11-08 read "Unprojected: 3 people in the data
+        # behind the 100")
+        return None
     e = rec.get('entry') or {}
     if str(e.get('route') or '') == 'sample_check':
         for mm in (e.get('metrics') or []):
