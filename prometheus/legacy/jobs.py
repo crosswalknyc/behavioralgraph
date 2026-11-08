@@ -17,7 +17,7 @@ from prometheus.legacy import H as _H, C as _C  # noqa: E402
 from prometheus import seams as _seams
 from prometheus import store as _store   # relational shadow store (audit item 7)  # noqa: E402
 
-__all__ = ['api_synth_chat_status', '_pm_job_owner_ok', '_pm_read_status_write', 'api_synth_chat_read_status', '_pm_deck_status_write', '_pm_bpiq_status_write', '_pm_jiq_status_write', '_pm_fw_status_write', '_pm_aiq_status_write', 'api_synth_chat_deck_status', 'api_synth_chat_bpiq_status', 'api_synth_chat_jiq_status', 'api_synth_chat_fw_status', 'api_synth_chat_aiq_status']
+__all__ = ['api_synth_chat_status', '_pm_job_owner_ok', '_pm_read_status_write', 'api_synth_chat_read_status', '_pm_deck_status_write', '_pm_bpiq_status_write', '_pm_jiq_status_write', '_pm_fw_status_write', '_pm_aiq_status_write', 'api_synth_chat_deck_status', 'api_synth_chat_bpiq_status', 'api_synth_chat_jiq_status', 'api_synth_chat_fw_status', 'api_synth_chat_aiq_status', 'api_synth_chat_active_runs', 'api_synth_chat_health']
 
 
 @_H.app.route('/api/brief-chat/status/<run_id>', methods=['GET'])
@@ -393,3 +393,181 @@ def _pm_file_stash_read(username):
         return doc if isinstance(doc, dict) else {}
     except Exception:
         return {}
+
+
+@_H.app.route('/api/brief-chat/active-runs', methods=['GET'])
+@_H.app.route('/api/synth-chat/active-runs', methods=['GET'])  # legacy alias
+@_H.requires_auth
+@_H._chatbot_route_guard('brief-chat/active-runs')
+def api_synth_chat_active_runs():
+    """Return the caller's in-flight profile runs with step progress.
+
+    Powers the chatbot's "status update" reply. When a user types
+    "status update" (or any variant) the frontend hits this endpoint,
+    gets back the list of their non-terminal runs, and formats a
+    per-run "step X of Y (label)" line for each.
+
+    Established 2026-08-19 (Jenna directive: "if someone asks status
+    update it should update you on all open running profiles in
+    process and give percentage of completion like on step 5 of 19
+    kinda thing"). Prior behavior: the frontend only surfaced the
+    single most-recent run_id from the on-page chat history, so a
+    user with two builds in flight only saw one.
+
+    Session-authenticated dashboard users only. Partner API keys must
+    use GET /api/v1/profiles/<run_id> per run - the "list every run"
+    surface is intentionally not exposed to partners so one key can't
+    enumerate cross-partner traffic.
+    """
+    user, err = _C._synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not _H.SYNTH_QUEUE_SECRET or not _H.SYNTH_QUEUE_URL:
+        _H._chatbot_error_email('brief-chat/active-runs',
+                             'profile engine not configured '
+                             '(queue URL/secret missing)',
+                             tb='(configuration check)')
+        return jsonify(_H._chatbot_calm_payload())
+
+    scope_arg = (request.args.get('scope') or '').strip().lower()
+    is_super = user.get('role') == 'super_admin'
+    want_global = (scope_arg == 'global' and is_super)
+    user_id = (user.get('email') or user.get('username') or '').strip()
+
+    try:
+        import requests as _requests
+        params = {'active': '1', 'limit': 50}
+        if not want_global and user_id:
+            params['user'] = user_id
+        resp = _requests.get(
+            f"{_H.SYNTH_QUEUE_URL}/synth/list",
+            params=params,
+            headers={'X-Synth-Auth': _H.SYNTH_QUEUE_SECRET},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            _H._chatbot_error_email(
+                'brief-chat/active-runs',
+                f'active-runs returned {resp.status_code}: '
+                f'{_H._clean_queue_error_text(resp.text)[:400]}',
+                tb=str(resp.text or '')[:2000] or '(empty reply)')
+            return jsonify(_H._chatbot_calm_payload())
+        raw = resp.json() or []
+    except Exception as e:
+        traceback.print_exc()
+        _H._chatbot_error_email('brief-chat/active-runs', e)
+        return jsonify(_H._chatbot_calm_payload())
+
+    # Shape each entry into a compact chat-friendly summary. Progress
+    # percent is computed on the read side so old status.json files
+    # (without step_index) still return a usable payload - those show
+    # as "queued" / "running" without a percent.
+    #
+    # Total steps is authoritative from the worker (PROFILE_STEPS_TOTAL
+    # == 11 as of 2026-08-19). If a status file was written by a worker
+    # slot that hasn't picked up the new code yet it'll be missing
+    # step_total; default to 11 so the display is still sensible.
+    runs = []
+    for doc in raw:
+        step_index = doc.get('step_index')
+        step_total = doc.get('step_total') or 11
+        step_label = doc.get('step_label') or ''
+        percent = None
+        if isinstance(step_index, int) and step_total:
+            percent = int(round(100.0 * step_index / step_total))
+            percent = max(0, min(100, percent))
+        runs.append({
+            'run_id': doc.get('run_id'),
+            'subject': doc.get('subject'),
+            'status': doc.get('status'),
+            'decision': doc.get('decision'),
+            'started_at': doc.get('started_at'),
+            'updated_at': doc.get('updated_at'),
+            'step_index': step_index,
+            'step_total': step_total,
+            'step_label': step_label,
+            'percent': percent,
+            'tu_step_index': doc.get('tu_step_index'),
+            'avid_step_index': doc.get('avid_step_index'),
+            'tu_key': doc.get('tu_key'),
+            'avid_key': doc.get('avid_key'),
+        })
+    return jsonify({
+        'success': True,
+        'runs': runs,
+        'scoped_to_user': None if want_global else user_id,
+    })
+
+
+@_H.app.route('/api/brief-chat/health', methods=['GET'])
+@_H.app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
+@_H.requires_auth
+@_H._chatbot_route_guard('brief-chat/health')
+def api_synth_chat_health():
+    """Health check + queue counts scoped to the current user.
+
+    The queue badge in the chatbot UI polls this endpoint. It was
+    previously showing global counts (every user's jobs), which is
+    both confusing and a small info leak. As of 2026-08-18 the
+    counts are scoped to the caller's own jobs by passing their
+    email as `?user=` to the Hetzner listener. Super-admins can
+    request the unscoped/global view with `?scope=global`.
+
+    Session-authenticated dashboard users only. Partner API keys must
+    use GET /api/v1/health instead (that endpoint returns a stable
+    "ok" / "degraded" enum with no internal counts).
+    """
+    user, err = _C._synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not _H.SYNTH_QUEUE_SECRET or not _H.SYNTH_QUEUE_URL:
+        _H._chatbot_error_email('brief-chat/health',
+                             'profile engine not configured '
+                             '(queue URL/secret missing)',
+                             tb='(configuration check)')
+        return jsonify(_H._chatbot_calm_payload(configured=False))
+
+    scope_arg = (request.args.get('scope') or '').strip().lower()
+    is_super = user.get('role') == 'super_admin'
+    want_global = (scope_arg == 'global' and is_super)
+
+    # Identifier we send to Hetzner. Must match what synth_queue_worker
+    # writes into the status file's `user_email` field. app.py always
+    # sets that to `user.get('email') or username`, so we mirror it.
+    user_id = (user.get('email') or user.get('username') or '').strip()
+
+    try:
+        import requests as _requests
+        params = {} if (want_global or not user_id) else {'user': user_id}
+        # One quick retry rides out the listener's restart-on-new-code
+        # window before the poll counts as failed at all.
+        resp, _hc_last = None, None
+        for _attempt, _tmo in ((0, 5), (1, 6)):
+            try:
+                resp = _requests.get(
+                    f"{_H.SYNTH_QUEUE_URL}/synth/health",
+                    params=params,
+                    timeout=_tmo,
+                )
+                break
+            except Exception as e:
+                _hc_last = e
+                if _attempt == 0:
+                    time.sleep(1.5)
+        if resp is None:
+            raise _hc_last
+        if resp.status_code == 200:
+            _H._QUEUE_HEALTH_BLIP['consec'] = 0
+            body = resp.json()
+            body['scope'] = 'global' if (want_global or not user_id) else 'user'
+            return jsonify({'success': True, 'configured': True,
+                             'queue': body})
+        _H._queue_health_blip_email(f'queue health check returned '
+                                 f'{resp.status_code}',
+                                 tb=str(resp.text or '')[:1200]
+                                 or '(empty reply)')
+        return jsonify(_H._chatbot_calm_payload(configured=True))
+    except Exception as _hc_err:
+        traceback.print_exc()
+        _H._queue_health_blip_email(_hc_err)
+        return jsonify(_H._chatbot_calm_payload(configured=True))

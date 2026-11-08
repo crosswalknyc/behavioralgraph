@@ -1,6 +1,6 @@
 {
   "_about": "The schematic for taking prometheus/legacy/chat.py apart (2026-10-02 RCA W3). Every top-level function and constant in the legacy modules belongs to exactly one family; a name no rule claims fails scripts/test_pm_families.py until someone places it. Families move out of chat.py one at a time: a moved family lives in prometheus/legacy/<module>.py, reads chat.py through the C proxy, and chat.py re-exports its names. Rules are regexes on the name, first match wins; names lists are explicit overrides checked before the rules.",
-  "updated": "2026-10-02",
+  "updated": "2026-11-08",
   "families": [
     {
       "name": "threads",
@@ -30,12 +30,38 @@
       "names": [
         "_pm_job_owner_ok",
         "api_synth_chat_status",
-        "api_synth_chat_read_status"
+        "api_synth_chat_read_status",
+        "api_synth_chat_active_runs",
+        "api_synth_chat_health"
       ],
       "rules": [
         "_status_write$",
         "^api_synth_chat_\\w+_status$"
       ]
+    },
+    {
+      "name": "rankers",
+      "module": "rankers",
+      "moved": true,
+      "purpose": "Rankers boards (overall reply, board block for a Rankers-view ask), multi-year ask detection with the year-package proposal, year-over-year trajectory reads",
+      "names": [
+        "_pm_overall_rankers_reply",
+        "_PM_RANKER_FAMILIES",
+        "_pm_rankers_board_block",
+        "_PM_MY_RANGE_RE",
+        "_PM_MY_LAST_RE",
+        "_PM_MY_NYEAR_RE",
+        "_PM_MY_SINCE_RE",
+        "_PM_MY_SPAN_RE",
+        "_PM_MY_YOY_RE",
+        "_pm_detect_multi_year_ask",
+        "_pm_year_files_for_subject",
+        "_pm_year_package_reply",
+        "_pm_trajectory_files",
+        "_pm_trajectory_metrics",
+        "_pm_trajectory_reply"
+      ],
+      "rules": []
     },
     {
       "name": "corrections",

@@ -1013,6 +1013,13 @@ _NESTED_OBJ = (
     # platform is named, the next stop word ends it ('on Paramount+ and ...')
     r"(?=\s*[?.,;!]|\s+(?-i:in|during|over|within|since|last|this|between|from|and|or|but|who|that|which|when|while|after|before|also|too)\b"
     r"(?(platform)|(?!\s+(?:the\s+)?(?-i:(?!(?:January|February|March|April|May|June|July|August|September|October|November|December|Q[1-4]|US|UK)\b)[A-Z][A-Za-z0-9'&:!.-]*)))"
+    # a breakdown or cadence tail is never part of the title (2026-11-08:
+    # once the count question joined the nested-audience read, 'how many
+    # people watched the office month by month' bound 'The Office Month
+    # by Month'): month by month, by month, each month, per week, monthly
+    r"|\s+(?-i:(?:(?:month|week|year|day|quarter)\s+(?:by|over|after|on)\s+(?:month|week|year|day|quarter)"
+    r"|by\s+(?:month|week|year|day|quarter|platform|service|gender|age|region|market|state|dma|device)"
+    r"|(?:each|every|per)\s+(?:month|week|year|day|quarter)|monthly|weekly|yearly|annually|daily|quarterly))\b"
     # a named platform ends at the next lowercase word too ('on Netflix watch next' is Netflix)
     r"|(?(platform)\s+(?-i:[a-z])|(?!))|$)")
 _NESTED_WHO = (

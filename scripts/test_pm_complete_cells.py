@@ -608,7 +608,8 @@ class StringSweep(unittest.TestCase):
         self.assertEqual(pma.missing_pieces_line(['x']), '')
         with open(os.path.join(ROOT, 'prometheus', 'priced_read.py'), encoding='utf-8') as fh:
             src = fh.read()
-        self.assertIn("'reply': CALM_LINE", src)
+        # the calm line, opened with 'Included with your plan.' for a covered seat (2026-11-08)
+        self.assertIn("'reply': (with_included_line(CALM_LINE) if included else CALM_LINE)", src)
         self.assertIn("_mail('prometheus/priced-read'", src)
         with open(os.path.join(ROOT, 'prometheus', 'drilldown.py'), encoding='utf-8') as fh:
             src = fh.read()

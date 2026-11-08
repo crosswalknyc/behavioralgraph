@@ -53,6 +53,10 @@ PRUNABLE = {
     'PARENT-SELECTION TIEBREAK': lambda t, c, r=None: bool(c),
     'UNIVERSE-QUALIFIER COMPATIBILITY': lambda t, c, r=None: bool(c),
     'SUBJECT-IDENTITY COMPATIBILITY': lambda t, c, r=None: bool(c),
+    # the whole-subject identity rules for a catalog match (2026-11-06, Tomorrow x
+    # Together) bind a candidate to the typed subject; with no candidate there is
+    # nothing to match, so they go with the other candidate-only sections
+    'CATALOG MATCH IDENTITY': lambda t, c, r=None: bool(c),
     'PLATFORM SCOPE': lambda t, c, r=None: bool(_PLATFORM_RX.search(t)) or bool((r or {}).get('platform')),
     'CAR-BRAND SELF-PINS': lambda t, c, r=None: bool(_AUTO_RX.search(t)),
     'PURCHASE-ON-A-PLATFORM': lambda t, c, r=None: bool(_PLATFORM_RX.search(t)) or bool(re.search(r"\b(buy|purchas|shop|consumer)", t, re.I)),
