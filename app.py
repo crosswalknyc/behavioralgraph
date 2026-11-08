@@ -11094,7 +11094,16 @@ def index():
     _uname = session.get('username') or ''
     _, effective_credits = check_user_credits(_uname) if _uname else (False, 0)
     _wallet_snap = _caller_wallet_snapshot(_uname) if _uname else {}
+    # Included with your plan (Jenna 2026-11-08): an unlimited seat (personal
+    # or company pool) or Crosswalk staff reads that on the pricing modal
+    # instead of a price
+    try:
+        from prometheus import guards as _pm_guards
+        _seat_included = bool(effective_credits == -1 or _pm_guards.is_staff(user))
+    except Exception:
+        _seat_included = bool(effective_credits == -1)
     return render_template('index.html', 
+                           seat_included=_seat_included,
                            username=session.get('username'),
                            insights_quick_snapshot_icon=insights_quick_snapshot_icon,
                            insights_quick_snapshot_title=insights_quick_snapshot_title,

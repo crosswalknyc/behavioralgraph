@@ -62,11 +62,15 @@ _STRONG_RX = re.compile(
     r"\bone (?:universe|audience|base|population|cohort) (?:definition|and (?:one )?window)\b|"
     r"\bstate (?:one|a single|the) (?:universe|definition|window|base|audience)\b|"
     r"\b(?:same|single|one) (?:universe|definition) (?:and|,) (?:one |the same |a single )?window\b", re.I)
-# "unprojected" / "before projection" reconcile the figures the ask
-# quotes or the answers it points back to; alone, in a question about
-# how a count is made ("what is the raw count before projection?"), they
-# are a methodology question and the provenance answer takes it (Grace
-# Yin 2026-11-08).
+# "unprojected" / "before projection" reconcile two or more figures the
+# ask quotes, or the answers it points back to while asking them to
+# agree; alone, in a question about how a count is made ("what is the
+# raw count before projection?"), they are a methodology question and
+# the provenance answer takes it (Grace Yin 2026-11-08); with one
+# figure, a subject or a referent ("the unprojected count behind the
+# 6,195,357", "unprojected audience for Howie Mandel") they are the
+# unprojected-number lane's one line (prometheus.unprojected, Jenna
+# 2026-11-08).
 _UNPROJECTED_RX = re.compile(r"\bunprojected\b|\bbefore projection\b", re.I)
 # cues that need two quoted figures or a reference to earlier answers
 _CUE_RX = re.compile(
@@ -178,7 +182,9 @@ def wants_reconcile(text):
         return True
     figs = quoted_figures(t)
     if _UNPROJECTED_RX.search(t):
-        return bool(figs) or bool(_PRIOR_RX.search(t))
+        # two figures to square, or earlier answers asked to agree; one
+        # figure or a referent alone is the unprojected-number lane's
+        return len(figs) >= 2 or (bool(_PRIOR_RX.search(t)) and bool(_CUE_RX.search(t)))
     if not _CUE_RX.search(t):
         return False
     return len(figs) >= 2 or bool(_PRIOR_RX.search(t))

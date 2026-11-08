@@ -611,15 +611,18 @@ def _label(v, username):
     return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
 
 
-def price(username=None):
+def price(username=None, included=False):
     """The three numbers and the one line: the audience build, the twin
-    with its first two runs, each further run."""
+    with its first two runs, each further run. ``included`` (an
+    unlimited seat, Jenna 2026-11-08): the line names no price."""
     p = _usd(PROFILE_PRICE_KEY, PROFILE_PRICE_DEFAULT, username)
     t = _usd(TWIN_PRICE_KEY, TWIN_PRICE_DEFAULT, username)
     r = _usd(RUN_PRICE_KEY, RUN_PRICE_DEFAULT, username)
     out = {'profile_usd': p, 'twin_usd': t, 'run_usd': r, 'total_usd': p + t,
            'profile_label': _label(p, username), 'twin_label': _label(t, username), 'run_label': _label(r, username), 'total_label': _label(p + t, username)}
-    if t <= 0:
+    if included:
+        out['line'] = "Price: included with your plan (the audience build, the twin with its first two runs, and each further run)."
+    elif t <= 0:
         out['line'] = (f"Price: {out['profile_label']} charged now for the audience build; the twin and its first two runs are included "
                        f"(each group you open on it is priced per group); each further run {out['run_label']}.")
     else:
@@ -656,8 +659,8 @@ def list_words(rec):
     return line + '.'
 
 
-def confirm_reply(rec, name, window, username=None):
-    pr = price(username)
+def confirm_reply(rec, name, window, username=None, included=False):
+    pr = price(username, included=included)
     lines = ['Here is the twin brief:',
              f"- Audience: {name}",
              f"- Defined by: {list_words(rec)}",
@@ -1384,7 +1387,11 @@ def analyze_hook(text, body, history, user, ppu, uname, *, host, pending, start_
             pending('stash', user, FLOW, brief, '')
             return _payload(f"I read the list: {list_words(rec)} " + ASK_NAME, ['Cancel'], twin_list_collect=True)
         pending('stash', user, FLOW, brief, RUN_LABEL)
-        return _payload(confirm_reply(rec, name, window, uname), [RUN_LABEL, 'Cancel'], twin_list_confirm_payload=brief, twin_list_collect=True)
+        try:
+            _incl = bool(billing(user, uname, consume_credit=consume_credit, is_free=is_free)[0])   # Included with your plan (2026-11-08)
+        except Exception:
+            _incl = False
+        return _payload(confirm_reply(rec, name, window, uname, included=_incl), [RUN_LABEL, 'Cancel'], twin_list_confirm_payload=brief, twin_list_collect=True)
     except Exception:
         traceback.print_exc()
         return None

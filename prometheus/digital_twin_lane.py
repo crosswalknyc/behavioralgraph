@@ -257,9 +257,25 @@ def _refund(user, credits, reason, job_id=''):
         traceback.print_exc()
 
 
-def group_quote(user, kind='group', tier=None):
-    """One line for a confirm card: what this group costs on the seat's plan."""
+INCLUDED_LINE = "Included with your plan."
+
+
+def _included(user):
+    """An unlimited seat or company, or Crosswalk staff: the group is
+    included with the plan and no price is shown (Jenna 2026-11-08)."""
     from migration import digital_twin_pricing as PR
+    try:
+        return bool(PR.seat_is_free(user, _uname(user)))
+    except Exception:
+        return False
+
+
+def group_quote(user, kind='group', tier=None):
+    """One line for a confirm card: what this group costs on the seat's
+    plan, or 'Included with your plan.' for an unlimited company."""
+    from migration import digital_twin_pricing as PR
+    if _included(user):
+        return INCLUDED_LINE
     uname = _uname(user)
     plan = _plan(user)
     return PR.quote_line(plan, tier if tier is not None else PR.default_tier(plan), _price_fn(uname), _symbol(uname), kind=kind)
@@ -267,8 +283,11 @@ def group_quote(user, kind='group', tier=None):
 
 def pricing_answer(user):
     """The per-group card, in the seat's currency, for 'what does a focus
-    group cost' and the like."""
+    group cost' and the like; the included line for an unlimited company."""
     from migration import digital_twin_pricing as PR
+    if _included(user):
+        return (INCLUDED_LINE + " Focus groups and pilot tests open on your company's plan with nothing charged to your account, "
+                "in any mode and at either size (1-20 or 1-40 questions).")
     uname = _uname(user)
     plan = _plan(user)
     text = PR.rate_card_text(_price_fn(uname), _symbol(uname))
@@ -459,7 +478,21 @@ def confirm_reply(parsed, username=None, on_file=None):
         lines.append(f"- Home: {parsed.get('platform_home')}")
     if pullable:
         lines.append(_TNP.audience_line(parsed.get('subject'), on_file))
-    if on_file or not pullable:
+    # Included with your plan (Jenna 2026-11-08): an unlimited seat's brief
+    # names no price; the intake calls this by name with the words alone,
+    # so the seat is the session's when none is passed
+    included = False
+    try:
+        from prometheus.priced_read import included_with_plan as _incl
+        if username is None:
+            from prometheus.legacy.watch import _pm_ask_log_user as _alu
+            username = _alu('') or None
+        included = bool(username) and bool(_incl(None, username, host))
+    except Exception:
+        included = False
+    if included:
+        lines.append("- Price: included with your plan (the twin, its runs and every group you open on it)")
+    elif on_file or not pullable:
         lines.append(f"- Price: the twin and its first two runs are included (each group you open on it is priced per group); each further run {_price_label('digital_twin_run', username)}")
     else:
         lines.append(_TNP.price_line(username, pull=True))
@@ -1445,7 +1478,9 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
     g = sess.get('group') or {}
     others = [str((t.get('meta') or {}).get('name') or '') for t in twins[1:] if (t.get('meta') or {}).get('name')]
     what = 'Script read' if option == 'script' else 'Concept test'
-    price = f"one group, {PR.tier_label(PR.group_tier(sess, plan))}" + (", charged at open" if PR.group_charge(sess) and not _is_super(user) else '')
+    _gc = PR.group_charge(sess)
+    price = f"one group, {PR.tier_label(PR.group_tier(sess, plan))}" + (
+        ", included with your plan" if (_gc and _gc.get('free')) or _included(user) else (", charged at open" if _gc and not _is_super(user) else ''))
     room = f"{g.get('in_room') or 12} in the room" + (f", the {' and '.join(others)} twin{'s' if len(others) > 1 else ''} seated too" if others else '')
     ready = str(sess.get('status') or '') == 'ready'
     return _payload(

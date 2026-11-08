@@ -36,6 +36,22 @@ US_POP = 329_900_000
 PANEL_DENOMINATOR = 10_000_000
 DEFAULT_FACTOR = US_POP / PANEL_DENOMINATOR  # 32.99
 
+
+# The one factor, both ways (Jenna 2026-11-08: a raw, unprojected or
+# "not modeled" number on request is the projected figure brought back to
+# the 10 million US consumers we measure). Projection = Raw x 329,900,000 /
+# 10,000,000 (profile-iq-pipeline-rules, section 3); the inverse here is
+# the only place the division lives. Both keep the arithmetic's own last
+# digit: a count of people is a whole number, never a tidy one.
+def project(raw):
+    """A count inside the 10 million -> the projected US figure."""
+    return int(round(float(raw) * US_POP / PANEL_DENOMINATOR))
+
+
+def unproject(value):
+    """A projected US figure -> the count inside the 10 million."""
+    return int(round(float(value) * PANEL_DENOMINATOR / US_POP))
+
 # Keys whose value is a projected (US) count.
 PROJECTED_KEYS = (
     'gen_pop', 'gen_pop_projection', 'gen_pop_projected', 'projected',

@@ -430,17 +430,25 @@ def parameter_change_hint(text):
     return hint
 
 
-def rerun_confirm(deliv, window, price_label, *, what=''):
+def rerun_confirm(deliv, window, price_label, *, what='', included=False):
     """The confirm card for a re-run: names the deliverable, the window
-    and the standing price. Never a silent 'working on it'."""
+    and the standing price. Never a silent 'working on it'. ``included``
+    (an unlimited seat, Jenna 2026-11-08): no price anywhere."""
     subj = str((deliv or {}).get('subject') or what or 'the last read').strip()
     kind = str((deliv or {}).get('kind') or 'read')
     noun = {'read': 'read', 'build': 'profile', 'journey': 'journey', 'deck': 'deck', 'cut': 'cut'}.get(kind, 'read')
     wp = window_phrase(window)
-    if wp:
+    if wp and included:
+        from .priced_read import INCLUDED_LINE, lead_for
+        reply = f"{INCLUDED_LINE} {lead_for('rerun', subj, noun=noun, window=wp)}"
+        chips = ['Run it', 'Cancel']
+    elif wp:
         # the one offer shape (prometheus/priced_read.py, Jenna 2026-10-21: Approve / Cancel)
         from .priced_read import compose_offer, lead_for
         reply, chips, _body = compose_offer(lead_for('rerun', subj, noun=noun, window=wp), price_label, '', {})
+    elif included:
+        reply = f"I can run the {subj} {noun} again, included with your plan. Tell me the window (two dates, a month, or a quarter) and I will run it."
+        chips = ['Something else']
     else:
         reply = f"I can run the {subj} {noun} again. Tell me the window (two dates, a month, or a quarter) and I will quote it; pulling this data will cost {price_label}."
         chips = ['Something else']
@@ -449,4 +457,5 @@ def rerun_confirm(deliv, window, price_label, *, what=''):
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips,
             'offer_deck': False, 'deck_angle': None,
             'rerun_confirm': {'subject': subj, 'kind': kind, 'window': list(window) if window else None,
-                              'question': merged, 'price_label': price_label}}
+                              'question': merged, 'price_label': ('Included with your plan' if included else price_label),
+                              'included': bool(included)}}

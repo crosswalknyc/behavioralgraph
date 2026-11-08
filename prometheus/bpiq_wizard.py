@@ -245,8 +245,26 @@ def price_label(usd):
     return f"${int(usd):,}"
 
 
-def accept_chip(usd):
-    return f"Accept {price_label(usd)}"
+def accept_chip(usd, included=False):
+    """'Accept $500'; a bare 'Accept' for a seat whose plan includes the
+    valuation (Jenna 2026-11-08: no price, no staff chip)."""
+    return CHIP_ACCEPT if included else f"Accept {price_label(usd)}"
+
+
+INCLUDED_LINE = "Included with your plan."
+
+
+def included_seat(draft=None):
+    """True when the recap and its chips carry no price: the draft is
+    stamped for an unlimited seat (analyze_hook stamps it once per turn
+    from the live seat), or the request's flag says so."""
+    if isinstance(draft, dict) and draft.get('included'):
+        return True
+    try:
+        from flask import g as _g
+        return bool(getattr(_g, '_pm_bpiq_included', False))
+    except Exception:
+        return False
 
 
 def extract_urls(text):
@@ -866,7 +884,7 @@ def recap_lines(draft):
         f"Attribution window: {pretty_range(d['attr_start'], d['attr_end'])}",
         f"Control group: {'yes' if control else 'no'}",
         assets,
-        f"This is {price_label(usd)}.",
+        (INCLUDED_LINE if included_seat(d) else f"This is {price_label(usd)}."),
     ]
     return lines
 
@@ -972,7 +990,7 @@ def step_prompt(draft, today=None):
     if step == STEP_LINKS:
         return ASK_LINKS, [CHIP_CANCEL]
     usd = price_usd(bool((draft or {}).get('control_group')))
-    return recap_reply(draft), [accept_chip(usd), CHIP_DECLINE, CHIP_CANCEL]
+    return recap_reply(draft), [accept_chip(usd, included=included_seat(draft)), CHIP_DECLINE, CHIP_CANCEL]
 
 
 def _clean_name(text):
@@ -1630,6 +1648,14 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     thread_id = str((body or {}).get('thread_id') or '')
     uname = uname or _uname(user)
     today = _today(today)
+    # Included with your plan (Jenna 2026-11-08): an unlimited seat's recap
+    # carries no price and a bare Accept; decided once per turn from the
+    # live seat and read by recap_lines / step_prompt through included_seat
+    try:
+        from flask import g as _g_inc
+        _g_inc._pm_bpiq_included = bool(_seat_is_free(user, uname, g))
+    except Exception:
+        pass
     # A start phrase always opens step 1. Cancel any leftover draft
     # first so a prior subject on the thread cannot become the talent
     # or fall through to a library-comp read.

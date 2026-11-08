@@ -458,7 +458,35 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                    'followups': [], 'offer_deck': False, 'deck_angle': None}
             return _answer(raw, 'rerun_which', route='rerun_window', outcome='asked_which_deliverable', **common)
         label, key = _price_label_for(str(deliv.get('kind') or 'read'), bool(deliv.get('viewership')), host)
-        raw = _cont.rerun_confirm(deliv, cont.get('window'), label)
+        included = False
+        try:
+            from .priced_read import included_with_plan as _incl
+            included = bool(_incl(user, uname, host))
+        except Exception:
+            included = False
+        q = str(deliv.get('question') or '').strip()
+        if included and cont.get('window') and q:
+            # Included with your plan (Jenna 2026-11-08): no confirm card and
+            # no price; the re-run starts now on the window named, and the
+            # service opens the reply with the included line
+            wp = _cont.window_phrase(cont.get('window'))
+            body = dict(body)
+            body['bind_subject'] = body.get('bind_subject') or deliv.get('subject') or ''
+            body['surface'] = 'analyze'
+            body['rerun_charge'] = {'subject': deliv.get('subject'), 'window': list(cont['window']), 'price_key': key,
+                                    'price_label': 'Included with your plan', 'included': True}
+            body['_pm_included'] = True
+            try:
+                from flask import g as _g4
+                _g4._pm_rerun_charge = body['rerun_charge']
+            except Exception:
+                pass
+            try:
+                host.ask_hint(route='rerun_window', outcome='included', subject=deliv.get('subject'))
+            except Exception as _fx:
+                _faults.note('turn_gate', _fx)
+            return {'text': (f"{q} Window: {wp}." if wp else q), 'body': body}
+        raw = _cont.rerun_confirm(deliv, cont.get('window'), label, included=included)
         raw['subject'] = deliv.get('subject') or ''
         raw['rerun_confirm']['price_key'] = key
         return _answer(raw, 'rerun_confirm', route='rerun_window', outcome='asked_confirm' if cont.get('window') else 'asked_window', **common)
@@ -473,7 +501,10 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             body['bind_subject'] = body.get('bind_subject') or rc.get('subject') or ''
             body['surface'] = 'analyze'
             body['rerun_charge'] = {'subject': rc.get('subject'), 'window': rc.get('window'),
-                                    'price_key': rc.get('price_key') or 'panel_report', 'price_label': rc.get('price_label')}
+                                    'price_key': rc.get('price_key') or 'panel_report', 'price_label': rc.get('price_label'),
+                                    'included': bool(rc.get('included'))}
+            if rc.get('included'):
+                body['_pm_included'] = True
             try:
                 from flask import g as _g3
                 _g3._pm_rerun_charge = body['rerun_charge']

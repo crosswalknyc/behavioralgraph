@@ -576,7 +576,7 @@ def list_words(read, file_name=''):
     return parts[0] + '.'
 
 
-def confirm_reply(read, rows, window, username=None, file_name='', cap=None, run_avid=True):
+def confirm_reply(read, rows, window, username=None, file_name='', cap=None, run_avid=True, included=False):
     n_reused = sum(1 for r in rows if r['state'] == 'reused')
     n_new = sum(1 for r in rows if r['state'] == 'queued')
     total, p = total_label(n_new, username)
@@ -584,12 +584,15 @@ def confirm_reply(read, rows, window, username=None, file_name='', cap=None, run
     lines = ['Here is the list:',
              f"- {list_words(read, file_name)}"]
     if n_reused:
-        lines.append(f"- {_n(n_reused, 'name')} already in the library: reused as is, no charge. {_n(n_new, 'new build')}.")
+        lines.append(f"- {_n(n_reused, 'name')} already in the library: reused as is{'' if included else ', no charge'}. {_n(n_new, 'new build')}.")
     else:
         lines.append(f"- None of the names is in the library yet: {_n(n_new, 'new build')}.")
     lines.append(f"- Window: {window_words(window)}")
     lines.append(f"- Each new build is a Total Universe{' with its Avid Fan cut' if run_avid else ''}; a profile lands in Select Profile the moment it finishes.")
-    if n_new:
+    if n_new and included:
+        # Included with your plan (Jenna 2026-11-08): no price on the read-back for an unlimited seat
+        lines.append(f"- Price: included with your plan ({_n(n_new, 'new build')}; reused profiles are reused as is).")
+    elif n_new:
         lines.append(f"- Price: {total} charged now ({_n(n_new, 'new build')} at {p['label']} each; reused profiles are free). "
                      f"A name that turns out to be in the library when its turn comes is not charged, and a build that cannot be completed is refunded.")
         lines.append(f"- Time: {eta_words(n_new, cap)} at the current pace (up to {cap} builds at a time, about {BUILD_MINUTES} minutes each). "
@@ -925,7 +928,11 @@ def analyze_hook(text, body, history, user, ppu, uname, *, host, pending, catalo
         s3.put_object(Bucket=bucket, Key=list_key, Body=json.dumps(read, default=str).encode('utf-8'), ContentType='application/json')
         brief = {'list_key': list_key, 'window': _normalize_window(window), 'file_name': file_name, 'count': len(read['items']), 'run_avid': run_avid, 'ask_text': t[:400]}
         pending('stash', user, FLOW, brief, RUN_LABEL)
-        return _payload(confirm_reply(read, rows, window, uname, file_name=file_name, cap=cap, run_avid=run_avid), [RUN_LABEL, 'Cancel'],
+        try:
+            _incl = bool(_TUL.billing(user, uname, consume_credit=consume_credit, is_free=is_free)[0])   # Included with your plan (2026-11-08)
+        except Exception:
+            _incl = False
+        return _payload(confirm_reply(read, rows, window, uname, file_name=file_name, cap=cap, run_avid=run_avid, included=_incl), [RUN_LABEL, 'Cancel'],
                         bulk_confirm_payload=brief)
     except Exception:
         traceback.print_exc()

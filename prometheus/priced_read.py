@@ -32,8 +32,11 @@ One offer shape everywhere (Jenna, verbatim: "just say something like
 pulling this data will cost $500 accept or decline with chips"): one
 sentence on what they get, then "Pulling this data will cost $N.",
 then exactly two chips, Accept and Decline. Never "The path for X",
-never "I will not answer until you accept". Crosswalk staff see the
-same offer and are not charged; their Accept chip says so.
+never "I will not answer until you accept". An unlimited seat and
+Crosswalk staff see no offer at all (Jenna 2026-11-08: "for anyone
+with unlimited credit it just should say included with your plan
+instead of giving a price or staff chip"): the reply opens "Included
+with your plan." and the read starts in the same turn, charged at zero.
 
 A company wallet is shared by every seat on the company: a seat on a
 paying company is charged for every priced product unless the seat is
@@ -57,11 +60,20 @@ APPROVE_CHIP = "Approve"
 CANCEL_CHIP = "Cancel"
 ACCEPT_CHIP, DECLINE_CHIP = APPROVE_CHIP, CANCEL_CHIP   # historic names, same chips
 STAFF_ACCEPT_CHIP = "Approve ({price}, not billed to a staff account)"
-# A client seat the plan covers (an unlimited company seat) sees the
-# price and that it is included; it is never called a staff account
-# (Grace Yin at Amazon, 2026-11-08, read "not billed to a staff
-# account" twice on her own offers).
+# A client seat the plan covers (an unlimited company seat) is never
+# called a staff account (Grace Yin at Amazon, 2026-11-08, read "not
+# billed to a staff account" twice on her own offers). The chip survives
+# for compose_offer callers; the gate itself no longer shows a covered
+# seat an offer at all (below).
 COVERED_ACCEPT_CHIP = "Approve ({price}, included in your plan)"
+# Included with your plan (Jenna 2026-11-08, verbatim: "for anyone with
+# unlimited credit it just should say included with your plan instead of
+# giving a price or staff chip"). An unlimited seat (and Crosswalk staff)
+# never sees a price, an Approve chip or the staff chip: the reply opens
+# with this line and the read starts in the same turn. The charge stays
+# at zero; `included_charge` is the panel_charge such a read carries.
+INCLUDED_LINE = "Included with your plan."
+INCLUDED_LABEL = "Included with your plan"
 # Kept under its historic name for callers that import it; the offer text
 # no longer carries a refusal sentence.
 CONFIRM = ""
@@ -1063,9 +1075,21 @@ def live_user(host, username, user=None):
     rec = None
     load = _host_cap(host, 'load_users')
     if load is None:
+        # the bound host first (a hermetic test binds its own users
+        # document there); the app module only as the last resort
         try:
-            import app as _app
-            load = getattr(_app, 'load_users', None)
+            from .host import host as _gh
+            load = _host_cap(_gh, 'load_users')
+        except Exception:
+            load = None
+    if load is None:
+        # the web app's own loader, only when the app is already running in
+        # this process (the web and the read worker both import it first);
+        # a hermetic test never pulls the 73,000-line module in from here
+        try:
+            import sys as _sys
+            _app = _sys.modules.get('app')
+            load = getattr(_app, 'load_users', None) if _app is not None else None
         except Exception:
             load = None
     if callable(load) and uname:
@@ -1094,15 +1118,47 @@ def live_user(host, username, user=None):
     return user if isinstance(user, dict) else {}
 
 
+def _pool_unlimited(username, host):
+    """True when the seat draws on an unlimited company pool with no
+    ceiling of its own (app.check_user_credits -> (True, -1)). Only
+    consulted once the web app is loaded (a host capability or the app
+    module already imported), so a hermetic test never pulls it in."""
+    uname = str(username or '').strip()
+    if not uname:
+        return False
+    chk = _host_cap(host, 'check_user_credits')
+    if chk is None:
+        try:
+            from .host import host as _gh
+            chk = _host_cap(_gh, 'check_user_credits')
+        except Exception:
+            chk = None
+    if chk is None:
+        try:
+            import sys as _sys
+            _app = _sys.modules.get('app')
+            chk = getattr(_app, 'check_user_credits', None) if _app is not None else None
+        except Exception:
+            chk = None
+    if not callable(chk):
+        return False
+    try:
+        ok, left = chk(uname)
+        return bool(ok) and int(left) == -1
+    except Exception:
+        return False
+
+
 def seat_is_free(user, username=None, host=None):
     """True when this seat is never billed: staff, super_admin, or
     unlimited (credits == -1, unlimited flag, billing_mode unlimited,
-    or no_cap). Looks up the live row when the passed user is thin."""
+    no_cap, or an unlimited company pool with no ceiling on the seat).
+    Looks up the live row when the passed user is thin."""
     u = live_user(host, username, user)
     if staff_user(u):
         return True
     if not isinstance(u, dict) or not u:
-        return False
+        return _pool_unlimited(username, host)
     role = str(u.get('role') or '').strip().lower().replace(' ', '_')
     if role in ('super_admin', 'superadmin'):
         return True
@@ -1120,7 +1176,49 @@ def seat_is_free(user, username=None, host=None):
                 return True
         except (TypeError, ValueError):
             pass
-    return False
+    return _pool_unlimited(username or u.get('username') or u.get('email'), host)
+
+
+def included_with_plan(user, username=None, host=None):
+    """True when priced reads are included with this seat's plan: an
+    unlimited seat (personal or company pool) or Crosswalk staff. The
+    one check every priced surface asks before it shows a price or an
+    Approve chip (Jenna 2026-11-08). A probe identity (the golden set,
+    the canary, the replay harness, a sandbox key) is never included: it
+    reads the paying seat's shape, which is what gets graded."""
+    try:
+        uname = str(username or '').strip()
+        if not uname and isinstance(user, dict):
+            uname = str(user.get('username') or user.get('email') or '').strip()
+        if uname:
+            from . import probe_identity as _pi
+            if _pi.is_probe_user(uname, user if isinstance(user, dict) else None):
+                return False
+    except Exception:
+        pass
+    try:
+        return bool(staff_user(user) or seat_is_free(user, username, host))
+    except Exception:
+        return False
+
+
+def included_charge(username, subject, kind, pull_type, label='', staff=False):
+    """The panel_charge an included read carries: zero credits, the
+    included label, the quoted price kept for the record only. ``staff``
+    is a Crosswalk seat; a covered client seat is never called staff."""
+    return {'user': username, 'credits': 0, 'subject': subject, 'kind': kind, 'pull_type': pull_type,
+            'label': INCLUDED_LABEL, 'quoted': str(label or ''), 'included': True,
+            'staff': bool(staff), 'covered': not bool(staff)}
+
+
+def with_included_line(reply):
+    """'Included with your plan. <reply>' once, never twice."""
+    r = str(reply or '').strip()
+    if not r:
+        return INCLUDED_LINE
+    if r.startswith(INCLUDED_LINE):
+        return r
+    return INCLUDED_LINE + ' ' + r
 
 
 def charge(host, username, subject, pull_type, credits, description, quantity=1):
@@ -1328,10 +1426,12 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                         '(one line is enough) and I will take it from there.')
             return 'offer', {'success': True, 'action': 'answer', 'reply': line, 'followups': [],
                              'offer_deck': False, 'deck_angle': None, 'subject': '', 'subject_unclear': True}
+    # Included with your plan (Jenna 2026-11-08): an unlimited seat (a
+    # covered client seat, never called staff) or Crosswalk staff never
+    # sees the offer, the price or a chip; the read is charged at zero
+    # and starts in the same turn.
     is_staff = staff_user(user)
-    # a covered client seat (unlimited, never billed) is not staff: its
-    # chip says the read is included in the plan
-    staff = True if is_staff else ('covered' if seat_is_free(user, username, host) else False)
+    included = included_with_plan(user, username, host)
     if kind not in ('sizing', 'derived') and custom_price(username, history, subj).get('metered'):
         # a follow-up on a subject this thread already paid for (custom or viewership): metered, never quoted (Jenna 2026-10-30)
         return 'charged', {'user': username, 'credits': 0, 'subject': subj, 'kind': kind,
@@ -1351,10 +1451,13 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     else:
         p = custom_price(username, history, subj)
         label, credits, qty, pull_type = p['label'], p['credits'], 1, p['pull_type']
+    if included:
+        # no offer step: the caller runs the read now and opens with INCLUDED_LINE
+        return 'charged', included_charge(username, subj, kind, pull_type, label, staff=is_staff)
     if not isinstance(panel_confirm, dict):
         span = 'one year' if int(years or 1) == 1 else f"{int(years)} years"
         reply, chips, off = offer(subj, label, text, kind=kind, frame=frame, years=years,
-                                  staff=staff, dimension=dimension, verb=verb, series=series,
+                                  dimension=dimension, verb=verb, series=series,
                                   condition=condition, span=span, what=what, work=work, service=service)
         return 'offer', {'success': True, 'action': 'answer', 'reply': reply,
                          'followups': chips, 'offer_deck': False, 'deck_angle': None,
@@ -1363,11 +1466,6 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     if isinstance(rc, dict):
         return 'charged', rc
     desc = charge_description(kind, subj, text, dimension=dimension, years=int(years or 1))
-    if staff:
-        # Crosswalk staff and covered seats see the offer and are never billed
-        return 'charged', {'user': username, 'credits': 0, 'subject': subj, 'kind': kind,
-                           'pull_type': pull_type, 'label': label, 'staff': bool(is_staff),
-                           'covered': staff == 'covered'}
     fn = consume
     if fn is None and host is not None and hasattr(host, 'consume_credit'):
         fn = host.consume_credit
@@ -1417,23 +1515,30 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
     bound = bound_subject(text, history, ctx, fallback=subject)
     if bound and hit['kind'] != 'sizing':
         subject = bound
+    included = False
     if pc is None:
         state, payload = offer_or_charge(text=text, subject=subject, kind=hit['kind'],
                                          panel_confirm=None, username=uname, user=user,
                                          history=history, host=host, frame=hit.get('frame') or '',
                                          what=(sizing_lead(text, ctx) if hit['kind'] == 'sizing' else ''))
-        return payload
-    if hit['kind'] == 'sizing' and pc_kind not in ('sizing', 'derived', ''):
-        return None
-    state, payload = offer_or_charge(text=text, subject=subject, kind=hit['kind'],
-                                     panel_confirm=pc, username=uname, user=user,
-                                     history=history, host=host, frame=hit.get('frame') or '')
-    if state == 'error':
-        return payload
+        if state != 'charged':
+            return payload
+        # no offer step (included with the plan, or a metered follow-up):
+        # the read runs in this same turn
+        included = bool((payload or {}).get('included'))
+    else:
+        if hit['kind'] == 'sizing' and pc_kind not in ('sizing', 'derived', ''):
+            return None
+        state, payload = offer_or_charge(text=text, subject=subject, kind=hit['kind'],
+                                         panel_confirm=pc, username=uname, user=user,
+                                         history=history, host=host, frame=hit.get('frame') or '')
+        if state == 'error':
+            return payload
+        included = bool((payload or {}).get('included'))
     from . import sizing_lane as _sz
     raw = _sz.answer(text, ctx, host=host, history=history, staff=staff_user(user))
-    paid = {'kind': hit['kind'], 'frame': hit.get('frame'), 'usd': hit.get('usd'),
-            'subject': subject, 'pull_type': (payload or {}).get('pull_type')}
+    paid = {'kind': hit['kind'], 'frame': hit.get('frame'), 'usd': (0 if included else hit.get('usd')),
+            'subject': subject, 'pull_type': (payload or {}).get('pull_type'), 'included': included}
     if not raw:
         # the sizing pass came back with nothing: the reader gets the calm
         # line (the answer comes by email), ops gets the cause. Never "I
@@ -1450,7 +1555,7 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
             pass
         return {
             'success': True, 'action': 'answer',
-            'reply': CALM_LINE,
+            'reply': (with_included_line(CALM_LINE) if included else CALM_LINE),
             'followups': [], 'offer_deck': False, 'deck_angle': None,
             'priced_paid': paid, 'subject': subject, 'held': True,
         }
@@ -1458,13 +1563,18 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
     out['priced_paid'] = paid
     out.setdefault('subject', subject)
     out['priced_lane'] = hit['kind']
+    if included:
+        # the opener an unlimited seat reads instead of a price (Jenna 2026-11-08)
+        out['reply'] = with_included_line(out.get('reply') or '')
+        out['included_with_plan'] = True
     return out
 
 
 # ----------------------------------------------------------------- chat helpers
-def sizing_offer_payload(text, history=None, username=None):
+def sizing_offer_payload(text, history=None, username=None, user=None):
     """The interpret surface's sizing pre-check: the $100 offer for an
-    audience-size ask, or None when the words are not a sizing ask."""
+    audience-size ask, or None when the words are not a sizing ask (or
+    the seat's plan includes the read, so no price is ever shown)."""
     try:
         from . import sizing_lane as _sz
     except Exception:
@@ -1473,6 +1583,8 @@ def sizing_offer_payload(text, history=None, username=None):
     if not ((hit and hit.get('kind') == 'sizing') or (
             _sz is not None and _sz.wants_sizing(text) and _sz.names_an_audience(text))):
         return None
+    if included_with_plan(user, username, None):
+        return None      # Included with your plan (Jenna 2026-11-08): the size runs without a quote
     subj = (hit or {}).get('subject') or _sizing_subject(text) or 'that audience'
     label, credits, pull_type, _k = price_plan(hit or {'kind': 'sizing', 'usd': 100}, username)
     reply, chips, off = offer(subj, label, text, kind='sizing',
@@ -1493,6 +1605,8 @@ def charge_rerun(username, subj_hint, consume):
     if not isinstance(rrc, dict) or getattr(_g, '_pm_rerun_charged', False):
         return None
     _g._pm_rerun_charged = True
+    if rrc.get('included') or included_with_plan(None, username, None):
+        return {}       # included with the plan: nothing to charge (Jenna 2026-11-08)
     subj = str(rrc.get('subject') or subj_hint or 'the read')
     try:
         from .continuation import window_phrase as _wp
@@ -1652,6 +1766,10 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
         return payload
     if isinstance(pc, dict) and not isinstance(pc.get('resume_charge'), dict):
         pc['resume_charge'] = payload
+    if isinstance(payload, dict) and payload.get('included'):
+        # Included with your plan (Jenna 2026-11-08): no offer, the read
+        # runs now; the service opens the reply with INCLUDED_LINE
+        body['_pm_included'] = True
     # The read runs on exactly what was quoted and approved: the subject
     # rides the body as the bound subject so the generation pass never
     # resolves a base of its own (the open page) behind the quote.

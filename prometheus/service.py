@@ -468,7 +468,7 @@ LANE_ORDER = (
     'intake_cancel',
     'bpiq_wizard', 'build_fix',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
-    'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'confirm_answer', 'short_reply',
+    'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
@@ -484,11 +484,11 @@ DETERMINISTIC_LANES = frozenset((
     'build_fix', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
-    'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'reconcile',
+    'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
     'us_scope'))
 NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
-                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'reconcile', 'us_scope'))
+                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope'))
 
 
 def lane_markers(source=None):
@@ -1108,6 +1108,35 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: unprojected
+    # The raw, unprojected count behind a projected figure (Jenna
+    # 2026-11-08): "what's the raw number for that", "how many people in
+    # your data watched X", "unprojected audience for Howie Mandel". The
+    # figure on the table (quoted in the ask, the subject's SAMPLE SIZE
+    # row, the last read, the open profile) brought back to the 10
+    # million we measure with the one factor in prometheus.projection.
+    # Never a quote, never the model; a size ask on a subject not on
+    # file falls through to the sizing lane.
+    if not _armed(body):
+        try:
+            from . import unprojected as _unp
+            _unp_raw = _unp.answer(text, history, ctx=ctx) if _unp.wants_unprojected(text) else None
+        except Exception as _fx:
+            _faults.note('service.unprojected', _fx)
+            _unp_raw = None
+        if _unp_raw:
+            raw = _unp_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'unprojected', 'client_hint': None}
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+            try:
+                host.ask_hint(route='unprojected', outcome=('answered' if (_unp_raw.get('unprojected') or {}).get('found') else 'asked_which'))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     referent_decision = None
     _client_surface = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
     try:
@@ -1375,8 +1404,13 @@ def ask(user, body, *, via='session'):
         try:
             from . import product_facts as _pf
             if _pf.looks_like(text):
+                try:
+                    from . import priced_read as _prf
+                    _pf_incl = bool(_prf.included_with_plan(user, uname, host))   # Included with your plan (Jenna 2026-11-08)
+                except Exception:
+                    _pf_incl = False
                 _pf_raw = _pf.answer(text, price_fn=_pf.price_fn_for(uname),
-                                     has_names_list=lambda: _pf.thread_has_names(uname, tid, host))
+                                     has_names_list=lambda: _pf.thread_has_names(uname, tid, host), included=_pf_incl)
         except Exception as _fx:
             _faults.note('service.product_facts', _fx)
             _pf_raw = None
@@ -1572,7 +1606,7 @@ def ask(user, body, *, via='session'):
         return env, 200
     # lane: standing
     if referent_decision is None and not _armed(body):
-        _standing = _standing_answer(text)
+        _standing = _standing_answer(text, user=user, uname=uname)
         if _standing is None:
             # A journey-figure question reads from the delivered journey
             # first (Jenna 2026-10-14: two different numbers for one
@@ -1795,10 +1829,21 @@ def ask(user, body, *, via='session'):
         except Exception:
             _is_price = False
         if _is_price:
+            _incl = False
+            try:
+                # Included with your plan (Jenna 2026-11-08): an unlimited
+                # seat asking what things cost reads that, never a card
+                from . import priced_read as _prp
+                from . import rate_card as _rcp
+                _incl = bool(_prp.included_with_plan(user, uname, host))
+            except Exception:
+                _incl = False
             try:
                 # Rate card in the seat's currency (East Tree Media and
                 # Omaze read pounds, Jenna 2026-10-08).
-                if host.has('pricing_copy_for'):
+                if _incl:
+                    copy = _rcp.render(included=True)
+                elif host.has('pricing_copy_for'):
                     copy = str(host.pricing_copy_for(uname) or '')
                 else:
                     copy = str(host.pricing_copy) if host.has('pricing_copy') else ''
@@ -1806,7 +1851,7 @@ def ask(user, body, *, via='session'):
                 copy = ''
             if copy:
                 raw = {'success': True, 'action': 'answer', 'reply': copy,
-                       'followups': ['What is my balance?'],
+                       'followups': ([] if _incl else ['What is my balance?']),
                        'offer_deck': False, 'deck_angle': None}
                 decision = {'surface': 'analyze', 'mode': None,
                             'reason': 'product_fact', 'client_hint': None}
@@ -2387,6 +2432,15 @@ def ask(user, body, *, via='session'):
         raw, status = _unpack(resp)
         if surface == 'analyze' and isinstance(raw, dict) and raw.get('action') == 'answer' and raw.get('reply'):
             raw = _after_answer(raw, text, uname, ctx)
+        if body.get('_pm_included') and isinstance(raw, dict) and raw.get('success') and raw.get('reply'):
+            # Included with your plan (Jenna 2026-11-08): the work gate
+            # waved the read through with no offer; the reply opens with
+            # the line a paying seat would have read as a price
+            try:
+                from . import priced_read as _pri
+                raw = dict(raw, reply=_pri.with_included_line(raw['reply']), included_with_plan=True)
+            except Exception as _fx:
+                _faults.note('service.included', _fx)
         if (surface == 'analyze' and _client_surface == 'interpret'
                 and isinstance(raw, dict)):
             # The widget is sitting in its build flow (an armed step, or a
@@ -2434,7 +2488,7 @@ def last_user_question(history):
     return ''
 
 
-def _standing_answer(text):
+def _standing_answer(text, user=None, uname=''):
     """Three answers that come before any executor or lane (2026-10-14):
     behavior with no digital trace (linear TV, in-store, foot traffic,
     radio) is declined with the nearest measurable read instead of being
@@ -2497,12 +2551,18 @@ def _standing_answer(text):
                 host.ask_hint(route='roster_offer', outcome='answered')
             except Exception:
                 pass
-            _reply, _chips = _cl.roster_reply(*_ro)
+            _incl = False
+            try:
+                from . import priced_read as _prs
+                _incl = bool(_prs.included_with_plan(user, uname, host))   # Included with your plan (Jenna 2026-11-08)
+            except Exception:
+                _incl = False
+            _reply, _chips = _cl.roster_reply(*_ro, included=_incl)
             _out = {'success': True, 'action': 'answer', 'reply': _reply, 'followups': _chips,
                     'offer_deck': False, 'deck_angle': None, 'roster_ask': True}
             if _ro[2]:
                 from . import talent_list_job as _tl
-                _out['offer'] = _tl.offer(_cl._plural(_ro[0]), _ro[2], _ro[1])[2]
+                _out['offer'] = _tl.offer(_cl._plural(_ro[0]), _ro[2], _ro[1], included=_incl)[2]
             return _out
     except Exception as _fx:
         _faults.note('service', _fx)

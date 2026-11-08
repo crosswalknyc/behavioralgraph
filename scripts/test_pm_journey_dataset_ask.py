@@ -100,7 +100,11 @@ class StudyAnswersItself(unittest.TestCase):
         self.assertNotIn('Pulling this data', raw['reply'])
 
     def test_a_cut_the_study_lacks_is_one_honest_line_plus_a_labeled_offer(self):
-        raw = JL.answer('what share of the Instagram viewers were women', PAGE, user=LIZ_USER, history=[])
+        # a Crosswalk staff seat (Liz) is included with the plan (Jenna 2026-11-08): no offer, the
+        # ask falls through to the derived read; the paying seat reads the honest line and the quote
+        self.assertIsNone(JL.answer('what share of the Instagram viewers were women', PAGE, user=LIZ_USER, history=[]))
+        payer = {'username': 'payer', 'email': 'payer@studio.com', 'company': 'Studio', 'credits': 100}
+        raw = JL.answer('what share of the Instagram viewers were women', PAGE, user=payer, history=[])
         self.assertIsNotNone(raw)
         self.assertTrue(raw.get('panel_offer'))
         self.assertEqual(raw['panel_offer']['subject'], 'Music to Long Form')

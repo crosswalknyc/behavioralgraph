@@ -321,10 +321,19 @@ def _group_card(user):
     pf = _price_fn(uname)
     sym = _money_symbol(uname)
     try:
+        free = bool(PR.seat_is_free(user, uname))
+        if free:
+            # Included with your plan (Jenna 2026-11-08): an unlimited
+            # company's page reads that in place of every per-group price
+            return {'plan': plan, 'plan_label': PR.plan_label(plan), 'tiers': list(PR.tiers_for(plan)), 'default_tier': PR.default_tier(plan),
+                    'rates': {str(t): 0.0 for t in PR.tiers_for(plan)}, 'labels': {str(t): PR.INCLUDED_LABEL for t in PR.tiers_for(plan)},
+                    'upgrade_usd': 0.0, 'upgrade_label': PR.INCLUDED_LABEL,
+                    'quote': {str(t): PR.quote_line(plan, t, pf, sym, included=True) for t in PR.tiers_for(plan)}, 'free': True,
+                    'included': True, 'card': [PR.INCLUDED_LINE], 'twin_included': True}
         return {'plan': plan, 'plan_label': PR.plan_label(plan), 'tiers': list(PR.tiers_for(plan)), 'default_tier': PR.default_tier(plan),
                 'rates': {str(t): PR.rate(plan, t, pf) for t in PR.tiers_for(plan)}, 'labels': {str(t): PR.money(PR.rate(plan, t, pf), sym) for t in PR.tiers_for(plan)},
                 'upgrade_usd': PR.upgrade_rate(plan, pf), 'upgrade_label': PR.money(PR.upgrade_rate(plan, pf), sym),
-                'quote': {str(t): PR.quote_line(plan, t, pf, sym) for t in PR.tiers_for(plan)}, 'free': PR.seat_is_free(user, uname),
+                'quote': {str(t): PR.quote_line(plan, t, pf, sym) for t in PR.tiers_for(plan)}, 'free': free,
                 'card': PR.rate_card_lines(pf, sym), 'twin_included': True}
     except Exception:
         traceback.print_exc()

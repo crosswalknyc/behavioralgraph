@@ -181,14 +181,22 @@ def facts(price_fn=None):
             'list_max': list_max, 'build_minutes': build_minutes}
 
 
-def answer(text, *, price_fn=None, has_names_list=None):
+INCLUDED_LINE = "Included with your plan."
+INCLUDED_PHRASE = "included with your plan"
+
+
+def answer(text, *, price_fn=None, has_names_list=None, included=False):
     """{'reply', 'followups', 'family'} or None. ``has_names_list`` is a
     callable (or bool) saying whether a names sheet sits on the thread:
-    a bulk ORDER with the list attached is never answered here."""
+    a bulk ORDER with the list attached is never answered here.
+    ``included`` is an unlimited seat (or Crosswalk staff): every price
+    in the answer reads "included with your plan" (Jenna 2026-11-08)."""
     fam = family_of(text)
     if not fam:
         return None
     f = facts(price_fn)
+    if included:
+        f = dict(f, profile=INCLUDED_PHRASE, bp_base=INCLUDED_PHRASE, bp_control=INCLUDED_PHRASE)
     if fam == 'bulk_list':
         try:
             from . import bulk_pull as _bp
@@ -202,29 +210,41 @@ def answer(text, *, price_fn=None, has_names_list=None):
                 has = False
             if has:
                 return None       # the door reads the list back and runs it
+        readback = (f"how many names are already in the library (reused as is), how many are new builds ({INCLUDED_PHRASE}), "
+                    f"the window and the time at the current pace" if included else
+                    f"how many names are already in the library (reused at no charge), how many are new builds at "
+                    f"{f['profile']} each, the window, the price and the time at the current pace")
         reply = (f"Yes. Attach a CSV, TXT or XLSX with one name per row (a column named subject, name, talent, brand or title, "
                  f"else the first text column; up to {f['list_max']:,} names) and say 'pull profiles for everyone on this list'. "
-                 f"I read the list back first: how many names are already in the library (reused at no charge), how many are new builds at "
-                 f"{f['profile']} each, the window, the price and the time at the current pace (about {f['build_minutes']} minutes a build, "
+                 f"I read the list back first: {readback} (about {f['build_minutes']} minutes a build, "
                  f"several at a time); say 'Queue the list' and the builds run as capacity allows, each profile landing in Select Profile as it "
                  f"finishes, with a summary email as the list progresses. Ask 'how is my list going' any time.")
         return {'reply': reply, 'followups': ['How is my list going?'], 'family': fam}
     if fam == 'twin_pricing':
-        from migration.digital_twin_pricing import rate_card_text
-        reply = (rate_card_text(price_fn) + "\n\nThe plan is set per company; every seat on the company opens groups at that rate, and the group is charged "
-                 "to the company wallet when it opens. Open a room on the Focus Group IQ tab or a test on the Pilot Testing tab, or say 'Open a focus group with the <subject> twin'.")
+        if included:
+            reply = (INCLUDED_LINE + " Focus groups and pilot tests open on your company's plan with nothing charged to your account, "
+                     "in any mode and at either size (1-20 or 1-40 questions). Open a room on the Focus Group IQ tab or a test on the "
+                     "Pilot Testing tab, or say 'Open a focus group with the <subject> twin'.")
+        else:
+            from migration.digital_twin_pricing import rate_card_text
+            reply = (rate_card_text(price_fn) + "\n\nThe plan is set per company; every seat on the company opens groups at that rate, and the group is charged "
+                     "to the company wallet when it opens. Open a room on the Focus Group IQ tab or a test on the Pilot Testing tab, or say 'Open a focus group with the <subject> twin'.")
         return {'reply': reply, 'followups': ['Open a focus group', 'Open Pilot Testing', 'How do I use Digital Twins IQ?'], 'family': fam}
     if fam == 'valuation':
+        recap = ("You approve the recap, and the valuation lands" if included else "You approve the recap with the price on it, and the valuation lands")
+        tail = (f" It is {INCLUDED_PHRASE}, with or without a control group." if included
+                else f": {f['bp_base']}, or {f['bp_control']} with a control group.")
         reply = (f"Say 'Value a brand partnership' and I walk you through it one question at a time: the talent or property, the campaign, "
                  f"its dates, the attribution window (the campaign dates plus 30 days, or your own), whether to include a control group, and "
-                 f"the assets (paste the links or I find them). You approve the recap with the price on it, and the valuation lands in the "
+                 f"the assets (paste the links or I find them). {recap} in the "
                  f"Brand Partnership tab with one dollar figure for the partnership and the audience fit, earned media, brand lift and conversion "
-                 f"lenses behind it: {f['bp_base']}, or {f['bp_control']} with a control group.")
+                 f"lenses behind it" + ('.' if included else '') + tail)
         return {'reply': reply, 'followups': ['Value a brand partnership'], 'family': fam}
+    priced = ("each included with your plan" if included else "each priced before it runs")
     reply = (f"I answer questions about any US audience from what people actually do, in plain English: who they are, what they watch, "
              f"stream, buy, search and subscribe to, and how two audiences compare. I also build what is not on file yet: a profile of any "
              f"person, title, brand or behavior ({f['profile']}, about an hour), profiles for a whole list of names from an uploaded CSV, a "
-             f"Brand Partnership valuation, a Flywheel, a Digital Journey, a Subscriber IQ read and a Digital Twin, each priced before it runs. "
+             f"Brand Partnership valuation, a Flywheel, a Digital Journey, a Subscriber IQ read and a Digital Twin, {priced}. "
              f"Every data answer comes with a CSV you can download or have emailed.")
     return {'reply': reply, 'followups': ['Run a profile', 'Value a brand partnership', 'Build a Flywheel', 'How do I pull profiles for a list?'],
             'family': fam}

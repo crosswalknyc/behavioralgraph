@@ -32,7 +32,7 @@ KIND = 'tlist'
 TOOL_KEY = 'panel_report'
 PULL_TYPE = 'Panel Report'
 LABEL = 'Influencers and talent who sell their own product or service'
-_CHIP_RX = re.compile(r"^\s*(?:yes,?\s*)?pull the list(?: of (?P<group>.+?))?\s*\(\$?[\d,]+\)\s*$", re.I)
+_CHIP_RX = re.compile(r"^\s*(?:yes,?\s*)?pull the list(?: of (?P<group>.+?))?\s*(?:\((?:\$|\u00a3)?[\d,]+(?:\.\d+)?\))?\s*$", re.I)   # the included chip carries no price (2026-11-08)
 _ACCEPT_RX = re.compile(r"^\s*(?:yes|yeah|yep|sure|ok(?:ay)?|please|go ahead|do it|pull it|pull the list|run it|sounds good|lets do it|let's do it)(?:[,.! ]+(?:please|pull (?:it|the list)|do it|go ahead|thanks?))*[.! ]*$", re.I)
 
 
@@ -60,20 +60,22 @@ def group_phrase(noun_plural, qualifier):
     return f"{noun_plural} {q}" if first.endswith('ing') else f"{noun_plural} who {q}"
 
 
-def offer(noun_plural, qualifier, person=True):
-    """(reply, chips, offer_doc) for a roster ask with a condition."""
+def offer(noun_plural, qualifier, person=True, included=False):
+    """(reply, chips, offer_doc) for a roster ask with a condition.
+    ``included`` (an unlimited seat, Jenna 2026-11-08): the line reads
+    'Included with your plan.' and the chip carries no price."""
     group = group_phrase(noun_plural, qualifier)
     price = price_label()
     # the one offer shape (prometheus/priced_read.py, Jenna 2026-10-21):
     # what they get, then the price line; the list chip accepts
-    from .priced_read import OFFER_LINE
+    from .priced_read import OFFER_LINE, INCLUDED_LINE
     # "we can pull anything you want, just request it" stays the opener (Jenna 2026-10-15, Emmet at Kartel)
     reply = (f"I can pull anything you want, just ask. Which {noun_plural} are you talking about? Name them and I will "
              f"check each one. Or I can pull the list of {group} in our data, each with their US audience, delivered here "
-             f"and to your inbox as a workbook and a PDF. " + OFFER_LINE.format(price=price))
-    chip = f"Pull the list of {group} ({price})"
+             f"and to your inbox as a workbook and a PDF. " + (INCLUDED_LINE if included else OFFER_LINE.format(price=price)))
+    chip = f"Pull the list of {group}" + ('' if included else f" ({price})")
     return reply, [chip, 'I will name them'], {'kind': KIND, 'group': group, 'noun': noun_plural, 'qualifier': qualifier,
-                                              'price_usd': price_usd(), 'chip': chip}
+                                              'price_usd': (0.0 if included else price_usd()), 'chip': chip, 'included': bool(included)}
 
 
 def last_offer(history):
@@ -148,6 +150,14 @@ def start(user, username, question, off, thread_id=None, *, run_fn=None, start_f
     price = float(off.get('price_usd') or price_usd())
     job_id = uuid.uuid4().hex[:12]
     charge = charge_fn or (host.consume_credit if host.has('consume_credit') else None)
+    included = False
+    try:
+        from .priced_read import included_with_plan as _incl
+        included = bool(off.get('included')) or bool(_incl(user, username, host))   # Included with your plan (Jenna 2026-11-08)
+    except Exception:
+        included = bool(off.get('included'))
+    if included:
+        charge, price = None, 0.0
     charged = True
     if charge is not None:
         try:
@@ -170,8 +180,9 @@ def start(user, username, question, off, thread_id=None, *, run_fn=None, start_f
         host.ask_hint(route='talent_list', outcome='started', subject=group)
     except Exception:
         pass
-    reply = (f"On it. The list of {group} is running now, {price_label()} charged to your account. "
-             f"It lands right here when it is ready, and the workbook and PDF go to your inbox too. "
+    reply = ((f"Included with your plan. On it. The list of {group} is running now. " if included
+              else f"On it. The list of {group} is running now, {price_label()} charged to your account. ")
+             + f"It lands right here when it is ready, and the workbook and PDF go to your inbox too. "
              f"Expect it within the hour.")
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': [], 'offer_deck': False, 'deck_angle': None,
             'tlist_job_id': job_id, 'job_id': job_id, 'job_type': KIND}

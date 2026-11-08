@@ -3389,9 +3389,17 @@ from prometheus import rate_card as _rate_card  # noqa: E402
 _PM_PRICING_COPY = _rate_card.render('$')
 
 
-def _pm_pricing_copy(username=None):
+def _pm_pricing_copy(username=None, user=None):
     """The rate card in the seat's currency (East Tree Media and Omaze
-    read it in pounds, Jenna 2026-10-08) with live prices."""
+    read it in pounds, Jenna 2026-10-08) with live prices. An unlimited
+    seat (or Crosswalk staff) reads "Included with your plan." and no
+    price (Jenna 2026-11-08)."""
+    try:
+        from prometheus.priced_read import included_with_plan as _incl
+        if (username or user) and _incl(user, username, None):
+            return _rate_card.render(included=True)
+    except Exception:
+        pass
     return _rate_card.render(_pm_money_symbol(username),
                              lambda key, dflt: _pm_usd(key, dflt, username))
 
@@ -5808,7 +5816,7 @@ def _pm_interpret_core(user, body, text, history):
     if _pm_pricing_question(text):
         _pm_ask_hint(route='pricing_fact', outcome='answered')
         return jsonify({'success': False, 'guidance': True,
-                        'error': _pm_pricing_copy()})
+                        'error': _pm_pricing_copy(_pm_ask_log_user(''), user)})
     _ch = __import__('prometheus.build_guards', fromlist=['correction_hold']).correction_hold(text, history)   # a complaint is never a go-ahead (Emmet Riley 2026-10-26)
     if _ch:
         _pm_ask_hint(route='correction', outcome='no_draft')
@@ -5920,7 +5928,7 @@ def _pm_interpret_core(user, body, text, history):
     if _synth_chat_is_incidence_request(text) and not _subject_rules.wants_breakdown(text):   # I3: a split or a table is never the sample card
         try:
             from prometheus import priced_read as _pr_inc
-            _inc_pl = _pr_inc.sizing_offer_payload(text, history, _pm_ask_log_user(''))
+            _inc_pl = _pr_inc.sizing_offer_payload(text, history, _pm_ask_log_user(''), user=user)   # no quote for an included seat (2026-11-08)
             if _inc_pl:
                 _pm_ask_hint(route='incidence', outcome='panel_offer', subject=_inc_pl.get('subject'))
                 return jsonify(_inc_pl)
@@ -14057,18 +14065,24 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if subj_name and not isinstance(panel_confirm, dict):
             _state, _pl = _prg.offer_or_charge(text=text, subject=subj_name, kind='report', panel_confirm=None,
                                                username=_pm_user, user=user, history=history)
-            _pm_ask_hint(outcome='panel_offer', subject=subj_name)
-            return jsonify(_pl)
-        if not isinstance(panel_confirm, dict):   # nothing named: which audience? the page is a chip, never the answer (2026-10-24)
+            if _state != 'charged':
+                _pm_ask_hint(outcome='panel_offer', subject=subj_name)
+                return jsonify(_pl)
+            # no offer step (included with the plan, Jenna 2026-11-08, or a
+            # metered follow-up): the read runs now on the named subject
+            base = {'subject': subj_name, 's3_key': '', 'source': 'panel'}
+            panel_charge = _pl
+        if not base and not isinstance(panel_confirm, dict):   # nothing named: which audience? the page is a chip, never the answer (2026-10-24)
             _pm_ask_hint(route='audience_confirm', outcome='asked_audience', subject=_pg_name)
             return jsonify(_prg.which_audience(text, ctx if (_pg_name and not _page_default.page_rejected(text, history, _pg_name)) else None))
-        reply, followups = pma.build_profile_required_reply(
-            '', price_label=_pm_panel_price_label(_pm_user)[0])
-        _pm_ask_hint(outcome='clarify_subject')
-        return jsonify({
-            'success': True, 'action': 'answer', 'reply': reply,
-            'followups': followups, 'offer_deck': False,
-            'deck_angle': None})
+        if not base:
+            reply, followups = pma.build_profile_required_reply(
+                '', price_label=_pm_panel_price_label(_pm_user)[0])
+            _pm_ask_hint(outcome='clarify_subject')
+            return jsonify({
+                'success': True, 'action': 'answer', 'reply': reply,
+                'followups': followups, 'offer_deck': False,
+                'deck_angle': None})
     # NEW-NUMBERS ON AN OPEN FILE (2026-10-21): overlap, incrementality,
     # path, ranked list. Opening the profile does not make a new count
     # chat. Quote first; charge on confirm; extra titles in the same
@@ -14287,6 +14301,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if _mplan:
             _on_it = (_on_it.rstrip() + f" This one runs in pieces ({_matrix.describe(_mplan)}); "
                       "the whole table lands here as one answer with the file under it.")
+        if isinstance(panel_charge, dict) and panel_charge.get('included'):
+            # Included with your plan (Jenna 2026-11-08): the opener an unlimited seat reads instead of a price
+            _on_it = __import__('prometheus.priced_read', fromlist=['with_included_line']).with_included_line(_on_it)
         if _pm_probe_caller() == 'golden-set' or _faults.is_probe():   # a probe grades the reply shape only: no job, no queue, no inflight mark (2026-11-02: a local replay's orphaned read drew the deliver-by-email alert for 'canary:golden')
             _pm_ask_hint(outcome='answered', subject=_promised)
             return jsonify({'success': True, 'action': 'answer', 'read_job_id': 'golden-' + job_id, 'followups': [], 'offer_deck': False, 'deck_angle': None,
@@ -14332,6 +14349,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     if panel_charge and (_sync_held or not payload.get('success')):
         # The paid report never delivered: reverse the charge.
         _pm_panel_refund(panel_charge)
+    if isinstance(panel_charge, dict) and panel_charge.get('included') and payload.get('success') and payload.get('reply'):
+        payload['reply'] = __import__('prometheus.priced_read', fromlist=['with_included_line']).with_included_line(payload['reply'])
     try:
         if not payload.pop('_held', False):
             _pm_csv_point(payload.get('profile'), text,
@@ -16474,7 +16493,7 @@ def _pm_analyze_core(user, body, text, history):
     # things cost gets the answer, free, no model call.
     if _pm_pricing_question(text):
         _pm_ask_hint(route='pricing_fact', outcome='answered')
-        return jsonify({'success': True, 'reply': _pm_pricing_copy()})
+        return jsonify({'success': True, 'reply': _pm_pricing_copy(_pm_ask_log_user(''), user)})
     # Challenged-number heads-up (2026-09-30): fire-and-continue;
     # the answer path is untouched.
     _pm_challenge_headsup(user, text)

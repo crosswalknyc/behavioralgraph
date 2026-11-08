@@ -85,12 +85,15 @@ _APP_BINDINGS = {
     'ask_logged': '_ask_logged',             # (surface) -> decorator
     'error_email': '_chatbot_error_email',   # (label, err, tb=None)
     'consume_credit': 'consume_credit',      # (username, description=, job_id=, pull_type=, credits_used=, quantity=) -> bool (2026-10-15, the talent list)
+    'load_users': 'load_users',              # () -> the users document; the billed seat's live row (priced_read.live_user, 2026-11-08)
+    'check_user_credits': 'check_user_credits',   # (username) -> (has_credits, credits_left); -1 = unlimited, personal or company pool (2026-11-08)
     'calm_payload': '_chatbot_calm_payload', # () -> dict
     'intent_view_hydrate': '_pm_intent_view_hydrate',   # (view_ctx) -> view_ctx with the campaign's own numbers and words (2026-10-22)
 }
 
 # Bindings that may legitimately be absent on an older host.
 _OPTIONAL = {'queue_url', 'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate', 'price_table_for',
+             'load_users', 'check_user_credits',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

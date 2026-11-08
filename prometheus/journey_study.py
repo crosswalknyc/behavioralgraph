@@ -440,14 +440,16 @@ def _offer(text, dim, user, history, host, honest):
         from . import priced_read as _pr
         uname = str((user or {}).get('username') or (user or {}).get('email') or '').strip()
         label, _credits = _pr._derived_price(uname)
-        staff = False
         try:
-            staff = bool(_pr.staff_user(user) or _pr.seat_is_free(user, uname, host))
+            if _pr.included_with_plan(user, uname, host):
+                # Included with your plan (Jenna 2026-11-08): no quote; the
+                # ask falls through to the derived read, which runs now
+                return None
         except Exception:
-            staff = False
+            pass
         reply, chips, body = _pr.compose_offer(f"I can pull that read on {STUDY_NAME}.", label, text,
                                                {'question': str(text or '')[:600], 'subject': STUDY_NAME, 'kind': 'derived',
-                                                'frame': '', 'dimension': dim or 'platform'}, staff=staff)
+                                                'frame': '', 'dimension': dim or 'platform'})
     except Exception:
         return {'success': True, 'action': 'answer', 'reply': honest, 'followups': [], 'offer_deck': False,
                 'deck_angle': None, 'subject': STUDY_NAME, 'figures': []}

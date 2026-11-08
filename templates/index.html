@@ -20342,25 +20342,31 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             </div>
             <div class="pricing-eyebrow">Pricing</div>
             <h2 class="pricing-title">Prometheus pricing.</h2>
+            {% if seat_included|default(false) %}
+            <p class="pricing-sub">Included with your plan. Every product below runs on your plan with nothing charged to your account.</p>
+            {% endif %}
             <table class="pricing-table">
                 <thead><tr><th>Product</th><th>Price</th></tr></thead>
                 <tbody>
-                    <tr><td>Digital Journey</td><td>$500</td></tr>
-                    <tr><td>Profile</td><td>$300</td></tr>
-                    <tr><td>Subscriber Acquisition</td><td>$500</td></tr>
-                    <tr><td>Viewership Metrics</td><td>$500</td></tr>
-                    <tr><td>Flywheel</td><td>$500</td></tr>
-                    <tr><td>Brand Partnership</td><td>$500 + $500 Control for a $1000 total</td></tr>
-                    <tr><td>Ad Attribution</td><td>$500 for the initial pull, plus an optional $100 per day to track each campaign</td></tr>
-                    <tr><td>Custom Ask</td><td>$500</td></tr>
-                    <tr><td>Pull not based on pre-pulled data</td><td>$100 for the first ask, then $50 for each follow-up</td></tr>
-                    <tr><td>Digital Twins focus group or pilot test (one group, 1-40 questions)</td><td>$750 a group for 1-20 questions or $1,000 for 1-40; $500 / $750 on a $5,000 package deposit; $200 a group on an enterprise agreement ($20K a month, 12 months)</td></tr>
+                    {% set _pm_incl = seat_included|default(false) %}
+                    <tr><td>Digital Journey</td><td>{% if _pm_incl %}Included with your plan{% else %}$500{% endif %}</td></tr>
+                    <tr><td>Profile</td><td>{% if _pm_incl %}Included with your plan{% else %}$300{% endif %}</td></tr>
+                    <tr><td>Subscriber Acquisition</td><td>{% if _pm_incl %}Included with your plan{% else %}$500{% endif %}</td></tr>
+                    <tr><td>Viewership Metrics</td><td>{% if _pm_incl %}Included with your plan{% else %}$500{% endif %}</td></tr>
+                    <tr><td>Flywheel</td><td>{% if _pm_incl %}Included with your plan{% else %}$500{% endif %}</td></tr>
+                    <tr><td>Brand Partnership</td><td>{% if _pm_incl %}Included with your plan{% else %}$500 + $500 Control for a $1000 total{% endif %}</td></tr>
+                    <tr><td>Ad Attribution</td><td>{% if _pm_incl %}Included with your plan{% else %}$500 for the initial pull, plus an optional $100 per day to track each campaign{% endif %}</td></tr>
+                    <tr><td>Custom Ask</td><td>{% if _pm_incl %}Included with your plan{% else %}$500{% endif %}</td></tr>
+                    <tr><td>Pull not based on pre-pulled data</td><td>{% if _pm_incl %}Included with your plan{% else %}$100 for the first ask, then $50 for each follow-up{% endif %}</td></tr>
+                    <tr><td>Digital Twins focus group or pilot test (one group, 1-40 questions)</td><td>{% if _pm_incl %}Included with your plan{% else %}$750 a group for 1-20 questions or $1,000 for 1-40; $500 / $750 on a $5,000 package deposit; $200 a group on an enterprise agreement ($20K a month, 12 months){% endif %}</td></tr>
                 </tbody>
             </table>
+            {% if not seat_included|default(false) %}
             <div class="pricing-short">
                 <h3>Metered usage.</h3>
                 <p>All Prometheus (chat bot) usage is billed at a metered rate of $10.50 / $52.50 per million in / out, plus $0.021 per search</p>
             </div>
+            {% endif %}
             <div class="pricing-foot">CROSSWALK &nbsp;/&nbsp; BEHAVIORAL INTELLIGENCE ENGINE</div>
         </div>
     </div>

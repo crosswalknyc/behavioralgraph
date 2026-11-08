@@ -124,7 +124,15 @@ class NumberedQuestionsAreNotAReconciliation(unittest.TestCase):
 
     def test_before_projection_alone_is_a_methodology_question(self):
         self.assertFalse(rl.wants_reconcile('How is a Hazbin play detected, and what is the raw panel count before projection?'))
-        self.assertTrue(rl.wants_reconcile('what is the unprojected count behind the 6,195,357?'))
+        # one figure asked for unprojected is the unprojected-number lane's one line (Jenna 2026-11-08,
+        # prometheus.unprojected); two figures to square stay a reconciliation
+        self.assertFalse(rl.wants_reconcile('what is the unprojected count behind the 6,195,357?'))
+        from prometheus import unprojected as unp
+        self.assertTrue(unp.wants_unprojected('what is the unprojected count behind the 6,195,357?'))
+        self.assertIn('187,795 of the 10 million US consumers we measure',
+                      unp.answer('what is the unprojected count behind the 6,195,357?', [])['reply'])
+        self.assertTrue(rl.wants_reconcile('what are the unprojected counts behind the 6,195,357 and the 1,230,696?'))
+        self.assertTrue(rl.wants_reconcile('your two answers do not agree; give me the unprojected counts'))
 
     def test_jay_still_reconciles(self):
         self.assertTrue(rl.wants_reconcile(
@@ -218,13 +226,19 @@ class CoveredSeatChip(unittest.TestCase):
         self.assertEqual(chips[0], 'Approve')
 
     def test_offer_or_charge_marks_a_covered_seat(self):
+        # Jenna, later the same day (2026-11-08): "for anyone with unlimited credit it just should say
+        # included with your plan instead of giving a price or staff chip". A covered seat sees no offer
+        # at all: the gate hands back the zero charge and the read runs in the same turn, never a chip.
         user = {'username': 'graceyin', 'email': 'graceyin@amazon.com', 'company': 'Amazon', 'role': 'user',
                 'credits': -1, 'unlimited': True}
         host = _Host(user)
         state, payload = pr.offer_or_charge(text=Q9, subject='Hazbin Hotel pilot', kind='viewership',
                                             panel_confirm=None, username='graceyin', user=user, history=None, host=host)
-        self.assertEqual(state, 'offer')
-        self.assertEqual(payload['followups'][0], 'Approve ($100, included in your plan)')
+        self.assertEqual(state, 'charged')
+        self.assertTrue(payload.get('included'))
+        self.assertEqual(payload.get('label'), pr.INCLUDED_LABEL)
+        self.assertNotIn('followups', payload)
+        self.assertNotIn('staff account', str(payload))
         state, charged = pr.offer_or_charge(text=Q9, subject='Hazbin Hotel pilot', kind='viewership',
                                             panel_confirm={'subject': 'Hazbin Hotel pilot'}, username='graceyin',
                                             user=user, history=None, host=host)
@@ -232,6 +246,7 @@ class CoveredSeatChip(unittest.TestCase):
         self.assertEqual(charged.get('credits'), 0)
         self.assertFalse(charged.get('staff'))
         self.assertTrue(charged.get('covered'))
+        self.assertTrue(charged.get('included'))
 
 
 class SignupCountIsAQuestion(unittest.TestCase):

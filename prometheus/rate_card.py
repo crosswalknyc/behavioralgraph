@@ -89,8 +89,20 @@ def _price(price_fn, key, dflt):
         return float(dflt)
 
 
-def render(symbol='$', price_fn=None):
-    """The card, Jenna's words, live numbers."""
+# An unlimited seat (or Crosswalk staff) asking what things cost reads this,
+# never a price (Jenna 2026-11-08: "for anyone with unlimited credit it just
+# should say included with your plan instead of giving a price").
+INCLUDED_LINE = "Included with your plan."
+INCLUDED_CARD = (INCLUDED_LINE + " Profiles, custom asks, audience sizes, breakdowns, viewership reads, journeys, "
+                 "valuations, attribution campaigns and Digital Twins groups all run on your plan with nothing charged "
+                 "to your account. Ask for the read and it starts.")
+
+
+def render(symbol='$', price_fn=None, included=False):
+    """The card, Jenna's words, live numbers. ``included`` is the
+    unlimited seat's answer: the one line, no prices."""
+    if included:
+        return INCLUDED_CARD
     c = symbol or '$'
     lines = ['Pricing is:', '']
     for label, key, dflt, shape in ROWS:

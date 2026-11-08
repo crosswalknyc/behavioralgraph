@@ -227,12 +227,19 @@ def rate_card_text(price_fn: Optional[Callable] = None, symbol='$') -> str:
     return 'Digital Twins IQ pricing, per group:\n\n' + '\n'.join('- ' + ln for ln in rate_card_lines(price_fn, symbol))
 
 
-def quote_line(plan, tier, price_fn: Optional[Callable] = None, symbol='$', *, kind='group') -> str:
+INCLUDED_LINE = "Included with your plan."
+INCLUDED_LABEL = "Included with your plan"
+
+
+def quote_line(plan, tier, price_fn: Optional[Callable] = None, symbol='$', *, kind='group', included=False) -> str:
     """One sentence for a confirm card: what this group costs on the
-    seat's plan."""
+    seat's plan. ``included`` (an unlimited company or Crosswalk staff,
+    Jenna 2026-11-08): the one line, no price."""
     p = normalize_plan(plan)
     t = normalize_tier(tier, p)
     what = {'pilot': 'This pilot test', 'panel': 'This focus group', 'room': 'This room'}.get(kind, 'This group')
+    if included:
+        return f"{INCLUDED_LINE} {what} is one group ({tier_label(t)}) on your plan, with nothing charged when it opens."
     line = f"{what} is one group at {money(rate(p, t, price_fn), symbol)} ({tier_label(t)}, {plan_label(p).lower()}), charged when it opens."
     if t == TIER_SMALL and p in UPGRADE_RATES:
         line += f" At twenty questions you can move it to 1-40 for {money(upgrade_rate(p, price_fn), symbol)}."
@@ -770,6 +777,7 @@ __all__ = ['PLANS', 'DEFAULT_PLAN', 'TIERS', 'TIER_SMALL', 'TIER_LARGE', 'RATES'
            'ENTERPRISE_MONTHLY_USD', 'ENTERPRISE_TERM_MONTHS', 'TOOL_KEYS', 'UPGRADE_TOOL_KEYS', 'PULL_TYPES', 'CREDITS', 'PLAN_LABELS', 'PLAN_FIELD', 'PLAN_META_FIELD',
            'ADD_FUNDS_URL', 'RETIRED_KEYS', 'normalize_plan', 'normalize_tier', 'tiers_for', 'default_tier', 'tier_label', 'plan_label', 'tool_key', 'upgrade_tool_key',
            'pull_type', 'credits', 'rate', 'upgrade_rate', 'money', 'rate_card_lines', 'rate_card_text', 'quote_line', 'is_pricing_ask',
+           'INCLUDED_LINE', 'INCLUDED_LABEL',
            'plan_holder', 'plan_record', 'plan_for_company', 'company_for_user', 'plan_for_user', 'set_plan', 'set_company_plan', 'note_deposit',
            'seat_is_free', 'group_charge', 'legacy_paid', 'group_paid', 'group_tier', 'question_cap', 'questions_asked', 'asset_reads', 'ASSET_READ_COUNTS_AS_QUESTION', 'record_tier', 'charge_group_open', 'refund_group_open',
            'offer_tier_upgrade', 'question_gate', 'accept_tier_upgrade', 'cap_reply', 'gate_open', 'public_fields']

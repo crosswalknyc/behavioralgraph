@@ -233,7 +233,7 @@ def roster_ask(text):
     return ' or '.join(nouns[:2]), person, qual
 
 
-def roster_reply(noun, person, qualifier=''):
+def roster_reply(noun, person, qualifier='', included=False):
     """Jenna 2026-10-15: "the response should always default to we can
     pull anything you want, just request it" and "it should ask what
     influencer(s) are you talking about". With a condition on the class,
@@ -249,7 +249,7 @@ def roster_reply(noun, person, qualifier=''):
     # and list influencers who have their own product lines". The offer is
     # the list, a Custom Ask, not a profile.
     from . import talent_list_job as _tl
-    reply, chips, _offer = _tl.offer(plural, qualifier, person)
+    reply, chips, _offer = _tl.offer(plural, qualifier, person, included=included)   # no price for an included seat (2026-11-08)
     return reply, chips
 
 
