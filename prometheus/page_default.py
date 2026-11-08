@@ -308,6 +308,18 @@ def profile_category(s3_key='', name='', catalog=None):
     return by_name
 
 
+def _canon_platform(p):
+    low = str(p or '').lower()
+    if low in ('streaming', 'any streaming service'):
+        return 'any streaming service'
+    if low in ('free tv', 'free ad-supported'):
+        return 'free ad-supported TV'
+    return {'prime video': 'Prime Video', 'netflix': 'Netflix', 'hulu': 'Hulu', 'max': 'Max', 'hbo max': 'HBO Max',
+            'peacock': 'Peacock', 'youtube': 'YouTube', 'tubi': 'Tubi', 'pluto tv': 'Pluto TV', 'roku': 'Roku',
+            'the roku channel': 'The Roku Channel', 'starz': 'Starz', 'freevee': 'Freevee', 'crunchyroll': 'Crunchyroll'}.get(low) \
+        or _PLATFORM_NAMES.get(low, p)
+
+
 def viewing_platform(text):
     """The service the ask says the viewing happened on ('Prime Video'),
     or '' when none is named without a negation in front of it."""
@@ -315,16 +327,77 @@ def viewing_platform(text):
     for m in _PLATFORM_RX.finditer(t):
         if _NEGATED_BEFORE_RX.search(t[:m.start()]):
             continue
-        p = m.group('p')
-        low = p.lower()
-        if low in ('streaming', 'any streaming service'):
-            return 'any streaming service'
-        if low in ('free tv', 'free ad-supported'):
-            return 'free ad-supported TV'
-        return {'prime video': 'Prime Video', 'netflix': 'Netflix', 'hulu': 'Hulu', 'max': 'Max', 'hbo max': 'HBO Max',
-                'peacock': 'Peacock', 'youtube': 'YouTube', 'tubi': 'Tubi', 'pluto tv': 'Pluto TV', 'roku': 'Roku',
-                'the roku channel': 'The Roku Channel', 'starz': 'Starz', 'freevee': 'Freevee', 'crunchyroll': 'Crunchyroll'}.get(low, p)
+        return _canon_platform(m.group('p'))
     return ''
+
+
+# A platform belongs to the audience whose clause names it (Grace Yin,
+# 2026-11-08: "the overlap between Hazbin Hotel viewers and viewers of
+# adult animation and anime on Netflix, Crunchyroll and HIDIVE" opened
+# "On people who watched Hazbin Hotel on Netflix in the window:" because
+# the first platform anywhere in the ask was taken as the title's). The
+# gap between the title and its "on <service>" never crosses a clause
+# break or a word that starts the other audience.
+_CLAUSE_BREAK_WORD = r"\b(?:and|or|vs\.?|versus|against|compared|while|but|overlap(?:s|ping|ped)?|with|who|that|which|also|plus|then)\b"
+_SAME_CLAUSE_GAP = r"(?:(?!" + _CLAUSE_BREAK_WORD + r")[^.?!,;:()]){0,60}?"
+_ANY_PLATFORM_RX_CACHE = []
+
+
+def _any_platform_rx():
+    """Every service name we know (``_PLATFORM_NAMES`` below, plus HIDIVE),
+    bare, longest first; 'max' only counts with 'on' in front of it."""
+    if not _ANY_PLATFORM_RX_CACHE:
+        names = sorted((re.escape(k) for k in _PLATFORM_NAMES if k != 'max'), key=len, reverse=True)
+        _ANY_PLATFORM_RX_CACHE.append(re.compile(r"(?<![\w+])(?P<p>" + "|".join(names) + r"|hidive)(?![\w+])", re.I))
+    return _ANY_PLATFORM_RX_CACHE[0]
+
+
+def title_platform(text, title):
+    """The service the ask names for THIS title's own viewing ('Prime
+    Video' in 'watched The Love Hypothesis on Prime Video'), or '' when
+    the title's clause names none. A service named for another audience
+    in the same ask ('... and viewers of anime on Netflix') is never
+    borrowed."""
+    n = _name_rx(re.sub(r"\s*\([^()]*\)\s*$", "", str(title or '')))   # 'Dune (2021)' is asked about as 'Dune'
+    t = ' '.join(str(text or '').split())
+    if not n or not t:
+        return ''
+    after = re.compile(rf"\b{n}(?:'s)?\b{_SAME_CLAUSE_GAP}\bon (?:the )?(?P<p>{_PLATFORMS})(?![\w+])", re.I)
+    for m in after.finditer(t):
+        if _NEGATED_BEFORE_RX.search(t[:m.start('p')]):
+            continue
+        return _canon_platform(m.group('p'))
+    before = re.compile(rf"(?:\bon (?:the )?(?P<p>{_PLATFORMS})(?![\w+]),?\s+(?:the\s+)?|(?P<p2>{_PLATFORMS})'s\s+){n}\b", re.I)
+    m = before.search(t)
+    if m and not _NEGATED_BEFORE_RX.search(t[:m.start()]):
+        return _canon_platform(m.group('p') or m.group('p2'))
+    return ''
+
+
+def platforms_named(text):
+    """Every service the ask names, in order, deduped (with or without
+    'on' in front of it; a negated mention does not count)."""
+    t = ' '.join(str(text or '').split())
+    hits = []
+    for m in _PLATFORM_RX.finditer(t):          # 'on Max' counts; a bare 'max' is a word
+        hits.append((m.start(), _canon_platform(m.group('p'))))
+    for m in _any_platform_rx().finditer(t):
+        low = m.group('p').lower()
+        hits.append((m.start(), _PLATFORM_NAMES.get(low) or ('HIDIVE' if low == 'hidive' else m.group('p'))))
+    out = []
+    for pos, p in sorted(hits):
+        if _NEGATED_BEFORE_RX.search(t[:pos]) or p in out:
+            continue
+        out.append(p)
+    return out
+
+
+def _two_audience_ask(text):
+    try:
+        from . import overlap_read as _ov
+        return bool(_ov.two_audiences(text))
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -522,7 +595,15 @@ def title_universe_label(text, subject, category=''):
         if not works:
             return ''
         is_title = False
-    plat = viewing_platform(t) or paren_plat
+    # the title's own service: named in its clause, or the only service
+    # the ask names when the ask is about one audience; a second
+    # audience's service is never borrowed (2026-11-08)
+    plat = title_platform(t, title)
+    if not plat and not _two_audience_ask(t):
+        named = platforms_named(t)
+        if len(named) == 1:
+            plat = viewing_platform(t) or named[0]
+    plat = plat or paren_plat
     where = f" on {plat}" if plat else ''
     if is_title:
         return f"people who watched {title}{where} in the window{cut_clause(cut)}"

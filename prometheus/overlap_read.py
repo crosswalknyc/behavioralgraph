@@ -144,6 +144,193 @@ def also_watched_lead(text):
     return f"I can pull how many of the people who {first} {second}{tail}."
 
 
+# ---------------------------------------------------------------------------
+# The header of a two-audience read names the two audiences (Grace Yin,
+# Amazon, 2026-11-08). "What is the overlap between Hazbin Hotel viewers
+# and viewers of adult animation and anime on Netflix, Crunchyroll and
+# HIDIVE?" shipped under "On people who watched Hazbin Hotel on Netflix in
+# the window:" - the first service anywhere in the ask was pinned on the
+# title. The header is "On <A> and <B>:" in the ask's own words; a service
+# rides only on the side whose words (or whose bound audience) name it.
+# ---------------------------------------------------------------------------
+_PEOPLE_NOUN_RX = re.compile(
+    r"\b(?:viewers?|watchers?|fans?|audiences?|subscribers?|subs|members?|buyers?|shoppers?|users?|listeners?|"
+    r"readers?|players?|customers?|sign-?ups?|households?|people|engagers?|followers?|streamers?|cohorts?|bases?|"
+    r"gamers?|renters?|owners?|visitors?|voters?|attendees?|consumers?|purchasers?|watchers?)\b", re.I)
+_OVERLAP_BETWEEN_RX = re.compile(
+    r"\b(?:overlap|intersection|crossover|cross-?over|shared\s+audience|common\s+audience|co-?viewing|audience\s+overlap)\s+"
+    r"(?:between|of|among|across|for)\s+(?P<rest>.+)$", re.I)
+_WHO_OVERLAP_RX = re.compile(
+    r"^(?P<a>.+?)\s+(?:(?:who|that|which)\s+)?(?:overlap(?:s|ped)?|overlapping|intersect(?:s|ing)?|cross(?:es)?\s+over)\s+with\s+(?P<b>.+)$", re.I)
+_DO_OVERLAP_RX = re.compile(
+    r"\b(?:how\s+(?:much|many|big|large|far)|what\s+(?:share|percent(?:age)?|portion|fraction|part))\s+(?:do|does|of|is)\s+(?P<rest>.+?)\s+overlap(?:s|ping)?\b", re.I)
+_SIDE_LEAD_RX = re.compile(
+    r"^(?:(?:what|how)\s+(?:is|are|many|much|big|large)\s+(?:the\s+)?|(?:the\s+)?(?:overlap|intersection|crossover)\s+(?:between|of|among)\s+|"
+    r"(?:do|does|did|can|could|would|please|tell\s+me|show\s+me|give\s+me|size|measure|pull|run)\s+)+", re.I)
+_SIDE_TAIL_RX = re.compile(
+    r"(?:\s+(?:overlap(?:s|ping)?(?:\s+with\s+each\s+other)?|intersect|in\s+(?:the|that|this)\s+window|right\s+now|today|please|"
+    r"and\s+(?:how|what)\s+.*|by\s+(?:size|share|count)|ranked\s+by\s+.*|as\s+of\s+.*)|\s*[?.!,;:]+)+$", re.I)
+_SIDE_MAX = 110
+
+
+def _clean_side(s, window_tail=None):
+    s = ' '.join(str(s or '').split()).strip(' ,;:.?!')
+    s = _SIDE_LEAD_RX.sub('', s)
+    s = _SIDE_TAIL_RX.sub('', s).strip(' ,;:.?!')
+    if window_tail:
+        s = window_tail(s)
+    s = re.sub(r"^(?:an?)\s+", 'the ', s, flags=re.I)         # 'a Hazbin Hotel sign-ups audience' reads 'the ...'
+    s = re.sub(r"^(?:all|every|any)\s+(?:of\s+)?(?:the\s+)?", '', s, flags=re.I)
+    return s.strip(' ,;:.?!')
+
+
+def _side_ok(s):
+    if not s or len(s) > _SIDE_MAX or len(s) < 2:
+        return False
+    low = s.lower()
+    if re.match(r"^(?:of|on|in|for|to|with|at|by|from|the|a|an|and|or)$", low):
+        return False
+    if re.search(r"\b(?:of|on|in|for|to|with|at|by|from|and|or|the|a|an)$", low):
+        return False
+    return bool(re.search(r"[A-Za-z]", s))
+
+
+def _split_two(rest, window_tail=None):
+    """(A, B) out of 'A and B', 'A with B', 'A vs B': the first split where
+    both sides read as audiences; the first clean split when neither
+    side carries a people noun (two titles)."""
+    r = ' '.join(str(rest or '').split())
+    cands = []
+    for m in re.finditer(r"\s+(?:and|with|vs\.?|versus|&)\s+", r, re.I):
+        a, b = _clean_side(r[:m.start()], window_tail), _clean_side(r[m.end():], window_tail)
+        if _side_ok(a) and _side_ok(b):
+            cands.append((a, b))
+    if not cands:
+        return None
+    nouns = [(a, b) for a, b in cands if _PEOPLE_NOUN_RX.search(a) and _PEOPLE_NOUN_RX.search(b)]
+    for a, b in nouns:
+        # the second audience opens on a name, a determiner or its people
+        # noun ('viewers of adult animation and anime ...', 'the Hazbin
+        # Hotel sign-ups audience', 'Helluva Boss viewers'), never on the
+        # tail of the first one's list ('anime and Hazbin Hotel viewers')
+        if b[:1].isupper() or re.match(r"^(?:the|those|these|that|this|its|their|us|people)\b", b, re.I) or _PEOPLE_NOUN_RX.match(b):
+            return a, b
+    return nouns[0] if nouns else cands[0]
+
+
+def two_audiences(text):
+    """(A, B), the two audiences an overlap ask names, in the ask's own
+    words, or None. 'What is the overlap between Hazbin Hotel viewers and
+    viewers of adult animation and anime on Netflix, Crunchyroll and
+    HIDIVE?' -> ('Hazbin Hotel viewers', 'viewers of adult animation and
+    anime on Netflix, Crunchyroll and HIDIVE'); 'anime viewers who
+    overlap with a Hazbin Hotel sign-ups audience' -> ('anime viewers',
+    'the Hazbin Hotel sign-ups audience'). A window named at the end of
+    a side comes off it (it is the read's window, not the audience)."""
+    t = ' '.join(str(text or '').split()).strip()
+    if not t or len(t) > 800:
+        return None
+    def _tail(s):
+        # a window named at the end of a side ('... viewers in 2025',
+        # '... from September 2025 to March 2026') is the read's window
+        m = _WINDOW_TAIL_RX.search(s)
+        if not m:
+            return s
+        tail = m.group(0)
+        dated = False
+        try:
+            from . import stated_numbers as _sn
+            dated = bool(_sn.window_in_words(tail))
+        except Exception:  # pragma: no cover
+            dated = False
+        if not dated:
+            try:
+                from . import inline_dates as _idw
+                dated = _idw.parse_inline_window(tail) is not None
+            except Exception:  # pragma: no cover
+                dated = False
+        return s[:m.start()].strip(' ,') if dated else s
+    m = _OVERLAP_BETWEEN_RX.search(t)
+    if m:
+        pair = _split_two(m.group('rest'), _tail)
+        if pair:
+            return pair
+    m = _DO_OVERLAP_RX.search(t)
+    if m:
+        pair = _split_two(m.group('rest'), _tail)
+        if pair:
+            return pair
+    m = _WHO_OVERLAP_RX.match(t.rstrip(' ?.!'))
+    if m:
+        a, b = _clean_side(m.group('a'), _tail), _clean_side(m.group('b'), _tail)
+        if _side_ok(a) and _side_ok(b):
+            return a, b
+    return None
+
+
+_BOUND_PLATFORM_RX = re.compile(r"\s+on\s+(?P<p>[A-Z][\w+' ]{1,30}?)\s*$|\s*\((?:on\s+)?(?P<p2>[^()]{2,40})\)\s*$")
+
+
+def _tokens(s):
+    return set(re.findall(r"[a-z0-9]+", str(s or '').lower())) - {'the', 'a', 'an', 'of', 'and', 'on', 'in', 'to', 'for', 'with'}
+
+
+def two_audience_label(text, bound=None):
+    """'<A> and <B>' for the header of a two-audience read, or '' when the
+    ask names no pair. Each side is the ask's own words, so a service
+    stays on the side that named it and never crosses to the other. A
+    bound audience whose display name carries its service ('Young
+    Sheldon on Netflix', 'The Love Hypothesis (Amazon Prime Video)')
+    lends that service to the side that names it when the side has
+    none; a bound audience without one lends nothing."""
+    pair = two_audiences(text)
+    if not pair:
+        return ''
+    sides = list(pair)
+    for name in (bound or []):
+        name = ' '.join(str(name or '').split())
+        if not name:
+            continue
+        bm = _BOUND_PLATFORM_RX.search(name)
+        if not bm:
+            continue
+        plat = (bm.group('p') or bm.group('p2') or '').strip()
+        head = name[:bm.start()].strip()
+        if not plat or not head:
+            continue
+        for i, side in enumerate(sides):
+            if _tokens(head) and _tokens(head) <= _tokens(side) and not re.search(r"\bon\s+[A-Z]", side) \
+                    and plat.lower() not in side.lower():
+                sides[i] = f"{side} on {plat}"
+    return f"{sides[0]} and {sides[1]}"
+
+
+_OPENER_RX = re.compile(r"^On (?P<aud>[^\n]{3,220}?):\n")
+_BASE_LINE_RX = re.compile(r"^(?P<lead>- Base: )(?P<aud>[^\n]{3,220}?)(?P<tail>, measured across [^\n]*)$", re.M)
+
+
+def repair_shipped_header(reply, question, subject='', bound=None):
+    """A shipped overlap reply with a one-sided universe on its opener
+    ('On people who watched Hazbin Hotel on Netflix in the window:') and
+    its Base line gets the two-audience label in both places. Nothing
+    else in the reply changes: no figure, no line count. The input comes
+    back when the question is not a two-audience ask or the reply has no
+    opener to repair. Pure; used by the in-place fix and its test."""
+    text = str(reply or '')
+    label = two_audience_label(question, bound=list(bound or []) + ([subject] if subject else []))
+    if not label or not text:
+        return reply
+    m = _OPENER_RX.match(text)
+    if not m:
+        return reply
+    old = m.group('aud')
+    if old == label:
+        return reply
+    out = f"On {label}:\n" + text[m.end():]
+    out = _BASE_LINE_RX.sub(lambda b: f"{b.group('lead')}{label}{b.group('tail')}" if b.group('aud') == old else b.group(0), out)
+    return out
+
+
 def is_overlap_read(text):
     """True for a new-numbers overlap: of audience A, how many
     subscribe to / pay for B; incrementality of X to Y; what that

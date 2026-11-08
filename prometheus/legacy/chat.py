@@ -486,6 +486,24 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         _def_start, _def_end = _H._ew_default_window(_today)
     except Exception:
         _def_start, _def_end = _t_minus_365, _today_iso
+    # The dates written into the ask are read deterministically ahead of
+    # the model (2026-11-08, Grace Yin: 'from January 19 and February 15,
+    # 2024' drew the default three times). The stated window rides the
+    # prompt so the draft is built on it; the spec step binds it again
+    # regardless (_bind_inline_date_window), so the model cannot lose it.
+    _stated_window_block = ''
+    try:
+        from prometheus import inline_dates as _idw
+        _sw = _idw.parse_inline_window(user_text, today=_today)
+        if _sw:
+            _stated_window_block = (
+                f"STATED WINDOW (HARD RULE - 2026-11-08): the request itself "
+                f"states the window '{_sw['phrase']}', which is "
+                f"{_sw['start']} to {_sw['end']}. Put exactly that in "
+                f"`date_range`, set `date_range_explicit` to true, and never "
+                f"use the default window for this request.\n\n")
+    except Exception:
+        _stated_window_block = ''
 
     system_prompt = (
         "You are the Profile Brief Architect for BehavioralGraph's Profile "
@@ -1445,6 +1463,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "and Iowa voter builds). The spec step independently re-binds "
         "stated relative windows, but you must emit them correctly "
         "up front.\n\n"
+        + _stated_window_block +
 
         "EVENT-SCOPED WINDOWS (MANDATORY - 2026-08-24):\n"
         "When the request ties the audience to a real-world event or "
@@ -6699,12 +6718,13 @@ def _pm_interpret_core(user, body, text, history):
         else:
             # Relative-window binding (2026-08-24): 'trailing 60 days'
             # style requests compute concrete dates at interpret time;
-            # a confident event window wins when both are present.
-            _H._bind_relative_window(spec_draft, text, chat_history=history,
-                                  decision=_dec_norm)
-            _H._bind_shared_explicit_window(spec_draft, text,
-                                         decision=_dec_norm)
-            _H._apply_standing_default_window(spec_draft)
+            # a confident event window wins when both are present. Then
+            # the shared 'Date range:' clause, then the dates written
+            # into the ask (2026-11-08, Grace Yin: 'from January 19 and
+            # February 15, 2024' is the window, never the default), then
+            # the standing default on a draft still without one.
+            _H._bind_explicit_windows(spec_draft, text, chat_history=history,
+                                      decision=_dec_norm)
         _H._ensure_cut_window_echo(spec_draft, decision=_dec_norm)
         # Subscriber IQ dates/season guard (2026-08-25): researches the
         # real air window, flags a season still in progress as 'Season
@@ -15032,12 +15052,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # Video in the window:' opens the read and the Base line says the
     # same; the subject stays the person for the ledger and the thread.
     try:
-        if not str(res.get('universe') or '').strip() and str(base.get('source') or '') != 'view':
-            _uni_subj = _meth.audience_label(res, '')
-            _uni = _page_default.title_universe_label(
-                text, _uni_subj, category=_page_default.subject_category(_uni_subj, base))
-            if _uni:
-                res['universe'] = _uni
+        if str(base.get('source') or '') != 'view':
+            if not _pm_name_two_audiences(res, text, base) and not str(res.get('universe') or '').strip():
+                _uni_subj = _meth.audience_label(res, '')
+                _uni = _page_default.title_universe_label(
+                    text, _uni_subj, category=_page_default.subject_category(_uni_subj, base))
+                if _uni:
+                    res['universe'] = _uni
     except Exception:
         traceback.print_exc()
     _aud = _meth.audience_label(res, '')
@@ -15196,6 +15217,33 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         **_file_payload}
 
 
+def _pm_name_two_audiences(res, text, base=None):
+    """An overlap read opens on the two audiences it crosses (Grace Yin,
+    2026-11-08: "the overlap between Hazbin Hotel viewers and viewers of
+    adult animation and anime on Netflix, Crunchyroll and HIDIVE" shipped
+    under "On people who watched Hazbin Hotel on Netflix in the window:").
+    Sets res['universe'] to '<A> and <B>' in the ask's own words, so the
+    opener and the Base line name both and a service rides only on the
+    side whose words (or whose bound audience) name it. Returns the label,
+    or '' when the ask is not a two-audience read (nothing changes)."""
+    try:
+        from prometheus import overlap_read as _ov
+        bound = [str((base or {}).get('subject') or ''), str((res or {}).get('subject') or '')]
+        try:
+            _two = _pm_two_base_detect(text)
+            for side in (_two or {}).get('pair') or []:
+                bound.append(str(side.get('subject') or ''))
+        except Exception:
+            pass
+        label = _ov.two_audience_label(text, bound=[b for b in bound if b])
+        if label:
+            res['universe'] = label
+        return label
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
 def _pm_persist_identity(res, base):
     """(subject, cohort) a generated read banks under. A read on a
     product view (Digital Journey IQ on screen) banks under the view's
@@ -15239,6 +15287,11 @@ def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=N
             print(f"[pm-matrix] arithmetic coherence: {_arith_trail[:700]}")
         if _ai.get('fixes') and isinstance(verify, dict):
             verify = dict(verify, arith={'fixed': len(_ai['fixes']), 'trail': _arith_trail[:800]})
+    except Exception:
+        traceback.print_exc()
+    try:
+        if str((base or {}).get('source') or '') != 'view':
+            _pm_name_two_audiences(res, text, base)
     except Exception:
         traceback.print_exc()
     _aud = _meth.audience_label(res, '')

@@ -47838,6 +47838,105 @@ def _bind_shared_explicit_window(draft, user_text, decision=None):
         return False
 
 
+def _bind_inline_date_window(draft, user_text, chat_history=None,
+                             decision=None):
+    """INLINE-DATE BINDING (2026-11-08, Grace Yin / Hazbin Hotel Season 1
+    sign-ups): a range written into the ask IS the window. She asked
+    'from January 19 and February 15, 2024' (then 'between January 19
+    and February 15, 2024', then 'Jan 19 to Feb 15 2024') and the
+    interpret step stamped the trailing-12 default every time; she typed
+    the dates again in the wizard.
+
+    Deterministic, ahead of anything the model decided: the ask is read
+    by prometheus.inline_dates (month-name or numeric dates, 'from A and
+    B', 'from A to B', 'between A and B', 'A through B', 'A - B', a day
+    range inside a month, a single month / quarter / half / calendar
+    year, 'the first 28 days of <date>', 'the two weeks after <date>',
+    'since <date>'; a missing year on the first date comes from the
+    second). A two-sided range or a span found in the ask binds whatever
+    the model drafted. A COARSE mention (a bare month, quarter or year)
+    does not replace a finer explicit window the model already resolved
+    ('Super Bowl 2025' to the game day). When the ask itself states no
+    window and the draft is not yet explicit, the last four user turns
+    are read newest first so a re-ask without the dates keeps the stated
+    window. Marks the range explicit so _apply_standing_default_window
+    never overwrites it, sets the plain label the confirm copy echoes
+    ('Window: Jan 19 to Feb 15, 2024'), and routes the window onto the
+    decision's engine / cut fields. No-op when no explicit range exists:
+    the standing trailing-12 default then stands. Never raises."""
+    try:
+        from prometheus import inline_dates as _idw
+    except Exception:
+        return False
+    try:
+        if not isinstance(draft, dict):
+            return False
+        found = _idw.parse_inline_window(str(user_text or ''))
+        source = 'the ask'
+        if not found:
+            if draft.get('date_range_explicit'):
+                return False
+            recent_user = [t for t in (chat_history or [])[-8:]
+                           if (t.get('role') or '').lower() == 'user']
+            for t in reversed(recent_user[-4:]):
+                found = _idw.parse_inline_window(str(t.get('text') or ''))
+                if found:
+                    source = 'an earlier turn'
+                    break
+        if not found:
+            return False
+        start, end = found['start'], found['end']
+        if not _ew_window_string(start, end):
+            return False
+        cur = draft.get('date_range') if isinstance(draft.get('date_range'), dict) else {}
+        cur_pair = (str(cur.get('start') or ''), str(cur.get('end') or ''))
+        if found.get('coarse') and draft.get('date_range_explicit') \
+                and _ew_window_string(*cur_pair) and not _ew_is_default(*cur_pair) \
+                and cur_pair != (start, end):
+            return False      # the model resolved a finer window inside the period named
+        if cur_pair != (start, end):
+            try:
+                print(f"[inline-window] {draft.get('subject') or draft.get('name')!r}: "
+                      f"{source} states {found.get('phrase')!r} ({start} to {end}) "
+                      f"but draft window was {cur_pair[0] or '-'} to {cur_pair[1] or '-'}; "
+                      f"binding the stated window")
+            except Exception:
+                pass
+        draft['date_range'] = {'start': start, 'end': end}
+        draft['date_range_explicit'] = True
+        label = _ew_format_label(start, end)
+        draft['date_window_label'] = label or f"{start} to {end}"
+        _route_window_fields(draft, decision, start, end,
+                             draft['date_window_label'], label)
+        return True
+    except Exception:
+        return False
+
+
+def _bind_explicit_windows(draft, user_text, chat_history=None,
+                           decision=None):
+    """The binder chain every interpret path runs when no confident
+    event window resolved: the relative phrase ('trailing 60 days'),
+    then the shared 'Date range: X to Y' clause, then the dates written
+    into the ask (2026-11-08), then the standing default on whatever is
+    still empty. A later binder never writes over an earlier one (the
+    user's chained 'Date range:' answer outranks the dates in the
+    original ask). Returns the name of the binder that bound, or ''."""
+    if _bind_relative_window(draft, user_text, chat_history=chat_history,
+                             decision=decision):
+        bound = 'relative'
+    elif _bind_shared_explicit_window(draft, user_text, decision=decision):
+        bound = 'shared'
+    elif _bind_inline_date_window(draft, user_text,
+                                  chat_history=chat_history,
+                                  decision=decision):
+        bound = 'inline'
+    else:
+        bound = ''
+    _apply_standing_default_window(draft)
+    return bound
+
+
 def _append_window_echo_to_cut_label(draft, date_label):
     """Fold the window's date label into the display cut_label so the
     chat confirmation line always shows it ('Rosie O'Donnell Guest Host
@@ -49902,13 +50001,12 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
             if _ew.get('query'):
                 spec_draft['event_window_query'] = _ew['query']
         if _ev_state != 'confident':
-            _bind_relative_window(spec_draft, prompt_text, decision=_dn)
-            # Shared 'Date range: X to Y' clause (2026-09-10). On a
-            # batch the clause is glued to the last line, so without
-            # this only that one subject got the stated window.
-            _bind_shared_explicit_window(spec_draft, prompt_text,
-                                         decision=_dn)
-            _apply_standing_default_window(spec_draft)
+            # Relative phrase, then the shared 'Date range: X to Y'
+            # clause (2026-09-10: on a batch the clause is glued to the
+            # last line, so without this only that one subject got the
+            # stated window), then the dates written into the ask
+            # (2026-11-08), then the standing default.
+            _bind_explicit_windows(spec_draft, prompt_text, decision=_dn)
         _ensure_cut_window_echo(spec_draft, decision=_dn,
                                 fetch_parent=False)
         # Semantic bind-or-ask guards (2026-08-25): array elements are
@@ -57782,9 +57880,9 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
         if _ew.get('query'):
             draft['event_window_query'] = _ew['query']
     if _ev_state != 'confident':
-        _bind_relative_window(draft, prompt, decision=decision)
-        _bind_shared_explicit_window(draft, prompt, decision=decision)
-        _apply_standing_default_window(draft)
+        # relative phrase, shared 'Date range:' clause, the dates written
+        # into the ask (2026-11-08), then the standing default
+        _bind_explicit_windows(draft, prompt, decision=decision)
     _bind_window_confirmation(draft, prompt)
     _ensure_cut_window_echo(draft, decision=decision)
     _guard_future_window(draft, decision=decision, allow_ask=False)

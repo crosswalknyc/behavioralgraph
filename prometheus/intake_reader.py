@@ -960,6 +960,21 @@ def find_date_ranges(text):
         if s and e and s <= e:
             out.append((s, e, m.span()))
     out.sort(key=lambda r: r[2][0])
+    if not out:
+        # The shapes above want a year on both dates and a range word
+        # or dash between them. A person writes 'from January 19 and
+        # February 15, 2024', 'between January 19 and February 15, 2024',
+        # 'the first 28 days after January 19 2024', 'Q4 2025' (Grace
+        # Yin, 2026-11-08, typed her window three ways and the brief
+        # read none of them). The shared inline reader takes those; the
+        # shapes above keep every range they already read.
+        try:
+            from prometheus import inline_dates as _idw
+            w = _idw.parse_inline_window(t)
+        except Exception:
+            w = None
+        if w:
+            out.append((w['start'], w['end'], tuple(w['span'])))
     return out
 
 
