@@ -253,16 +253,123 @@ def strip_false_build_claims(text):
     return out
 
 
-def shape_finished_read(payload, held=False):
+# A read answers from the data; it never puts anything on a dashboard
+# surface. Sony Television, 2026-11-10: a reasoned read on My Life with
+# the Walter Boys told the seat "It is in the picker now: ... is built as
+# a Digital Journey and shows under Select a journey", and, asked again,
+# "It is on the dashboard now: ... sits as a Digital Journey card", while
+# no journey-iq/ object and no journey job existed. A sentence that says
+# an artifact sits in a picker, dropdown, tab or card may be printed only
+# after the registry object exists (the payload carries its key); a read
+# that has none says the read is here in the chat and offers the real
+# build. The same discipline covers the Select Profile dropdown and the
+# Twins tab.
+_ARTIFACT_CLAIMS = (
+    ('journey', re.compile(
+        r"\b(?:in the picker|(?:under|in) select a journey|select a journey|(?:is )?built as a digital journey|"
+        r"(?:sits|shows|appears|is) (?:now )?(?:as|under|in|on) (?:a |the |your )?digital journey (?:card|tab|picker|list|shelf)|"
+        r"digital journey card|(?:is|are) (?:now )?(?:live|up|sitting|showing) (?:in|on) (?:the |your )?digital journey (?:iq )?tab|"
+        r"(?:in|on) your journey (?:picker|list|shelf|tab))\b", re.I)),
+    ('profile', re.compile(
+        r"\b(?:(?:in|on) (?:the |your )?select profile dropdown|select profile dropdown|(?:in|on) your (?:profile )?dropdown|"
+        r"(?:is|are) (?:now )?(?:live|up|sitting|showing) (?:in|on) (?:the |your )?profile iq tab|added as a profile|"
+        r"sits as a profile(?: iq)? card|(?:in|on) your profile (?:picker|list|shelf))\b", re.I)),
+    ('twin', re.compile(
+        r"\b(?:(?:in|on) (?:the |your )?twins tab|twins tab|(?:is|are) (?:now )?(?:live|up|sitting) (?:in|on) digital twins iq|"
+        r"sits as a (?:digital )?twin(?: card)?)\b", re.I)),
+)
+# "It is on the dashboard now" / "It is in the dashboard" with no product
+# named reads as a journey claim when the read speaks of a journey, a
+# profile claim when it speaks of a profile; otherwise it is a surface
+# claim no read may make
+_DASHBOARD_NOW_RX = re.compile(r"\b(?:it is|it's|its|is|are|they are|now) (?:now )?(?:on|in) the dashboard(?: now)?\b|\b(?:on|in) the dashboard now\b", re.I)
+_ARTIFACT_KEYS = {'journey': ('journey_key', 'jiq_job_id'), 'profile': ('profile_key', 's3_key', 'profile'), 'twin': ('twin_key', 'twin_job_id')}
+_ARTIFACT_CHIP = {'journey': 'Add it to Digital Journey IQ', 'profile': 'Build this profile', 'twin': 'Build a twin from this audience'}
+HERE_LINE = 'The read is here in the chat.'
+
+
+def artifact_claim_kinds(text):
+    """The artifact kinds a text claims exist on a dashboard surface."""
+    t = str(text or '')
+    kinds = [k for k, rx in _ARTIFACT_CLAIMS if rx.search(t)]
+    if not kinds and _DASHBOARD_NOW_RX.search(t):
+        low = t.lower()
+        kinds = ['journey'] if 'journey' in low else ['twin'] if 'twin' in low else ['profile']
+    return kinds
+
+
+def strip_false_artifact_claims(text, exists=None):
+    """Drop every sentence in a read that claims an artifact sits in a
+    picker, dropdown, tab or card when ``exists(kind)`` is not True for
+    that kind; append the here line once. Returns (text, kinds_dropped).
+    Text with no such claim comes back untouched."""
+    t = str(text or '')
+    kinds = [k for k in artifact_claim_kinds(t) if not (exists and exists(k))]
+    if not t or not kinds:
+        return t, []
+    rxs = [rx for k, rx in _ARTIFACT_CLAIMS if k in kinds] + [_DASHBOARD_NOW_RX]
+
+    def _hit(s):
+        return any(rx.search(s) for rx in rxs)
+    kept = []
+    for line in t.split('\n'):
+        if not _hit(line):
+            kept.append(line)
+            continue
+        # a sentence inside a line goes; a line that is one claim goes whole.
+        # "On X: It is in the picker now: Y is built ..., carrying A down to B."
+        # keeps its figures: the claim clause up to the first colon or comma
+        # after the surface words is cut, the counts that follow stay.
+        parts = re.split(r"(?<=[.!?])\s+", line)
+        keep = []
+        for p in parts:
+            if not _hit(p):
+                keep.append(p)
+                continue
+            m = re.search(r"(?:,\s*)?\b(?:carrying|running|with|holding|from)\b\s+(\d[\d,]*\s+people\b.*)$", p, re.I)
+            if m:
+                keep.append(m.group(1)[:1].upper() + m.group(1)[1:])
+        if keep:
+            kept.append(' '.join(keep))
+    out = re.sub(r"\n{3,}", "\n\n", '\n'.join(kept)).strip()
+    if HERE_LINE not in out:
+        out = (out + "\n\n" + HERE_LINE).strip() if out else HERE_LINE
+    return out, kinds
+
+
+def shape_finished_read(payload, held=False, artifact_exists=None):
     """A finished background read lands via the status doc the widget
     polls and the thread copy, bypassing the envelope; shape it here.
-    A held read carries no answer to shape. Never raises."""
+    A held read carries no answer to shape. ``artifact_exists(kind)``
+    may say a journey / profile / twin the read names is really on its
+    surface; by default the payload's own keys decide. Never raises."""
     if held or not isinstance(payload, dict):
         return payload
     try:
         for k in ('answer', 'reply', 'text', 'message'):
             if isinstance(payload.get(k), str) and payload.get(k):
                 payload[k] = strip_false_build_claims(payload[k])
+    except Exception:
+        pass
+    try:
+        def _exists(kind):
+            if artifact_exists is not None:
+                try:
+                    if artifact_exists(kind):
+                        return True
+                except Exception:
+                    pass
+            return any(payload.get(k) for k in _ARTIFACT_KEYS.get(kind, ()))
+        dropped = []
+        for k in ('answer', 'reply', 'text', 'message'):
+            if isinstance(payload.get(k), str) and payload.get(k):
+                payload[k], kinds = strip_false_artifact_claims(payload[k], exists=_exists)
+                dropped.extend(x for x in kinds if x not in dropped)
+        if dropped:
+            chips = [_ARTIFACT_CHIP[k] for k in dropped if k in _ARTIFACT_CHIP]
+            fu = payload.get('followups') if isinstance(payload.get('followups'), list) else []
+            payload['followups'] = chips + [f for f in fu if f not in chips][:max(0, 4 - len(chips))]
+            payload['artifact_claims_dropped'] = dropped
     except Exception:
         pass
     try:

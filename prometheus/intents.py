@@ -120,6 +120,18 @@ def jiq_intent(text, chip=''):
         return True
     if re.search(r"\b(?:day|week) in the (?:media |digital )?life of\b", low):
         return True
+    # the real build behind a read (Sony Television 2026-11-10: the seat
+    # asked for the read "in the dashboard where it says select a journey"
+    # and was told it was there when nothing had been built): 'Add it to
+    # Digital Journey IQ', 'add this as a digital journey', 'I want it under
+    # Select a journey'. A question about whether it was added ("did you add
+    # this as a digital journey?") is a status ask, not an order.
+    if not re.match(r"^\W*(?:did|do|does|is|was|has|have|are|were|can|could|where)\b", low):
+        if re.search(r"\b(?:add|put|save|load|get|want|need)\b[^.?!]{0,40}\b(?:digital journey(?: iq| tab| picker)?|select a journey|journey (?:iq|tab|picker))\b", low):
+            return True
+        if re.search(r"\b(?:as|into|in|under|to) (?:a |the )?(?:digital journey(?: iq)?|select a journey|journey (?:tab|picker))\b", low) \
+                and re.search(r"\b(?:add|put|want|need|make|build|create|save)\b", low):
+            return True
     return 'journey' in low and any(k in low for k in ('start from', 'end at', 'ends at', 'conversion'))
 
 
