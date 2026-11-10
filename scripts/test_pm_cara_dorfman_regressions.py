@@ -168,6 +168,25 @@ class OffCampusDiscovery(unittest.TestCase):
         self.assertIn('search the web for it', p)
         self.assertIn('Off Campus premiered on Prime Video May 13 2026', p)
 
+    def test_discover_is_not_a_typo_of_discovery_plus(self):
+        # the read's authorizing base was the Discovery+ profile, bound through the typo tier off the verb
+        from prometheus import question_universe as QU
+        from prometheus import named_subject as NS
+        self.assertTrue(QU.ordinary_word('discover'))
+        norm = lambda s: re.sub(r"[^a-z0-9]+", " ", str(s or '').lower()).strip()  # noqa: E731
+
+        def typo_eq(a, b):
+            if a == b or abs(len(a) - len(b)) > 1:
+                return False
+            if len(a) == len(b):
+                return sum(x != y for x, y in zip(a, b)) == 1
+            s, l = (a, b) if len(a) < len(b) else (b, a)
+            return any(l[:i] + l[i + 1:] == s for i in range(len(l)))
+        cat = [{'subject': 'Discovery+', 'display_name': 'Discovery+', 's3_key': 'Discovery+_06_15_2026_04_13.csv'}]
+        kw = dict(normalize=norm, typo_eq=typo_eq, expand_alias=lambda t, x: t, generic_tokens=set())
+        self.assertIsNone(NS.fuzzy_catalog_subject(Q1, cat, **kw))
+        self.assertIsNotNone(NS.fuzzy_catalog_subject('how big is the dicovery+ audience', cat, **kw))
+
     def test_lane_researches_the_premiere(self):
         src = _source('prometheus/legacy/chat.py')
         i = src.index('def _pm_search_demand_response(')

@@ -629,7 +629,12 @@ worth would write wrong wrote yards years young yours youth
 started starts starting began begins beginning shopping shopped buying bought spending spent searching searched
 planning planned ordered ordering watching watched streaming streamed visiting visited returned returning switched
 switching cancelled canceled subscribing subscribed paying paid giving gifted waiting waited
+discover discovered discovering discovers engage engaged engaging convert converted converting finding follow
+followed follows notice noticed hunted hunting
 """.split())
+# "discover" is not a one-letter misspelling of Discovery+ (Cara Dorfman
+# 2026-11-10: "how did viewers discover off campus" bound the Discovery+
+# profile as the base of the Off Campus read through the typo tier)
 
 
 def ordinary_word(word):
