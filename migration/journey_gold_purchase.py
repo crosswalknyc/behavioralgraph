@@ -849,7 +849,7 @@ def analysis_points(payload: dict) -> list:
         c = s['searched'][0]
         pts.append(f"{c[0]} was the biggest thing people typed before the product page: {round(c[1] / s['search'] * 100, 1)}% of the searches.")
     if s['buyers'] and s['no_post']:
-        pts.append(f"{s['buyers']:,} people bought {T} online in the window. {round(s['no_post'] / s['buyers'] * 100, 1)}% of them never saw a post, so social is one door of several.")
+        pts.append(f"{s['buyers']:,} people bought {T} online in the window. {round(s['no_post'] / s['buyers'] * 100, 1)}% of them never saw a post, so social is one route of several.")
     return pts[:6]
 
 

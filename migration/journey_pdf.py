@@ -444,6 +444,12 @@ def _build_pdf(payload: dict) -> bytes:
     if G.is_premiere_journey(payload):
         from migration import journey_pdf_premiere as _pp
         return _pp.build_pdf(payload)
+    if is_own_frame(payload):
+        # a journey that carries its own frame (anchored to a read already
+        # delivered, or a spine that does not start on a social post) renders
+        # from its own words; the Babylon 5 derivation below would invent
+        # social tables for it (2026-11-10, the Sony Season 3 journey)
+        return _build_pdf_own_frame(payload)
     if not G.is_gold(payload):
         payload = G.apply(copy.deepcopy(payload))
     if not G.is_watch_journey(payload):
@@ -549,6 +555,169 @@ def _build_pdf(payload: dict) -> bytes:
     d.new_page(True, 'What to do next', f"Three moves for the next {T} flight.", "Each one comes with the number that backs it.")
     d.bullets(recommendations(payload)[:4], d.m, d.y, full_w, size=12.5)
     d.meaning(f"Reply to the email this came with to run the same path for another title, or to cut this one by platform, post family or episode.")
+    return d.finish()
+
+
+_SOCIAL_START_RX = re.compile(r"\b(?:saw|seen|viewed|watched)\b.{0,40}\b(?:post|clip|video|content|edit|trailer)\b|\bsocial\b", re.I)
+
+
+def _steps(payload: dict) -> list:
+    j = (payload or {}).get('fragrance_shop_journey') or {}
+    return [s for s in (j.get('spine') or []) if isinstance(s, dict) and str(s.get('id') or '') not in ('tam', 'us_gen_pop', 'genpop', 'us_population')]
+
+
+def is_own_frame(payload: dict) -> bool:
+    """True for a watch journey whose words are its own: anchored to a read
+    already delivered (meta.anchored_to.basis == 'delivered_read'), or not
+    in the Babylon 5 shape with a first step that is not a social post. Such
+    a payload is rendered from its own spine, fork, tables, read and moves;
+    never re-derived through the social-post standard."""
+    try:
+        meta = (payload or {}).get('meta') or {}
+        a = meta.get('anchored_to')
+        if isinstance(a, dict) and str(a.get('basis') or '') == 'delivered_read':
+            return True
+        from migration import journey_gold as G
+        if G.is_media_week_journey(payload) or G.is_premiere_journey(payload) or not G.is_watch_journey(payload):
+            return False
+        if G.is_gold(payload):
+            return False
+        steps = _steps(payload)
+        if len(steps) < 2:
+            return False
+        return not _SOCIAL_START_RX.search(str(steps[0].get('label') or ''))
+    except Exception:
+        return False
+
+
+_EYEBROWS = (
+    (re.compile(r"^first\b.*(?:surface|post|touch)|where the first|where it (?:sat|started)", re.I), 'Where it started'),
+    (re.compile(r"before they|looked before|how many", re.I), 'Before the title page'),
+    (re.compile(r"time from|how far|new to the title|episode", re.I), 'Inside the season'),
+    (re.compile(r"last touch|assist|closed", re.I), 'What closed it'),
+    (re.compile(r"where they watched|every|everyone|rest of", re.I), 'The whole audience'),
+)
+
+
+def _eyebrow_for(title: str, i: int = 0) -> str:
+    for rx, label in _EYEBROWS:
+        if rx.search(title or ''):
+            return label
+    return f"The detail, part {i + 1}"
+
+
+def _build_pdf_own_frame(payload: dict) -> bytes:
+    """The analysis PDF for a journey in its own frame: one finding per
+    page, the payload's own spine, fork, tables, routes, audience, read
+    cards and moves. No figure is derived here that the payload does not
+    carry; the only arithmetic is a share of a base the payload names."""
+    from migration import journey_gold as G
+    meta = payload.get('meta') or {}
+    j = payload.get('fragrance_shop_journey') or {}
+    T, P = G._title_platform(payload)
+    name = str(meta.get('project_name') or meta.get('target_name') or f"{T} on {P}")
+    window = (f"{meta['start_date']} to {meta['end_date']}" if meta.get('start_date') and meta.get('end_date')
+              else str(meta.get('window_label') or ''))
+    steps = _steps(payload)
+    start, end = steps[0], steps[-1]
+    s_n, e_n = int(start.get('accounts') or 0), int(end.get('accounts') or 0)
+    s_lab, e_lab = _lower_first(str(start.get('label') or 'started')), _lower_first(str(end.get('label') or 'reached the end'))
+    conv = _pct(e_n, s_n)
+    copy_ = j.get('copy') if isinstance(j.get('copy'), dict) else {}
+    read = payload.get('the_read') if isinstance(payload.get('the_read'), dict) else {}
+    facts = [f for f in (payload.get('facts') or []) if isinstance(f, dict) and f.get('value')]
+    d = _Doc()
+    full_w = d.right - d.m
+    half_w = (full_w - 0.28 * 72) / 2
+    col2 = d.m + half_w + 0.28 * 72
+
+    # 01 cover
+    d.new_page(True, 'Digital Journey IQ', f"{name}: from the first touch to the play.",
+               f"Unique US people, {window}. Every count is one person.")
+    d.paragraph(str(copy_.get('deck') or f"This starts with everyone who {s_lab}, and ends with the {_fmt(e_n)} who {e_lab}."),
+                d.m, d.y - 10, full_w * 0.7, size=12, color=BODY_DARK)
+
+    # 02 the short version
+    d.new_page(False, 'The short version', f"{_fmt(e_n)} people {e_lab}.",
+               f"{conv} of the {_fmt(s_n)} who {s_lab}. Here is what matters and what to do.")
+    cards = [c for c in (read.get('cards') or []) if isinstance(c, dict) and c.get('body')]
+    pts = [f"{str(c.get('title') or '').rstrip('.')}. {c['body']}" if c.get('title') else str(c['body']) for c in cards][:5] \
+        or [str(f['value']) for f in facts][:5]
+    d.bullets(pts, d.m, d.y, full_w, size=12.5)
+    d.meaning(str(copy_.get('spineHead') or f"{conv} of those who {s_lab} {e_lab}."))
+
+    # 03 the path
+    d.new_page(False, 'The path', f"{len(steps)} steps from the first touch to the play.",
+               f"Each step keeps a share of the one before it. {_fmt(s_n)} {s_lab}; {_fmt(e_n)} {e_lab}.")
+    rows, prev = [], None
+    for st in steps:
+        n = int(st.get('accounts') or 0)
+        rows.append((str(st.get('label') or ''), _fmt(n), _pct(n, prev) if prev else 'start'))
+        prev = n
+    d.table('The spine', rows, d.m, d.y, half_w, head=('Step', 'People', 'Kept'))
+    fork = [f for f in (j.get('fork') or []) if isinstance(f, dict)]
+    if fork:
+        fb = j.get('fork_base') if isinstance(j.get('fork_base'), dict) else {}
+        frows = [(str(f.get('label') or f.get('id')), _fmt(f.get('accounts')), f"{float(f.get('kept') or 0):.1f}%") for f in fork]
+        d.table(f"{str(fb.get('label') or 'The title page')}: who left and who came back", frows, col2, d.y, half_w,
+                head=('Branch', 'People', 'Kept'),
+                note='Kept is the share of the branch above it. Same-session plays and plays after a return add up to the last step.')
+    d.meaning(str(copy_.get('forkRead') or f"The last step holds {conv} of the people who {s_lab}."))
+
+    # 04.. the tables, two to a page; the eyebrow names the content, never the move
+    dets = [x for x in (j.get('detours') or []) if isinstance(x, dict) and x.get('rows')]
+    for i in range(0, len(dets), 2):
+        a, b = dets[i], (dets[i + 1] if i + 1 < len(dets) else None)
+        top = _top(a)
+        base_a = int(a.get('base') or 0) or _base(a)
+        hdr = (f"{top[0][0]} led with {_pct(top[0][1], base_a)} of the {_fmt(base_a)}." if top and base_a else f"{a.get('title')}.")
+        d.new_page(False, _eyebrow_for(str(a.get('title') or ''), i // 2), hdr[:1].upper() + hdr[1:],
+                   str(a.get('title') or '') + (f". {b.get('title')}." if b else '.'))
+        d.table(str(a.get('title') or ''), _rows_for(a, base_a), d.m, d.y, half_w, note=str(a.get('note') or ''))
+        if b:
+            base_b = int(b.get('base') or 0) or _base(b)
+            d.table(str(b.get('title') or ''), _rows_for(b, base_b), col2, d.y, half_w, note=str(b.get('note') or ''))
+        d.meaning(f"{top[0][0]} is the largest group in {_lower_first(str(a.get('title') or 'this table'))}." if top else '')
+
+    # the routes
+    pw = payload.get('pathways') if isinstance(payload.get('pathways'), dict) else {}
+    seqs = [q for q in (pw.get('sequences') or []) if isinstance(q, dict)]
+    if seqs:
+        base = int(pw.get('base') or 0) or sum(int(q.get('viewers') or 0) for q in seqs)
+        noun = str(pw.get('base_label') or 'people')
+        lead = seqs[0]
+        lead_name = str(lead.get('name') or (lead.get('steps') or ['Route 1'])[0])
+        d.new_page(False, 'The routes', f"{lead_name} carried {_pct(lead.get('viewers'), base)} of the {noun.lower()}.",
+                   str(pw.get('note') or f"The routes people took, counted at entry, with the days from the first touch to {pw.get('end_short') or 'the end'}."))
+        rrows = [(str(q.get('name') or (q.get('steps') or [''])[0]), _fmt(q.get('viewers')), f"{float(q.get('avg_days') or 0):g} days") for q in seqs]
+        d.table('Routes, people at entry and days to the play', rrows, d.m, d.y, half_w, head=('Route', noun, 'Days'))
+        drows = [(str(q.get('name') or (q.get('steps') or [''])[0]), _fmt(q.get('played')) if q.get('played') else '', f"{float(q.get('depth_pct') or 0):g}%") for q in seqs]
+        d.table(f"Who {pw.get('depth_label') or 'reached the end'}, by route", drows, col2, d.y, half_w, head=('Route', 'People', 'Of entrants'))
+        d.meaning(f"{lead_name} is the fastest at {float(lead.get('avg_days') or 0):g} days; "
+                  f"{str((seqs[-1].get('name') or (seqs[-1].get('steps') or [''])[0]))} takes {float(seqs[-1].get('avg_days') or 0):g}.")
+
+    # who they are
+    who = payload.get('who_they_are') if isinstance(payload.get('who_they_are'), dict) else {}
+    ages = [a for a in (who.get('age') or []) if isinstance(a, dict)]
+    genders = [g for g in (who.get('gender') or []) if isinstance(g, dict)]
+    if ages or genders:
+        top_age = max(ages, key=lambda a: float(a.get('pct') or 0)) if ages else None
+        d.new_page(False, 'Who they are', (f"{top_age.get('label')} is the largest age band at {float(top_age.get('pct') or 0):g}%." if top_age else 'Who they are.'),
+                   f"The {_fmt(e_n)} who {e_lab}.")
+        if ages:
+            d.table('Age', [(str(a.get('label')), '', f"{float(a.get('pct') or 0):g}%") for a in ages], d.m, d.y, half_w, head=('Band', '', 'Share'))
+        if genders:
+            d.table('Gender', [(str(g.get('label')), '', f"{float(g.get('pct') or 0):g}%") for g in genders], col2, d.y, half_w, head=('', '', 'Share'))
+        fem = next((float(g.get('pct') or 0) for g in genders if str(g.get('label') or '').lower().startswith('f')), 0)
+        d.meaning(f"{fem:g}% female." if fem else '')
+
+    # what to do
+    moves = [m for m in (read.get('moves') or []) if isinstance(m, dict) and m.get('move')]
+    items = [f"{str(m['move']).rstrip('.')}. {m.get('why') or ''}".strip() for m in moves][:4]
+    d.new_page(True, 'What to do next', f"{len(items) or 'The'} moves for the next {T} flight.", 'Each one comes with the number that backs it.')
+    if items:
+        d.bullets(items, d.m, d.y, full_w, size=12.5)
+    d.meaning('Reply to the email this came with to run the same path for another title, or to cut this one by route, surface or episode.')
     return d.finish()
 
 
