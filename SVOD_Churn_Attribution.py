@@ -5132,6 +5132,95 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
     return df_out, changes
 
 
+def enforce_adult_signup_demographics(df_out, subject=''):
+    """New sign-ups are account holders, and account holders are adults
+    (Grace Yin, Amazon, 2026-11-10; the house rule in adult_universe.py).
+    The AGE block under "DEMOGRAPHICS - New Signups" carries the under-18
+    band at 0 with the adult bands renormalized to 100 through the shared
+    helper (subject-salted, no boundary values, idempotent), counts
+    re-apportioned to the block's own total and the projection recomputed
+    from each count. Runs on every tracker build, locked demographics
+    included, after the alignment agent and before the final percentages
+    are captured for the title anchor. Returns (df_out, changes). Never
+    raises: any failure leaves the rows as they were.
+    """
+    changes = []
+    try:
+        try:
+            from adult_universe import zero_minor_age_distribution, is_minor_age_label
+        except ImportError:
+            from migration.adult_universe import zero_minor_age_distribution, is_minor_age_label
+    except Exception as _imp_err:
+        print(f"   ⚠️  adult-universe helper unavailable; sign-up age split left as written: {_imp_err}")
+        return df_out, changes
+    try:
+        in_demo = False
+        section = None
+        age_rows = []
+        for idx in df_out.index:
+            cat = str(df_out.loc[idx, "Category"] or "").strip()
+            mid = str(df_out.loc[idx, "Count"] or "").strip()
+            if not in_demo:
+                if mid.startswith("DEMOGRAPHICS - New Signups"):
+                    in_demo = True
+                continue
+            if cat == "AGE" and not str(df_out.loc[idx, "Percentage"] or "").strip():
+                section = "AGE"
+                continue
+            if section == "AGE":
+                if not cat:
+                    break
+                age_rows.append(idx)
+        if not age_rows:
+            return df_out, changes
+        dist, counts = {}, {}
+        for idx in age_rows:
+            label = str(df_out.loc[idx, "Category"]).strip()
+            pct_s = str(df_out.loc[idx, "Percentage"] or "").strip().rstrip("%")
+            cnt_s = str(df_out.loc[idx, "Count"] or "").replace(",", "").strip()
+            try:
+                dist[label] = float(pct_s) if pct_s else 0.0
+            except ValueError:
+                dist[label] = 0.0
+            try:
+                counts[label] = int(float(cnt_s)) if cnt_s else 0
+            except ValueError:
+                counts[label] = 0
+        if not any(is_minor_age_label(k) for k in dist):
+            return df_out, changes
+        minor_mass = sum(v for k, v in dist.items() if is_minor_age_label(k))
+        minor_counts = sum(c for k, c in counts.items() if is_minor_age_label(k))
+        if minor_mass <= 0.0 and minor_counts <= 0:
+            return df_out, changes   # already adults only (idempotent at the file's 2dp)
+        fixed, changed = zero_minor_age_distribution(dist, str(subject or "tracker"))
+        if not changed:
+            return df_out, changes   # a children's or teen cut keeps its band
+        total = sum(counts.values())
+        # largest-remainder apportionment of the block's own total to the
+        # fixed shape, so count and percentage never contradict each other
+        exact = {k: max(0.0, total * float(fixed.get(k, 0.0)) / 100.0) for k in dist}
+        floors = {k: int(e) for k, e in exact.items()}
+        rem = max(0, total - sum(floors.values()))
+        for k in sorted(exact, key=lambda k: exact[k] - floors[k], reverse=True):
+            if rem <= 0:
+                break
+            floors[k] += 1
+            rem -= 1
+        for idx in age_rows:
+            label = str(df_out.loc[idx, "Category"]).strip()
+            new_pct = float(fixed.get(label, 0.0))
+            new_cnt = int(floors.get(label, 0))
+            df_out.loc[idx, "Count"] = new_cnt
+            df_out.loc[idx, "Percentage"] = f"{new_pct:.2f}%"
+            df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_cnt))
+        changes.append(
+            f"New sign-ups are account holders: AGE under-18 band {minor_mass:.2f}% "
+            f"({minor_counts:,} of {total:,}) set to 0 and the adult bands renormalized to 100")
+    except Exception as _adult_err:
+        print(f"   ⚠️  adult sign-up demographics step skipped: {_adult_err}")
+    return df_out, changes
+
+
 def enforce_attribution_summary_consistency(df_out):
     """
     Ensure Attributed Signups + Dormant to Reactive == New Platform Signups.
@@ -5805,6 +5894,15 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                 print(f"     → {c}")
         else:
             print("   No final demographic adjustments applied.")
+
+    # New sign-ups are account holders, so the sign-up age split carries
+    # no under-18 band (2026-11-10, the house adult-universe rule). Runs
+    # on every build, locked or aligned, so the anchor below records the
+    # adult shape.
+    df_out, _adult_changes = enforce_adult_signup_demographics(
+        df_out, subject=(p.get('show_search_terms') or [p.get('project_name') or ''])[0])
+    for _c in _adult_changes:
+        print(f"   → {_c}")
 
     # Stash the FINAL demographic percentages (post-alignment) on the
     # params dict so run_synthetic_attribution can return them and the
