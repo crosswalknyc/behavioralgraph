@@ -210,6 +210,7 @@ def split(text, pma=None):
         qs = list(pma.split_questions(t) or [])
     except Exception:
         qs = []
+    qs = fold_facets(qs, t)
     if len(qs) >= 2:
         return qs[:MAX_ITEMS]
     # a single sentence carrying two questions joined by ", and what ..."
@@ -227,6 +228,93 @@ def split(text, pma=None):
             return []
     parts = [p if p.endswith('?') else p + '?' for p in parts]
     return parts[:MAX_ITEMS]
+
+
+# ------------------------------------------------------- facets of one ask
+# ONE ASK WITH FACET QUESTIONS IS ONE ASK (Jenna 2026-11-10). Her message
+# "do a digital journey of people who watched my life with the walter boys
+# ... showing how they got there. was it from the blog on wattpad? social
+# media contrnt? digital ads? just suggested as content to watch next? that
+# kind of thing." was split at its question marks into four unrelated asks
+# and one started a stray read. Trailing fragment questions that enumerate
+# facets of the one ask (no subject or verb of their own, short, a marker
+# like "that kind of thing" / "etc" / "for example" nearby, each naming a
+# channel, path, option or attribute of the stated subject) are part of the
+# single ask and ride into it as the facets to cover; the lane splits only
+# on full independent questions.
+_FACET_MARK_RX = re.compile(
+    r"\b(?:that (?:kind|sort|type) of thing|things? like th(?:at|ose|is)|stuff like that|and so on|and so forth|etc\.?|"
+    r"for example|for instance|e\.g\.|such as|or similar|and the like|whatever applies|anything like that)\b", re.I)
+_FACET_MAX_WORDS = 8
+_FACET_LEAD_RX = re.compile(r"^(?:just|or|and|maybe|perhaps|also|even|only)\s+", re.I)
+_PRONOUN_Q_RX = re.compile(
+    r"\b(?:was|is|were|are|did|does|do)\s+(?:it|they|that|this|those|these)\s+(?:(?:come|coming|get|getting|arrive|arriving)\s+)?"
+    r"(?:from|via|through|because of|out of|off|by|by way of)?\s*(?P<what>[^?]{2,80}?)\s*\?\s*$", re.I)
+
+
+def _is_facet_fragment(q):
+    """A chunk with no subject or verb of its own: eight words or fewer,
+    not opened by a question word, an auxiliary or an imperative, and
+    naming no subject of its own (a capitalized name, a figure, a quoted
+    title would make it a question about something else)."""
+    body = str(q or '').strip().rstrip('?.! ')
+    words = body.split()
+    if not words or len(words) > _FACET_MAX_WORDS:
+        return False
+    if _Q_OPEN_RX.match(body) or _IMPERATIVE_RX.match(body):
+        return False
+    if _SUBJECT_SIGNAL_RX.search(body):
+        return False
+    return True
+
+
+def fold_facets(qs, text=''):
+    """Fold trailing facet fragments into the question they enumerate.
+    ``qs`` is the sentence splitter's list; a fragment folds when the
+    message carries a facet marker, or when it follows a question (the
+    chunk before it ends in '?') and a run of such fragments closes the
+    message. Full independent questions are never folded."""
+    qs = [str(q or '').strip() for q in (qs or []) if str(q or '').strip()]
+    if len(qs) < 2:
+        return qs
+    marker = bool(_FACET_MARK_RX.search(str(text or '')))
+    out = [qs[0]]
+    for q in qs[1:]:
+        prev_q = out[-1].rstrip().endswith('?')
+        if _is_facet_fragment(q) and (marker or prev_q):
+            out[-1] = out[-1] + ' ' + q
+            continue
+        out.append(q)
+    # a facet marker as its own tail ("that kind of thing.") rides the ask too
+    if len(out) >= 2 and _FACET_MARK_RX.fullmatch(out[-1].strip().rstrip('.!? ')):
+        out[-2] = out[-2] + ' ' + out.pop()
+    return out
+
+
+def facets_of(text):
+    """The facets a single ask enumerates, in order: the object of its
+    pronoun question ("was it from the blog on wattpad?" -> "the blog on
+    wattpad") and each fragment question after it ("social media content",
+    "digital ads", "suggested as content to watch next"). [] when the
+    message enumerates none."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return []
+    chunks = [c.strip() for c in re.split(r'(?<=\?)\s+', t) if c.strip()]
+    facets = []
+    started = False
+    for c in chunks:
+        body = c.rstrip('?.! ').strip()
+        if _FACET_MARK_RX.fullmatch(body):
+            continue
+        m = _PRONOUN_Q_RX.search(c)
+        if m and not started:
+            facets.append(m.group('what').strip())
+            started = True
+            continue
+        if started and _is_facet_fragment(c):
+            facets.append(_FACET_LEAD_RX.sub('', body).strip())
+    return [f for f in facets if f]
 
 
 # --------------------------------------------------------- item descriptions
