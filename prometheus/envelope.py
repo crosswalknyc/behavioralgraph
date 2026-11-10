@@ -198,4 +198,14 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
             _ig.attach_resume_chip(env, hit)
     except Exception:
         pass
+    # A read that landed since the reader's last message, and that the
+    # reader's copy of the thread does not show yet, gets one trailing
+    # line ("Your <name> read landed above.") and a mark the widget pulls
+    # the thread on (Jenna 2026-11-10). Never the read itself: the reply
+    # to a question is the answer to that question. prometheus.read_landing.
+    try:
+        from . import read_landing as _rl
+        _rl.attach_landed_note(env, raw, via=via)
+    except Exception:
+        pass
     return env

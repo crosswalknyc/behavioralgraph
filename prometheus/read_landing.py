@@ -29,9 +29,11 @@ scripts/test_pm_read_landing.py.
 """
 from __future__ import annotations
 
+from contextvars import ContextVar
 from datetime import datetime, timezone
 
-__all__ = ['JOB_MARKS', 'LANDED_MARK', 'text_key', 'landing_state', 'land', 'read_meta']
+__all__ = ['JOB_MARKS', 'LANDED_MARK', 'text_key', 'landing_state', 'land', 'read_meta',
+           'landed_since_last_user', 'note_landed_since', 'reset_landed_since', 'pending_landed', 'attach_landed_note', 'landed_line']
 
 # the job marks a server turn can carry (one per job family)
 JOB_MARKS = ('read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id', 'aiq_job_id',
@@ -133,3 +135,177 @@ def land(history, meta_key, job_id, text, meta, *, ts=None):
         return hist, 'filled'
     hist.append({'role': 'agent', 'text': text, 'ts': ts or _now_iso(), 'meta': meta})
     return hist, 'appended'
+
+
+# ------------------------------------------------------------------------
+# A finished read never rides inside another answer (Jenna 2026-11-10).
+#
+# Found that day: a Sony Television seat asked "where is the digital
+# journey in the dashboard?" and the status lane answered "Your read for
+# Select a Journey finished 5 minutes ago. Here it is:" with the whole
+# Walter Boys read under it, then two more "finished 41 / 47 minutes ago
+# ... open the tab again" lines. The read had already landed in the
+# thread as its own turn (above); gluing it onto the reply to a
+# different question buried the question and repeated the read.
+#
+# The rule: the reply to a question is the answer to that question. When
+# a read landed since the reader's last message and the copy of the
+# thread the reader is looking at does not show it yet, the reply gets
+# ONE trailing line, "Your <name> read landed above.", and the widget
+# pulls the thread so the landed turn shows. When the landed turn is
+# already visible, nothing is added.
+
+_LANDED_SINCE = ContextVar('pm_landed_since', default=None)
+
+
+def _epoch(t):
+    try:
+        from .thread_merge import turn_epoch
+        return turn_epoch(t)
+    except Exception:
+        return 0.0
+
+
+def _is_promise_text(text):
+    """The ack's own words, with or without the included-with-your-plan
+    lead (prometheus.thread_merge.is_promise knows the same shapes)."""
+    import re as _re
+    s = str(text or '')[:400]
+    if _re.match(r"^\W*(?:included with your plan[.!]?\s*)?(?:on it\b|already on it\b|working on it\b)", s, _re.I):
+        return True
+    try:
+        from .thread_merge import is_promise
+        return bool(is_promise({'text': s}))
+    except Exception:
+        return False
+
+
+def _is_landed_turn(t):
+    """An agent turn that carries a read's payload: the landed mark, the
+    read kind, or a read job id with a text that is not the ack's
+    promise."""
+    m = _meta(t)
+    if str((t or {}).get('role') or '') not in ('agent', 'assistant'):
+        return False
+    if not m.get('read_job_id'):
+        return False
+    if m.get(LANDED_MARK) or str(m.get('kind') or '') == 'read':
+        return True
+    txt = str((t or {}).get('text') or '').strip()
+    return bool(txt) and not _is_promise_text(txt)
+
+
+def landed_since_last_user(stored, client_history):
+    """Reads in the stored thread that landed after the client's last
+    user turn and that the client's copy does not show as a landed turn:
+    [{'job_id', 'name', 'ts'}], oldest first. [] when the client sent no
+    history (a caller that reads the stored thread sees the turns)."""
+    if not isinstance(client_history, list) or not isinstance(stored, list):
+        return []
+    client = [t for t in client_history if isinstance(t, dict)]
+    last_user = 0.0
+    for t in client:
+        if str(t.get('role') or '') == 'user':
+            last_user = max(last_user, _epoch(t))
+    if not last_user:
+        # no user turn in the client's copy: measure from its last turn of any kind
+        for t in client:
+            last_user = max(last_user, _epoch(t))
+    seen_jobs = set()
+    seen_text = set()
+    for t in client:
+        m = _meta(t)
+        if _is_landed_turn(t):
+            seen_jobs.add(str(m['read_job_id']))
+        tk = text_key(t.get('text'))
+        if tk:
+            seen_text.add(tk)
+    out = []
+    for t in stored:
+        if not isinstance(t, dict) or not _is_landed_turn(t):
+            continue
+        m = _meta(t)
+        job = str(m.get('read_job_id') or '')
+        when = _epoch(t)
+        landed_at = str(m.get(LANDED_MARK) or '')
+        if landed_at:
+            try:
+                when = max(when, datetime.fromisoformat(landed_at.replace('Z', '+00:00')).timestamp())
+            except Exception:
+                pass
+        if last_user and when <= last_user:
+            continue
+        if job in seen_jobs or text_key(t.get('text')) in seen_text:
+            continue
+        out.append({'job_id': job, 'name': str(m.get('subject') or '').strip(), 'ts': str(t.get('ts') or '')})
+    out.sort(key=lambda r: r['ts'])
+    return out
+
+
+def reset_landed_since():
+    _LANDED_SINCE.set(None)
+
+
+def note_landed_since(uname, tid, client_history, loader):
+    """Compute the landed-since list for this ask from the stored thread
+    (``loader(uname, tid)``) and keep it for the reply. Never raises."""
+    reset_landed_since()
+    try:
+        if not uname or not tid or not isinstance(client_history, list):
+            return []
+        stored = loader(uname, tid) or []
+        hits = landed_since_last_user(stored, client_history)
+        _LANDED_SINCE.set(hits or None)
+        return hits
+    except Exception:
+        return []
+
+
+def pending_landed():
+    return _LANDED_SINCE.get() or []
+
+
+def landed_line(hits):
+    """'Your X read landed above.' / 'Your X and Y reads landed above.'"""
+    names = []
+    for h in hits or []:
+        n = str((h or {}).get('name') or '').strip()
+        if n and n not in names:
+            names.append(n)
+    if not names:
+        return "Your read landed above." if len(hits or []) == 1 else "Your reads landed above."
+    if len(names) == 1:
+        return f"Your {names[0]} read landed above."
+    return f"Your {' and '.join(names[:2])} reads landed above."
+
+
+def attach_landed_note(env, raw, *, via='session'):
+    """Add the one trailing landed line to an envelope and its raw payload
+    when a read landed since the reader's last message and the reader's
+    copy does not show it; mark the payload so the widget pulls the
+    thread. Idempotent per ask (the list is cleared once attached). A
+    status answer that already names the landing (raw.landed_noted) gets
+    the widget mark only."""
+    hits = pending_landed()
+    if not hits or not isinstance(env, dict):
+        return env
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        _prev = [str(x) for x in (raw.get('landed_since') or []) if x] if isinstance(raw.get('landed_since'), list) else []
+        raw['landed_since'] = list(dict.fromkeys(_prev + [str(h.get('job_id')) for h in hits if h.get('job_id')]))
+        if via == 'api_key' or raw.get('landed_noted') or env.get('kind') in ('error',):
+            return env
+        line = landed_line(hits)
+        text = str(env.get('text') or '')
+        if line in text:
+            return env
+        env['text'] = (text.rstrip() + '\n\n' + line) if text.strip() else line
+        for k in ('reply', 'error', 'message', 'question', 'summary', 'text'):
+            v = raw.get(k)
+            if isinstance(v, str) and v.strip():
+                if line not in v:
+                    raw[k] = v.rstrip() + '\n\n' + line
+                break
+    finally:
+        reset_landed_since()
+    return env

@@ -473,6 +473,7 @@ def accept_offered_run(history, text):
 LANE_ORDER = (
     'intake_cancel',
     'bpiq_wizard', 'build_fix',
+    'wayfinding',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
     'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
@@ -487,12 +488,12 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'build_fix', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
+    'build_fix', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
     'us_scope'))
-NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope'))
 
@@ -601,6 +602,18 @@ def ask(user, body, *, via='session'):
                               extra=(text, body.get('_pm_continued_from')))
     except Exception as _fx:
         _faults.note('service', _fx)
+    # A read that landed since the reader's last message and that the copy
+    # of the thread the widget sent does not show yet (prometheus.read_landing,
+    # Jenna 2026-11-10): noted here, attached once to the reply as a single
+    # trailing line by envelope.wrap, never the read itself. Probes have no
+    # thread to read.
+    try:
+        from . import read_landing as _rl0
+        _rl0.reset_landed_since()
+        if isinstance(body.get('history'), list) and tid and via != 'canary' and client not in ('golden', 'canary', 'probe'):
+            _rl0.note_landed_since(uname, tid, body.get('history'), load_thread)
+    except Exception as _fx:
+        _faults.note('service.landed_since', _fx)
 
     ctx = body.get('context')
     if ctx is None:
@@ -800,6 +813,60 @@ def ask(user, body, *, via='session'):
                     return env, 200
     except Exception as e:
         _faults.note('service.build_fix', e)
+
+    # lane: wayfinding
+    # "Where is the digital journey in the dashboard?" gets directions
+    # (Jenna 2026-11-10: "go to the drop down menu and click on digital
+    # journey iq kinda thing"): the SELECT PRODUCT dropdown, the product
+    # named as the dropdown shows it, its picker or tab, the thing the
+    # asker holds when they name it, the deep link, one Open chip. From
+    # prometheus.dashboard_map, the one map of the dashboard. A product
+    # the seat cannot open is named with "ask your admin for access".
+    # Deterministic, never priced, never a read: before this a Sony seat's
+    # where-is question drew a finished read glued under a status line.
+    # A data question that starts with "where", a named deliverable and
+    # the reader's own results keep their lanes (wayfinding.wants).
+    if not _armed(body) and not _is_order:
+        try:
+            from . import wayfinding as _wf
+            _wf_raw = _wf.answer(user, text, ctx, host=host, uname=uname, history=history) if _wf.wants(text) else None
+        except Exception as _fx:
+            _faults.note('service.wayfinding', _fx)
+            _wf_raw = None
+        if _wf_raw and _wf_raw.get('rewrite_text'):
+            # 'Add it to Digital Journey IQ' is a build order for the journey
+            # lane: the words become the build and the ask goes on from here,
+            # read as the order it now is (prometheus.orders)
+            text = str(_wf_raw['rewrite_text'])
+            body = dict(body, text=text)
+            try:
+                from . import orders as _orders2
+                _is_order = bool(_orders2.is_order(text))
+                if _is_order:
+                    body = dict(body, _pm_order=True, _pm_order_text=text)
+            except Exception as _fx:
+                _faults.note('service.orders', _fx)
+            try:
+                host.ask_hint(route='wayfinding', outcome='add_to_journey', subject=str(_wf_raw.get('subject') or '') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            _wf_raw = None
+        if _wf_raw:
+            raw = _wf_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'wayfinding', 'client_hint': None}
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_wf_raw.get('followups') or [])
+                if _wf_raw.get('action_hint'):
+                    raw['action_hint'] = _wf_raw['action_hint']
+            try:
+                host.ask_hint(route='wayfinding', outcome='answered',
+                              subject=(str((_wf_raw.get('wayfinding') or {}).get('product') or '') or None))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
 
     # lane: offer_acceptance
     # Accepting an offered run (2026-10-06, Eliot / Gunna): the build-
@@ -1803,7 +1870,7 @@ def ask(user, body, *, via='session'):
         try:
             from . import status_lane as _stl_f
             from . import deliverables as _dlv_f
-            _sf_raw = (_stl_f.answer(text, uname, host=host, user=user, history=history)
+            _sf_raw = (_stl_f.answer(text, uname, host=host, user=user, history=history, thread_id=tid)
                        if _stl_f.wants_status_fast(text) and not _dlv_f.parse(text) else None)
         except Exception as e:
             _faults.note('service.status_fast', e)
@@ -1995,7 +2062,7 @@ def ask(user, body, *, via='session'):
                         _sm_raw, _sm_reason = _c0, 'catalog_lookup'
                 elif _lane == 'status_lookup':
                     from . import status_lane as _stl0
-                    _c0 = _stl0.answer(text, uname, host=host, user=user, history=history)
+                    _c0 = _stl0.answer(text, uname, host=host, user=user, history=history, thread_id=tid)
                     if _c0:
                         _sm_raw, _sm_reason = _c0, 'status_lookup'
         except Exception as e:
@@ -2113,7 +2180,7 @@ def ask(user, body, *, via='session'):
             from . import status_lane as _stl
             from . import deliverables as _dlv0
             # a named artifact ("where is the howdy deck") belongs to the deliverable lane below
-            _st_raw = (_stl.answer(text, uname, host=host, user=user, history=history)
+            _st_raw = (_stl.answer(text, uname, host=host, user=user, history=history, thread_id=tid)
                        if _stl.wants_status(text) and not _dlv0.parse(text) else None)
         except Exception as e:
             _faults.note('service.status_lane', e)
@@ -2670,7 +2737,7 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
     elif intent == 'status':
         from . import status_lane as _stl
         _pg.say('Checking your runs and deliveries')
-        raw = _stl.answer(text, uname, host=host, user=user, history=history)
+        raw = _stl.answer(text, uname, host=host, user=user, history=history, thread_id=tid)
         reason = 'status_lookup'
     elif intent == 'capability':
         # a yes-answerable question about what the data can show is "Yes."

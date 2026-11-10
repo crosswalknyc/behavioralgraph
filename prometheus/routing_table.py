@@ -241,6 +241,22 @@ ROWS = [
         'examples': [], 'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'wayfinding', 'surface': 'analyze',
+        'reason': 'wayfinding', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'A where-is question about the dashboard itself ("where is '
+                'the digital journey in the dashboard?", "where do I find '
+                'pilot testing", "where is my Walter Boys journey") gets '
+                'directions from the dashboard map: the SELECT PRODUCT '
+                'dropdown, the product as the dropdown shows it, its picker '
+                'or tab, the thing the asker holds when they name it, the '
+                'deep link and one Open chip; a product the seat cannot '
+                'open is named with "ask your admin for access". Never a '
+                'read, never priced (Jenna 2026-11-10). Served by the ask '
+                'service lane (prometheus.wayfinding).',
+        'examples': [], 'counter': [('where did the viewers come from', True), ('where is the howdy deck created last night', False)],
+    },
+    {
         'id': 'status_lookup', 'surface': 'analyze',
         'reason': 'status_lookup', 'client_action': 'analyze',
         'host_only': True,

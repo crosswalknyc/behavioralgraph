@@ -89,11 +89,15 @@ _APP_BINDINGS = {
     'check_user_credits': 'check_user_credits',   # (username) -> (has_credits, credits_left); -1 = unlimited, personal or company pool (2026-11-08)
     'calm_payload': '_chatbot_calm_payload', # () -> dict
     'intent_view_hydrate': '_pm_intent_view_hydrate',   # (view_ctx) -> view_ctx with the campaign's own numbers and words (2026-10-22)
+    # wayfinding (Jenna 2026-11-10): directions name only the products the seat can open
+    'product_access': 'compute_product_access_flags',   # (user, role) -> the resolved has_*_access dict the SELECT PRODUCT dropdown is drawn from
+    'live_features': 'get_live_features',               # () -> {'hidden_products': {...}, ...}; the admin's global hide list
+    'twins_locked': '_digital_twins_menu_locked',       # (user) -> bool; the company lock on Digital Twins IQ
 }
 
 # Bindings that may legitimately be absent on an older host.
 _OPTIONAL = {'queue_url', 'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate', 'price_table_for',
-             'load_users', 'check_user_credits',
+             'load_users', 'check_user_credits', 'product_access', 'live_features', 'twins_locked',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

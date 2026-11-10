@@ -80,6 +80,17 @@ def is_help_ask(text):
     return bool(_WRITING_RX.search(t) or _ENGINEERING_RX.search(t))
 
 
+# where things are on the dashboard, from the one map (prometheus.dashboard_map,
+# Jenna 2026-11-10): the help answers name the same dropdown, pickers and tabs
+# the wayfinding lane gives directions to
+try:
+    from .dashboard_map import where_things_are as _wta
+    _WHERE_THINGS_ARE = "Where things are on the dashboard: " + _wta()
+except Exception:
+    _WHERE_THINGS_ARE = ("Where things are on the dashboard: every product is in the SELECT PRODUCT dropdown at the top right; "
+                         "a finished journey lands under Select a journey in Digital Journey IQ, a finished profile in the Select Profile "
+                         "dropdown in Profile IQ, a twin on the Twins tab in Digital Twins IQ; chats are in the Chats & Tasks rail on the left.")
+
 _SYSTEM = (
     "You are Prometheus, the analyst inside Crosswalk's dashboard. Crosswalk sees a US consumer's entire "
     "digital life on one opted-in identity and turns it into audience reads: Profile IQ (the audience of any "
@@ -96,6 +107,7 @@ _SYSTEM = (
     "names already on file are reused at no charge, and 'how is my list going' answers from the list), and Prometheus "
     "itself, which answers questions in plain English, prices a read before it runs (Approve or Cancel), and builds "
     "decks. 'Download this' or 'email me this' means the last thing in the chat.\n\n"
+    + _WHERE_THINGS_ARE + "\n\n"
     "The person is asking for WORDS or for HELP, not for a read. Answer the ask directly and completely in plain "
     "English a high school student could follow: short sentences, no jargon, no bullet that opens the same way as "
     "the one before. Never invent a figure; use only numbers that appear in the thread context given. Never say "

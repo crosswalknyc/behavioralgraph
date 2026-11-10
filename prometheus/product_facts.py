@@ -177,8 +177,17 @@ def facts(price_fn=None):
         build_minutes = int(_bp.BUILD_MINUTES)
     except Exception:
         list_max, build_minutes = 2000, 65
+    # where finished things land, from the one map of the dashboard
+    # (prometheus.dashboard_map, Jenna 2026-11-10); the wayfinding lane
+    # gives directions from the same names
+    try:
+        from . import dashboard_map as _dm
+        where = {k: _dm.where_lands(k) for k in ('journey', 'profile', 'twin', 'valuation', 'flywheel', 'campaign')}
+        where['dropdown'] = _dm.DROPDOWN_WHERE
+    except Exception:
+        where = {}
     return {'profile': _rc.money(profile), 'bp_base': _rc.money(bp_control / 2.0), 'bp_control': _rc.money(bp_control),
-            'list_max': list_max, 'build_minutes': build_minutes}
+            'list_max': list_max, 'build_minutes': build_minutes, 'where': where}
 
 
 INCLUDED_LINE = "Included with your plan."
@@ -241,10 +250,13 @@ def answer(text, *, price_fn=None, has_names_list=None, included=False):
                  f"lenses behind it" + ('.' if included else '') + tail)
         return {'reply': reply, 'followups': ['Value a brand partnership'], 'family': fam}
     priced = ("each included with your plan" if included else "each priced before it runs")
+    where = f.get('where') or {}
+    lands = (f" Each lands on the dashboard: a profile {where['profile']}, a journey {where['journey']}, a twin {where['twin']}; ask me 'where is X' any time."
+             if where.get('profile') and where.get('journey') and where.get('twin') else '')
     reply = (f"I answer questions about any US audience from what people actually do, in plain English: who they are, what they watch, "
              f"stream, buy, search and subscribe to, and how two audiences compare. I also build what is not on file yet: a profile of any "
              f"person, title, brand or behavior ({f['profile']}, about an hour), profiles for a whole list of names from an uploaded CSV, a "
              f"Brand Partnership valuation, a Flywheel, a Digital Journey, a Subscriber IQ read and a Digital Twin, {priced}. "
-             f"Every data answer comes with a CSV you can download or have emailed.")
+             f"Every data answer comes with a CSV you can download or have emailed." + lands)
     return {'reply': reply, 'followups': ['Run a profile', 'Value a brand partnership', 'Build a Flywheel', 'How do I pull profiles for a list?'],
             'family': fam}

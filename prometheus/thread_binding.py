@@ -80,12 +80,20 @@ def subject_key_for(page_context):
     if view not in PROJECT_PRODUCTS or view == 'profileIQ':
         return None, None, None
     data = vc.get('data') if isinstance(vc.get('data'), dict) else {}
-    ident = _clean(vc.get('subject_key') or data.get('key') or data.get('slug')
-                   or data.get('title') or data.get('subject') or vc.get('view_title'))
+    # a picker's placeholder ("Select a journey", "Select Profile", "Select a
+    # twin", "Choose...") is nothing selected, never an identity or a label
+    # (2026-11-10). prometheus.dashboard_map.
+    try:
+        from .dashboard_map import is_placeholder as _is_ph
+    except Exception:
+        def _is_ph(_s):
+            return False
+    cands = [vc.get('subject_key'), data.get('key'), data.get('slug'), data.get('title'), data.get('subject'), vc.get('view_title')]
+    ident = next((_clean(c) for c in cands if _clean(c) and not _is_ph(_clean(c))), '')
     if not ident:
         return None, None, None
-    label = _clean(vc.get('subject_label') or data.get('title') or data.get('subject')
-                   or vc.get('view_title') or ident)
+    label_cands = [vc.get('subject_label'), data.get('title'), data.get('subject'), vc.get('view_title'), ident]
+    label = next((_clean(c) for c in label_cands if _clean(c) and not _is_ph(_clean(c))), ident)
     try:   # a tab label's icon is chrome, never part of the project's name (2026-11-05)
         from .subject_display import strip_emoji as _se
         label = _se(label) or label

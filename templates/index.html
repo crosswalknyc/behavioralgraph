@@ -91432,6 +91432,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
         } catch (_) {}
 
+        // Wayfinding (2026-11-10): switch the SELECT PRODUCT dropdown to a product the way a click
+        // does (the change handler shows the view and remembers it); a disabled or locked option is
+        // never opened. A Digital Twins IQ tab follows once the view is up. True when switched.
+        function _pmOpenView(view, tab) {
+            try {
+                var dd = document.getElementById('viewNavDropdown');
+                if (!dd || !view || !/^[A-Za-z]+$/.test(String(view))) return false;
+                var opt = dd.querySelector('option[value="' + view + '"]');
+                if (!opt || opt.disabled || opt.getAttribute('data-locked') === '1') return false;
+                dd.value = view;
+                dd.dispatchEvent(new Event('change', { bubbles: true }));
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown(view);
+                if (tab && view === 'digitalTwinsIQ' && typeof dtwTab === 'function') {
+                    setTimeout(function () { try { dtwTab(tab); } catch (_) {} }, 350);
+                }
+                return true;
+            } catch (_) { return false; }
+        }
         function _pmCollectPageContext() {
             try {
                 var primaryKey = (typeof currentS3Key !== 'undefined' && currentS3Key) || null;
@@ -92191,6 +92209,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                     } catch (_) {}
                 }
+                // Wayfinding (Jenna 2026-11-10): directions to a product carry one Open chip; the
+                // hint names the dropdown option the chip switches to (any product, and a tab on it).
+                if (data.action_hint && data.action_hint.view && data.action_hint.label) {
+                    window._pmOpenViewHint = { view: String(data.action_hint.view), label: String(data.action_hint.label),
+                                               tab: data.action_hint.tab ? String(data.action_hint.tab) : null };
+                }
+                // A read landed since this reader's last message and this tab has not shown it
+                // (prometheus.read_landing, 2026-11-10): pull the thread now so the landed turn
+                // shows above the reply, instead of waiting for the twenty-second pull.
+                if (data.landed_since && data.landed_since.length) {
+                    try { _pmHistoryRev = null; setTimeout(function () { try { _pmServerTurnsPull(); } catch (_) {} }, 600); } catch (_) {}
+                }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
                 });
@@ -92874,6 +92904,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return;
             }
 
+            // Wayfinding (Jenna 2026-11-10): the Open <Product> chip under a directions reply
+            // switches the page to that product (and its tab) instead of asking the server again.
+            // A chip from an earlier turn (loaded from history, no hint in memory) is matched
+            // against the dropdown's own option labels. The twins' own Open chips keep their branch.
+            var _openM = /^open\s+(.+?)[.!\s]*$/i.exec(text.trim());
+            if (_openM && !/^(?:in digital twins iq|focus group iq)$/i.test(_openM[1].trim())) {
+                var _want = _openM[1].trim().toLowerCase();
+                var _ovh = (window._pmOpenViewHint && window._pmOpenViewHint.label &&
+                            String(window._pmOpenViewHint.label).trim().toLowerCase() === text.trim().replace(/[.!\s]+$/, '').toLowerCase())
+                           ? window._pmOpenViewHint : null;
+                if (!_ovh) {
+                    try {
+                        var _ddo = document.getElementById('viewNavDropdown');
+                        var _oarr = _ddo ? Array.prototype.slice.call(_ddo.options) : [];
+                        for (var _oi = 0; _oi < _oarr.length; _oi++) {
+                            var _olbl = String(_oarr[_oi].textContent || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+                            if (_olbl && _olbl.toLowerCase() === _want) { _ovh = { view: _oarr[_oi].value, label: 'Open ' + _olbl, tab: null }; break; }
+                        }
+                    } catch (_) { _ovh = null; }
+                }
+                if (_ovh) {
+                    window._pmOpenViewHint = null;
+                    if (_pmOpenView(_ovh.view, _ovh.tab)) {
+                        synthChatPushTurn('agent', 'Opening ' + String(_ovh.label).replace(/^open\s+/i, '') + '.');
+                        return;
+                    }
+                }
+            }
             // Digital Twins IQ (2026-10-26): the Open chip switches the page;
             // the twin brief confirms or collects like the journey flow.
             if (/^open (?:in digital twins iq|focus group iq)[.! ]*$/i.test(text.trim())) {

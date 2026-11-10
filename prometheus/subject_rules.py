@@ -1166,6 +1166,15 @@ def clean_display(raw, text='', casing=None):
     low = s.lower()
     if low in _NEVER_LABEL:
         return ''
+    # a picker's own placeholder is never a subject (2026-11-10: a reader
+    # quoted "select a journey", the Digital Journey IQ picker's text, and a
+    # read was bound to "Select a Journey"). prometheus.dashboard_map.
+    try:
+        from .dashboard_map import is_placeholder as _is_ph
+        if _is_ph(s):
+            return ''
+    except Exception:
+        pass
     # a bare 'the' title keeps its article ("The Office"); other leading articles drop
     if low.startswith('the ') and len(low.split()) <= 3:
         return _cased(s, casing)

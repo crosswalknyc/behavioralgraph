@@ -180,12 +180,26 @@ def _job_items(host, uname, days=7):
                 if str(doc.get('final_reason') or '') == 'requester not found':
                     continue        # nobody to report it to (a probe identity with no seat)
                 _pl = doc.get('payload') if isinstance(doc.get('payload'), dict) else {}
+                # the read's own name: the payload's subject first (2026-11-10: a job bound to the
+                # picker placeholder "Select a Journey" named the read after it; the payload said
+                # My Life with the Walter Boys), never a placeholder
+                _subj = doc.get('subject') or doc.get('project_name') or doc.get('title') or ''
+                if jtype == 'read':
+                    _subj = _pl.get('profile') or _pl.get('subject') or _subj
+                try:
+                    from . import dashboard_map as _dm
+                    if _dm.is_placeholder(_subj):
+                        _subj = _pl.get('profile') or _pl.get('subject') or ''
+                        if _dm.is_placeholder(_subj):
+                            _subj = ''
+                except Exception:
+                    pass
                 items.append({'kind': jtype, 'status': str(doc.get('status') or 'running').lower(),
-                              'subject': doc.get('subject') or doc.get('project_name') or doc.get('title')
-                              or (('"' + str(doc.get('question'))[:80].rstrip() + '"') if doc.get('question') else ''),
+                              'subject': _subj or (('"' + str(doc.get('question'))[:80].rstrip() + '"') if doc.get('question') else ''),
                               'started': doc.get('started_at') or doc.get('created_at'),
                               'finished': doc.get('finished_at'), 'key': doc.get('s3_key') or doc.get('slug') or '',
                               'ready_message': doc.get('ready_message') or '', 'job_id': doc.get('job_id'),
+                              'thread_id': str(doc.get('thread_id') or ''),
                               'reply': (str(_pl.get('reply') or '').strip() if jtype == 'read' else ''),
                               'followups': [f for f in (_pl.get('followups') or []) if isinstance(f, str)][:3] if jtype == 'read' else []})
         except Exception:
@@ -258,7 +272,52 @@ def _mentioned(text, items):
     return hits or items
 
 
-def answer(text, uname, *, host, user=None, history=None):
+# where a finished thing lives, by job kind (prometheus.dashboard_map is the one map)
+_KIND_NOUN = {'jiq': 'journey', 'journey': 'journey', 'bpiq': 'valuation', 'aiq': 'campaign', 'attribution': 'campaign',
+              'fw': 'flywheel', 'flywheel': 'flywheel', 'profile': 'profile', 'deck': 'deck', 'subiq': 'tracker', 'package': 'email'}
+
+
+def _where_lands(kind):
+    try:
+        from . import dashboard_map as _dm
+        w = _dm.where_lands(_KIND_NOUN.get(kind, kind))
+    except Exception:
+        w = ''
+    return f"It is {w}." if w else "It is on the dashboard."
+
+
+def _thread_title(host, uname, tid):
+    try:
+        idx = host.load_threads_index(uname) if host.has('load_threads_index') else {}
+        for t in (idx or {}).get('threads') or []:
+            if str(t.get('id') or '') == str(tid):
+                return str(t.get('title') or '').strip()
+    except Exception:
+        pass
+    return ''
+
+
+def _read_where(it, history, thread_id, host, uname):
+    """Where a finished read sits, never the read itself (Jenna
+    2026-11-10): in this chat as its own message, or in the chat it
+    landed in when that is another one."""
+    job_tid = str(it.get('thread_id') or '')
+    if job_tid and thread_id and job_tid != str(thread_id):
+        title = _thread_title(host, uname, job_tid)
+        if title:
+            return f"It is in your '{title}' chat: open Chats & Tasks on the left of this panel and pick it."
+        return "It is in another of your chats: open Chats & Tasks on the left of this panel and pick it."
+    try:
+        from . import read_landing as _rl
+        state, _i = _rl.landing_state(history or [], 'read_job_id', it.get('job_id'), it.get('reply') or '')
+    except Exception:
+        state = 'none'
+    if state == 'landed':
+        return "It is in this chat, above, as its own message with its CSV link under it."
+    return "It is in this chat as its own message, above."
+
+
+def answer(text, uname, *, host, user=None, history=None, thread_id=None):
     """A status answer dict for the chat, or None when the reader has no
     work on record (the ask then routes normally)."""
     try:
@@ -295,7 +354,7 @@ def answer(text, uname, *, host, user=None, history=None):
             by_key.setdefault(k, d)
     picked = _mentioned(text, items)[:3] if items else []
     lines = []
-    reposted, followups = False, []
+    followups, landed_noted, landed_jobs = [], False, []
     for it in picked:
         label = KIND_LABEL.get(it['kind'], it['kind'])
         subj = str(it.get('subject') or 'your request')
@@ -311,17 +370,16 @@ def answer(text, uname, *, host, user=None, history=None):
                     line += f" The email with the files went to {em.get('to') or 'you'}{(' ' + _ago(d.get('recorded_at'))) if d.get('recorded_at') else ''}."
                 elif em.get('reason') == 'no email on seat':
                     line += " I could not email it because your seat has no email address on file; ask your admin to add one."
-            elif it['kind'] == 'read' and it.get('reply') and not reposted:
-                # the answer itself, right here: the thread it landed in may
-                # not be the one the reader is looking at (2026-10-26, Jay
-                # Patel: "where do i see the answer", "do you have the results")
-                line += " Here it is:\n\n" + it['reply']
-                reposted = True
-                followups = list(it.get('followups') or [])
+            elif it['kind'] == 'read':
+                # Never the read itself (Jenna 2026-11-10): the read landed in
+                # the thread as its own turn; the answer says where that turn
+                # is. Before this the whole read was glued under this line.
+                line += ' ' + _read_where(it, history, thread_id, host, uname)
+                landed_noted = True
+                if it.get('job_id'):
+                    landed_jobs.append(str(it['job_id']))
             else:
-                where = {'jiq': 'the Digital Journey IQ tab', 'bpiq': 'the Brand Partnership IQ tab', 'aiq': 'the Attribution IQ tab',
-                         'fw': 'the Flywheel tab', 'profile': 'Profile IQ, Select Profile', 'deck': 'your email', 'read': 'this chat'}.get(it['kind'], 'the dashboard')
-                line += f" It is in {where}; open the tab again if you had it open before it landed."
+                line += ' ' + _where_lands(it['kind'])
             lines.append(line)
         elif st in ('error', 'failed'):
             if it.get('client_line'):
@@ -357,8 +415,14 @@ def answer(text, uname, *, host, user=None, history=None):
     if not lines:
         return None
     reply = '\n\n'.join(dict.fromkeys(lines))      # three failed copies of one read say it once
-    followups = list(followups)                       # the re-posted read's own chips, when one was handed back
+    followups = list(followups)
     if any(it.get('status') not in ('done', 'complete', 'completed', 'ready', 'error', 'failed') for it in picked):
         followups.append('Email me when it lands')
-    return {'success': True, 'action': 'answer', 'reply': reply, 'followups': followups, 'offer_deck': False, 'deck_angle': None,
-            'status_items': [{'kind': i['kind'], 'subject': i['subject'], 'status': i['status']} for i in picked]}
+    out = {'success': True, 'action': 'answer', 'reply': reply, 'followups': followups, 'offer_deck': False, 'deck_angle': None,
+           'status_items': [{'kind': i['kind'], 'subject': i['subject'], 'status': i['status']} for i in picked]}
+    if landed_noted:
+        # this answer already says where the read is; the envelope adds no second landed line,
+        # and the widget pulls the thread so the landed turn shows
+        out['landed_noted'] = True
+        out['landed_since'] = landed_jobs
+    return out

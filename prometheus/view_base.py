@@ -92,16 +92,26 @@ def data_title(view_ctx):
     data = vc.get('data') if isinstance(vc.get('data'), dict) else {}
     for k in ('title', 'project_name', 'target_name', 'subject', 'campaign'):
         t = str(data.get(k) or '').strip()
-        if t:
+        if t and not _placeholder(t):
             if '_' in t and ' ' not in t:
                 t = t.replace('_', ' ').strip().title()
             return clean_label(t)[:120]
     meta = data.get('meta') if isinstance(data.get('meta'), dict) else {}
     for k in ('project_name', 'target_name', 'title'):
         t = str(meta.get(k) or '').strip()
-        if t:
+        if t and not _placeholder(t):
             return clean_label(t)[:120]
     return ''
+
+
+def _placeholder(text):
+    """A picker's own placeholder ('Select a journey', 'Select Profile')
+    names nothing (2026-11-10). prometheus.dashboard_map."""
+    try:
+        from .dashboard_map import is_placeholder
+        return bool(is_placeholder(text))
+    except Exception:
+        return False
 
 
 def view_label(view_ctx):
