@@ -16407,12 +16407,15 @@ def _pm_analyze_core(user, body, text, history):
                 'deck_angle': None})
         _jiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
         _rr.start_engine_job('jiq', _jiq_job, _bpiq_user, _jiq_confirm, _jiq_extras, _pm_jiq_status_write, _pm_run_jiq_job)   # the queue, never a web thread (audit item 5)
+        _jiq_line = (f'On it. Building the {_jsubj} journey now - '
+                     'it takes a few minutes. '
+                     'It lands in the Digital Journey tab, and I '
+                     'will confirm here when it is ready.')
+        if _pm_included_seat(_bpiq_user):   # an unlimited or staff seat reads the included line, never a price (2026-11-08 rule)
+            _jiq_line = __import__('prometheus.priced_read', fromlist=['with_included_line']).with_included_line(_jiq_line)
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': (f'On it. Building the {_jsubj} journey now - '
-                      'it takes a few minutes. '
-                      'It lands in the Digital Journey tab, and I '
-                      'will confirm here when it is ready.'),
+            'reply': _jiq_line,
             'jiq_job_id': _jiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if _pm_collect_flag_applies(body, 'jiq_inputs', history) and not _pm_intake_breakout(text, 'digital_journey'):
@@ -17941,7 +17944,8 @@ def _pm_jiq_confirm_reply(parsed):
            else 'trailing 12 months')
     if str(parsed.get('journey_kind') or '') == 'media_week':   # what watchers do after and in addition (Jenna 2026-10-19)
         from prometheus.intake_reader import media_week_confirm_reply
-        return media_week_confirm_reply(parsed, win, _pm_tool_price_label('journey_iq', '$500'))
+        return media_week_confirm_reply(parsed, win, _pm_tool_price_label('journey_iq', '$500'),
+                                        price_sentence=_pm_price_sentence('journey_iq', '$500'))
     tam = parsed.get('tam_label') or 'US gen pop (329.9M)'
     start_line = (f"- Starting point: {parsed['start_behavior']} "
                   f"(out of {tam})"
@@ -18002,8 +18006,8 @@ def _pm_jiq_confirm_reply(parsed):
         f"{shape}. Every journey carries Pathways, One viewer and "
         f"Clickstream sections: the routes people took, one person's "
         f"walk step by step, and the public URLs on each step. It lands "
-        f"in the Digital Journey tab when finished. It prices at "
-        f"{_pm_tool_price_label('journey_iq', '$500')}. Run it?")
+        f"in the Digital Journey tab when finished. "
+        f"{_pm_price_sentence('journey_iq', '$500')} Run it?")
 
 
 def _pm_run_jiq_job(job_id, username, inputs, extras):
@@ -18102,6 +18106,38 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
 # Method: the revised acquired/reactivated playbook. The nest starts
 # at the captured users (the people who did the thing the ask wants
 # to capture) - never at US gen pop.
+def _pm_price_sentence(tool_key, fallback, username=None):
+    """The price sentence a confirm card prints: 'It prices at $500.' for a
+    paying seat; 'Included with your plan.' with no price for an unlimited
+    or staff seat (the 2026-11-08 rule, priced_read.included_with_plan, the
+    one check every priced surface asks; the journey card printed $500 to
+    Jenna's unlimited seat on 2026-11-10). Never raises."""
+    try:
+        uname = (username or '').strip()
+        if not uname:
+            try:
+                uname = (session.get('username') or '').strip()
+            except Exception:
+                uname = ''
+        if uname:
+            data = _H.load_users()
+            user = (data.get('users') or {}).get(uname) or {}
+            from prometheus import priced_read as _pr
+            if user and _pr.included_with_plan(user, uname, _H):
+                return _pr.INCLUDED_LINE
+    except Exception as _fx:
+        _faults.note('chat', _fx)
+    return f"It prices at {_pm_tool_price_label(tool_key, fallback, username)}."
+
+
+def _pm_included_seat(username=None):
+    """True when priced reads are included with this seat's plan (unlimited or staff)."""
+    try:
+        return _pm_price_sentence('journey_iq', '$500', username) == __import__('prometheus.priced_read', fromlist=['INCLUDED_LINE']).INCLUDED_LINE
+    except Exception:
+        return False
+
+
 def _pm_tool_price_label(tool_key, fallback, username=None):
     """Live per-pull price from the billing panel (system/pricing.json
     via wallet.tool_price_usd), so chat copy never drifts from what

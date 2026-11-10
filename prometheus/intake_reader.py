@@ -664,7 +664,7 @@ def journey_inputs_complete(parsed):
     return bool(p.get('subject') and p.get('platform') and p.get('conversion_event'))
 
 
-def media_week_confirm_reply(parsed, window_label, price_label):
+def media_week_confirm_reply(parsed, window_label, price_label, price_sentence=''):
     """The confirm card for the after-watch read: the Survivor / NCIS / Sistas shape."""
     home = parsed.get('platform') or 'its streaming home, confirmed from the title'
     return (
@@ -677,8 +677,8 @@ def media_week_confirm_reply(parsed, window_label, price_label):
         "off-screen in a week, and who watches the next episode; episode night or later in the week; then where "
         "they stream it, how fast they watch a new episode, their week day by day, an episode day by daypart, "
         "and the other shows, streaming services, podcasts and audio, social platforms, news, sports and games "
-        "around the episode, each against US adults. It lands in the Digital Journey tab when finished. It "
-        f"prices at {price_label}. Run it?")
+        "around the episode, each against US adults. It lands in the Digital Journey tab when finished. "
+        f"{price_sentence or ('It prices at ' + str(price_label) + '.')} Run it?")
 
 
 def _kind_from_ask(text, kind):
