@@ -583,6 +583,12 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
         if tv and tv > 0:
             cap_end = int(tv * TITLE_CAP_SHARE)
             trail['title_cap'] = cap_end
+            # the title's viewers on the service ride the trail (2026-11-10):
+            # the gold pass totals the every-viewer table from
+            # meta.norms.title_viewers, and without it a file with researched
+            # viewers and no title anchor summed that table off the end step
+            # (the Walter Boys run: 2,618,392 against its own 9,178,463)
+            trail['title_viewers'] = tv
         lo, hi, target = float(band['lo']), float(band['hi']), float(band['target'])
         want_rate = old_rate if lo <= old_rate <= hi else target
         want_end = int(round(start * want_rate / 100.0))
