@@ -259,7 +259,7 @@ def hydrate_identity_from_profile(twin: dict, s3) -> bool:
     rows = _load_csv_rows(s3, key)
     if not rows:
         return False
-    fresh = profile_identity(rows, str((twin.get('meta') or {}).get('subject') or ''))
+    fresh = profile_identity(rows, str((twin.get('meta') or {}).get('subject') or ''), profile_key=key)
     ident = twin.setdefault('identity', {})
     demo = ident.setdefault('demographics', {})
     changed = False
@@ -419,8 +419,45 @@ def find_profile_key(s3, subject: str, anchors: Optional[dict] = None) -> str:
     return best
 
 
-def profile_identity(rows: list, subject: str) -> dict:
-    """identity + size + avid + category from the Total Universe rows."""
+def _adult_universe_rows(rows: list, subject: str, profile_key: str = '') -> bool:
+    """The profile is an account-holder universe (sign-ups, subscribers,
+    members, buyers, customers, ...): adults only, so a twin built from
+    it seats adults only (Grace Yin, Amazon, 2026-11-10). Reads the
+    subject, the profile key and the file's SUBJECT / BRAND INPUT rows
+    through the shared rule; False on any doubt."""
+    try:
+        from migration.adult_universe import is_account_holder_universe
+    except Exception:
+        return False
+    words = [subject, profile_key]
+    for r in rows or []:
+        col = str((r or {}).get('Column') or '').strip().upper()
+        if col in ('SUBJECT', 'BRAND INPUT'):
+            v = str(r.get('Value') or '').strip()
+            if v and v.lower() != 'nan':
+                words.append(v)
+    try:
+        return bool(is_account_holder_universe(*[w for w in words if w]))
+    except Exception:
+        return False
+
+
+def _adults_only_age(age_rows: list, subject: str) -> list:
+    """The age rows of an adult universe: the under-18 row leaves and the
+    rest renormalize to 100 (the same rule the file carries)."""
+    try:
+        from migration.adult_universe import adult_age_rows
+        return adult_age_rows(age_rows, subject or 'audience')
+    except Exception:
+        kept = [r for r in age_rows if _norm_key(r.get('label')) not in _AGE_ADULT_DROP]
+        return kept or age_rows
+
+
+def profile_identity(rows: list, subject: str, profile_key: str = '') -> dict:
+    """identity + size + avid + category from the Total Universe rows.
+    ``profile_key`` (2026-11-10) names the universe when the SUBJECT row
+    does not (a sign-ups or buyers file): an account-holder universe's
+    age rows carry no under-18 band, so the room seats adults only."""
     out = {'demographics': {}, 'geography': [], 'platforms': [], 'purchase': [], 'media_diet': [], 'talent': [], 'size_us': 0, 'sample': 0,
            'avid_share_pct': 0.0, 'brand_category': '', 'window': None, 'subject_row': ''}
     plats, purch, media, talent, geo = [], [], [], [], []
@@ -459,6 +496,9 @@ def profile_identity(rows: list, subject: str) -> dict:
             media.append({'label': val, 'pct': pct1(bp)})
         elif col == 'TALENT' and bp is not None and bp < 99.9:
             talent.append({'label': val, 'pct': pct1(bp)})
+    if out['demographics'].get('age') and _adult_universe_rows(rows, subject, profile_key):
+        out['demographics']['age'] = _adults_only_age(out['demographics']['age'], subject)
+        out['adults_only'] = True
     seen = set()
     dedup = []
     svod_first = sorted(plats, key=lambda x: (0 if x['group'] in ('STREAMING/PLATFORM', 'STREAMING VIDEO', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST', 'FAST PLATFORM') else 1, -x['reach_pct']))
@@ -533,7 +573,7 @@ def corpus_anchors(subject: str, window: Optional[dict], s3=None, profile_key: s
     if out['profile_key']:
         rows = _load_csv_rows(s3, out['profile_key'])
         if rows:
-            out['profile'] = profile_identity(rows, subject)
+            out['profile'] = profile_identity(rows, subject, profile_key=out['profile_key'])
     try:
         if out['profile']:
             labels = [p['label'] for p in out['profile']['platforms'][:12]] + [p['label'] for p in out['profile']['purchase'][:8]]
@@ -1354,6 +1394,11 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
             'source': 'demographics' if by_demo else ('profile' if corpus.get('profile_key') else 'research'),
             'profile_key': '' if by_demo else str(corpus.get('profile_key') or ''), 'profile_name': '' if by_demo else str(prof.get('subject_row') or ''),
             'demographics_spec': demo_spec if by_demo else None, 'panelists': panelists}
+    # an account-holder universe seats adults only (2026-11-10): the
+    # profile's age rows already carry no under-18 band; the flag rides
+    # the meta so the room's seating honors it too
+    if prof.get('adults_only'):
+        meta['adults_only'] = True
     # identity
     demo = prof.get('demographics') or {}
     if not demo:

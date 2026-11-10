@@ -373,7 +373,9 @@ class ThePlanHalf(unittest.TestCase):
         self.assertEqual(len(plain['reads']), 5)
         self.assertTrue(all(len(r) <= 480 for r in plain['reads']))
         src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
-        self.assertEqual(src.count('plan=_is_plan)'), 5)
+        # every coherence pass of the read carries the plan flag (and, since
+        # 2026-11-10, the ask and the base for the adult account-holder rule)
+        self.assertEqual(src.count('plan=_is_plan, **_ah_ctx)'), 5)
 
 
 class TheRetiredTurn(unittest.TestCase):

@@ -232,8 +232,53 @@ def _resolve_location_buckets(df_source, cut_def: dict) -> dict:
     return out
 
 
+def _source_is_adult_universe(df_source, cut_def: dict,
+                              universe_labels=()) -> bool:
+    """The parent is an account-holder universe (sign-ups, subscribers,
+    members, buyers, customers, ...): adults only, so an age cut never
+    draws from the under-18 bucket (Grace Yin, Amazon, 2026-11-10).
+    Reads the parent's own SUBJECT / BRAND INPUT rows plus whatever the
+    caller knows (the parent subject, its S3 key, the cut's parent
+    hints). Never raises; False on any doubt."""
+    try:
+        try:
+            from migration.adult_universe import is_account_holder_universe
+        except ImportError:
+            from adult_universe import is_account_holder_universe  # type: ignore
+    except Exception:
+        return False
+    labels = [str(x) for x in (universe_labels or ()) if x]
+    cd = cut_def if isinstance(cut_def, dict) else {}
+    for k in ("subject", "parent_subject", "parent_name", "parent_key",
+              "source_key", "source_label", "parent_display_name"):
+        if cd.get(k):
+            labels.append(str(cd[k]))
+    try:
+        cats = df_source["Column"].astype(str).str.upper().str.strip()
+        for cat in ("SUBJECT", "BRAND INPUT"):
+            for v in df_source[cats == cat]["Value"].astype(str).tolist():
+                if v and v.lower() != "nan":
+                    labels.append(v)
+    except Exception:
+        pass
+    spec = {"account_holder": cd.get("account_holder")} if cd.get("account_holder") is True else None
+    return is_account_holder_universe(*labels, spec=spec)
+
+
+def _is_minor_bucket(label) -> bool:
+    try:
+        try:
+            from migration.adult_universe import is_minor_age_label
+        except ImportError:
+            from adult_universe import is_minor_age_label  # type: ignore
+        return bool(is_minor_age_label(label))
+    except Exception:
+        return _norm_bucket("AGE", label) == "17 AND UNDER"
+
+
 def _pin_shares_from_source(df_source, pin_category: str,
-                            pin_buckets: list) -> tuple:
+                            pin_buckets: list, *,
+                            adults_only: bool = False) -> tuple:
     """Returns (cohort_fraction, {bucket_label: source_bp}).
 
     cohort_fraction = sum of the pinned buckets' BPs / 100, read
@@ -241,16 +286,22 @@ def _pin_shares_from_source(df_source, pin_category: str,
     sizing is the only place we use a calculation" - math, not vibes.
     Bucket matching is alias-tolerant via _norm_bucket so canonical
     and legacy spellings on either side resolve to the same break.
+    adults_only (account-holder parent, 2026-11-10): an AGE pin never
+    draws from the under-18 bucket, whatever the row carries.
     """
     cat_col, val_col = "Column", "Value"
     bp_col, _, _, _ = _detect_cols(df_source)
     cats = df_source[cat_col].astype(str).str.upper().str.strip()
     want = {_norm_bucket(pin_category, b) for b in pin_buckets}
+    is_age = str(pin_category).upper().strip() == "AGE"
     shares = {}
     for _, r in df_source[cats == str(pin_category).upper().strip()
                           ].iterrows():
         lbl = str(r.get(val_col, "")).strip()
         if _norm_bucket(pin_category, lbl) not in want:
+            continue
+        if adults_only and is_age and _is_minor_bucket(lbl):
+            shares[lbl] = 0.0
             continue
         v = _fbp(r.get(bp_col, 0))
         if v is not None:
@@ -290,7 +341,8 @@ def _parse_age_range(cut_def: dict):
     return None
 
 
-def _age_range_fraction(df_source, lo: int, hi: int) -> tuple:
+def _age_range_fraction(df_source, lo: int, hi: int, *,
+                        adults_only: bool = False) -> tuple:
     """(cohort_fraction, {bucket: source_bp}, note) for an age RANGE.
 
     fraction = sum over the parent's AGE buckets of
@@ -298,7 +350,9 @@ def _age_range_fraction(df_source, lo: int, hi: int) -> tuple:
     span). A range that fully covers its buckets (Millennials 25-44 =
     25-34 + 35-44) reduces to the plain bucket sum; a partial overlap
     (18-30 takes 6 of 25-34's 10 years) is allocated proportionally
-    and documented in the returned note.
+    and documented in the returned note. adults_only (account-holder
+    parent, 2026-11-10): the under-18 bucket contributes nothing even
+    when the row carries mass.
     """
     cat_col, val_col = "Column", "Value"
     bp_col, _, _, _ = _detect_cols(df_source)
@@ -316,6 +370,9 @@ def _age_range_fraction(df_source, lo: int, hi: int) -> tuple:
         overlap = min(hi, b_hi) - max(lo, b_lo) + 1
         if overlap <= 0:
             continue
+        if adults_only and _is_minor_bucket(lbl_raw):
+            shares[lbl_raw] = 0.0
+            continue
         v = _fbp(r.get(bp_col, 0))
         if v is None:
             continue
@@ -328,10 +385,15 @@ def _age_range_fraction(df_source, lo: int, hi: int) -> tuple:
     if partial:
         note = (f"AGE range {lo}-{hi}: proportional allocation on "
                 + ", ".join(partial))
+    if adults_only:
+        note = (note + "; " if note else "") + (
+            "account-holder parent is adults: the under-18 bucket "
+            "contributes nothing")
     return max(0.0, min(1.0, total / 100.0)), shares, note
 
 
-def deterministic_cut_fraction(df_source, cut_def: dict) -> tuple:
+def deterministic_cut_fraction(df_source, cut_def: dict,
+                               universe_labels=()) -> tuple:
     """(cohort_fraction, {bucket: source_bp}, note), resolved
     DETERMINISTICALLY from the parent file's own rows at synthesis
     time. This value ALWAYS WINS over any reasoned or spec-provided
@@ -346,10 +408,17 @@ def deterministic_cut_fraction(df_source, cut_def: dict) -> tuple:
         buckets' parent BPs / 100.
       * behavioral cuts (no pin_category) -> (None, {}, note): there
         is no parent row to read, the reasoned fraction applies.
+
+    universe_labels (2026-11-10): the parent's subject and S3 key, so
+    an age cut on an account-holder parent (sign-ups, subscribers,
+    buyers, ...) never draws from the under-18 bucket. The parent's
+    own SUBJECT / BRAND INPUT rows are read either way.
     """
     if _is_behavioral_cut(cut_def):
         return None, {}, ("behavioral cut - no parent row to read; "
                           "reasoned fraction applies")
+    adults_only = _source_is_adult_universe(df_source, cut_def,
+                                            universe_labels)
     pins = _cut_pins(cut_def)
     if _is_compound_cut(cut_def) or len(pins) > 1:
         # Compound multi-pin (2026-08-25): fraction = PRODUCT of each
@@ -360,7 +429,8 @@ def deterministic_cut_fraction(df_source, cut_def: dict) -> tuple:
         shares_by_cat = {}
         factors = []
         for cat, buckets in pins:
-            f, sh = _pin_shares_from_source(df_source, cat, buckets)
+            f, sh = _pin_shares_from_source(df_source, cat, buckets,
+                                            adults_only=adults_only)
             if f <= 0:
                 return None, {}, (
                     f"compound pin {cat}={buckets} not found in "
@@ -376,15 +446,20 @@ def deterministic_cut_fraction(df_source, cut_def: dict) -> tuple:
     if pin_cat == "AGE":
         rng = _parse_age_range(cut_def)
         if rng:
-            frac, shares, note = _age_range_fraction(df_source, *rng)
+            frac, shares, note = _age_range_fraction(
+                df_source, *rng, adults_only=adults_only)
             if frac > 0:
                 return frac, shares, (
                     note or f"AGE range {rng[0]}-{rng[1]}: whole "
                             f"panel buckets, plain sum")
     frac, shares = _pin_shares_from_source(
-        df_source, pin_cat, cut_def.get("pin_buckets") or [])
-    return ((frac if frac > 0 else None), shares,
-            f"sum of parent {pin_cat} bucket BPs / 100")
+        df_source, pin_cat, cut_def.get("pin_buckets") or [],
+        adults_only=adults_only)
+    note = f"sum of parent {pin_cat} bucket BPs / 100"
+    if adults_only and pin_cat == "AGE":
+        note += ("; account-holder parent is adults: the under-18 "
+                 "bucket contributes nothing")
+    return ((frac if frac > 0 else None), shares, note)
 
 
 # =============================================================================
@@ -2010,7 +2085,7 @@ def synthesize_demo_cut(
               f"(behavioral - no deterministic source)")
     else:
         det_cf, pin_shares, det_note = deterministic_cut_fraction(
-            df_source, cut_def)
+            df_source, cut_def, universe_labels=(subject, source_label))
         if not det_cf or det_cf <= 0:
             raise RuntimeError(
                 f"pins [{_pin_desc(cut_def)}] not found in source - "

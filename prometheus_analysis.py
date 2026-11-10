@@ -63,6 +63,102 @@ SHARE_SECTIONS = {
     'PODCAST', 'MEDIA', 'BROADCAST/CABLE',
 }
 
+# ---------------------------------------------------------------------------
+# Adult account-holder universes (Grace Yin, Amazon, 2026-11-10: minors
+# counted as Prime sign-ups). A universe defined by an action an adult
+# takes on an account (sign-ups, subscribers, members, paid, buyers,
+# customers, shoppers, renters, bettors, cardholders) is adults, so the
+# age split the digest, the panel-fact answer and a breakdown print
+# excludes the under-18 band and sums the adult bands to 100. A viewers /
+# listeners / players universe keeps the band. Shared rule:
+# migration/adult_universe.py (the pipeline's enforcer uses the same).
+# ---------------------------------------------------------------------------
+try:
+    from migration.adult_universe import (
+        is_account_holder_universe as _ah_universe,
+        is_account_holder_text as _ah_text,
+        is_minor_age_label as _ah_minor,
+        zero_minor_age_distribution as _ah_zero,
+    )
+except Exception:  # pragma: no cover - the twin is always shipped with the app
+    _ah_universe = lambda *a, **k: False  # noqa: E731
+    _ah_text = lambda t: False  # noqa: E731
+    _ah_minor = lambda t: False  # noqa: E731
+    _ah_zero = lambda d, s, **k: (dict(d or {}), False)  # noqa: E731
+
+_AGE_DIM_RX = re.compile(r"\bage|\bgeneration|\bgen\s*z\b|\bmillennial|\bboomer", re.I)
+_AGE_DIM_NOT_RX = re.compile(r"child|kid|parent|household\s+size", re.I)
+_ADULT_BUCKET_RX = re.compile(r"^\s*(?:18\s*[-\u2013to]+\s*24|25\s*[-\u2013to]+\s*34|35\s*[-\u2013to]+\s*44|45\s*[-\u2013to]+\s*54|55\s*[-\u2013to]+\s*64|65\s*(?:\+|or\s+older|and\s+over|and\s+older))\s*$", re.I)
+
+
+def _frame_universe_words(df):
+    """The frame's SUBJECT row and BRAND INPUT persona, the words the
+    universe describes itself with."""
+    out = []
+    try:
+        cats = df['Column'].astype(str).str.strip().str.upper()
+        sub = df[cats.isin(['SUBJECT', 'BRAND INPUT'])]
+        for v in sub['Value'].astype(str).tolist():
+            if v and v.lower() != 'nan':
+                out.append(v)
+    except Exception:
+        pass
+    return out
+
+
+def is_adult_universe(df=None, meta=None, *labels) -> bool:
+    """True when the profile is an account-holder universe: its display
+    name / s3 key (meta), its SUBJECT and BRAND INPUT rows, or any extra
+    label carries an account-action word as a whole word."""
+    m = meta if isinstance(meta, dict) else {}
+    if m.get('account_holder') is True:
+        return True
+    words = [m.get('name'), m.get('s3_key'), m.get('key'), m.get('display_name')]
+    words.extend(labels)
+    if df is not None:
+        words.extend(_frame_universe_words(df))
+    return bool(_ah_universe(*[w for w in words if w]))
+
+
+def adult_age_split(rows, subject=''):
+    """[(label, bp)] with the under-18 band removed and the adult bands
+    renormalized to 100 (the file's own rule). Order kept."""
+    rows = [(str(lab), float(v)) for lab, v in (rows or [])]
+    if not any(_ah_minor(lab) for lab, _ in rows):
+        return rows
+    fixed, _ = _ah_zero({lab: v for lab, v in rows}, subject or 'audience')
+    return [(lab, float(fixed.get(lab, v))) for lab, v in rows if not _ah_minor(lab)]
+
+
+def is_age_breakdown(bd) -> bool:
+    """The breakdown ranks age bands (dimension says age / generation,
+    or at least two rows are canonical adult age buckets), and is not a
+    children's-age or household dimension."""
+    if not isinstance(bd, dict):
+        return False
+    dim = ' '.join(str(bd.get('dimension') or '').split())
+    if dim and _AGE_DIM_NOT_RX.search(dim):
+        return False
+    if dim and _AGE_DIM_RX.search(dim):
+        return True
+    labels = [str((r or {}).get('label') or '') for r in (bd.get('rows') or []) if isinstance(r, dict)]
+    return sum(1 for lab in labels if _ADULT_BUCKET_RX.match(lab)) >= 2
+
+
+def breakdown_adults_only(data, question='', base_label='') -> bool:
+    """A read whose base is an account-holder universe, or whose measure
+    is an account action (sign-ups, paid, subscribers, members, buyers,
+    ...), never reports an under-18 band in an age breakdown."""
+    d = data if isinstance(data, dict) else {}
+    bd = d.get('breakdown') if isinstance(d.get('breakdown'), dict) else {}
+    probe = [question, base_label, d.get('subject'), d.get('cohort'), d.get('headline'),
+             bd.get('share_basis'), bd.get('dimension')]
+    for m in (d.get('metrics') or []):
+        if isinstance(m, dict):
+            probe.append(f"{m.get('label') or ''} {m.get('definition') or ''}")
+    return any(_ah_text(p) for p in probe if p)
+
+
 _digest_cache = {}       # {s3_key: (etag+norms_ver, built_ts, digest_str, meta)}
 _genpop_cache = {'ts': 0.0, 'map': None, 'etag': None}
 _norms_cache = {'ts': 0.0, 'etag': None, 'data': None}
@@ -384,6 +480,9 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
     demo_rows_all, beh_rows_all = [], []
     share_c = _fuzzy_col(df, 'category share')
     share_sections_seen = False
+    # an account-holder universe is adults: its AGE line carries no
+    # under-18 band and the adult bands sum to 100 (2026-11-10)
+    adults_only = is_adult_universe(df, meta, name)
     for cat, grp in df.groupby('Column', sort=False):
         catU = _norm_cat(cat)
         if catU in METADATA_COLS:
@@ -403,6 +502,10 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
                     share_by_brand[b] = sv
         if not rows:
             continue
+        if adults_only and catU == 'AGE':
+            rows = adult_age_split(rows, name)
+            if not rows:
+                continue
         rows.sort(key=lambda r: -r[1])
         if catU in DEMO_COLS:
             demo_rows_all.extend((catU, b, v) for b, v in rows)
@@ -1272,6 +1375,7 @@ def _profile_digest_cached(s3_client, bucket, s3_key, want_name, genpop,
     if cached and cached[0] == ck:
         return cached[2], cached[3], etag, df
     meta = _profile_meta(df, want_name)
+    meta['s3_key'] = s3_key     # the key names the universe (sign-ups, buyers, ...) when the SUBJECT row does not (2026-11-10)
     digest = build_profile_digest(df, meta, genpop, norms=norms)
     _digest_cache_put(s3_key, ck, digest, meta)
     _digest_shared_put(s3_client, bucket, s3_key, etag, norms_ver, digest, meta, want_name)
@@ -5346,6 +5450,24 @@ def answer_panel_fact(fact, df, meta, genpop_map=None):
         dim = col.title().replace('_', ' ')
         bucket = fact.get('bucket')
         metrics = []
+        # an account-holder universe is adults (2026-11-10): the age
+        # split excludes the under-18 band and sums the adults to 100
+        adults_only = _norm_cat(col) == 'AGE' and is_adult_universe(df, meta, name)
+        if adults_only:
+            if bucket and any(_ah_minor(r[0]) for r in rows
+                              if bucket in _norm_cat(r[0])):
+                reply = (f"No one under 18 is in the {name} audience: "
+                         f"everyone in it holds the account the audience "
+                         f"is defined by, so the age split covers adults "
+                         f"only (18 and older).")
+                return {'reply': reply, 'family': 'demographics',
+                        'metrics': [], 'breakdown': None,
+                        'followups': [f'Age split for {name}',
+                                      'Top brands for this audience']}
+            rows = adult_age_split(rows, name)
+            rows.sort(key=lambda r: -r[1])
+            if not rows:
+                return None
         if bucket:
             hit = next((r for r in rows
                         if bucket in _norm_cat(r[0])), None)
@@ -6412,7 +6534,8 @@ def build_insights_deck_user_prompt(subject, partner, digest_bundle,
 _PCT_UNITS = {'pct', 'percent', 'percentage', '%'}
 
 
-def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False):
+def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
+                              question='', base_label=''):
     """Exactify a reasoned measurement read: counts messy (last digit
     1-9), percentages one decimal and bounded, labels and definitions
     capped. Returns the cleaned dict. `so_what` (2026-10-06) marks the
@@ -6420,7 +6543,11 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False):
     (2026-11-06): a social, search or media plan asked for beside the
     figures gets room for its moves (nine reads, each up to 1,200
     characters); the 480-character clip cut Jenna's plan at four of
-    five flights and two of three angles, and dropped the search terms."""
+    five flights and two of three angles, and dropped the search terms.
+    `question` / `base_label` (2026-11-10, Grace Yin): the ask and the
+    base profile's name or key, so an age breakdown on an account-holder
+    universe, or of an account action (sign-ups, paid, subscribers), is
+    adults only; the under-18 band never prints."""
     if not isinstance(data, dict):
         raise ValueError('measurement payload is not a dict')
     subj = str(data.get('subject') or 'subject').strip() or 'subject'
@@ -6467,7 +6594,9 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False):
         if len(metrics) >= 12:
             break
     out['cohort'] = _clip_label(data.get('cohort'))
-    out['breakdown'] = _coherent_breakdown(data.get('breakdown'))
+    out['breakdown'] = _coherent_breakdown(
+        data.get('breakdown'),
+        adults_only=breakdown_adults_only(data, question, base_label))
     # A breakdown-primary read shows three context stats in the chat
     # preamble (the formatter's [:3]); the rest stay on the result so the
     # ledger entry and the file carry every figure (2026-11-04).
@@ -6516,15 +6645,19 @@ def full_table_line(res):
     return f"The full table, all {len(rows)} rows, is in the file under this answer."
 
 
-def _coherent_breakdown(bd):
+def _coherent_breakdown(bd, adults_only=False):
     """Validate + exactify a breakdown table: ranked rows, shares
     renormalized to sum to exactly 100 (residual absorbed by the
     largest row), penetrations bounded, labels capped. Returns the
     cleaned dict or None. Every row survives (BREAKDOWN_ROWS_MAX is a
     runaway guard, never a 16): a distribution row keeps its full
-    bucket set and its pool."""
+    bucket set and its pool. `adults_only` (2026-11-10): on an age
+    breakdown of an account-holder universe or an account action the
+    under-18 row leaves before the shares renormalize, so the adult
+    bands sum to 100 and no minor band is reported."""
     if not isinstance(bd, dict):
         return None
+    drop_minors = bool(adults_only) and is_age_breakdown(bd)
     rows = []
     for r in (bd.get('rows') or [])[:BREAKDOWN_ROWS_MAX]:
         if not isinstance(r, dict):
@@ -6535,6 +6668,8 @@ def _coherent_breakdown(bd):
         except (TypeError, ValueError):
             continue
         if not label or share <= 0:
+            continue
+        if drop_minors and _ah_minor(label):
             continue
         row = {'label': label, 'share_pct': share}
         try:

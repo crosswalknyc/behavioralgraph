@@ -95,9 +95,39 @@ def _twin_key(t):
 
 
 # --------------------------------------------------------------- the room
+def _adults_only(t) -> bool:
+    """The twin stands for an account-holder universe (sign-ups,
+    subscribers, members, buyers, customers, ...): adults only, so no
+    seat is under 18 (Grace Yin, Amazon, 2026-11-10). The flag rides the
+    meta (set at build) or the identity (set by profile_identity); a
+    twin whose profile name or key carries the words counts too."""
+    t = t or {}
+    if (t.get('meta') or {}).get('adults_only') or (t.get('identity') or {}).get('adults_only'):
+        return True
+    try:
+        from migration.adult_universe import is_account_holder_universe
+        m = t.get('meta') or {}
+        return bool(is_account_holder_universe(m.get('profile_name'), m.get('profile_key'), m.get('subject'), m.get('name')))
+    except Exception:
+        return False
+
+
+def _minor_age_label(label) -> bool:
+    try:
+        from migration.adult_universe import is_minor_age_label
+        return bool(is_minor_age_label(label))
+    except Exception:
+        return str(label or '').strip().lower().startswith('17')
+
+
 def _demo(t, cat):
     rows = ((t or {}).get('identity') or {}).get('demographics') or {}
-    return [r for r in (rows.get(cat) or []) if isinstance(r, dict) and r.get('label') is not None]
+    out = [r for r in (rows.get(cat) or []) if isinstance(r, dict) and r.get('label') is not None]
+    if cat == 'age' and out and _adults_only(t):
+        kept = [r for r in out if not _minor_age_label(r.get('label'))]
+        if kept:
+            return kept
+    return out
 
 
 def _share_of(t, cat, pred) -> float:
@@ -776,7 +806,11 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
             name = bank[int(unit('name', seed, s['label'], j) * len(bank))]
             if demos and demos.get('AGE'):
                 lab_j = age_labs[j] if j < len(age_labs) else ''
-                age = (14 + int(4 * unit('age', seed, s['label'], j))) if str(lab_j).startswith('17') else _age_in_bucket(lab_j, unit('age', seed, s['label'], j))
+                if str(lab_j).startswith('17') and _adults_only(t):
+                    # an account-holder twin never seats a minor, whatever the picker asked (2026-11-10)
+                    age = 18 + int(7 * unit('age', seed, s['label'], j))
+                else:
+                    age = (14 + int(4 * unit('age', seed, s['label'], j))) if str(lab_j).startswith('17') else _age_in_bucket(lab_j, unit('age', seed, s['label'], j))
             elif f.get('age'):
                 lo, hi = f['age'] if isinstance(f['age'], (list, tuple)) else (18, 54)
                 age = int(lo + (hi - lo) * unit('age', seed, s['label'], j))

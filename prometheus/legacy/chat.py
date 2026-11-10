@@ -1092,7 +1092,17 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  AGE_OF_CHILDREN: No Kids, Under 3, 3 to 5, 6 to 10, 11 to 13, "
         "14 to 17\n"
         "Every bucket in every canonical category MUST appear in demos and "
-        "the sum MUST be 100.0 (four decimals fine).\n\n"
+        "the sum MUST be 100.0 (four decimals fine).\n"
+        "  * ACCOUNT-HOLDER UNIVERSES ARE ADULTS (Grace Yin, Amazon, "
+        "2026-11-10): when the ask defines the audience by an action an "
+        "adult takes on an account (sign-ups, new subscribers, "
+        "subscribers, members, paid, purchasers, buyers, customers, "
+        "shoppers, renters, bettors, account holders, cardholders, bank "
+        "customers), set `account_holder: true` and give AGE "
+        "'17 AND UNDER' exactly 0 in tu_demos AND avid_demos, spreading "
+        "the shape over the 18+ buckets (still summing to 100). A "
+        "viewers / listeners / players / fans universe keeps the bucket "
+        "(minors watch) and sets `account_holder: false`.\n\n"
 
         "GENDER SKEW VOCABULARY (HARD MAPPING - Jenna 2026-09-02): when "
         "a request uses a gender-skew word, translate it to a concrete "
@@ -1304,6 +1314,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"youtube_include_clips\": <true|false> or null // YouTube audiences only: false = full episodes only (default), true = the channel's clips too; null until asked,\n"
         "  \"consumers_sample_fraction\": <float 0.15-0.90 or null - consumed-share of the broad engager universe>,\n"
         "  \"kids_product\": <true|false - see KIDS' PRODUCTS: true ONLY when the subject is a product/app/game/toy/franchise whose end users are predominantly children under 13>,\n"
+        "  \"account_holder\": <true|false - true when the universe is defined by an action on an account (sign-ups, subscribers, members, paid, buyers, customers, shoppers, renters, bettors, cardholders): adults only, AGE '17 AND UNDER' = 0; false for viewers / listeners / players / fans>,\n"
         "  \"home_platform_rows\": [[\"STREAMING/PLATFORM\",\"Starz\"], ...] or [],\n"
         "  \"run_avid\": <true|false>,\n"
         "  \"subject_rows\": [[\"CATEGORY\",\"Value\"], ...],\n"
@@ -7577,6 +7588,21 @@ def _spec_from_draft(draft):
         'follower_platforms': (draft.get('follower_platforms')
                                 if audience_type_out != 'general' else None),
     }
+    # Account-holder universes are adults (Grace Yin, Amazon, 2026-11-10):
+    # the interpret step's `account_holder: true`, or the universe's own
+    # words (sign-ups, subscribers, members, buyers, customers, ...),
+    # zero AGE '17 AND UNDER' in tu_demos / avid_demos and stamp the flag
+    # so the engine, the enforcers and the cut sizing see one verdict. A
+    # viewers universe keeps the bucket and carries no flag.
+    try:
+        if draft.get('account_holder') is True:
+            spec['account_holder'] = True
+        from migration.adult_universe import apply_to_spec_demos as _ah_apply
+        _ah_apply(spec)
+        if spec.get('account_holder') is not True:
+            spec.pop('account_holder', None)
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     try:   # anchor_entity / geo_scope / political_lean ride the spec (2026-10-12); lazy so extracted copies of this function run
         __import__('prometheus.cohort_scope', fromlist=['apply_to_spec']).apply_to_spec(spec, draft)
     except Exception as _fx:
@@ -13349,6 +13375,7 @@ def _pm_panel_fact_response(pm_user, ppu, text, base):
     try:
         df, _etag = pma.load_profile_df(_H.s3_client, _H.S3_BUCKET, key)
         meta = pma._profile_meta(df, (base or {}).get('subject') or '')
+        meta['s3_key'] = key     # the key names an account-holder universe when the SUBJECT row does not (2026-11-10)
         # 2026-10-02 audit: the subject's own platform is not a brand
         # fact ("what % of Roku subscribers ..." on The Roku Channel
         # file read back "Roku reaches 18.4% of the audience"). That
@@ -14543,8 +14570,14 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             'deck_angle': None, 'not_quantifiable': 'model_decline'}
     _stage_note('composing the answer')
     _t_stage = time.monotonic()
+    # an age breakdown on an account-holder universe, or of an account
+    # action the ask names (sign-ups, paid, subscribers), is adults only
+    # (Grace Yin, Amazon, 2026-11-10); the ask and the base ride into
+    # every coherence pass of this read
+    _ah_ctx = {'question': str(text or ''),
+               'base_label': ' '.join(str((base or {}).get(k) or '') for k in ('subject', 's3_key', 'name'))}
     try:
-        res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)
+        res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series)
         # a creator-fit read is held to the subject's universe (the catalog's
         # projected US people, the thread's banked figure, Gen Pop) so it can
         # never disagree with the subject's profile (2026-10-20, Mark's
@@ -14647,7 +14680,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                   if isinstance(d, dict)), {})
                 if str(data2.get('action') or '').strip().lower() \
                         != 'decline':
-                    res2 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data2, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)
+                    res2 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data2, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series)
                     reply2 = pma.format_generated_metrics_reply(res2)
                     fam2 = ('strategy' if is_strategy
                             else res2.get('metric_family'))
@@ -14685,7 +14718,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                       if isinstance(d, dict)), {})
                     if str(data3.get('action') or '').strip().lower() \
                             != 'decline':
-                        res3 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data3, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)
+                        res3 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data3, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series)
                         reply3 = pma.format_generated_metrics_reply(
                             res3)
                         fam3 = ('strategy' if is_strategy
@@ -14730,7 +14763,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _trm = pmv.trim_unverified(
                 _ld, _last_verdict or verdict, base_lookup=_v_lookup, question=text,
                 recompute=lambda d: (lambda r: (r, pma.format_generated_metrics_reply(r)))(
-                    pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)),
+                    pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series)),
                 prior_entries=_pm_verify_prior_entries(_ld[1], _ld[3], led) if _ld[1] else [],
                 bound_facts=_purchase_facts, family=_ld[3] or fam0)
             if _trm:
@@ -14751,7 +14784,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                     _cmp = pmv.complete_cells(
                         _ld, (data, res, reply), question=text, dropped_labels=_dropped,
                         recompute=lambda d: (lambda r: (r, pma.format_generated_metrics_reply(r)))(
-                            pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan), _ds_series)),
+                            pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series)),
                         model_json=lambda p: (lambda r: (r.get('data') if r.get('success') else None))(
                             _pm_claude_json(pmv.COMPLETE_CELLS_SYSTEM_PROMPT, p, max_tokens=2500,
                                             temperature=0.1, usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])),

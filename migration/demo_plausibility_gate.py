@@ -368,11 +368,23 @@ def _load_genpop_demos(verbose=True):
 # ---------------------------------------------------------------------------
 
 def _build_user_prompt(subject, brand_category, persona_brief,
-                       demo_dists, genpop_demos):
+                       demo_dists, genpop_demos, account_holder=False):
     parts = [
         f"SUBJECT: {subject}",
         f"BRAND CATEGORY: {(brand_category or 'UNKNOWN').strip().upper()}",
     ]
+    if account_holder:
+        # Grace Yin (Amazon), 2026-11-10: an account-holder universe is
+        # adults; the reviewer must never put mass back under 18.
+        parts.append(
+            "ACCOUNT-HOLDER UNIVERSE (ADULTS ONLY): everyone in this "
+            "audience took an action on an account an adult holds (a "
+            "sign-up, a subscription, a membership, a purchase, a "
+            "rental, a bet, a card). AGE '17 and Under' is 0.0000 by "
+            "definition and is CORRECT; never flag AGE for it and never "
+            "return a corrected AGE distribution that puts any share "
+            "under 18. Judge the adult buckets only."
+        )
     if persona_brief:
         pb = str(persona_brief).strip()
         if len(pb) > 4000:
@@ -445,17 +457,58 @@ def _parse_response(raw):
 # Public API
 # ---------------------------------------------------------------------------
 
+def _is_adult_universe(subject, df, account_holder):
+    """The account-holder rule (2026-11-10): the caller's explicit flag,
+    or the subject label / the frame's SUBJECT and BRAND INPUT rows
+    naming an account action. Never raises."""
+    if account_holder is True:
+        return True
+    try:
+        try:
+            from migration.adult_universe import is_account_holder_universe
+        except ImportError:
+            from adult_universe import is_account_holder_universe  # type: ignore
+        labels = [subject]
+        try:
+            cats = df["Column"].astype(str).str.strip().str.upper()
+            for cat in ("SUBJECT", "BRAND INPUT"):
+                for v in df[cats == cat]["Value"].astype(str).tolist():
+                    if v and v.lower() != "nan":
+                        labels.append(v)
+        except Exception:
+            pass
+        return bool(is_account_holder_universe(*labels))
+    except Exception:
+        return False
+
+
+def _minor_label(label):
+    try:
+        try:
+            from migration.adult_universe import is_minor_age_label
+        except ImportError:
+            from adult_universe import is_minor_age_label  # type: ignore
+        return bool(is_minor_age_label(label))
+    except Exception:
+        return _norm_bucket(label) == _norm_bucket("17 and Under")
+
+
 def enforce_demo_plausibility(df, subject, persona_brief=None,
                               brand_category=None, *, s3_key=None,
                               genpop_demos=None,
                               claude_call: Optional[Callable] = None,
-                              verbose=True):
+                              verbose=True, account_holder=None):
     """Review the sum-to-100 demo categories against the subject's
     persona and auto-correct implausible ones. Returns (df, report).
 
     Never raises and never blocks the build: any failure returns the
     input frame unchanged with a loud log. A successful call that flags
     a category ALWAYS applies the correction (mandatory, not advisory).
+
+    account_holder (2026-11-10, Grace Yin): an account-holder universe
+    is adults. The prompt says so, and any corrected AGE distribution
+    the reviewer returns has its under-18 bucket forced to 0 before the
+    renormalize, so the review can never put minors back.
     """
     report = {"ran": False, "subject": subject, "categories": {},
               "n_corrected": 0}
@@ -483,8 +536,11 @@ def enforce_demo_plausibility(df, subject, persona_brief=None,
         if genpop_demos is None:
             genpop_demos = _load_genpop_demos(verbose=verbose)
 
+        adults_only = _is_adult_universe(subject, df, account_holder)
+        report["account_holder"] = bool(adults_only)
         user = _build_user_prompt(subject, brand_category, persona_brief,
-                                  demo_dists, genpop_demos)
+                                  demo_dists, genpop_demos,
+                                  account_holder=adults_only)
         call = claude_call or _default_claude_call
         try:
             raw = call(_SYSTEM_PROMPT, user)
@@ -549,8 +605,32 @@ def enforce_demo_plausibility(df, subject, persona_brief=None,
             pairs = []
             for _, label, bp in rows:
                 cv = corr_norm.get(_norm_bucket(label))
+                # Adults only (2026-11-10): the reviewer never puts
+                # mass back under 18 on an account-holder universe.
+                if adults_only and cat == "AGE" and _minor_label(label):
+                    cv = 0.0
                 pairs.append((label, cv if cv is not None else bp))
             new_pairs = _renorm_messy(subject, cat, pairs)
+            if adults_only and cat == "AGE":
+                # The messy renorm floors every bucket at 0.0101; the
+                # adult rule puts the under-18 bucket back to exactly 0
+                # and re-spreads the adults to 100 (shared helper).
+                try:
+                    try:
+                        from migration.adult_universe import (
+                            zero_minor_age_distribution,
+                        )
+                    except ImportError:
+                        from adult_universe import (  # type: ignore
+                            zero_minor_age_distribution,
+                        )
+                    fixed, _ = zero_minor_age_distribution(
+                        dict(new_pairs), subject)
+                    new_pairs = [(label, float(fixed.get(label, v)))
+                                 for label, v in new_pairs]
+                except Exception:
+                    new_pairs = [(label, (0.0 if _minor_label(label) else v))
+                                 for label, v in new_pairs]
             new_by_label = dict(new_pairs)
 
             for idx, label, _bp in rows:

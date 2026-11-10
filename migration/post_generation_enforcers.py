@@ -12316,8 +12316,15 @@ def enforce_qc_standing_anchors(df, subject, verbose=True):
 
 def run_all_enforcers(df, subject, brand_category=None, verbose=True,
                        target_year=None, follower_ceiling=None,
-                       keep_avid_row=False, carriage_doc=None):
+                       keep_avid_row=False, carriage_doc=None,
+                       account_holder=None):
     """Run every enforcer in order. Returns (df, total_changes).
+
+    account_holder (optional bool): the spec's explicit
+    ``account_holder`` flag (2026-11-10). True forces the adult
+    account-holder rule (17 AND UNDER = 0.0000); None lets
+    zero_minor_age_on_account_holder_universes detect the universe from
+    the subject label and the frame's SUBJECT / BRAND INPUT rows.
 
     target_year (optional): if provided (e.g. 2022 for a `Gen_Pop_2022.csv`
     generation), runs the anachronism check to zero / dampen brands that
@@ -12890,6 +12897,25 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer repair_demo_bracket_craters failed: {e}")
+
+    # 2026-11-10 (Grace Yin, Amazon, Hazbin Hotel Season 1 Prime
+    # sign-ups): an account-holder universe (sign-ups, subscribers,
+    # members, buyers, customers, ...) is adults, so its AGE block
+    # carries 17 AND UNDER at exactly 0.0000 with the adult buckets
+    # renormalized to 100. Runs AFTER the demo settle point (canonical
+    # buckets, renormalize, schema back-fill, crater repair) so nothing
+    # downstream puts mass back in the bucket, and BEFORE
+    # normalize_final_format / recompute_raw_and_projection so the
+    # chain finalizes from the adult shape. Viewers / listeners /
+    # players universes keep the bucket. Idempotent.
+    try:
+        df, n = zero_minor_age_on_account_holder_universes(
+            df, subject, verbose=verbose, account_holder=account_holder,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer zero_minor_age_on_account_holder_universes "
+              f"failed: {e}")
 
     # 2026-07-28 (pipeline hardening rail #5, WoF Avid defects 5/6/7/8):
     # final format normalizer. Runs immediately BEFORE
@@ -15541,6 +15567,134 @@ def repair_demo_bracket_craters(df, *, subject=None, verbose=True):
     return df, n_repaired
 
 
+def _frame_universe_labels(df):
+    """The frame's own words about its universe: the SUBJECT row value
+    and the BRAND INPUT persona / seed terms. Used by the adult
+    account-holder rule next to the subject label the caller passes."""
+    out = []
+    try:
+        cats = df['Column'].astype(str).str.strip().str.upper()
+        for cat in ('SUBJECT', 'BRAND INPUT'):
+            m = cats == cat
+            if m.any():
+                for idx in df.index[m]:
+                    v = str(df.at[idx, 'Value'] or '').strip()
+                    if v and v.lower() != 'nan':
+                        out.append(v)
+    except Exception:
+        pass
+    return out
+
+
+def zero_minor_age_on_account_holder_universes(df, subject, verbose=True,
+                                               *, account_holder=None):
+    """Account-holder universes are adults: the 17 AND UNDER age bucket
+    is 0.0000 (Grace Yin, Amazon, 2026-11-10: "We saw minors counted as
+    'sign-ups,' so it matters for an 18 to 34 cut").
+
+    A universe defined by an action an adult takes on an account
+    (sign-ups, new subscribers, subscribers, members, paid, purchasers,
+    buyers, customers, shoppers, renters, bettors, account holders,
+    cardholders, bank customers) cannot carry an under-18 share. The
+    canonical AGE schema always emits the bucket (19.3% in Gen Pop),
+    so the reasoned split on the Hazbin Hotel Season 1 Prime sign-ups
+    file shipped 17 AND UNDER at 4.6290 and the age reads printed it.
+
+    Detection: the subject label the writer passes (the display name /
+    spec name), the frame's SUBJECT row and BRAND INPUT persona, or an
+    explicit ``account_holder=True`` from the spec flag. Viewers /
+    listeners / players / fans universes keep the bucket.
+
+    Repair: the under-18 bucket(s) go to exactly 0.0000 and the adult
+    buckets renormalize to 100.0000 with subject-salted micro-jitter
+    (no 2dp boundary, no two equal values, the standing demo-sum
+    convention); Raw / Projection / Category Share recompute through
+    _set_bp. Idempotent: a frame already at 0 with adults on 100 is
+    untouched. Wired into run_all_enforcers (after the demo settle
+    point) and run_write_safety_net (cut paths run only the net).
+    Returns (df, n_rows_changed).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    try:
+        try:
+            from migration.adult_universe import (
+                is_account_holder_universe, is_minor_age_label,
+                zero_minor_age_distribution,
+            )
+        except ImportError:
+            from adult_universe import (  # type: ignore
+                is_account_holder_universe, is_minor_age_label,
+                zero_minor_age_distribution,
+            )
+    except Exception as e:
+        if verbose:
+            print(f"   ⚠️ zero_minor_age_on_account_holder_universes: "
+                  f"adult_universe unavailable ({e}); skipped")
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None or bp_col not in df.columns:
+        return df, 0
+    cats = df['Column'].astype(str).str.strip().str.upper()
+    m_age = cats == 'AGE'
+    if not m_age.any():
+        return df, 0
+    minor_idxs = [idx for idx in df.index[m_age]
+                  if is_minor_age_label(df.at[idx, 'Value'])]
+    if not minor_idxs:
+        return df, 0
+    if account_holder is not True:
+        frame_labels = _frame_universe_labels(df)
+        if not is_account_holder_universe(subject, *frame_labels):
+            return df, 0
+    # Sample size: the BRAND INPUT / SAMPLE SIZE row raw first (the
+    # canonical anchor), the walk-the-frame estimate as the fallback.
+    sample_size = None
+    try:
+        if raw_col:
+            for cat in ('BRAND INPUT', 'SAMPLE SIZE'):
+                m = cats == cat
+                if m.any():
+                    rv = str(df.at[df.index[m][0], raw_col]).replace(',', '').strip()
+                    if rv and rv.lower() != 'nan' and float(rv) > 0:
+                        sample_size = float(rv)
+                        break
+    except Exception:
+        sample_size = None
+    if not sample_size:
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    dist = {}
+    label_idxs = {}
+    for idx in df.index[m_age]:
+        lab = str(df.at[idx, 'Value']).strip()
+        bp = _bp(df.at[idx, bp_col])
+        if bp is None or pd.isna(bp):
+            bp = 0.0
+        dist[lab] = round(dist.get(lab, 0.0) + float(bp), 4)
+        label_idxs.setdefault(lab, []).append(idx)
+    fixed, changed = zero_minor_age_distribution(dist, subject or '')
+    if not changed:
+        return df, 0
+    n = 0
+    before = {k: round(v, 4) for k, v in dist.items()}
+    for lab, idxs in label_idxs.items():
+        new_v = float(fixed.get(lab, dist[lab]))
+        per_row = new_v if len(idxs) == 1 else new_v / len(idxs)
+        for idx in idxs:
+            old = _bp(df.at[idx, bp_col])
+            df = _set_bp(df, idx, per_row, bp_col, cs_col, raw_col,
+                         proj_col, sample_size)
+            if old is None or pd.isna(old) or abs(float(old) - per_row) >= 0.00005:
+                n += 1
+    if verbose and n:
+        minors_before = {k: before[k] for k in before if is_minor_age_label(k)}
+        print(f"   🔞 zero_minor_age_on_account_holder_universes "
+              f"[{subject or ''}]: account-holder universe is adults; "
+              f"AGE {minors_before} -> 0.0000, adult buckets renormalized "
+              f"to {sum(v for v in fixed.values()):.4f} ({n} row(s))")
+    return df, n
+
+
 def validate_income_monotonicity(df, *, subject=None, verbose=True):
     """Soft-warn on bimodal INCOME distributions.
 
@@ -17755,6 +17909,15 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         # BEFORE recompute_raw_and_projection + the CS recompute so
         # the canonical chain cascades the renormed BPs into Raw/Proj.
         ("renormalize_location_to_100", renormalize_location_to_100),
+        # 2026-11-10 (Grace Yin, Amazon): account-holder universes are
+        # adults; 17 AND UNDER is 0.0000 and the adult buckets sum to
+        # 100. The derived-cut paths (gender / age / avid cuts of a
+        # sign-ups or subscribers universe) run only this net, so the
+        # rule lives here as well as in run_all_enforcers. Runs BEFORE
+        # recompute_raw_and_projection so Raw / Proj cascade from the
+        # adult shape. Idempotent; viewers universes untouched.
+        ("zero_minor_age_on_account_holder_universes",
+         zero_minor_age_on_account_holder_universes),
         ("recompute_raw_and_projection", recompute_raw_and_projection),
         ("enforce_streaming_share_health", enforce_streaming_share_health),
         ("apply_recompute_category_share", apply_recompute_category_share),
