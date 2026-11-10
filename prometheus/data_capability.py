@@ -221,6 +221,12 @@ def question(text):
 def answer(text):
     """{'reply': 'Yes.', 'followups': [...]} for a yes-answerable question
     about what the data can show, else None."""
+    try:
+        from . import orders as _orders
+        if _orders.is_order(text):
+            return None      # an order is queued, never deflected (Grace Yin 2026-11-10)
+    except Exception:
+        pass
     if not is_data_capability_question(text):
         return None
     chip = question(text)

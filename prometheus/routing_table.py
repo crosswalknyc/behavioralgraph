@@ -124,6 +124,47 @@ ROWS = [
         'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'build_order', 'surface': 'interpret',
+        'reason': 'build_order', 'client_action': 'interpret',
+        'note': 'An order is queued, never deflected (Jenna 2026-11-10, Grace '
+                'Yin at Amazon). "Please queue one Profile IQ: US people who '
+                'watched Fallout Season 2 on Prime Video, Nov 1 2025 to Oct 31 '
+                '2026. Include reach, age and gender split ... Deliver as a CSV '
+                'with the unprojected panelist count for each figure" is an '
+                'imperative to queue a profile: it goes to the build flow with '
+                'the deliverable notes riding the brief, whatever keyword lane '
+                'the notes would otherwise wake (prometheus.orders.is_order). '
+                'A question about a build, a price, a status or a capability '
+                'is not an order.',
+        'examples': [('Please queue one Profile IQ: US people who watched Fallout Season 2 on Prime Video, Nov 1 2025 \u2013 Oct 31 2026. Include reach, age and gender split, top other titles and genres they watch, and their streaming platform mix. Deliver as a CSV with the unprojected panelist count for each figure.', False),
+                     ('Please queue one Profile IQ: US people who watched Fallout Season 2 on Prime Video, Nov 1 2025 \u2013 Oct 31 2026. Deliver as a CSV with the unprojected panelist count for each figure.', True),
+                     ('please queue those as separate Profile IQs (US only, Nov 1 2025 \u2013 Oct 31 2026), starting with #1 and #7', False),
+                     ('Queue a Profile IQ: US men aged 18 to 34, Nov 1 2025 to Oct 31 2026', False),
+                     ('run a profile on Taylor Swift and give me the raw count behind every figure', True),
+                     # the explicit orders that lived on build_or_other until 2026-11-10
+                     ("run a profile on mountain dew", True),
+                     ("can you build a profile for the toys category that is for the brand Lego?", True),
+                     ('Run a profile for Starz', False),
+                     ('can you build me a Nike profile', False),
+                     # an explicit profile order with a profile open is the build lane, whatever is on the
+                     # screen or armed (2026-10-20 Jenna: 'run a profile on mountain dew' with Ghost Energy
+                     # Drink open drew a $500 custom-read offer)
+                     ('build a profile on mountain dew', True),
+                     ('run aprofile on ncis: new york', True),
+                     ('pull a profile for Nike runners', True),
+                     # ask log 2026-10-21 (Jessie): a build verb, a consumer noun and a title with two slips
+                     # is a build order; the entity resolves, the gate never asks whether it is a build
+                     ('run a profile for Listerners of Ball in the Bonzo Family with Lonzo Ball', True),
+                     ('run a profile for listeners of New Heights', False),
+                     ('run a profile on mountan dew', True),
+                     ('build a profile for The Spiderwick Chronicles', False)],
+        'counter': [('did you queue the Fallout profile?', False),
+                    ('what does a profile cost?', False),
+                    ('what is the unprojected count behind the 6,195,357?', True),
+                    ("Don't build a new profile. Answer this from the open one", True),
+                    ('how long does a build take', False)],
+    },
+    {
         'id': 'dataset_build', 'surface': 'interpret',
         'reason': 'dataset_build', 'client_action': 'interpret',
         'note': 'A dataset on an audience is a Profile IQ build (Emmet Riley '
@@ -500,37 +541,20 @@ ROWS = [
         'reason': 'build_or_other', 'client_action': 'interpret',
         'note': 'A build order or a bare subject; the interpret step '
                 'drafts a brief for approval.',
+        # The explicit profile orders that used to sit here ("run a
+        # profile on mountain dew", "can you build me a Nike profile",
+        # "pull a profile for Nike runners") land on build_order since
+        # 2026-11-10 (same surface, the order read first); this row keeps
+        # the bare subjects and the build-shaped asks that are not orders.
         'examples': [
                      # ask log 2026-10-20 (I9)
-                     ("run a profile on mountain dew", True),
-                     # ask log 2026-10-20 (I9)
-                     ("can you build a profile for the toys category that is for the brand Lego?", True),
-                     # ask log 2026-10-20 (I9)
-                     ("Everybody Loves Raymond viewers on Amazon Prime Video, September 2026", False),('Run a profile for Starz', False),
+                     ("Everybody Loves Raymond viewers on Amazon Prime Video, September 2026", False),
                      ('Reba McEntire avid fans', False),
                      ('Nike', False),
-                     ('can you build me a Nike profile', False),
                      ('is there a way to build an audience of people who '
                       'have attended a Gunna concert?', False),
                      ('is there a way to build an audience of people who '
-                      'have attended a Gunna concert?', True),
-                     # an explicit profile order with a profile open is
-                     # the build lane, whatever is on the screen or
-                     # armed (2026-10-20 Jenna: 'run a profile on
-                     # mountain dew' with Ghost Energy Drink open drew
-                     # a $500 custom-read offer)
-                     ('run a profile on mountain dew', True),
-                     ('build a profile on mountain dew', True),
-                     ('run aprofile on ncis: new york', True),
-                     ('pull a profile for Nike runners', True),
-                     # ask log 2026-10-21 (Jessie): a build verb, a
-                     # consumer noun and a title with two slips is a
-                     # build order; the entity resolves, the gate never
-                     # asks whether it is a build (rule 60)
-                     ('run a profile for Listerners of Ball in the Bonzo Family with Lonzo Ball', True),
-                     ('run a profile for listeners of New Heights', False),
-                     ('run a profile on mountan dew', True),
-                     ('build a profile for The Spiderwick Chronicles', False)],
+                      'have attended a Gunna concert?', True)],
         'counter': [('who watches love island?', False),
                     # a correction inside the conversation never lands
                     # on the build row (Mark at Bent Pixels, 2026-10-20)

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "56da421af5c3ea61100afc91cd3e9ec0be8b20625b46ce1c54d858fe12b6f6e0",
+ "content_hash": "2a1a1b21df7622a0b323fb9ba69335d956161ba2224fa18acc498a68ed21e4f6",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -885,7 +885,40 @@
     "prometheus-brain.md",
     "crosswalk-design/SKILL.md"
    ]
+  },
+  {
+   "id": "orders_counts_and_the_raw_column",
+   "decided": "2026-11-10",
+   "statement": "A message that is an order, an imperative to run, build, pull, set up, start or open a product ('please start one Profile IQ: US people who watched Fallout Season 2 on Prime Video, Nov 1 2025 to Oct 31 2026 ...'), is started through that product's build flow first, whatever other words ride behind it: an order that also says unprojected, reconcile, how many, raw or what does it cost is still an order, and it is never answered with a question about which number to bring back or told to say 'run a profile on X'. The notes behind the order (include reach, the age and gender split, the titles and genres, the platform mix; deliver as a CSV) are requirements on the file and ride the brief; the window written into the order binds; the platform the client named is strict. An unlimited seat reads 'Included with your plan.' and the build starts with no approve chip; the only question back is the subject when the words leave it open. Every row of a Profile IQ CSV carries the projected US figure and the count inside the 10 million US consumers we measure (the Raw column), so an unprojected count for each figure is already in the file; say so in those words. The reader's words map to the house words: a member of the data is a person inside the 10 million US consumers we measure; the reader's base or measured set is the 10 million we measure; unprojected, raw, before projection, people in the data and a count without scaling all mean the Raw column; reach is the projected US audience with the Avid tier beside it; an index is against the average American, 100 = average. A methodology question (which devices the data covers, whether viewing time per sitting is measured, where age comes from, how many of a group sit inside the ten million) is answered directly and plainly, never with a read, a build or a chip.",
+   "match_terms": [
+    "please start",
+    "run a profile",
+    "build a profile",
+    "pull a profile",
+    "profile iq",
+    "order",
+    "unprojected",
+    "raw count",
+    "raw number",
+    "before projection",
+    "people in the data",
+    "raw column",
+    "reach",
+    "included with your plan",
+    "deliver as a csv",
+    "csv with",
+    "for each figure",
+    "which devices",
+    "desktop software",
+    "watch duration",
+    "own age",
+    "how many men",
+    "how many people in your data"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-06T04:41:14Z"
+ "generated_at": "2026-11-10T22:05:29Z"
 }

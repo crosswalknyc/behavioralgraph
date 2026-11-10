@@ -1180,6 +1180,17 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Renters', 'Spectrum Churners', 'Amazon Prime Members', 'ISP "
         "Switchers' stay whole. Those define the universe itself and "
         "are NOT demographic cuts.\n"
+        "  * DELIVERABLE NOTES (2026-11-10): sentences after an order "
+        "that say what the FILE must carry ('Include reach, age and "
+        "gender split, top other titles and genres they watch, and "
+        "their streaming platform mix. Deliver as a CSV with the "
+        "unprojected count for each figure') are requirements on the "
+        "deliverable, never a second subject and never add-on cuts; "
+        "the universe is the one the order names ('US people who "
+        "watched Fallout Season 2 on Prime Video'), the window written "
+        "into the order is `date_range` with `date_range_explicit` "
+        "true, and the demographic splits named in the notes are the "
+        "profile's own rows, not cuts.\n"
         "  * Downstream naming is automatic: TU = '{subject}', avid = "
         "'{subject} - Avid Fan', each cut = '{subject} - {cut}' "
         "('Go-GURT - 18-24'). You never emit file names - just keep "
@@ -5803,6 +5814,55 @@ def api_synth_chat_interpret():
     return _pm_interpret_core(user, body, text, history)
 
 
+def _pm_auto_start_order(user, spec_draft, order_text, dec, clarify_steps, chip_options, body):
+    """An unlimited seat's explicit order starts building in the same turn
+    (Jenna 2026-11-08: included with your plan, no price, no chip;
+    2026-11-10, Grace Yin: an order is queued, never deflected). Returns
+    the Flask response the widget renders as the build turn, or None
+    when the brief still needs the reader (a clarify step, an identity
+    picker, a paying seat, a reuse or a cut, a probe)."""
+    if not isinstance(spec_draft, dict) or clarify_steps or chip_options:
+        return None
+    if str(dec or '').strip().lower() not in ('new_build', 'time_shifted_refresh', 'cut_needs_parent'):
+        return None
+    if isinstance(body, dict) and body.get('_pm_no_auto_start'):
+        return None
+    from prometheus import orders as _orders
+    from prometheus.priced_read import included_with_plan as _incl
+    _otext = str((body or {}).get('_pm_order_text') or order_text or '')
+    if not _orders.is_order(_otext):
+        return None
+    _uname = (session.get('username') or (user or {}).get('username') or '').strip()
+    if not _incl(user, _uname, None):
+        return None
+    if _pm_probe_caller() or _faults.is_probe() or _pm_is_probe_user(_uname):
+        return None      # a probe grades the brief; nothing queues
+    _email = str((user or {}).get('email') or '').strip()
+    resp = _pm_approve_core(user, {'spec_draft': spec_draft, 'run_avid': bool(spec_draft.get('run_avid', True)),
+                                   'email_to': _email})
+    _status = 200
+    if isinstance(resp, tuple):
+        resp, _status = resp[0], (resp[1] if len(resp) > 1 else 200)
+    try:
+        data = resp.get_json(silent=True) or {}
+    except Exception:
+        data = {}
+    if _status != 200 or not data.get('success') or not data.get('run_id'):
+        return resp if _status == 200 else (resp, _status)   # the approve path's own guidance stands (a duplicate, a hold)
+    _name = str(data.get('subject') or spec_draft.get('subject') or spec_draft.get('name') or '')
+    _win = str(spec_draft.get('date_window_label') or '').split(' (')[0].strip()
+    reply = _orders.build_line(_name, _win, avid=bool(data.get('run_avid', True)), included=True,
+                               pending_position=data.get('pending_position'), notes=spec_draft.get('deliverable_notes') or '')
+    out = dict(data)
+    out.update({'auto_started': True, 'included_with_plan': True, 'message': reply, 'reply': reply,
+                'subject': _name, 'followups': []})
+    try:
+        _pm_ask_hint(route='build_order', outcome='queued', subject=_name)
+    except Exception as _fx:
+        _faults.note('chat', _fx)
+    return jsonify(out)
+
+
 def _pm_interpret_core(user, body, text, history):
     """The interpret surface for an already-gated user.
 
@@ -6163,6 +6223,23 @@ def _pm_interpret_core(user, body, text, history):
     except Exception as _fx:
         _faults.note('chat', _fx)
         _platform_hit = None
+    # An order's deliverable notes ride the brief, never the subject read
+    # (Grace Yin 2026-11-10, prometheus.orders): "Include reach, age and
+    # gender split, top other titles ... Deliver as a CSV with the
+    # unprojected panelist count for each figure" are requirements on the
+    # file, not cuts and not a second subject. The model reads the order
+    # alone; the notes land on the draft and the spec, and the confirm
+    # says what the file carries.
+    _order_text, _order_notes = text, ''
+    try:
+        from prometheus import orders as _orders
+        _oc, _order_notes = _orders.split(text)
+        if _order_notes and _oc:
+            print(f"[synth-chat interpret] deliverable notes set aside: {_order_notes[:160]!r}")
+            text = _oc
+    except Exception as _fx:
+        _faults.note('chat', _fx)
+        _order_notes = ''
     # A single compound behavioral audience ("anyone who watched X and
     # any one of the following A, B, C on streaming") is ONE build, not
     # a batch - never let the list OR Cartesian splitters shatter it
@@ -6999,6 +7076,21 @@ def _pm_interpret_core(user, body, text, history):
                         'action': 'identity_picker'}}
             except Exception as _fx:
                 _faults.note('chat', _fx)
+        if _order_notes and isinstance(spec_draft, dict):
+            spec_draft['deliverable_notes'] = str(_order_notes)[:600]
+        # Orders beat chips (Grace Yin 2026-11-10, prometheus.orders): an
+        # explicit order on an unlimited seat queues the brief in this same
+        # turn, no approve chip, when nothing is left to ask (no clarify
+        # step, no identity picker, a fresh build). The reply is the build
+        # line plus what the file carries. A paying seat still reads the
+        # brief and approves; a probe never queues.
+        try:
+            _auto = _pm_auto_start_order(user, spec_draft, _order_text, _dec_norm, clarify_steps, _chip_options, body)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
+            _auto = None
+        if _auto is not None:
+            return _auto
         spec_draft['price_table'] = _ptab = _pm_price_table()  # money, not credits
         return jsonify({
             'success': True,
@@ -7607,6 +7699,13 @@ def _spec_from_draft(draft):
         __import__('prometheus.cohort_scope', fromlist=['apply_to_spec']).apply_to_spec(spec, draft)
     except Exception as _fx:
         _faults.note('chat', _fx)
+    # The deliverable notes an order carried (Grace Yin 2026-11-10,
+    # prometheus.orders): what the file must carry, on the spec so the
+    # confirm and the ready notice can say it. Requirements, never a
+    # second subject and never a cut.
+    _dn = draft.get('deliverable_notes') if isinstance(draft, dict) else None
+    if isinstance(_dn, str) and _dn.strip():
+        spec['deliverable_notes'] = _scrub(_dn, field='deliverable_notes', subject=subject, max_len=600, single_line=True)
     # ---- Platform scope passthrough (2026-09-04, Jenna perceptionbox
     # rerun). Normalized here so the engine host sees a validated list
     # of canonical platform keys or None. Draft may set the field or
@@ -8387,7 +8486,16 @@ def api_synth_chat_approve():
     except Exception as e:
         _H._chatbot_error_email('brief-chat/approve', e)
         return jsonify(_H._chatbot_calm_payload())
+    return _pm_approve_core(user, body)
 
+
+def _pm_approve_core(user, body):
+    """The approve surface for an already-gated user and a parsed body.
+    Split out of api_synth_chat_approve (2026-11-10, prometheus.orders):
+    the route above runs it on the widget's Approve, and the interpret
+    core runs it in the same turn for an unlimited seat's explicit order
+    (no approve chip, Jenna 2026-11-08 and 2026-11-10). Returns a Flask
+    response exactly as the route did."""
     draft = body.get('spec_draft') or {}
     if not isinstance(draft, dict) or not any(draft.get(k) for k in ('subject', 'display_name', 'name', 'subject_name', 'decision')):
         # No draft, nothing to run (2026-10-15, Emmet at Kartel): guidance the reader can act on, never the working-on-it promise, no ops email.

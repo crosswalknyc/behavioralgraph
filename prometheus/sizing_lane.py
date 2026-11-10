@@ -236,6 +236,12 @@ def is_scope_ask(text):
         return False
 
 
+_PERIOD_SPLIT_RX = re.compile(
+    r"\b(?:each|every|per|by) (?:quarter|month|week|year|day)\b|\bquarter (?:by|over) quarter\b|\bmonth (?:by|over) month\b|"
+    r"\b(?:new|first[- ]time) (?:vs\.?|versus|against|and|or) (?:returning|repeat|existing|lapsed)\b|"
+    r"\bq[1-4] \d{4} (?:to|through|-) q[1-4] \d{4}\b", re.I)
+
+
 def wants_sizing(text):
     """A question about how many people an audience holds."""
     t = ' '.join(str(text or '').split())
@@ -243,6 +249,14 @@ def wants_sizing(text):
         return False
     if not _SIZE_WORDS_RX.search(t) or _INSTRUCTION_RX.search(t) or _NOT_SIZING_RX.search(t):
         return False
+    try:
+        from . import orders as _orders
+        if _orders.is_order(t):
+            return False   # an order is queued, never deflected (Grace Yin 2026-11-10)
+    except Exception:
+        pass
+    if _PERIOD_SPLIT_RX.search(t):
+        return False   # "how many people each quarter ... were new vs returning" is a counted read by period, never a size quote (Grace Yin 2026-11-09)
     if is_reconcile_ask(t):
         return False   # "reconcile these ... state one universe definition, one window, the unprojected ..." reads the record
     if is_scope_ask(t):

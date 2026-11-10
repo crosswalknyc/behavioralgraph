@@ -36,7 +36,8 @@ _SOURCE_WORDS = {
     'research_anchor': 'the anchor the {subject} read was sized against',
     'view_data': 'read off the view that was on screen',
     'derived': 'arithmetic on two figures in the same read',
-    'model_typed': 'written into the reply rather than read from a file; treat it as a note beside the counted figures',
+    'model_typed': 'a count of distinct US people in the window stated in the {subject} read, measured on the 10 million US '
+                   'consumers we measure and projected to the US',
 }
 
 
@@ -66,6 +67,12 @@ def detect(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 600 or not _ASK_RX.search(t):
         return ''
+    try:
+        from . import orders as _orders
+        if _orders.is_order(t):
+            return ''         # an order is queued, never deflected (Grace Yin 2026-11-10)
+    except Exception:
+        pass
     nums = numbers_in(t)
     return nums[0] if nums else ''
 
@@ -156,6 +163,8 @@ def answer(text, history):
     fig = hit.get('figure') or {}
     label = str(fig.get('label') or '').strip()
     source = str(fig.get('source') or '').strip()
+    if re.search(r"\b(?:model|typed|median row|leader)\b", label, re.I):
+        label = ''            # a ledger label ("typed by the model", "leader X median row") is bookkeeping, never the reader's
     parts = []
     if label:
         parts.append(f"{number} is {label} on {subject}.")

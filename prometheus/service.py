@@ -369,6 +369,12 @@ def _interpret_body(body, text, history, tid=None):
             out[k] = body[k]
     if isinstance(body.get('reading'), dict):
         out['reading'] = body['reading']
+    # an explicit order rides to the build flow as one (prometheus.orders,
+    # 2026-11-10): the core sets its deliverable notes aside for the brief
+    # and an unlimited seat's order starts with no approve chip
+    if body.get('_pm_order'):
+        out['_pm_order'] = True
+        out['_pm_order_text'] = str(body.get('_pm_order_text') or text)
     return out
 
 
@@ -605,6 +611,28 @@ def ask(user, body, *, via='session'):
         open_tabs = len((ctx or {}).get('other_tabs') or [])
     except Exception as _fx:
         _faults.note('service', _fx)
+
+    # An order is queued, never deflected (Jenna 2026-11-10, Grace Yin,
+    # prometheus.orders): an imperative to queue / run / build / pull /
+    # set up / start a product routes to that product's build or brief
+    # flow first. The deterministic keyword lanes below (reconcile, US
+    # scope, number provenance, unprojected, sizing, definitions,
+    # capability, the standing answers, the multi-ask splitter, the
+    # product facts, the fast status check) step aside for it, however
+    # many deliverable notes, windows, figures or "unprojected" words
+    # ride behind the order; understand.decide reads a profile order as
+    # the interpret surface. The lanes that resolve an armed step or an
+    # offer (cancel, the wizards, acceptance, referents, short replies,
+    # the continuation read) keep their place ahead of it.
+    _is_order = False
+    try:
+        from . import orders as _orders
+        _is_order = bool(_orders.is_order(text)) and not _armed(body)
+        if _is_order:
+            body = dict(body, _pm_order=True, _pm_order_text=text)
+    except Exception as _fx:
+        _faults.note('service.orders', _fx)
+        _is_order = False
 
     # lane: intake_cancel
     # Cancel means gone, and a new thread starts clean (Jenna 2026-11-05:
@@ -1031,7 +1059,7 @@ def ask(user, body, *, via='session'):
     # sizing, never the open profile, never a model call or a charge.
     # Ahead of number_provenance: one figure's origin is provenance, two
     # or more that must agree is a reconciliation.
-    if not _armed(body):
+    if not _armed(body) and not _is_order:
         try:
             from . import reconcile_lane as _rcl
             _rc_raw = _rcl.answer(text, history, ctx=ctx) if _rcl.wants_reconcile(text) else None
@@ -1063,7 +1091,7 @@ def ask(user, body, *, via='session'):
     # projected to the US. No model call, nothing re-run, never priced.
     # Ahead of number_provenance, the continuation gate, the Reader, the
     # sizing lanes and the open-profile binding, on both surfaces.
-    if not _armed(body):
+    if not _armed(body) and not _is_order:
         try:
             from . import us_scope as _uss
             _us_raw = _uss.answer(text, history, ctx=ctx) if _uss.wants_us_scope(text) else None
@@ -1088,7 +1116,7 @@ def ask(user, body, *, via='session'):
     # the read that carried the figure, the sentence, its label and how
     # it was counted (2026-10-30 audit, item 5: Alexia got a status update
     # twice and then "12 is not one of the brands we carry").
-    if not _armed(body):
+    if not _armed(body) and not _is_order:
         try:
             from . import number_provenance as _np
             _np_raw = _np.answer(text, history)
@@ -1117,7 +1145,7 @@ def ask(user, body, *, via='session'):
     # million we measure with the one factor in prometheus.projection.
     # Never a quote, never the model; a size ask on a subject not on
     # file falls through to the sizing lane.
-    if not _armed(body):
+    if not _armed(body) and not _is_order:
         try:
             from . import unprojected as _unp
             _unp_raw = _unp.answer(text, history, ctx=ctx) if _unp.wants_unprojected(text) else None
@@ -1399,7 +1427,7 @@ def ask(user, body, *, via='session'):
     # facts the client guide carries. Never a build, never a quote. A
     # bulk ORDER with the list attached stays the bulk door's; a valuation
     # order that names its subject stays the wizard's.
-    if referent_decision is None and not _armed(body):
+    if referent_decision is None and not _armed(body) and not _is_order:
         _pf_raw = None
         try:
             from . import product_facts as _pf
@@ -1605,7 +1633,7 @@ def ask(user, body, *, via='session'):
         _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
         return env, 200
     # lane: standing
-    if referent_decision is None and not _armed(body):
+    if referent_decision is None and not _armed(body) and not _is_order:
         _standing = _standing_answer(text, user=user, uname=uname)
         if _standing is None:
             # A journey-figure question reads from the delivered journey
@@ -1636,7 +1664,7 @@ def ask(user, body, *, via='session'):
     # itemized quote, metered and free parts answer alongside; Approve
     # charges each part at its quoted price and runs each read. One
     # question is one question and the lane steps aside.
-    if referent_decision is None and not body.get('_multi_part') and not body.get('_meta_replay') \
+    if referent_decision is None and not _is_order and not body.get('_multi_part') and not body.get('_meta_replay') \
             and _client_surface != 'interpret':
         try:
             from . import multi_ask as _multi
@@ -1730,7 +1758,7 @@ def ask(user, body, *, via='session'):
     # fall through to a compiled read. Where-watched is never here: it is
     # the free lane above. A library question that missed ("do we have
     # anything on Polymarket?") is not sized either.
-    if referent_decision is None and not (_exists_ask and not _armed(body)):
+    if referent_decision is None and not _is_order and not (_exists_ask and not _armed(body)):
         try:
             from . import priced_read as _pr
             _ex = body.get('extra') if isinstance(body.get('extra'), dict) else {}
@@ -1771,7 +1799,7 @@ def ask(user, body, *, via='session'):
     # do I find the oprah podcast data?" and "why did this query fail?" paid
     # the reader's 15 to 18 s for a lookup). Same lane, same guards, earlier;
     # a miss falls through to the reader and the later status lane.
-    if referent_decision is None and not _armed(body):
+    if referent_decision is None and not _armed(body) and not _is_order:
         try:
             from . import status_lane as _stl_f
             from . import deliverables as _dlv_f
@@ -2052,7 +2080,7 @@ def ask(user, body, *, via='session'):
     # X customers: quoted in priced_read.service_turn above. This
     # standing call is the fail-safe when classify missed (panel-self
     # still answers free). Never the panel line when an audience is named.
-    if referent_decision is None and not _armed(body):
+    if referent_decision is None and not _armed(body) and not _is_order:
         try:
             from . import sizing_lane as _szl, guards as _gs
             _sz = _szl.answer(text, ctx, host=host, history=history, staff=_gs.is_staff(user))
@@ -2214,7 +2242,7 @@ def ask(user, body, *, via='session'):
     # journey: answer from the breakdown the file holds, or build it once
     # and write it onto the page under the row. Never a fresh read that
     # cannot be checked, never the calm line.
-    if referent_decision is None and not _armed(body):
+    if referent_decision is None and not _armed(body) and not _is_order:
         try:
             from . import drilldown as _dd
             _dd_raw = _dd.answer(text, uname, ctx=ctx, tid=tid) if (_dd.looks_like_drilldown(text) or _dd.looks_like_definition(text)) else None
@@ -2248,7 +2276,7 @@ def ask(user, body, *, via='session'):
     # builds named "I.e Can I Cut ..." and "2Q 2026 Can I Cut ...". A
     # question about what the product does gets the answer, not a
     # draft and never a batch.
-    if referent_decision is None and not _armed(body):
+    if referent_decision is None and not _armed(body) and not _is_order:
         try:
             from . import guards as _g
             _cap = _g.capability_answer(text)
@@ -2291,6 +2319,17 @@ def ask(user, body, *, via='session'):
             if _own.get('surface') == 'analyze' and str(_own.get('reason') or '') in (
                     'question', 'subiq_lookup', 'capability_question', 'compare_open',
                     'data_open'):
+                forced = ''
+        except Exception as _fx:
+            _faults.note('service', _fx)
+    # The mirror (Grace Yin 2026-11-10): a client sitting on the analyze
+    # surface sends an explicit profile order there ("Please queue one
+    # Profile IQ: ..."); the order is the build flow's, so the server's
+    # own read stands and the analyze client is handed off to it below.
+    if forced == 'analyze' and _is_order and referent_decision is None and not _armed(body):
+        try:
+            from . import orders as _ord_f
+            if _ord_f.is_profile_order(text):
                 forced = ''
         except Exception as _fx:
             _faults.note('service', _fx)
@@ -2511,6 +2550,22 @@ def _standing_answer(text, user=None, uname=''):
                     'deck_angle': None, 'not_quantifiable': gate.get('domain')}
     except Exception as _fx:
         _faults.note('service', _fx)
+    try:
+        # A methodology question is answered directly, one or a numbered
+        # list of them (Grace Yin 2026-11-10: device coverage, viewing time
+        # per sitting, the source of age, how many men 18 to 34 are in the
+        # data; prometheus.methodology_answers). Never a read, a build or
+        # a chip.
+        from . import methodology_answers as _ma
+        _ma_raw = _ma.answer(text, host=host)
+        if _ma_raw:
+            try:
+                host.ask_hint(route='methodology', outcome='answered')
+            except Exception:
+                pass
+            return _ma_raw
+    except Exception as _fx:
+        _faults.note('service.methodology_answers', _fx)
     try:
         from . import guards as _g
         if _g.is_provenance_question(text):

@@ -118,6 +118,12 @@ def _question_shaped(sentence, whole):
 
 def wants_us_scope(text):
     """A question about whether figures in hand are US or global."""
+    try:
+        from . import orders as _orders
+        if _orders.is_order(text):
+            return False      # an order is queued, never deflected (Grace Yin 2026-11-10)
+    except Exception:
+        pass
     if not enabled():
         return False
     t = ' '.join(str(text or '').split())

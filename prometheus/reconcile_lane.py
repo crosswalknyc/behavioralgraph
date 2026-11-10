@@ -78,6 +78,7 @@ _CUE_RX = re.compile(
     r"\b(?:do not|don'?t|doesn'?t|does not|cannot|can'?t|won'?t|will not|did not|didn'?t) (?:agree|match|reconcile|line up|add up|square|tie out|tie)\b|"
     r"\b(?:disagree|contradict(?:s|ed|ory|ion)?|inconsistent|conflicting|mismatch(?:ed|es)?)\b|"
     r"\bwhich (?:of (?:these|those|them)|one|number|figure|total|answer) is (?:right|correct|the right one|the one to use)\b|"
+    r"\bwhich is (?:right|correct|the right one|the one to use)\b|\bhow do the two (?:definitions|numbers|figures|counts|reads|bases) differ\b|"
     r"\bwhy (?:do|are|did|would) (?:these|those|they|the (?:numbers|figures|totals|answers)) (?:differ|different|not (?:the same|agree|match)|so different|so far apart)\b|"
     r"\bone window\b|\bone (?:universe|definition|base)\b|\bsame (?:universe|definition|basis)\b", re.I)
 _PRIOR_RX = re.compile(
@@ -166,6 +167,12 @@ def wants_reconcile(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 900 or _NOT_RX.search(t):
         return False
+    try:
+        from . import orders as _orders
+        if _orders.is_order(t):
+            return False      # an order is queued, never deflected (Grace Yin 2026-11-10)
+    except Exception:
+        pass
     # A numbered list of two or more questions is several asks; each
     # routes on its own through prometheus.multi_ask (Grace Yin
     # 2026-11-08: four numbered questions on how a Prime activation and

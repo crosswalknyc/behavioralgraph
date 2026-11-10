@@ -368,6 +368,24 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         d.update(surface='deck', reason='deck_ask')
         return d
 
+    # 2a0. An order is queued, never deflected (Jenna 2026-11-10, Grace
+    #      Yin: "Please queue one Profile IQ: US people who watched
+    #      Fallout Season 2 on Prime Video, Nov 1 2025 - Oct 31 2026.
+    #      Include reach, age and gender split, ... Deliver as a CSV with
+    #      the unprojected panelist count for each figure" was read as a
+    #      dimension split and then taken by the unprojected lane). An
+    #      imperative to queue / run / build / pull a profile is the
+    #      interpret surface, whatever deliverable notes, dates or
+    #      figure words ride behind it (prometheus.orders). Orders for
+    #      the other products keep their own lanes above and below.
+    try:
+        from . import orders as _ord
+        if _ord.is_profile_order(t):
+            d.update(surface='interpret', reason='build_order')
+            return d
+    except Exception:
+        pass
+
     # 2a. A dataset on an audience is a Profile IQ build (Emmet Riley
     #     2026-10-26: "Can you help me query a dataset on UVA consumers
     #     for the unversity of virgina https://www.virginia.edu/" ran as

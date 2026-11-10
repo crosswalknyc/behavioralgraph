@@ -82,7 +82,11 @@ REGISTRY = {
     'interpret.rulebook.full': {
         'version': '2026.10.14', 'owner': 'build drafting', 'loader': lambda: _rulebook(candidates=[{'s3_key': 'x', 'display_name': 'X'}], reading=None),
         # budget = current size (re-baselined 2026-11-08 for the Nov 6 catalog-identity and question-universe rules Jenna mandated);
-        # only shrinks from here except for a new rule Jenna mandates, which re-baselines with a dated note
+        # only shrinks from here except for a new rule Jenna mandates, which re-baselines with a dated note.
+        # 2026-11-10 (Jenna, Grace Yin): the DELIVERABLE NOTES bullet joined SUBJECT NAMING + EMBEDDED CUTS (an order's
+        # "include reach, the age and gender split ... deliver as a CSV" is a requirement on the file, never a cut or a
+        # second subject). That section prunes out of the worst case measured here, so the measured size and the budget
+        # stay at 13,405; a build order with notes reads the bullet (about 120 tokens) inside its own pruned book.
         'budget_tokens': 13405, 'target_tokens': 9000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'the whole rulebook with candidates (worst case); 19,838 before the 2026-10-14 diet'},

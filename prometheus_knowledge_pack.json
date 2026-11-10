@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "00800942730ba68953c1f7059c573ae6d6170560d80449e6f1f66966859c967d",
- "examples_hash": "03bc26bf213a4fbf2c48ebac74c55ecb74ed46cb6916fee13b882356616b6ff9",
+ "content_hash": "ca1501655bb9e5b0ccbaeacac9fdaf03b9acb9ea7b8cf30a06f788f4ff2b8a50",
+ "examples_hash": "97c32b21f8faa8e76fe6b1d92abf587994d3e48969c683740765fa11db4a096e",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "64b5f1894a0f7f475cdf92b5edc583089cbd911282b10c8e91cadfe6d801705e",
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "aa202026f27ec733ee3a0bc33c404723455bc84c432f13dd8033534683a5c613",
   ".cursor/skills/crosswalk-design/SKILL.md": "3820d5b6a581e967d3272d7652cc9cbc9f9d7166945597965ba654114f4d75ad",
   ".cursor/skills/crosswalk-design/references/company.md": "ac29b7962918715d9b337a01f23befb4990b4af6c7afb3cf50fdb6a493b64d83"
  },
@@ -149,10 +149,10 @@
    "text": "On Olipop:\n\nThe age profile is front-loaded on 25-34: 2,756,599 people, 29.7% of the audience and an index of 225 against the average American.\n\nProjected US audience: 9,281,209, Core 25-44 audience: 4,926,301, Share under 35: 50.6%.\n\nAge band mix, Oct 31 2025 to Oct 31 2026 (share of the projected US audience)\n- 25-34: 29.7% share. largest band, index 225, 2,756,599 people\n- 35-44: 23.4% share. index 173, 2,169,702 people\n- 18-24: 18.3% share. index 188, 1,695,498 people\n- 45-54: 14.2% share. index 111, 1,316,595 people\n- 55-64: 7.7% share. index 62, 715,711 people\n- 65 or older: 4.1% share. index 22, 382,915 ..."
   },
   "audience_sizing": {
-   "subject": "My Life with the Walter Boys",
-   "title": "My Life with the Walter Boys | US Wattpad readers of My Life with the Walter Boys | Dec 7 2023 to Nov 5 2026",
-   "q": "how many wattpad readers of my life with the walter boys watched any episode of any season on netflix and in turn did people who watched the show drive readership of the wattpad?",
-   "text": "149,739 of the 219,237 US Wattpad readers of My Life with the Walter Boys watched an episode on Netflix, and the traffic ran harder the other way: 97,418 people opened the Wattpad original for the first time only after the show.\n\nUS Wattpad readers of the title: 219,237, Readers who watched the Netflix series: 149,739, Reader to viewer crossover rate: 68.3%.\n\nReading start window relative to the series mix, Dec 7 2023 to Nov 5 2026 (share of the 97,418 show-driven first reads on Wattpad)\n- Season 1 premiere month (Dec 7 2023 to Jan 7 2024): 38.4% share. 37,409 first reads, the largest spike in the series ..."
+   "subject": "My Life with the Walter Boys (Season 3 cut vs full viewers universe)",
+   "title": "My Life with the Walter Boys (Season 3 cut vs full viewers universe) | Season 3 watchers | Dec 7 2023 to Nov 5 2026 (Season 3 plays from Aug 6 2026)",
+   "q": "Compare the Season 3 cut against the full Walter Boys universe",
+   "text": "On My Life with the Walter Boys (Season 3 cut vs full viewers universe) - Season 3 watchers:\n\nOn people who watched My Life with the Walter Boys in the window: the Season 3 cut is 8,146,329 viewers, 59.3% of the 13,742,586 full universe, and it pulls 1,489,237 people who had never played the title before Aug 6 2026.\n\nFull universe, projected US viewers: 13,742,586, Season 3 cut, projected US viewers: 8,146,329, Season 3 reach of the universe: 59.3%.\n\nAge band mix, Dec 7 2023 to Nov 5 2026 (Season 3 plays from Aug 6 2026) (share of the 8,146,329 Season 3 cut viewers; penetration is that band's Season 3 reach ..."
   },
   "category_demand": {
    "subject": "Paw Patrol Series",
@@ -209,5 +209,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-11-06T04:41:14Z"
+ "generated_at": "2026-11-10T22:05:29Z"
 }

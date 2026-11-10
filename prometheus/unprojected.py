@@ -160,6 +160,12 @@ def wants_unprojected(text):
     t = _clean(text)
     if not t or len(t) > 600 or not _ASK_RX.search(t):
         return False
+    try:
+        from . import orders as _orders
+        if _orders.is_order(t):
+            return False      # an order is queued, never deflected (Grace Yin 2026-11-10): "Deliver as a CSV with the unprojected count" rides the brief
+    except Exception:
+        pass
     if re.search(r"\braw (?:data|file|csv|export|rows|table|download)\b", t, re.I) and not quoted_figures(t) \
             and not re.search(r"\b(?:number|count|figure|how many|total)\b", t, re.I):
         return False
@@ -314,8 +320,10 @@ def answer(text, history=None, ctx=None):
         if not _REF_RX.search(t):
             if not explicit(t):
                 return None       # a new count on a subject not on file: the sizing lane's (priced) read
+            # one line, the question only: never "say run a profile on X" (an order was never this lane's to ask for;
+            # a reader who already said it was being told to repeat herself, Grace Yin 2026-11-10)
             reply = (f"I do not hold a profile on {named} yet, so there is no figure to bring back to {TEN_M_PHRASE}. "
-                     f"Give me the projected number you are looking at and I will unproject it, or say 'run a profile on {named}'.")
+                     f"Which projected number should I unproject?")
             return _payload(reply, False, basis='no_profile', subject=named)
     # 3. the figure the last read in the thread carried
     if not named or _REF_RX.search(t):

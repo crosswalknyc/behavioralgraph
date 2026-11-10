@@ -93421,6 +93421,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         'Sample check complete.');
                     return;
                 }
+                if (data.auto_started && data.run_id) {
+                    // An order on an unlimited seat started building in
+                    // this same turn (Jenna 2026-11-08 / 2026-11-10,
+                    // prometheus.orders): no approval card, the build
+                    // line with what the file carries, and the run is
+                    // polled the way an approved build is.
+                    var _asPanel = document.getElementById('synthChatBriefPreview');
+                    if (_asPanel) _asPanel.style.display = 'none';
+                    synthChatCurrentDraft = null;
+                    synthChatClarify = null;
+                    synthChatActiveRun = data.run_id;
+                    try { _synthChatRefreshQueueBadge(); } catch (_) {}
+                    _synthChatPushTurnWithMeta('agent',
+                        String(data.message || data.reply || ('Profile building: ' + (data.subject || 'your profile') + '. I will email you when it is complete.')),
+                        { run_id: data.run_id, status: 'queued', subject: data.subject || null });
+                    try { _synthChatStartPolling(data.run_id, data.subject || null); } catch (_) {}
+                    return;
+                }
                 if (data.discovery) {
                     // Guided discovery (2026-08-19): the ask was a
                     // business goal, not an audience. Show the

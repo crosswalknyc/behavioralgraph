@@ -225,7 +225,13 @@ def is_build_order(text):
     for Paw Patrol'), or an order that names a product ('Pull Subscriber
     IQ for Dark Matter on Apple TV+')."""
     t = _norm(text)
-    return bool(_BUILD_ORDER_RX.search(t) or _PRODUCT_ORDER_RX.search(t))
+    if _BUILD_ORDER_RX.search(t) or _PRODUCT_ORDER_RX.search(t):
+        return True
+    try:
+        from . import orders as _orders
+        return bool(_orders.is_order(t))      # the shared detector (Grace Yin 2026-11-10)
+    except Exception:
+        return False
 
 
 def looks_like_title(text):
