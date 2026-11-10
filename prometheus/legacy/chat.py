@@ -12469,6 +12469,13 @@ def _pm_two_base_detect(text, ctx=None):
     if not _PM_TWO_BASE_VOCAB_RE.search(t):
         return None
     toks = set(_H._normalize_for_match(t).split())
+    # a platform named under another name counts as the library's spelling
+    # ("Prime Video" is Amazon Prime Video; Cara Dorfman 2026-11-10)
+    try:
+        from prometheus import base_pair as _bp
+        toks |= set(_bp.alias_tokens(t))
+    except Exception:
+        _bp = None
     found = {}
     try:
         for entry in _profile_catalog_for_chat():
@@ -12485,11 +12492,18 @@ def _pm_two_base_detect(text, ctx=None):
                 if key not in found or is_tu:
                     found[key] = {
                         'subject': subj,
-                        's3_key': str(entry.get('s3_key') or '')}
+                        's3_key': str(entry.get('s3_key') or ''),
+                        'display_name': str(entry.get('display_name') or subj)}
     except Exception:
         traceback.print_exc()
-    pair = [v for v in found.values() if v.get('s3_key')]
-    pair.sort(key=lambda v: -len(v['subject']))
+    # two sides are two families: a Total Universe is never paired with
+    # its own cut (Cara's Tubi x Prime Video read ran as TUBI - Avid Fan x TUBI)
+    if _bp is not None:
+        pair = _bp.two_families(found)
+    else:
+        pair = [v for v in found.values() if v.get('s3_key')]
+        pair.sort(key=lambda v: -len(v['subject']))
+    pair = [{'subject': v['subject'], 's3_key': v['s3_key']} for v in pair]
     if len(pair) == 1 and ctx and (ctx.get('primary') or {}) \
             .get('s3_key'):
         pname = str(ctx['primary'].get('name') or '').strip()
@@ -12680,6 +12694,17 @@ def _pm_generation_base(subject_hint, text, ctx=None,
 
     q_tokens = set(_H._normalize_for_match(text).split())
     hint_tokens = set(_H._normalize_for_match(subject_hint).split())
+    # a platform named under another name is the library's file ("Prime
+    # Video" is Amazon Prime Video; Cara Dorfman 2026-11-10, whose Prime
+    # Video reads found no base and ran on the other side's file)
+    try:
+        from prometheus import base_pair as _bp_al
+        _al_q = set(_bp_al.alias_tokens(text))
+        _al_h = set(_bp_al.alias_tokens(subject_hint))
+        q_tokens |= _al_q
+        hint_tokens |= _al_h
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     guessed = ''
     try:
         guessed = pma.guess_subject_from_text(text)
@@ -13272,9 +13297,13 @@ def _pm_search_demand_response(user, text, history):
     except Exception as _fx:
         _faults.note('chat', _fx)
     _t_model = time.monotonic()
+    # The window is the title's real premiere, looked up when the model is
+    # not sure of it (Cara Dorfman 2026-11-10: Off Campus, released on Prime
+    # Video May 13 2026, was read on an invented Oct 2 to Oct 18 2026
+    # window). Research is additive: the tool plan falls back to no tools.
     result = _pm_claude_json(pma.SEARCH_DEMAND_SYSTEM_PROMPT, user_prompt,
                              max_tokens=7500, temperature=0.4,
-                             usage_extras=_pm_ppu)
+                             usage_extras=_pm_ppu, tools=[pma.WEB_SEARCH_TOOL])
     _pm_ask_stage('model', t0=_t_model)
     if not result.get('success'):
         _H._chatbot_error_email(

@@ -520,7 +520,8 @@ def _pm_looks_report_ask(text):
 # of window (quantity = years), never the un-priced $550.
 _PM_VIEWERSHIP_METRIC_RX = re.compile(
     r"\b(?:viewership|viewing|viewers?|watch(?:ing)?\s*time|hours watched|"
-    r"minutes watched|watch(?:ed|es)?|viewed|views|consumption|streams?|"
+    r"minutes watched|(?:total\s+)?hours|minutes|time spent|"   # "total hours by month" (Cara Dorfman, 2026-11-10)
+    r"watch(?:ed|es)?|viewed|views|consumption|streams?|"
     r"streamed|streaming|plays|played|listens|listened|listenership|"
     r"listeners?|audience)\b", re.I)
 _PM_YEAR_WORDS = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,

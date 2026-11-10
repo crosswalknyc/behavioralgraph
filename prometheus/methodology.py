@@ -542,16 +542,36 @@ PERIOD_RX = re.compile(r"\b(?:q[1-4]\b|quarter(?:s|ly)?|month(?:s|ly)?\b|month b
                        r"per quarter|each quarter|h[12]\s*20\d\d|ytd|year to date|"
                        r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+20\d\d)", re.I)
 WHOLE_RX = re.compile(r"\b(?:total universe|full[- ]window|full year|whole year|the year\b|annual|"
-                      r"trailing 12|12 months|twelve months|overall|year total|for 20\d\d\b)", re.I)
+                      r"trailing 12|12 months|twelve months|year total|for 20\d\d\b)", re.I)
+# "overall" reads as the whole window only beside a run of periods; in
+# prose ("leans into streaming overall") it is an ordinary word (Cara
+# Dorfman, Amazon, 2026-11-10: an October 2026 overlap read, one month
+# and no quarters, carried the period note on the strength of that word)
+_OVERALL_RX = re.compile(r"\boverall\b", re.I)
+_PERIOD_RUN_RX = re.compile(r"\b(?:q[1-4]\b|quarter(?:s|ly)?|month(?:s|ly)\b|month by month|by month|per month|"
+                            r"each month|by quarter|per quarter|each quarter|h[12]\s*20\d\d|ytd|year to date)\b", re.I)
+_MONTH_YEAR_RX = re.compile(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(20\d\d)\b", re.I)
 _PERIOD_CUT_NAME_RX = re.compile(r"\s-\s(?:Q[1-4]\s+20\d\d|H[12]\s+20\d\d|20\d\d(?:\s+YTD)?|"
                                  r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+20\d\d)\s*$", re.I)
 
 
 def is_period_comparison(*texts):
     """True when the words put a full-window figure next to sub-period
-    figures (quarters, months, halves, YTD)."""
+    figures (quarters, months, halves, YTD). One named month that is the
+    window itself ("October 2026"), with no run of periods beside it, is
+    not a comparison whatever else the prose says."""
     joined = ' '.join(str(t or '') for t in texts)
-    return bool(PERIOD_RX.search(joined) and WHOLE_RX.search(joined))
+    if not PERIOD_RX.search(joined):
+        return False
+    run = bool(_PERIOD_RUN_RX.search(joined))
+    if not run:
+        months = {m.lower() for m in re.findall(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+20\d\d\b",
+                                                 joined, re.I)}
+        if len(months) <= 1:
+            return False      # a single named month is the window, not a period inside one
+    if WHOLE_RX.search(joined):
+        return True
+    return run and bool(_OVERALL_RX.search(joined))
 
 
 def is_period_cut_name(name):

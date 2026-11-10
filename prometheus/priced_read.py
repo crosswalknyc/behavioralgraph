@@ -503,7 +503,10 @@ def reading_cohort(text, page=''):
 
 # "consumption" is the viewing verb of a consumption report (Jordan 2026-10-08 "Show me monthly consumption for
 # The Office US"; Bria 2026-10-23 "run the same type of consumption report by month"): both ran unpriced without it
-_VIDEO_VERB_RX = re.compile(r"\b(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(?:ed|s|ing|ers|ership)?|binge[ds]?|consum(?:ption|ed|e|ing))\b", re.I)
+# hours and watch time are the viewing metric too (Cara Dorfman, Amazon, 2026-11-10: "total hours by month for 2025 ... for
+# Prime Video and YouTube" carried no viewing verb and fell to the capability lane)
+_VIDEO_VERB_RX = re.compile(r"\b(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(?:ed|s|ing|ers|ership)?|binge[ds]?|consum(?:ption|ed|e|ing)|"
+                            r"(?:total\s+)?hours|watch\s*time|time\s+spent)\b", re.I)
 
 
 def _viewership_ask(text):
@@ -538,6 +541,24 @@ _ADAPT_IF_RX = re.compile(r"\b(?:would|could|might|if there|if \w+ (?:made|make|
 _SERVICE_RX = re.compile(
     r"\b(prime video|amazon prime video|amazon prime|netflix|hulu|max|hbo max|disney\+|disney plus|peacock|paramount\+|paramount plus|"
     r"apple tv\+|apple tv plus|apple tv|youtube|youtube tv|tubi|pluto tv|roku channel|crunchyroll|starz|amc\+|britbox|discovery\+|espn\+|fubo|sling|mgm\+)\b", re.I)
+
+
+_PRETTY_SERVICE = {'amazon prime video': 'Prime Video', 'amazon prime': 'Prime Video', 'prime video': 'Prime Video',
+                   'hbo max': 'HBO Max', 'disney plus': 'Disney+', 'paramount plus': 'Paramount+', 'apple tv plus': 'Apple TV+',
+                   'youtube tv': 'YouTube TV', 'pluto tv': 'Pluto TV', 'roku channel': 'The Roku Channel', 'youtube': 'YouTube',
+                   'netflix': 'Netflix', 'hulu': 'Hulu', 'max': 'Max', 'peacock': 'Peacock', 'tubi': 'Tubi',
+                   'crunchyroll': 'Crunchyroll', 'starz': 'Starz', 'britbox': 'BritBox', 'fubo': 'Fubo', 'sling': 'Sling'}
+
+
+def platform_subject(text):
+    """The first streaming service the words name, in its display spelling
+    ('Prime Video' for "PRIME video"), or '' when none. The subject of a
+    viewing-metric read that names a service and no title."""
+    m = _SERVICE_RX.search(str(text or ''))
+    if not m:
+        return ''
+    raw = m.group(1).lower()
+    return _PRETTY_SERVICE.get(raw) or (m.group(1) if m.group(1)[:1].isupper() else m.group(1).title())
 
 
 def is_adaptation_ask(text):
@@ -1706,6 +1727,12 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
         subject = bound_subject(words, history, ctx, fallback='', reading=reading)
         if subject and is_everyone(subject):
             subject = GEN_POP_LABEL
+        if not subject and hit['kind'] == 'viewership':
+            # a viewing metric of a named service ("total hours by month for
+            # 2025 ... for Prime Video and YouTube") is a read on that
+            # service; the words name it even when no reading rode in
+            # (Cara Dorfman 2026-11-10)
+            subject = platform_subject(words)
     if not subject:
         try:
             # The open product's own view ("this campaign", its title) is the

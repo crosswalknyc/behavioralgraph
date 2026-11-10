@@ -752,10 +752,25 @@ def _is_promise_turn(text):
         return bool(re.match(r"^\s*(?:On it\b|Already on it\b|Working on it\b|Still on it\b)", str(text or '')))
 
 
+_ASKS_INPUT_RX = re.compile(
+    r"(?:\?\s*$|^\s*(?:name|tell me|say|send|pick|give me|which|what)\b[^.]*\b(?:and|so)\s+i\s+(?:will|can)\b[^.]*\.?\s*$)", re.I)
+
+
+def _asks_for_input(ans):
+    """True when the reply's last sentence asks the reader for something
+    (a question mark, or "Name the X you want and I will set it up")."""
+    t = ' '.join(str(ans or '').split())
+    if not t:
+        return False
+    parts = [p for p in re.split(r"(?<=[.!?])\s+", t) if p.strip()]
+    return bool(parts) and bool(_ASKS_INPUT_RX.search(parts[-1]))
+
+
 def thread_replay(text, history):
     """The earlier answer to this exact question in this thread, with when
     it was given, or None. Never a promise line, never a read that was
-    retired or corrected in place."""
+    retired or corrected in place, never a reply that ended by asking the
+    reader for something."""
     try:
         q = _fold_q(text)
         if len(q) < 3:
@@ -796,6 +811,13 @@ def thread_replay(text, history):
             if not ans or meta.get('job') or (meta.get('options') and not landed) or len(ans) < 40:
                 continue
             if re.search(r"(give me, in one message|which time window|here'?s the|brief drafted|ready to run)", ans, re.I):
+                continue
+            # a reply that ended by asking the reader for something ("Name
+            # the months you want and I will set it up.", "Which audience
+            # should this run on?") was not the answer; the question runs
+            # again (Cara Dorfman 2026-11-10: her re-ask was handed the
+            # month-cut pitch back as "the same read as earlier")
+            if _asks_for_input(ans):
                 continue
             # an answer the reader pushed back on is never replayed
             nxt_user = next((x for x in turns[i + 1:] if str(x.get('role') or '') == 'user' and x is not turn), None)

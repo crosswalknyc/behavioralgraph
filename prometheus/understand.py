@@ -86,8 +86,12 @@ _TIME_WORDS = (r"over time|month by month|month over month|monthly|by month|"
                r"every week|per week|quarter by quarter|quarterly|by quarter|"
                r"year over year|each year|every year|trend(?:s|ed|ing|line)?|"
                r"trajectory|time series")
+# "total hours by month" is a viewing metric over time (Cara Dorfman at
+# Amazon, 2026-11-10: hours by month for 2025 on Prime Video and YouTube
+# was answered as a question about cutting a profile by month)
 _METRIC_WORDS = (r"consumption|viewership|viewing|watch(?:ing)? time|"
-                 r"hours watched|minutes watched|watch(?:ed|es)?|viewed|views|"
+                 r"hours watched|minutes watched|(?:total\s+)?hours|minutes|time spent|"
+                 r"watch(?:ed|es)?|viewed|views|"
                  r"streams?|streamed|streaming|plays|played|"
                  r"listens|listened|listenership|viewers?|listeners?|users?|"
                  r"visitors?|subscribers?|signups?|churn|engagement|audience|"

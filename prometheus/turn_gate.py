@@ -424,7 +424,14 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             _g2._pm_repeat_n = n_rep
         except Exception:
             pass
-        if n_rep >= 2 or kind != 'new_ask':
+        # A yes to what the reply promised ("Name the months you want and I
+        # will set it up") re-runs the ask once through the other path; the
+        # continuation classifier reads the re-run against the reply as a
+        # parameter change, which is not a path that already ran (Cara
+        # Dorfman 2026-11-10: her "yes please" drew the calm line with
+        # nothing running). A second yes still escalates.
+        promise_rerun = bool(body.get('_pm_promise_rerun')) and n_rep == 1
+        if n_rep >= 2 or (kind != 'new_ask' and not promise_rerun):
             # The third ask, or a repeated continuation whose own path
             # already ran once: the calm promise, and ops gets the problem.
             # Never a scold, never a debugging question (Jenna 2026-10-21).

@@ -1965,7 +1965,8 @@ def ask(user, body, *, via='session'):
                         _rr_hit = None
             except Exception as _fx:
                 _faults.note('service.recent_read', _fx)
-            _tr = None if (_rr_hit or body.get('bind_subject')) else _sm.thread_replay(text, history)
+            # the gate's other path never hands back the words that did not land (Cara Dorfman 2026-11-10)
+            _tr = None if (_rr_hit or body.get('bind_subject') or body.get('_pm_alternative')) else _sm.thread_replay(text, history)
             if _rr_hit and _rr_hit.get('status') == 'done':
                 from . import read_registry as _reg
                 _sm_raw, _sm_reason = _reg.replay_payload(_rr_hit), 'read_replay'
@@ -3113,6 +3114,15 @@ def _bare_reply(body, text, history, has_ctx, uname=''):
         # order is rebuilt from the reply and the ask that drew it.
         _promised = _prose_promise_order(prev, history)
         if _promised:
+            # the yes re-runs the ask the reply promised to set up; the gate
+            # reads this mark and takes the other path once instead of the
+            # calm line (Cara Dorfman 2026-11-10: "yes please" to "Name the
+            # months you want and I will set it up" drew "Working on it"
+            # with nothing running). The caller copies this body forward.
+            try:
+                body['_pm_promise_rerun'] = True
+            except Exception:
+                pass
             return _promised, None
         if re.search(r'approv|go|run|ship|do it|proceed', low):
             return None, _p(

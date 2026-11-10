@@ -728,6 +728,21 @@ def _profile_named_in(text):
     return n
 
 
+def names_a_measure_over_time(text):
+    """True when the words ask for a metric by period ("total hours by
+    month for 2025", "viewers month by month", "monthly consumption"):
+    a read on data, never a capability question, whatever opener it
+    carries. prometheus.understand owns the vocabulary."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    try:
+        from .understand import _TIME_SERIES_RX
+        return bool(_TIME_SERIES_RX.search(t))
+    except Exception:
+        return False
+
+
 # ------------------------------------------------------ capability answers
 _CAP_COMPARE_RX = re.compile(r'\bcompare|\bside\s+by\s+side|\boverlap\b', re.I)
 _CAP_CUT_RX = re.compile(
@@ -782,6 +797,13 @@ def capability_answer(text, cut_credits=None):
     t = str(text or '').strip()
     cut_price = _cut_price_label()
     if not t or not is_capability_question(t):
+        return None
+    if names_a_measure_over_time(t):
+        # "can i get total hours by month for 2025 ... for Prime Video and
+        # YouTube" is a data order, not a question about what the product
+        # does (Cara Dorfman, Amazon, 2026-11-10: it drew the month-cut
+        # pitch and "Name the months you want" when she had named them).
+        # A metric over time is the viewership read's; the priced lanes own it.
         return None
     win = time_window_cut_ask(t)
     if win:
