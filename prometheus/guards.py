@@ -738,9 +738,22 @@ def names_a_measure_over_time(text):
         return False
     try:
         from .understand import _TIME_SERIES_RX
-        return bool(_TIME_SERIES_RX.search(t))
+        if _TIME_SERIES_RX.search(t):
+            return True
     except Exception:
-        return False
+        pass
+    # a put-together read by period ("the overlap for usage for Prime Video
+    # and Tubi for 2026 by month to date"): the priced lanes' own
+    # classification, lazily, never a cycle
+    try:
+        from .priced_read import classify as _classify
+        from .understand import _TIME_WORDS
+        if re.search(r"\b(?:" + _TIME_WORDS + r")\b", t, re.I):
+            hit = _classify(t, None, None)
+            return bool(hit and hit.get('via') == 'generate')
+    except Exception:
+        pass
+    return False
 
 
 # ------------------------------------------------------ capability answers

@@ -90,7 +90,7 @@ _TIME_WORDS = (r"over time|month by month|month over month|monthly|by month|"
 # Amazon, 2026-11-10: hours by month for 2025 on Prime Video and YouTube
 # was answered as a question about cutting a profile by month)
 _METRIC_WORDS = (r"consumption|viewership|viewing|watch(?:ing)? time|"
-                 r"hours watched|minutes watched|(?:total\s+)?hours|minutes|time spent|"
+                 r"hours watched|minutes watched|(?:total\s+)?hours|minutes|time spent|usage|overlap|"
                  r"watch(?:ed|es)?|viewed|views|"
                  r"streams?|streamed|streaming|plays|played|"
                  r"listens|listened|listenership|viewers?|listeners?|users?|"

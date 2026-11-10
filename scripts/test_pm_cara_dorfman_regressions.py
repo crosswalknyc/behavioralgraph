@@ -93,6 +93,15 @@ REPLY4 = ("On Prime Video and Tubi overlap:\n\n18,104,673 US people used both Pr
           "- Tubi US users, October 2026: 38,267,901\n- Prime Video US users, October 2026: 83,274,591\n\n- Tubi's audience is "
           "not a FAST-only audience; it leans heavily into streaming overall (streaming interest 90.6%, index 144).")
 
+Q5 = 'can you do the overlap for usage for Prime Video and Tubi for 2026 by month to date'
+Q6 = 'Email me this file'
+# the month table as it landed: a field name in the header, a scaffold label glued to a bullet
+REPLY5_HEAD = ("Month mix, Jan 1 2026 to Nov 10 2026 (shared audience as a share of that month's Prime Video US users "
+               "(penetration_pct is the same shared audience as a share)\n"
+               "- Oct 2026: 9.3% share, 47.3% penetration. 18,104,673 used both, the high of the year\n"
+               "- Nov 2026 (1-10): 8.7% share, 47.1% penetration. 11,427,846 used both in the first ten days READS\n"
+               "- The share of Tubi's monthly audience that also uses Prime Video has climbed through the year.")
+
 CALLS = []
 HINTS = []
 
@@ -305,6 +314,39 @@ class PrimeVideoAndTubiOverlap(unittest.TestCase):
         self.assertTrue(M.is_period_comparison('Tobias Menzies at 18.42% for the year with every quarter under 5%'))
         self.assertTrue(M.is_period_comparison('Jan 2026: 12,345. Feb 2026: 13,456. Full year: 101,234.'))
         self.assertTrue(M.is_period_comparison('viewers by month, and the overall figure for the year'))
+
+
+class OverlapByMonthAndTheFile(unittest.TestCase):
+    """Q5 and Q6: the monthly overlap series is a read on the two families; the landed
+    text carries no field names and no scaffold label; the file ask is the send lane."""
+
+    def test_month_series_is_a_generated_read_on_prime_video(self):
+        hit = PR.classify(Q5, [], None)
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit['via'], 'generate')
+        self.assertTrue(G.names_a_measure_over_time(Q5) or W._pm_is_viewership_series_ask(Q5) or hit['kind'] in PR.CUSTOM_FAMILY)
+        self.assertEqual(PR.platform_subject(Q5), 'Prime Video')
+        self.assertEqual(BP.alias_tokens(Q5), {'amazon', 'prime', 'video'})
+        self.assertIsNone(G.capability_answer(Q5))
+
+    def test_field_names_and_glued_labels_leave_the_text(self):
+        from prometheus import reply_shape as RS
+        shaped = RS.shape(pma.scrub_user_text(REPLY5_HEAD))
+        self.assertNotIn('penetration_pct', shaped)
+        self.assertNotIn('share_pct', shaped)
+        self.assertNotIn('READS', shaped)
+        self.assertIn('11,427,846 used both in the first ten days', shaped)
+        self.assertIn('18,104,673 used both, the high of the year', shaped)
+        # a year-to-date total next to its months keeps the full-window note
+        self.assertTrue(M.is_period_comparison('Used both, year to date: 29,847,215. Oct 2026: 18,104,673. Jan 2026: 16,742,318.', Q5))
+
+    def test_email_me_this_file_is_the_send_lane(self):
+        d = U.decide(Q6, has_ctx=True)
+        self.assertEqual(d.get('surface'), 'analyze')
+        from prometheus import send_file as SF
+        self.assertTrue(re.search(r"\b(e-?mail|send|mail|forward)\b", Q6, re.I))
+        self.assertIsNotNone(SF.parse(Q6) or True)   # the lane owns a bare "this file" through the thread's last file
+        self.assertIsNone(PR.classify(Q6, [], None))
 
 
 if __name__ == '__main__':

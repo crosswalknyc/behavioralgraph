@@ -3632,6 +3632,11 @@ _SCRUB_RULES = (
     (r'\bopen\s?ai\b', 'the analysis'),
     (r'\bgpt[-0-9a-z.]*\b', 'the analysis'),
     (r'\bllm\b', 'analysis'),
+    # breakdown field names typed into prose (Cara Dorfman 2026-11-10: a
+    # month table's header read "(penetration_pct is the same shared
+    # audience as a share"): the plain word, never the key
+    (r'\bpenetration_pct\b', 'penetration'),
+    (r'\bshare_pct\b', 'share'),
 )
 _SCRUB_COMPILED = tuple(
     (re.compile(pat, re.IGNORECASE), rep) for pat, rep in _SCRUB_RULES)

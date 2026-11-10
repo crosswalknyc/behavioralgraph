@@ -46,6 +46,11 @@ _MOVE_LABEL_RX = re.compile(
     r"KEY (?:POINTS?|TAKEAWAYS?|NUMBERS?|FACTS?)\b|BEFORE (?:WE|YOU|I)\b|ON (?:QUALIFICATION|THE WINDOW|THE COST|COST|PRICE|THE PULL|SIZE|SIZING)\b|"
     r"MY (?:READ|TAKE|CALL)\b|YOUR CALL|UP TO YOU|RIGHT NOW\b|IN FRONT OF ME)", re.I)
 _LONG_PAREN_RX = re.compile(r'\s*\(([^()]{90,}?)\)')
+# A scaffold label glued to the END of a bullet with no punctuation before
+# it ("... used both in the first ten days READS"; Cara Dorfman 2026-11-10):
+# the label goes, the bullet stays.
+_TRAILING_SCAFFOLD_RX = re.compile(
+    r'(?<=[A-Za-z0-9)%])\s+(?:READS?|NOTES?|ANSWER|SUMMARY|EVIDENCE|MEASURED READ|SO WHAT|BOTTOM LINE)\s*:?\s*$')
 _SMALL_WORDS = {'a', 'an', 'the', 'of', 'on', 'in', 'and', 'or', 'to', 'for', 'by', 'with',
                 'at', 'from', 'vs', 'per', 'this', 'that', 'these', 'those', 'us', 'tvod',
                 'svod', 'avod', 'q1', 'q2', 'q3', 'q4', 'iq', 'ctr', 'roi', 'cpm', 'nfl', 'nba',
@@ -129,7 +134,7 @@ def shape(reply):
                 split_lines.append(head)
                 split_lines.append(label)
             else:
-                split_lines.append(ln)
+                split_lines.append(_TRAILING_SCAFFOLD_RX.sub('', ln) if ln.lstrip().startswith(('-', '*', '\u2022')) else ln)
         lines = split_lines
         out_lines = []
         for ln in lines:
