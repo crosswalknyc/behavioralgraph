@@ -354,7 +354,11 @@ _TEXT_SOFT_RX = re.compile(
 _GAMES_RX = re.compile(
     r"\b(?:video ?games?|mobile games?|gamers?|players?|gameplay|playthroughs?|xbox|playstation|"
     r"nintendo|roblox|fortnite|minecraft|esports|consoles?)\b", re.I)
-_UNIT_NOUNS = ('viewers', 'listeners', 'readers', 'players', 'subscribers', 'buyers', 'shoppers')
+# a pool is sometimes a quantity, not a crowd: a table of viewing hours
+# by month says "Pool 5,886,000,022 hours", never "viewers" (Cara Dorfman
+# 2026-11-10, hours by month for Prime Video and YouTube)
+_UNIT_NOUNS = ('viewers', 'listeners', 'readers', 'players', 'subscribers', 'buyers', 'shoppers', 'hours', 'minutes')
+_TIME_POOL_RX = re.compile(r"\b(?:total\s+)?(?:hours|minutes)\b|\bwatch\s*time\b|\btime\s+spent\b|\bviewing\s+time\b", re.I)
 _SUBSCRIPTION_RX = re.compile(
     r"\b(?:subscribers?|subscriptions?|subs|sign-?ups?|signed up|churn(?:ed|ers?)?|cancel(?:led|lations?|s)?)\b", re.I)
 _BROWSED_RX = re.compile(
@@ -445,6 +449,12 @@ def pool_noun_for(res, question=''):
             unit = str((m or {}).get('unit') or '').strip().lower() if isinstance(m, dict) else ''
             if unit in _UNIT_NOUNS:
                 return unit
+        # the breakdown's own basis says the pool is time ("share of 2025
+        # adult viewing hours across both platforms")
+        bd = res.get('breakdown') if isinstance(res.get('breakdown'), dict) else {}
+        basis = ' '.join(str(bd.get(k) or '') for k in ('share_basis', 'dimension'))
+        if _TIME_POOL_RX.search(basis):
+            return 'minutes' if re.search(r"\bminutes\b", basis, re.I) and not re.search(r"\bhours\b", basis, re.I) else 'hours'
     return pool_noun(fam, ' '.join([str(question or ''), pool_context(res)]))
 
 

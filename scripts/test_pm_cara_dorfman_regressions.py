@@ -213,6 +213,22 @@ class HoursByMonthIsAViewershipRead(unittest.TestCase):
             self.assertNotIn('Name the months', str(env['raw']))
             self.assertEqual(env['raw'].get('followups') or [], [])
 
+    def test_an_hours_table_pools_are_hours_not_viewers(self):
+        # the read that landed for her said "Pool 5,886,000,022 viewers" on a table of monthly viewing hours
+        res = {'_family': 'viewing',
+               'metrics': [{'label': 'YouTube total hours, P18+', 'unit': 'hours', 'value': 64638000214},
+                           {'label': 'Prime Video total hours, P18+', 'unit': 'hours', 'value': 15364120272}],
+               'breakdown': {'dimension': 'Month x platform', 'share_basis': 'share of 2025 adult viewing hours across both platforms',
+                             'rows': []}}
+        self.assertEqual(M.pool_noun_for(res, Q2), 'hours')
+        res2 = {'_family': 'viewing', 'metrics': [],
+                'breakdown': {'dimension': 'Month x platform', 'share_basis': 'share of 2025 adult viewing hours across both platforms', 'rows': []}}
+        self.assertEqual(M.pool_noun_for(res2, Q2), 'hours')
+        # a viewing read whose pools are people keeps its noun, whatever the question says about hours
+        res3 = {'_family': 'viewing', 'metrics': [{'label': 'Viewers', 'unit': 'viewers', 'value': 1}],
+                'breakdown': {'dimension': 'Month', 'share_basis': 'share of viewers', 'rows': []}}
+        self.assertEqual(M.pool_noun_for(res3, 'how many people watched 3 hours of Landman'), 'viewers')
+
     def test_platform_subject_from_the_words(self):
         self.assertEqual(PR.platform_subject(Q2), 'Prime Video')
         self.assertEqual(PR.platform_subject(Q4), 'Prime Video')
