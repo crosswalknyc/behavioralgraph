@@ -127,7 +127,7 @@ def analysis_points(payload: dict) -> List[str]:
         pts.append(f"{_pct(s['click'] - one, s['click'])} of the people who clicked through needed two or more posts first. Plan a run, not a single post.")
     if s['viewers'] and s['no_post']:
         pts.append(f"{_fmt(s['viewers'])} people watched {T} on {P} in the window. {_pct(s['no_post'], s['viewers'])} of them never saw a post, "
-                   f"so social is one door of several.")
+                   f"so social is one route of several.")
     return pts[:5]
 
 
@@ -509,7 +509,13 @@ def _build_pdf(payload: dict) -> bytes:
 
     # 05 the road to the platform
     lb, tp, fe = G.section(payload, 'looked_before'), G.section(payload, 'time_to_play'), G.section(payload, 'first_episode')
-    d.new_page(False, 'From the click to the play', f"Most first plays came the same day as the post.",
+    # the header states what the table shows: same day when that is the
+    # majority, within a week when the first week is, otherwise the spread
+    same_most = s['same_day'] > 0.5 * max(s['watched'], 1)
+    fast = (s['same_day'] + s['within_7']) >= 0.6 * max(s['watched'], 1)
+    d.new_page(False, 'From the click to the play',
+               ("Most first plays came the same day as the post." if same_most else
+                "Most first plays came within a week of the post." if fast else "The watching spread across the month."),
                f"{_pct(s['same_day'], s['watched'])} the same day, {_pct(s['within_7'], s['watched'])} within a week, "
                f"{_pct(s['within_30'], s['watched'])} in days 8 to 30.")
     y1 = d.table(f"Where they looked before {P}", _rows_for(lb, s['click']), d.m, d.y, half_w,
@@ -537,7 +543,7 @@ def _build_pdf(payload: dict) -> bytes:
     d.table('Social viewers outside the 30-day window', _rows_for(ro, s['carried']), d.m, d.y, half_w,
             note=f"Share of the {_fmt(s['carried'])} viewers who also engaged socially.")
     d.table(f"Every {T} viewer on {P} in the window", _rows_for(ev, s['viewers']), col2, d.y, half_w)
-    d.meaning(f"{_pct(s['no_post'], s['viewers'])} of the viewers never saw a post. Social is the biggest door we can measure here, not the only one.")
+    d.meaning(f"{_pct(s['no_post'], s['viewers'])} of the viewers never saw a post. Social is the biggest route we can measure here, not the only one.")
 
     # 08 what to do
     d.new_page(True, 'What to do next', f"Three moves for the next {T} flight.", "Each one comes with the number that backs it.")
@@ -642,7 +648,7 @@ def _build_pdf_social_then_view(payload: dict) -> bytes:
     d.table('Social viewers outside the 30-day window', _rows_for(ro, s['outside_30'] + s['also']), d.m, d.y, half_w,
             note=f"Share of the {_fmt(s['outside_30'] + s['also'])} viewers who saw a post but watched outside the 30 days or before the posts.")
     d.table(f"Every {T} viewer on {P} in the window", _rows_for(ev, s['viewers']), col2, d.y, half_w)
-    d.meaning(f"{_pct(s['no_post'], s['viewers'])} of the viewers never saw a post. Social is the biggest door we can measure here, not the only one.")
+    d.meaning(f"{_pct(s['no_post'], s['viewers'])} of the viewers never saw a post. Social is the biggest route we can measure here, not the only one.")
 
     # 08 what to do
     d.new_page(True, 'What to do next', f"Moves for the next {T} flight.", "Each one comes with the number that backs it.")

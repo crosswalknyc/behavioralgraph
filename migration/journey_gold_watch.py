@@ -892,7 +892,7 @@ def the_read(f: dict) -> dict:
     elif fp and ps:
         tldr.append(f"{fp[0]} on {ps[0]} opened the most paths: {_pct(fp[1], f['social']):.0f}% of first posts were that kind and {_pct(ps[1], f['social']):.0f}% sat there.")
     if f.get('viewers') and f.get('no_post'):
-        tldr.append(f"{_fmt(f['no_post'])} of the {_fmt(f['viewers'])} people who watched {T} on {P} never saw a post. Social is the biggest door we can see, not the only one.")
+        tldr.append(f"{_fmt(f['no_post'])} of the {_fmt(f['viewers'])} people who watched {T} on {P} never saw a post. Social is the biggest route we can see, not the only one.")
     reads = []
     if fp and ps:
         reads.append(f"The first post people saw was most often {_lower_first(fp[0])}, {_pct(fp[1], f['social']):.0f}% of first posts; {ps[0]} carried {_pct(ps[1], f['social']):.0f}% of them.")

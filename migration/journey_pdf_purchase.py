@@ -200,7 +200,7 @@ def build_pdf(payload: dict) -> bytes:
     d.table('Social buyers outside the 30-day window', _rows_for(ro, s['carried'] - s['paid'] if s['carried'] > s['paid'] else None), d.m, d.y, half_w,
             note=f"Share of the {_fmt(s['carried'] - s['paid'])} buyers who engaged socially but bought outside the 30 days.")
     d.table(f"Every online {T} buyer in the window", _rows_for(ev, s['buyers']), col2, d.y, half_w)
-    d.meaning(f"{_pct(s['no_post'], s['buyers'])} of the online buyers never saw a post. Social is the biggest door we can measure here, not the only one.")
+    d.meaning(f"{_pct(s['no_post'], s['buyers'])} of the online buyers never saw a post. Social is the biggest route we can measure here, not the only one.")
 
     # 09 what to do
     d.new_page(True, 'What to do next', f"Four moves for the next {T} flight.", "Each one comes with the number that backs it.")
