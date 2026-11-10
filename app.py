@@ -2581,25 +2581,28 @@ def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by,
                          direction='grant'):
     """Schedule a recurring monthly grant (or charge) on a subject.
 
-    kind: 'credits' or 'hours' (minutes for hours grants)
+    kind: 'credits', 'hours' (minutes/month), or 'wallet' (USD/month).
     amount: int (>0). For hours grants this is minutes/month.
+        For wallet grants this is dollars/month.
     months: int months to run (None = forever until cancelled)
     direction: 'grant' (default; adds to balance/pool) or 'charge'
         (subtracts from balance/pool). Only meaningful for kind='credits';
-        'charge' is not supported for consulting hours yet.
+        'charge' is not supported for consulting hours or wallet yet.
     Applies the first month's grant immediately so the balance jumps
     right away; the next tick fires ~30 days later.
     """
     kind = (kind or '').lower()
-    if kind not in ('credits', 'hours'):
-        raise ValueError("kind must be 'credits' or 'hours'")
+    if kind == 'usd':
+        kind = 'wallet'
+    if kind not in ('credits', 'hours', 'wallet'):
+        raise ValueError("kind must be 'credits', 'hours', or 'wallet'")
     direction = (direction or 'grant').lower()
     if direction not in ('grant', 'charge'):
         raise ValueError("direction must be 'grant' or 'charge'")
-    if direction == 'charge' and kind == 'hours':
+    if direction == 'charge' and kind in ('hours', 'wallet'):
         # Consulting-hour deductions run through _log_consulting_hours
-        # with the "worked" descriptor — a scheduled charge doesn't map
-        # cleanly. Reject rather than silently misapply.
+        # with the "worked" descriptor. Wallet dollars are gifted
+        # credits, not a scheduled debit.
         raise ValueError("recurring charges only support kind='credits'")
     amount = int(amount)
     if amount <= 0:
@@ -2695,13 +2698,16 @@ def _apply_recurring_grants(data):
                     'recurring_grant_id': grant.get('id'),
                 })
                 subject['credit_attribution_history'] = hist[:500]
-            elif grant['kind'] == 'hours':
+            elif grant['kind'] in ('hours',):
                 _grant_consulting_hours(
                     subject,
                     int(grant['amount']),
                     reason=f"[Recurring] {grant.get('reason','')}".strip(),
                     granted_by=grant.get('created_by') or 'system',
                 )
+            elif grant['kind'] in ('wallet', 'usd'):
+                import wallet as _w_rec
+                _w_rec.credit_recurring_wallet_month(subject, grant, now=now)
             grant['last_applied_at'] = now.isoformat()
             if grant.get('months_remaining') is not None:
                 grant['months_remaining'] = int(grant['months_remaining']) - 1
@@ -7939,12 +7945,12 @@ def api_time_tracking_delete_entry():
 @app.route('/api/admin/recurring-grants', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @requires_admin
 def api_recurring_grants():
-    """Manage recurring monthly grants (credits or consulting hours).
+    """Manage recurring monthly grants (credits, consulting hours, or wallet USD).
 
     GET  → list every recurring grant across all users & companies.
            Optional query filter: ?subject_type=user&subject_name=X to
            return only that subject's grants (used by the user modal).
-    POST body: {subject_type, subject_name, kind: 'credits'|'hours',
+    POST body: {subject_type, subject_name, kind: 'credits'|'hours'|'wallet',
                 amount: int, months: int|null, reason: str,
                 direction: 'grant'|'charge' (credits only; default 'grant'),
                 apply_first_immediately: bool}
@@ -8091,6 +8097,9 @@ def api_recurring_grants():
                     'recurring_grant_id': grant['id'],
                 })
                 subject['credit_attribution_history'] = hist[:500]
+            elif kind in ('wallet', 'usd'):
+                import wallet as _w_rec
+                _w_rec.credit_recurring_wallet_month(subject, grant)
             else:
                 _grant_consulting_hours(subject, amount, reason=f'[Recurring] {reason}',
                                         granted_by=added_by)
@@ -10975,6 +10984,12 @@ def apply_cloak_product_access_overrides(access):
 def api_me_product_access():
     """Fresh module flags from user store — keeps SELECT PRODUCT in sync after admin edits (no full reload)."""
     try:
+        try:
+            _tick = load_users()
+            if _apply_recurring_grants(_tick):
+                save_users(_tick)
+        except Exception as _tick_err:
+            print(f"recurring grant tick on product-access: {_tick_err}")
         user = get_current_user()
         if not user:
             return jsonify({'success': False, 'error': 'User not found'}), 404

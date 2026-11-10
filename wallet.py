@@ -2574,6 +2574,51 @@ def apply_wallet_topup(user: dict, amount_usd: float, *,
     return txn
 
 
+def credit_recurring_wallet_month(subject: dict, grant: dict, *,
+                                  now=None) -> dict:
+    """Credit one month of a kind=wallet recurring grant.
+
+    Idempotent per grant id + calendar month via stripe_ref
+    `recurring_wallet_<id>_<YYYY_MM>`. Admin adjustment, not a
+    Stripe top-up, so lifetime_topups stays put. Charge direction
+    is a no-op (wallet charges are not a scheduled debit).
+    """
+    if not isinstance(subject, dict) or not isinstance(grant, dict):
+        return {}
+    kind = str(grant.get("kind") or "").strip().lower()
+    if kind not in ("wallet", "usd"):
+        return {}
+    if str(grant.get("direction") or "grant").strip().lower() == "charge":
+        return {}
+    try:
+        amt = float(grant.get("amount") or 0)
+    except (TypeError, ValueError):
+        return {}
+    if amt <= 0:
+        return {}
+    stamp = now or datetime.now(timezone.utc)
+    if getattr(stamp, "tzinfo", None) is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    yyyymm = stamp.strftime("%Y_%m")
+    gid = str(grant.get("id") or "wallet").strip() or "wallet"
+    ref = f"recurring_wallet_{gid}_{yyyymm}"
+    for txn in subject.get("wallet_transactions") or []:
+        if isinstance(txn, dict) and str(txn.get("stripe_ref") or "") == ref:
+            return txn
+    reason = str(grant.get("reason") or "").strip()
+    if abs(amt - round(amt)) < 0.001:
+        money = f"${amt:,.0f}"
+    else:
+        money = f"${amt:,.2f}"
+    desc = reason or f"Monthly wallet credit {money}"
+    return apply_wallet_topup(
+        subject, amt,
+        description=desc,
+        stripe_ref=ref,
+        kind="adjustment",
+    )
+
+
 def apply_wallet_refund(user: dict, amount_usd: float, *,
                         description: str = "",
                         stripe_ref: str = "",
