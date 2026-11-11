@@ -173,13 +173,24 @@ def entry_key(subject, metric_family, window_start=None, window_end=None, journe
 PROV_DELIVERED = 'delivered_artifact'
 PROV_OPERATOR = 'operator'
 PROV_DISTILLED = 'distilled'
-_PROV_RANK = {PROV_DELIVERED: 2, PROV_OPERATOR: 1, PROV_DISTILLED: 0}
+# The decision of record (2026-11-10, Jenna: "anything pulled here is
+# stored for Prometheus"): a figure Jenna approved in a published Crosswalk
+# deliverable (The Read, a deck, a PDF, a Subscriber IQ tracker). It
+# outranks every other provenance, replays for every natural ask on its
+# subject, and nothing a later read draws may contradict it. Route prefix
+# `decision_of_record_<source>` (The Paper banked its trackers through
+# `decision_of_record_subiq` on 2026-11-10).
+PROV_RECORD = 'decision_of_record'
+RECORD_ROUTE_PREFIX = 'decision_of_record_'
+_PROV_RANK = {PROV_RECORD: 3, PROV_DELIVERED: 2, PROV_OPERATOR: 1, PROV_DISTILLED: 0}
 
 
 def canon_provenance(provenance):
     p = str(provenance or '').strip().lower()
     if not p:
         return PROV_OPERATOR
+    if 'record' in p:
+        return PROV_RECORD
     if 'artifact' in p or 'deliver' in p or 'deck' in p:
         return PROV_DELIVERED
     if 'distill' in p:
@@ -187,11 +198,24 @@ def canon_provenance(provenance):
     return PROV_OPERATOR
 
 
+def is_record_entry(entry):
+    """True for a decision-of-record entry (its provenance or its route
+    says so; the route alone carries entries written before the
+    provenance value existed)."""
+    if not isinstance(entry, dict):
+        return False
+    return entry.get('prov') == PROV_RECORD \
+        or str(entry.get('route') or '').startswith(RECORD_ROUTE_PREFIX)
+
+
 def provenance_rank(entry):
     """Conflict rank for one stored entry. Delivered-deck anchor
-    entries written before the prov field rank as delivered too."""
+    entries written before the prov field rank as delivered too; a
+    decision-of-record route ranks as the record whatever its stamp."""
     if not isinstance(entry, dict):
         return _PROV_RANK[PROV_OPERATOR]
+    if str(entry.get('route') or '').startswith(RECORD_ROUTE_PREFIX):
+        return _PROV_RANK[PROV_RECORD]
     p = entry.get('prov')
     if p in _PROV_RANK:
         return _PROV_RANK[p]
@@ -638,8 +662,12 @@ def _enforce_ledger_coherence(doc, skey, entry):
        fingerprint; the new value nudges by a salted fraction with
        messy endings.
 
-    Mutates entry['metrics'] in place; never raises."""
+    Mutates entry['metrics'] in place; never raises. A decision of
+    record is exempt: its figures are the published ones and never move
+    (2026-11-10)."""
     try:
+        if is_record_entry(entry):
+            return
         subject = str(entry.get('subject') or '')
         fam = entry.get('family') or ''
         metrics = entry.get('metrics') or []
@@ -958,6 +986,136 @@ def persist(*, subject, metric_family, question, route, metrics,
         print(f"[insights-ledger] persist failed: {e}")
 
 
+def bank_record(*, subject, source, metrics, question, reply,
+                window_start='', window_end='', window_label='',
+                universe='', cohort='', breakdown=None, anchors=None,
+                derivation='', metric_family='', followups=None,
+                questions=None, retire_others=True, subject_aliases=None):
+    """Bank a published deliverable's figures as the decision of record
+    for its subject (Jenna 2026-11-10: "anything pulled here is stored
+    for Prometheus"). Synchronous; returns the list of entry keys written.
+
+    One entry carries the headline metrics, the breakdown and the reply
+    Prometheus hands back for the subject's natural asks; each extra
+    natural ask in ``questions`` (``[(question, reply), ...]`` or plain
+    strings, which reuse ``reply``) is banked as its own exact-question
+    entry under the same key so a verbatim re-ask replays the record.
+    Idempotent: the same source re-banked replaces its earlier rows
+    (same key and question). With ``retire_others`` every non-record
+    entry already in the subject's bucket with the same family is
+    stamped retired, so a figure a read drew before the deliverable was
+    published never replays against the record. Never raises; the trail
+    (the anchors, the derivation) stays internal and never renders."""
+    try:
+        src = re.sub(r'[^a-z0-9]+', '_', str(source or 'deliverable').lower()).strip('_')[:32] or 'deliverable'
+        route = RECORD_ROUTE_PREFIX + src
+        fam = canon_family(metric_family or family_from_question(question) or 'subscribers')
+        written = []
+        asks = [(question, reply)]
+        for q in (questions or []):
+            if isinstance(q, (list, tuple)) and len(q) >= 2:
+                asks.append((str(q[0]), str(q[1] or reply)))
+            elif isinstance(q, str) and q.strip():
+                asks.append((q, reply))
+        first = True
+        for q, r in asks:
+            entry = make_entry(
+                subject=subject, metric_family=fam, question=q, route=route,
+                metrics=attach_sample_people(metrics, universe=universe or cohort or subject) if first else metrics,
+                anchors=anchors, window_start=window_start, window_end=window_end,
+                window_label=window_label, reply=r, followups=followups,
+                cohort=cohort, breakdown=breakdown if first else None,
+                derivation=derivation, provenance=PROV_RECORD, universe=universe)
+            first = False
+            if not entry['metrics'] and not entry['reply']:
+                continue
+            _record_entry_now(entry)
+            written.append(entry['k'])
+        if written and subject_aliases:
+            aliases = [str(a).strip()[:80] for a in subject_aliases if str(a or '').strip()][:24]
+
+            def _alias_mut(doc):
+                skey = bucket_key_for(doc, subject)
+                sub = (doc.get('subjects') or {}).get(skey)
+                if not sub:
+                    return None
+                have = list(sub.get('aliases') or [])
+                for a in aliases:
+                    if a not in have:
+                        have.append(a)
+                sub['aliases'] = have[:24]
+                return doc
+
+            try:
+                _update_index(_alias_mut)
+            except Exception as e:
+                print(f"[insights-ledger] record aliases not written: {e}")
+        if retire_others and written:
+            retire_entries_for_record(subject, fam, exclude_routes=(route,))
+        return written
+    except Exception as e:
+        print(f"[insights-ledger] bank_record failed: {e}")
+        return []
+
+
+def retire_entries(keys=None, questions=None, by='operator', note=''):
+    """Stamp entries retired (they leave replay and the prompt block, and
+    stay in the index for audit). Matches by entry key or by normalized
+    question across every bucket. Returns the number stamped."""
+    want_k = {str(k) for k in (keys or []) if k}
+    want_q = {normalize_question(q) for q in (questions or []) if q}
+    if not want_k and not want_q:
+        return 0
+    done = {'n': 0}
+    stamp = {'by': str(by or 'operator')[:40], 'note': str(note or '')[:160],
+             'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+
+    def _mut(doc):
+        for sk, sub in (doc.get('subjects') or {}).items():
+            for e in (sub.get('entries') or []):
+                if not isinstance(e, dict) or e.get('retired'):
+                    continue
+                if str(e.get('k') or '') in want_k or (want_q and e.get('qn') in want_q):
+                    e['retired'] = dict(stamp)
+                    done['n'] += 1
+        return doc if done['n'] else None
+
+    try:
+        _update_index(_mut)
+    except Exception as e:
+        print(f"[insights-ledger] retire_entries failed: {e}")
+    return done['n']
+
+
+def retire_entries_for_record(subject, metric_family, exclude_routes=()):
+    """Every non-record entry in the subject's bucket with this family is
+    stamped retired: the record is the only figure that answers there."""
+    fam = canon_family(metric_family)
+    done = {'n': 0}
+    stamp = {'by': 'decision_of_record', 'subject': str(subject or '')[:120],
+             'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+
+    def _mut(doc):
+        skey = _resolve_subject(doc, subject=subject)
+        bucket = (doc.get('subjects') or {}).get(skey) if skey else None
+        if not bucket:
+            return None
+        for e in (bucket.get('entries') or []):
+            if not isinstance(e, dict) or e.get('retired') or is_record_entry(e):
+                continue
+            if e.get('route') in exclude_routes or canon_family(e.get('family')) != fam:
+                continue
+            e['retired'] = dict(stamp)
+            done['n'] += 1
+        return doc if done['n'] else None
+
+    try:
+        _update_index(_mut)
+    except Exception as e:
+        print(f"[insights-ledger] retire_entries_for_record failed: {e}")
+    return done['n']
+
+
 ANCHOR_ROUTE = 'delivered_deck'
 
 
@@ -1078,13 +1236,23 @@ def _fold_family_aliases(norm_text):
     return re.sub(r'\s+', ' ', t).strip()
 
 
-def _resolve_subject(index_doc, subject=None, question=None):
+def _has_live_entries(bucket):
+    return any(isinstance(e, dict) and not e.get('retired') for e in ((bucket or {}).get('entries') or []))
+
+
+def _resolve_subject(index_doc, subject=None, question=None, live_only=False):
     """Find the subject bucket for this ask. Explicit subject first
     (normalized match), else the longest ledger subject whose
-    normalized form appears inside the normalized question, else the
+    normalized form appears inside the normalized question, else a
+    bucket one of whose aliases the question carries whole, else the
     subject whose distinctive tokens all appear in the question. Family
-    spellings fold onto the banked subject first (_SUBJECT_FAMILY_ALIASES)."""
+    spellings fold onto the banked subject first (_SUBJECT_FAMILY_ALIASES).
+    With ``live_only`` a bucket whose entries are all retired never
+    resolves (2026-11-10: the retired reads under 'Amazon Prime Video'
+    must not shadow the record banked under its own subject)."""
     subjects = index_doc.get('subjects') or {}
+    if live_only:
+        subjects = {k: v for k, v in subjects.items() if _has_live_entries(v)}
     if subject:
         folded = _fold_family_aliases(normalize_subject(subject))
         if folded != normalize_subject(subject):
@@ -1118,6 +1286,22 @@ def _resolve_subject(index_doc, subject=None, question=None):
             continue
         if f' {s_norm} ' in qn and len(s_norm) > best_len:
             best_key, best_len = k, len(s_norm)
+    # A bucket's own aliases (2026-11-10): the ways readers name a subject
+    # that was banked under a deliverable's title ('Amazon Channels vs
+    # direct', 'by billing path' for the Amazon Prime Video Channels vs
+    # direct record). Every token of an alias in the ask resolves the
+    # bucket, scored against the plain-name matches by length, so 'Amazon
+    # Prime Video Channels versus direct' resolves the record and not the
+    # Amazon Prime Video profile whose name sits inside it.
+    q_tokens = set(qn.split())
+    for k, v in subjects.items():
+        for alias in (v.get('aliases') or [])[:24]:
+            atoks = [w for w in normalize_subject(alias).split() if w]
+            if not atoks or not set(atoks) <= q_tokens:
+                continue
+            score = sum(len(w) for w in atoks) + len(atoks) - 1
+            if score > best_len:
+                best_key, best_len = k, score
     if best_key:
         return best_key
     # Token-subset fallback: every distinctive token of the stored
@@ -1261,23 +1445,29 @@ def render_block(entries, limit=12):
     per stored metric. Delivered-deck anchor entries render first
     (they are the figures already shipped for the subject and always
     survive the line cap), then the most recent reads."""
-    anchors = [e for e in entries if e.get('route') == ANCHOR_ROUTE]
-    reads = [e for e in entries if e.get('route') != ANCHOR_ROUTE]
+    # the decision of record renders ahead of everything (2026-11-10): the
+    # published figures a later read must agree with, tagged so the
+    # prompt reads them as binding, never as one more earlier read
+    anchors = [e for e in entries if e.get('route') == ANCHOR_ROUTE or is_record_entry(e)]
+    reads = [e for e in entries if e.get('route') != ANCHOR_ROUTE and not is_record_entry(e)]
     ordered = anchors[-limit:] + list(reversed(reads[-limit:]))
     lines = []
     for e in ordered[:limit]:
         win = e.get('wl') or (f"{e.get('ws')} to {e.get('we')}"
                               if e.get('ws') and e.get('we') else 'any window')
-        for m in (e.get('metrics') or [])[:6]:
+        tag = '[decision of record] ' if is_record_entry(e) else ''
+        for m in (e.get('metrics') or [])[:(12 if tag else 6)]:
             unit = m.get('unit') or ''
             if unit in ('pct', 'percent', 'percentage', '%'):
                 val = f"{m['value']:.1f}%"
+            elif unit in ('usd', '$'):
+                val = f"${m['value']:,.2f}"
             else:
                 val = f"{m['value']:,}"
                 if unit and unit != 'count':
                     val += f" {unit}"
             d = f" ({m['definition']})" if m.get('definition') else ''
-            lines.append(f"- {e.get('subject')} | {e.get('family')} | "
+            lines.append(f"- {tag}{e.get('subject')} | {e.get('family')} | "
                          f"{win}: {m.get('label')} = {val}{d}")
         bd = e.get('breakdown') or {}
         coh = f", {e.get('cohort')}" if e.get('cohort') else ''
@@ -1445,19 +1635,132 @@ _MEASURE_CLASSES = (
     ('titles', re.compile(
         r'\b(?:shows?|titles?|series|programs?|programming|episodes?|'
         r'films?|movies?)\b')),
+    # Subscription measures (2026-11-10, Liz's Amazon Channels vs direct
+    # thread): three asks on the same ten services and the same two
+    # billing paths replayed earlier reads that counted something else.
+    # "share still active at day 30, 60 and 90" was handed the starts and
+    # share-of-starts read; "90 day survival by service" was handed the
+    # cancellers' switching read; "still active at day 30/60/90" was
+    # handed the churn-rate read. Same family (subscribers), same
+    # dimension (service), enough topic overlap, a different measure.
+    # Patterns run on normalized text (lower case, punctuation folded to
+    # spaces), so 'month-to-month' reads 'month to month'.
+    ('survival', re.compile(
+        r'\b(?:still active|surviv\w*|retention|retained|retain\w*|'
+        r'remain(?:s|ed|ing)? (?:at|active|subscribed)|active at day|'
+        r'at day \d+|day (?:30|60|90|180)\b|d(?:30|60|90)\b)')),
+    ('churn_rate', re.compile(
+        r'\bchurn\w*\b|\bcancel(?:lation|ation)s? rate\b|\bcancel rate\b|'
+        r'\bcancel(?:s|led|ed)? (?:a|per) month\b')),
+    ('starts', re.compile(
+        r'\b(?:new (?:us )?(?:subscriptions?|subscribers|signups?|sign ups?|starts?)|'
+        r'subscriptions? started|signups? started|started (?:through|via|in|inside|direct)|'
+        r'share of (?:new )?(?:starts|signups|sign ups)|starts? (?:through|via|in|inside)|'
+        r'how many (?:new )?(?:subscriptions?|signups?|starts))\b')),
+    ('months_kept', re.compile(
+        r'\b(?:months? (?:kept|retained|held|paid)|average (?:number of )?months|'
+        r'paid months|months (?:of|in) the first 12|of 12 months|first (?:12|twelve) months)\b')),
+    ('samplers', re.compile(
+        r'\b(?:one title|single title|only one title|gone within \d+ days|'
+        r'cancel(?:led|ed)? within \d+ days|samplers?)\b')),
+    ('switching', re.compile(
+        r'\b(?:different (?:streaming )?service|another (?:streaming )?(?:service|subscription)|'
+        r'start(?:ed)? (?:another|a new) (?:subscription|service)|switch(?:ed|ers|ing)?|'
+        r'rotat\w*|where (?:the )?cancel\w* go|destination service)\b')),
+    ('winback', re.compile(
+        r'\b(?:win ?back\w*|came back|come back|back (?:at|to) the same|'
+        r'return(?:ed|s)? to the same|reactivat\w*|restart(?:ed|s)?)\b')),
+    ('plan_mix', re.compile(
+        r'\b(?:month to month|monthly (?:plan|pricing)|annual (?:plans?|pricing)|'
+        r'bundles?|plan mix|pricing mix)\b')),
+    ('value', re.compile(
+        r'\b(?:worth|lifetime value|ltv|first year value|value (?:of|per) (?:a |an |each )?'
+        r'(?:subscriber|signup|sign up|account)|revenue per|arpu)\b')),
+    ('basis', re.compile(
+        r'\b(?:access end|request date|cancel request|requested date|access ends?)\b')),
+    ('per_service', re.compile(
+        r'\b(?:per service|by service|each service|every service|one row per service|'
+        r'service by service|for each of the (?:ten|nine|eight|\d+) services|'
+        r'each of the (?:ten|nine|eight|\d+) (?:streaming )?services)\b')),
 )
 _DIM_SPLIT_RX = re.compile(r'\s+(?:by|per|across)\s+')
 
 
 def _entry_measure_text(entry):
-    """Every stored string that says what the entry counts."""
+    """Every stored string that says what the entry counts: the table's
+    dimension and share basis, the question, each metric's label and
+    definition, and each row's note (a per-service row carries its
+    measure in the note, 'Day 90: Channels 47.1, direct 55.4')."""
     bd = entry.get('breakdown') or {}
     bits = [bd.get('dimension'), bd.get('share_basis'), entry.get('q'),
             entry.get('question')]
     for m in (entry.get('metrics') or []):
         if isinstance(m, dict):
             bits.extend((m.get('label'), m.get('definition')))
-    return normalize_question(' '.join(str(b) for b in bits if b))
+    for r in (bd.get('rows') or [])[:60]:
+        if isinstance(r, dict) and r.get('note'):
+            bits.append(r.get('note'))
+    # the whole text, not normalize_question's 300-character cap: a read
+    # with a dozen metrics names its measures well past that (2026-11-10)
+    return re.sub(r'[^a-z0-9]+', ' ', ' '.join(str(b) for b in bits if b).lower()).strip()[:8000]
+
+
+def _norm_full(question):
+    """The whole ask, normalized (normalize_question caps at 300
+    characters; a long ask names its measures past that cap)."""
+    return re.sub(r'[^a-z0-9]+', ' ', str(question or '').lower()).strip()[:2000]
+
+
+def ask_measure_classes(question):
+    """The measure classes an ask names, in table order."""
+    qn = ' ' + _norm_full(question) + ' '
+    return [name for name, rx in _MEASURE_CLASSES if rx.search(qn)]
+
+
+_MONTHS = {'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+           'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
+           'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10,
+           'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12}
+_MON_RX = r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
+_MONTH_WINDOW_RX = re.compile(
+    r'\b(?P<m1>' + _MON_RX + r')(?: \d{1,2})? (?P<y1>20\d\d) (?:through|thru|to|until|till|and)'
+    r' (?P<m2>' + _MON_RX + r')(?: \d{1,2})? (?P<y2>20\d\d)\b')
+
+
+def ask_month_window(question):
+    """(y1, m1, y2, m2) when the ask names a month window ('Nov 1 2025
+    through Oct 31 2026', 'Jul 2025 to Jun 2026'), else None. An ask
+    that names its window only replays a read banked on that window
+    (2026-11-10: a Nov 2025 to Oct 2026 ask was handed a Jul 2025 to Jun
+    2026 read because the year gate saw 2025 and 2026 covered)."""
+    m = _MONTH_WINDOW_RX.search(' ' + normalize_question(question) + ' ')
+    if not m:
+        return None
+    try:
+        return (int(m.group('y1')), _MONTHS[m.group('m1')], int(m.group('y2')), _MONTHS[m.group('m2')])
+    except Exception:
+        return None
+
+
+def _entry_month_window(entry):
+    ws, we = str(entry.get('ws') or ''), str(entry.get('we') or '')
+    try:
+        return (int(ws[:4]), int(ws[5:7]), int(we[:4]), int(we[5:7]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _month_window_ok(entry, question):
+    """The stored read sits on the month window the ask names. An ask
+    with no month window is unconstrained here (the year gate and the
+    rolling-window freshness still apply)."""
+    want = ask_month_window(question)
+    if not want:
+        return True
+    have = _entry_month_window(entry)
+    if not have:
+        return False
+    return have == want
 
 
 def _measure_ok(entry, qn):
@@ -2242,6 +2545,11 @@ def find_semantic(entries, question, ask_sig=None):
         # unconstrained, as before.
         if q_years and not _window_covers(e, q_years):
             continue
+        # An ask that names its month window only replays a read banked
+        # on that window (2026-11-10, Liz: Nov 2025 to Oct 2026 asked,
+        # Jul 2025 to Jun 2026 handed back).
+        if not _month_window_ok(e, question):
+            continue
         # An annual-phrased ask ("annual viewership", "full year")
         # carries no digits, so the year gate above never sees it;
         # it must not replay a read banked on a much shorter window
@@ -2250,6 +2558,17 @@ def find_semantic(entries, question, ask_sig=None):
             span = _entry_span_days(e)
             if span is not None and span < 300:
                 continue
+        # The decision of record answers every natural ask on its subject
+        # (2026-11-10): no family verb or ranked dimension is needed, the
+        # record IS the subject's read. It must still count what the ask
+        # counts and sit on the window the ask names.
+        if is_record_entry(e):
+            if _measure_ok(e, _norm_full(question)) and _month_window_ok(e, question) \
+                    and _topical_overlap_ok(e, qn, floor=0.2) and _chain_titles_ok(e, question):
+                rank = provenance_rank(e)
+                if best is None or best_rank is None or rank > best_rank or best_dist is None or best_dist > 0:
+                    best, best_dist, best_rank = e, 0, rank
+            continue
         if fam:
             if e.get('family') not in _family_compat(fam):
                 continue
@@ -2287,6 +2606,8 @@ def find_semantic(entries, question, ask_sig=None):
             dist = 0
         if not _dimension_ok(e, qn):
             continue
+        if not _measure_ok(e, _norm_full(question)):
+            continue   # the stored read counts what the whole ask counts (2026-11-10)
         if not _topical_overlap_ok(e, qn):
             continue
         if not _chain_titles_ok(e, question):
@@ -2360,7 +2681,10 @@ def find_exact(entries, question=None, key=None, ask_sig=None):
         if hit is not None:
             return hit
     if key:
-        return _best(lambda e: e.get('k') == key and (not qn or (_topical_overlap_ok(e, qn) and _chain_titles_ok(e, question))))
+        # a key is subject, family and window; the stored read must also
+        # count what the ask counts and sit on the month window it names
+        return _best(lambda e: e.get('k') == key and (not qn or (_topical_overlap_ok(e, qn) and _chain_titles_ok(e, question)
+                                                                 and _measure_ok(e, _norm_full(question)) and _month_window_ok(e, question))))
     return None
 
 
@@ -2454,6 +2778,12 @@ def consult(subject=None, question=None, metric_family=None,
         _can_replay = replay_eligible(question)
         _ask_sig = ask_journey(question, prior_question=prior_question, history=history)
         skey = _resolve_subject(doc, subject=subject, question=question)
+        if skey and not _has_live_entries(subjects.get(skey)):
+            # every read under the resolved subject is retired: the ask
+            # resolves again over the live buckets (the record banked
+            # under its own subject answers it, 2026-11-10)
+            skey = _resolve_subject(doc, subject=None, question=question, live_only=True) \
+                or _resolve_subject(doc, subject=subject, question=question, live_only=True)
         if not skey:
             # Exact-ask replay must not depend on subject resolution:
             # scan all buckets for this normalized question.
@@ -2514,6 +2844,21 @@ def consult(subject=None, question=None, metric_family=None,
             exact = find_semantic(entries, question, ask_sig=_ask_sig)
             if exact:
                 match = 'semantic'
+        if not exact:
+            # A decision of record the question itself names outranks the
+            # bound subject's bucket (2026-11-10): an ask on the Amazon
+            # Prime Video profile about 'Amazon Prime Video Channels versus
+            # direct' is answered by the published Channels vs direct
+            # record, not read fresh against the profile.
+            rkey = _resolve_subject(doc, subject=None, question=question, live_only=True)
+            if rkey and rkey != skey:
+                rb = subjects.get(rkey) or {}
+                rents = [e for e in (rb.get('entries') or []) if isinstance(e, dict) and not e.get('retired')]
+                if any(is_record_entry(e) for e in rents):
+                    rexact = find_semantic(rents, question, ask_sig=_ask_sig)
+                    if rexact is not None and is_record_entry(rexact):
+                        skey, bucket, entries = rkey, rb, rents
+                        exact, match = rexact, 'semantic'
         if not _can_replay:
             exact, match = None, None
         exact = _exact_if_fresh(exact)

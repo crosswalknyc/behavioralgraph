@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "9a4175c4d9bec3c1eb3506b499709506aa5987abfdbe877c25933305681e7d24",
+ "content_hash": "e127ca7d483cfdab4de6130fa286f00aaa85c1b4539014b10d0ce3aa02737222",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1005,7 +1005,27 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "deliverable_banks_before_send",
+   "decided": "2026-11-10",
+   "statement": "A deliverable built outside Prometheus (an issue of The Read, a hand-built deck, a PDF, a data file) banks its figures as the decision of record before it is sent, and Prometheus answers from the record. The record outranks every earlier read on its subject; a repeat of a published measurement restates the published figure, and a different scope on the same subject (one more service, a per-service split, another window or basis) is stated against the published figures, never drawn fresh. A re-ask that changes what is counted or the window is a new read, never a replay of an earlier reply.",
+   "match_terms": [
+    "newsletter",
+    "the read",
+    "issue",
+    "published",
+    "record",
+    "amazon vs direct",
+    "channels vs direct",
+    "same question",
+    "again",
+    "earlier"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-11T00:22:44Z"
+ "generated_at": "2026-11-11T01:55:53Z"
 }

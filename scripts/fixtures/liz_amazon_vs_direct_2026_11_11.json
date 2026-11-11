@@ -1,0 +1,1605 @@
+{
+ "subjects": {
+  "amazon": {
+   "subject": "Amazon Prime Video",
+   "entries": [
+    {
+     "k": "amazon|subscribers|2025-07-01|2026-06-30",
+     "subject": "Amazon Prime Video",
+     "family": "subscribers",
+     "q": "For the ten premium streaming services sold both through Amazon Prime Video Channels and on the services' own sites and apps (HBO Max, Peacock, Paramount+, STARZ, Apple TV, BET+, MGM+, AMC+, BritBox, Acorn TV): how many new US subscriptions started in the window, what share started through Amazon Ch",
+     "qn": "for the ten premium streaming services sold both through amazon prime video channels and on the services own sites and apps hbo max peacock paramount starz apple tv bet mgm amc britbox acorn tv how many new us subscriptions started in the window what share started through amazon channels versus dire",
+     "route": "reasoned_metrics",
+     "ts": "2026-11-11T00:48:21Z",
+     "ws": "2025-07-01",
+     "we": "2026-06-30",
+     "wl": "Jul 1 2025 to Jun 30 2026",
+     "metrics": [
+      {
+       "name": "total_new_us_starts",
+       "label": "New US subscription starts, ten services",
+       "value": 68413927,
+       "unit": "subscriptions",
+       "definition": "paid US subscription starts activated across HBO Max, Peacock, Paramount+, STARZ, Apple TV, BET+, MGM+, AMC+, BritBox and Acorn TV in the window, counted once per activation across both billing surfaces",
+       "sample_people": 2073778
+      },
+      {
+       "name": "amazon_channels_starts",
+       "label": "Started through Amazon Prime Video Channels",
+       "value": 15808113,
+       "unit": "subscriptions",
+       "definition": "starts whose billing relationship opened inside Prime Video Channels, with the first play of the service delivered through the Prime Video app",
+       "sample_people": 479179
+      },
+      {
+       "name": "amazon_channels_share",
+       "label": "Amazon Channels share of starts",
+       "value": 23.1,
+       "unit": "pct",
+       "definition": "Channels starts as a share of all new US starts across the ten services in the window"
+      },
+      {
+       "name": "direct_starts",
+       "label": "Started direct on the service",
+       "value": 52605814,
+       "unit": "subscriptions",
+       "definition": "starts activated on the service's own site or app, including starts billed through a device store on the service's own signup flow",
+       "sample_people": 1594599
+      },
+      {
+       "name": "direct_share",
+       "label": "Direct share of starts",
+       "value": 76.9,
+       "unit": "pct",
+       "definition": "direct starts as a share of all new US starts across the ten services in the window"
+      },
+      {
+       "name": "prime_video_audience_hbo_max",
+       "label": "HBO Max inside the Prime Video audience",
+       "value": 24026976,
+       "unit": "people",
+       "definition": "People in the US Prime Video audience who also streamed HBO Max at least once in the window",
+       "sample_people": 728311
+      }
+     ],
+     "anchors": [
+      "PUBLISHED MEASUREMENTS - BET - Paramount+ Viewers",
+      "Paramount+ | audience | 2025-10-30 to 2026-10-30: twin audience, US people = 83,791,763.0 people (people in the US in th",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Horror audience with Paramount+ = 41.3% (share of the US horror audi",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Prank content audience with Paramount+ = 29.4% (share of the US pran",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Comedy audience with Paramount+ = 24,876,934 people (projected US pe",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Interest audience share, Prank content = 45.2%"
+     ],
+     "base": "Amazon_Prime_Video_06_14_2026_11_35.csv",
+     "cohort": "",
+     "universe": "Amazon Prime Video",
+     "breakdown": {
+      "dimension": "Service",
+      "share_basis": "share of the ten services' new US subscription starts in the window",
+      "rows": [
+       {
+        "label": "Apple TV",
+        "share_pct": 21.4241,
+        "penetration_pct": 21.4,
+        "note": "9,538,821 starts; device signups hold the majority",
+        "pool": 9538821,
+        "definition": "Service for Apple TV, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels",
+          "count": 2041308,
+          "share_pct": 21.4
+         },
+         {
+          "label": "Direct",
+          "count": 7497513,
+          "share_pct": 78.6,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "Peacock",
+        "share_pct": 15.2622,
+        "note": "6,774,400 people. People who started a paid US Peacock subscription in the window, on either billing surface",
+        "definition": "Service for Peacock, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026"
+       },
+       {
+        "label": "Paramount+",
+        "share_pct": 14.3083,
+        "note": "6,351,012 people. People who started a paid US Paramount+ subscription in the window, on either billing surface",
+        "definition": "Service for Paramount+, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026"
+       },
+       {
+        "label": "HBO Max",
+        "share_pct": 12.6305,
+        "note": "5,606,317 people. People who started a paid US HBO Max subscription in the window, on either billing surface",
+        "definition": "Service for HBO Max, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026"
+       },
+       {
+        "label": "STARZ",
+        "share_pct": 12.1763,
+        "penetration_pct": 42.7,
+        "note": "5,382,719 starts; promo-led, close to an even split",
+        "pool": 5382719,
+        "definition": "Service for STARZ, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels",
+          "count": 2298421,
+          "share_pct": 42.7
+         },
+         {
+          "label": "Direct",
+          "count": 3084298,
+          "share_pct": 57.3,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "AMC+",
+        "share_pct": 8.1689,
+        "penetration_pct": 46.3,
+        "note": "3,614,287 starts; franchise premieres pull Channels adds",
+        "pool": 3614287,
+        "definition": "Service for AMC+, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels",
+          "count": 1673415,
+          "share_pct": 46.3
+         },
+         {
+          "label": "Direct",
+          "count": 1940872,
+          "share_pct": 53.7,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "BET+",
+        "share_pct": 4.9322,
+        "penetration_pct": 38.9,
+        "note": "2,218,463 starts; the most direct-weighted catalog service",
+        "pool": 2218463,
+        "definition": "Service for BET+, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels",
+          "count": 862982,
+          "share_pct": 38.9
+         },
+         {
+          "label": "Direct",
+          "count": 1355481,
+          "share_pct": 61.1,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "MGM+",
+        "share_pct": 4.3157,
+        "penetration_pct": 51.2,
+        "note": "1,894,752 starts; majority arrive as a Prime add-on",
+        "pool": 1894752,
+        "definition": "Service for MGM+, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels",
+          "count": 970113,
+          "share_pct": 51.2,
+          "mode": true
+         },
+         {
+          "label": "Direct",
+          "count": 924639,
+          "share_pct": 48.8
+         }
+        ]
+       },
+       {
+        "label": "Acorn TV",
+        "share_pct": 3.3909,
+        "penetration_pct": 57.4,
+        "note": "1,537,268 starts; the highest Channels share of the ten",
+        "pool": 1537268,
+        "definition": "Service for Acorn TV, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels",
+          "count": 882392,
+          "share_pct": 57.4,
+          "mode": true
+         },
+         {
+          "label": "Direct",
+          "count": 654876,
+          "share_pct": 42.6
+         }
+        ]
+       },
+       {
+        "label": "BritBox",
+        "share_pct": 3.3909,
+        "penetration_pct": 54.8,
+        "note": "1,513,678 starts; British drama buyers add it on Prime",
+        "pool": 1513678,
+        "definition": "Service for BritBox, share of the ten services' new US subscription starts in the window, Jul 1 2025 to Jun 30 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels",
+          "count": 829496,
+          "share_pct": 54.8,
+          "mode": true
+         },
+         {
+          "label": "Direct",
+          "count": 684182,
+          "share_pct": 45.2
+         }
+        ]
+       }
+      ]
+     },
+     "reply": "On Amazon Prime Video:\n\nThe ten premium services took 68,413,927 new US subscription starts in the window, and 15,808,113 of them (23.1%) started inside Amazon Prime Video Channels rather than on the service's own site or app.\n\nNew US subscription starts, ten services: 68,413,927, Started through Amazon Prime Video Channels: 15,808,113, Amazon Channels share of starts: 23.1%.\n\nService mix, Jul 1 2025 to Jun 30 2026 (share of the ten services' new US subscription starts in the window)\n- Apple TV: 21.4% share, 21.4% penetration. 9,538,821 starts; device signups hold the majority. Pool 9,538,821 subscribers. Amazon Channels: 2,041,308 (21.4%) | Direct: 7,497,513 (78.6%) most common\n- Peacock: 15.3% share. 6,788,497 people. People who started a paid US Peacock subscription in the window, on either billing surface\n- Paramount+: 14.3% share. 6,351,012 people. People who started a paid US Paramount+ subscription in the window, on either billing surface\n- HBO Max: 12.6% share. 5,606,317 people. People who started a paid US HBO Max subscription in the window, on either billing surface\n- STARZ: 12.2% share, 42.7% penetration. 5,382,719 starts; promo-led, close to an even split. Pool 5,382,719 subscribers. Amazon Channels: 2,298,421 (42.7%) | Direct: 3,084,298 (57.3%) most common\n- AMC+: 8.2% share, 46.3% penetration. 3,614,287 starts; franchise premieres pull Channels adds. Pool 3,614,287 subscribers. Amazon Channels: 1,673,415 (46.3%) | Direct: 1,940,872 (53.7%) most common\n- BET+: 4.9% share, 38.9% penetration. 2,218,463 starts; the most direct-weighted catalog service. Pool 2,218,463 subscribers. Amazon Channels: 862,982 (38.9%) | Direct: 1,355,481 (61.1%) most common\n- MGM+: 4.3% share, 51.2% penetration. 1,894,752 starts; majority arrive as a Prime add-on. Pool 1,894,752 sub",
+     "followups": [
+      "Day 90 retention of Channels starts versus direct starts, by service",
+      "How many of the Channels starts were first-ever subscriptions to that service",
+      "Monthly series of Channels share across the window"
+     ],
+     "prov": "operator",
+     "verify": {
+      "outcome": "revised_pass",
+      "anchor": "skip",
+      "facts": "pass",
+      "ledger": "skip",
+      "scrub": "pass",
+      "anchored": 0,
+      "ts": "2026-11-11T00:48:21Z",
+      "arith": "{'fixed': 0, 'trail': 'digits drawn natu"
+     }
+    }
+   ]
+  },
+  "premium_streaming_services_sold_through_amazon_prime_video_channels_vs_direct": {
+   "subject": "Premium streaming services sold through Amazon Prime Video Channels vs direct",
+   "entries": [
+    {
+     "k": "premium_streaming_services_sold_through_amazon_prime_video_channels_vs_direct|subscribers|2025-11-11|2026-11-11",
+     "subject": "Premium streaming services sold through Amazon Prime Video Channels vs direct",
+     "family": "subscribers",
+     "q": "what is the average monthly churn rate for subscribers on each path (Amazon versus direct)? State how churn is defined.?",
+     "qn": "what is the average monthly churn rate for subscribers on each path amazon versus direct state how churn is defined",
+     "route": "reasoned_metrics",
+     "ts": "2026-11-11T00:44:14Z",
+     "ws": "2025-11-11",
+     "we": "2026-11-11",
+     "wl": "Nov 11 2025 to Nov 11 2026",
+     "metrics": [
+      {
+       "name": "avg_monthly_churn_amazon_channels",
+       "label": "Average monthly churn, Amazon Prime Video Channels path",
+       "value": 8.7,
+       "unit": "pct",
+       "definition": "mean across the twelve months of the window of paid US subscriptions to the ten services billed through Amazon Prime Video Channels that were active on the first day of a calendar month and not active on the last day of "
+      },
+      {
+       "name": "avg_monthly_churn_direct",
+       "label": "Average monthly churn, direct path",
+       "value": 5.8,
+       "unit": "pct",
+       "definition": "the same monthly calculation for paid US subscriptions to the ten services billed on the services' own sites and apps, averaged across the twelve months of the window"
+      },
+      {
+       "name": "blended_monthly_churn",
+       "label": "Blended monthly churn, both paths",
+       "value": 6.7,
+       "unit": "pct",
+       "definition": "all paid US subscriptions to the ten services across both billing paths, monthly losses over month-opening active subscriptions, averaged across the window"
+      }
+     ],
+     "anchors": [],
+     "base": "Amazon_Music_05_22_2026_22_31.csv",
+     "cohort": "",
+     "universe": "Premium streaming services sold through Amazon Prime Video Channels vs direct",
+     "breakdown": {
+      "dimension": "Service and billing path",
+      "share_basis": "share of all churned subscriptions across the ten services in the window",
+      "rows": [
+       {
+        "label": "HBO Max",
+        "share_pct": 21.3,
+        "penetration_pct": 8.1,
+        "note": "Amazon path 8.1% monthly, direct 5.2%",
+        "definition": "Service and billing path for HBO Max, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "Paramount+",
+        "share_pct": 17.6,
+        "penetration_pct": 9.4,
+        "note": "Amazon path 9.4% monthly, direct 6.3%",
+        "definition": "Service and billing path for Paramount+, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "Peacock",
+        "share_pct": 16.4,
+        "penetration_pct": 9.7,
+        "note": "Amazon path 9.7% monthly, direct 6.6%",
+        "definition": "Service and billing path for Peacock, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "Apple TV",
+        "share_pct": 12.7,
+        "penetration_pct": 7.4,
+        "note": "Amazon path 7.4% monthly, direct 4.8%",
+        "definition": "Service and billing path for Apple TV, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "STARZ",
+        "share_pct": 9.8,
+        "penetration_pct": 10.3,
+        "note": "Amazon path 10.3% monthly, direct 7.1%",
+        "definition": "Service and billing path for STARZ, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "AMC+",
+        "share_pct": 6.3,
+        "penetration_pct": 9.1,
+        "note": "Amazon path 9.1% monthly, direct 6.2%",
+        "definition": "Service and billing path for AMC+, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "MGM+",
+        "share_pct": 5.1,
+        "penetration_pct": 8.9,
+        "note": "Amazon path 8.9% monthly, direct 6.4%",
+        "definition": "Service and billing path for MGM+, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "BET+",
+        "share_pct": 4.2,
+        "penetration_pct": 8.3,
+        "note": "Amazon path 8.3% monthly, direct 5.9%",
+        "definition": "Service and billing path for BET+, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "Acorn TV",
+        "share_pct": 3.4,
+        "penetration_pct": 6.8,
+        "note": "Amazon path 6.8% monthly, direct 4.6%",
+        "definition": "Service and billing path for Acorn TV, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       },
+       {
+        "label": "BritBox",
+        "share_pct": 3.2,
+        "penetration_pct": 6.4,
+        "note": "Amazon path 6.4% monthly, direct 4.3%",
+        "definition": "Service and billing path for BritBox, share of all churned subscriptions across the ten services in the window, Nov 11 2025 to Nov 11 2026"
+       }
+      ]
+     },
+     "reply": "On Premium streaming services sold through Amazon Prime Video Channels vs direct:\n\nAcross the ten services, subscriptions billed through Amazon Prime Video Channels churn at an average of 8.7% a month against 5.8% a month for subscriptions billed direct, a gap of 2.9 points that holds on every title in the set.\n\nAverage monthly churn, Amazon Prime Video Channels path: 8.7%, Average monthly churn, direct path: 5.8%, Blended monthly churn, both paths: 6.7%.\n\nService and billing path mix, Nov 11 2025 to Nov 11 2026 (share of all churned subscriptions across the ten services in the window)\n- HBO Max: 21.3% share, 8.1% penetration. Amazon path 8.1% monthly, direct 5.2%\n- Paramount+: 17.6% share, 9.4% penetration. Amazon path 9.4% monthly, direct 6.3%\n- Peacock: 16.4% share, 9.7% penetration. Amazon path 9.7% monthly, direct 6.6%\n- Apple TV: 12.7% share, 7.4% penetration. Amazon path 7.4% monthly, direct 4.8%\n- STARZ: 9.8% share, 10.3% penetration. Amazon path 10.3% monthly, direct 7.1%\n- AMC+: 6.3% share, 9.1% penetration. Amazon path 9.1% monthly, direct 6.2%\n- MGM+: 5.1% share, 8.9% penetration. Amazon path 8.9% monthly, direct 6.4%\n- BET+: 4.2% share, 8.3% penetration. Amazon path 8.3% monthly, direct 5.9%\n- Acorn TV: 3.4% share, 6.8% penetration. Amazon path 6.8% monthly, direct 4.6%\n- BritBox: 3.2% share, 6.4% penetration. Amazon path 6.4% monthly, direct 4.3%\n\nREADS\n- [Q1] Monthly churn by path: Amazon Prime Video Channels subscriptions to the ten services run 8.7% a month on average across the window, direct subscriptions run 5.8%, and both paths together blend to 6.7%. The gap is widest on the weekly-cadence general entertainment services (Peacock 9.7% Amazon vs 6.6% direct, Paramount+ 9.4% vs 6.3%, STARZ 10.3% vs 7.1%) and narrowest on the library-first British and ",
+     "followups": [
+      "Month by month churn on both paths across the window",
+      "Day 30, 60 and 90 survival for the Channels signup cohorts",
+      "How many Channels cancellers resubscribe within 90 days, and on which path"
+     ],
+     "prov": "operator",
+     "verify": {
+      "outcome": "revised_pass",
+      "anchor": "skip",
+      "facts": "skip",
+      "ledger": "skip",
+      "scrub": "pass",
+      "anchored": 0,
+      "ts": "2026-11-11T00:44:14Z"
+     }
+    }
+   ]
+  },
+  "amazon_prime_video_channels_vs_direct_billing_ten_streaming_services": {
+   "subject": "Amazon Prime Video Channels vs direct billing, ten streaming services",
+   "entries": [
+    {
+     "k": "amazon_prime_video_channels_vs_direct_billing_ten_streaming_services|subscribers|2025-11-11|2026-11-11",
+     "subject": "Amazon Prime Video Channels vs direct billing, ten streaming services",
+     "family": "subscribers",
+     "q": "Build a per-service comparison for these ten streaming services, each sold both through Amazon Prime Video Channels and on the service's own site and app: HBO Max, Peacock, Paramount+, STARZ, Apple TV, BET+, MGM+, AMC+, BritBox, Acorn TV. For each service give two numbers: average monthly churn rate",
+     "qn": "build a per service comparison for these ten streaming services each sold both through amazon prime video channels and on the service s own site and app hbo max peacock paramount starz apple tv bet mgm amc britbox acorn tv for each service give two numbers average monthly churn rate for subscribers ",
+     "route": "reasoned_metrics",
+     "ts": "2026-11-11T00:49:43Z",
+     "ws": "2025-11-11",
+     "we": "2026-11-11",
+     "wl": "Nov 11 2025 to Nov 11 2026",
+     "metrics": [
+      {
+       "name": "channels_monthly_churn",
+       "label": "Amazon Channels monthly churn, ten services blended",
+       "value": 8.7,
+       "unit": "pct",
+       "definition": "US paid accounts billed through Amazon Prime Video Channels that canceled in a month divided by Channels-billed accounts active at the start of that month, averaged across the window and weighted by starting accounts"
+      },
+      {
+       "name": "direct_monthly_churn",
+       "label": "Direct owned and operated monthly churn, ten services blended",
+       "value": 6.1,
+       "unit": "pct",
+       "definition": "US paid accounts billed on the service's own site or app that canceled in a month divided by direct accounts active at the start of that month, averaged across the window and weighted by starting accounts"
+      },
+      {
+       "name": "churn_gap",
+       "label": "Channels minus direct churn gap",
+       "value": 3,
+       "unit": "pct_pts",
+       "definition": "blended Channels monthly churn less blended direct monthly churn, same definition applied to both paths"
+      },
+      {
+       "name": "channels_subscribers",
+       "label": "Channels-billed US subscribers behind the rate",
+       "value": 28072544,
+       "unit": "subscribers",
+       "definition": "distinct US paid accounts for the ten services billed through Amazon Prime Video Channels, averaged across the months of the window",
+       "sample_people": 850941
+      },
+      {
+       "name": "direct_subscribers",
+       "label": "Direct-billed US subscribers behind the rate",
+       "value": 133864765,
+       "unit": "subscribers",
+       "definition": "distinct US paid accounts for the ten services billed on the owned and operated site or app, averaged across the months of the window",
+       "sample_people": 4057738
+      },
+      {
+       "name": "channels_monthly_cancels",
+       "label": "Channels-path cancels per month",
+       "value": 2447893,
+       "unit": "accounts",
+       "definition": "US paid Channels accounts across the ten services that canceled in an average month of the window",
+       "sample_people": 74201
+      }
+     ],
+     "anchors": [
+      "PUBLISHED MEASUREMENTS - BET - Paramount+ Viewers",
+      "Paramount+ | audience | 2025-10-30 to 2026-10-30: twin audience, US people = 83,791,763.0 people (people in the US in th",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Horror audience with Paramount+ = 41.3% (share of the US horror audi",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Prank content audience with Paramount+ = 29.4% (share of the US pran",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Comedy audience with Paramount+ = 24,876,934 people (projected US pe",
+      "Paramount+ | audience | Oct 21 2025 to Oct 21 2026: Interest audience share, Prank content = 45.2%"
+     ],
+     "base": "HBO_Max_06_15_2026_23_21.csv",
+     "cohort": "",
+     "universe": "Amazon Prime Video Channels vs direct billing, ten streaming services",
+     "breakdown": {
+      "dimension": "Streaming service",
+      "share_basis": "share of the 28,072,544 Amazon Channels billed US subscribers across the ten services",
+      "rows": [
+       {
+        "label": "HBO Max",
+        "share_pct": 22.9,
+        "penetration_pct": 6.8,
+        "note": "direct runs 4.9%, the tightest gap of the big four",
+        "pool": 33745572,
+        "definition": "Streaming service for HBO Max, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (6.8% monthly churn)",
+          "count": 6428713,
+          "share_pct": 19.1
+         },
+         {
+          "label": "Direct site and app (4.9% monthly churn)",
+          "count": 27316859,
+          "share_pct": 80.9,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "Paramount+",
+        "share_pct": 15.1,
+        "penetration_pct": 9.1,
+        "note": "direct runs 6.7%, sports and weekly drops hold the owned path",
+        "pool": 42952482,
+        "definition": "Streaming service for Paramount+, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (9.1% monthly churn)",
+          "count": 4239518,
+          "share_pct": 9.9
+         },
+         {
+          "label": "Direct site and app (6.7% monthly churn)",
+          "count": 38712964,
+          "share_pct": 90.1,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "STARZ",
+        "share_pct": 13.8,
+        "penetration_pct": 11.2,
+        "note": "direct runs 8.6%, the steepest churn on both paths",
+        "pool": 8929046,
+        "definition": "Streaming service for STARZ, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (11.2% monthly churn)",
+          "count": 3864217,
+          "share_pct": 43.3
+         },
+         {
+          "label": "Direct site and app (8.6% monthly churn)",
+          "count": 5064829,
+          "share_pct": 56.7,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "Peacock",
+        "share_pct": 11.1,
+        "penetration_pct": 8.4,
+        "note": "direct runs 6.3%, event sports pull the owned path back",
+        "pool": 32585857,
+        "definition": "Streaming service for Peacock, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (8.4% monthly churn)",
+          "count": 3117642,
+          "share_pct": 9.6
+         },
+         {
+          "label": "Direct site and app (6.3% monthly churn)",
+          "count": 29468215,
+          "share_pct": 90.4,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "MGM+",
+        "share_pct": 9.3,
+        "penetration_pct": 10.8,
+        "note": "direct runs 8.3%, the most Channels-weighted base here",
+        "pool": 4565613,
+        "definition": "Streaming service for MGM+, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (10.8% monthly churn)",
+          "count": 2618374,
+          "share_pct": 57.3,
+          "mode": true
+         },
+         {
+          "label": "Direct site and app (8.3% monthly churn)",
+          "count": 1947239,
+          "share_pct": 42.7
+         }
+        ]
+       },
+       {
+        "label": "Apple TV",
+        "share_pct": 8.8,
+        "penetration_pct": 7.9,
+        "note": "direct runs 5.4%, device-bundled billing holds the owned path",
+        "pool": 26790408,
+        "definition": "Streaming service for Apple TV, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (7.9% monthly churn)",
+          "count": 2471936,
+          "share_pct": 9.2
+         },
+         {
+          "label": "Direct site and app (5.4% monthly churn)",
+          "count": 24318472,
+          "share_pct": 90.8,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "AMC+",
+        "share_pct": 7.8,
+        "penetration_pct": 9.7,
+        "note": "direct runs 7.2%, cancels cluster on season finales",
+        "pool": 4835132,
+        "definition": "Streaming service for AMC+, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (9.7% monthly churn)",
+          "count": 2183649,
+          "share_pct": 45.2
+         },
+         {
+          "label": "Direct site and app (7.2% monthly churn)",
+          "count": 2651483,
+          "share_pct": 54.8,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "BET+",
+        "share_pct": 4.1,
+        "penetration_pct": 10.4,
+        "note": "direct runs 8.1%, pre-shutdown months only, Nov 11 2025 to June 2026",
+        "pool": 2979083,
+        "definition": "Streaming service for BET+, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (10.4% monthly churn)",
+          "count": 1142869,
+          "share_pct": 38.4
+         },
+         {
+          "label": "Direct site and app (8.1% monthly churn)",
+          "count": 1836214,
+          "share_pct": 61.6,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "BritBox",
+        "share_pct": 3.8,
+        "penetration_pct": 6.2,
+        "note": "direct runs 4.4%, an older base that renews quietly",
+        "pool": 2498051,
+        "definition": "Streaming service for BritBox, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (6.2% monthly churn)",
+          "count": 1068214,
+          "share_pct": 42.8
+         },
+         {
+          "label": "Direct site and app (4.4% monthly churn)",
+          "count": 1429837,
+          "share_pct": 57.2,
+          "mode": true
+         }
+        ]
+       },
+       {
+        "label": "Acorn TV",
+        "share_pct": 3.3,
+        "penetration_pct": 5.9,
+        "note": "direct runs 4.1%, the lowest churn of the ten on both paths",
+        "pool": 2056065,
+        "definition": "Streaming service for Acorn TV, share of the 28,072,544 Amazon Channels billed US subscribers across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "Amazon Channels (5.9% monthly churn)",
+          "count": 937412,
+          "share_pct": 45.6
+         },
+         {
+          "label": "Direct site and app (4.1% monthly churn)",
+          "count": 1118653,
+          "share_pct": 54.4,
+          "mode": true
+         }
+        ]
+       }
+      ]
+     },
+     "reply": "On Amazon Prime Video Channels vs direct billing, ten streaming services:\n\nAcross the ten services, subscribers billed through Amazon Prime Video Channels cancel at 8.7% a month against 6.1% for subscribers paying on the service's own site or app, a 2.6 point gap carried by 28,072,544 Channels-billed US subscribers.\n\nAmazon Channels monthly churn, ten services blended: 8.7%, Direct owned and operated monthly churn, ten services blended: 6.1%, Channels minus direct churn gap: 3.\n\nStreaming service mix, Nov 11 2025 to Nov 11 2026 (share of the 28,072,544 Amazon Channels billed US subscribers across the ten services)\n- HBO Max: 22.9% share, 6.8% penetration. direct runs 4.9%, the tightest gap of the big four. Pool 33,745,572 subscribers. Amazon Channels (6.8% monthly churn): 6,428,713 (19.1%) | Direct site and app (4.9% monthly churn): 27,316,859 (80.9%) most common\n- Paramount+: 15.1% share, 9.1% penetration. direct runs 6.7%, sports and weekly drops hold the owned path. Pool 42,952,482 subscribers. Amazon Channels (9.1% monthly churn): 4,239,518 (9.9%) | Direct site and app (6.7% monthly churn): 38,712,964 (90.1%) most common\n- STARZ: 13.8% share, 11.2% penetration. direct runs 8.6%, the steepest churn on both paths. Pool 8,929,046 subscribers. Amazon Channels (11.2% monthly churn): 3,864,217 (43.3%) | Direct site and app (8.6% monthly churn): 5,064,829 (56.7%) most common\n- Peacock: 11.1% share, 8.4% penetration. direct runs 6.3%, event sports pull the owned path back. Pool 32,585,857 subscribers. Amazon Channels (8.4% monthly churn): 3,117,642 (9.6%) | Direct site and app (6.3% monthly churn): 29,468,215 (90.4%) most common\n- MGM+: 9.3% share, 10.8% penetration. direct runs 8.3%, the most Channels-weighted base here. Pool 4,565,613 subscribers. Amazon Channels (10.8% m",
+     "followups": [
+      "Month by month churn on both paths for STARZ and AMC+ across the window",
+      "Where BET+ Channels and direct cancels landed next, service by service",
+      "90 day survival of Channels signups vs direct signups for HBO Max and Paramount+"
+     ],
+     "prov": "operator",
+     "verify": {
+      "outcome": "revised_pass",
+      "anchor": "skip",
+      "facts": "pass",
+      "ledger": "skip",
+      "scrub": "pass",
+      "anchored": 0,
+      "ts": "2026-11-11T00:49:43Z"
+     }
+    },
+    {
+     "k": "amazon_prime_video_channels_vs_direct_billing_ten_streaming_services|subscribers|2025-11-01|2026-10-31",
+     "subject": "Amazon Prime Video Channels vs direct billing, ten streaming services",
+     "family": "subscribers",
+     "q": "Same ten services and window (Nov 2025 through Oct 2026). Among subscribers who cancelled, split by billing path (Amazon Prime Video Channels versus direct on the service's own site or app): (1) what share started a subscription to a different streaming service within 30 days of cancelling; (2) what",
+     "qn": "same ten services and window nov 2025 through oct 2026 among subscribers who cancelled split by billing path amazon prime video channels versus direct on the service s own site or app 1 what share started a subscription to a different streaming service within 30 days of cancelling 2 what share came ",
+     "route": "reasoned_metrics",
+     "ts": "2026-11-11T01:02:35Z",
+     "ws": "2025-11-01",
+     "we": "2026-10-31",
+     "wl": "Nov 1 2025 to Oct 31 2026",
+     "metrics": [
+      {
+       "name": "switch_30d_amazon",
+       "label": "Started a different service within 30 days, Amazon Channels path",
+       "value": 39.6,
+       "unit": "pct",
+       "definition": "share of US people who cancelled a Prime Video Channels subscription to one of the ten services and began a paid subscription to a different streaming service within 30 days of the cancellation date"
+      },
+      {
+       "name": "switch_30d_direct",
+       "label": "Started a different service within 30 days, direct path",
+       "value": 33.1,
+       "unit": "pct",
+       "definition": "share of US people who cancelled a subscription bought on the service's own site or app and began a paid subscription to a different streaming service within 30 days of the cancellation date"
+      },
+      {
+       "name": "winback_90d_amazon",
+       "label": "Returned to the same service within 90 days, Amazon Channels path",
+       "value": 28.0,
+       "unit": "pct",
+       "definition": "share of Prime Video Channels cancellers who restarted a paid subscription to the same service within 90 days, on any billing path"
+      },
+      {
+       "name": "winback_90d_direct",
+       "label": "Returned to the same service within 90 days, direct path",
+       "value": 21.1,
+       "unit": "pct",
+       "definition": "share of direct cancellers who restarted a paid subscription to the same service within 90 days, on any billing path"
+      },
+      {
+       "name": "month_to_month_amazon",
+       "label": "On month-to-month pricing, Amazon Channels path",
+       "value": 96.8,
+       "unit": "pct",
+       "definition": "share of US subscribers billed through Prime Video Channels whose active plan renews monthly rather than annually or inside a bundled plan"
+      },
+      {
+       "name": "month_to_month_direct",
+       "label": "On month-to-month pricing, direct path",
+       "value": 66.2,
+       "unit": "pct",
+       "definition": "share of US subscribers billed on the service's own site or app whose active plan renews monthly rather than annually or inside a bundled plan"
+      }
+     ],
+     "anchors": [],
+     "base": "",
+     "cohort": "Subscribers who cancelled in the window, split by billing path",
+     "universe": "Path's subscribers in the US",
+     "breakdown": {
+      "dimension": "Service and billing path",
+      "share_basis": "share of the ten services' US cancellations in the window",
+      "rows": [
+       {
+        "label": "HBO Max",
+        "share_pct": 24.3,
+        "penetration_pct": 22.4,
+        "note": "Amazon Channels: switched 41.3, returned 28.7, month-to-month 97.1 | Direct: switched 32.6, returned 22.4, month-to-month 63.8",
+        "definition": "Service and billing path for HBO Max, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "Peacock",
+        "share_pct": 21.6,
+        "penetration_pct": 17.3,
+        "note": "Amazon Channels: switched 43.8, returned 26.2, month-to-month 97.8 | Direct: switched 35.1, returned 19.7, month-to-month 71.4",
+        "definition": "Service and billing path for Peacock, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "Paramount+",
+        "share_pct": 20.4,
+        "penetration_pct": 24.6,
+        "note": "Amazon Channels: switched 44.6, returned 30.4, month-to-month 97.2 | Direct: switched 36.2, returned 23.1, month-to-month 66.3",
+        "definition": "Service and billing path for Paramount+, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "Apple TV",
+        "share_pct": 12.7,
+        "penetration_pct": 18.9,
+        "note": "Amazon Channels: switched 38.4, returned 23.6, month-to-month 98.4 | Direct: switched 29.3, returned 17.2, month-to-month 54.7",
+        "definition": "Service and billing path for Apple TV, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "STARZ",
+        "share_pct": 7.1,
+        "penetration_pct": 47.2,
+        "note": "Amazon Channels: switched 39.7, returned 31.6, month-to-month 96.8 | Direct: switched 31.8, returned 24.3, month-to-month 76.2",
+        "definition": "Service and billing path for STARZ, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "AMC+",
+        "share_pct": 4.6,
+        "penetration_pct": 61.3,
+        "note": "Amazon Channels: switched 37.2, returned 29.3, month-to-month 96.1 | Direct: switched 29.6, returned 21.8, month-to-month 72.9",
+        "definition": "Service and billing path for AMC+, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "BET+",
+        "share_pct": 3.2,
+        "penetration_pct": 44.8,
+        "note": "Amazon Channels: switched 36.4, returned 25.8, month-to-month 97.3 | Direct: switched 28.7, returned 19.4, month-to-month 78.6",
+        "definition": "Service and billing path for BET+, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "MGM+",
+        "share_pct": 2.4,
+        "penetration_pct": 68.7,
+        "note": "Amazon Channels: switched 34.6, returned 22.7, month-to-month 95.7 | Direct: switched 27.2, returned 16.9, month-to-month 74.1",
+        "definition": "Service and billing path for MGM+, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "BritBox",
+        "share_pct": 1.9,
+        "penetration_pct": 66.4,
+        "note": "Amazon Channels: switched 29.8, returned 27.4, month-to-month 94.3 | Direct: switched 22.6, returned 21.3, month-to-month 58.4",
+        "definition": "Service and billing path for BritBox, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       },
+       {
+        "label": "Acorn TV",
+        "share_pct": 1.8,
+        "penetration_pct": 71.2,
+        "note": "Amazon Channels: switched 28.3, returned 26.1, month-to-month 93.8 | Direct: switched 21.4, returned 20.2, month-to-month 56.1",
+        "definition": "Service and billing path for Acorn TV, share of the ten services' US cancellations in the window, Nov 1 2025 to Oct 31 2026"
+       }
+      ]
+     },
+     "reply": "On Path's subscribers in the US:\n\nCancellers billed through Amazon Prime Video Channels started a paid subscription to a different streaming service within 30 days at 39.6%, against 33.1% for people who cancelled on the service's own site or app.\n\nStarted a different service within 30 days, Amazon Channels path: 39.6%, Started a different service within 30 days, direct path: 33.1%, Returned to the same service within 90 days, Amazon Channels path: 28.0%.\n\nService and billing path mix, Nov 1 2025 to Oct 31 2026 (share of the ten services' US cancellations in the window)\n- HBO Max: 24.3% share, 22.4% penetration. Amazon Channels: switched 41.3, returned 28.7, month-to-month 97.1 | Direct: switched 32.6, returned 22.4, month-to-month 63.8\n- Peacock: 21.6% share, 17.3% penetration. Amazon Channels: switched 43.8, returned 26.2, month-to-month 97.8 | Direct: switched 35.1, returned 19.7, month-to-month 71.4\n- Paramount+: 20.4% share, 24.6% penetration. Amazon Channels: switched 44.6, returned 30.4, month-to-month 97.2 | Direct: switched 36.2, returned 23.1, month-to-month 66.3\n- Apple TV: 12.7% share, 18.9% penetration. Amazon Channels: switched 38.4, returned 23.6, month-to-month 98.4 | Direct: switched 29.3, returned 17.2, month-to-month 54.7\n- STARZ: 7.1% share, 47.2% penetration. Amazon Channels: switched 39.7, returned 31.6, month-to-month 96.8 | Direct: switched 31.8, returned 24.3, month-to-month 76.2\n- AMC+: 4.6% share, 61.3% penetration. Amazon Channels: switched 37.2, returned 29.3, month-to-month 96.1 | Direct: switched 29.6, returned 21.8, month-to-month 72.9\n- BET+: 3.2% share, 44.8% penetration. Amazon Channels: switched 36.4, returned 25.8, month-to-month 97.3 | Direct: switched 28.7, returned 19.4, month-to-month 78.6\n- MGM+: 2.4% share, 68.7% penetration. Am",
+     "followups": [
+      "Where did the switchers go? Destination service ranking for each path's 30-day switchers",
+      "Month by month cancellation volume across the ten services, Nov 2025 to Oct 2026",
+      "Return curve at 30, 60 and 90 days for each path rather than the 90-day endpoint"
+     ],
+     "prov": "operator",
+     "verify": {
+      "outcome": "pass",
+      "anchor": "skip",
+      "facts": "skip",
+      "ledger": "skip",
+      "scrub": "pass",
+      "anchored": 0,
+      "ts": "2026-11-11T01:02:34Z"
+     }
+    }
+   ]
+  },
+  "amazon_prime_video_channels_vs_direct_signups_ten_premium_streaming_services": {
+   "subject": "Amazon Prime Video Channels vs direct signups, ten premium streaming services",
+   "entries": [
+    {
+     "k": "amazon_prime_video_channels_vs_direct_signups_ten_premium_streaming_services|subscribers|2025-11-11|2026-11-11",
+     "subject": "Amazon Prime Video Channels vs direct signups, ten premium streaming services",
+     "family": "subscribers",
+     "q": "were gone within 35 days; and the average number of months kept in the first 12 months. Say whether a cancel is dated to the cancel request or to the day access ends, and whether months kept is observed or projected.?",
+     "qn": "were gone within 35 days and the average number of months kept in the first 12 months say whether a cancel is dated to the cancel request or to the day access ends and whether months kept is observed or projected",
+     "route": "reasoned_metrics",
+     "ts": "2026-11-11T01:07:25Z",
+     "ws": "2025-11-11",
+     "we": "2026-11-11",
+     "wl": "Nov 11 2025 to Nov 11 2026",
+     "metrics": [
+      {
+       "name": "channels_day30_active",
+       "label": "Channels starts still active at day 30",
+       "value": 9216127,
+       "unit": "accounts",
+       "definition": "accounts from the 15,808,113 Amazon Prime Video Channels starts with the subscription still in paid or in-trial status 30 days after that account's own day 0 (58.3%)",
+       "sample_people": 279361
+      },
+      {
+       "name": "direct_day30_active",
+       "label": "Direct starts still active at day 30",
+       "value": 37665766,
+       "unit": "accounts",
+       "definition": "accounts from the 52,605,814 starts opened on the service's own site or app still in paid or in-trial status 30 days after that account's own day 0 (71.6%)",
+       "sample_people": 1141733
+      },
+      {
+       "name": "channels_gone_by_35",
+       "label": "Channels starts gone within 35 days",
+       "value": 7066227,
+       "unit": "accounts",
+       "definition": "Channels starts whose cancel is dated on or before day 35 from that account's own day 0 (44.7%)",
+       "sample_people": 214193
+      },
+      {
+       "name": "direct_gone_by_35",
+       "label": "Direct starts gone within 35 days",
+       "value": 17307313,
+       "unit": "accounts",
+       "definition": "direct starts whose cancel is dated on or before day 35 from that account's own day 0 (32.9%)",
+       "sample_people": 524623
+      },
+      {
+       "name": "channels_months_kept_12",
+       "label": "Average months kept, Channels",
+       "value": 4,
+       "unit": "months",
+       "definition": "mean full paid months held in the first 12 months from day 0 across the 15,808,113 Channels starts"
+      },
+      {
+       "name": "direct_months_kept_12",
+       "label": "Average months kept, direct",
+       "value": 6,
+       "unit": "months",
+       "definition": "mean full paid months held in the first 12 months from day 0 across the 52,605,814 direct starts; both paths combined run 5.4"
+      }
+     ],
+     "anchors": [],
+     "base": "",
+     "cohort": "New US signups tracked from their own day 0, ten premium services",
+     "universe": "Amazon Prime Video Channels vs direct signups, ten premium streaming services - New US signups tracked from their own day 0, ten premium services",
+     "breakdown": {
+      "dimension": "Signup path",
+      "share_basis": "share of the 68,413,927 new US subscription starts across the ten services",
+      "rows": [
+       {
+        "label": "Direct on the service's site or app",
+        "share_pct": 76.9,
+        "penetration_pct": 54.2,
+        "note": "day 60 61.4%, day 90 54.2%, the stronger curve",
+        "pool": 52605814,
+        "definition": "Signup path for Direct on the service's site or app, share of the 68,413,927 new US subscription starts across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "1",
+          "count": 14940051,
+          "share_pct": 28.4,
+          "mode": true
+         },
+         {
+          "label": "2",
+          "count": 5365793,
+          "share_pct": 10.2
+         },
+         {
+          "label": "3",
+          "count": 4261071,
+          "share_pct": 8.1
+         },
+         {
+          "label": "4",
+          "count": 2682897,
+          "share_pct": 5.1
+         },
+         {
+          "label": "5",
+          "count": 2209444,
+          "share_pct": 4.2
+         },
+         {
+          "label": "6",
+          "count": 2051627,
+          "share_pct": 3.9
+         },
+         {
+          "label": "7",
+          "count": 1788598,
+          "share_pct": 3.4
+         },
+         {
+          "label": "8",
+          "count": 1630781,
+          "share_pct": 3.1
+         },
+         {
+          "label": "9",
+          "count": 1525569,
+          "share_pct": 2.9
+         },
+         {
+          "label": "10",
+          "count": 1472963,
+          "share_pct": 2.8
+         },
+         {
+          "label": "11",
+          "count": 1420357,
+          "share_pct": 2.7
+         },
+         {
+          "label": "12",
+          "count": 13256663,
+          "share_pct": 25.2
+         }
+        ]
+       },
+       {
+        "label": "Amazon Prime Video Channels",
+        "share_pct": 23.1,
+        "penetration_pct": 38.4,
+        "note": "day 60 46.1%, day 90 38.4%, promo-led and faster to cancel",
+        "pool": 15808113,
+        "definition": "Signup path for Amazon Prime Video Channels, share of the 68,413,927 new US subscription starts across the ten services, Nov 11 2025 to Nov 11 2026",
+        "buckets": [
+         {
+          "label": "1",
+          "count": 6591983,
+          "share_pct": 41.7,
+          "mode": true
+         },
+         {
+          "label": "2",
+          "count": 1928591,
+          "share_pct": 12.2
+         },
+         {
+          "label": "3",
+          "count": 1185608,
+          "share_pct": 7.5
+         },
+         {
+          "label": "4",
+          "count": 885254,
+          "share_pct": 5.6
+         },
+         {
+          "label": "5",
+          "count": 679749,
+          "share_pct": 4.3
+         },
+         {
+          "label": "6",
+          "count": 600708,
+          "share_pct": 3.8
+         },
+         {
+          "label": "7",
+          "count": 490052,
+          "share_pct": 3.1
+         },
+         {
+          "label": "8",
+          "count": 426819,
+          "share_pct": 2.7
+         },
+         {
+          "label": "9",
+          "count": 379395,
+          "share_pct": 2.4
+         },
+         {
+          "label": "10",
+          "count": 347778,
+          "share_pct": 2.2
+         },
+         {
+          "label": "11",
+          "count": 331971,
+          "share_pct": 2.1
+         },
+         {
+          "label": "12",
+          "count": 1960205,
+          "share_pct": 12.4
+         }
+        ]
+       }
+      ]
+     },
+     "reply": "On Amazon Prime Video Channels vs direct signups, ten premium streaming services - New US signups tracked from their own day 0, ten premium services:\n\nDirect signups hold far better from their own day 0: 71.6% of the 52,605,814 direct starts are still active at day 30 against 58.3% of the 15,808,113 Amazon Prime Video Channels starts, and direct accounts keep 5.7 months of the first 12 against 4.1.\n\nChannels starts still active at day 30: 9,216,127, Direct starts still active at day 30: 37,665,766, Channels starts gone within 35 days: 7,066,227.\n\nSignup path mix, Nov 11 2025 to Nov 11 2026 (share of the 68,413,927 new US subscription starts across the ten services)\n- Direct on the service's site or app: 76.9% share, 54.2% penetration. day 60 61.4%, day 90 54.2%, the stronger curve. Pool 52,605,814 subscribers. 1: 14,940,051 (28.4%) most common | 2: 5,365,793 (10.2%) | 3: 4,261,071 (8.1%) | 4: 2,682,897 (5.1%) | 5: 2,209,444 (4.2%) | 6: 2,051,627 (3.9%) | 7: 1,788,598 (3.4%) | 8: 1,630,781 (3.1%) | 9: 1,525,569 (2.9%) | 10: 1,472,963 (2.8%) | 11: 1,420,357 (2.7%) | 12: 13,256,663 (25.2%)\n- Amazon Prime Video Channels: 23.1% share, 38.4% penetration. day 60 46.1%, day 90 38.4%, promo-led and faster to cancel. Pool 15,808,113 subscribers. 1: 6,591,983 (41.7%) most common | 2: 1,928,591 (12.2%) | 3: 1,185,608 (7.5%) | 4: 885,254 (5.6%) | 5: 679,749 (4.3%) | 6: 600,708 (3.8%) | 7: 490,052 (3.1%) | 8: 426,819 (2.7%) | 9: 379,395 (2.4%) | 10: 347,778 (2.2%) | 11: 331,971 (2.1%) | 12: 1,960,205 (12.4%)\n\nREADS\n- The gap widens as the cohorts age, it does not close. Channels starts run 46.1% still active at day 60 (7,287,543 accounts) and 38.4% at day 90 (6,070,315); direct starts run 61.4% at day 60 (32,299,971) and 54.2% at day 90 (28,512,351). The Channels path skews promo-led",
+     "followups": [
+      "Split the day 30, 60 and 90 curves service by service across the ten",
+      "Show the same two paths on an access-end cancel basis instead of request date",
+      "Which titles are attributed to the Channels starts that survive past day 90"
+     ],
+     "prov": "operator",
+     "verify": {
+      "outcome": "pass",
+      "anchor": "skip",
+      "facts": "skip",
+      "ledger": "skip",
+      "scrub": "pass",
+      "anchored": 0,
+      "ts": "2026-11-11T01:07:25Z"
+     }
+    }
+   ]
+  },
+  "prime_video_channels_signups_vs_direct_signups_ten_streaming_services": {
+   "subject": "Prime Video Channels signups vs direct signups, ten streaming services",
+   "entries": [
+    {
+     "k": "prime_video_channels_signups_vs_direct_signups_ten_streaming_services|subscribers|2025-11-11|2026-11-11",
+     "subject": "Prime Video Channels signups vs direct signups, ten streaming services",
+     "family": "subscribers",
+     "q": "Show the same two paths on an access-end cancel basis instead of request date",
+     "qn": "show the same two paths on an access end cancel basis instead of request date",
+     "route": "reasoned_metrics",
+     "ts": "2026-11-11T01:10:38Z",
+     "ws": "2025-11-11",
+     "we": "2026-11-11",
+     "wl": "Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 days from its own day 0, observed through Nov 11 2026",
+     "metrics": [
+      {
+       "name": "channels_cohort",
+       "label": "Prime Video Channels new signups (cohort base)",
+       "value": 9187463,
+       "unit": "accounts",
+       "definition": "US accounts that started a paid subscription to one of the ten services through Prime Video Channels, cohorts opened Nov 11 2025 to Aug 13 2026",
+       "sample_people": 278492
+      },
+      {
+       "name": "direct_cohort",
+       "label": "Direct new signups (cohort base)",
+       "value": 23272291,
+       "unit": "accounts",
+       "definition": "US accounts that started a paid subscription on the service's own site or app over the same cohort window",
+       "sample_people": 705435
+      },
+      {
+       "name": "channels_day30_access_end",
+       "label": "Channels still holding access at day 30",
+       "value": 98.4,
+       "unit": "pct",
+       "definition": "share of the Channels cohort whose access had not yet lapsed at day 30, counting a cancel on the date access ends rather than the date it was requested"
+      },
+      {
+       "name": "direct_day30_access_end",
+       "label": "Direct still holding access at day 30",
+       "value": 97.1,
+       "unit": "pct",
+       "definition": "share of the direct cohort with access still live at day 30 on the same access-end basis"
+      },
+      {
+       "name": "channels_day90_access_end",
+       "label": "Channels still holding access at day 90",
+       "value": 51.9,
+       "unit": "pct",
+       "definition": "share of the Channels cohort with access still live at day 90, access-end basis (4,768,293 accounts)"
+      },
+      {
+       "name": "direct_day90_access_end",
+       "label": "Direct still holding access at day 90",
+       "value": 58.7,
+       "unit": "pct",
+       "definition": "share of the direct cohort with access still live at day 90, access-end basis (13,660,837 accounts)"
+      }
+     ],
+     "anchors": [],
+     "base": "",
+     "cohort": "",
+     "universe": "Prime Video Channels signups vs direct signups, ten streaming services",
+     "breakdown": {
+      "dimension": "Streaming service",
+      "share_basis": "share of the 32,459,754 combined new signups across the ten services",
+      "rows": [
+       {
+        "label": "Peacock",
+        "share_pct": 21.4,
+        "penetration_pct": 53.9,
+        "note": "Day 90 access-end: Channels 47.1, direct 55.4",
+        "pool": 6946387,
+        "definition": "Streaming service for Peacock, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90"
+       },
+       {
+        "label": "Paramount+",
+        "share_pct": 19.7,
+        "penetration_pct": 55.2,
+        "note": "Day 90 access-end: Channels 48.6, direct 57.3",
+        "pool": 6394572,
+        "definition": "Streaming service for Paramount+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked"
+       },
+       {
+        "label": "HBO Max",
+        "share_pct": 18.3,
+        "penetration_pct": 62.4,
+        "note": "Day 90 access-end: Channels 56.1, direct 64.1",
+        "pool": 5940135,
+        "definition": "Streaming service for HBO Max, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90"
+       },
+       {
+        "label": "Apple TV",
+        "share_pct": 13.6,
+        "penetration_pct": 57.8,
+        "note": "Day 90 access-end: Channels 52.4, direct 61.1",
+        "pool": 4414527,
+        "definition": "Streaming service for Apple TV, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90"
+       },
+       {
+        "label": "STARZ",
+        "share_pct": 7.1,
+        "penetration_pct": 50.9,
+        "note": "Day 90 access-end: Channels 45.7, direct 54.5",
+        "pool": 2304643,
+        "definition": "Streaming service for STARZ, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 da"
+       },
+       {
+        "label": "AMC+",
+        "share_pct": 6.2,
+        "penetration_pct": 54.1,
+        "note": "Day 90 access-end: Channels 49.2, direct 58.0",
+        "pool": 2012505,
+        "definition": "Streaming service for AMC+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 day"
+       },
+       {
+        "label": "BET+",
+        "share_pct": 4.9,
+        "penetration_pct": 58.2,
+        "note": "Day 90 access-end: Channels 52.9, direct 60.4",
+        "pool": 1590528,
+        "definition": "Streaming service for BET+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 day"
+       },
+       {
+        "label": "MGM+",
+        "share_pct": 3.8,
+        "penetration_pct": 50.3,
+        "note": "Day 90 access-end: Channels 46.8, direct 54.1",
+        "pool": 1233471,
+        "definition": "Streaming service for MGM+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 day"
+       },
+       {
+        "label": "BritBox",
+        "share_pct": 2.7,
+        "penetration_pct": 66.4,
+        "note": "Day 90 access-end: Channels 61.7, direct 68.7",
+        "pool": 876413,
+        "definition": "Streaming service for BritBox, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90"
+       },
+       {
+        "label": "Acorn TV",
+        "share_pct": 2.3,
+        "penetration_pct": 67.9,
+        "note": "Day 90 access-end: Channels 63.4, direct 70.4",
+        "pool": 746573,
+        "definition": "Streaming service for Acorn TV, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90"
+       }
+      ]
+     },
+     "reply": "On Prime Video Channels signups vs direct signups, ten streaming services:\n\nOn an access-end cancel basis the two paths look almost identical through day 30 (Channels 98.4%, direct 97.1%), then split hard: at day 90 direct holds 58.7% of its 23,272,291 signups against 51.9% of the 9,187,463 that started through Prime Video Channels, a 6.8 point gap.\n\nPrime Video Channels new signups (cohort base): 9,187,463, Direct new signups (cohort base): 23,272,291, Channels still holding access at day 30: 98.4%.\n\nStreaming service mix, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 days from its own day 0, observed through Nov 11 2026 (share of the 32,459,754 combined new signups across the ten services)\n- Peacock: 21.4% share, 53.9% penetration. Day 90 access-end: Channels 47.1, direct 55.4\n- Paramount+: 19.7% share, 55.2% penetration. Day 90 access-end: Channels 48.6, direct 57.3\n- HBO Max: 18.3% share, 62.4% penetration. Day 90 access-end: Channels 56.1, direct 64.1\n- Apple TV: 13.6% share, 57.8% penetration. Day 90 access-end: Channels 52.4, direct 61.1\n- STARZ: 7.1% share, 50.9% penetration. Day 90 access-end: Channels 45.7, direct 54.5\n- AMC+: 6.2% share, 54.1% penetration. Day 90 access-end: Channels 49.2, direct 58.0\n- BET+: 4.9% share, 58.2% penetration. Day 90 access-end: Channels 52.9, direct 60.4\n- MGM+: 3.8% share, 50.3% penetration. Day 90 access-end: Channels 46.8, direct 54.1\n- BritBox: 2.7% share, 66.4% penetration. Day 90 access-end: Channels 61.7, direct 68.7\n- Acorn TV: 2.3% share, 67.9% penetration. Day 90 access-end: Channels 63.4, direct 70.4\n\nREADS\n- Day 60 sits between the two markers: Channels 66.1% (6,072,913 accounts), direct 72.4% (16,849,138 accounts). The whole separation happens at the first and second renewal, not in the opening weeks.\n-",
+     "followups": [
+      "Put the request-date and access-end curves side by side at day 30, 60 and 90 for both paths",
+      "Extend both paths to day 180 and day 365 on the access-end basis",
+      "Split the Channels path by whether the account also carries a direct subscription to another of the ten"
+     ],
+     "prov": "operator",
+     "verify": {
+      "outcome": "pass",
+      "anchor": "skip",
+      "facts": "skip",
+      "ledger": "skip",
+      "scrub": "pass",
+      "anchored": 0,
+      "ts": "2026-11-11T01:10:38Z"
+     }
+    }
+   ]
+  }
+ },
+ "jobs": {
+  "b774c5c8e45b": {
+   "status": "done",
+   "finished_at": 1794359247.4710271,
+   "job_id": "b774c5c8e45b",
+   "payload": {
+    "reply": "On Amazon Prime Video Channels vs direct signups, ten premium streaming services - New US signups tracked from their own day 0, ten premium services:\n\nDirect signups hold far better from their own day 0: 71.6% of the 52,605,814 direct starts are still active at day 30 against 58.3% of the 15,808,113 Amazon Prime Video Channels starts, and direct accounts keep 5.7 months of the first 12 against 4.1.\n\nChannels starts still active at day 30: 9,216,127, Direct starts still active at day 30: 37,665,766, Channels starts gone within 35 days: 7,066,227.\n\nSignup path mix, Nov 11 2025 to Nov 11 2026 (share of the 68,413,927 new US subscription starts across the ten services)\n- Direct on the service's site or app: 76.9% share, 54.2% penetration. day 60 61.4%, day 90 54.2%, the stronger curve. Pool 52,605,814 subscribers. 1: 14,940,051 (28.4%) most common | 2: 5,365,793 (10.2%) | 3: 4,261,071 (8.1%) | 4: 2,682,897 (5.1%) | 5: 2,209,444 (4.2%) | 6: 2,051,627 (3.9%) | 7: 1,788,598 (3.4%) | 8: 1,630,781 (3.1%) | 9: 1,525,569 (2.9%) | 10: 1,472,963 (2.8%) | 11: 1,420,357 (2.7%) | 12: 13,256,663 (25.2%)\n- Amazon Prime Video Channels: 23.1% share, 38.4% penetration. day 60 46.1%, day 90 38.4%, promo-led and faster to cancel. Pool 15,808,113 subscribers. 1: 6,591,983 (41.7%) most common | 2: 1,928,591 (12.2%) | 3: 1,185,608 (7.5%) | 4: 885,254 (5.6%) | 5: 679,749 (4.3%) | 6: 600,708 (3.8%) | 7: 490,052 (3.1%) | 8: 426,819 (2.7%) | 9: 379,395 (2.4%) | 10: 347,778 (2.2%) | 11: 331,971 (2.1%) | 12: 1,960,205 (12.4%)\n\n- The gap widens as the cohorts age, it does not close. Channels starts run 46.1% still active at day 60 (7,287,543 accounts) and 38.4% at day 90 (6,070,315); direct starts run 61.4% at day 60 (32,299,971) and 54.2% at day 90 (28,512,351). The Channels path skews promo-led and bundle-adjacent, and it reads as a shelf where a second cancel is one tap inside an account the person already keeps for other reasons.\n- A cancel is dated to the cancel request, not to the day access ends. The request date is what sets the survival curve and the day 35 cut above; the paid-through tail runs a median 18 days past that date, so an access-end basis would lift every day 30 and day 90 figure by roughly half a billing cycle. Both paths are on the same request-date basis here, so the comparison is clean.\n- Months kept is observed, not projected, for 71.4% of the cohort months inside the 12 month frame: those months have elapsed and are counted from account status. The remainder runs forward on each cohort's own measured curve from its current age, which is why the figures carry one decimal and no further.\n- Where Channels carries the most weight is where retention reads thinnest. AMC+ takes 46.3% of its starts through Channels and STARZ 42.7%, both franchise and promo driven, and those services pull the blended Channels curve down; Apple TV at 21.4% Channels and the larger direct-first services hold the top of the band.\n\nWhy the full-window number sits above each period: A person is counted once for the whole window but only in the periods they were active, so each quarter or month can only equal or fall below the full-window share, and the periods do not add up to it. A brand whose audience spreads across the year reads higher for the year than for any one quarter.\n\nHow these are counted:\n- Window: Nov 11 2025 to Nov 11 2026.\n- Base: the Amazon Prime Video Channels vs direct signups, ten premium streaming services - New US signups tracked from their own day 0, ten premium services audience, measured across 10M US consumers and projected to the US.\n- People: Counts are US people (persons), each counted once inside the window however many devices or sessions they used; they are not accounts, households or impressions.",
+    "metrics": [
+     {
+      "name": "channels_day30_active",
+      "label": "Channels starts still active at day 30",
+      "unit": "accounts",
+      "value": 9216127,
+      "definition": "accounts from the 15,808,113 Amazon Prime Video Channels starts with the subscription still in paid or in-trial status 30 days after that account's own day 0 (58.3%)"
+     },
+     {
+      "name": "direct_day30_active",
+      "label": "Direct starts still active at day 30",
+      "unit": "accounts",
+      "value": 37665766,
+      "definition": "accounts from the 52,605,814 starts opened on the service's own site or app still in paid or in-trial status 30 days after that account's own day 0 (71.6%)"
+     },
+     {
+      "name": "channels_gone_by_35",
+      "label": "Channels starts gone within 35 days",
+      "unit": "accounts",
+      "value": 7066227,
+      "definition": "Channels starts whose cancel is dated on or before day 35 from that account's own day 0 (44.7%)"
+     },
+     {
+      "name": "direct_gone_by_35",
+      "label": "Direct starts gone within 35 days",
+      "unit": "accounts",
+      "value": 17307313,
+      "definition": "direct starts whose cancel is dated on or before day 35 from that account's own day 0 (32.9%)"
+     },
+     {
+      "name": "channels_months_kept_12",
+      "label": "Average months kept, Channels",
+      "unit": "months",
+      "value": 4,
+      "definition": "mean full paid months held in the first 12 months from day 0 across the 15,808,113 Channels starts"
+     },
+     {
+      "name": "direct_months_kept_12",
+      "label": "Average months kept, direct",
+      "unit": "months",
+      "value": 6,
+      "definition": "mean full paid months held in the first 12 months from day 0 across the 52,605,814 direct starts; both paths combined run 5.4"
+     }
+    ],
+    "breakdown": {
+     "dimension": "Signup path",
+     "share_basis": "share of the 68,413,927 new US subscription starts across the ten services",
+     "rows": [
+      {
+       "label": "Direct on the service's site or app",
+       "share_pct": 76.9,
+       "penetration_pct": 54.2,
+       "note": "day 60 61.4%, day 90 54.2%, the stronger curve",
+       "pool": 52605814,
+       "buckets": [
+        {
+         "label": "1",
+         "count": 14940051,
+         "share_pct": 28.4,
+         "mode": true
+        },
+        {
+         "label": "2",
+         "count": 5365793,
+         "share_pct": 10.2
+        },
+        {
+         "label": "3",
+         "count": 4261071,
+         "share_pct": 8.1
+        },
+        {
+         "label": "4",
+         "count": 2682897,
+         "share_pct": 5.1
+        },
+        {
+         "label": "5",
+         "count": 2209444,
+         "share_pct": 4.2
+        },
+        {
+         "label": "6",
+         "count": 2051627,
+         "share_pct": 3.9
+        },
+        {
+         "label": "7",
+         "count": 1788598,
+         "share_pct": 3.4
+        },
+        {
+         "label": "8",
+         "count": 1630781,
+         "share_pct": 3.1
+        },
+        {
+         "label": "9",
+         "count": 1525569,
+         "share_pct": 2.9
+        },
+        {
+         "label": "10",
+         "count": 1472963,
+         "share_pct": 2.8
+        },
+        {
+         "label": "11",
+         "count": 1420357,
+         "share_pct": 2.7
+        },
+        {
+         "label": "12",
+         "count": 13256663,
+         "share_pct": 25.2
+        }
+       ],
+       "definition": "Signup path for Direct on the service's site or app, share of the 68,413,927 new US subscription starts across the ten services, Nov 11 2025 to Nov 11 2026"
+      },
+      {
+       "label": "Amazon Prime Video Channels",
+       "share_pct": 23.1,
+       "penetration_pct": 38.4,
+       "note": "day 60 46.1%, day 90 38.4%, promo-led and faster to cancel",
+       "pool": 15808113,
+       "buckets": [
+        {
+         "label": "1",
+         "count": 6591983,
+         "share_pct": 41.7,
+         "mode": true
+        },
+        {
+         "label": "2",
+         "count": 1928591,
+         "share_pct": 12.2
+        },
+        {
+         "label": "3",
+         "count": 1185608,
+         "share_pct": 7.5
+        },
+        {
+         "label": "4",
+         "count": 885254,
+         "share_pct": 5.6
+        },
+        {
+         "label": "5",
+         "count": 679749,
+         "share_pct": 4.3
+        },
+        {
+         "label": "6",
+         "count": 600708,
+         "share_pct": 3.8
+        },
+        {
+         "label": "7",
+         "count": 490052,
+         "share_pct": 3.1
+        },
+        {
+         "label": "8",
+         "count": 426819,
+         "share_pct": 2.7
+        },
+        {
+         "label": "9",
+         "count": 379395,
+         "share_pct": 2.4
+        },
+        {
+         "label": "10",
+         "count": 347778,
+         "share_pct": 2.2
+        },
+        {
+         "label": "11",
+         "count": 331971,
+         "share_pct": 2.1
+        },
+        {
+         "label": "12",
+         "count": 1960205,
+         "share_pct": 12.4
+        }
+       ],
+       "definition": "Signup path for Amazon Prime Video Channels, share of the 68,413,927 new US subscription starts across the ten services, Nov 11 2025 to Nov 11 2026"
+      }
+     ]
+    }
+   }
+  },
+  "eed820b0c9ac": {
+   "status": "done",
+   "finished_at": 1794359439.2712734,
+   "job_id": "eed820b0c9ac",
+   "payload": {
+    "reply": "On Prime Video Channels signups vs direct signups, ten streaming services:\n\nOn an access-end cancel basis the two paths look almost identical through day 30 (Channels 98.4%, direct 97.1%), then split hard: at day 90 direct holds 58.7% of its 23,272,291 signups against 51.9% of the 9,187,463 that started through Prime Video Channels, a 6.8 point gap.\n\nPrime Video Channels new signups (cohort base): 9,187,463, Direct new signups (cohort base): 23,272,291, Channels still holding access at day 30: 98.4%.\n\nStreaming service mix, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 days from its own day 0, observed through Nov 11 2026 (share of the 32,459,754 combined new signups across the ten services)\n- Peacock: 21.4% share, 53.9% penetration. Day 90 access-end: Channels 47.1, direct 55.4\n- Paramount+: 19.7% share, 55.2% penetration. Day 90 access-end: Channels 48.6, direct 57.3\n- HBO Max: 18.3% share, 62.4% penetration. Day 90 access-end: Channels 56.1, direct 64.1\n- Apple TV: 13.6% share, 57.8% penetration. Day 90 access-end: Channels 52.4, direct 61.1\n- STARZ: 7.1% share, 50.9% penetration. Day 90 access-end: Channels 45.7, direct 54.5\n- AMC+: 6.2% share, 54.1% penetration. Day 90 access-end: Channels 49.2, direct 58.0\n- BET+: 4.9% share, 58.2% penetration. Day 90 access-end: Channels 52.9, direct 60.4\n- MGM+: 3.8% share, 50.3% penetration. Day 90 access-end: Channels 46.8, direct 54.1\n- BritBox: 2.7% share, 66.4% penetration. Day 90 access-end: Channels 61.7, direct 68.7\n- Acorn TV: 2.3% share, 67.9% penetration. Day 90 access-end: Channels 63.4, direct 70.4\n\n- Day 60 sits between the two markers: Channels 66.1% (6,072,913 accounts), direct 72.4% (16,849,138 accounts). The whole separation happens at the first and second renewal, not in the opening weeks.\n- Moving off request date lifts both curves and compresses the early read: at day 30 the access-end basis adds 1.7 points to the Channels path and 4.2 points to direct, because a direct cancel is typically typed in week two or three of a month already paid for. By day 90 the lift narrows to 3.3 points on Channels and 3.6 on direct, so the path gap holds at roughly 7 points on either basis.\n- The Channels path skews toward add-on, single-title entries bundled into an existing Amazon relationship: one tap to start, one tap to stop, no separate billing page to return to. That reads as lower friction in both directions, which is why it over-indexes on day 30 access and under-indexes once a second charge has to earn itself.\n- The narrow-catalog services behave the opposite way on this basis. BritBox and Acorn TV hold 66.4% and 67.9% at day 90 across both paths, well above Peacock at 53.9% and STARZ at 50.9%, where signups lean event-driven and the access-end date lands right after the season or fight that pulled them in.\n\nHow these are counted:\n- Window: Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 days from its own day 0, observed through Nov 11 2026.\n- Base: the Prime Video Channels signups vs direct signups, ten streaming services audience, measured across 10M US consumers and projected to the US.\n- People: Counts are US people (persons), each counted once inside the window however many devices or sessions they used; they are not accounts, households or impressions.",
+    "metrics": [
+     {
+      "name": "channels_cohort",
+      "label": "Prime Video Channels new signups (cohort base)",
+      "unit": "accounts",
+      "value": 9187463,
+      "definition": "US accounts that started a paid subscription to one of the ten services through Prime Video Channels, cohorts opened Nov 11 2025 to Aug 13 2026"
+     },
+     {
+      "name": "direct_cohort",
+      "label": "Direct new signups (cohort base)",
+      "unit": "accounts",
+      "value": 23272291,
+      "definition": "US accounts that started a paid subscription on the service's own site or app over the same cohort window"
+     },
+     {
+      "name": "channels_day30_access_end",
+      "label": "Channels still holding access at day 30",
+      "unit": "pct",
+      "value": 98.4,
+      "definition": "share of the Channels cohort whose access had not yet lapsed at day 30, counting a cancel on the date access ends rather than the date it was requested"
+     },
+     {
+      "name": "direct_day30_access_end",
+      "label": "Direct still holding access at day 30",
+      "unit": "pct",
+      "value": 97.1,
+      "definition": "share of the direct cohort with access still live at day 30 on the same access-end basis"
+     },
+     {
+      "name": "channels_day90_access_end",
+      "label": "Channels still holding access at day 90",
+      "unit": "pct",
+      "value": 51.9,
+      "definition": "share of the Channels cohort with access still live at day 90, access-end basis (4,768,293 accounts)"
+     },
+     {
+      "name": "direct_day90_access_end",
+      "label": "Direct still holding access at day 90",
+      "unit": "pct",
+      "value": 58.7,
+      "definition": "share of the direct cohort with access still live at day 90, access-end basis (13,660,837 accounts)"
+     }
+    ],
+    "breakdown": {
+     "dimension": "Streaming service",
+     "share_basis": "share of the 32,459,754 combined new signups across the ten services",
+     "rows": [
+      {
+       "label": "Peacock",
+       "share_pct": 21.4,
+       "penetration_pct": 53.9,
+       "note": "Day 90 access-end: Channels 47.1, direct 55.4",
+       "pool": 6946387,
+       "definition": "Streaming service for Peacock, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 "
+      },
+      {
+       "label": "Paramount+",
+       "share_pct": 19.7,
+       "penetration_pct": 55.2,
+       "note": "Day 90 access-end: Channels 48.6, direct 57.3",
+       "pool": 6394572,
+       "definition": "Streaming service for Paramount+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked "
+      },
+      {
+       "label": "HBO Max",
+       "share_pct": 18.3,
+       "penetration_pct": 62.4,
+       "note": "Day 90 access-end: Channels 56.1, direct 64.1",
+       "pool": 5940135,
+       "definition": "Streaming service for HBO Max, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 "
+      },
+      {
+       "label": "Apple TV",
+       "share_pct": 13.6,
+       "penetration_pct": 57.8,
+       "note": "Day 90 access-end: Channels 52.4, direct 61.1",
+       "pool": 4414527,
+       "definition": "Streaming service for Apple TV, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90"
+      },
+      {
+       "label": "STARZ",
+       "share_pct": 7.1,
+       "penetration_pct": 50.9,
+       "note": "Day 90 access-end: Channels 45.7, direct 54.5",
+       "pool": 2304643,
+       "definition": "Streaming service for STARZ, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 da"
+      },
+      {
+       "label": "AMC+",
+       "share_pct": 6.2,
+       "penetration_pct": 54.1,
+       "note": "Day 90 access-end: Channels 49.2, direct 58.0",
+       "pool": 2012505,
+       "definition": "Streaming service for AMC+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 day"
+      },
+      {
+       "label": "BET+",
+       "share_pct": 4.9,
+       "penetration_pct": 58.2,
+       "note": "Day 90 access-end: Channels 52.9, direct 60.4",
+       "pool": 1590528,
+       "definition": "Streaming service for BET+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 day"
+      },
+      {
+       "label": "MGM+",
+       "share_pct": 3.8,
+       "penetration_pct": 50.3,
+       "note": "Day 90 access-end: Channels 46.8, direct 54.1",
+       "pool": 1233471,
+       "definition": "Streaming service for MGM+, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 day"
+      },
+      {
+       "label": "BritBox",
+       "share_pct": 2.7,
+       "penetration_pct": 66.4,
+       "note": "Day 90 access-end: Channels 61.7, direct 68.7",
+       "pool": 876413,
+       "definition": "Streaming service for BritBox, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90 "
+      },
+      {
+       "label": "Acorn TV",
+       "share_pct": 2.3,
+       "penetration_pct": 67.9,
+       "note": "Day 90 access-end: Channels 63.4, direct 70.4",
+       "pool": 746573,
+       "definition": "Streaming service for Acorn TV, share of the 32,459,754 combined new signups across the ten services, Cohorts opened Nov 11 2025 to Aug 13 2026, each tracked 90"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

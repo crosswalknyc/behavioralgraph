@@ -2318,6 +2318,11 @@ def _run_send(campaign_id):
             return result
         settings = state.get("settings") or {}
         html = get_campaign_html(campaign_id)
+        # the issue's figures are the record before the list send
+        try:
+            bank_issue_figures(campaign_id, state=state, html=html)
+        except Exception:
+            traceback.print_exc()
         base = _public_base(settings)
         asset_base = f"{base}/n/asset/{campaign_id}"
         download_url = f"{base}/n/d/{campaign_id}" if (camp.get("download") or {}).get("enabled") else ""
@@ -2491,6 +2496,186 @@ def start_send_async(campaign_id):
         return t
 
 
+# ---------------------------------------------------------------------------
+# The issue's figures are the decision of record (Jenna 2026-11-10:
+# "anything pulled here is stored for Prometheus"). A deliverable built
+# outside Prometheus banks its figures before it is sent, so Prometheus
+# answers from the record. The builder fills a structured ``figures``
+# block on the campaign record; a campaign without one has its slices'
+# alt text parsed as a fallback and logs a warning. Runs on the test
+# send and on the list send; idempotent (the same campaign re-banked
+# replaces its earlier rows).
+# ---------------------------------------------------------------------------
+_ALT_RE = re.compile(r'<img[^>]*\balt=(?P<q>["\'])(?P<alt>.*?)(?P=q)', re.I | re.S)
+_ALT_SENT_RE = re.compile(r'(?<=[.!?])\s+(?=[A-Z0-9$])')
+_ALT_PCT_RE = re.compile(r'(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*%')
+_ALT_COUNT_RE = re.compile(r'(?<![\d,.$])(\d{1,3}(?:,\d{3})+|\d{5,})(?![\d,]*\s*%)')
+_ALT_USD_RE = re.compile(r'\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)')
+_ALT_SKIP_RE = re.compile(r'\b(?:learn more|forward this|know someone|behavioral intelligence engine|^crosswalk\b)', re.I)
+
+
+def figures_from_alt_text(html):
+    """Fallback figures from an issue's slices: every alt-text sentence
+    that carries exactly one figure becomes a metric named by the
+    sentence, with the sentence as its definition. Conservative by
+    design; the builder's structured block is the real record."""
+    out, seen = [], set()
+    for m in _ALT_RE.finditer(str(html or '')):
+        alt = unescape(m.group('alt')).strip()
+        if not alt or _ALT_SKIP_RE.search(alt):
+            continue
+        for sent in _ALT_SENT_RE.split(alt):
+            sent = ' '.join(sent.split()).strip(' .')
+            if not sent or len(sent) < 12:
+                continue
+            pcts = _ALT_PCT_RE.findall(sent)
+            counts = _ALT_COUNT_RE.findall(sent)
+            usd = _ALT_USD_RE.findall(sent)
+            figs = [(float(p), 'pct') for p in pcts] + [(float(c.replace(',', '')), 'count') for c in counts] \
+                + [(float(u.replace(',', '')), 'usd') for u in usd]
+            if len(figs) != 1:
+                continue
+            value, unit = figs[0]
+            words = re.sub(r'[^a-z0-9 ]+', ' ', sent.lower()).split()
+            words = [w for w in words if not re.fullmatch(r'\d+', w)]
+            name = '_'.join(words[:6])[:48].strip('_')
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            out.append({'name': name, 'label': sent[:90], 'value': value, 'unit': unit, 'definition': sent[:220]})
+    return out
+
+
+def issue_figures(camp, html=''):
+    """The campaign's figures block (the builder's structured record) or
+    the alt-text fallback. Returns (block, source) where source is
+    'figures' or 'alt_text'; block is None when nothing is usable."""
+    block = (camp or {}).get('figures')
+    if isinstance(block, dict) and (block.get('metrics') or []):
+        return block, 'figures'
+    metrics = figures_from_alt_text(html)
+    if not metrics:
+        return None, ''
+    return {'subject': str((camp or {}).get('name') or (camp or {}).get('subject') or 'The Read')[:120],
+            'metrics': metrics, 'reply': ''}, 'alt_text'
+
+
+def bank_issue_figures(campaign_id, ledger=None, state=None, html=None):
+    """Write the issue's figures to the insights ledger as the decision
+    of record for its subject. Never raises; returns a small report
+    {'banked': [keys], 'source': 'figures'|'alt_text'|'', 'warning': ''}."""
+    report = {'banked': [], 'source': '', 'warning': ''}
+    try:
+        state = state if state is not None else load_state()
+        camp = _campaign(state, campaign_id)
+        if not camp:
+            report['warning'] = 'campaign not found'
+            return report
+        html = get_campaign_html(campaign_id) if html is None else html
+        block, source = issue_figures(camp, html)
+        report['source'] = source
+        if not block:
+            report['warning'] = f"campaign {campaign_id} has no figures block and no figure in its slices; nothing banked"
+            print(f"[newsletter] WARNING {report['warning']}")
+            return report
+        if source == 'alt_text':
+            report['warning'] = f"campaign {campaign_id} has no figures block; banked the slices' alt text as a fallback"
+            print(f"[newsletter] WARNING {report['warning']}")
+        il = ledger
+        if il is None:
+            import insights_ledger as il   # noqa: F811
+        win = block.get('window') if isinstance(block.get('window'), dict) else {}
+        subject = str(block.get('subject') or camp.get('name') or 'The Read')[:120]
+        question = str(block.get('question') or camp.get('subject') or camp.get('name') or subject)[:300]
+        reply = str(block.get('reply') or '').strip() or _figures_reply(subject, block.get('metrics') or [], win)
+        keys = il.bank_record(
+            subject=subject, source=f"newsletter {campaign_id}",
+            metrics=list(block.get('metrics') or []), question=question, reply=reply,
+            window_start=str(win.get('start') or ''), window_end=str(win.get('end') or ''),
+            window_label=str(win.get('label') or ''), universe=str(block.get('universe') or ''),
+            cohort=str(block.get('cohort') or ''), breakdown=block.get('breakdown'),
+            anchors=list(block.get('anchors') or []), derivation=str(block.get('derivation') or '')[:600],
+            metric_family=str(block.get('family') or ''), followups=list(block.get('followups') or []),
+            questions=list(block.get('questions') or []), subject_aliases=list(block.get('aliases') or []))
+        report['banked'] = list(keys or [])
+        if keys:
+            print(f"[newsletter] banked {len(keys)} decision-of-record entr{'y' if len(keys) == 1 else 'ies'} "
+                  f"for {subject!r} from campaign {campaign_id} ({source})")
+            try:
+                _mark_banked(campaign_id, keys, source)
+            except Exception:
+                traceback.print_exc()
+        return report
+    except Exception as e:
+        traceback.print_exc()
+        report['warning'] = f"bank failed: {e}"
+        return report
+
+
+def _figures_reply(subject, metrics, win):
+    """A plain reply for the record when the builder gave none: one line
+    per figure."""
+    lines = [f"On {subject}:", '']
+    for m in list(metrics or [])[:24]:
+        try:
+            v = m.get('value')
+            unit = str(m.get('unit') or 'count')
+            if unit in ('pct', '%'):
+                val = f"{float(v):.1f}%"
+            elif unit == 'usd':
+                val = f"${float(v):,.2f}"
+            else:
+                val = f"{int(round(float(v))):,}" + (f" {unit}" if unit not in ('count', 'people') else '')
+            lines.append(f"- {m.get('label') or m.get('name')}: {val}")
+        except Exception:
+            continue
+    if win and (win.get('label') or (win.get('start') and win.get('end'))):
+        lines.append('')
+        lines.append(f"Window: {win.get('label') or (str(win.get('start')) + ' to ' + str(win.get('end')))}.")
+    return '\n'.join(lines)
+
+
+def set_issue_figures(campaign_id, block):
+    """The builder's structured figures block on the campaign record:
+    {'subject', 'family', 'window': {'start', 'end', 'label'}, 'universe',
+    'cohort', 'metrics': [{'name', 'label', 'value', 'unit', 'definition'}],
+    'breakdown': {...}, 'reply', 'question', 'questions', 'aliases',
+    'anchors', 'derivation'}. The anchors and the derivation are internal
+    (the ledger never renders them). Returns True when stored."""
+    if not isinstance(block, dict) or not (block.get('metrics') or []):
+        return False
+    done = {'ok': False}
+
+    def mutate(st):
+        camp = _campaign(st, campaign_id)
+        if not camp:
+            return None
+        keep = {k: v for k, v in (camp.get('figures') or {}).items() if k.startswith('banked_')} \
+            if isinstance(camp.get('figures'), dict) else {}
+        camp['figures'] = {**block, **keep}
+        camp['updated_at'] = _utcnow()
+        done['ok'] = True
+        return st
+    _cas_update_state(mutate)
+    return done['ok']
+
+
+def _mark_banked(campaign_id, keys, source):
+    def mutate(st):
+        camp = _campaign(st, campaign_id)
+        if not camp:
+            return None
+        fig = camp.get('figures') if isinstance(camp.get('figures'), dict) else {}
+        fig = dict(fig)
+        fig['banked_at'] = _utcnow()
+        fig['banked_keys'] = list(keys)[:24]
+        fig['banked_source'] = source
+        camp['figures'] = fig
+        camp['updated_at'] = _utcnow()
+        return st
+    _cas_update_state(mutate)
+
+
 def send_test(campaign_id, to_email):
     email = _valid_email(to_email)
     if not email:
@@ -2502,6 +2687,11 @@ def send_test(campaign_id, to_email):
     html = get_campaign_html(campaign_id)
     if not html.strip():
         return False, "campaign has no HTML"
+    # the issue's figures are the record before any copy of it leaves
+    try:
+        bank_issue_figures(campaign_id, state=state, html=html)
+    except Exception:
+        traceback.print_exc()
     settings = state.get("settings") or {}
     base = _public_base(settings)
     asset_base = f"{base}/n/asset/{campaign_id}"

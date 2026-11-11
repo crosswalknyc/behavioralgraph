@@ -339,13 +339,13 @@ def named_universe(text):
         # the brand is the name beside the noun: leading verbs and function
         # words ("what do Costco members", "compare Gunna fans") come off
         btoks = _clean_phrase(m.group('brand')).split()
-        while btoks and (ordinary_word(btoks[0]) or btoks[0].lower() in _LABEL_LOWER) and not _ACRONYM_RX.match(btoks[0]):
+        while btoks and (ordinary_word(btoks[0]) or bare_word(btoks[0]) in _LABEL_LOWER) and not _ACRONYM_RX.match(btoks[0]):
             btoks.pop(0)
         if not btoks:
             continue
         b = ' '.join(btoks)
         if any(ordinary_word(w) for w in b.lower().split()) and not any(c.isupper() for c in b):
-            continue        # 'toy buyers', 'holiday shoppers': a category, not a brand's audience
+            continue        # 'toy buyers', 'holiday shoppers', "each path's subscribers": a category or a cut, not a brand's audience
         noun = m.group('p').split()[-1]
         _add(m.start() + m.group('p').lower().find(b.lower()), f"{b} {noun}", False)
     for m in _WHO_RX.finditer(t):
@@ -649,16 +649,34 @@ planning planned ordered ordering watching watched streaming streamed visiting v
 switching cancelled canceled subscribing subscribed paying paid giving gifted waiting waited
 discover discovered discovering discovers engage engaged engaging convert converted converting finding follow
 followed follows notice noticed hunted hunting
+path paths basis bases channel channels route routes cohort cohorts segment segments tier tiers bucket buckets
+slice slices band bands billing pathway pathways funnel funnels storefront storefronts touchpoint touchpoints
+method methods mode modes option options variant variants version versions column columns row rows table tables
+metric metrics measure measures rate rates window windows period periods quarter quarters
 """.split())
 # "discover" is not a one-letter misspelling of Discovery+ (Cara Dorfman
 # 2026-11-10: "how did viewers discover off campus" bound the Discovery+
 # profile as the base of the Off Campus read through the typo tier)
+# "path", "basis", "channel", "route", "cohort", "segment" and the other
+# split words are how a reader names a cut ("split by billing path", "on
+# an access-end basis", "each path's subscribers"); never a subject (Liz
+# 2026-11-10: "what share of each path's subscribers are on month-to-month
+# pricing" read "Path's subscribers" as a named universe and the read
+# shipped under "On Path's subscribers in the US:").
+_POSSESSIVE_RX = re.compile(r"(?:'|’|&#39;|&rsquo;)s?$")
+
+
+def bare_word(word):
+    """The word without a trailing possessive ("path's" -> "path",
+    "readers'" -> "readers")."""
+    return _POSSESSIVE_RX.sub('', str(word or '').strip().lower())
 
 
 def ordinary_word(word):
     """An ordinary English word in the reader's own sentence: never a
-    typo of a library subject's token."""
-    w = str(word or '').strip().lower()
+    typo of a library subject's token. A possessive form of one is still
+    one ("path's")."""
+    w = bare_word(word)
     if not w or not w.isalpha():
         return False
     if w in _ORDINARY:

@@ -149,6 +149,8 @@ def recent(s3, bucket, read_prefix, user, text, now=None):
         subject = str(ent.get('subject') or status.get('subject') or '')
         if payload.get('faulted') or status.get('fault'):
             return None        # a read that could not run never replays; the ask runs fresh (2026-11-04)
+        if status.get('corrected_at') or status.get('retired'):
+            return None        # a read corrected in place is never handed back as the same read (2026-11-10)
         if st == 'done' and reply:
             return {'status': 'done', 'job_id': str(ent['job_id']), 'reply': reply, 'subject': subject,
                     'followups': [f for f in (payload.get('followups') or []) if isinstance(f, str)][:6],

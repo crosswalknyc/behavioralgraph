@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "08677b20b00ac23413c16425d6f5e7a85337bf4825224f9612bd2998e8a41abf",
- "examples_hash": "97c32b21f8faa8e76fe6b1d92abf587994d3e48969c683740765fa11db4a096e",
+ "content_hash": "53751e833ef863c5f952f0d8feec5798c4e604ccf80b0f07bdbe4cb94a23e64a",
+ "examples_hash": "8a4f564c5cd01293c951dfea6c54f745bec414cb6a4ee1741ca6ef41b97c03dd",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "ab625689b81719f57c4bfa514b18b56118570812dbd51619921565e4096fa9db",
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "84538e8974eb789927917a6e8e0b1896f37719f55ae08cbba7f46e63a532bba2",
   ".cursor/skills/crosswalk-design/SKILL.md": "3820d5b6a581e967d3272d7652cc9cbc9f9d7166945597965ba654114f4d75ad",
   ".cursor/skills/crosswalk-design/references/company.md": "ac29b7962918715d9b337a01f23befb4990b4af6c7afb3cf50fdb6a493b64d83"
  },
@@ -191,10 +191,10 @@
    "text": "On Howie Mandel:\n\nTheme parks and live experience is the sharpest partnership lane on this file: Universal Orlando Resort runs 32.4% of the audience at index 901, or 1,302,276 US people.\n\nProjected US audience reachable through a Howie Mandel partnership: 4,027,331, Universal Orlando Resort audience: 1,302,276, Carfax users: 1,852,929.\n\nPartnership category mix, Jan 1 2025 to Dec 31 2025 (share of the audience's above-average brand purchase and usage signals)\n- Theme parks and live experience: 18.3% share, 32.4% penetration. Universal Orlando Resort (901) and Universal Studios Hollywood (637) lead\n- Footwear and ..."
   },
   "subscriber_churn": {
-   "subject": "Dark Matter (Apple TV+), Season 1 and Season 2",
-   "title": "Dark Matter (Apple TV+), Season 1 and Season 2 | Apple TV+ accounts activated or reactivated inside each season's first 30 days whose attributed first play was a Dark Ma | Season 1 first 30 days May 8 to Jun 7 2024 vs Season 2 first 30 days Aug 28 to S",
-   "q": "please only compare the first 30 days of season 1 to season 2",
-   "text": "On matched first 30 days, Season 2 pulled 238,417 attributed new US signups against Season 1's 146,643, 91,774 more accounts (62.6%), off a conversion rate that fell from 4.9% to 4.1%.\n\nMEASURED READ (Season 1 first 30 days May 8 to Jun 7 2024 vs Season 2 first 30 days Aug 28 to S)\n- Season 1 attributed new US signups, first 30 days: 146,643 (new paid US Apple TV accounts activated May 8 to Jun 7 2024 whose first title played within 72 hours of activation was a Dark Matter Season 1 episode)\n- Season 2 attributed new US signups, first 30 days: 238,417 (new paid US Apple TV accounts activated Aug 28 to Sep 27 2026 ..."
+   "subject": "Amazon Prime Video Channels vs direct, premium streaming subscriptions",
+   "title": "Amazon Prime Video Channels vs direct, premium streaming subscriptions | Nov 1 2025 to Oct 31 2026",
+   "q": "per service churn and survival, Amazon Prime Video Channels versus direct",
+   "text": "On Amazon Prime Video Channels vs direct, premium streaming subscriptions:\n\nPeople who sign up for a premium streaming service through Amazon cancel 1.7x as often as people who sign up direct: 7.4% monthly churn through Amazon Prime Video Channels against 4.3% direct, same services, same shows, same price in both stores.\n\nWe followed 6,214,387 subscriptions to ten premium services sold both ways (HBO Max, Peacock, Paramount+, STARZ, Apple TV+, BET+, MGM+, AMC+, BritBox, Acorn TV) from Nov 1 2025 to Oct 31 2026. 33.4% started in Amazon's store (2,075,611 Amazon starts; 4,138,776 direct).\n\n- Monthly churn: 7.4% ..."
   },
   "talent_value": {
    "subject": "Starz",
@@ -209,5 +209,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-11-11T00:22:44Z"
+ "generated_at": "2026-11-11T01:55:53Z"
 }

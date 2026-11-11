@@ -14741,11 +14741,34 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 res, _pm_verify_prior_entries(res, res.get('metric_family'), led), ask_text=text)
         except Exception as _fx:
             _faults.note('chat', _fx); _bound = []
+        # A named base holds across the thread's reads (2026-11-10, Liz's
+        # Amazon Channels vs direct survival thread: 52,605,814 direct
+        # starts became 23,272,291 two reads later on a basis change). The
+        # cohort counts the thread's earlier reads stated, resolved through
+        # their job documents when the landing sits in another thread, bind
+        # this pass unless the ask named a window of its own.
+        _tb_held = []
+        try:
+            from prometheus import thread_bases as _tbases
+            _tb_bases = _tbases.bases_from_reads(_tbases.thread_reads(history, _pm_read_job_doc))
+            if _tb_bases:
+                res, _unused_reply, _tb_held = _tbases.hold(res, '', _tb_bases, ask_text=text)
+                if _tb_held:
+                    print(f"[pm-loop] thread bases held: " + '; '.join(f"{h['label']} {h['from']:,} -> {h['to']:,}" for h in _tb_held)[:600])
+        except Exception as _fx:
+            _faults.note('chat', _fx); _tb_held = []
         reply, _fig_ledger2 = _fig.compose(pma.format_generated_metrics_reply(res), _figs2, anchors_block)
         if _bound:
             _ar = _fb.already_reported_line(_bound)
             if _ar:
                 reply = reply.rstrip() + '\n\n' + _ar
+        if _tb_held:
+            try:
+                _hl = _tbases.held_line(_tb_held)
+                if _hl:
+                    reply = reply.rstrip() + '\n\n' + _hl
+            except Exception as _fx:
+                _faults.note('chat', _fx)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/analyze', e)
@@ -15361,6 +15384,21 @@ def _pm_req_thread_set(body):
         _PM_REQ_THREAD.tid = str((body or {}).get('thread_id') or '').strip()
     except Exception:
         _PM_REQ_THREAD.tid = ''
+
+
+def _pm_read_job_doc(job_id):
+    """One read job's document (status, payload, resume), or None. The
+    thread-base hold reads a thread's earlier landed reads through it
+    (prometheus.thread_bases, 2026-11-10). Never raises."""
+    jid = ''.join(c for c in str(job_id or '') if c.isalnum() or c in '-_')
+    if not jid:
+        return None
+    try:
+        obj = _H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=f"{_PM_READ_PREFIX}{jid}.json")
+        doc = json.loads(obj['Body'].read().decode('utf-8'))
+        return doc if isinstance(doc, dict) else None
+    except Exception:
+        return None
 
 
 def _pm_job_bind_thread(job_id, username=None):
