@@ -681,7 +681,12 @@ def test_finish_ready(decks):
         steps = {n: ok for n, ok, _o in rep.steps}
         check(f"{label}: fonts embedded", steps.get("embed", False), rep.summary)
         check(f"{label}: brand lint has no FAIL", steps.get("brand_lint", True), rep.summary)
-        check(f"{label}: READY", rep.ready, rep.summary)
+        # READY is the whole truth since 2026-11-11: fonts embedded, no lint FAIL and no
+        # plain-English flag. A deck with flags left says NOT READY and still ships.
+        clean = steps.get("embed", False) and steps.get("brand_lint", True) and rep.copy_ok
+        check(f"{label}: the status is the truth (READY only with fonts, lint and plain-English all clean)",
+              rep.ready == clean and ("NOT READY" in rep.summary) == (not rep.ready)
+              and (rep.copy_ok or "flag(s) left)" in rep.summary), rep.summary)
 
 
 # ------------------------------------------------------------------ [6]

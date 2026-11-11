@@ -18962,10 +18962,20 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                              f"pm_deck_{job_id}.pptx")
         static_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), 'static')
+        # The finisher repairs whatever the plain-English check flags, in
+        # place: a model pass over only the flagged lines first, then its
+        # fixed repairs (2026-11-11: two decks shipped READY with a failed
+        # readability check and were fixed by hand).
+        try:
+            _copy_rewriter = pma.make_deck_copy_rewriter(_pm_claude_json, usage_extras=_ppu_extras)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
+            _copy_rewriter = None
         deck_builder.render_insights_deck(
             plan, local, static_dir=static_dir,
             photo_subject=str(subject or p_meta.get('name') or ''),
-            photo_kind=deck_builder.photo_kind_for_category(p_meta.get('brand_category')))
+            photo_kind=deck_builder.photo_kind_for_category(p_meta.get('brand_category')),
+            copy_rewriter=_copy_rewriter)
         base.update(image_subject=plan.get('_photo_subject') or plan.get('image_subject'),
                     photo_sources=plan.get('_photo_sources') or [],
                     # the pre-ship pass on the finished deck: ready, lint and

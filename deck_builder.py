@@ -67,6 +67,18 @@ EYEBROW_MAX_W = Inches(11.083 - 0.280 - 1.129)
 A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 
 
+# Where a page's content has to stop: above the source line when the page
+# carries one, above the footer when it does not. A two-line headline
+# pushes the content band down; cards that were laid for a one-line
+# headline ran over the source line (2026-11-11).
+_FLOOR_SOURCE = 6.50
+_FLOOR_PLAIN = 6.90
+
+
+def _content_floor(sl):
+    return _FLOOR_SOURCE if sl.get("source") else _FLOOR_PLAIN
+
+
 def _face(run, name):
     rPr = run._r.get_or_add_rPr()
     for tag in (A_NS + "latin", A_NS + "ea", A_NS + "cs"):
@@ -159,10 +171,39 @@ def _str_w_in(text, size, bold=False):
     return len(str(text)) * size * k / 72.0
 
 
+_PACK_LINES = {}
+
+
+def _pack_lines(seg, size, width_in, bold):
+    """Lines the design pack's wrap model gives this paragraph (the most
+    any of its renderer scales needs), or 0 without the pack. The widow
+    fit in ``txt`` lays type with that model, so the layout has to count
+    with it too: a headline this module measured at one line was set on
+    two and ran into its subhead (2026-11-11)."""
+    key = (seg, float(size), round(float(width_in), 3), bool(bold))
+    if key in _PACK_LINES:
+        return _PACK_LINES[key]
+    n = 0
+    ds = _design()
+    if ds is not None and size >= 9 and width_in > 0 and seg.strip():
+        try:
+            _lone, n = ds.widow_lines(seg, size, width_in, bold=bold)
+            if ds.lint_module() is None:
+                n = 0
+        except Exception:
+            n = 0
+    if len(_PACK_LINES) > 20000:
+        _PACK_LINES.clear()
+    _PACK_LINES[key] = n
+    return n
+
+
 def _line_count(text, size, width_in, bold=False):
-    """Greedy-wrap line count for text in a box width_in wide. A pair
-    bound with a non-breaking space (the widow fix) is one word here, as
-    it is to every renderer."""
+    """Line count for text in a box width_in wide: the greedy wrap on the
+    real font metrics, or the design pack's wrap model when that needs
+    more lines (the model the widow fit and the brand lint lay type
+    with). A pair bound with a non-breaking space (the widow fix) is one
+    word here, as it is to every renderer."""
     total = 0
     for seg in str(text or "").split("\n"):
         words = [w for w in seg.split(" ") if w.strip()]
@@ -177,7 +218,7 @@ def _line_count(text, size, width_in, bold=False):
             else:
                 lines += 1
                 cur = w
-        total += lines
+        total += max(lines, _pack_lines(seg, size, width_in, bold))
     return max(total, 1)
 
 
@@ -197,18 +238,66 @@ def _fit_size(text, sizes, width_in, max_lines, bold=True):
     return sizes[-1]
 
 
+_TRAIL_WORDS = {
+    "the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "but",
+    "with", "from", "by", "as", "than", "that", "which", "is", "are", "was",
+    "were", "its", "their", "this", "these", "over", "per", "vs", "into",
+}
+
+
+def _shorten_whole(text, fits):
+    """The longest opening of ``text`` that ``fits`` and still reads whole
+    (2026-11-11: a table cell shipped as "Daily by design, the" and
+    another as "YouTube 19.3 / TikTok"). Whole sentences first, then a
+    clause join (comma, semicolon, slash), then a word boundary; never
+    inside a word, never ending on a joining word or a loose comma,
+    never an ellipsis. A sentence keeps its full stop."""
+    s = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not s or fits(s):
+        return s
+    closed = s.endswith((".", "!", "?"))
+    sents = re.split(r"(?<=[.!?])\s+", s)
+    while len(sents) > 1:
+        sents.pop()
+        cand = " ".join(sents)
+        if fits(cand):
+            return cand
+    s = sents[0] if sents else s
+    ds = _design()
+    try:
+        mod = ds.copy_fix_module() if ds is not None else None
+    except Exception:
+        mod = None
+
+    def _fits_closed(t):
+        return fits(t + "." if closed and not t.endswith((".", "!", "?")) else t)
+
+    if mod is not None:
+        out = mod.short_cell(s.rstrip(".!?") if closed else s, _fits_closed)
+    else:
+        words = (s.rstrip(".!?") if closed else s).split()
+        while len(words) > 1:
+            words.pop()
+            while len(words) > 1 and words[-1].lower().strip(",;:") in _TRAIL_WORDS:
+                words.pop()
+            if _fits_closed(" ".join(words).rstrip(" ,;:/(")):
+                break
+        out = " ".join(words).rstrip(" ,;:/(")
+    if closed and out and not out.endswith((".", "!", "?")):
+        out += "."
+    return out
+
+
 def _fit_body(text, size_opts, width_in, max_h):
-    """Body copy: step the size down, then trim whole words, so the
-    block never runs past max_h. Returns (text, size)."""
+    """Body copy: step the size down, then shorten at a sentence, a
+    clause or a word boundary, so the block never runs past max_h and
+    never ends on a dangling word. Returns (text, size)."""
     for cand in size_opts:
         if _block_h(text, cand, width_in) <= max_h:
             return str(text or ""), cand
     size = size_opts[-1]
-    words = str(text or "").split()
-    while len(words) > 1 and _block_h(
-            " ".join(words), size, width_in) > max_h:
-        words.pop()
-    return " ".join(words), size
+    return _shorten_whole(
+        text, lambda t: _block_h(t, size, width_in) <= max_h), size
 
 
 # ---- widows (2026-11-10) ----------------------------------------------------
@@ -263,6 +352,14 @@ def txt(s, x, y, w, h, text, *, size=12, bold=False, color=GRAPHITE,
         text = scrub_door_metaphor(text)
     except Exception:
         text = text
+    if face != "Geist Mono":
+        # a range reads "25 to 34" and a label "Arts and Culture": the
+        # joining words a title-caser raised come back down (2026-11-11)
+        try:
+            from migration.design_skill import fix_label_casing
+            text = fix_label_casing(text)
+        except Exception:
+            text = text
     text, x, w, size = _widow_proof(text, x, w, h, size, bold, face, spc,
                                     align, max_w)
     box = s.shapes.add_textbox(x, y, w, h)
@@ -352,7 +449,9 @@ def dot(s, x, y, fill=SIGNAL):
 # design: any miss renders the slide text-only exactly as before.
 
 _PHOTO_CACHE = {}
-_PHOTO_SOURCES = {}   # subject -> the candidate photo urls, for the job trail
+_PHOTO_SOURCES = {}   # subject -> the candidate photo urls (one address once), for the job trail
+_PHOTO_USED = {}      # subject -> the urls whose pictures the deck took
+_PHOTO_REJECTS = {}   # subject -> [(url, why)] candidates turned away
 _PHOTO_MIN_W = 640
 _PHOTO_MIN_H = 420
 
@@ -396,7 +495,18 @@ def _fetch_photos(subject, kind, max_n):
     except Exception:
         return []
     master = {'person': 'TALENT', 'title': 'CONTENT'}.get(kind, 'BRAND')
-    urls = []
+    # A cover photograph is of someone or something. A subject made only
+    # of general words ("Digital Original Content Categories") names
+    # nothing to photograph: a search on it returns blog graphics and
+    # whoever tops the encyclopedia search (2026-11-11). No search runs
+    # and the cover takes the gradient.
+    subj_toks = _subject_photo_tokens(subject)
+    if not subj_toks:
+        _PHOTO_SOURCES[subject.lower()] = []
+        _PHOTO_USED[subject.lower()] = []
+        _PHOTO_REJECTS[subject.lower()] = [(subject[:160], "the subject names no person, title or brand to photograph")]
+        return []
+    urls, off_subject = [], []
     try:
         u, _src = ib.resolve_image_url(subject, master)
         if u:
@@ -406,14 +516,17 @@ def _fetch_photos(subject, kind, max_n):
     try:
         u = ib.wiki_lookup(subject)
         if u:
-            urls.append(u)
+            # an encyclopedia lookup answers with its nearest article; the
+            # picture counts only when its file is named for the subject
+            if _url_names_subject(u, subj_toks, need=1):
+                urls.append(u)
+            else:
+                off_subject.append((u, "the picture is not named for the subject"))
     except Exception:
         pass
     # Open-web results must carry the subject in the address (host or
     # path). A generic query returns stock art of anything; a Starz
     # deck opened on a Microsoft Teams graphic (2026-10-07, Bria).
-    subj_toks = [w for w in _re.sub(r'[^a-z0-9]+', ' ', subject.lower()).split()
-                 if len(w) >= 4]
     try:
         data, _ct = ib._http_get(
             ib.BING_IMAGES_URL.format(q=_up.quote(f"{subject} photo")),
@@ -425,21 +538,115 @@ def _fetch_photos(subject, kind, max_n):
             low = u.lower().split('?', 1)[0]
             if not low.endswith(('.jpg', '.jpeg', '.png', '.webp')):
                 continue
-            if subj_toks and not any(t in low for t in subj_toks):
+            if not _url_names_subject(u, subj_toks):
                 continue
             urls.append(u)
             if len(urls) >= max_n + 5:
                 break
     except Exception:
         pass
-    _PHOTO_SOURCES[subject.lower()] = [u[:160] for u in urls[:max_n + 2]]
-    seen, blobs = set(), []
+    blobs, kept, rejected = _vet_photo_candidates(
+        urls, max_n, lambda u: ib.download_image(u))
+    ds = _design()
+    seen_keys, cands = set(), []
     for u in urls:
-        if not u or u in seen:
+        k = u
+        if ds is not None:
+            try:
+                k = ds.photo_url_key(u) or u
+            except Exception:
+                k = u
+        if k not in seen_keys:
+            seen_keys.add(k)
+            cands.append(u)
+    _PHOTO_SOURCES[subject.lower()] = [u[:160] for u in cands[:max_n + 2]]
+    _PHOTO_USED[subject.lower()] = [u[:160] for u in kept]
+    _PHOTO_REJECTS[subject.lower()] = [(u[:160], why) for u, why in off_subject + rejected]
+    return blobs
+
+
+# Words that describe an audience or a kind of thing, never a person, a
+# title or a brand. A subject left with none of its own words after these
+# come out is a topic, and a topic has no photograph.
+_PHOTO_GENERIC_WORDS = {
+    "digital", "original", "originals", "content", "contents", "category", "categories", "viewers", "viewer",
+    "audience", "audiences", "fans", "users", "buyers", "shoppers", "customers", "consumers", "streaming",
+    "streamers", "online", "video", "videos", "social", "media", "platform", "platforms", "brand", "brands",
+    "profile", "profiles", "insights", "total", "universe", "avid", "casual", "potential", "enthusiasts",
+    "owners", "members", "subscribers", "switchers", "renters", "players", "listeners", "watchers", "read",
+    "reads", "summary", "report", "deck", "series", "shows", "show", "movies", "movie", "people", "persons",
+    "american", "americans", "adults", "women", "female", "male", "with", "from", "that", "this", "their",
+    "your", "what", "which", "best", "most", "types", "type", "kinds", "kind", "genres", "genre", "examples",
+}
+# Folders every site has; a subject word found only there names nothing.
+_PHOTO_PATH_BOILERPLATE = ("wp-content", "wp-includes", "content", "contents", "uploads", "upload", "images",
+                           "image", "img", "media", "static", "assets", "files", "file", "cdn", "storage",
+                           "public", "resources", "thumb", "thumbs", "thumbnail", "thumbnails", "photos", "photo")
+
+
+def _subject_photo_tokens(subject):
+    """The subject's own words (four letters and up), without the general
+    words that describe an audience or a kind of thing. Empty when the
+    subject names no person, title or brand."""
+    return [w for w in re.sub(r"[^a-z0-9]+", " ", str(subject or "").lower()).split()
+            if len(w) >= 4 and w not in _PHOTO_GENERIC_WORDS]
+
+
+def _url_names_subject(url, subj_toks, need=2):
+    """True when the address carries the subject's own words outside the
+    folders every site has ("wp-content/uploads"): ``need`` of them (two
+    for an open-web result, one for an encyclopedia picture), or the one
+    the subject has when it has only one."""
+    import urllib.parse as _up
+    try:
+        pr = _up.urlsplit(str(url or ""))
+        host = (pr.netloc or "").lower()
+        segs = [seg for seg in _up.unquote(pr.path or "").lower().split("/") if seg and seg not in _PHOTO_PATH_BOILERPLATE]
+    except Exception:
+        return False
+    words = set(re.sub(r"[^a-z0-9]+", " ", host + " " + " ".join(segs)).split())
+    blob = host + "/" + "/".join(segs)
+    hits = sum(1 for t in set(subj_toks) if t in words or (len(t) >= 6 and t in blob))
+    return hits >= min(max(1, int(need)), len(set(subj_toks)))
+
+
+def _vet_photo_candidates(urls, max_n, fetch):
+    """(blobs, urls kept, [(url, why)] turned away) from candidate photo
+    addresses, best first (2026-11-11: a YouTube deck took a Wikipedia
+    screenshot of the search page twice, by one address written two ways,
+    with a logo from a free-icon site next in line). One address counts
+    once, however it is written. A logo file, an icon or clip-art site, a
+    stock preview and a screenshot of an interface are turned away by the
+    address; a cut-out graphic, a page that is mostly white and a flat
+    graphic are turned away by the pixels; the same picture reached by two
+    addresses counts once. Nothing left means no photo: the cover takes
+    the gradient."""
+    import hashlib as _hl
+    ds = _design()
+    seen, seen_blobs, blobs, kept, rejected = set(), set(), [], [], []
+    for u in urls:
+        if not u:
             continue
-        seen.add(u)
+        key = u
+        if ds is not None:
+            try:
+                key = ds.photo_url_key(u) or u
+            except Exception:
+                key = u
+        if key in seen:
+            continue
+        seen.add(key)
+        why = None
+        if ds is not None:
+            try:
+                why = ds.photo_url_reject_reason(u)
+            except Exception:
+                why = None
+        if why:
+            rejected.append((u, why))
+            continue
         try:
-            got = ib.download_image(u)
+            got = fetch(u)
         except Exception:
             got = None
         if not got:
@@ -447,11 +654,27 @@ def _fetch_photos(subject, kind, max_n):
         blob = got[0] if isinstance(got, tuple) else got
         if not blob:
             continue
-        if _blob_embeddable(blob):
-            blobs.append(bytes(blob))
+        blob = bytes(blob)
+        digest = _hl.sha1(blob).hexdigest()
+        if digest in seen_blobs:
+            continue
+        seen_blobs.add(digest)
+        if not _blob_embeddable(blob):
+            rejected.append((u, "too small, or a format a deck cannot carry"))
+            continue
+        if ds is not None:
+            try:
+                why = ds.photo_blob_reject_reason(blob)
+            except Exception:
+                why = None
+        if why:
+            rejected.append((u, why))
+            continue
+        blobs.append(blob)
+        kept.append(u)
         if len(blobs) >= max_n:
             break
-    return blobs
+    return blobs, kept, rejected
 
 
 _PERSON_CATS = {'ACTOR', 'ATHLETE', 'BUSINESS/TECH LEADERS', 'COMEDIAN', 'INFLUENCER/CREATOR', 'CREATOR/INFLUENCER',
@@ -518,21 +741,50 @@ def _add_photo_fill(s, blob, x, y, w, h):
     return pic
 
 
-def _photo_moment(s, blob, alpha_pct):
+# Where type sits on a photo page, in page fractions, for the scrim
+# measurement: the cover carries its eyebrow, title and intro up top and
+# its three stats along the bottom; a close carries its title band over
+# cards that sit on their own panels; a statement page carries type
+# everywhere. The dimmest type on a dark page (body grey) is the color
+# that has to read.
+_PHOTO_ZONES = {
+    "cover": ((0.06, 0.05, 0.94, 0.50), (0.06, 0.76, 0.94, 0.95)),
+    "close": ((0.06, 0.05, 0.94, 0.34),),
+}
+_PHOTO_ZONE_ALL = ((0.06, 0.05, 0.94, 0.95),)
+_BAKED_CACHE = {}
+
+
+def _photo_moment(s, blob, alpha_pct, kind=""):
     """Full-bleed photo under the graphite scrim, as the slide BACKGROUND
     (2026-11-10): the photo is cover-cropped to the page at 3840 x 2160
     and the scrim is baked into the pixels, so no full-page shape sits
     under the content and no image is low resolution (the design pack:
     set the image as the slide background; scrim type over photographs,
-    baked in). A bad blob renders the slide text-only instead of
-    failing the deck."""
+    baked in).
+
+    The scrim is set by what is behind the type (2026-11-11: a light
+    photo under the standing 64% scrim left a cover title unreadable).
+    The luminance behind the page's text zones is read from the cropped
+    photo and the scrim is deepened from ``alpha_pct`` until body type
+    clears 4.5:1 against the brightest part behind it. When no scrim
+    short of the cap does, this returns False and the caller sets the
+    gradient page with no photo. A bad blob does the same."""
     ds = _design()
     if ds is None:
         return False
     try:
-        baked = ds.bake_photo_background(
-            blob, scrim_hex="#%02X%02X%02X" % tuple(GRAPHITE),
-            alpha=int(alpha_pct) / 100.0)
+        zones = [z + (tuple(BODY_DK),) for z in _PHOTO_ZONES.get(kind, _PHOTO_ZONE_ALL)]
+        key = (id(blob), len(blob), int(alpha_pct), kind)
+        if key not in _BAKED_CACHE:
+            if len(_BAKED_CACHE) > 12:
+                _BAKED_CACHE.clear()
+            _BAKED_CACHE[key] = ds.bake_photo_for_text(
+                blob, zones, scrim_hex="#%02X%02X%02X" % tuple(GRAPHITE),
+                alpha=int(alpha_pct) / 100.0)
+        baked, _used = _BAKED_CACHE[key]
+        if not baked:
+            return False
         ds.set_slide_background_image(s, baked)
     except Exception:
         return False
@@ -661,10 +913,33 @@ def _fmt_index(v):
     return out or str(v).strip()
 
 
-def _fmt_val(v, suffix):
-    """Bar value display: keep the model's precision, add the suffix."""
+def _row_decimals(rows, key="value"):
+    """How many decimals a column of values is written to (0 to 2): the
+    most any row carries, so 3.0 sits beside 2.4 as "3.0%", never "3%"
+    (the design pack: matching numbers share precision)."""
+    most = 0
+    for r in rows or []:
+        v = r.get(key) if isinstance(r, dict) else r
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        txt_v = repr(v) if isinstance(v, float) else str(v)
+        frac = txt_v.split(".", 1)[1] if "." in txt_v and "e" not in txt_v.lower() else ""
+        frac = frac.rstrip("0") if isinstance(v, str) is False else frac
+        if f != int(f) or (isinstance(v, str) and frac):
+            most = max(most, min(len(frac) or 1, 2))
+    return most
+
+
+def _fmt_val(v, suffix, decimals=0):
+    """Bar value display: keep the model's precision, add the suffix.
+    ``decimals`` is the column's precision (``_row_decimals``); every
+    row in the column is written to it."""
     n = _num(v)
-    if n == int(n) and abs(n) >= 10 and suffix != "x":
+    if decimals and decimals > 0:
+        disp = f"{n:,.{int(decimals)}f}"
+    elif n == int(n) and abs(n) >= 10 and suffix != "x":
         disp = f"{int(n):,}"
     else:
         disp = f"{n:g}"
@@ -676,15 +951,33 @@ def _items(sl, key, cap):
     return out[:cap]
 
 
+def _one_line_eyebrow(text):
+    """The cover eyebrow on one line: a long one ("SUBJECT · AUDIENCE READ
+    · NOV 10 2025 TO NOV 10 2026") gives up its last segments until it
+    fits before the lockup, since a second line sits on top of the
+    headline (the window is in the intro line as well)."""
+    parts = [p.strip() for p in re.split(r"\s*[\u00b7|]\s*", str(text or "").upper()) if p.strip()]
+    if not parts:
+        return str(text or "").upper()
+    room = float(EYEBROW_MAX_W) / 914400.0
+
+    def wide(t):
+        return _str_w_in(t, 10.5, bold=True) + len(t) * 2.6 / 72.0
+
+    while len(parts) > 1 and wide("  \u00b7  ".join(parts)) > room:
+        parts.pop()
+    return "  \u00b7  ".join(parts)
+
+
 # ---- slide renderers --------------------------------------------------------
 
 def _sl_cover(d, sl):
     s = d.new_slide(dark=True)
-    if not (sl.get("_photo") and _photo_moment(s, sl["_photo"], 64)):
+    if not (sl.get("_photo") and _photo_moment(s, sl["_photo"], 64, "cover")):
         _page_gradient(s, "graphiteWash")
     dot(s, M, Inches(0.540))
     txt(s, Inches(1.129), Inches(0.540), Inches(9.4), Inches(0.22),
-        str(sl.get("eyebrow") or "CROSSWALK").upper(),
+        _one_line_eyebrow(sl.get("eyebrow") or "CROSSWALK"),
         size=10.5, bold=True, color=BODY_DK, spc=260, max_w=EYEBROW_MAX_W)
     d.logo(s, True)
     band_in = float(BAND) / 914400.0
@@ -715,7 +1008,7 @@ def _sl_cover(d, sl):
                  d.page, size=8, color=FOOTER)
 
 
-def _cards_2x2(d, s, cards, dark, read=None):
+def _cards_2x2(d, s, cards, dark, read=None, floor=_FLOOR_PLAIN):
     top = d.content_top
     cards = cards[:4]
     # A card that is a group of brands carries its category reach and
@@ -730,6 +1023,10 @@ def _cards_2x2(d, s, cards, dark, read=None):
     rows = (len(cards) + 1) // 2
     band_in = float(BAND) / 914400.0
     read_h = _block_h(read, 11.5, band_in) if (figs and read) else 0.0
+    # under a two-line headline the rows give up a little height so the
+    # cards (and the line under them) stop above the floor
+    room = floor - top - (rows - 1) * 0.22 - ((read_h + 0.24) if read_h else 0.0)
+    ch_in = max(1.42, min(1.82, room / max(rows, 1)))
     for i, c in enumerate(cards):
         x = M + (i % 2) * (cw + GUT)
         y = top + (i // 2) * (ch_in + 0.22)
@@ -831,7 +1128,7 @@ def _sl_argument(d, sl):
             sub, read = read, None
     d.chrome(s, sl.get("eyebrow") or "Argument", sl.get("title") or "",
              dark=dark, sub=sub, source=sl.get("source"))
-    _cards_2x2(d, s, cards, dark, read=read)
+    _cards_2x2(d, s, cards, dark, read=read, floor=_content_floor(sl))
 
 
 def _sl_tiles_facts(d, sl):
@@ -856,8 +1153,13 @@ def _sl_tiles_facts(d, sl):
         x += w + GUT
     y = top + 1.79
     facts = _items(sl, "facts", 6)
+    band_in = float(BAND) / 914400.0
+    read_h = _block_h(sl["read"], 11.5, band_in) if sl.get("read") else 0.0
+    # the read ends above the source line (or the footer); the facts end above the read
+    read_y = (_content_floor(sl) + 0.06 - read_h) if sl.get("read") else None
     if facts:
-        floor_y = 6.20 if sl.get("read") else 6.88
+        floor_y = (min(6.20, read_y - 0.10) if sl.get("read")
+                   else (_content_floor(sl) if sl.get("source") else 6.88))
         # A pushed-down top plus a full fact list cannot always fit:
         # drop trailing facts rather than render over the footer
         # (the renderer's contract is that list lengths clamp).
@@ -882,8 +1184,8 @@ def _sl_tiles_facts(d, sl):
                 color=BODY_LT)
             y += row_h
     if sl.get("read"):
-        ry = max(6.30, y + 0.10)
-        txt(s, M, Inches(ry), BAND, Inches(0.52), sl["read"],
+        ry = max(min(6.30, read_y), y + 0.10)
+        txt(s, M, Inches(ry), BAND, Inches(max(0.30, read_h + 0.04)), sl["read"],
             size=11.5, color=BODY_LT)
 
 
@@ -914,6 +1216,7 @@ def _sl_bars(d, sl):
             spc=100, align=PP_ALIGN.RIGHT)
         y += 0.33
     vmax = max([_num(r.get("value"), 1) for r in rows] or [1.0])
+    dec = _row_decimals(rows)
     n = max(len(rows), 1)
     lab_w = 2.70 if not show_index else 2.55
     floor_y = 6.02 if sl.get("read") else 6.60
@@ -941,7 +1244,7 @@ def _sl_bars(d, sl):
         val_c = val_accent if accent else ink
         if show_index:
             txt(s, M + Inches(8.95), Inches(y), Inches(1.20),
-                Inches(0.28), _fmt_val(r.get("value"), suffix),
+                Inches(0.28), _fmt_val(r.get("value"), suffix, dec),
                 size=11, bold=True, color=val_c,
                 align=PP_ALIGN.RIGHT)
             txt(s, M + Inches(10.30), Inches(y), Inches(1.19),
@@ -949,7 +1252,7 @@ def _sl_bars(d, sl):
                 color=body, align=PP_ALIGN.RIGHT)
         else:
             txt(s, bx + tw + Inches(0.12), Inches(y), Inches(1.00),
-                Inches(0.28), _fmt_val(r.get("value"), suffix),
+                Inches(0.28), _fmt_val(r.get("value"), suffix, dec),
                 size=11, bold=True, color=val_c)
         y += row_step
     if sl.get("read"):
@@ -958,15 +1261,20 @@ def _sl_bars(d, sl):
             size=11.5, color=body)
 
 
-def _stat_card(s, x, y, card, *, big_color=GRAPHITE):
-    rrect(s, x, y, Inches(3.644), Inches(1.82), CARD)
-    txt(s, x + Inches(0.24), y + Inches(0.19), Inches(3.16), Inches(0.24),
+def _stat_card(s, x, y, card, *, big_color=GRAPHITE, h=1.82):
+    """One stat card, ``h`` inches tall. Under 1.80 the figure steps down
+    a size and the lines sit closer, so the card still holds its label."""
+    tight = h < 1.80
+    rrect(s, x, y, Inches(3.644), Inches(h), CARD)
+    txt(s, x + Inches(0.24), y + Inches(0.16 if tight else 0.19), Inches(3.16), Inches(0.24),
         str(card.get("kicker") or "").upper(), size=10.5, bold=True,
         color=MUTED_LT, spc=100)
-    txt(s, x + Inches(0.24), y + Inches(0.49), Inches(3.16), Inches(0.7),
-        card.get("big") or "", size=34, bold=True,
+    txt(s, x + Inches(0.24), y + Inches(0.41 if tight else 0.49), Inches(3.16),
+        Inches(0.56 if tight else 0.7),
+        card.get("big") or "", size=28 if tight else 34, bold=True,
         color=OLIVE if card.get("accent") else big_color)
-    txt(s, x + Inches(0.24), y + Inches(1.23), Inches(3.16), Inches(0.56),
+    ly = 1.00 if tight else 1.23
+    txt(s, x + Inches(0.24), y + Inches(ly), Inches(3.16), Inches(max(0.30, h - ly - 0.06)),
         card.get("label") or "", size=11.5, color=BODY_LT)
 
 
@@ -976,10 +1284,12 @@ def _sl_split_stats_bars(d, sl):
              sub=sl.get("sub"), source=sl.get("source"))
     top = d.content_top
     cards = _items(sl, "stat_cards", 2)
+    # two cards and the gap between them stop above the source line
+    card_h = max(1.45, min(1.82, (_content_floor(sl) - top - 0.25) / 2.0))
     if cards:
-        _stat_card(s, M, Inches(top), cards[0])
+        _stat_card(s, M, Inches(top), cards[0], h=card_h)
     if len(cards) > 1:
-        _stat_card(s, M, Inches(top + 2.07), cards[1])
+        _stat_card(s, M, Inches(top + card_h + 0.25), cards[1], h=card_h)
     rx = M + Inches(3.644) + GUT
     rw = Inches(7.569)
     if sl.get("bars_title"):
@@ -990,6 +1300,7 @@ def _sl_split_stats_bars(d, sl):
     suffix = str(sl.get("value_suffix") if sl.get("value_suffix")
                  is not None else "%")
     vmax = max([_num(r.get("value"), 1) for r in rows] or [1.0])
+    dec = _row_decimals(rows)
     y = top + 0.37
     tw = Inches(4.6)
     n = max(len(rows), 1)
@@ -1015,7 +1326,7 @@ def _sl_split_stats_bars(d, sl):
              _num(r.get("value")) / vmax, accent=accent)
         txt(s, rx + Inches(2.15) + tw + Inches(0.10), Inches(y),
             Inches(0.80), Inches(0.28),
-            _fmt_val(r.get("value"), suffix), size=11, bold=True,
+            _fmt_val(r.get("value"), suffix, dec), size=11, bold=True,
             color=AMETHYST if accent else GRAPHITE)
         y += row_step
     if sl.get("read"):
@@ -1033,8 +1344,13 @@ def _sl_tiles_row(d, sl):
     acc = sl.get("accent_index")
     x, w = M, Inches(3.644)
     w_in = 3.644
+    band_in = float(BAND) / 914400.0
+    read_h = _block_h(sl["read"], 11.5, band_in) if sl.get("read") else 0.0
+    # the tiles (and the read under them) stop above the source line
+    tile_h = max(2.40, min(3.30, _content_floor(sl) + 0.06 - top
+                           - ((read_h + 0.18) if sl.get("read") else 0.0)))
     for i, t in enumerate(tiles):
-        rrect(s, x, Inches(top), w, Inches(3.30), CARD)
+        rrect(s, x, Inches(top), w, Inches(tile_h), CARD)
         color = OLIVE if (isinstance(acc, int) and i == acc) else GRAPHITE
         txt(s, x + Inches(0.24), Inches(top + 0.21), w - Inches(0.48),
             Inches(0.70), t.get("big") or "", size=34, bold=True,
@@ -1047,14 +1363,14 @@ def _sl_tiles_row(d, sl):
         body_y = top + 0.97 + label_h + 0.10
         body_txt, body_sz = _fit_body(t.get("body") or "",
                                       (11.5, 10.5), w_in - 0.48,
-                                      top + 3.30 - body_y - 0.14)
+                                      top + tile_h - body_y - 0.14)
         txt(s, x + Inches(0.24), Inches(body_y), w - Inches(0.48),
-            Inches(max(0.28, top + 3.30 - body_y - 0.14)), body_txt,
+            Inches(max(0.28, top + tile_h - body_y - 0.14)), body_txt,
             size=body_sz, color=BODY_LT)
         x += w + GUT
     if sl.get("read"):
-        ry = max(6.10, top + 3.30 + 0.18)
-        txt(s, M, Inches(ry), BAND, Inches(0.40), sl["read"],
+        ry = max(min(6.10, _content_floor(sl) + 0.06 - read_h), top + tile_h + 0.18)
+        txt(s, M, Inches(ry), BAND, Inches(max(0.30, read_h + 0.04)), sl["read"],
             size=11.5, color=BODY_LT)
 
 
@@ -1062,7 +1378,7 @@ def _sl_hero(d, sl):
     orchid = str(sl.get("ground") or "accent").lower() != "dark"
     s = d.new_slide(dark=not orchid, fill=ORCHID if orchid else None)
     if not orchid and sl.get("_photo"):
-        _photo_moment(s, sl["_photo"], 68)
+        _photo_moment(s, sl["_photo"], 68, "hero")
     d.chrome(s, sl.get("eyebrow") or "Signal", sl.get("title") or "",
              dark=not orchid, orchid=orchid, sub=sl.get("sub"),
              source=sl.get("source"))
@@ -1091,6 +1407,46 @@ def _sl_hero(d, sl):
             sl["support"], size=16, color=support_c)
 
 
+_TABLE_SIZES = (14, 12.5, 11.5, 10.5)     # the cell type scale, largest first
+_TABLE_PAD = 0.28                         # the gutter a column carries on its left
+
+
+def _table_layout(cols, rows, band_in=11.493):
+    """Column widths (inches) and which columns are words rather than
+    figures, from what the cells hold (2026-11-11: five equal columns cut
+    "YouTube 19.3 / TikTok 13.3" and "Daily by design, the stickiest" in
+    half). A column of figures takes the width of its widest cell; the
+    columns of words share what is left in proportion to their longest
+    cell, so words get the room and wrap inside it."""
+    n = len(cols)
+    cells = [[str(r[i]) if i < len(r) else "" for r in rows] for i in range(n)]
+    wordy = [i > 0 and any(len(c.split()) > 3 for c in cells[i]) for i in range(n)]
+    nat = []
+    for i in range(n):
+        widest = max([_str_w_in(c, 12.5) for c in cells[i]] + [_str_w_in(str(cols[i]).upper(), 10.5, bold=True) * 1.12])
+        nat.append(widest + (0.0 if i == 0 else _TABLE_PAD) + 0.06)
+    floor = [1.60 if i == 0 else 1.05 for i in range(n)]
+    nat = [max(a, f) for a, f in zip(nat, floor)]
+    if sum(nat) <= band_in:
+        spare = band_in - sum(nat)
+        share = [(1.0 if (i == 0 or wordy[i]) else 0.35) for i in range(n)]
+        return [a + spare * sh / sum(share) for a, sh in zip(nat, share)], wordy
+    # too wide on one line each: figures keep their width, words wrap in the rest
+    fixed = [i for i in range(n) if not wordy[i] and i != 0]
+    flex = [i for i in range(n) if i not in fixed]
+    left = band_in - sum(nat[i] for i in fixed)
+    if left < 1.6 * len(flex):
+        return [band_in * a / sum(nat) for a in nat], wordy
+    widths = list(nat)
+    tot = sum(nat[i] for i in flex)
+    for i in flex:
+        widths[i] = max(floor[i], left * nat[i] / tot)
+    scale = (band_in - sum(widths[i] for i in fixed)) / max(sum(widths[i] for i in flex), 0.01)
+    for i in flex:
+        widths[i] *= scale
+    return widths, wordy
+
+
 def _sl_table(d, sl):
     s = d.new_slide()
     d.chrome(s, sl.get("eyebrow") or "Table", sl.get("title") or "",
@@ -1100,58 +1456,89 @@ def _sl_table(d, sl):
     if not cols:
         return
     n = len(cols)
-    first_w = 3.60 if n >= 5 else 4.20
-    rest_w = (11.493 - first_w) / max(n - 1, 1)
+    widths, wordy = _table_layout(cols, rows)
     xs = [float(M) / 914400.0]
     for i in range(1, n):
-        xs.append(xs[0] + first_w + (i - 1) * rest_w)
+        xs.append(xs[i - 1] + widths[i - 1])
+
+    def box(i):
+        """(x, width) of a cell's text box: every column after the first
+        keeps a gutter on its left."""
+        pad = 0.0 if i == 0 else _TABLE_PAD
+        return xs[i] + pad, max(widths[i] - pad, 0.6)
+
+    def align(i):
+        return PP_ALIGN.LEFT if (i == 0 or wordy[i]) else PP_ALIGN.RIGHT
+
     top = d.content_top
     for i, c in enumerate(cols):
-        txt(s, Inches(xs[i]), Inches(top),
-            Inches(first_w if i == 0 else rest_w),
+        bx, bw = box(i)
+        txt(s, Inches(bx), Inches(top), Inches(bw),
             Inches(0.24), c.upper(), size=10.5, bold=True,
-            color=MUTED_LT, spc=100,
-            align=PP_ALIGN.LEFT if i == 0 else PP_ALIGN.RIGHT)
+            color=MUTED_LT, spc=100, align=align(i))
     rect(s, M, Inches(top + 0.25), BAND, Pt(0.75), TRACK)
     acc_row = sl.get("accent_row")
     acc_col = sl.get("accent_col")
     y = top + 0.39
     has_read = bool(sl.get("read") or sl.get("read2"))
-    floor_y = (6.98 - 1.10 - 0.12) if has_read else 6.88
-    budget = max((floor_y - y) / max(len(rows), 1), 0.42)
-    for ri, row in enumerate(rows):
+    # the read cards end above the source line (or the footer); the rows end above the cards
+    card_h = 1.10 if (sl.get("read") and sl.get("read2")) else 0.92
+    card_end = 6.56 if sl.get("source") else 6.98
+    floor_y = (card_end - card_h - 0.12) if has_read else (
+        _content_floor(sl) if sl.get("source") else 6.88)
+    avail = max(floor_y - y, 0.42 * max(len(rows), 1))
+    grid = [[str(row[ci]) if ci < len(row) else "" for ci in range(n)]
+            for row in rows]
+
+    def heights(size):
+        return [max([0.42] + [_block_h(grid[ri][ci], size, box(ci)[1]) + 0.10
+                              for ci in range(n)])
+                for ri in range(len(grid))]
+
+    # one size for the whole table: the largest on the scale at which every
+    # cell wraps inside its column and the rows fit above the read
+    c_size = _TABLE_SIZES[-1]
+    for cand in _TABLE_SIZES:
+        if sum(heights(cand)) <= avail + 1e-6:
+            c_size = cand
+            break
+    else:
+        # still too tall at the smallest size: the longest cells are
+        # shortened at a clause or a word, never inside one
+        budget = avail / max(len(grid), 1)
+        for ri in range(len(grid)):
+            for ci in range(n):
+                bw = box(ci)[1]
+                grid[ri][ci] = _shorten_whole(
+                    grid[ri][ci],
+                    lambda t, _w=bw: _block_h(t, c_size, _w) <= budget - 0.10)
+    row_hs = heights(c_size)
+    for ri in range(len(grid)):
         row_acc = isinstance(acc_row, int) and ri == acc_row
-        cells = []
-        row_h = 0.42
+        row_h = row_hs[ri]
         for ci in range(n):
-            cell = str(row[ci]) if ci < len(row) else ""
-            cw_in = first_w if ci == 0 else rest_w
-            cell, c_size = _fit_body(cell, (14, 12.5),
-                                     cw_in, budget - 0.10)
-            cells.append((cell, c_size))
-            row_h = max(row_h,
-                        _block_h(cell, c_size, cw_in) + 0.10)
-        for ci in range(n):
-            cell, c_size = cells[ci]
+            cell = grid[ri][ci]
             cell_acc = row_acc and isinstance(acc_col, int) \
                 and ci == acc_col
-            txt(s, Inches(xs[ci]), Inches(y),
-                Inches(first_w if ci == 0 else rest_w),
+            bx, bw = box(ci)
+            txt(s, Inches(bx), Inches(y), Inches(bw),
                 Inches(row_h - 0.06), cell, size=c_size,
                 bold=(ci == 0 and row_acc) or cell_acc,
                 color=OLIVE if cell_acc else GRAPHITE,
-                align=PP_ALIGN.LEFT if ci == 0 else PP_ALIGN.RIGHT)
+                align=align(ci))
         y += row_h
     reads = [t for t in [sl.get("read"), sl.get("read2")] if t]
-    ry = max(5.50, y + 0.12)
+    ry = max(min(5.50, card_end - card_h), y + 0.12)
     if len(reads) == 2:
         rrect(s, M, Inches(ry), Inches(5.607), Inches(1.10), CARD)
         txt(s, M + Inches(0.24), Inches(ry + 0.16), Inches(5.12),
             Inches(0.86), reads[0], size=13, color=BODY_LT)
         rrect(s, M + Inches(5.607) + GUT, Inches(ry), Inches(5.607),
               Inches(1.10), CARD)
-        txt(s, M + Inches(5.887), Inches(ry + 0.16), Inches(5.12),
-            Inches(0.86), reads[1], size=13, color=BODY_LT)
+        # the second card's copy sits inside its card like the first
+        # (it was set flush on the card's left edge)
+        txt(s, M + Inches(5.607) + GUT + Inches(0.24), Inches(ry + 0.16),
+            Inches(5.12), Inches(0.86), reads[1], size=13, color=BODY_LT)
     elif reads:
         rrect(s, M, Inches(ry), BAND, Inches(0.92), CARD)
         txt(s, M + Inches(0.24), Inches(ry + 0.16), BAND - Inches(0.48),
@@ -1161,7 +1548,7 @@ def _sl_table(d, sl):
 def _sl_hero_proof(d, sl):
     s = d.new_slide(dark=True)
     if sl.get("_photo"):
-        _photo_moment(s, sl["_photo"], 70)
+        _photo_moment(s, sl["_photo"], 70, "hero")
     d.chrome(s, sl.get("eyebrow") or "Proof", sl.get("title") or "",
              dark=True, sub=sl.get("sub"), source=sl.get("source"))
     top = d.content_top
@@ -1179,15 +1566,18 @@ def _sl_hero_proof(d, sl):
             sl["line"], size=16, color=BODY_DK)
     rx = M + Inches(5.607) + GUT
     y = top
-    for p in _items(sl, "proofs", 3):
-        rrect(s, rx, Inches(y), Inches(5.607), Inches(1.18), SLATE)
+    proofs = _items(sl, "proofs", 3)
+    pitch = max(1.12, min(1.32, (_content_floor(sl) - top + 0.14) / max(len(proofs), 1)))
+    p_h = pitch - 0.14
+    for p in proofs:
+        rrect(s, rx, Inches(y), Inches(5.607), Inches(p_h), SLATE)
         txt(s, rx + Inches(0.24), Inches(y + 0.16), Inches(5.12),
             Inches(0.44), p.get("fig") or "", size=22, bold=True,
             color=WHITE)
-        txt(s, rx + Inches(0.24), Inches(y + 0.64), Inches(5.12),
-            Inches(0.40), p.get("label") or "", size=11.5,
+        txt(s, rx + Inches(0.24), Inches(y + min(0.64, p_h - 0.40)), Inches(5.12),
+            Inches(0.36), p.get("label") or "", size=11.5,
             color=BODY_DK)
-        y += 1.32
+        y += pitch
 
 
 _CLICKSTREAM_ROW = re.compile(
@@ -1230,7 +1620,7 @@ def _sl_paths(d, sl):
 
 def _sl_close(d, sl):
     s = d.new_slide(dark=True)
-    if not (sl.get("_photo") and _photo_moment(s, sl["_photo"], 70)):
+    if not (sl.get("_photo") and _photo_moment(s, sl["_photo"], 70, "close")):
         _page_gradient(s, "graphiteWash")
     d.chrome(s, sl.get("eyebrow") or "Close", sl.get("title") or "",
              dark=True, sub=sl.get("sub"))
@@ -1456,8 +1846,10 @@ def _lead_fact(sl):
     rows = [r for r in (sl.get("rows") or []) if isinstance(r, dict) and r.get("label")]
     if t in ("bars", "split_stats_bars") and rows:
         suffix = str(sl.get("value_suffix") if sl.get("value_suffix") is not None else "%")
+        dec = _row_decimals(rows)
+
         def val(r):
-            return _fmt_val(r.get("value"), suffix)
+            return _fmt_val(r.get("value"), suffix, dec)
         top, sec, bot = rows[0], (rows[1] if len(rows) > 1 else None), (rows[-1] if len(rows) > 1 else None)
         idx = _fmt_index(top.get("index")) if sl.get("show_index") else ""
         return ("ranked", str(top["label"]).strip(), val(top), idx,
@@ -1510,7 +1902,103 @@ def _content_sub(sl, lead, k):
         return variants[k % len(variants)]
     if f and f[0] == "card":
         return f"{lead}: {f[1]}."
-    return f"{lead}."
+    t = str(sl.get("type") or "").lower()
+    if t == "table":
+        cols = [str(c).strip() for c in (sl.get("columns") or []) if str(c).strip()]
+        if len(cols) >= 2:
+            first, rest = _plain_label(cols[0]), [_plain_label(c) for c in cols[1:]]
+            listed = rest[0] if len(rest) == 1 else ", ".join(rest[:-1]) + " and " + rest[-1]
+            variants = [f"{listed[0].upper()}{listed[1:]} for each {first}.",
+                        f"Each {first} by {listed}."]
+            return variants[k % len(variants)]
+    if t == "paths":
+        kinds = []
+        for r in (sl.get("rows") or []):
+            kd = str((r or {}).get("kind") or "").strip().lower() if isinstance(r, dict) else ""
+            if kd and kd not in kinds:
+                kinds.append(kd)
+        if len(kinds) >= 2:
+            variants = [f"Example sessions from the window: {', then '.join(kinds)}.",
+                        f"What a session looks like, step by step: {', '.join(kinds)}."]
+            return variants[k % len(variants)]
+        return "Example sessions from the window, one step per row."
+    # nothing on the slide to name: no subhead reads better than a
+    # one-word fragment ("Size.", "Paths."), so the caller drops it
+    return ""
+
+
+def _plain_label(label):
+    """A column header as running words: "US VIEWERS" -> "US viewers",
+    "Share Of Viewing" -> "share of viewing". Short all-caps tokens (US,
+    CTR, AOV) and names with a capital inside (YouTube) keep their case."""
+    out = []
+    for w in str(label or "").split():
+        core = re.sub(r"[^A-Za-z]", "", w)
+        if (core.isupper() and len(core) <= 3 and core not in ("OF", "TO", "AND", "THE", "OR", "VS", "PER", "BY", "IN", "ON")) \
+                or re.search(r"[a-z][A-Z]", w):
+            out.append(w)
+        else:
+            out.append(w.lower())
+    return " ".join(out)
+
+
+def _is_fragment_sub(text):
+    """A subhead that is not one: under three words ("Size.", "Paths.",
+    "Buy: beauty."). A subhead is a plain sentence or a content label."""
+    return len(_words_of(text)) < 3
+
+
+def retire_fragment_subs(slides):
+    """Replace a fragment subhead with one that names the slide's own
+    content, or drop it when the slide has nothing to name (2026-11-11:
+    "Size." and "Paths." shipped as subheads). Returns notes."""
+    notes = []
+    for i, sl in enumerate(slides):
+        sub = sl.get("sub")
+        if not isinstance(sub, str) or not sub.strip() or not _is_fragment_sub(sub):
+            continue
+        lead = _sub_lead(sub, sl)
+        new = _content_sub(sl, lead, i)
+        if new and not _is_fragment_sub(new):
+            sl["sub"] = new
+            notes.append(f"slide {i + 1}: one-word subhead replaced with the slide's own content")
+        else:
+            sl.pop("sub", None)
+            notes.append(f"slide {i + 1}: one-word subhead dropped")
+    return notes
+
+
+def _map_plan_strings(slides, fn, skip_keys=("url", "type", "ground", "kind", "value_suffix")):
+    """Apply ``fn`` to every written string of the plan (titles, subs,
+    reads, card and tile copy, table cells, column heads), in place.
+    Addresses, slide types and other machine fields are left alone.
+    Returns how many strings changed."""
+    n = 0
+
+    def walk(o):
+        nonlocal n
+        if isinstance(o, dict):
+            for k, v in list(o.items()):
+                if k in skip_keys or str(k).startswith("_"):
+                    continue
+                if isinstance(v, str):
+                    new = fn(v)
+                    if isinstance(new, str) and new != v:
+                        o[k] = new
+                        n += 1
+                else:
+                    walk(v)
+        elif isinstance(o, list):
+            for j, v in enumerate(o):
+                if isinstance(v, str):
+                    new = fn(v)
+                    if isinstance(new, str) and new != v:
+                        o[j] = new
+                        n += 1
+                else:
+                    walk(v)
+    walk(slides)
+    return n
 
 
 def _content_closer(sl, k):
@@ -1542,9 +2030,12 @@ def _set_path(sl, path, value):
     sl[lf][j][k] = value
 
 
-def dedupe_plan_copy(slides):
+def dedupe_plan_copy(slides, thin_phrases=True):
     """Retire repeated phrases in a slide plan, in place. Returns notes
-    (one line per rewrite) for the job record."""
+    (one line per rewrite) for the job record. ``thin_phrases=False``
+    stops after the subhead templates: a phrase on three pages is then
+    left for the plain-English repair after the first layout, where a
+    model pass rewords the line instead of rebuilding it from figures."""
     notes = []
     # A. a subhead template shared across slides
     subs = [(i, sl["sub"]) for i, sl in enumerate(slides)
@@ -1576,8 +2067,15 @@ def dedupe_plan_copy(slides):
             notes.append(f"slide {first + 1}: subhead defines index and penetration once")
         for k, idx in enumerate(members[1:]):
             old = slides[idx]["sub"]
-            slides[idx]["sub"] = _content_sub(slides[idx], _sub_lead(old, slides[idx]), k)
-            notes.append(f"slide {idx + 1}: subhead template retired, names its own content")
+            new = _content_sub(slides[idx], _sub_lead(old, slides[idx]), k)
+            if new and not _is_fragment_sub(new):
+                slides[idx]["sub"] = new
+                notes.append(f"slide {idx + 1}: subhead template retired, names its own content")
+            else:
+                slides[idx].pop("sub", None)
+                notes.append(f"slide {idx + 1}: subhead template retired, nothing of its own to name, dropped")
+    if not thin_phrases:
+        return notes
     # B. any phrase still carried by three or more units: thin the later
     #    closers and stat labels until it reads on two at most
     closer_k = {}
@@ -1618,6 +2116,8 @@ def dedupe_plan_copy(slides):
                 elif path[0] == "sub":
                     new = _content_sub(sl, _sub_lead(text, sl), closer_k.get(i, 0))
                     closer_k[i] = closer_k.get(i, 0) + 1
+                    if new is not None and _is_fragment_sub(new):
+                        new = ""        # dropped: never a one-word subhead
                 if new is None or new == text:
                     continue
                 _set_path(sl, path, new)
@@ -1631,8 +2131,476 @@ def dedupe_plan_copy(slides):
     return notes
 
 
+# ---- shares and the counts beside them (2026-11-11) -------------------------
+# A page printed "Comedy 6,579,974 ... 3.0% penetration" under "of US
+# people": 6,579,974 over the US is 2.0%, and the 3.0% came from a base
+# nowhere on the page. Before a page is written, every share that sits
+# beside a count is checked against the base its own label names:
+#
+#   * "of US people", "US penetration", "against the US": the count over
+#     the US population the projections use (329.9M).
+#   * "of the audience", "of viewers": the count over the deck's projected
+#     US audience (the universe page, else the cover).
+#   * any other share ("of viewing", "of sessions"): the rows must agree
+#     on one base, and that base must be a count printed in the deck.
+#
+# A share whose base is named and does not match its count is recomputed
+# from the count, to the precision it was written at, and the same figure
+# is corrected wherever the deck repeats it for the same row. A share
+# whose base cannot be told is left as written and noted for the job
+# record. Counts are never changed: the count is what was measured.
+
+US_PEOPLE = 329_900_000
+_BASE_COUNT_RX = re.compile(r"(?<![\d.,$%])(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?\s?[MK](?![A-Za-z]))(?![\d,]*\.?\d*%)")
+_BASE_PCT_RX = re.compile(r"(?<![\d.,])(\d+(?:\.\d+)?)%")
+_US_WORDS_RX = re.compile(r"\b(U\.?S\.?|american|americans|national|nationwide|country|population)\b", re.I)
+_US_CASE_RX = re.compile(r"\bUS\b|\bU\.S\.")
+_AUD_WORDS_RX = re.compile(
+    r"\bof (?:the |this |these |all |its |their )?(?:total )?(?:audience|viewers|fans|users|engagers|listeners|"
+    r"players|subscribers|shoppers|buyers|universe|file)\b", re.I)
+_PEN_WORDS_RX = re.compile(r"\b(penetration|reach|reaches|reached)\b", re.I)
+
+
+def _parse_count(text):
+    """(value, relative precision) of a count as written: '6,579,974' is
+    exact, '6.6M' is good to half its last digit. None when not a count."""
+    t = str(text or "").strip().replace("\u00a0", " ")
+    m = re.fullmatch(r"(\d{1,3}(?:,\d{3})+|\d{4,})", t)
+    if m:
+        return float(m.group(1).replace(",", "")), 0.0
+    m = re.fullmatch(r"(\d+(?:\.(\d+))?)\s?([MK])", t)
+    if m:
+        mult = 1_000_000.0 if m.group(3) == "M" else 1_000.0
+        num = float(m.group(1))
+        half = 0.5 * 10 ** (-len(m.group(2) or ""))
+        return num * mult, (half / num if num else 0.0)
+    return None
+
+
+def _pct_decimals(txt_pct):
+    return len(txt_pct.split(".", 1)[1]) if "." in txt_pct else 0
+
+
+def _fmt_pct(value, decimals):
+    return f"{value:.{int(decimals)}f}"
+
+
+def _label_key(label):
+    return [w for w in re.sub(r"[^a-z0-9]+", " ", str(label or "").lower()).split()
+            if w not in ("the", "a", "an", "and", "of", "for", "us")]
+
+
+def _labels_match(a, b):
+    ka, kb = _label_key(a), _label_key(b)
+    if not ka or not kb:
+        return False
+    short, long_ = (ka, kb) if len(ka) <= len(kb) else (kb, ka)
+    return short == long_[:len(short)] or (len(short) >= 2 and all(w in long_ for w in short))
+
+
+def _slide_context(sl):
+    return " ".join(str(sl.get(k) or "") for k in ("eyebrow", "title", "sub", "read", "bars_title", "source"))
+
+
+_US_CTX_RX = re.compile(
+    r"\bUS (?:penetration|people|population|adults|reach)\b|\bof (?:the )?US\b|\bagainst the US\b|"
+    r"\bof Americans\b|\bof the country\b")
+
+
+def _share_bases(descriptor, context, audience, count_label=""):
+    """The bases a share could be measured against, from the words that
+    follow the percent (and, for a bare 'penetration', the slide around
+    it and the label on the count beside it): [(base, name, explicit)].
+    Explicit means the words name the base ("of US people", "of the
+    audience"); a bare 'penetration' could be the deck's audience or,
+    on a page about the US or beside a count of US people, the US."""
+    d = str(descriptor or "")
+    if _AUD_WORDS_RX.search(d):
+        return [(audience[0], "the deck's audience", True)] if audience else []
+    if _US_CASE_RX.search(d) or re.search(r"\b(americans?|national|nationwide|country|population)\b", d, re.I):
+        return [(float(US_PEOPLE), "the US", True)]
+    us_ctx = bool(_US_CTX_RX.search(context or "")) or bool(_US_CASE_RX.search(str(count_label or "")))
+    pen = bool(re.search(r"\bpenetration\b", d, re.I))
+    out = []
+    if pen or (not d.strip() and us_ctx and _PEN_WORDS_RX.search(context or "")):
+        if audience and pen:
+            out.append((audience[0], "the deck's audience", False))
+        if us_ctx:
+            out.append((float(US_PEOPLE), "the US", False))
+    return out
+
+
+def _resolve_share(pct_txt, count, bases, aud_prec=0.0):
+    """None when the written share agrees with a base it could be measured
+    against, or when no base can be told. Otherwise (corrected percent
+    text, base name); the text is '' when the base is only implied and the
+    written figure is too far from it to call a miscount (left as
+    written, noted)."""
+    import math
+    try:
+        pct = float(pct_txt)
+    except (TypeError, ValueError):
+        return None
+    if not bases or pct <= 0:
+        return None
+    best = None
+    for base, name, explicit in bases:
+        prec = count[1] + (aud_prec if "audience" in name else 0.0)
+        exp, off = _share_off(count[0], prec, base, pct_txt)
+        if not off:
+            return None
+        if exp <= 0 or exp >= 100.5:
+            continue
+        gap = abs(math.log(pct / exp))
+        if best is None or gap < best[0]:
+            best = (gap, exp, name, explicit)
+    if best is None:
+        return None
+    gap, exp, name, explicit = best
+    if not explicit and gap > math.log(2.5):
+        return "", name
+    return _fmt_pct(exp, max(_pct_decimals(pct_txt), 1)), name
+
+
+def _deck_audience(slides):
+    """The deck's projected US audience as a count: the first figure on
+    the universe page (tiles_facts), else the first cover stat that is a
+    count. (value, relative precision) or None."""
+    for want in ("tiles_facts", "cover"):
+        for sl in slides:
+            if str(sl.get("type") or "").lower() != want:
+                continue
+            for it in (sl.get("tiles") or sl.get("stats") or []):
+                if isinstance(it, dict):
+                    got = _parse_count(it.get("big"))
+                    if got:
+                        return got
+    return None
+
+
+def _deck_ledger(slides):
+    """{label: (count, precision)} from every row that pairs a label with
+    a count: fact rows, table rows, bars of counts."""
+    led = []
+    for sl in slides:
+        for f in (sl.get("facts") or []):
+            if isinstance(f, dict) and f.get("label"):
+                got = _parse_count(f.get("fig"))
+                if got:
+                    led.append((str(f["label"]), got))
+        t = str(sl.get("type") or "").lower()
+        if t == "table":
+            for row in (sl.get("rows") or []):
+                if isinstance(row, list) and len(row) >= 2:
+                    for cell in row[1:]:
+                        got = _parse_count(cell)
+                        if got:
+                            led.append((str(row[0]), got))
+                            break
+        if t in ("bars", "split_stats_bars") and str(sl.get("value_suffix") or "%") == "":
+            for r in (sl.get("rows") or []):
+                if isinstance(r, dict) and r.get("label") and _num(r.get("value")) >= 1000:
+                    led.append((str(r["label"]), (_num(r.get("value")), 0.0)))
+    return led
+
+
+def _ledger_count(ledger, label):
+    hits = {c for lab, c in ledger if _labels_match(lab, label)}
+    exact = [c for lab, c in ledger if _label_key(lab) == _label_key(label)]
+    if exact:
+        return sorted(exact, key=lambda c: c[1])[0]
+    return hits.pop() if len(hits) == 1 else None
+
+
+def _share_off(count, prec, base, pct_txt):
+    """(expected percent, True when the written percent is off) for a
+    count over a base, within the rounding the figures were written to."""
+    pct = float(pct_txt)
+    exp = count / base * 100.0
+    slack = 0.5 * 10 ** (-_pct_decimals(pct_txt)) + exp * (prec + 0.004) + 1e-9
+    return exp, abs(exp - pct) > slack
+
+
+def reconcile_page_bases(slides):
+    """Check every share that sits beside a count against the base its
+    label names, and correct the ones that do not match, in place. Returns
+    (notes, changes): one note per correction or unverified share, and
+    ``changes`` as [(slide index, label, old percent, new percent)]."""
+    notes, changes = [], []
+    audience = _deck_audience(slides)
+    aud_prec = audience[1] if audience else 0.0
+    ledger = _deck_ledger(slides)
+
+    def settle(i, label, pct_txt, count, descriptor, ctx, count_label="", droppable=False):
+        """The corrected percent text for one share; None to leave it; ''
+        when it matches no base it could be measured against and the
+        caller can take it off the page (``droppable``)."""
+        got = _resolve_share(pct_txt, count, _share_bases(descriptor, ctx, audience, count_label), aud_prec)
+        if got is None:
+            return None
+        new, name = got
+        if not new:
+            if droppable:
+                notes.append(f"slide {i + 1}: {label}: {pct_txt}% matches no base beside {int(count[0]):,} "
+                             "(taken off the page)")
+                return ""
+            notes.append(f"slide {i + 1}: {label}: {pct_txt}% does not match {int(count[0]):,} over {name} "
+                         "and names no base (left as written)")
+            return None
+        if new == pct_txt:
+            return None
+        changes.append((i, label, pct_txt, new))
+        notes.append(f"slide {i + 1}: {label}: {pct_txt}% recomputed to {new}% ({int(count[0]):,} over {name})")
+        return new
+
+    def fix_text(text, count, ctx, label, i, count_label=""):
+        """Correct the shares in one string that sit beside ``count``; a
+        share that matches no base comes out with its clause when the
+        string has another clause to stand on."""
+        out, pos = "", 0
+        clauses = [c for c in re.split(r",\s+", text) if c.strip()]
+        for m in _BASE_PCT_RX.finditer(text):
+            tail = re.split(r"[,.;)]|\s+(?:and|while|but|against|versus|vs)\s", text[m.end():], 1)[0]
+            new = settle(i, label, m.group(1), count, tail, ctx, count_label, droppable=len(clauses) >= 2)
+            if new is None:
+                continue
+            if new == "":
+                # the clause runs between the clause commas on either side
+                # (a comma inside a figure, "188,901", is not one)
+                before = [x.start() for x in re.finditer(r",\s", text[:m.start()])]
+                after = re.search(r",\s", text[m.end():])
+                a = before[-1] if before else -1
+                b = m.end() + after.start() if after else len(text)
+                if a >= max(pos, 0):
+                    out += text[pos:a]
+                    pos = b
+                else:
+                    pos = min(b + 2, len(text)) if after else len(text)
+                continue
+            out += text[pos:m.start()] + new + "%"
+            pos = m.end()
+        res = (out + text[pos:]) if pos else text
+        if res == text:
+            return text
+        res = re.sub(r"\s{2,}", " ", res).strip(" ,")
+        if text.rstrip().endswith(".") and res and not res.endswith("."):
+            res += "."
+        return res[:1].upper() + res[1:] if text[:1].isupper() else res
+
+    for i, sl in enumerate(slides):
+        ctx = _slide_context(sl)
+        t = str(sl.get("type") or "").lower()
+        # fact rows: the figure is the count, the note carries its shares
+        for f in (sl.get("facts") or []):
+            if not isinstance(f, dict):
+                continue
+            count = _parse_count(f.get("fig"))
+            if count and isinstance(f.get("note"), str):
+                f["note"] = fix_text(f["note"], count, ctx, str(f.get("label") or "this row"), i,
+                                     count_label=str(f.get("label") or ""))
+        # tiles and stat cards: a count with its share in the label
+        for key in ("tiles", "stat_cards", "stats", "proofs"):
+            for it in (sl.get(key) or []):
+                if not isinstance(it, dict):
+                    continue
+                count = _parse_count(it.get("big") or it.get("fig"))
+                if count and isinstance(it.get("label"), str):
+                    it["label"] = fix_text(it["label"], count, ctx, it["label"][:40], i, count_label=it["label"])
+        # tables: a count column and share columns named by their headers
+        if t == "table":
+            cols = [str(c) for c in (sl.get("columns") or [])]
+            drop_cols = set()
+            for row in (sl.get("rows") or []):
+                if not isinstance(row, list) or len(row) < 3:
+                    continue
+                cc = next((k for k in range(1, len(row)) if _parse_count(row[k])), None)
+                if cc is None:
+                    continue
+                count = _parse_count(row[cc])
+                for ci in range(1, min(len(row), len(cols))):
+                    m = re.fullmatch(r"(\d+(?:\.\d+)?)%", str(row[ci]).strip())
+                    if not m:
+                        continue
+                    new = settle(i, str(row[0]), m.group(1), count, cols[ci], ctx,
+                                 count_label=cols[cc] if cc < len(cols) else "", droppable=len(cols) >= 4)
+                    if new == "":
+                        drop_cols.add(ci)
+                    elif new is not None:
+                        row[ci] = new + "%"
+            for ci in sorted(drop_cols, reverse=True):      # a share column with no base: the column comes off
+                for row in (sl.get("rows") or []):
+                    if isinstance(row, list) and ci < len(row):
+                        del row[ci]
+                if ci < len(sl.get("columns") or []):
+                    del sl["columns"][ci]
+                if isinstance(sl.get("accent_col"), int):
+                    sl["accent_col"] = None if sl["accent_col"] == ci else sl["accent_col"] - (1 if sl["accent_col"] > ci else 0)
+        # bars of shares: the counts come from the rows of the same name elsewhere in the deck
+        if t in ("bars", "split_stats_bars") and str(
+                sl.get("value_suffix") if sl.get("value_suffix") is not None else "%") == "%":
+            rows = [r for r in (sl.get("rows") or []) if isinstance(r, dict) and r.get("label")]
+            dec = max(_row_decimals(rows), 1)
+            for r in rows:
+                count = _ledger_count(ledger, r["label"])
+                if not count:
+                    continue
+                new = settle(i, str(r["label"]), _fmt_pct(_num(r.get("value")), dec), count, "", ctx)
+                if new is not None:
+                    r["value"] = float(new)
+    # the same figure, wherever the deck repeats it for the same row
+    if changes:
+        touched = {i for i, _l, _o, _n in changes}
+        by_pair = {}
+        for _i, label, old, new in changes:
+            by_pair.setdefault((tuple(_label_key(label)[:1]), old), new)
+
+        def repaint(text, on_touched, about=()):
+            """``about`` is the one corrected row a whole page is about
+            (its header names that row and no other): a share on that page
+            that speaks of the US or of penetration is that row's share."""
+            if not isinstance(text, str) or "%" not in text:
+                return text
+            low = re.sub(r"[^a-z0-9]+", " ", text.lower())
+            us_words = bool(_US_CASE_RX.search(text) or _PEN_WORDS_RX.search(text))
+            if not (on_touched or us_words):
+                return text
+            out = text
+            for (lab, old), new in by_pair.items():
+                if lab and (re.search(rf"\b{re.escape(lab[0])}\b", low) or (us_words and lab == tuple(about))):
+                    out = re.sub(rf"(?<![\d.,]){re.escape(old)}%", new + "%", out)
+            return out
+
+        labs = {lab for (lab, _old) in by_pair if lab}
+        for i, sl in enumerate(slides):
+            on = i in touched
+            head = re.sub(r"[^a-z0-9]+", " ", " ".join(str(sl.get(k) or "") for k in ("eyebrow", "title", "sub")).lower())
+            named = [lab for lab in labs if re.search(rf"\b{re.escape(lab[0])}\b", head)]
+            about = named[0] if len(named) == 1 else ()
+            for f in (sl.get("facts") or []):
+                if isinstance(f, dict) and isinstance(f.get("fig"), str) and f["fig"].strip().endswith("%"):
+                    ctx_f = " ".join(str(f.get(x) or "") for x in ("label", "note"))
+                    f["fig"] = repaint(f["fig"].strip() + " " + ctx_f, on, about).split(" ", 1)[0]
+            for k in ("title", "sub", "intro", "line", "support", "read", "read2"):
+                if isinstance(sl.get(k), str):
+                    sl[k] = repaint(sl[k], on, about)
+            for key in ("tiles", "stat_cards", "stats", "proofs", "cards"):
+                for it in (sl.get(key) or []):
+                    if not isinstance(it, dict):
+                        continue
+                    lab_txt = " ".join(str(it.get(x) or "") for x in ("label", "kicker", "head", "body"))
+                    for fld in ("label", "body"):
+                        if isinstance(it.get(fld), str):
+                            it[fld] = repaint(it[fld], on, about)
+                    for fld in ("big", "fig"):
+                        v = it.get(fld)
+                        if isinstance(v, str) and v.strip().endswith("%"):
+                            new = repaint(v.strip() + " " + lab_txt, on, about)
+                            it[fld] = new.split(" ", 1)[0]
+    # shares with a base the deck does not print: said for the record, left as written
+    for i, sl in enumerate(slides):
+        groups = {}
+        for f in (sl.get("facts") or []):
+            if not isinstance(f, dict):
+                continue
+            count = _parse_count(f.get("fig"))
+            if not count or not isinstance(f.get("note"), str):
+                continue
+            for m in _BASE_PCT_RX.finditer(f["note"]):
+                tail = re.split(r"[,.;)]", f["note"][m.end():], 1)[0].strip()
+                if not _share_bases(tail, _slide_context(sl), audience, str(f.get("label") or "")) \
+                        and float(m.group(1)) > 0:
+                    groups.setdefault(tail.lower(), []).append(count[0] / (float(m.group(1)) / 100.0))
+        printed = [c[0] for _lab, c in ledger]
+        for it in (sl.get("tiles") or []):
+            if isinstance(it, dict) and _parse_count(it.get("big")):
+                printed.append(_parse_count(it.get("big"))[0])
+        if audience:
+            printed.append(audience[0])
+        for tail, bases in groups.items():
+            if len(bases) < 2:
+                continue
+            mid = sorted(bases)[len(bases) // 2]
+            if max(bases) > mid * 1.04 or min(bases) < mid * 0.96:
+                notes.append(f"slide {i + 1}: shares '{tail}' do not share one base across the rows (left as written)")
+            elif not any(abs(c - mid) <= mid * 0.03 for c in printed):
+                notes.append(f"slide {i + 1}: shares '{tail}' use a base of about {int(mid):,} "
+                             f"that the deck does not print (left as written)")
+    return notes, changes
+
+
+def assert_page_bases(slides):
+    """The check after the correction: [] when every share that names its
+    base agrees with the count beside it. Run on a copy; nothing changes."""
+    probe = copy.deepcopy(slides)
+    _notes, changes = reconcile_page_bases(probe)
+    return [f"slide {i + 1}: {label}: {old}% should read {new}%" for i, label, old, new in changes]
+
+
+# ---- plan copy, cleaned before layout (2026-11-11) ---------------------------
+def _clean_plan_copy(slides):
+    """Stock filler out ("does the work"), joining words a title-caser
+    raised back down ("25 To 34"), fragment subheads replaced or dropped.
+    Returns notes for the job record."""
+    notes = []
+    ds = _design()
+    if ds is not None:
+        try:
+            n = _map_plan_strings(slides, ds.scrub_stock_phrases)
+            if n:
+                notes.append(f"stock filler replaced in {n} line(s)")
+            n = _map_plan_strings(slides, ds.fix_label_casing, skip_keys=("url", "type", "ground", "kind",
+                                                                         "value_suffix", "eyebrow", "bars_title"))
+            if n:
+                notes.append(f"label casing corrected in {n} line(s)")
+        except Exception:
+            pass
+    try:
+        notes += retire_fragment_subs(slides)
+    except Exception:
+        pass
+    return notes
+
+
+def _norm_copy(text):
+    return re.sub(r"\s+", " ", str(text or "").replace("\u00a0", " ")).strip()
+
+
+def _apply_copy_edits_to_plan(slides, edits):
+    """Write the copy repairs made on the rendered deck back into the plan
+    (so the deck is laid out again on the repaired words): each edit is
+    (label, old text, new text) as the check read it. Returns how many
+    plan strings changed."""
+    if not edits:
+        return 0
+    table = {}
+    for _lab, old, new in edits:
+        table[_norm_copy(old)] = new
+    ds = _design()
+
+    def as_rendered(v):
+        t = v
+        if ds is not None:
+            try:
+                t = ds.fix_label_casing(ds.scrub_door_metaphor(t))
+            except Exception:
+                t = v
+        return _norm_copy(t)
+
+    def fn(v):
+        key = as_rendered(v)
+        hops = 0
+        out = None
+        while key in table and hops < 6:        # a line repaired twice: follow the chain
+            out = table[key]
+            key = _norm_copy(out)
+            hops += 1
+        return out if out is not None else v
+
+    return _map_plan_strings(slides, fn)
+
+
 def render_insights_deck(plan, out_path, static_dir=None,
-                        photo_subject='', photo_kind=''):
+                        photo_subject='', photo_kind='', copy_rewriter=None):
     """Render a slide-plan dict to a finished PPTX at out_path.
     Returns the number of slides rendered.
 
@@ -1640,22 +2608,48 @@ def render_insights_deck(plan, out_path, static_dir=None,
     caller's photo_subject fallback) resolves to real photos placed
     under a graphite scrim on the cover, the first hero or
     hero_proof, and the close - the manual deck grammar. A slide
-    carrying photo: false opts out; no photos means text-only."""
-    prs = Presentation()
-    prs.slide_width = SW
-    prs.slide_height = SH
+    carrying photo: false opts out; no photos means text-only.
+
+    The deck comes out clean with no hand repair (2026-11-11). Before
+    layout the plan's copy is cleaned (stock filler, label casing,
+    fragment subheads, repeated phrases) and every share that sits
+    beside a count is checked against the base its label names. After
+    the first layout the plain-English check reads the deck; whatever it
+    flags is repaired on the words (``copy_rewriter``, a model pass over
+    only the flagged text, then the fixed repairs), the repairs go back
+    into the plan and the deck is laid out again on them. The finisher
+    then embeds, lints and checks the file as it stands."""
     lw, lk = _resolve_logos(static_dir)
-    d = _Deck(prs, lw, lk)
     # Render from copies: the caller's plan is never mutated, so a
     # repeat render of the same plan is deterministic.
     _slides = [copy.deepcopy(sl) for sl in (plan.get("slides") or [])
                if isinstance(sl, dict)]
+    notes = []
+    try:
+        notes += _clean_plan_copy(_slides)
+    except Exception:
+        pass
     # Repeated phrases come off before anything is laid out (2026-11-10):
     # one subhead template across slides, a closer reused three times.
+    ds = _design()
+    _rewriter = copy_rewriter
+    if _rewriter is None and ds is not None:
+        try:
+            _rewriter = ds.copy_rewriter()
+        except Exception:
+            _rewriter = None
     try:
-        plan['_copy_notes'] = dedupe_plan_copy(_slides)
+        notes += dedupe_plan_copy(_slides, thin_phrases=_rewriter is None)
     except Exception:
-        plan['_copy_notes'] = []
+        pass
+    # Shares agree with the counts beside them before a page is written.
+    base_notes, base_left = [], []
+    try:
+        base_notes, _changes = reconcile_page_bases(_slides)
+        base_left = assert_page_bases(_slides)
+    except Exception:
+        pass
+    plan['_copy_notes'] = list(notes)
     try:
         _p_subj = str(plan.get("image_subject")
                       or photo_subject or '').strip()
@@ -1664,8 +2658,11 @@ def render_insights_deck(plan, out_path, static_dir=None,
         photos = _deck_photos(_p_subj, _p_kind) if _p_subj else []
         plan['_photo_subject'] = _p_subj
         plan['_photo_sources'] = list(_PHOTO_SOURCES.get(_p_subj.lower()) or [])
+        plan['_photo_used'] = list(_PHOTO_USED.get(_p_subj.lower()) or [])
+        plan['_photo_rejected'] = [f"{u}: {why}" for u, why in (_PHOTO_REJECTS.get(_p_subj.lower()) or [])][:8]
         print(f"[deck] photo subject {_p_subj!r} ({_p_kind}); "
-              f"{len(photos)} photo(s) from {plan['_photo_sources'][:3]}")
+              f"{len(photos)} photo(s) from {(plan['_photo_used'] or plan['_photo_sources'])[:3]}"
+              + (f"; turned away {len(plan['_photo_rejected'])}" if plan['_photo_rejected'] else ""))
         if photos:
             moments = []
             for want in (('cover',), ('hero', 'hero_proof'),
@@ -1680,25 +2677,79 @@ def render_insights_deck(plan, out_path, static_dir=None,
                 sl["_photo"] = photos[i % len(photos)]
     except Exception:
         pass
-    rendered = 0
-    for sl in _slides:
-        fn = _RENDERERS.get(str(sl.get("type") or "").strip().lower())
-        if fn is None:
-            continue
-        fn(d, sl)
-        rendered += 1
-    prs.save(out_path)
-    _apply_theme_faces(out_path)
+    # The pack asks every deck for one alternative color page. A plan
+    # whose only statement pages are dark gets its first one that carries
+    # no photograph on the accent ground (the hero page's own default).
+    try:
+        heroes = [sl for sl in _slides if str(sl.get("type") or "").lower() == "hero"]
+        if heroes and all(str(sl.get("ground") or "accent").lower() == "dark" for sl in heroes):
+            free = next((sl for sl in heroes if not sl.get("_photo")), None)
+            if free is not None:
+                free["ground"] = "accent"
+                notes.append("a statement page set on the accent ground (every deck carries one color page)")
+    except Exception:
+        pass
+
+    def _build(path):
+        prs = Presentation()
+        prs.slide_width = SW
+        prs.slide_height = SH
+        d = _Deck(prs, lw, lk)
+        n = 0
+        for sl in _slides:
+            fn = _RENDERERS.get(str(sl.get("type") or "").strip().lower())
+            if fn is None:
+                continue
+            fn(d, sl)
+            n += 1
+        prs.save(path)
+        _apply_theme_faces(path)
+        return n
+
+    rendered = _build(out_path)
+    # The plain-English check reads the laid-out deck; its repairs go back
+    # into the plan and the deck is laid out again on the repaired words,
+    # so the type is fitted to what ships.
+    if ds is not None:
+        probe = f"{out_path}.copyfix.pptx"
+        try:
+            mod = ds.copy_fix_module()
+            if mod is not None:
+                import shutil as _sh
+                _sh.copyfile(out_path, probe)
+                res = mod.fix_file(probe, _rewriter)
+                if res.get("before"):
+                    n_plan = _apply_copy_edits_to_plan(_slides, res.get("edits") or [])
+                    notes.append(f"plain-English check: {res.get('before')} flag(s) on the first layout, "
+                                 f"{int(res.get('rewritten') or 0)} unit(s) rewritten, "
+                                 f"{int(res.get('fallback') or 0)} repaired by rule, "
+                                 f"{n_plan} line(s) changed in the plan")
+                    if n_plan:
+                        try:
+                            notes += retire_fragment_subs(_slides)
+                        except Exception:
+                            pass
+                        rendered = _build(out_path)
+        except Exception as e:
+            notes.append(f"copy repair before layout skipped: {type(e).__name__}")
+        finally:
+            try:
+                os.remove(probe)
+            except OSError:
+                pass
+    plan['_copy_notes'] = list(notes)
     # 2026-10-21 (Jenna: the design skill is always used): every delivered
     # deck carries Crosswalk Inter embedded and passes the pack's checks.
     # The finish fixes in place and never holds the file. What it ran,
     # what it changed and the check counts ride on the plan for the job
     # record (2026-11-10).
-    ds = _design()
-    plan['_finish'] = {'ready': None, 'copy_notes': list(plan.get('_copy_notes') or [])}
+    plan['_finish'] = {'ready': None, 'copy_notes': list(plan.get('_copy_notes') or []),
+                       'base_notes': list(base_notes), 'base_check': 'ok' if not base_left else list(base_left),
+                       'photo_used': list(plan.get('_photo_used') or []),
+                       'photo_rejected': list(plan.get('_photo_rejected') or [])}
     if ds is not None:
         try:
-            rep = ds.finish(out_path)
+            rep = ds.finish(out_path, copy_repair=True, copy_rewriter=_rewriter)
             plan['_finish'].update(rep.job_record())
         except Exception as e:
             plan['_finish']['error'] = f"{type(e).__name__}: {e}"[:200]

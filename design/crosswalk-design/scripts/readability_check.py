@@ -22,6 +22,11 @@ Reports:
       that repeat an opener, and phrases of five or more words that
       recur across cards or pages
     - door / doors metaphor (no-doors-in-decks.mdc, 2026-10-28)
+    - stock filler ("does the work", "does the heavy lifting"), 2026-11-11
+
+``analyze_path(path)`` returns the same findings as records (kind, the
+text that carries the problem, what is wrong with it) for a caller that
+repairs the copy in place (cw_copy_fix.py, design_skill.finish).
     - a store word standing in for a category or a group in a header
       ("Four aisles where ...", 2026-11-11): say categories or groups
 
@@ -107,6 +112,27 @@ STOP_TITLES = {"agenda", "appendix", "thank you", "contents", "sources"}
 OVERUSE = {
     "actually": 1,
 }
+
+# Stock filler: a phrase that stands in for the finding. Flagged on first
+# use (2026-11-11, the Las Culturistas deck: "the first exposure does the
+# work"). The repair table lives in cw_copy_fix.py.
+STOCK_PHRASES = [
+    # "does the work of three channels" is a comparison, not filler
+    re.compile(r"\b(?:do|does|did|doing)\s+(?:all\s+)?(?:the|any)\s+"
+               r"(?:work\b(?!\s+(?:of|for|that|to)\b)|heavy\s+lifting\b|talking\b)", re.I),
+    # the same filler with a word in the middle: "does the conversion work", "does the repeat work"
+    re.compile(r"\b(?:do|does|did|doing)\s+(?:(?:most|all|much)\s+of\s+)?the\s+[a-z-]+\s+work\b"
+               r"(?!\s+(?:of|for|that|to)\b)", re.I),
+    re.compile(r"\b(?:do|does|did|doing)\s+(?:a\s+lot\s+of|most\s+of\s+the)\s+(?:work|heavy\s+lifting)\b", re.I),
+]
+
+
+def stock_hits(text: str) -> list[str]:
+    out = []
+    for pat in STOCK_PHRASES:
+        out.extend(m.group(0) for m in pat.finditer(text or ""))
+    return out
+
 
 # Voice checks (no-formulaic-deck-prose.mdc). A "card" is a written unit
 # of at least this many words that starts like a sentence and ends with
@@ -247,8 +273,12 @@ def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page], int]:
                 return 0
         # Fallback title: the largest type on the page (20pt or more, 25 words or fewer). Works for
         # 16:9 decks (34pt titles) and portrait documents (23pt headlines) alike.
+        # A header is words. A figure set large ("3,593,822", "$33.4M", "39.8%") is a stat, not the
+        # page's header, so it is never the fallback title (2026-11-11: seven hero figures read as
+        # "7 consecutive headers open on a number").
         cands = [sh for sh in slide.shapes if sh.has_text_frame and sh.text_frame.text.strip()
-                 and len(sh.text_frame.text.split()) <= 25 and biggest(sh) >= 20]
+                 and len(sh.text_frame.text.split()) <= 25 and biggest(sh) >= 20
+                 and len(re.findall(r"[A-Za-z]{2,}", sh.text_frame.text)) >= 2]
         fallback = max(cands, key=biggest) if cands else None
         # python-pptx builds a new shape proxy on every pass over slide.shapes, so `shape is fallback`
         # was never true and decks without title placeholders (cw_deck.js / pptxgenjs) reported no
@@ -464,8 +494,21 @@ def phrase_tokens(text: str) -> list[str]:
 def voice_flags(headers: list[str], pages: list[Page]) -> tuple[list[str], list[str]]:
     """Template tells: same-shape cards per page, repeated header openers,
     phrases recurring across units. Returns (flags, info)."""
-    flags: list[str] = []
-    info: list[str] = []
+    recs = voice_records(headers, pages)
+    return [r["line"] for r in recs if r["flag"]], [r["line"] for r in recs if not r["flag"]]
+
+
+def voice_records(headers: list[str], pages: list[Page]) -> list[dict]:
+    """The voice findings as records. Each carries ``line`` (what the check
+    prints), ``flag`` (False for an info line) and ``kind``:
+
+      same_shape       label, opener, cards (the cards that open alike)
+      header_opener    key, titles (headers sharing a two-word opener)
+      header_run       opener, titles (consecutive headers on one opener)
+      repeated_phrase  phrase, count, units (every unit that carries it,
+                       headers first, then the pages in order)
+    """
+    out: list[dict] = []
 
     # Same shape: three or more cards on one page opening the same way.
     for label, units in pages:
@@ -483,7 +526,8 @@ def voice_flags(headers: list[str], pages: list[Page]) -> tuple[list[str], list[
             if len(counts) == 1:
                 n = counts.pop()
                 how += f", {n} sentence{'s' if n != 1 else ''} each"
-            flags.append(f"{label}: {how}. Same shape card to card; rewrite so no three share a skeleton.")
+            out.append({"kind": "same_shape", "flag": True, "label": label, "opener": opener, "cards": list(group),
+                        "line": f"{label}: {how}. Same shape card to card; rewrite so no three share a skeleton."})
 
     # Repeated opener across headers.
     titles = []
@@ -501,7 +545,8 @@ def voice_flags(headers: list[str], pages: list[Page]) -> tuple[list[str], list[
     flagged_sets: list[set[str]] = []
     for key, group in two_words.items():
         if len(group) >= OPENER_REPEAT_MIN:
-            flags.append(f"{len(group)} headers open '{key} ...': " + " | ".join(g[:50] for g in group))
+            out.append({"kind": "header_opener", "flag": True, "key": key, "titles": list(group),
+                        "line": f"{len(group)} headers open '{key} ...': " + " | ".join(g[:50] for g in group)})
             flagged_sets.append(set(group))
     run, prev = [], None
     for t in titles + [""]:
@@ -510,7 +555,9 @@ def voice_flags(headers: list[str], pages: list[Page]) -> tuple[list[str], list[
             run.append(t)
         else:
             if len(run) >= OPENER_REPEAT_MIN and not any(set(run) <= s for s in flagged_sets):
-                flags.append(f"{len(run)} consecutive headers open on {repr(prev)}: " + " | ".join(r[:50] for r in run))
+                out.append({"kind": "header_run", "flag": True, "opener": prev, "titles": list(run),
+                            "line": f"{len(run)} consecutive headers open on {repr(prev)}: "
+                                    + " | ".join(r[:50] for r in run)})
             run = [t] if t else []
         prev = first
 
@@ -544,13 +591,19 @@ def voice_flags(headers: list[str], pages: list[Page]) -> tuple[list[str], list[
                 continue
             grams.setdefault(g, set()).add(idx)
     repeated = [(g, s) for g, s in grams.items() if len(s) >= PHRASE_INFO_MIN]
-    for phrase, count, merged in merged_phrases(repeated):
+    for phrase, count, merged, where in merged_phrase_groups(repeated):
         line = f"'{phrase}'{' (or most of it)' if merged else ''} appears in {count} places"
+        carriers = [(i, units[i], i < len(titles)) for i in sorted(where)]
         if count >= PHRASE_FLAG_MIN:
-            flags.append(line + ". A reused phrase reads as a template; say it once.")
+            out.append({"kind": "repeated_phrase", "flag": True, "phrase": phrase, "count": count,
+                        "units": [u for _i, u, _t in carriers], "is_title": [t for _i, _u, t in carriers],
+                        "line": line + ". A reused phrase reads as a template; say it once."})
         else:
-            info.append(line)
-    return flags, info
+            out.append({"kind": "repeated_phrase", "flag": False, "phrase": phrase, "count": count,
+                        "units": [u for _i, u, _t in carriers], "is_title": [t for _i, _u, t in carriers],
+                        "line": line})
+    # flags first, then info, each in the order found (what the report prints)
+    return [r for r in out if r["flag"]] + [r for r in out if not r["flag"]]
 
 
 def merged_phrases(repeated: list[tuple[tuple[str, ...], set[int]]]) -> list[tuple[str, int, bool]]:
@@ -558,6 +611,12 @@ def merged_phrases(repeated: list[tuple[tuple[str, ...], set[int]]]) -> list[tup
     one phrase each, so 'the top rate in the' and 'top rate in the cast'
     report once as 'the top rate in the cast'. Returns (phrase, count,
     merged_from_several), strongest repeats first."""
+    return [(p, c, m) for p, c, m, _w in merged_phrase_groups(repeated)]
+
+
+def merged_phrase_groups(repeated: list[tuple[tuple[str, ...], set[int]]]) -> list[tuple[str, int, bool, set[int]]]:
+    """``merged_phrases`` with the places: (phrase, count, merged, the unit
+    indexes that carry any part of it)."""
     n = len(repeated)
     parent = list(range(n))
 
@@ -577,7 +636,7 @@ def merged_phrases(repeated: list[tuple[tuple[str, ...], set[int]]]) -> list[tup
     for i in range(n):
         clusters.setdefault(find(i), []).append(i)
 
-    out: list[tuple[str, int, bool]] = []
+    out: list[tuple[str, int, bool, set[int]]] = []
     for members in clusters.values():
         gs = {repeated[i][0] for i in members}
         starts = sorted(g for g in gs if not any(h != g and h[1:] == g[:-1] for h in gs))
@@ -591,37 +650,48 @@ def merged_phrases(repeated: list[tuple[tuple[str, ...], set[int]]]) -> list[tup
             used.add(cur)
             phrase.append(cur[-1])
         count = max(len(repeated[i][1]) for i in members)
-        out.append((" ".join(phrase), count, len(members) > 1))
+        where: set[int] = set()
+        for i in members:
+            where |= set(repeated[i][1])
+        out.append((" ".join(phrase), count, len(members) > 1, where))
     out.sort(key=lambda pc: (-pc[1], pc[0]))
     return out
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("path", nargs="?", help=".pptx, .docx, .html, .md, or .txt")
-    ap.add_argument("--text", help="check a single string (treated as a header)")
-    args = ap.parse_args()
+def load_path(path) -> tuple[list[str], list[str], list[Page], int | None]:
+    """(headers, bodies, pages, slide count or None) for any file the check reads."""
+    p = Path(path)
+    ext = p.suffix.lower()
+    if ext == ".pptx":
+        return load_pptx(p)
+    if ext == ".docx":
+        return (*load_docx(p), None)
+    if ext in (".html", ".htm"):
+        return (*load_html(p.read_text(encoding="utf-8", errors="replace")), None)
+    return (*load_text(p.read_text(encoding="utf-8")), None)
 
-    slide_count = None  # set for a .pptx only
-    if args.text:
-        headers, bodies, pages = [args.text], [], []
-    elif args.path:
-        p = Path(args.path)
-        if p.suffix.lower() == ".pptx":
-            headers, bodies, pages, slide_count = load_pptx(p)
-        elif p.suffix.lower() == ".docx":
-            headers, bodies, pages = load_docx(p)
-        elif p.suffix.lower() in (".html", ".htm"):
-            headers, bodies, pages = load_html(p.read_text(encoding="utf-8", errors="replace"))
-        else:
-            headers, bodies, pages = load_text(p.read_text(encoding="utf-8"))
-    else:
-        ap.print_help()
-        return 2
 
+def analyze(headers: list[str], bodies: list[str], pages: list[Page], slide_count: int | None = None) -> dict:
+    """Run every check. Returns ``{"lines": [...], "flags": [...], "count": n}``:
+    ``lines`` is the printed report, ``count`` the number of flags, and
+    ``flags`` one record per flag for a caller that repairs the copy:
+
+      header           text, issues (each a short reason), words
+      long_sentence    text (the sentence), words
+      grade            grade
+      jargon           word, sub, count        (body copy)
+      overuse          word, count, limit
+      stock_phrase     phrase                  (header or body)
+      door             snippet
+      no_headers       slides
+      same_shape / header_opener / header_run / repeated_phrase
+                       see ``voice_records``
+    """
+    lines: list[str] = []
+    recs: list[dict] = []
     flags = 0
 
-    print("HEADERS")
+    lines.append("HEADERS")
     examined = 0
     for h in headers:
         label, _, text = h.partition(": ") if h.startswith("slide ") else ("", "", h)
@@ -639,12 +709,16 @@ def main() -> int:
         for j in JARGON:
             if re.search(rf"\b{re.escape(j)}\b", text.lower()):
                 issues.append(f"jargon '{j}'" + (f" -> '{JARGON[j]}'" if JARGON[j] else " -> cut"))
+        for hit in stock_hits(text):
+            issues.append(f"stock phrase '{hit}'")
         mark = "FLAG" if issues else " ok "
         flags += len(issues)
         prefix = f"{label}: " if label else ""
-        print(f"  [{mark}] {prefix}{text}" + (f"    <- {'; '.join(issues)}" if issues else ""))
+        lines.append(f"  [{mark}] {prefix}{text}" + (f"    <- {'; '.join(issues)}" if issues else ""))
+        if issues:
+            recs.append({"kind": "header", "text": text.strip(), "issues": list(issues), "words": n, "label": label})
     if not headers:
-        print("  (none found)")
+        lines.append("  (none found)")
     # Always say how many headers were checked. This section used to pass silently when the title
     # detection found nothing (2026-11-05, Twin IQ v3); on a deck of two or more slides, zero
     # headers is a flag, not a pass.
@@ -652,30 +726,33 @@ def main() -> int:
     tail = f" ({skipped} skipped: agenda, appendix, contents, sources, thank you)" if skipped else ""
     plural = "s" if examined != 1 else ""
     if slide_count is None:
-        print(f"  [info] {examined} header{plural} examined{tail}")
+        lines.append(f"  [info] {examined} header{plural} examined{tail}")
     elif not headers and slide_count >= 2:
         flags += 1
-        print(f"  [FLAG] 0 headers found on a {slide_count}-slide deck; no title was detected, so no header was checked")
+        lines.append(f"  [FLAG] 0 headers found on a {slide_count}-slide deck; no title was detected, so no header was checked")
+        recs.append({"kind": "no_headers", "slides": slide_count})
     else:
-        print(f"  [info] {examined} header{plural} examined on {slide_count} slide{'s' if slide_count != 1 else ''}{tail}")
+        lines.append(f"  [info] {examined} header{plural} examined on {slide_count} slide{'s' if slide_count != 1 else ''}{tail}")
 
-    print("\nBODY")
+    lines.append("\nBODY")
     all_body = FOOTER_RE.sub(" ", " ".join(bodies))
     prose_sents = [s for s in sentences_of(all_body) if is_prose(s)]
     long_sents = [s for s in prose_sents if len(words_of(s)) > SENTENCE_WORD_CEILING]
     for s in long_sents:
         flags += 1
-        print(f"  [FLAG] {len(words_of(s))} words: {s[:110]}{'...' if len(s) > 110 else ''}")
+        lines.append(f"  [FLAG] {len(words_of(s))} words: {s[:110]}{'...' if len(s) > 110 else ''}")
+        recs.append({"kind": "long_sentence", "text": s, "words": len(words_of(s))})
     prose_text = " ".join(prose_sents)
     grade = fk_grade(prose_text)
     if grade is not None:
         ok = grade <= GRADE_CEILING
         if not ok:
             flags += 1
-        print(f"  [{' ok ' if ok else 'FLAG'}] Flesch-Kincaid grade {grade} on prose (target <= {GRADE_CEILING})")
+            recs.append({"kind": "grade", "grade": grade, "sentences": list(prose_sents)})
+        lines.append(f"  [{' ok ' if ok else 'FLAG'}] Flesch-Kincaid grade {grade} on prose (target <= {GRADE_CEILING})")
     if prose_sents:
         avg = sum(len(words_of(s)) for s in prose_sents) / len(prose_sents)
-        print(f"  [info] {len(prose_sents)} prose sentences, average {avg:.1f} words (tables and labels skipped)")
+        lines.append(f"  [info] {len(prose_sents)} prose sentences, average {avg:.1f} words (tables and labels skipped)")
     jargon_hits = {}
     low_body = all_body.lower()
     for j, sub in JARGON.items():
@@ -684,39 +761,77 @@ def main() -> int:
             jargon_hits[j] = (c, sub)
     for j, (c, sub) in sorted(jargon_hits.items(), key=lambda kv: -kv[1][0]):
         flags += 1
-        print(f"  [FLAG] '{j}' x{c}" + (f" -> '{sub}'" if sub else " -> cut"))
+        lines.append(f"  [FLAG] '{j}' x{c}" + (f" -> '{sub}'" if sub else " -> cut"))
+        recs.append({"kind": "jargon", "word": j, "sub": sub, "count": c})
     all_copy = (" ".join(headers) + " " + all_body).lower()
     for w, limit in OVERUSE.items():
         c = len(re.findall(rf"\b{re.escape(w)}\b", all_copy))
         if c > limit:
             flags += 1
-            print(f"  [FLAG] '{w}' x{c} -> {limit} at most; cut the rest")
+            lines.append(f"  [FLAG] '{w}' x{c} -> {limit} at most; cut the rest")
+            recs.append({"kind": "overuse", "word": w, "count": c, "limit": limit})
+    for hit in stock_hits(all_body):
+        flags += 1
+        lines.append(f"  [FLAG] stock phrase '{hit}': filler; say what happened")
+        recs.append({"kind": "stock_phrase", "phrase": hit})
     if not bodies:
-        print("  (none found)")
+        lines.append("  (none found)")
 
-    print("\nDOORS")
+    lines.append("\nDOORS")
     d_hits = door_hits(" ".join(headers) + " " + all_body)
     for snippet in d_hits:
         flags += 1
-        print(f"  [FLAG] door metaphor: '{snippet}'")
+        lines.append(f"  [FLAG] door metaphor: '{snippet}'")
+        recs.append({"kind": "door", "snippet": snippet})
     if not d_hits:
-        print("  [ ok ] no door / doors in copy")
+        lines.append("  [ ok ] no door / doors in copy")
 
-    print("\nVOICE (one analyst wrote this)")
-    v_flags, v_info = voice_flags(headers, pages)
-    for line in v_flags:
+    lines.append("\nVOICE (one analyst wrote this)")
+    v_recs = voice_records(headers, pages)
+    v_flags = [r for r in v_recs if r["flag"]]
+    v_info = [r["line"] for r in v_recs if not r["flag"]]
+    for r in v_flags:
         flags += 1
-        print(f"  [FLAG] {line}")
+        lines.append(f"  [FLAG] {r['line']}")
+        recs.append(r)
     for line in v_info[:INFO_LINES_SHOWN]:
-        print(f"  [info] {line}")
+        lines.append(f"  [info] {line}")
     if len(v_info) > INFO_LINES_SHOWN:
-        print(f"  [info] ... and {len(v_info) - INFO_LINES_SHOWN} more phrases used twice; read them before shipping")
+        lines.append(f"  [info] ... and {len(v_info) - INFO_LINES_SHOWN} more phrases used twice; read them before shipping")
     if not v_flags and not v_info:
-        print("  [ ok ] no same-shape cards, repeated openers, or repeated phrases" if pages or len(headers) > 1
-              else "  (nothing to compare)")
+        lines.append("  [ ok ] no same-shape cards, repeated openers, or repeated phrases" if pages or len(headers) > 1
+                     else "  (nothing to compare)")
 
-    print(f"\n{flags} flag(s). {'Ready.' if flags == 0 else 'Rewrite before shipping.'}")
-    return 0 if flags == 0 else 1
+    lines.append(f"\n{flags} flag(s). {'Ready.' if flags == 0 else 'Rewrite before shipping.'}")
+    return {"lines": lines, "flags": recs, "count": flags}
+
+
+def analyze_path(path) -> dict:
+    """``analyze`` on a file (.pptx, .docx, .html, .md, .txt)."""
+    headers, bodies, pages, slide_count = load_path(path)
+    out = analyze(headers, bodies, pages, slide_count)
+    out["headers"], out["pages"] = headers, pages
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("path", nargs="?", help=".pptx, .docx, .html, .md, or .txt")
+    ap.add_argument("--text", help="check a single string (treated as a header)")
+    args = ap.parse_args()
+
+    slide_count = None  # set for a .pptx only
+    if args.text:
+        headers, bodies, pages = [args.text], [], []
+    elif args.path:
+        headers, bodies, pages, slide_count = load_path(args.path)
+    else:
+        ap.print_help()
+        return 2
+
+    res = analyze(headers, bodies, pages, slide_count)
+    print("\n".join(res["lines"]))
+    return 0 if res["count"] == 0 else 1
 
 
 if __name__ == "__main__":

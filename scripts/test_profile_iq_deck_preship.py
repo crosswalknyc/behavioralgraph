@@ -143,7 +143,7 @@ PLAN = {
          "bars_title": "Top purchased brands, % of audience", "value_suffix": "%",
          "rows": [{"label": "Nike", "value": 34.3, "accent": True}, {"label": "Bath & Body Works", "value": 24.4},
                   {"label": "Converse", "value": 22.8}, {"label": "Stanley", "value": 18.5}, {"label": "CeraVe", "value": 16.3}, {"label": "Zara", "value": 11}],
-         "read": "Spending power is real: 1,908,444 viewers earn $99,593 or more, and the brand mix skews to accessible premium rather than value."},
+         "read": "Spending power is real: 1,908,444 viewers earn $100,000 or more, and the brand mix skews to accessible premium rather than value."},
         {"type": "bars", "ground": "dark", "eyebrow": "Graph", "title": "The talent graph is the rarest asset in this file.",
          "sub": TEMPLATE_SUB.format(lead="Talent affinity"),
          "source": "Profile IQ talent and musician rows, Nov 10 2025 to Nov 10 2026.", "show_index": True, "value_suffix": "%",
@@ -193,11 +193,11 @@ PLAN = {
         {"type": "paths", "eyebrow": "Paths", "title": "The path from clip to cart is short and repeatable.",
          "sub": "Example clickstream sequences from awards engagers in window.",
          "source": "Crosswalk Unique ID clickstream, Nov 10 2025 to Nov 10 2026.",
-         "rows": [{"kind": "search", "url": "Google.com/search?q=las+culturistas+culture+awards+winners"},
-                  {"kind": "click", "url": "Peacocktv.com/watch/las-culturistas-culture-awards"},
-                  {"kind": "play", "url": "Peacocktv.com/stream/las-culturistas-culture-awards-full-show", "lit": True},
-                  {"kind": "click", "url": "Nike.com/w/new-releases-sneakers"},
-                  {"kind": "cart", "url": "Nike.com/cart/checkout", "lit": True},
+         "rows": [{"kind": "search", "url": "google.com/search?q=las+culturistas+culture+awards+winners"},
+                  {"kind": "click", "url": "peacocktv.com/watch/las-culturistas-culture-awards"},
+                  {"kind": "play", "url": "peacocktv.com/stream/las-culturistas-culture-awards-full-show", "lit": True},
+                  {"kind": "click", "url": "nike.com/w/new-releases-sneakers"},
+                  {"kind": "cart", "url": "nike.com/cart/checkout", "lit": True},
                   {"kind": "brand", "url": "Nike running shoes"}]},
         {"type": "argument", "ground": "light", "eyebrow": "Buy", "title": "Four categories where the file and the journeys agree.",
          "sub": "Where the audience composition and the purchase paths point at the same place.",
@@ -207,7 +207,7 @@ PLAN = {
                    {"head": "Travel and dining", "body": "Travel buying reaches 53.5% at index 128 and dining out 52.9% at index 129, in a file that is 57.8% without children."}]},
         {"type": "close", "eyebrow": "Close", "title": "A compact audience that pays back on every measured stage.",
          "cards": [{"head": "The scale is qualified", "body": "4,194,382 US viewers, with an avid core of 1,154,947 watching four or more times."},
-                   {"head": "The demo is the premium one", "body": "68.5% hold a bachelors degree or higher and 45.5% earn $99,593 or more."},
+                   {"head": "The demo is the premium one", "body": "68.5% hold a bachelors degree or higher and 45.5% earn $100,000 or more."},
                    {"head": "The creative works harder here", "body": "Awards-tagged units clear 2.41% CTR against a 0.97% general entertainment benchmark."},
                    {"head": "The purchase follows", "body": "Awards-path sessions convert at 11.8%, and each completing buyer is worth $386.51 a year."}]},
     ],
@@ -361,7 +361,7 @@ for sh in paths_slide.shapes:
             for r in p.runs:
                 faces[r.text] = r.font.name
 check("Geist Mono on the clickstream address rows",
-      faces.get("Nike.com/cart/checkout") == "Geist Mono" and faces.get("CART") == "Geist Mono", str(faces))
+      faces.get("nike.com/cart/checkout") == "Geist Mono" and faces.get("CART") == "Geist Mono", str(faces))
 check("Crosswalk Inter on a paths row that is a brand name, not an address",
       faces.get("Nike running shoes") == "Crosswalk Inter" and faces.get("BRAND") == "Crosswalk Inter", str(faces))
 
@@ -419,6 +419,11 @@ s1 = prs3.slides.add_slide(prs3.slide_layouts[6])
 box = s1.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(13.333), Inches(7.5))
 box.fill.solid(); box.fill.fore_color.rgb = __import__("pptx.dml.color", fromlist=["RGBColor"]).RGBColor(0x0C, 0x16, 0x18)
 box.line.fill.background()
+hd = s1.shapes.add_textbox(Inches(1), Inches(0.3), Inches(11), Inches(0.6))
+hr = hd.text_frame.paragraphs[0].add_run()
+hr.text = "The top income bands hold most of these viewers."     # a header, so the plain-English check has one to read
+hr.font.size = Pt(28); hr.font.bold = True; hr.font.name = "Crosswalk Inter"
+hr.font.color.rgb = __import__("pptx.dml.color", fromlist=["RGBColor"]).RGBColor(0xE9, 0xE8, 0xE1)
 tb = s1.shapes.add_textbox(Inches(1), Inches(1), Inches(3.16), Inches(0.6))
 tb.text_frame.word_wrap = True
 tb.text_frame.margin_left = tb.text_frame.margin_right = 0
@@ -443,7 +448,9 @@ rep = ds.finish(out3)
 check("finish reports the background and widow fixes it applied",
       rep.fixes.get("background_solid") == 1 and rep.fixes.get("background_image") == 1 and rep.fixes.get("widow_bound", 0) >= 1,
       str(rep.fixes))
-check("finish is READY with zero lint FAIL after the net", rep.ready and rep.counts.get("lint_fail") == 0, rep.summary)
+check("finish is READY with zero lint FAIL and zero readability flags after the net",
+      rep.ready and rep.copy_ok and rep.counts.get("lint_fail") == 0 and rep.counts.get("readability_flags") == 0
+      and "readability: ok" in rep.summary, rep.summary)
 z3, slides3, _, _ = slide_xml_parts(out3)
 a1 = _et.fromstring(z3.read(slides3[0])); a2 = _et.fromstring(z3.read(slides3[1]))
 check("the full-page rectangle became a solid slide background",

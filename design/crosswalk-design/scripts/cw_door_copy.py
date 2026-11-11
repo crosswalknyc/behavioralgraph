@@ -85,6 +85,9 @@ def _restore(text: str, held: list[str]) -> str:
     return text
 
 
+_LEAD_RE = re.compile(r"^((?:\d+[.)]?\s+)*)(\S)")
+
+
 def _tidy(text: str, orig: str) -> str:
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r" +\n", "\n", text)
@@ -96,15 +99,16 @@ def _tidy(text: str, orig: str) -> str:
     lead = re.match(r"^\s*", text).group(0)
     body = text[len(lead):]
     if body:
-        body = re.sub(
-            r"^((?:\d+[.)]?\s+)*)([a-z])",
-            lambda m: m.group(1) + m.group(2).upper(),
-            body,
-            count=1,
-        )
-        o = (orig or "").lstrip()
-        if o[:1].isupper() and body[:1].islower() and not o[:1].isdigit():
-            body = body[:1].upper() + body[1:]
+        # The opening letter is raised only when the rewrite took the head
+        # off a line that opened on a capital ("01 The door to new viewers"
+        # -> "01 New viewers"). A line that opened lower case stays lower
+        # case: "25 to 34" is a range and "google.com/search" is an address
+        # (2026-11-11: every such line came back "25 To 34", "Google.com").
+        mo = _LEAD_RE.match((orig or "").lstrip())
+        mn = _LEAD_RE.match(body)
+        if mo and mn and mo.group(2).isupper() and mn.group(2).islower():
+            i = mn.start(2)
+            body = body[:i] + body[i].upper() + body[i + 1:]
     return (lead + body).strip() if (orig or "").strip() == (orig or "") else lead + body
 
 
@@ -117,6 +121,8 @@ def scrub_door_metaphor(text: str) -> str:
         text = str(text)
     if not text:
         return text
+    if not DOOR_TOKEN.search(text):
+        return text          # nothing to rewrite: the string comes back byte for byte
     protected, held = _protect(text)
     out = protected
     for pat, repl in _FRAMES:

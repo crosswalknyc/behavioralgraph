@@ -63,6 +63,43 @@ The deck builders call the same helpers while they lay type
 so a fresh deck is already clean; the pass in ``finish`` is the net for
 every other builder. The report carries what changed (``Report.fixes``)
 and the lint / readability counts (``Report.counts``) for the job record.
+
+Copy repaired in place, and a status that says what happened (2026-11-11:
+two decks left the builder READY with ``readability: FAIL`` and were fixed
+by hand). ``finish(copy_repair=True)`` ends with the plain-English check
+passing, and every ``finish`` reports the state the file is in:
+
+  * a builder that wrote the deck's copy asks for the repair (the
+    Prometheus insights deck). Every other deck (a focus group export
+    whose pages must match its PDF, verbatim answers, a Brand
+    Partnership IQ deck built from a client's own record) and every
+    attachment at the mail door is checked and reported, never
+    rewritten.
+  * the flagged text is rewritten in place before the layout fixes
+    (``copy_fix``: the pack's ``cw_copy_fix.py``). When a rewriter is
+    registered (``set_copy_rewriter``, or ``finish(copy_rewriter=...)``)
+    the flagged units go to it for one or two passes, and a rewrite is
+    taken only when it keeps every figure; whatever is still flagged gets
+    the fixed repair for its kind (a long sentence split at its join, a
+    phrase used in three places reworded or dropped from the later ones,
+    stock filler replaced). Every rule repair is checked before it is
+    written; one that would not read is not made. The file is never held.
+  * ``ready`` is true only when the fonts are embedded, the lint has no
+    FAIL and the plain-English check has no flag; the summary line prints
+    the state of the file as it stands at the end ("readability: FAIL (2
+    flag(s) left)" is NOT READY, never READY).
+  * title-cased joining words are lowered where a caser raised them
+    (``25 To 34`` -> ``25 to 34``): ``fix_label_casing`` for builders, and
+    with the copy repair a pass over every paragraph in ``preship_fix``.
+  * a photo behind type is measured: the luminance behind every text box
+    is read from the background image and the graphite scrim is deepened
+    until the type clears 4.5:1; past the deepest scrim, or when the photo
+    is light all the way across the type, the page takes the pack's
+    gradient and the photo is dropped (``bake_photo_for_text`` for
+    builders, ``fix_photo_contrast_in_pptx`` in ``preship_fix``).
+  * ``photo_url_reject_reason`` / ``photo_blob_reject_reason`` say why a
+    candidate is not a cover photograph (a logo file, an icon or clip-art
+    site, a screenshot of an interface, a flat graphic).
 """
 from __future__ import annotations
 
@@ -111,7 +148,7 @@ PACKAGED_SCRIPTS = (
     "cw_embed_fonts.py", "cw_pptx_finalize.py", "cw_pptx_embed.py",
     "cw_pptx_check.py", "cw_docx_finalize.py", "cw_brand_lint.py",
     "readability_check.py", "cw_pptx_tools.py", "cw_email_check.py",
-    "render_preview.py", "cw_door_copy.py",
+    "render_preview.py", "cw_door_copy.py", "cw_copy_fix.py",
 )
 PACKAGED_TEMPLATES = (
     "Crosswalk_Deck_Templates.pptx", "Crosswalk_SOW_Template.pptx",
@@ -391,12 +428,32 @@ class Report:
 
     @property
     def copy_ok(self) -> bool:
-        """The plain-English check ran and found nothing to flag."""
-        return any(n == "readability" and ok for n, ok, _o in self.steps)
+        """The plain-English check ran and its last run found nothing to flag."""
+        runs = [ok for n, ok, _o in self.steps if n == "readability"]
+        return bool(runs) and bool(runs[-1])
 
     @property
     def summary(self) -> str:
-        bits = [f"{n}: {'ok' if ok else 'FAIL'}" for n, ok, _o in self.steps]
+        """One line that says what state the file is in now. A step that
+        ran more than once (the plain-English check runs before and after
+        the copy repair) prints its last result."""
+        last = {}
+        order = []
+        for n, ok, _o in self.steps:
+            if n not in last:
+                order.append(n)
+            last[n] = ok
+        bits = []
+        for n in order:
+            bit = f"{n}: {'ok' if last[n] else 'FAIL'}"
+            if n == "readability":
+                left = self.counts.get("readability_flags")
+                fixed = self.fixes.get("copy_units_repaired")
+                if not last[n] and left:
+                    bit += f" ({left} flag(s) left)"
+                elif last[n] and fixed:
+                    bit += f" ({self.fixes.get('copy_flags_before', '?')} flag(s) repaired in place)"
+            bits.append(bit)
         bits += [f"{n}: skipped ({w})" for n, w in self.skipped]
         return f"{Path(self.path).name}: " + ("READY" if self.ready else "NOT READY") + (" (" + "; ".join(bits) + ")" if bits else "")
 
@@ -628,11 +685,158 @@ def readability(path, report: Optional[Report] = None) -> Report:
     return rep
 
 
-def preship_fix(path, report: Optional[Report] = None) -> Report:
+_COPY_MOD = None
+_COPY_REWRITER = None
+
+
+def copy_fix_module():
+    """The pack's copy repair (``cw_copy_fix.py``), imported once. None when
+    the pack is absent."""
+    global _COPY_MOD
+    if _COPY_MOD is not None:
+        return _COPY_MOD or None
+    sd = scripts_dir()
+    if sd is None or not (sd / "cw_copy_fix.py").is_file():
+        _COPY_MOD = False
+        return None
+    try:
+        import importlib.util
+        if str(sd) not in sys.path:
+            sys.path.insert(0, str(sd))      # it imports readability_check and cw_door_copy beside it
+        spec = importlib.util.spec_from_file_location("cw_copy_fix", str(sd / "cw_copy_fix.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _COPY_MOD = mod
+    except Exception:
+        _COPY_MOD = False
+        return None
+    return _COPY_MOD
+
+
+def set_copy_rewriter(fn) -> None:
+    """Register the model pass ``finish`` hands flagged copy to: a callable
+    that takes ``[{"id", "text", "role", "problems", "keep"}]`` and returns
+    ``{id: new text}``. The web app registers its own; a process with none
+    (a test, a local script) uses the fixed repairs alone."""
+    global _COPY_REWRITER
+    _COPY_REWRITER = fn
+
+
+def copy_rewriter():
+    return _COPY_REWRITER
+
+
+def fix_label_casing(text) -> str:
+    """Lower the joining words a title-caser raised (``25 To 34`` ->
+    ``25 to 34``, ``Arts And Culture`` -> ``Arts and Culture``). The pack's
+    ``small_word_case``; the text comes back as it was without the pack."""
+    try:
+        mod = copy_fix_module()
+        if mod is not None:
+            return mod.small_word_case(text)
+    except Exception:
+        pass
+    return "" if text is None else str(text)
+
+
+def scrub_stock_phrases(text) -> str:
+    """Replace stock filler ("does the work") with the plain verb. The
+    pack's ``scrub_stock``; unchanged without the pack."""
+    try:
+        mod = copy_fix_module()
+        if mod is not None:
+            return mod.scrub_stock(text)
+    except Exception:
+        pass
+    return "" if text is None else str(text)
+
+
+def _copy_fits(shape, old: str, new: str) -> bool:
+    """May a repaired line go into this shape? Yes when it wraps to no more
+    lines than the line it replaces (measured with the pack's wrap model
+    on the shape's own width, face and size), or when the box has the
+    height for one more; failing that the type steps down, by no more
+    than an eighth and never under 10 pt; failing that the repair is not
+    written (a line is never pushed out of its box). A shape that cannot
+    be measured takes the repair only when it is not longer."""
+    try:
+        tf = shape.text_frame
+        sizes = [r.font.size.pt for p_ in tf.paragraphs for r in p_.runs if r.font.size]
+        if lint_module() is None or not sizes:
+            return len(new) <= len(old) + 2
+        size = max(sizes)
+        runs = [r for p_ in tf.paragraphs for r in p_.runs]
+        face = runs[0].font.name if runs and runs[0].font.name else None
+        bold = bool(runs and runs[0].font.bold)
+        ml = tf.margin_left if tf.margin_left is not None else 91440
+        mr = tf.margin_right if tf.margin_right is not None else 91440
+        mt = tf.margin_top if tf.margin_top is not None else 45720
+        mb = tf.margin_bottom if tf.margin_bottom is not None else 45720
+        width_in = (int(shape.width) - int(ml) - int(mr)) / EMU_PER_IN
+        height_in = (int(shape.height) - int(mt) - int(mb)) / EMU_PER_IN
+        if width_in <= 0:
+            return len(new) <= len(old) + 2
+        _l, n_old = widow_lines(old, size, width_in, face=face, bold=bold)
+        _l, n_new = widow_lines(new, size, width_in, face=face, bold=bold)
+        if n_new <= n_old:
+            return True
+        if n_new * size * 1.2 / 72.0 <= height_in + 0.01:
+            return True
+        floor = max(10.0, size * 0.875)
+        s_try = size - 0.5
+        while s_try >= floor - 1e-6:
+            _l, n_try = widow_lines(new, s_try, width_in, face=face, bold=bold)
+            if n_try <= n_old:
+                from pptx.util import Pt
+                for r in runs:
+                    if r.font.size:
+                        r.font.size = Pt(s_try * (r.font.size.pt / size))
+                return True
+            s_try -= 0.5
+        return False
+    except Exception:
+        return len(new) <= len(old) + 2
+
+
+def copy_fix(path, report: Optional[Report] = None, rewriter=None) -> Report:
+    """Repair the copy the plain-English check flags, in place (a .pptx).
+    ``rewriter`` (or the registered one) gets the flagged units first; the
+    fixed repairs take whatever is left. Never raises; never holds."""
+    rep = report or Report(str(path))
+    if Path(str(path)).suffix.lower() != ".pptx":
+        return rep
+    mod = copy_fix_module()
+    if mod is None:
+        rep.skip("copy_fix", "scripts missing")
+        return rep
+    try:
+        res = mod.fix_file(path, rewriter if rewriter is not None else _COPY_REWRITER, guard=_copy_fits)
+        before, after = res.get("before"), res.get("after")
+        n = int(res.get("rewritten") or 0) + int(res.get("fallback") or 0)
+        if before:
+            rep.fixes["copy_flags_before"] = int(before)
+        if n:
+            rep.fixes["copy_units_repaired"] = n
+            if res.get("rewritten"):
+                rep.fixes["copy_units_rewritten"] = int(res["rewritten"])
+        if after:
+            rep.fixes["copy_flags_left"] = int(after)
+        rep.add("copy_fix", not after,
+                (f"{before} flag(s) on entry, {n} unit(s) repaired, {after or 0} left"
+                 if before else "nothing flagged")
+                + ("".join(f"\n  left: {x}" for x in (res.get("notes") or []))))
+    except Exception as e:
+        rep.add("copy_fix", False, f"{type(e).__name__}: {e}"[:300])
+    return rep
+
+
+def preship_fix(path, report: Optional[Report] = None, casing: bool = False) -> Report:
     """The in-place corrections on a deck before the checks run: page
     backgrounds set as backgrounds (a full-page shape or photo under a
-    scrim becomes the slide background at 3840 px), then widows bound
-    and their boxes fitted. Never raises; never holds the file."""
+    scrim becomes the slide background at 3840 px), a photo behind type
+    scrimmed until the type reads, joining words a title-caser raised
+    lowered (``casing``, with the copy repair), then widows bound and
+    their boxes fitted. Never raises; never holds the file."""
     rep = report or Report(str(path))
     if Path(str(path)).suffix.lower() != ".pptx":
         return rep
@@ -641,6 +845,18 @@ def preship_fix(path, report: Optional[Report] = None) -> Report:
         rep.fixes.update({f"background_{k}": v for k, v in bg.items() if v})
     except Exception as e:
         rep.fixes["background_error"] = f"{type(e).__name__}: {e}"[:200]
+    try:
+        pc = fix_photo_contrast_in_pptx(path)
+        rep.fixes.update({f"photo_{k}": v for k, v in pc.items() if v})
+    except Exception as e:
+        rep.fixes["photo_error"] = f"{type(e).__name__}: {e}"[:200]
+    if casing:
+        try:
+            n = fix_label_casing_in_pptx(path)
+            if n:
+                rep.fixes["casing_lowered"] = n
+        except Exception as e:
+            rep.fixes["casing_error"] = f"{type(e).__name__}: {e}"[:200]
     try:
         wd = fix_widows_in_pptx(path)
         rep.fixes.update({f"widow_{k}": v for k, v in wd.items() if v})
@@ -652,30 +868,47 @@ def preship_fix(path, report: Optional[Report] = None) -> Report:
 
 
 def finish(path, *, render_check: bool = False, lint: bool = True,
-           copy_check: Optional[bool] = None) -> Report:
-    """Finish one client-facing file in place: the pre-ship fixes on a
-    deck (backgrounds, widows, door metaphors), then embed and check the
-    fonts, then the brand lint (FAILs reported) and the plain-English
-    check (on every deck; on other files when asked). Never raises; never
-    holds the file. ``ready`` means the embed passed and the lint found
-    no FAIL; ``copy_ok`` means the plain-English check found no flag."""
+           copy_check: Optional[bool] = None, copy_repair: Optional[bool] = None,
+           copy_rewriter=None) -> Report:
+    """Finish one client-facing file in place: door metaphors rewritten,
+    then on a deck the pre-ship fixes (backgrounds, photo contrast,
+    widows), then embed and check the fonts, then the brand lint (FAILs
+    reported) and the plain-English check on the file as it now stands
+    (on every deck; on other files when asked). Never raises; never
+    holds the file.
+
+    ``copy_repair=True`` is for a builder that wrote the deck's copy:
+    whatever the plain-English check flags is repaired in place before
+    the layout fixes (``copy_fix``; ``copy_rewriter`` is the model pass
+    over only the flagged lines), and joining words a title-caser raised
+    are lowered. Without it the copy is checked and reported, never
+    rewritten (a deck whose copy is data, an attachment at the mail door).
+
+    ``ready`` means the file is clean at the end: the embed passed, the
+    lint found no FAIL, and the plain-English check (when it ran) found
+    no flag. ``copy_ok`` is that last check alone."""
     rep = Report(str(path))
     try:
         ext = Path(str(path)).suffix.lower()
         if copy_check is None:
             copy_check = ext == ".pptx"
+        copy_repair = bool(copy_repair) and bool(copy_check) and ext == ".pptx"
         if lint and ext in (".pptx", ".docx", ".html", ".htm", ".md", ".txt"):
             scrub_doors_in_file(path, report=rep)
+        if copy_repair:
+            copy_fix(path, report=rep, rewriter=copy_rewriter)
         if lint and ext == ".pptx":
-            preship_fix(path, report=rep)
+            preship_fix(path, report=rep, casing=copy_repair)
         embed_fonts(path, render_check=render_check, report=rep)
         if lint and ext in (".pptx", ".docx", ".html", ".htm"):
             brand_lint(path, report=rep)      # the linter reads Office, HTML and text; a .pdf is verified above
+        copy_ran = False
         if copy_check and ext in (".pptx", ".docx", ".html", ".htm", ".md", ".txt"):
-            readability(path, report=rep)
+            readability(path, report=rep)     # the file as it stands now: this is the state the summary prints
+            copy_ran = any(n == "readability" for n, _ok, _o in rep.steps)
         embed_ok = any(n == "embed" and ok for n, ok, _o in rep.steps)
         lint_ok = all(ok for n, ok, _o in rep.steps if n == "brand_lint")
-        rep.ready = embed_ok and lint_ok
+        rep.ready = embed_ok and lint_ok and (rep.copy_ok or not copy_ran)
     except Exception:
         rep.add("finish", False, traceback.format_exc()[-1500:])
     try:
@@ -685,7 +918,7 @@ def finish(path, *, render_check: bool = False, lint: bool = True,
     return rep
 
 
-def gate_attachment(name: str, data: bytes, *, lint: bool = True) -> tuple:
+def gate_attachment(name: str, data: bytes, *, lint: bool = True, **kw) -> tuple:
     """The outbound door's gate for an attached deck / document / PDF:
     writes the bytes, runs ``finish`` (fixes applied in place), returns
     (bytes, Report). Anything that is not a .pptx / .docx / .pdf / .html
@@ -698,7 +931,7 @@ def gate_attachment(name: str, data: bytes, *, lint: bool = True) -> tuple:
     p = Path(tmp) / Path(str(name)).name
     try:
         p.write_bytes(data)
-        rep = finish(p, lint=lint)
+        rep = finish(p, lint=lint, **kw)
         try:
             data = p.read_bytes()
         except Exception:
@@ -909,6 +1142,30 @@ def widow_fit(text, size_pt: float, width_in: float, *, height_in: Optional[floa
         if fine:
             out.width_in, out.action, out.lines = w, "narrowed", n
             return out
+    # The pair cannot be kept together at any width (a long last word: the
+    # line before it would have to be nearly empty). The same copy without
+    # the binding, at a width where the natural wrap leaves two words on the
+    # last line at every renderer scale (2026-11-11: "... an under-25,
+    # female-leaning audience." failed the lint as a bound pair alone).
+    def ok_plain(w):
+        lone, n = widow_lines(s, size_pt, w, face=face, bold=bold, tracking_pt=tracking_pt)
+        return (not lone) and n <= allowed, n
+
+    if max_width_in is not None and max_width_in > width_in + 0.005:
+        w = width_in
+        while w + 0.02 <= max_width_in + 1e-6:
+            w = round(w + 0.02, 3)
+            fine, n = ok_plain(w)
+            if fine:
+                out.text, out.width_in, out.action, out.lines = s, w, "widened", n
+                return out
+    w = width_in
+    while w - 0.02 >= floor - 1e-6:
+        w = round(w - 0.02, 3)
+        fine, n = ok_plain(w)
+        if fine:
+            out.text, out.width_in, out.action, out.lines = s, w, "narrowed", n
+            return out
     # a half point or two smaller, then the same search
     steps = (size_pt - 0.5, size_pt - 1.0) if size_pt < 20 else (size_pt - 2.0, size_pt - 3.0)
     for sz in steps:
@@ -1050,8 +1307,9 @@ def fix_widows_in_pptx(path) -> dict:
                                 max_width_in=room if (single and algn == "l") else None)
                 if fit.action == "none":
                     continue
-                # the binding lands in whichever run holds the final gap
-                m = re.search(r"[ \t]+(?=[^\s\u00a0]+\s*$)", text)
+                # the binding lands in whichever run holds the final gap (a fit
+                # made without the binding leaves the gap a plain space)
+                m = re.search(r"[ \t]+(?=[^\s\u00a0]+\s*$)", text) if NBSP in fit.text else None
                 if m is not None:
                     pos = 0
                     first = True
@@ -1359,6 +1617,389 @@ def fix_backgrounds_in_pptx(path) -> dict:
     return counts
 
 
+# ------------------------------------------- casing, photos behind type (2026-11-11)
+def fix_label_casing_in_pptx(path) -> int:
+    """Lower the joining words a title-caser raised, on every paragraph of
+    a saved deck, in place (``25 To 34`` -> ``25 to 34``). Only the case of
+    a letter changes, so runs keep their lengths and formatting. Returns
+    the number of paragraphs changed."""
+    import zipfile
+    from lxml import etree
+    mod = copy_fix_module()
+    if mod is None:
+        return 0
+    z = zipfile.ZipFile(str(path))
+    names = z.namelist()
+    slides, _sw, _sh = _slide_parts(z)
+    replace, n = {}, 0
+    for sp in slides:
+        if sp not in names:
+            continue
+        raw = z.read(sp)
+        if not re.search(rb"\b(To|And|Or|Of|The|Vs|Through|Thru)\b", raw):
+            continue
+        root = etree.fromstring(raw)
+        touched = False
+        for p_ in root.iter(f"{_A}p"):
+            ts = [t for t in p_.iter(f"{_A}t")]
+            text = "".join(t.text or "" for t in ts)
+            if not text.strip():
+                continue
+            new = mod.small_word_case(text)
+            if new == text or len(new) != len(text):
+                continue
+            pos = 0
+            for t in ts:
+                k = len(t.text or "")
+                t.text = new[pos:pos + k]
+                pos += k
+            n += 1
+            touched = True
+        if touched:
+            replace[sp] = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+    z.close()
+    if replace:
+        _rewrite_zip(path, replace)
+    return n
+
+
+MIN_TEXT_CONTRAST = 4.5          # type over a photograph, against the brightest part behind it
+MAX_SCRIM_ALPHA = 0.86           # the deepest scrim a photo takes; past it the page takes the gradient
+LIGHT_PHOTO_MEDIAN = 0.50        # a photo this light behind the type (median, 0 to 1) is all scrim at that depth
+_MEASURE_PX = (384, 216)
+
+
+def _lin(c):
+    c = c / 255.0
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def rel_luminance(rgb) -> float:
+    """WCAG relative luminance of an (r, g, b) color, 0 to 1."""
+    r, g, b = (float(x) for x in tuple(rgb)[:3])
+    return 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+
+
+def contrast_ratio(l1: float, l2: float) -> float:
+    hi, lo = (l1, l2) if l1 >= l2 else (l2, l1)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _lum_array(im):
+    """Relative luminance of every pixel of a Pillow image, measured on a
+    384 x 216 copy (enough to see what sits behind a line of type)."""
+    import numpy as np
+    from PIL import Image
+    small = im.convert("RGB").resize(_MEASURE_PX, Image.BILINEAR)
+    a = np.asarray(small, dtype=np.float64) / 255.0
+    lin = np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * lin[..., 0] + 0.7152 * lin[..., 1] + 0.0722 * lin[..., 2], np.asarray(small, dtype=np.float64)
+
+
+def _zone_slice(zone, shape):
+    h, w = shape[:2]
+    x0, y0, x1, y1 = (min(max(float(v), 0.0), 1.0) for v in zone[:4])
+    a, b = int(x0 * w), max(int(x0 * w) + 1, int(round(x1 * w)))
+    c, d = int(y0 * h), max(int(y0 * h) + 1, int(round(y1 * h)))
+    return slice(c, min(d, h)), slice(a, min(b, w))
+
+
+def zone_contrast(im, zones) -> float:
+    """The lowest contrast any zone's type gets against the bright part of
+    the image behind it. ``zones`` is a list of (x0, y0, x1, y1, (r, g, b)):
+    a box in page fractions and the color of the type in it. The image is
+    read at its 95th percentile inside each box, so a white patch behind
+    three words counts even when the rest of the box is dark."""
+    import numpy as np
+    lum, _rgb = _lum_array(im)
+    worst = 99.0
+    for z in zones or []:
+        ys, xs = _zone_slice(z, lum.shape)
+        patch = lum[ys, xs]
+        if patch.size == 0:
+            continue
+        behind = float(np.percentile(patch, 95))
+        worst = min(worst, contrast_ratio(rel_luminance(z[4]), behind))
+    return worst
+
+
+def zone_median_luminance(im, zones) -> float:
+    """The median relative luminance of the image across the text zones
+    (0 to 1): how light the picture is behind the type as a whole."""
+    import numpy as np
+    lum, _rgb = _lum_array(im)
+    vals = []
+    for z in zones or []:
+        ys, xs = _zone_slice(z, lum.shape)
+        vals.append(lum[ys, xs].ravel())
+    return float(np.median(np.concatenate(vals))) if vals else 0.0
+
+
+def scrim_alpha_for_text(im, zones, *, scrim_hex: str = "#0C1618", alpha: float = 0.64,
+                         max_alpha: float = MAX_SCRIM_ALPHA, min_contrast: float = MIN_TEXT_CONTRAST):
+    """The lightest scrim, from ``alpha`` up in 0.02 steps, under which
+    every zone's type clears ``min_contrast`` on this image; None when
+    even ``max_alpha`` leaves the type unreadable."""
+    from PIL import Image
+    small = im.convert("RGB").resize(_MEASURE_PX, Image.BILINEAR)
+    veil = Image.new("RGB", small.size, _hex_to_rgb(scrim_hex))
+    a = min(max(float(alpha), 0.0), 1.0)
+    while a <= max_alpha + 1e-9:
+        if zone_contrast(Image.blend(small, veil, a), zones) >= min_contrast:
+            return round(a, 2)
+        a += 0.02
+    return None
+
+
+def bake_photo_for_text(image_bytes: bytes, zones, *, scrim_hex: str = "#0C1618", alpha: float = 0.64,
+                        max_alpha: float = MAX_SCRIM_ALPHA, min_contrast: float = MIN_TEXT_CONTRAST,
+                        size=PAGE_PX, quality: int = 88, crop=None) -> tuple:
+    """``bake_photo_background`` with the scrim set by what is behind the
+    type: the luminance behind each text zone is measured on the cropped
+    photo and the scrim is deepened from ``alpha`` until every zone
+    clears ``min_contrast``. Returns (image bytes, alpha used); (None,
+    None) when no scrim up to ``max_alpha`` makes the type readable, or
+    when the photo is so light behind the type that the scrim it needs
+    would leave nothing of it, so the caller sets the gradient page
+    instead of the photo."""
+    from PIL import Image
+    im = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    if crop and any(crop):
+        l, t, r_, b = crop
+        W0, H0 = im.size
+        im = im.crop((int(round(l * W0)), int(round(t * H0)), int(round(W0 * (1 - r_))), int(round(H0 * (1 - b)))))
+    im = cover_crop(im, size)
+    use = scrim_alpha_for_text(im, zones, scrim_hex=scrim_hex, alpha=alpha, max_alpha=max_alpha,
+                               min_contrast=min_contrast) if zones else alpha
+    if use is None:
+        return None, None
+    # A photo that is light all the way across the type (a white page, an
+    # interface, a sky) would be nothing but scrim at the depth it needs:
+    # no photo, the gradient page instead.
+    if zones and use >= max_alpha - 0.04 and zone_median_luminance(im, zones) > LIGHT_PHOTO_MEDIAN:
+        return None, None
+    veil = Image.new("RGB", im.size, _hex_to_rgb(scrim_hex))
+    im = Image.blend(im, veil, min(max(float(use), 0.0), 1.0))
+    out = io.BytesIO()
+    im.save(out, format="JPEG", quality=int(quality), optimize=True, progressive=True)
+    return out.getvalue(), use
+
+
+PHOTO_DETAIL_MIN = 2.0           # image_detail at or above this is a photograph, below it a gradient or a flat ground
+
+
+def image_detail(im) -> float:
+    """How much picture an image carries: the page is read as a 32 x 18
+    grid of block averages and the measure is the mean bend from block to
+    block (the second difference, 0 to 255). A gradient changes evenly, so
+    it reads under 1 whatever its colors; a photograph reads 4 and up even
+    under the deepest scrim."""
+    import numpy as np
+    from PIL import Image
+    g = np.asarray(im.convert("L").resize((32, 18), Image.BOX), dtype=np.float64)
+    d2x = np.abs(g[:, 2:] - 2 * g[:, 1:-1] + g[:, :-2]).mean()
+    d2y = np.abs(g[2:, :] - 2 * g[1:-1, :] + g[:-2, :]).mean()
+    return float((d2x + d2y) / 2.0)
+
+
+def fix_photo_contrast_in_pptx(path) -> dict:
+    """The net under every builder for a photo behind type. On each slide
+    whose background is a photograph, the image is read behind every
+    light text box (9 pt and up, not sitting on its own panel); when any
+    box falls under 4.5:1 the graphite scrim is deepened in the image
+    until all of them clear it, and when no scrim short of solid does,
+    the slide takes the pack's graphite gradient instead. A gradient or a
+    flat background is left alone. Returns counts: deepened, gradient."""
+    import posixpath
+    import zipfile
+    from lxml import etree
+    from PIL import Image
+    counts = {"deepened": 0, "gradient": 0}
+    z = zipfile.ZipFile(str(path))
+    names = z.namelist()
+    slides, sw, sh = _slide_parts(z)
+    replace, add = {}, {}
+    n_media = 0
+    ct_name = "[Content_Types].xml"
+    ct_xml = z.read(ct_name).decode("utf8", "ignore") if ct_name in names else ""
+    for sp in slides:
+        if sp not in names:
+            continue
+        raw = z.read(sp)
+        if b"<p:bg" not in raw or b"blip" not in raw:
+            continue
+        root = etree.fromstring(raw)
+        bg = root.find(f"{_P}cSld/{_P}bg")
+        blip = bg.find(f".//{_A}blip") if bg is not None else None
+        if blip is None:
+            continue
+        rid = blip.get(f"{_R}embed")
+        rels_name = sp.replace("slides/", "slides/_rels/") + ".rels"
+        rels_xml = z.read(rels_name).decode("utf8", "ignore") if rels_name in names else ""
+        m = re.search(r'<Relationship\b[^>]*\bId="%s"[^>]*>' % re.escape(rid or ""), rels_xml)
+        tm = re.search(r'Target="([^"]+)"', m.group(0)) if m else None
+        if not tm:
+            continue
+        part = posixpath.normpath(posixpath.join(posixpath.dirname(sp), tm.group(1)))
+        if part not in names:
+            continue
+        try:
+            im = Image.open(io.BytesIO(z.read(part))).convert("RGB")
+        except Exception:
+            continue
+        if image_detail(im) < PHOTO_DETAIL_MIN:
+            continue                                  # a gradient or a flat ground, not a photograph
+        rects = _shape_rects(root)
+        panels = [(x, y, cx, cy) for x, y, cx, cy, flat in rects if flat and cx < 0.95 * sw]
+        zones = []
+        for shp in root.iter(f"{_P}sp"):
+            tx = shp.find(f"{_P}txBody")
+            off, ext = shp.find(f".//{_A}xfrm/{_A}off"), shp.find(f".//{_A}xfrm/{_A}ext")
+            if tx is None or off is None or ext is None:
+                continue
+            if not "".join(t.text or "" for t in tx.iter(f"{_A}t")).strip():
+                continue
+            x, y, cx, cy = (int(off.get("x")), int(off.get("y")), int(ext.get("cx")), int(ext.get("cy")))
+            if any(px <= x + cx // 2 <= px + pcx and py <= y + cy // 2 <= py + pcy for px, py, pcx, pcy in panels):
+                continue                              # this type sits on its own panel
+            size, rgb = 0.0, None
+            for rp in tx.iter(f"{_A}rPr"):
+                if rp.get("sz"):
+                    size = max(size, int(rp.get("sz")) / 100)
+                c = rp.find(f"{_A}solidFill/{_A}srgbClr")
+                if rgb is None and c is not None:
+                    rgb = _hex_to_rgb(c.get("val"))
+            if size < 9 or rgb is None or rel_luminance(rgb) < 0.18:
+                continue
+            zones.append((x / sw, y / sh, (x + cx) / sw, (y + cy) / sh, rgb))
+        if not zones or zone_contrast(im, zones) >= MIN_TEXT_CONTRAST - 0.2:
+            continue
+        extra = scrim_alpha_for_text(im, zones, alpha=0.04, max_alpha=0.80)
+        if extra is not None:
+            veil = Image.new("RGB", im.size, _hex_to_rgb("#0C1618"))
+            out = io.BytesIO()
+            Image.blend(im, veil, extra).save(out, format="JPEG", quality=88, optimize=True, progressive=True)
+            data, kind = out.getvalue(), "deepened"
+        else:
+            data, kind = gradient_image_bytes("graphiteWash"), "gradient"
+            if not data:
+                continue
+        n_media += 1
+        media_name = f"ppt/media/cwfx{n_media}.jpg"
+        while media_name in names or media_name in add:
+            n_media += 1
+            media_name = f"ppt/media/cwfx{n_media}.jpg"
+        add[media_name] = data
+        new_rel = re.sub(r'Target="[^"]+"', f'Target="../media/{media_name.split("/")[-1]}"', m.group(0))
+        replace[rels_name] = rels_xml.replace(m.group(0), new_rel).encode("utf8")
+        counts[kind] += 1
+    z.close()
+    if add and ct_xml and 'Extension="jpg"' not in ct_xml:
+        replace[ct_name] = ct_xml.replace("<Default ", '<Default Extension="jpg" ContentType="image/jpeg"/><Default ', 1).encode("utf8")
+    if replace or add:
+        _rewrite_zip(path, replace, add)
+    return counts
+
+
+# ------------------------------------------------ cover photo candidates (2026-11-11)
+# A deck about YouTube opened on a Wikipedia screenshot of YouTube's search
+# page (the same address twice) with a logo from a free-icon site next in
+# line. A cover takes a photograph or the gradient, never an interface, a
+# logo, an icon or clip art.
+_PHOTO_BAD_HOSTS = (
+    "freeiconspng", "vecteezy", "flaticon", "iconfinder", "icons8", "iconscout", "iconarchive", "thenounproject",
+    "pngtree", "pngwing", "pngegg", "pngmart", "pngimg", "pngall", "pngkey", "pngitem", "pngfind", "pngarts",
+    "pngplay", "kindpng", "cleanpng", "stickpng", "seekpng", "nicepng", "toppng", "clipart", "clipground",
+    "seeklogo", "logos-world", "1000logos", "logodownload", "logowik", "brandslogos", "logolook", "logotyp",
+    "freepnglogos", "freelogovectors", "logo.wine", "worldvectorlogo", "vectorstock", "vectorlogo", "freepik",
+    "shutterstock", "istockphoto", "gettyimages", "alamy", "dreamstime", "depositphotos", "123rf",
+    "stock.adobe", "adobestock", "bigstockphoto",
+)
+_PHOTO_BAD_WORDS = re.compile(
+    r"(?<![a-z])(logo|logos|logotype|icon|icons|clip[-_ +]?art|vector|wordmark|emblem|favicon|sprite|badge|"
+    r"screenshot|screenshots|screen[-_ +]?shot|screen[-_ +]?capture|screen[-_ +]?grab|interface|mockup|"
+    r"wireframe|transparent|sticker|infographic|diagram|flowchart|placeholder|watermark|"
+    r"wallpaper|wallpapers|background|backgrounds|banner|banners|thumbnail|thumbnails|template|templates|"
+    r"illustration|illustrations|artwork|graphic|graphics)(?![a-z])")
+_PHOTO_BAD_EXT = (".svg", ".gif", ".ico", ".webp", ".bmp", ".tif", ".tiff")
+
+
+def photo_url_key(url) -> str:
+    """One address for one picture: host and path, lower case, without the
+    scheme, the query or a size suffix, so the same file reached two ways
+    (a resolver and a wiki lookup, a tracking query) counts once."""
+    import urllib.parse as up
+    u = str(url or "").strip()
+    try:
+        pr = up.urlsplit(u)
+        host = (pr.netloc or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        return host + up.unquote(pr.path or "").lower().rstrip("/")
+    except Exception:
+        return u.lower().split("?", 1)[0]
+
+
+def photo_url_reject_reason(url):
+    """Why this address is not a cover photograph, or None. Read from the
+    address alone: an icon, clip-art, logo or stock-preview site; a file
+    named as a logo, an icon, a screenshot, an interface, a wallpaper, a
+    background, a banner or an illustration (a graphic made to sit behind
+    something, not a picture of the subject); a format a photograph does
+    not come in."""
+    key = photo_url_key(url)
+    if not key:
+        return "no address"
+    host = key.split("/", 1)[0]
+    path = key[len(host):]
+    for bad in _PHOTO_BAD_HOSTS:
+        if bad in host:
+            return f"an icon, logo, clip-art or stock-preview site ({bad})"
+    if path.endswith(_PHOTO_BAD_EXT):
+        return f"not a photograph format ({path.rsplit('.', 1)[-1]})"
+    m = _PHOTO_BAD_WORDS.search(path.replace("%20", " "))
+    if m:
+        return f"the file name says {m.group(1)}"
+    return None
+
+
+def photo_blob_reject_reason(blob):
+    """Why these image bytes are not a cover photograph, or None. Read from
+    the pixels: transparency (a cut-out graphic), a page that is mostly
+    white (an interface or a document), one flat color over a third of the
+    frame that is not shadow (a logo or an icon on its ground), or too few
+    colors to be a photograph."""
+    try:
+        import numpy as np
+        from PIL import Image
+        im = Image.open(io.BytesIO(blob))
+        if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+            alpha = np.asarray(im.convert("RGBA").resize((160, 160)))[..., 3]
+            if float((alpha < 250).mean()) > 0.02:
+                return "a cut-out graphic (transparent ground)"
+        small = im.convert("RGB")
+        small.thumbnail((200, 200))
+        a = np.asarray(small, dtype=np.uint8).reshape(-1, 3)
+        if a.shape[0] < 400:
+            return "too small to read"
+        white = float(((a[:, 0] > 235) & (a[:, 1] > 235) & (a[:, 2] > 235)).mean())
+        if white >= 0.40:
+            return "mostly white (an interface, a document or a graphic on white)"
+        q = (a >> 4).astype(np.int32)
+        bins = q[:, 0] * 256 + q[:, 1] * 16 + q[:, 2]
+        vals, cnts = np.unique(bins, return_counts=True)
+        share = cnts / float(a.shape[0])
+        top = int(np.argmax(cnts))
+        top_rgb = ((vals[top] // 256) * 16 + 8, ((vals[top] // 16) % 16) * 16 + 8, (vals[top] % 16) * 16 + 8)
+        if share[top] >= 0.35 and max(top_rgb) > 72:
+            return "one flat color over a third of the frame (a logo or an icon on its ground)"
+        if int((share >= 0.002).sum()) < 20:
+            return "too few colors for a photograph (a flat graphic)"
+    except Exception:
+        return "unreadable image"
+    return None
+
+
 def render_preview(path, out_dir=None, dpi: int = 90) -> Optional[Path]:
     """Page images through the pack's ``render_preview.py`` (needs
     LibreOffice). Returns the output directory or None."""
@@ -1402,4 +2043,11 @@ __all__ = [
     "NBSP", "MONO_FAMILY", "PAGE_PX", "WidowFit", "bind_last_two", "widow_lines", "widow_fit",
     "fix_widows_in_pptx", "fix_backgrounds_in_pptx", "preship_fix", "cover_crop", "bake_photo_background",
     "gradient_image_bytes", "set_slide_background_image",
+    # copy repaired in place, casing, photos behind type, cover candidates (2026-11-11)
+    "copy_fix_module", "copy_fix", "set_copy_rewriter", "copy_rewriter", "fix_label_casing",
+    "scrub_stock_phrases", "fix_label_casing_in_pptx", "MIN_TEXT_CONTRAST", "MAX_SCRIM_ALPHA",
+    "rel_luminance", "contrast_ratio", "zone_contrast", "zone_median_luminance", "LIGHT_PHOTO_MEDIAN",
+    "scrim_alpha_for_text", "bake_photo_for_text",
+    "image_detail", "PHOTO_DETAIL_MIN", "fix_photo_contrast_in_pptx", "photo_url_key", "photo_url_reject_reason",
+    "photo_blob_reject_reason",
 ]

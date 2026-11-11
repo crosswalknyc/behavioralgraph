@@ -6583,6 +6583,8 @@ ART DIRECTION. Set a top-level "image_subject": the one person, brand, or title 
 HEADLINES FIT THE PAGE
 - Every "title" is ONE sentence of 12 words or fewer, plain words, full stop. The cover title included: one clause, one idea. Two figures in one title is one too many; move the second figure to a stat or the intro.
 - "sub" and "intro" stay under 30 words. Card "head" under 8 words; card "body" under 28 words; tile "label" under 10 words; bar row "label" under 4 words; "big" is a figure, never a sentence.
+- "sub" is a plain sentence, or a content label of three words or more, that says what the page shows. Never a one-word fragment ("Size.", "Paths."); leave "sub" out when the title already says it.
+- A table cell is a figure or a label of six words or fewer. Two figures in one cell are written whole ("19.3% / 13.3%"), never trailed off.
 
 SLIDE TYPES (exact JSON shapes)
 - cover: {"type":"cover","eyebrow":"SUBJECT  \\u00b7  PREPARED FOR PARTNER  \\u00b7  CONTEXT","title":...,"intro":...,"stats":[{"big","label"}x3],"accent_index":1}
@@ -6602,6 +6604,8 @@ NUMBERS
 - Behavior-proof numbers (searchers, CTR, journey conversion, cart rates, AOV, spend per engager, co-visit multiples) are Crosswalk Unique ID reads you produce at realistic magnitude for the subject's actual fame and category: CTR on talent-tagged units runs 0.9 to 3.2 percent; journey conversion with a talent node runs 5 to 14 percent vs 2 to 5 without; cart completion 25 to 45 percent; AOV plausible for the category; unique searchers scaled to the subject's real search interest (a top-10 athlete or A-list name reads 8M to 25M unique US searchers over 12 months, a mid-tier name 1M to 6M, a niche name under 1M).
 - Every integer count is messy: the last digit is 1 to 9, never a round number, never a trailing zero. 542,306 not 542,000. 18,247,631 not 18,000,000. Display millions as 17.9M style. Percentages carry one decimal. Indexes are whole numbers and may be quoted bare (683); four digits or more carry a thousands separator (5,548). Dollar AOVs carry cents ($87.43).
 - Counts are viewers, users, people, accounts, engagers, searchers. Never households.
+- A band or a threshold is a definition and prints exactly: "25 to 34", "$100,000 or more", "$75,000 to $99,999". Never make a band edge messy; only counts are messy.
+- A share is the count beside it over the base its label names: "of US people" is the count over 329.9M US people; "of the audience" is the count over the projected US audience. Every share on a page uses the same base as the counts printed on that page, and the page says which base. Do not print a penetration the material does not carry.
 - Externally reported figures (box office, league viewership records) are quoted at their reported precision and attributed in the sentence, never invented.
 - Peer comparisons name real peers from the subject's world and keep the subject believable inside the set: near the top on its strongest metric, not sweeping every row.
 
@@ -6616,11 +6620,60 @@ VOICE
 - reads are one or two sentences stating what the slide proves, with the key number. Hard counts stated flat; interpretive lines use leans, skews, reads as.
 - NEVER use em dashes or en dashes anywhere. No "actually", no "absolutely", no "real-time". Never the word "household".
 - NEVER use the word door or doors. Not the door to, opens the door, or a door for. State the finding. The Door NYC as a venue name is the only proper-name exception.
+- Say a thing once. No run of five or more words appears on three slides; when a figure comes back on a later slide, word it differently. No stock filler: never "does the work", "does the heavy lifting", "does the talking".
+- Cards on one page do not open the same way: no three cards on a page start on a number, and no three start on the same word.
 - Use each brand's CURRENT name as it appears in the digest (MS NOW, not MSNBC).
 
 TOP-LEVEL JSON
 {"title": deck title sentence, "filename_stem": "Subject_Name" (letters, digits, underscores only), "slides": [...]}
 Return strict JSON only."""
+
+
+DECK_COPY_REWRITE_SYSTEM_PROMPT = """You are the copy editor on a finished Crosswalk insights deck. A plain-English check flagged the lines below. Rewrite ONLY those lines so every problem listed against a line is gone. Nothing else in the deck changes.
+
+RULES
+- Keep every figure exactly as written: every number, percent, dollar amount, index and date, the same digits. Never add a figure and never drop one. The "keep" list on each line is the figures it must still carry.
+- Keep the claim. Add no fact, no comparison and no judgment the line did not make.
+- Stay about the length of the original, never more than a few characters longer.
+- A header is ONE sentence of 12 words or fewer in plain words, ending in a full stop. No colon, no question, no two-beat fragments.
+- A sentence runs 30 words or fewer. Split a long one into two sentences.
+- When a line is told a phrase is used elsewhere in the deck, say the same thing in different words. Swapping one word is not enough; none of that phrase's five-word runs may remain.
+- When a line is told its neighbors open the same way, open it differently: lead with the subject, the comparison or what the figure rules out. If the others open on a number, this one opens on a word.
+- Plain words a high school student reads easily. Never "does the work", "heavy lifting", "does the talking", door or doors, an em dash or an en dash, "household", "modeled", "estimated".
+- Keep the ending the original had: a line without a full stop stays without one.
+
+Return strict JSON only: {"rewrites": [{"id": "u1", "text": "..."}]} with one entry for every id you were given."""
+
+
+def make_deck_copy_rewriter(call_json, usage_extras=None):
+    """The model pass the deck finisher hands flagged copy to. ``call_json``
+    is the caller's JSON model call (system, user, max_tokens=, temperature=,
+    surface=, usage_extras=) returning ``{'success', 'data'}``. The
+    returned callable takes the finisher's items and returns {id: text};
+    every text goes through the house vocabulary scrub first. Hermetic
+    tests (REGRESSION_TEST_MODE=1) get no model call: the finisher's fixed
+    repairs take the flags there."""
+    def _rewrite(items):
+        if not items or os.environ.get('REGRESSION_TEST_MODE') == '1':
+            return {}
+        user = ("LINES TO REWRITE (JSON)\n=======================\n"
+                + json.dumps([{'id': it.get('id'), 'role': it.get('role'), 'text': it.get('text'),
+                               'problems': it.get('problems'), 'keep': it.get('keep')}
+                              for it in items], ensure_ascii=False, indent=1)
+                + "\n\nReturn the strict JSON described in the system prompt. JSON only.")
+        kw = {'max_tokens': 4000, 'temperature': 0.3, 'surface': 'deck'}
+        if usage_extras:
+            kw['usage_extras'] = usage_extras
+        res = call_json(DECK_COPY_REWRITE_SYSTEM_PROMPT, user, **kw) or {}
+        data = res.get('data') if isinstance(res, dict) else None
+        if isinstance(data, list):
+            data = {'rewrites': data}
+        out = {}
+        for r in ((data or {}).get('rewrites') or []):
+            if isinstance(r, dict) and r.get('id') and isinstance(r.get('text'), str):
+                out[str(r['id'])] = scrub_user_text(r['text']).strip()
+        return out
+    return _rewrite
 
 
 def build_insights_deck_user_prompt(subject, partner, digest_bundle,
@@ -7229,12 +7282,67 @@ _INSIGHTS_SLIDE_TYPES = (
 _ROUND_INT_RE = re.compile(
     r'(?<![\d.,+-])(\d{1,3}(?:,\d{3})+|\d{4,9})(?![\d.,%xX+-])')
 _IDX_BEFORE_RE = re.compile(r'index\s*$', re.IGNORECASE)
+# A band label or a threshold is a definition, never a count we computed
+# (2026-11-11: an income band shipped as "$99,593 or more"). "$100,000 or
+# more", "$75,000 to $99,999", "under $25,000", "10,000+ followers" print
+# exactly as written.
+_THRESHOLD_AFTER_RE = re.compile(
+    r'^\s*(?:\+|or (?:more|less|fewer|over|above|higher|under|below|greater)\b|and (?:up|over|above|under|below|more)\b|'
+    r'plus\b|(?:to|through)\s+\$?\d|[-\u2013]\s?\$?\d)', re.IGNORECASE)
+_RANGE_BEFORE_RE = re.compile(r'\d\s*(?:to|through|[-\u2013])\s*\$?$', re.IGNORECASE)
+_DOLLAR_BEFORE_RE = re.compile(
+    r'\b(?:under|over|above|below|beyond|less than|more than|greater than|at least|at most|up to|from|between|'
+    r'exceeds?|exceeding|tops?|topped|topping|clear(?:s|ed|ing)?|cross(?:es|ed|ing)?|'
+    r'earn(?:s|ing|ed)?|makes?|making|income(?: of| at| over| above| under| below)?|'
+    r'salar(?:y|ies)(?: of| at| over| above)?)\s*\$$|[<>\u2265\u2264]\s*\$$|\d\s*and\s*\$$', re.IGNORECASE)
+_DOLLAR_AFTER_RE = re.compile(r'^\s*(?:a year\b|per year\b|/\s?(?:yr|year)\b|and\s+\$\d)', re.IGNORECASE)
+_INCOME_LINE_RE = re.compile(r'\b(income|earn\w*|salar\w+|wage\w*|HHI|bracket|band)\b', re.IGNORECASE)
 
 
-def _messy_int_in_text(subject, text):
+def _is_threshold_figure(s, start, end):
+    """True when the figure at s[start:end] is one end of a band or a
+    threshold, not a count: "10,000+", "100,000 or more", either end of
+    "25,000 to 49,999"; and for a dollar amount, any edge wording ("under
+    $25,000", "between $50,000 and $75,000", "earn $100,000") or a line
+    about income. A plain count after "over" or "up to" stays a count."""
+    after = s[end:end + 24]
+    before = s[max(0, start - 28):start]
+    if _THRESHOLD_AFTER_RE.match(after) or _RANGE_BEFORE_RE.search(before):
+        return True
+    if before.endswith('$'):
+        if _DOLLAR_BEFORE_RE.search(before) or _DOLLAR_AFTER_RE.match(after) or _INCOME_LINE_RE.search(s):
+            return True
+    return False
+
+
+def _threshold_dollars(obj, found=None):
+    """Every dollar figure a plan uses as a band edge or a threshold
+    anywhere in its copy, as integers ({100000, 75000, ...})."""
+    found = set() if found is None else found
+    if isinstance(obj, str):
+        for m in _ROUND_INT_RE.finditer(obj):
+            if obj[max(0, m.start(1) - 1):m.start(1)] != '$':
+                continue
+            try:
+                v = int(m.group(1).replace(',', ''))
+            except ValueError:
+                continue
+            if v >= 1000 and v % 10 == 0 and _is_threshold_figure(obj, m.start(1), m.end(1)):
+                found.add(v)
+    elif isinstance(obj, dict):
+        for x in obj.values():
+            _threshold_dollars(x, found)
+    elif isinstance(obj, list):
+        for x in obj:
+            _threshold_dollars(x, found)
+    return found
+
+
+def _messy_int_in_text(subject, text, protected=None):
     """Rewrite standalone round integer counts (>= 1000, trailing zero)
     inside a display string to messy variants. Indexes, years, decimals,
-    percentages, M/K-suffixed display figures, and ranges are left
+    percentages, M/K-suffixed display figures, ranges, band labels and
+    thresholds ("$100,000 or more", "$75,000 to $99,999") are left
     alone."""
     s = str(text or '')
     if not s:
@@ -7252,19 +7360,26 @@ def _messy_int_in_text(subject, text):
             return raw
         if _IDX_BEFORE_RE.search(s[:m.start()][-12:]):
             return raw
+        if _is_threshold_figure(s, m.start(1), m.end(1)):
+            return raw
+        # A dollar figure the deck uses as a band edge somewhere is that
+        # band edge wherever it is written ("45.5% clear $100,000 while
+        # ..." on a page whose bars read "$100,000 to $149,999").
+        if protected and v in protected and s[max(0, m.start(1) - 1):m.start(1)] == '$':
+            return raw
         nv = _messy(subject, 'deck_count', v) or v
         return f"{nv:,}" if ',' in raw else str(nv)
 
     return _ROUND_INT_RE.sub(_fix, s)
 
 
-def _clean_deck_value(subject, v):
+def _clean_deck_value(subject, v, protected=None):
     if isinstance(v, str):
-        return _messy_int_in_text(subject, scrub_user_text(v))
+        return _messy_int_in_text(subject, scrub_user_text(v), protected)
     if isinstance(v, list):
-        return [_clean_deck_value(subject, i) for i in v]
+        return [_clean_deck_value(subject, i, protected) for i in v]
     if isinstance(v, dict):
-        return {k: _clean_deck_value(subject, i) for k, i in v.items()}
+        return {k: _clean_deck_value(subject, i, protected) for k, i in v.items()}
     return v
 
 
@@ -7307,9 +7422,11 @@ def enforce_insights_plan(plan, subject):
     Returns the cleaned plan dict."""
     if not isinstance(plan, dict):
         return {'title': '', 'filename_stem': '', 'slides': []}
+    # the dollar figures this deck uses as band edges: exact everywhere in it
+    protected = _threshold_dollars(plan)
     out = {
         'title': _messy_int_in_text(
-            subject, scrub_user_text(str(plan.get('title') or ''))),
+            subject, scrub_user_text(str(plan.get('title') or '')), protected),
         'filename_stem': re.sub(
             r'[^A-Za-z0-9_]+', '_',
             str(plan.get('filename_stem') or '')).strip('_')[:60],
@@ -7336,7 +7453,7 @@ def enforce_insights_plan(plan, subject):
         stype = str(sl.get('type') or '').strip().lower()
         if stype not in _INSIGHTS_SLIDE_TYPES:
             continue
-        cleaned = _clean_deck_value(subject, sl)
+        cleaned = _clean_deck_value(subject, sl, protected)
         cleaned['type'] = stype
         if sl.get('photo') is False:
             cleaned['photo'] = False

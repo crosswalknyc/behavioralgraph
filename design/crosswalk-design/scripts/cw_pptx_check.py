@@ -54,6 +54,7 @@ W, H = prs.slide_width, prs.slide_height
 words = lambda t: re.findall(r"\S+", t.lower())
 norm = lambda t: re.sub(r"[^\w%$]+", "", t.lower())
 STOP = set("the and for with that this from what your their they them have more than into over each when were been only also most much many some about which while where".split())
+DOUBLE_STOP = set("the a an of to in on at and or is are was it that this for with by as be had has have not no so if we they he she you".split())
 # source word counts per slide, from every text run on the slide (groups and tables included)
 src_counts = []
 for slide in prs.slides:
@@ -85,10 +86,16 @@ for si, slide in enumerate(prs.slides, 1):
                     bad(f"{tag}: run '{r.text[:20]}' has no explicit typeface (inherits the theme)")
                 elif not (face.startswith(HOUSE) or face in ALLOWED_OTHER):
                     bad(f"{tag}: run uses '{face}'")
-        # 4. doubled words inside one box
+        # 4. doubled words inside one box. A name that repeats itself is a name, not a slip
+        #    ("Miu Miu", "Duran Duran", "Bora Bora": both words capitalized, and not a joining
+        #    word); 2026-11-11, a deck with Miu Miu on a brand row failed here.
         w = words(txt)
-        for a, b in zip(w, w[1:]):
+        w_src = re.findall(r"\S+", txt)
+        for k, (a, b) in enumerate(zip(w, w[1:])):
             if a == b and re.search(r"[a-z]", a):
+                sa, sb = w_src[k], w_src[k + 1]
+                if sa == sb and sa[:1].isupper() and re.sub(r"[^a-z]", "", a) not in DOUBLE_STOP:
+                    continue
                 bad(f"{tag}: repeated word '{a} {b}'")
         # 5. pre-broken lines
         xml = tf._txBody.xml

@@ -62,6 +62,11 @@ def _tb(slide, x, y, w, h, text, *, size=11.5, bold=False, color=None,
         text = scrub_door_metaphor(text)
     except Exception:
         text = text
+    try:        # a range reads "25 to 34", a label "Arts and Culture" (2026-11-11)
+        from migration.design_skill import fix_label_casing
+        text = fix_label_casing(text)
+    except Exception:
+        text = text
     for para_text in str(text).split('\n'):
         p = tf.paragraphs[0] if first else tf.add_paragraph()
         first = False
