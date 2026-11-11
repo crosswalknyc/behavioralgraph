@@ -56,6 +56,24 @@ _NUM_RX = re.compile(r"(?<![\w.,/$])(\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$?\d+(?:\.
 _HEADER_RX = re.compile(r"^\s*([A-Z][A-Z0-9 /&#'-]{5,}?)(?=\s*\(|:|\s-\s|$|\s+[a-z])")
 _TOKEN_RX = re.compile(r"\[\s*f(\d+)\s*\]|\{\{\s*f(\d+)\s*\}\}")
 _CALC_RX = re.compile(r"\[\s*calc\s*:\s*([^\]|]+?)\s*(?:\|\s*(pct1|pct2|pct|count|money|x|raw))?\s*\]", re.I)
+# a token opened and never closed before the end of its line, with the
+# sentence it hangs off (back to the previous sentence end or line start)
+_UNCLOSED_TOKEN_RX = re.compile(r"\[\s*(?:calc\s*:|f\d*)[^\]\n]*$", re.I | re.M)
+_SENTENCE_END_RX = re.compile(r"(?<=[.!?])\s+")
+
+
+def _drop_unclosed(line):
+    """A line holding a token opened and never closed loses the sentence
+    the token hangs off: back to the previous sentence end (a decimal
+    point is not one), or the whole line when the sentence began it."""
+    m = _UNCLOSED_TOKEN_RX.search(line)
+    if not m:
+        return line
+    head = line[:m.start()]
+    cut = 0
+    for sm in _SENTENCE_END_RX.finditer(head):
+        cut = sm.end()
+    return head[:cut].rstrip()
 _YEAR_RX = re.compile(r"^(19|20)\d\d$")
 
 
@@ -256,7 +274,14 @@ class Registry:
         out = _CALC_RX.sub(_calc, out)
         # a token the model malformed ([f99], [calc: ...] on a missing figure) must never reach a reader
         out = re.sub(r"\[\s*f\d+\s*\]", 'that figure', out)
-        out = re.sub(r"\[\s*calc\s*:[^\]]*\]", 'that figure', out)
+        out = re.sub(r"\[\s*calc\s*:[^\]\n]*\]", 'that figure', out)
+        # a token the model left open at the end of a line ("99.4% of the
+        # [calc:", Keith's Claire's read 2026-11-10) never reaches a reader
+        # either: the sentence it hangs off goes with it, and a line that
+        # held nothing else goes too.
+        if _UNCLOSED_TOKEN_RX.search(out):
+            out = '\n'.join(_drop_unclosed(ln) for ln in out.split('\n'))
+            out = re.sub(r"\n{3,}", '\n\n', out).strip('\n')
         return out
 
     # ------------------------------------------------------------ ledger

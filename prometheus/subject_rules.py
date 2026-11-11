@@ -72,7 +72,7 @@ __all__ = ['explicit_build_subject', 'conversational_turn', 'priced_handoff_allo
            'page_rejected_in_thread', 'thread_subjects', 'which_subject_payload',
            'CONVERSATIONAL_NOTE', 'strip_lead_negation', 'reading_subject', 'current_reading_subject',
            'definition_turn', 'Subject', 'bind', 'clean_display', 'is_metric_phrase',
-           'nested_audience', 'qualified_audience', 'clarify_for', 'wants_breakdown', 'display_for',
+           'nested_audience', 'also_base', 'product_line_expansion', 'qualified_audience', 'clarify_for', 'wants_breakdown', 'display_for',
            'pinned_thread_subject', 'pin_beats_page', 'pinned_bind_for']
 
 # A pointer at what is on the screen, never a subject of its own.
@@ -1289,6 +1289,37 @@ def _place_in_list(name, text):
     return found
 
 
+# words a catalog entry adds to a company name when it names one of the
+# company's products, not the company: Amazon -> Amazon Music, Apple ->
+# Apple TV+, Disney -> Disney+, Google -> Google Play, Paramount -> Paramount+
+_PRODUCT_LINE_WORDS = frozenset(('music', 'prime', 'video', 'fresh', 'pharmacy', 'kids', 'plus', 'tv', 'channels',
+                                 'studios', 'go', 'now', 'originals', 'sports', 'news', 'shopping', 'pay', 'photos',
+                                 'drive', 'play', 'store', 'cloud', 'one', 'fire', 'alexa', 'luna', 'books', 'kindle',
+                                 'audible', 'podcasts', 'arcade', 'fitness', 'maps', 'games', 'live', 'max', 'network',
+                                 'app', 'streaming', 'unlimited', 'premium', 'business', 'web', 'services', 'ads'))
+
+
+def product_line_expansion(as_written, catalog_name):
+    """True when the catalog name is the written brand plus product-line
+    words only (Amazon -> Amazon Music, Apple -> Apple TV+): the words
+    name the company, the entry one of its products. A written name that
+    already carries the product (Amazon Prime Video -> Amazon Prime Video)
+    or a title the reader completed (Walter Boys -> My Life with the
+    Walter Boys) is not one."""
+    aw = re.sub(r"[^a-z0-9+ ]+", ' ', str(as_written or '').lower()).split()
+    cat = re.sub(r"[^a-z0-9+ ]+", ' ', str(catalog_name or '').lower()).split()
+    if not aw or not cat or len(cat) < len(aw):
+        return False
+    if [w.rstrip('+') for w in cat[:len(aw)]] != [w.rstrip('+') for w in aw]:
+        return False
+    extra = cat[len(aw):]
+    if not extra:
+        # Disney -> Disney+, Paramount -> Paramount+: the one-word name is
+        # the service as readers write it; that match stands
+        return False
+    return all(w.rstrip('+') in _PRODUCT_LINE_WORDS for w in extra)
+
+
 def _reading_candidates(reading, page, norm, text=''):
     out = []
     if not isinstance(reading, dict):
@@ -1320,6 +1351,12 @@ def _reading_candidates(reading, page, norm, text=''):
             # 'audience' as the reader's kind for a named audience ("DraftKings users") still names a brand
             if kind != 'audience':
                 continue
+        if cat and product_line_expansion(aw, cat):
+            # the reader matched the company the words name to one of its
+            # products (Liz, 2026-11-10: "(Amazon versus direct)" was read as
+            # Amazon Music and the churn read ran on the Amazon Music
+            # profile); the written brand stays the subject
+            cat = ''
         name = cat or clean_display(aw)
         if not name:
             continue
@@ -1395,6 +1432,77 @@ def sentence_audience(text, casing=None):
     return seen[best][0], seen[best][1]
 
 
+# "<Name> shoppers that also shop at ...", "<Name> (url) purchasers that
+# have also made a purchase at ...": a named audience, then who / that,
+# then also. The parenthetical a reader pastes after a name (a URL, "the
+# retail outlet") is dropped before the match.
+_ALSO_PAREN_RX = re.compile(r"\s*\((?:https?://)?[^)]*\)|\s*https?://\S+")
+_ALSO_NOUN_RX = re.compile(
+    r"\b(?P<verb>viewers|fans|readers|listeners|players|watchers|buyers|purchasers|shoppers|users|customers|subscribers|"
+    r"drinkers|owners|members|visitors)\s+(?:who|that)\s+(?:have\s+|had\s+)?also\b", re.I)
+_ALSO_TARGET_RX = re.compile(
+    r"\balso\b[^.?!;]*?\b(?:at|on|from|with|to|in)\s+(?P<list>.+?)(?:[.?!;]|$)", re.I)
+_ALSO_CONNECT = frozenset(('of', 'the', 'and', '&', 'de', 'la'))
+_ALSO_TARGET_SKIP = frozenset(('the', 'a', 'an', 'retail', 'outlet', 'store', 'stores', 'site', 'sites', 'app', 'apps',
+                               'same', 'window', 'period', 'year', 'month', 'and', 'or', 'also', 'too', 'as', 'well'))
+
+
+def _name_before(head):
+    """The capitalized run that ends `head`: "the percentage of Claire's"
+    -> "Claire's", "share of Landman" -> "Landman", "people" -> ''."""
+    toks = head.split()
+    out = []
+    i = len(toks) - 1
+    while i >= 0:
+        w = toks[i]
+        core = w.strip("(),;:\"'")
+        if core and (core[0].isupper() or core[0].isdigit()):
+            out.insert(0, w)
+            i -= 1
+            continue
+        if core.lower() in _ALSO_CONNECT and out and i > 0:
+            prev = toks[i - 1].strip("(),;:\"'")
+            if prev and (prev[0].isupper() or prev[0].isdigit()):
+                out.insert(0, w)
+                i -= 1
+                continue
+        break
+    while out and out[0].strip("(),;:\"'").lower() in _SENTENCE_STOP | _ALSO_CONNECT:
+        out = out[1:]
+    return ' '.join(out).strip(" ,;:(")
+
+
+def also_base(text, casing=None):
+    """('Claire's', 'shoppers', ['Target', 'Walmart', "Kohl's"]) for a
+    question whose base is a named audience followed by who / that
+    also; ('', '', []) when the words carry no such frame (no name
+    before the who, or no also)."""
+    t = ' '.join(str(text or '').split())
+    if not t or not re.search(r"\b(?:who|that)\s+(?:have\s+|had\s+)?also\b", t, re.I):
+        return '', '', []
+    t = ' '.join(_ALSO_PAREN_RX.sub('', t).split())
+    m = _ALSO_NOUN_RX.search(t)
+    if not m:
+        return '', '', []
+    raw = _name_before(t[:m.start()])
+    if not raw or raw.lower() in _SENTENCE_STOP or raw.lower() in _NEVER_LABEL or is_metric_phrase(raw):
+        return '', '', []
+    name = clean_display(raw, t, casing) or raw
+    if not name or len(name) < 2:
+        return '', '', []
+    targets = []
+    tm = _ALSO_TARGET_RX.search(t, m.end() - 4)
+    if tm:
+        for part in re.split(r",|\band\b|\bor\b|&", tm.group('list')):
+            p = ' '.join(part.split()).strip(" ,.;:")
+            if not p or p.split()[0].lower() in _ALSO_TARGET_SKIP or not p[0].isupper():
+                continue
+            p = _cased(p, casing)
+            if _norm(p) != _norm(name) and p not in targets:
+                targets.append(p)
+    return name, m.group('verb').lower(), targets
+
+
 def _request_reading():
     """The Reader's reading for the request in flight, when there is one."""
     try:
@@ -1442,6 +1550,19 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
             return Subject('brand', name, name, quals, 'words', 0.95)
     # 2. a nested audience: people who watched X on Y
     name, platform, kind = nested_audience(t)
+    # 2a. a named audience in front of "who / that also <act>" is the
+    # base; what follows "also" is the overlap it is measured against,
+    # never the subject (Keith, 2026-11-10: "the percentage of Claire's
+    # shoppers that also shop at Target, Walmart and Kohl's" bound
+    # Target, the read ran on the Target profile and called Claire's
+    # buyers a row of it). "people who also watched X" keeps X: nobody
+    # is named before the who.
+    base, bverb, targets = also_base(t, casing)
+    if base and (not name or norm(base) != norm(name)):
+        quals['verb'] = bverb
+        if targets:
+            quals['also'] = targets
+        return Subject('audience', base, f"{base} {bverb}", quals, 'words', 0.9)
     if name:
         if platform:
             quals['platform'] = platform
