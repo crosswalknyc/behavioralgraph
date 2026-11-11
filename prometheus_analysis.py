@@ -634,7 +634,10 @@ def _peer_norms_section(meta, genpop_map, norms, demo_rows, beh_rows):
                 lows.append((med_i / max(idx, 1), catU, b, idx, entry,
                              g_used))
         elif v > p90_p * 1.15 and v >= 3:
-            highs.append((v / p90_p, catU, b, None, v, entry, g_used))
+            # a peer p90 of 0.0 (nine in ten peers do not carry the row) is
+            # the rarest case, never a division by zero: 28 profiles failed
+            # their digest on it every night and on every live ask (2026-11-11)
+            highs.append((v / max(p90_p, 0.01), catU, b, None, v, entry, g_used))
     for catU, b, v in demo_rows:
         entry, g_used = _norm_lookup(norms, group, catU, _norm_brand(b))
         if entry and abs(v - entry[1]) >= 8:
