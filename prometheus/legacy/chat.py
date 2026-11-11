@@ -2868,6 +2868,10 @@ def _synth_chat_incidence_check(text, history=None):
     from scripts._sample_size_jitter import ensure_messy_sample_size
 
     today_label = _dt.now().strftime('%B %d, %Y')
+    # the standing window is the trailing 12 months, computed; this prompt carried the fiscal pair retired on
+    # 2026-09-14 as its default and its example, and sizings were still banked on it in November (2026-11-11)
+    _std_s, _std_e = __import__('prometheus.window_scope', fromlist=['standing_default']).standing_default()
+    _std_mdy = ' to '.join(f"{d[5:7]}-{d[8:10]}-{d[:4]}" for d in (_std_s, _std_e))
     system_prompt = (
         "You size audiences for a US digital behavior panel. The panel "
         "has 10,000,000 panelists representing the 329,900,000-person "
@@ -2895,8 +2899,8 @@ def _synth_chat_incidence_check(text, history=None):
         "metric. Set audience_type to the matching label and "
         "follower_ceiling to the public number if you know it; "
         "otherwise null.\n"
-        "  4. If no time window is given, use 07-01-2025 to "
-        "06-30-2026 (the standard trailing year).\n"
+        f"  4. If no time window is given, use {_std_mdy} "
+        "(the standard trailing year).\n"
         "  5. Ground your sizing in real-world knowledge of the "
         "brand/talent/behavior's actual US reach. Do not inflate "
         "niche audiences or deflate mass ones.\n"
@@ -2914,8 +2918,8 @@ def _synth_chat_incidence_check(text, history=None):
         "  \"subject\": \"<clean audience display name>\",\n"
         "  \"window_start\": \"MM-DD-YYYY\",\n"
         "  \"window_end\": \"MM-DD-YYYY\",\n"
-        "  \"window_label\": \"<human label, e.g. 07-01-2025 to "
-        "06-30-2026 or past 90 days>\",\n"
+        f"  \"window_label\": \"<human label, e.g. {_std_mdy} "
+        "or past 90 days>\",\n"
         "  \"us_audience_estimate\": <int, people in US in window>,\n"
         "  \"subject_raw_tu\": <int>,\n"
         "  \"subject_raw_avid\": <int>,\n"

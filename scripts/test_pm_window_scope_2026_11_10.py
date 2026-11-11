@@ -418,7 +418,8 @@ class RetiredPairTests(unittest.TestCase):
     """4. No module produces the retired Jul 1 2025 to Jun 30 2026 pair."""
 
     RETIRED = ('2025-07-01', '2026-06-30')
-    RETIRED_WORDS = ('Jul 1, 2025 to Jun 30, 2026', 'Jul 1 2025 to Jun 30 2026', 'July 1, 2025', 'June 30, 2026')
+    RETIRED_WORDS = ('Jul 1, 2025 to Jun 30, 2026', 'Jul 1 2025 to Jun 30 2026', '07-01-2025', '06-30-2026',
+                     '07/01/2025', '06/30/2026', 'July 1, 2025', 'June 30, 2026')
     # the one place the pair may be spelled: the recognizer, so a leftover
     # draft is rewritten to the standing default
     RECOGNIZER = {os.path.join('migration', 'event_window.py'): {'LEGACY_DEFAULT_START', 'LEGACY_DEFAULT_END'},
@@ -460,7 +461,7 @@ class RetiredPairTests(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs and id(node) not in allowed:
                 v = node.value
-                if any(tok in v for tok in self.RETIRED) or any(tok in v for tok in self.RETIRED_WORDS[:2]):
+                if any(tok in v for tok in self.RETIRED) or any(tok in v for tok in self.RETIRED_WORDS[:6]):
                     hits.append((rel, node.lineno, v[:80]))
         return hits
 
@@ -483,7 +484,14 @@ class RetiredPairTests(unittest.TestCase):
         self.assertFalse(M._is_default_pair('2024-06-01', '2025-06-01', '2026-11-10T21:54:51Z'))
         import prometheus.legacy.chat as C
         import inspect
-        self.assertNotIn("'2025-07-01'", inspect.getsource(C))
+        src = inspect.getsource(C)
+        self.assertNotIn("'2025-07-01'", src)
+        # the sizing prompt named the retired pair as its default and its example (sizings were banked on it into
+        # November); it carries the computed trailing year now
+        sizing = src[src.index('def _synth_chat_incidence_check('):]
+        sizing = sizing[:sizing.index('\ndef ', 10)]
+        self.assertNotIn('07-01-2025', sizing)
+        self.assertIn('_std_mdy', sizing)
 
     def test_the_read_prompts_default_to_the_trailing_year(self):
         import prometheus_analysis as pma
