@@ -309,6 +309,15 @@ def _cross_ask(text):
         return False
 
 
+def _ov_first(text):
+    """A subscribe / pay / incremental overlap keeps its own lane."""
+    try:
+        from . import overlap_read as _ov
+        return bool(_ov.is_overlap_read(text))
+    except Exception:
+        return False
+
+
 def _panel_self(text, ctx=None):
     try:
         from . import sizing_lane as _sz
@@ -620,6 +629,15 @@ def classify(text, history=None, ctx=None):
     if _cross_ask(t):
         return {'kind': 'cross', 'via': 'service', 'usd': 100, 'same_frame': False,
                 'frame': 'cross', 'subject': _sizing_subject(t, ctx)}
+    try:
+        # a cross of behaviors inside one audience ("Chime users who shop at Target and are
+        # interested in X", prometheus.crosstab): a cross of two or more things, quoted here
+        from . import crosstab as _xt
+        if not _ov_first(t) and not _xt.declined(t) and _xt.wants(t, ctx):
+            return {'kind': 'cross', 'via': 'service', 'usd': 100, 'same_frame': False,
+                    'frame': 'crosstab', 'subject': _xt.subject_hint(t, ctx)}
+    except Exception:
+        pass
     try:
         from . import overlap_read as _ov
         if _ov.is_overlap_read(t):
@@ -1527,6 +1545,19 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
     pc = panel_confirm if isinstance(panel_confirm, dict) else None
     pc_kind = str((pc or {}).get('kind') or '')
     hit = classify(text, history, ctx)
+    xt_plan = None
+    if hit and hit.get('frame') == 'crosstab':
+        # a cross of behaviors inside one audience (prometheus.crosstab): every behavior binds
+        # to its row on the audience's profile before a price is named; a row the profile does
+        # not carry is said plainly, free. An audience with no profile is not that lane's: the
+        # words are read again without it and the standing lanes take the ask as before.
+        from . import crosstab as _xt
+        xt_plan = _xt.plan(text, ctx, host=host, history=history)
+        if xt_plan and xt_plan.get('reply'):
+            return xt_plan['reply']
+        if not xt_plan:
+            _xt.decline(text)
+            hit = classify(text, history, ctx)
     if pc and pc_kind in ('sizing', 'cross') and not hit:
         hit = {'kind': pc_kind, 'via': 'service', 'usd': 100, 'same_frame': False,
                'frame': frame_of(pc_kind, text), 'subject': str(pc.get('subject') or '')}
@@ -1536,12 +1567,15 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
     bound = bound_subject(text, history, ctx, fallback=subject)
     if bound and hit['kind'] != 'sizing':
         subject = bound
+    if xt_plan:
+        subject = xt_plan['subject']
     included = False
     if pc is None:
         state, payload = offer_or_charge(text=text, subject=subject, kind=hit['kind'],
                                          panel_confirm=None, username=uname, user=user,
                                          history=history, host=host, frame=hit.get('frame') or '',
-                                         what=(sizing_lead(text, ctx) if hit['kind'] == 'sizing' else ''))
+                                         what=(sizing_lead(text, ctx) if hit['kind'] == 'sizing'
+                                               else (xt_plan['lead'] if xt_plan else '')))
         if state != 'charged':
             return payload
         # no offer step (included with the plan, or a metered follow-up):
@@ -1557,7 +1591,11 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
             return payload
         included = bool((payload or {}).get('included'))
     from . import sizing_lane as _sz
-    raw = _sz.answer(text, ctx, host=host, history=history, staff=staff_user(user))
+    if xt_plan:
+        from . import crosstab as _xt
+        raw = _xt.answer(text, ctx, host=host, history=history, user=user, plan_=xt_plan)
+    else:
+        raw = _sz.answer(text, ctx, host=host, history=history, staff=staff_user(user))
     paid = {'kind': hit['kind'], 'frame': hit.get('frame'), 'usd': (0 if included else hit.get('usd')),
             'subject': subject, 'pull_type': (payload or {}).get('pull_type'), 'included': included}
     if not raw:
@@ -1704,6 +1742,15 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
     pc = extra.get('panel_confirm') or body.get('panel_confirm')
     pc = pc if isinstance(pc, dict) else None
     hit = classify(text, history, ctx)
+    if hit and hit.get('frame') == 'crosstab':
+        # a cross of behaviors is the sizing lane's (prometheus.crosstab); an ask that got
+        # this far was not answered there, so the words are read here without it
+        try:
+            from . import crosstab as _xt
+            _xt.decline(text)
+            hit = classify(text, history, ctx)
+        except Exception:
+            hit = None
     if not hit or hit.get('via') != 'generate':
         return None
     uname = str(username or (user or {}).get('username') or (user or {}).get('email') or '').strip()

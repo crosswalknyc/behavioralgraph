@@ -413,6 +413,22 @@ ROWS = [
                     ('build a profile on The Office US', False)],
     },
     {
+        'id': 'crosstab', 'surface': 'analyze',
+        'reason': 'crosstab', 'client_action': 'analyze',
+        'note': 'A cross of behaviors inside one audience: the people in it '
+                'who do behavior A and B and C (a brand row, an interest row, '
+                'a whole category, a demographic bucket). A question, read '
+                'from the audience\'s own profile at the custom ask price, '
+                'with a page open or with the audience named in the words; '
+                'an order to build that group as a cut goes to the build '
+                'flow (2026-11-11, Jenna).',
+        'examples': [('Chime users who shop at Target and are interested in home improvement', False),
+                     ('of Wicked Tuna viewers, how many use Hulu and drive a Ford', False),
+                     ('cross Target shoppers with Netflix and Costco in this profile', True)],
+        'counter': [('Build a cut of Chime users who shop at Target and use Hulu', False),
+                    ('how big is the Chime audience', False)],
+    },
+    {
         'id': 'product_fact', 'surface': 'analyze',
         'reason': 'product_fact', 'client_action': 'analyze',
         'note': 'A fact about the product with one fixed answer (the '

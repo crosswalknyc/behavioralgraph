@@ -417,6 +417,22 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
     except Exception:
         pass
 
+    # 2a3. A cross of behaviors inside one audience ("Chime users who shop
+    #      at Target and are interested in X", "of Wicked Tuna viewers, how
+    #      many use Hulu and drive a Ford") is a read on the analyze surface
+    #      with or without a page (prometheus.crosstab, Jenna 2026-11-11).
+    #      An order to build a profile or a cut of that group was taken
+    #      above; a bare "how many shop at Target and use Hulu" needs the
+    #      open profile to point at.
+    try:
+        from . import crosstab as _xt
+        _q = _xt.parse(t)
+        if _q and (_q.get('audience') or has_ctx):
+            d.update(surface='analyze', reason='crosstab')
+            return d
+    except Exception:
+        pass
+
     # 2b. A bare acknowledgement, pick, or refusal with nothing armed
     #     is not an ask. The surface stays whatever the data state
     #     says; the ask service answers it without a reasoning pass
