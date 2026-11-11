@@ -7,9 +7,12 @@ Three lane causes with a certain fix, each on the user's exact words:
 1. Keith (Crosswalk), 21:09 and 22:35 UTC: "the percentage of Claire's
    shoppers that also shop at Target, Walmart and Kohl's" bound Target
    (the nested-audience frame read "shoppers that also shop at Target"
-   as the audience), the read ran on the Target profile and called
-   Claire's buyers a row of it. A named audience in front of "who / that
-   also" is the base; the places after "also" are the overlap targets.
+   as the audience, and the read core's library tier took the Target
+   file because Target is in the words), the read ran on the Target
+   profile and called Claire's buyers a row of it. A named audience in
+   front of "who / that also" is the base; the places after "also" are
+   the overlap targets, and a library file for one of them is dropped
+   as the base (question_universe.names_other_universe).
 2. The same read's headline reached him as "99.4% of the [calc:" (a
    token the model left open at the end of the line). An unclosed token
    takes its sentence with it, and the closed-token scrub stays on one
@@ -30,6 +33,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from prometheus import figures as F  # noqa: E402
+from prometheus import question_universe as QU  # noqa: E402
 from prometheus import subject_rules as SR  # noqa: E402
 
 KEITH_1 = "I'd like to know the percentage of Claire's shoppers that also shop at Target, Walmart and Kohl's?"
@@ -76,6 +80,29 @@ class AlsoBaseIsTheNamedAudience(unittest.TestCase):
         self.assertEqual(s.name, 'Yellowstone')
         s = SR.bind("people who watched the Among Us series on Paramount+", None, '')
         self.assertEqual((s.name, s.qualifiers.get('platform')), ('Among Us', 'Paramount+'))
+
+
+class ALibrarySubjectAfterAlsoIsNotTheBase(unittest.TestCase):
+    """The read core drops a page or library base the question did not
+    name as its universe (names_other_universe). Target is in Keith's
+    words, after "also", and is still not the base."""
+
+    def test_target_walmart_kohls_are_overlap_targets_not_bases(self):
+        for b in ('Target', 'Walmart', "Kohl's"):
+            self.assertTrue(QU.names_other_universe(KEITH_1, b, page=''), b)
+            self.assertTrue(QU.names_other_universe(KEITH_3, b, page=''), b)
+        self.assertTrue(QU.names_other_universe(KEITH_3, 'CVS', page=''))
+
+    def test_the_audience_itself_still_binds(self):
+        self.assertFalse(QU.names_other_universe(KEITH_1, "Claire's", page=''))
+        self.assertFalse(QU.names_other_universe(KEITH_3, "Claire's", page=''))
+
+    def test_the_read_runs_on_claires(self):
+        self.assertEqual(QU.subject_for(QU.question_universe(KEITH_1, ''), '', KEITH_1), "Claire's shoppers")
+        self.assertEqual(QU.subject_for(QU.question_universe(KEITH_3, ''), '', KEITH_3), "Claire's purchasers")
+
+    def test_a_subject_named_as_the_universe_keeps_its_file(self):
+        self.assertFalse(QU.names_other_universe("How many Costco members shop at Target too?", 'Costco', page=''))
 
 
 class UnclosedTokenNeverReachesAReader(unittest.TestCase):

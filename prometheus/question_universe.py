@@ -56,8 +56,14 @@ Universe = namedtuple('Universe', 'kind label base phrases explicit')
 NONE = Universe('none', '', '', (), False)
 
 
+# a URL a reader pastes after a name, bare or in parentheses ("Claire's
+# (https://www.claires.com/) purchasers", Keith 2026-11-10), is never
+# part of the universe the words name
+_URL_RX = re.compile(r"\s*\((?:https?://|www\.)[^)]*\)|\s*(?:https?://|www\.)\S+")
+
+
 def _squash(text):
-    return ' '.join(str(text or '').split())
+    return ' '.join(_URL_RX.sub('', str(text or '')).split())
 
 
 def _norm(s):
@@ -457,15 +463,27 @@ def names_other_universe(text, base_subject, page=''):
     and `base_subject` (the page, a library file, a thread subject) is
     not that universe and is not named in the words: a read on that base
     never ships for this question."""
-    u = question_universe(text, page)
-    if u.kind != 'named' or not u.explicit:
-        return False
     subj = str(base_subject or '').strip()
     if not subj:
         return False
+    sk = _norm(subj.split(' - ')[0])
+    # "the percentage of Claire's shoppers that also shop at Target,
+    # Walmart and Kohl's" (Keith, 2026-11-10): the audience in front of
+    # "who / that also" is the universe; a library subject named only
+    # after "also" is the overlap it is measured against. Target is in
+    # the words, and it is still not the base.
+    try:
+        from .subject_rules import also_base as _also_base
+        ab_name, _ab_verb, ab_targets = _also_base(text)
+    except Exception:
+        ab_name, ab_targets = '', []
+    if ab_name and sk and _norm(ab_name) != sk and sk in {_norm(x) for x in (ab_targets or [])}:
+        return True
+    u = question_universe(text, page)
+    if u.kind != 'named' or not u.explicit:
+        return False
     if _subject_named(text, subj):
         return False
-    sk = _norm(subj.split(' - ')[0])
     for p in u.phrases:
         pk = _norm(p)
         if sk and pk and (sk == pk or (len(sk) >= 4 and sk in pk)):
