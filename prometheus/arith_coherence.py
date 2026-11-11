@@ -559,12 +559,17 @@ def _partition_notes(line, info):
             info['notes'].append(f"shares in \"{head}\" sum to {total:.1f}, not 100 (left as written)")
 
 
-def apply(reply, res=None, *, subject=''):
+def apply(reply, res=None, *, subject='', held=None):
     """Run the pass on a formatted reply and mirror the corrected lines
     into the read's own prose fields (reads, headline), so the reply, the
     payload and the ledger entry carry the same sentence. Returns
     (reply, info). Never raises; on any failure the reply comes back as
-    it was with info['changed'] False."""
+    it was with info['changed'] False. ``held`` (2026-11-11): the figures
+    already on record for this read (count_digits.on_record); the digits
+    pass never draws one. The pass ends on the read's own identities
+    (prometheus.read_identities): rows sum to their pools, one figure is
+    one value everywhere, a stated change is the difference of the two
+    counts beside it."""
     try:
         subj = str(subject or ((res or {}).get('subject') if isinstance(res, dict) else '') or '')
         info = check(reply, counts=counts_from_res(res), subject=subj)
@@ -594,13 +599,27 @@ def apply(reply, res=None, *, subject=''):
         # components, totals recomputed) and the prose follows it.
         try:
             from . import count_digits as _cd
-            text, _dg = _cd.apply(text, res, subject=subj)
+            text, _dg = _cd.apply(text, res, subject=subj, held=held)
             if _dg.get('moved'):
                 info['digits'] = _dg['moved']
                 info['changed'] = True
                 if isinstance(res, dict):
                     res.setdefault('_arith', {})['digits'] = len(_dg['moved'])
                 info['text'] = text
+        except Exception:
+            pass
+        # The read agrees with itself (2026-11-11, the Mad Men compare):
+        # checked on the text and the structure, fixed in place.
+        try:
+            from . import read_identities as _ri
+            text, _id = _ri.enforce(text, res, held=held)
+            info['identities'] = _id.get('outcome') or 'pass'
+            if _id.get('fixes'):
+                info['identity_fixes'] = list(_id['fixes'])
+                info['changed'] = True
+                info['text'] = text
+                if isinstance(res, dict):
+                    res.setdefault('_arith', {})['identities'] = len(_id['fixes'])
         except Exception:
             pass
         return text, info
@@ -617,6 +636,8 @@ def trail(info):
         mv = info['digits']
         bits.append(f"digits drawn natural on {len(mv)} count(s): " +
                     ' | '.join(f"{o:,} -> {n:,}" for o, n in list(mv.items())[:6]))
+    if info.get('identity_fixes'):
+        bits.append(f"identities fixed {len(info['identity_fixes'])}: " + ' | '.join(info['identity_fixes'])[:500])
     if info.get('fixes'):
         bits.append(f"arith fixed {len(info['fixes'])}: " + ' | '.join(f['note'] for f in info['fixes'])[:600])
     if info.get('notes'):

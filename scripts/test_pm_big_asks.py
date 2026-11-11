@@ -131,7 +131,10 @@ class NoSilentCap(unittest.TestCase):
         res = PMA.enforce_metrics_coherence(matrix_data())
         res['_matrix'] = {'groups': 12, 'dimensions': 3}
         reply = PMA.format_generated_metrics_reply(res)
-        self.assertEqual(sum(1 for ln in reply.split('\n') if ln.startswith('- ') and ': ' in ln and 'share' in ln), PMA.CHAT_BREAKDOWN_ROWS)
+        # each row is a whole group split into buckets: it prints its pool and its buckets, and no
+        # share of its own (2026-11-11: an even split of 100 across the rows says nothing)
+        self.assertEqual(sum(1 for ln in reply.split('\n') if ln.startswith('- ') and ': ' in ln and 'Pool ' in ln), PMA.CHAT_BREAKDOWN_ROWS)
+        self.assertNotIn('% share.', reply)
         self.assertIn('The full table, all 12 groups by every dimension (3 dimensions, 36 rows), is in the file under this answer.', reply)
         self.assertNotIn('\u2014', reply)
 

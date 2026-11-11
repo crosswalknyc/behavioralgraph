@@ -12917,8 +12917,13 @@ def _pm_csv_task_filename(entry):
     except Exception as _fx:
         _faults.note('chat', _fx)
     title = re.sub(r'[\\/:*?"<>|]+', ' ', title or '')
-    title = re.sub(r'\s+', ' ', title).strip()[:80].strip(' .') \
-        or 'Data Export'
+    title = re.sub(r'\s+', ' ', title).strip()
+    if len(title) > 80:   # whole words, no half-open parenthetical (2026-11-11: '... Faith, Yo.csv')
+        try:
+            title = _pma_fn._clip_label(title, 80)
+        except Exception:
+            title = title[:80]
+    title = title.strip(' .') or 'Data Export'
     return f"{title}.csv"
 
 
@@ -14745,6 +14750,21 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # every coherence pass of this read
     _ah_ctx = {'question': str(text or ''),
                'base_label': ' '.join(str((base or {}).get(k) or '') for k in ('subject', 's3_key', 'name'))}
+    # Figures already on record never have their digits drawn again
+    # (2026-11-11, the Mad Men compare: the profile's own 7,582,850 was
+    # re-drawn three ways in one reply): the profile's figures and the
+    # evidence the read was given, the subject's banked reads, and every
+    # count an earlier turn of this thread stated.
+    _on_record = set()
+    try:
+        from prometheus import count_digits as _cdh
+        _on_record = _cdh.on_record(
+            _figs2,
+            [e for e in ((led or {}).get('entries') or []) if isinstance(e, dict) and not e.get('retired')],
+            [t.get('text') for t in (history or []) if isinstance(t, dict)])
+    except Exception as _fx:
+        _faults.note('chat', _fx)
+    _ah_ctx['held'] = _on_record
     try:
         res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series)
         # a creator-fit read is held to the subject's universe (the catalog's
@@ -15035,7 +15055,11 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _arith_trail = ''
     try:
         from prometheus import arith_coherence as _arith
-        reply, _arith_info = _arith.apply(reply, res, subject=str(res.get('subject') or ''))
+        try:   # a figure this pass bound to the record or held to the thread is on record too
+            _on_record = set(_on_record) | {int(h['to']) for h in (_tb_held or []) if isinstance(h, dict) and h.get('to')}
+        except Exception as _fx:
+            _faults.note('chat', _fx)
+        reply, _arith_info = _arith.apply(reply, res, subject=str(res.get('subject') or ''), held=_on_record)
         _arith_trail = _arith.trail(_arith_info)
         if _arith_trail:
             print(f"[pm-verify] arithmetic coherence: {_arith_trail[:700]}")
@@ -15106,14 +15130,36 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     _aud = _meth.audience_label(res, '')
-    if _aud and _aud.lower() not in str(reply or '')[:90].lower():
-        reply = f"On {_aud}:\n\n{reply}"
+    # one opener, never two (2026-11-11: 'On people who watched Mad Men in
+    # the window:' over the headline's own 'On people who watched Mad Men:')
+    reply = __import__('prometheus.read_opener', fromlist=['with_opener']).with_opener(reply, _aud)
     # Counting block under every viewership figure (Liz 2026-10-08).
     try:
         reply = _meth.ensure(reply, res, question=text,
                              base_label=str(base.get('subject') or ''),
                              domain=str(base.get('domain') or ''),
                              view_context=(base.get('view_context') if str(base.get('source') or '') == 'view' else None))
+    except Exception:
+        traceback.print_exc()
+    # The finished answer agrees with itself (2026-11-11): rows sum to
+    # their pools, one figure is one value in the headline, the stat line,
+    # the table, the file and the record, a stated change is the
+    # difference of the two counts beside it. Checked last, on the text
+    # the reader gets and the result everything else is written from;
+    # fixed in place, never held.
+    try:
+        from prometheus import read_identities as _rid
+        reply, _id_info = _rid.enforce(reply, res, held=_on_record)
+        _id_trail = _rid.trail(_id_info)
+        if _id_trail:
+            print(f"[pm-verify] {_id_trail[:700]}")
+            stages['identities_fixed'] = len(_id_info.get('fixes') or [])
+            _arith_trail = (_arith_trail + '; ' if _arith_trail else '') + _id_trail[:400]
+        if _verify_stamp is not None:
+            _verify_stamp.setdefault('arith', {'fixed': int(stages.get('arith_fixed') or 0), 'trail': ''})
+            _verify_stamp['arith']['identities'] = str(_id_info.get('outcome') or 'pass')
+            if _id_trail:
+                _verify_stamp['arith']['trail'] = (str(_verify_stamp['arith'].get('trail') or '') + '; ' + _id_trail)[:800].lstrip('; ')
     except Exception:
         traceback.print_exc()
     _t_stage = time.monotonic()
@@ -15339,8 +15385,7 @@ def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=N
     except Exception:
         traceback.print_exc()
     _aud = _meth.audience_label(res, '')
-    if _aud and _aud.lower() not in str(reply or '')[:90].lower():
-        reply = f"On {_aud}:\n\n{reply}"
+    reply = __import__('prometheus.read_opener', fromlist=['with_opener']).with_opener(reply, _aud)   # one opener (2026-11-11)
     try:
         reply = _meth.ensure(reply, res, question=text, base_label=str(base.get('subject') or ''),
                              domain=str(base.get('domain') or ''),

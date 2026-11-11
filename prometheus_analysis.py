@@ -6660,7 +6660,7 @@ _PCT_UNITS = {'pct', 'percent', 'percentage', '%'}
 
 
 def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
-                              question='', base_label=''):
+                              question='', base_label='', held=None):
     """Exactify a reasoned measurement read: counts messy (last digit
     1-9), percentages one decimal and bounded, labels and definitions
     capped. Returns the cleaned dict. `so_what` (2026-10-06) marks the
@@ -6672,7 +6672,15 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
     `question` / `base_label` (2026-11-10, Grace Yin): the ask and the
     base profile's name or key, so an age breakdown on an account-holder
     universe, or of an account action (sign-ups, paid, subscribers), is
-    adults only; the under-18 band never prints."""
+    adults only; the under-18 band never prints.
+    `held` (2026-11-11, the Mad Men compare): the figures already on
+    record for this read (the profile's own sample and projection, banked
+    ledger figures, counts an earlier turn of the thread stated). The
+    digits pass never draws one of them, and it moves the read as one
+    structure: a stat that repeats a pool follows the pool, a row still
+    sums to its pool, a stated difference is recomputed from its two
+    totals (prometheus.count_digits). A stat used to be drawn here on its
+    own, which is how one 2025 total became three."""
     if not isinstance(data, dict):
         raise ValueError('measurement payload is not a dict')
     subj = str(data.get('subject') or 'subject').strip() or 'subject'
@@ -6709,7 +6717,17 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
                 continue
             value = v
         else:
-            value = _messy(subj, f'gm|{name}', row.get('value'))
+            # a count under 1,000 keeps the plain last-digit nudge; every
+            # larger count is drawn with the rest of the read, below, so a
+            # stat never parts from the pool or the headline that states
+            # the same figure
+            try:
+                _raw = int(round(float(row.get('value'))))
+            except (TypeError, ValueError):
+                continue
+            if _raw <= 0:
+                continue
+            value = _raw if _raw >= 1000 else _messy(subj, f'gm|{name}', _raw)
             if not value:
                 continue
         seen.add(name)
@@ -6735,6 +6753,14 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
     except Exception as _fx:
         _faults.note('analysis', _fx)
     out['metrics'] = metrics
+    # the digits pass, once, on the whole read (2026-11-11)
+    try:
+        from prometheus import count_digits as _cd
+        _moved = _cd.fix_result(out, subject=subj, held=held)
+        if _moved:
+            _cd._rewrite_res_prose(out, _moved)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     if so_what:
         out['_so_what'] = True
     if multi:
@@ -6760,6 +6786,21 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
 BREAKDOWN_ROWS_MAX = 400
 BREAKDOWN_BUCKETS_MAX = 40
 CHAT_BREAKDOWN_ROWS = 16
+ROW_LABEL_MAX = 96
+
+
+def distribution_filler(rows):
+    """True when the rows are distributions (each one a group split into
+    buckets) and their row shares say nothing: every row carries the same
+    share because the model split 100 evenly across them. The Mad Men
+    compare (2026-11-11) printed '10.0% share, 100.0% penetration' on
+    each of ten demographic-by-period rows; a row's share is only printed
+    when the rows are parts of one whole."""
+    rs = [r for r in (rows or []) if isinstance(r, dict)]
+    if len(rs) < 2 or not all(isinstance(r.get('buckets'), list) and r.get('buckets') for r in rs):
+        return False
+    shares = [float(r.get('share_pct') or 0) for r in rs]
+    return max(shares) - min(shares) <= 0.05
 
 
 def full_table_line(res):
@@ -6794,7 +6835,9 @@ def _coherent_breakdown(bd, adults_only=False):
     for r in (bd.get('rows') or [])[:BREAKDOWN_ROWS_MAX]:
         if not isinstance(r, dict):
             continue
-        label = str(r.get('label') or '').strip()[:60]
+        # whole, never cut inside a word or a parenthetical (2026-11-11:
+        # 'Lifestyle / Arts & Culture on YouTube: Tiny Desk Concerts (N')
+        label = clean_dimension(r.get('label'), default='', limit=ROW_LABEL_MAX)
         try:
             share = float(r.get('share_pct'))
         except (TypeError, ValueError):
@@ -6969,20 +7012,28 @@ def format_generated_metrics_reply(res):
         # the chat stays readable: the top rows here, every row in the
         # file (never a silent cut; the line below says where the rest is)
         shown = all_rows if len(all_rows) <= CHAT_BREAKDOWN_ROWS else all_rows[:CHAT_BREAKDOWN_ROWS]
+        # rows that are each a whole group split into buckets carry no
+        # share of their own to print (2026-11-11)
+        _filler = distribution_filler(all_rows)
         for r in shown:
-            ln = f"- {r['label']}: {r['share_pct']:.1f}% share"
-            if r.get('penetration_pct') is not None:
-                ln += f", {r['penetration_pct']:.1f}% penetration"
+            bits = []
+            if not _filler:
+                lead = f"{r['share_pct']:.1f}% share"
+                if r.get('penetration_pct') is not None:
+                    lead += f", {r['penetration_pct']:.1f}% penetration"
+                bits.append(lead)
+            elif r.get('penetration_pct') is not None and float(r['penetration_pct']) < 99.95:
+                bits.append(f"{r['penetration_pct']:.1f}% penetration")
             if r.get('note'):
-                ln += f". {r['note']}"
+                bits.append(str(r['note']))
             if isinstance(r.get('buckets'), list) and r['buckets']:
                 if r.get('pool'):
-                    ln += f". Pool {int(r['pool']):,} {pool_noun}"
-                ln += '. ' + ' | '.join(
+                    bits.append(f"Pool {int(r['pool']):,} {pool_noun}")
+                bits.append(' | '.join(
                     f"{b['label']}: {int(b['count']):,} ({b['share_pct']:.1f}%)"
                     + (' most common' if b.get('mode') else '')
-                    for b in r['buckets'])
-            lines.append(ln)
+                    for b in r['buckets']))
+            lines.append(f"- {r['label']}: " + '. '.join([b.rstrip('.') for b in bits[:-1]] + bits[-1:]))
         if len(all_rows) > len(shown) or res.get('_matrix'):
             tail_lines.append(full_table_line(res))
         # a piece that did not come back is completed before the reply is
@@ -7031,13 +7082,15 @@ def _bucket_rows_csv(w, rows, subject, cohort, dim, share_col_basis, pool_noun='
     w.writerow(['Group', 'Dimension', 'Bucket', 'Count',
                 'Share within the group %', f"Group pool ({pool_noun})",
                 f"Row share of total % ({subject}{', ' + cohort if cohort else ''})"])
+    # rows that are each a whole group carry no share of a total (2026-11-11)
+    _filler = distribution_filler(rows)
     for r in rows:
         label = scrub_user_text(str(r.get('label') or ''))
         grp = scrub_user_text(str(r.get('group') or '')) or label
         rdim = scrub_user_text(str(r.get('dimension') or '')) or dim
         pool = r.get('pool')
         pool_txt = f"{int(pool):,}".replace(',', '') if isinstance(pool, (int, float)) and pool else ''
-        share_txt = f"{float(r.get('share_pct')):.4f}" if isinstance(r.get('share_pct'), (int, float)) else ''
+        share_txt = f"{float(r.get('share_pct')):.4f}" if isinstance(r.get('share_pct'), (int, float)) and not _filler else ''
         bks = r.get('buckets') if isinstance(r.get('buckets'), list) else []
         if not bks:
             w.writerow([grp, rdim, label if grp != label else '', '', '', pool_txt, share_txt])

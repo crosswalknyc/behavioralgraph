@@ -1,0 +1,515 @@
+{
+ "_note": "The Mad Men compare of 2026-11-11 (job 9e5e8d62fd5a) as the model returned it, before any digits pass: every 2025 row sums to 7,582,850, the profile's own projection, and the stated loss is 7,582,850 less 6,941,827.",
+ "data": {
+  "subject": "Mad Men",
+  "metric_family": "viewership",
+  "universe": "people who watched Mad Men in the window",
+  "window_label": "Jan 1 2025 to Dec 30 2025 vs Jan 1 2026 to Nov 9 2026",
+  "window_start": "2025-01-01",
+  "window_end": "2026-11-09",
+  "headline": "On people who watched Mad Men: 7,582,850 US viewers in 2025 and 6,941,827 in 2026 through Nov 9, a loss of 641,023 viewers, with the remaining audience younger and slightly less affluent, Millennials up from 37.5% to 39.1% and $100,000-plus income down from 48.9% to 47.3%.",
+  "reads": [
+   "The contraction is concentrated at the older end. Viewers 55 and older fall from 32.1% of the audience to 30.7%, and 65 or older drops from 948,364 people to 832,283. The title skews toward people who came to it on streaming rather than on its original run, and that cohort leans 25 to 54.",
+   "Affluence softens but does not break. The $250,000-or-more and $150,000-to-$249,999 bands both give back share while $25,000-to-$74,999 picks it up, which reads as the audience widening past the original coastal professional core rather than losing it: New York still indexes at 261 and San Francisco at 264.",
+   "Geography is tilting out of the legacy top four. New York, Los Angeles, Chicago and San Francisco together move from 37.7% to 36.7% of viewers, while Dallas Ft Worth, Atlanta, Houston and Denver all gain share. That is the pattern of a catalog title finding incremental audience in lower-cost metros.",
+   "Engagement is rising even as reach falls. The daily signal moves from an engagement score of 50.0 to 57.8 across 32 tracked days through Sep 14 2026, with unique people peaking at 149 a day on Aug 24 2026 and the latest read at 117 a day. A smaller audience is talking about the show more, which reads as a core that is consolidating rather than drifting."
+  ],
+  "metrics": [
+   {
+    "name": "us_viewers_2025",
+    "label": "US viewers, Jan 1 2025 to Dec 30 2025",
+    "unit": "viewers",
+    "value": 7582850,
+    "definition": "distinct US people with at least one Mad Men play in the 2025 period"
+   },
+   {
+    "name": "us_viewers_2026",
+    "label": "US viewers, Jan 1 2026 to Nov 9 2026",
+    "unit": "viewers",
+    "value": 6941827,
+    "definition": "distinct US people with at least one Mad Men play in the 2026 period to date"
+   },
+   {
+    "name": "millennial_share_2026",
+    "label": "Millennials (25-44) share, 2026",
+    "unit": "pct",
+    "value": 39.1,
+    "definition": "share of 2026 US viewers aged 25 to 44, against 37.5% in 2025"
+   },
+   {
+    "name": "income_100k_plus_share_2026",
+    "label": "$100,000-plus income share, 2026",
+    "unit": "pct",
+    "value": 47.3,
+    "definition": "share of 2026 US viewers in homes at $100,000 or more, against 48.9% in 2025"
+   },
+   {
+    "name": "bachelors_plus_share_2026",
+    "label": "Bachelors degree or higher share, 2026",
+    "unit": "pct",
+    "value": 64.7,
+    "definition": "share of 2026 US viewers holding a bachelors, graduate or professional degree, against 65.3% in 2025"
+   }
+  ],
+  "breakdown": {
+   "dimension": "Age / generation, gender, household income, top market and education, by period",
+   "share_basis": "share of that period's US viewers",
+   "rows": [
+    {
+     "label": "Age / generation - 1/1/2025 - 12/30/2025",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "Gen X 42.6% leads, Millennials 37.5%",
+     "pool": 7582850,
+     "buckets": [
+      {
+       "label": "17 and Under",
+       "count": 116921,
+       "share_pct": 1.5
+      },
+      {
+       "label": "18-24",
+       "count": 439661,
+       "share_pct": 5.8
+      },
+      {
+       "label": "25-34",
+       "count": 1097709,
+       "share_pct": 14.5
+      },
+      {
+       "label": "35-44",
+       "count": 1747899,
+       "share_pct": 23.1
+      },
+      {
+       "label": "45-54",
+       "count": 1745831,
+       "share_pct": 23.0
+      },
+      {
+       "label": "55-64",
+       "count": 1486465,
+       "share_pct": 19.6
+      },
+      {
+       "label": "65 or Older",
+       "count": 948364,
+       "share_pct": 12.5
+      }
+     ]
+    },
+    {
+     "label": "Age / generation - 1/1/2026 - 11/9/2026",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "Millennials 39.1%, Gen X 41.2%, Boomers 12.0%",
+     "pool": 6941827,
+     "buckets": [
+      {
+       "label": "17 and Under",
+       "count": 112555,
+       "share_pct": 1.6
+      },
+      {
+       "label": "18-24",
+       "count": 423708,
+       "share_pct": 6.1
+      },
+      {
+       "label": "25-34",
+       "count": 1069749,
+       "share_pct": 15.4
+      },
+      {
+       "label": "35-44",
+       "count": 1644506,
+       "share_pct": 23.7
+      },
+      {
+       "label": "45-54",
+       "count": 1559919,
+       "share_pct": 22.5
+      },
+      {
+       "label": "55-64",
+       "count": 1299107,
+       "share_pct": 18.7
+      },
+      {
+       "label": "65 or Older",
+       "count": 832283,
+       "share_pct": 12.0
+      }
+     ]
+    },
+    {
+     "label": "Gender - 1/1/2025 - 12/30/2025",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "Male leads at 50.2%",
+     "pool": 7582850,
+     "buckets": [
+      {
+       "label": "Female",
+       "count": 3566813,
+       "share_pct": 47.0
+      },
+      {
+       "label": "Male",
+       "count": 3806819,
+       "share_pct": 50.3
+      },
+      {
+       "label": "Non-Binary",
+       "count": 123676,
+       "share_pct": 1.6
+      },
+      {
+       "label": "Trans Male",
+       "count": 67267,
+       "share_pct": 0.9
+      },
+      {
+       "label": "Trans Female",
+       "count": 18275,
+       "share_pct": 0.2
+      }
+     ]
+    },
+    {
+     "label": "Gender - 1/1/2026 - 11/9/2026",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "Male edge narrows to 2.1 points",
+     "pool": 6941827,
+     "buckets": [
+      {
+       "label": "Female",
+       "count": 3296764,
+       "share_pct": 47.5
+      },
+      {
+       "label": "Male",
+       "count": 3444659,
+       "share_pct": 49.6
+      },
+      {
+       "label": "Non-Binary",
+       "count": 118178,
+       "share_pct": 1.7
+      },
+      {
+       "label": "Trans Male",
+       "count": 65163,
+       "share_pct": 0.9
+      },
+      {
+       "label": "Trans Female",
+       "count": 17063,
+       "share_pct": 0.2
+      }
+     ]
+    },
+    {
+     "label": "Household income - 1/1/2025 - 12/30/2025",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "$100,000-plus is 48.9% of viewers",
+     "pool": 7582850,
+     "buckets": [
+      {
+       "label": "$250,000 or More",
+       "count": 618033,
+       "share_pct": 8.1
+      },
+      {
+       "label": "$150,000 - $249,999",
+       "count": 1386304,
+       "share_pct": 18.3
+      },
+      {
+       "label": "$100,000 - $149,999",
+       "count": 1704162,
+       "share_pct": 22.5
+      },
+      {
+       "label": "$75,000 - $99,999",
+       "count": 1172074,
+       "share_pct": 15.5
+      },
+      {
+       "label": "$50,000 - $74,999",
+       "count": 1119221,
+       "share_pct": 14.8
+      },
+      {
+       "label": "$25,000 - $49,999",
+       "count": 938203,
+       "share_pct": 12.4
+      },
+      {
+       "label": "Less than $25,000",
+       "count": 644853,
+       "share_pct": 8.5
+      }
+     ]
+    },
+    {
+     "label": "Household income - 1/1/2026 - 11/9/2026",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "$100,000-plus is 47.3% of viewers",
+     "pool": 6941827,
+     "buckets": [
+      {
+       "label": "$250,000 or More",
+       "count": 554249,
+       "share_pct": 8.0
+      },
+      {
+       "label": "$150,000 - $249,999",
+       "count": 1242143,
+       "share_pct": 17.9
+      },
+      {
+       "label": "$100,000 - $149,999",
+       "count": 1487085,
+       "share_pct": 21.4
+      },
+      {
+       "label": "$75,000 - $99,999",
+       "count": 1090166,
+       "share_pct": 15.7
+      },
+      {
+       "label": "$50,000 - $74,999",
+       "count": 1054297,
+       "share_pct": 15.2
+      },
+      {
+       "label": "$25,000 - $49,999",
+       "count": 886603,
+       "share_pct": 12.8
+      },
+      {
+       "label": "Less than $25,000",
+       "count": 627284,
+       "share_pct": 9.0
+      }
+     ]
+    },
+    {
+     "label": "Top geographic markets - 1/1/2025 - 12/30/2025",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "New York 16.2% at index 261",
+     "pool": 7582850,
+     "buckets": [
+      {
+       "label": "New York NY",
+       "count": 1228422,
+       "share_pct": 16.2
+      },
+      {
+       "label": "Los Angeles CA",
+       "count": 773451,
+       "share_pct": 10.2
+      },
+      {
+       "label": "Chicago IL",
+       "count": 447388,
+       "share_pct": 5.9
+      },
+      {
+       "label": "San Francisco Oakland San Jose CA",
+       "count": 409474,
+       "share_pct": 5.4
+      },
+      {
+       "label": "Philadelphia PA",
+       "count": 295731,
+       "share_pct": 3.9
+      },
+      {
+       "label": "Seattle Tacoma WA",
+       "count": 242651,
+       "share_pct": 3.2
+      },
+      {
+       "label": "Dallas Ft Worth TX",
+       "count": 219903,
+       "share_pct": 2.9
+      },
+      {
+       "label": "Atlanta GA",
+       "count": 212321,
+       "share_pct": 2.8
+      },
+      {
+       "label": "Houston TX",
+       "count": 181988,
+       "share_pct": 2.4
+      },
+      {
+       "label": "Denver CO",
+       "count": 159243,
+       "share_pct": 2.1
+      },
+      {
+       "label": "Minneapolis St Paul MN",
+       "count": 159239,
+       "share_pct": 2.1
+      },
+      {
+       "label": "Portland OR",
+       "count": 128908,
+       "share_pct": 1.7
+      },
+      {
+       "label": "All other US markets",
+       "count": 3124131,
+       "share_pct": 41.3
+      }
+     ]
+    },
+    {
+     "label": "Top geographic markets - 1/1/2026 - 11/9/2026",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "New York slips to 15.6%, Dallas and Atlanta gain",
+     "pool": 6941827,
+     "buckets": [
+      {
+       "label": "New York NY",
+       "count": 1082925,
+       "share_pct": 15.6
+      },
+      {
+       "label": "Los Angeles CA",
+       "count": 701125,
+       "share_pct": 10.1
+      },
+      {
+       "label": "Chicago IL",
+       "count": 402626,
+       "share_pct": 5.8
+      },
+      {
+       "label": "San Francisco Oakland San Jose CA",
+       "count": 360975,
+       "share_pct": 5.2
+      },
+      {
+       "label": "Philadelphia PA",
+       "count": 263789,
+       "share_pct": 3.8
+      },
+      {
+       "label": "Seattle Tacoma WA",
+       "count": 229081,
+       "share_pct": 3.3
+      },
+      {
+       "label": "Dallas Ft Worth TX",
+       "count": 215197,
+       "share_pct": 3.1
+      },
+      {
+       "label": "Atlanta GA",
+       "count": 208255,
+       "share_pct": 3.0
+      },
+      {
+       "label": "Houston TX",
+       "count": 180488,
+       "share_pct": 2.6
+      },
+      {
+       "label": "Denver CO",
+       "count": 152721,
+       "share_pct": 2.2
+      },
+      {
+       "label": "Minneapolis St Paul MN",
+       "count": 145778,
+       "share_pct": 2.1
+      },
+      {
+       "label": "Portland OR",
+       "count": 118011,
+       "share_pct": 1.7
+      },
+      {
+       "label": "All other US markets",
+       "count": 2880856,
+       "share_pct": 41.5
+      }
+     ]
+    },
+    {
+     "label": "Education - 1/1/2025 - 12/30/2025",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "Bachelors or higher is 65.3% of viewers",
+     "pool": 7582850,
+     "buckets": [
+      {
+       "label": "Bachelors Degree",
+       "count": 2745561,
+       "share_pct": 36.1
+      },
+      {
+       "label": "Graduate or Professional Degree",
+       "count": 2208383,
+       "share_pct": 29.2
+      },
+      {
+       "label": "Some College / Associate Degree",
+       "count": 1678001,
+       "share_pct": 22.2
+      },
+      {
+       "label": "High School or Less",
+       "count": 950905,
+       "share_pct": 12.6
+      }
+     ]
+    },
+    {
+     "label": "Education - 1/1/2026 - 11/9/2026",
+     "share_pct": 10.0,
+     "penetration_pct": 100.0,
+     "note": "Bachelors or higher is 64.7% of viewers",
+     "pool": 6941827,
+     "buckets": [
+      {
+       "label": "Bachelors Degree",
+       "count": 2528991,
+       "share_pct": 36.4
+      },
+      {
+       "label": "Graduate or Professional Degree",
+       "count": 1963196,
+       "share_pct": 28.3
+      },
+      {
+       "label": "Some College / Associate Degree",
+       "count": 1573741,
+       "share_pct": 22.7
+      },
+      {
+       "label": "High School or Less",
+       "count": 875899,
+       "share_pct": 12.6
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "shipped": {
+  "reply_head": "On people who watched Mad Men in the window:\n\nOn people who watched Mad Men: 7,575,296 US viewers in 2025 and 6,941,827 in 2026 through Nov 9, a loss of 641,023 viewers, with the remaining audience younger and slightly less affluent, Millennials up from 37.5% to 39.1% and $100,000-plus income down from 48.9% to 47.3%.\n\nUS viewers, Jan 1 2025 to Dec 30 2025: 7,619,181, US viewers, Jan 1 2026 to Nov 9 2026: 6,941,827, Millennials (25-44) share, 2026: 39.1%.\n\nAge / generation, gender, income, top market and education,",
+  "trail": "digits drawn natural on 6 count(s): 1,747,899 -> 1,748,634 | 7,582,850 -> 7,575,296 | 3,806,819 -> 3,816,536 | 1,704,162 -> 1,705,821 | 3,124,131 -> 3,135,216 | 2,745,561 -> 2,738,007"
+ }
+}
