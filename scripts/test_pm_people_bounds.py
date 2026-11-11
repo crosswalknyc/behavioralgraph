@@ -399,6 +399,41 @@ class TheExits(unittest.TestCase):
         self.assertTrue(env.get('success'))
         self.assertEqual(env.get('kind'), 'answer')
 
+    def test_a_stored_reply_is_corrected_to_the_open_profiles_own_figure(self):
+        """A replay carries no evidence: once a count breaks a rule the
+        open profile's figures for what the question names are looked up,
+        and the reply prints the category's own people."""
+        import flask
+        import prometheus_analysis as pma
+        from prometheus.host import host
+        df, gp = _profile_df()
+        ask = 'What share of Chime Banking Customers engage with insurance brands overall, and what is the index?'
+        m = re.search(r"insurance: (\d+\.\d)% of [^;]+; projected US people ([\d,]+)", CRE.block(df, gp, ask))
+        share, people = m.group(1), m.group(2)
+        wrong = int(round(float(share) * AUDIENCE))          # the share times the base, not divided by 100
+        stored = (f"Insurance is a flat category for this audience: {share}% engage with at least one insurance brand, index 104. "
+                  f"On a projected base of 8,977,404 people that is about {wrong:,} insurance-active people.\n\nGEICO leads at 26.7%.")
+        self.assertGreater(wrong, AUDIENCE)                 # larger than the audience it is part of
+        saved = (dict(host._b), host.bound, pma.load_profile_df, pma.load_genpop_map)
+        calls = []
+        try:
+            host.bind(s3_client=object(), bucket='test-bucket')
+            pma.load_profile_df = lambda s3, bucket, key: (calls.append(key) or (df, 'etag'))
+            pma.load_genpop_map = lambda s3, bucket: gp
+            app = flask.Flask('people_bounds_test')
+            with app.test_request_context('/ask', method='POST', json={'text': ask, 'context': {'primary': {'name': 'Chime Banking Customers', 's3_key': KEY}}}):
+                raw = PB.guard_payload({'reply': stored, 'profile': 'Chime Banking Customers'})
+                fine = PB.guard_payload({'reply': 'Insurance reaches 43.7% of this audience, 3,925,084 people.'})
+        finally:
+            host._b.clear()
+            host._b.update(saved[0])
+            host.bound = saved[1]
+            pma.load_profile_df, pma.load_genpop_map = saved[2], saved[3]
+        self.assertIn(f"that is about {people} insurance-active people", raw['reply'])
+        self.assertNotIn(f"{wrong:,}", raw['reply'])
+        self.assertEqual(calls, [KEY])                       # one lookup, and only for the reply that broke a rule
+        self.assertEqual(fine['reply'], 'Insurance reaches 43.7% of this audience, 3,925,084 people.')
+
     def test_a_payload_metric_follows_its_count(self):
         raw = {'reply': CHIME_REPLY, 'metrics': [{'label': 'insurance-active people', 'value': WRONG, 'unit': 'count'},
                                                  {'label': 'audience', 'value': AUDIENCE, 'unit': 'count'}]}

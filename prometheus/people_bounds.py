@@ -541,7 +541,7 @@ def _turn_evidence():
         key = str((((pc or {}) if isinstance(pc, dict) else {}).get('primary') or {}).get('s3_key') or '')
         if not key.lower().endswith('.csv'):
             return [], None
-        from . import host
+        from .host import host
         if not (host.has('s3_client') and host.has('bucket')):
             return [], None
         import prometheus_analysis as pma
