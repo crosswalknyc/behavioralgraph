@@ -34,6 +34,20 @@ build take", "do we have a profile for X", "can you measure watch
 time"), a negated build ("don't build a new profile"), a correction or a
 pushback ("why do you keep building", "I already pulled it"), a cancel.
 
+The add-as shapes (2026-11-10, the Sony Television seat: "Can you look
+into My Life With the Walter Boys viewers? I want to add them as a
+profile" ran a read instead of the build): "add them / this / X as a
+profile", "save this as a profile", "turn this into a profile", "make a
+profile of / for", "I want a profile of / on", "can I get a profile
+of", "profile this audience", "create a twin of", "add it to Digital
+Journey IQ" are orders too. A referent in the subject slot ("them",
+"this", "it", "this audience", "these viewers") is read by ``referent``;
+``prometheus.order_referent`` resolves it the way the thread's pronouns
+resolve (the subject named earlier in the same message, then the last
+read in the thread, then the audience on screen) and ``with_subject``
+writes the order the build flow reads, the resolved subject with its
+platform and window.
+
 Pure text; no model, no S3, no host. Never raises.
 """
 from __future__ import annotations
@@ -41,7 +55,7 @@ from __future__ import annotations
 import re
 
 __all__ = ['is_order', 'is_profile_order', 'product_of', 'split', 'deliverable_notes', 'order_core',
-           'build_line', 'deliverable_line']
+           'build_line', 'deliverable_line', 'referent', 'with_subject', 'REFERENT_WORDS']
 
 # the products an order can name, longest first where one contains another
 _PRODUCTS = (
@@ -65,8 +79,43 @@ _VERBS = (
 _LEAD = (
     r"(?:(?:please|pls|plz|kindly|just|also|and|then|now|next|so|ok(?:ay)?|yes|yep|sure|go ahead and|"
     r"no|nope|nah|not that|wait|hold on|actually|sorry|hmm|instead|"
-    r"can you|could you|would you|will you|can we|could we|i(?:'d| would) like(?: you)?(?: to)?|i need(?: you to)?|"
-    r"i want(?: you to)?|we need(?: you to)?|we want(?: you to)?|we(?:'d| would) like(?: you to)?|let'?s|lets)[,\s]+)*"
+    r"can you|could you|would you|will you|can we|could we|can i|could i|may i|"
+    r"i(?:'d| would) like(?: you)?(?: to)?|i need(?: you)?(?: to)?|"
+    r"i want(?: you)?(?: to)?|we need(?: you)?(?: to)?|we want(?: you)?(?: to)?|we(?:'d| would) like(?: you)?(?: to)?|"
+    r"let'?s|lets)[,\s]+)*"
+)
+# a pronoun or a bare referent standing for the subject ("add them as a profile", "profile this audience")
+REFERENT_WORDS = (
+    r"(?:(?:this|these|that|those)\s+(?:same\s+)?(?:audience|viewers|watchers|listeners|readers|players|group|cohort|fans|"
+    r"users|people|segment|crowd|base|universe|read|result|results|numbers|data)|them|this|it|these|those|that|"
+    r"this one|that one|the same|the same (?:audience|group|people))"
+)
+# the verbs that put a thing somewhere: "add them as a profile", "save this as a profile", "turn this into a
+# profile", "add it to Digital Journey IQ", "convert these viewers into a profile"
+_PLACE_VERBS = r"add|save|keep|store|put|register|load|convert|turn|move|place"
+_PLACE_OBJ = (
+    r"(?P<obj>" + REFERENT_WORDS + r"|(?:(?!(?:as|into)\b)[^\s.,;:?!()]+\s+){1,10}?)"
+)
+# the product surfaces a thing is added TO ("add it to Digital Journey IQ", "put this in Profile IQ"); "add the
+# brand to the profile" is an edit to a file, never a build order, so "to / in / on" takes a named surface only
+_PLACE_TARGETS = (
+    r"digital journey iqs?|journey iqs?|profile iqs?|subscriber iqs?|attribution iqs?|digital twins? iqs?|twins? iqs?|"
+    r"flywheel iqs?|brand partnership iqs?|select a journey|the journey picker|select profile|the profile picker|"
+    r"the dashboard|the picker|the dropdown|the library"
+)
+_PLACE_RX_BODY = (
+    _LEAD + r"(?P<verb3>" + _PLACE_VERBS + r")\s+" + _PLACE_OBJ + r"\s*(?:(?:as|into)\s+"
+    r"(?:(?:a|an|the|one|my|our|its|their)\s+)?(?:(?:new|separate|full|fresh|own|proper|real|saved)\s+)*"
+    r"(?P<product3>" + _PRODUCTS + r")\b|(?:to|in|on|into)\s+(?:the\s+)?(?P<target3>" + _PLACE_TARGETS + r")\b)"
+)
+_TARGET_FAMILY = (
+    ('journey', re.compile(r"^(?:digital journey|journey|select a journey|the journey picker)", re.I)),
+    ('subscriber_iq', re.compile(r"^subscriber iq", re.I)),
+    ('attribution', re.compile(r"^attribution iq", re.I)),
+    ('twin', re.compile(r"^(?:digital twins? iq|twins? iq)", re.I)),
+    ('flywheel', re.compile(r"^flywheel iq", re.I)),
+    ('bpiq', re.compile(r"^brand partnership iq", re.I)),
+    ('profile', re.compile(r".", re.I)),      # Profile IQ, the dashboard, the picker, the library
 )
 # what sits between the verb and the product noun
 _BETWEEN = (
@@ -78,19 +127,28 @@ _BETWEEN = (
     # words, none of them a preposition or a figure word (those open a different sentence shape)
     r"(?:(?!(?:on|of|for|about|from|with|in|to|at|by|and|or|numbers?|figures?|data|size|how|what|which)\b)[^\s.,;:?!()]+\s+){0,4}?"
 )
-# a want-led order with no verb ("I need a profile of Chipotle buyers", "we want a twin on the pilot")
+# a want-led order with no verb ("I need a profile of Chipotle buyers", "we want a twin on the pilot",
+# "can I get a profile of Gilmore Girls viewers on Hulu")
 _WANT_LEAD = (
     r"(?:(?:please|pls|also|and|then|ok(?:ay)?|so)[,\s]+)*"
     r"(?:(?:i|we)(?:'d| would)? (?:need|want|like|am after|'m after|am looking for|'m looking for)(?: you to (?:" + _VERBS + r"))?|"
-    r"(?:get|give|send|make) (?:me|us))\s+"
+    r"(?:can|could|may|might) (?:i|we) (?:get|have|order|request)|(?:get|give|send|make) (?:me|us))\s+"
 )
 _SENTENCE_START = r"(?:^|(?<=[.;:!?\n])\s*|(?<=[.;:!?])\s+)"
 _ORDER_RX = re.compile(
     _SENTENCE_START + r"\W*(?:" + _LEAD + r"(?P<verb>" + _VERBS + r")\s+" + _BETWEEN
     + r"(?P<product>" + _PRODUCTS + r")\b|" + _WANT_LEAD + _BETWEEN + r"(?P<product2>" + _PRODUCTS + r")\b|"
     + _LEAD + r"(?P<verb2>queue|re-?queue|run|re-?run|build|re-?build|pull|re-?pull|start|launch|kick ?off)\s+"
-    + r"(?P<pronoun>" + _PRONOUN_PRODUCT + r")\b)(?P<rest>[^\n]{0,400})", re.I)
+    + r"(?P<pronoun>" + _PRONOUN_PRODUCT + r")\b|"
+    # "add them as a profile", "save this as a profile", "turn this into a profile", "add it to Digital Journey IQ"
+    + _PLACE_RX_BODY + r"|"
+    # "profile this audience", "profile these viewers": the verb profile on a bare referent
+    + _LEAD + r"(?P<verb4>profile)\s+(?P<referent4>(?:this|these|that|those)\s+(?:same\s+)?"
+    + r"(?:audience|viewers|watchers|listeners|readers|players|group|cohort|fans|users|people|segment|crowd|base|universe))\b"
+    + r")(?P<rest>[^\n]{0,400})", re.I)
 # "profile X for me" / "profile the Y audience" are not orders here (a bare noun order is the interpret step's call)
+_REFERENT_ONLY_RX = re.compile(r"^\W*(?:" + REFERENT_WORDS + r")\W*$", re.I)
+_REST_SUBJECT_RX = re.compile(r"^\W*(?:of|on|for|about|around|covering)\s+(?P<subj>[^\n]{1,200}?)\s*$", re.I)
 
 # the products whose build flow is the Profile IQ interpret surface
 _PROFILE_PRODUCT_RX = re.compile(
@@ -169,13 +227,29 @@ def product_of(text):
     m = _order_match(text)
     if not m:
         return ''
-    prod = _squash(m.group('product') or m.group('product2') or '').lower()
+    prod = _squash(m.group('product') or m.group('product2') or m.group('product3') or '').lower()
     if not prod:
+        if m.group('verb4'):
+            return 'profile'
+        tgt = _squash(m.group('target3') or '').lower()
+        if tgt:
+            for fam, rx in _TARGET_FAMILY:
+                if rx.match(tgt):
+                    return fam
         return ''
     for fam, rx in _PRODUCT_FAMILY:
         if rx.match(prod):
             return fam
     return ''
+
+
+def _order_start(m):
+    return next(p for p in (m.start('verb'), m.start('verb2'), m.start('product2'), m.start('verb3'), m.start('verb4')) if p >= 0)
+
+
+def _order_prod_end(m):
+    return next(e for e in (m.end('product'), m.end('product2'), m.end('pronoun'), m.end('product3'), m.end('target3'),
+                            m.end('referent4')) if e >= 0)
 
 
 def is_order(text):
@@ -191,8 +265,8 @@ def is_order(text):
     if not m:
         return False
     # the sentence the order sits in
-    start = next(p for p in (m.start('verb'), m.start('verb2'), m.start('product2')) if p >= 0)
-    prod_end = next(e for e in (m.end('product'), m.end('product2'), m.end('pronoun')) if e >= 0)
+    start = _order_start(m)
+    prod_end = _order_prod_end(m)
     sent_start = max((t.rfind(ch, 0, start) for ch in '.;:!?\n'), default=-1) + 1
     sent_end_candidates = [t.find(ch, prod_end) for ch in '.;!?\n']
     sent_end = min([e for e in sent_end_candidates if e >= 0], default=len(t))
@@ -213,6 +287,8 @@ def is_order(text):
         return False      # "can you build profiles?" asks what the product does
     # the subject slot: an order names what it is on, or points at the list before it
     rest = re.sub(r"^\W*(?:please|pls|now|today|asap|thanks?|thank you|for me|for us)\b", '', _squash(m.group('rest')), flags=re.I)
+    if m.group('verb3') or m.group('verb4'):
+        return True      # the add-as shapes carry their subject (or its referent) before the noun
     if not rest.strip(' .!?,') and not m.group('pronoun'):
         # a name typed before the noun ("build me a Nike profile") names the subject too
         prod_start = next(p for p in (m.start('product'), m.start('product2')) if p >= 0)
@@ -229,6 +305,72 @@ def is_order(text):
 def is_profile_order(text):
     """An order whose build flow is the Profile IQ interpret surface."""
     return is_order(text) and product_of(text) == 'profile'
+
+
+def referent(text):
+    """The referent standing in the order's subject slot ("them" in "add
+    them as a profile", "this audience" in "profile this audience", "it"
+    in "add it to Digital Journey IQ", "these viewers" in "I want a
+    profile of these viewers"), squashed and lower-cased; '' when the
+    order names its subject or the text is not an order."""
+    t = _squash(text)
+    if not t or not is_order(t):
+        return ''
+    m = _order_match(t)
+    if not m:
+        return ''
+    if m.group('verb4'):
+        return _squash(m.group('referent4')).lower()
+    if m.group('verb3'):
+        obj = _squash(m.group('obj')).lower()
+        return obj if _REFERENT_ONLY_RX.match(obj) else ''
+    if m.group('pronoun'):
+        rest = _squash(m.group('rest')).strip(' .!?,')
+        # "run it on Mountain Dew" names its subject; a bare "run it" points back
+        return '' if re.match(r"^(?:on|for|of|about)\s+\S", rest, re.I) else _squash(m.group('pronoun')).lower()
+    rest = _squash(m.group('rest'))
+    sm = _REST_SUBJECT_RX.match(rest.split('.')[0] if rest else '')
+    if sm:
+        subj = _squash(sm.group('subj')).strip(' .!?,').lower()
+        if _REFERENT_ONLY_RX.match(subj):
+            return subj
+    return ''
+
+
+def with_subject(text, subject, *, platform='', window=''):
+    """The order the build flow reads once its referent is resolved: the
+    message with the referent replaced by the subject (and the platform
+    and window the thread carried), and the order itself put first in
+    the plain shape the interpret step binds. An order for a journey
+    reads 'Build a Digital Journey for <subject>' (the wayfinding chip's
+    own words); a twin 'Create a Digital Twin of <subject>'."""
+    subj = _squash(subject).strip(' .,;:')
+    t = _squash(text)
+    if not subj or not t:
+        return t
+    plat = _squash(platform).strip(' .,;:')
+    if plat and not re.search(r"\b" + re.escape(plat) + r"\b", subj, re.I):
+        subj_full = f"{subj} on {plat}"
+    else:
+        subj_full = subj
+    win = _squash(window).strip(' .,;:')
+    fam = product_of(t) or 'profile'
+    notes = deliverable_notes(t)
+    if fam == 'journey':
+        head = f"Build a Digital Journey for {subj_full}"
+    elif fam == 'twin':
+        head = f"Create a Digital Twin of {subj_full}"
+    elif fam in ('subscriber_iq', 'flywheel', 'attribution', 'bpiq', 'deck', 'read'):
+        label = {'subscriber_iq': 'Subscriber IQ', 'flywheel': 'Flywheel IQ', 'attribution': 'Attribution IQ',
+                 'bpiq': 'Brand Partnership IQ', 'deck': 'a deck', 'read': 'a read'}[fam]
+        head = f"Run {label} on {subj_full}"
+    else:
+        head = f"Please queue one Profile IQ: {subj_full}"
+    if win:
+        head += f", {win}"
+    if notes:
+        return head + '. ' + notes.rstrip('.') + '.'
+    return head      # the wayfinding chip's own shape, no full stop ("Build a Digital Journey for X")
 
 
 def _sentences(text):

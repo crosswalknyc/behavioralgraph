@@ -375,6 +375,8 @@ def _interpret_body(body, text, history, tid=None):
     if body.get('_pm_order'):
         out['_pm_order'] = True
         out['_pm_order_text'] = str(body.get('_pm_order_text') or text)
+        if body.get('_pm_order_referent'):
+            out['_pm_order_referent'] = True      # the subject was resolved from a referent (prometheus.order_referent)
     return out
 
 
@@ -642,6 +644,35 @@ def ask(user, body, *, via='session'):
         from . import orders as _orders
         _is_order = bool(_orders.is_order(text)) and not _armed(body)
         if _is_order:
+            # A referent in the order's subject slot ("I want to add them as a
+            # profile", "profile this audience", "add it to Digital Journey IQ")
+            # resolves the way the thread's pronouns resolve: the subject named
+            # earlier in the same message, then the last read in this thread,
+            # then the audience on screen (prometheus.order_referent, the Sony
+            # Television seat 2026-11-10). The build flow reads the order on
+            # the resolved subject with its platform and window; nothing
+            # resolved leaves the words as typed for the build flow's own
+            # one-line clarifier.
+            _rw, _rs = None, None
+            try:
+                from . import order_referent as _oref
+                if _orders.referent(text):
+                    _rs = _oref.resolve(text, history=history, ctx=ctx)
+                    _rw = _oref.rewrite(text, history=history, ctx=ctx) if _rs else None
+            except Exception as _fx:
+                _faults.note('service.order_referent', _fx)
+                _rw = None
+            if _rw:
+                try:
+                    # 'Add it to Digital Journey IQ' keeps the wayfinding lane's own trail
+                    if _orders.product_of(text) == 'journey' and re.search(r"\bjourney\b", text, re.I):
+                        host.ask_hint(route='wayfinding', outcome='add_to_journey', subject=str((_rs or {}).get('subject') or '') or None)
+                    else:
+                        host.ask_hint(route='build_order', outcome='referent_resolved', subject=str((_rs or {}).get('subject') or '') or None)
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                text = str(_rw)
+                body = dict(body, text=text, _pm_order_referent=True)
             body = dict(body, _pm_order=True, _pm_order_text=text)
     except Exception as _fx:
         _faults.note('service.orders', _fx)

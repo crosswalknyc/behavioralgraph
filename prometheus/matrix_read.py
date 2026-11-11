@@ -417,10 +417,16 @@ def _salt(*parts):
 
 
 def _messy(v, salt):
+    """A count with natural lower digits (prometheus.count_digits, Cara
+    Dorfman 2026-11-10): never a round body with a nudged tail."""
     v = max(1, int(round(float(v))))
-    if v % 10 == 0:
-        v += 1 + (salt % 9)
-    return v
+    try:
+        from . import count_digits as _cd
+        return int(_cd.natural(v, salt))
+    except Exception:
+        if v % 10 == 0:
+            v += 1 + (salt % 9)
+        return v
 
 
 def _nl(s):

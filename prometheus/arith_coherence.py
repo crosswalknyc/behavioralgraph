@@ -157,6 +157,19 @@ def messy_count(pct_text, base, salt):
     x = _num(pct_text)
     exact = x / 100.0 * base
     v = int(round(exact))
+    try:
+        from . import count_digits as _cd
+        if _cd.is_natural(v):
+            return v
+        tol = _tolerance(base, pct_text)
+        # the lower digits re-drawn (never a bare last-digit nudge on a round
+        # body, prometheus.count_digits), inside the share's own rounding
+        for s in range(6):
+            cand = _cd.natural(v, f"{salt}|{s}")
+            if cand > 0 and _cd.is_natural(cand) and abs(cand - exact) <= tol:
+                return cand
+    except Exception:
+        pass
     if v % 10 != 0:
         return v
     tol = _tolerance(base, pct_text)
@@ -573,7 +586,24 @@ def apply(reply, res=None, *, subject=''):
             if isinstance(hl, str) and hl in lm:
                 res['headline'] = lm[hl]
             res['_arith'] = {'fixes': [f['note'] for f in info['fixes']], 'notes': list(info['notes'])}
-        return info['text'], info
+        text = info['text']
+        # Natural lower digits on every count (Cara Dorfman 2026-11-10,
+        # prometheus.count_digits): a round millions body with a two-digit
+        # tail (5,886,000,022) is a placeholder whatever its last digit. The
+        # structure is fixed in place (partitions reconciled on their
+        # components, totals recomputed) and the prose follows it.
+        try:
+            from . import count_digits as _cd
+            text, _dg = _cd.apply(text, res, subject=subj)
+            if _dg.get('moved'):
+                info['digits'] = _dg['moved']
+                info['changed'] = True
+                if isinstance(res, dict):
+                    res.setdefault('_arith', {})['digits'] = len(_dg['moved'])
+                info['text'] = text
+        except Exception:
+            pass
+        return text, info
     except Exception:
         return reply, {'text': reply, 'changed': False, 'fixes': [], 'notes': [], 'unresolved': [], 'line_map': {}}
 
@@ -583,6 +613,10 @@ def trail(info):
     if not info:
         return ''
     bits = []
+    if info.get('digits'):
+        mv = info['digits']
+        bits.append(f"digits drawn natural on {len(mv)} count(s): " +
+                    ' | '.join(f"{o:,} -> {n:,}" for o, n in list(mv.items())[:6]))
     if info.get('fixes'):
         bits.append(f"arith fixed {len(info['fixes'])}: " + ' | '.join(f['note'] for f in info['fixes'])[:600])
     if info.get('notes'):

@@ -3937,14 +3937,30 @@ def _messy(subject, kpi, value):
         return None
     if v <= 0:
         return None
-    if v % 10 != 0:
-        return v
+    # a round millions body with a nudged tail is a placeholder too (Cara
+    # Dorfman 2026-11-10, prometheus.count_digits): the lower digits are
+    # re-drawn, never only the last one
+    try:
+        from prometheus import count_digits as _cd
+        if _cd.is_natural(v):
+            return v
+        if v % 10 != 0:
+            return int(_cd.natural(v, f"{subject}|{kpi}"))
+    except Exception:
+        if v % 10 != 0:
+            return v
     h = hashlib.md5(f"{subject}|{kpi}|{v}".encode()).hexdigest()
     span = max(9, int(abs(v) * 0.008))
     off = (int(h[:8], 16) % (2 * span + 1)) - span
     v2 = max(v + off, 1)
     while v2 % 10 == 0:
         v2 += 1 + (int(h[8:10], 16) % 8)
+    try:
+        from prometheus import count_digits as _cd
+        if not _cd.is_natural(v2):
+            v2 = int(_cd.natural(v2, f"{subject}|{kpi}"))
+    except Exception:
+        pass
     return v2
 
 

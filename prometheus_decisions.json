@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "5fee5b46a5cec5126bf659234462cc0e89476b644e1acb1123bcec90b753a360",
+ "content_hash": "9a4175c4d9bec3c1eb3506b499709506aa5987abfdbe877c25933305681e7d24",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -944,7 +944,68 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "caras_audit_notes_and_natural_digits",
+   "decided": "2026-11-10",
+   "statement": "A viewing metric asked by period (total hours, minutes, usage or overlap by month, by quarter, for 2025, split by a demographic) is an order for a read however the sentence opens: 'can I get total hours by month for 2025 broken out by P18+, M18-34, F18-34, M35+, F35+ for Prime Video and YouTube' runs the read. The capability answer (what Prometheus can do, what a product measures) is for a question about what the product does only, never for a metric with a period behind it. 'Prime Video', 'Prime' and 'Amazon Prime' all name the one Amazon Prime Video entry the library holds; a read across two audiences (YouTube and Prime Video, P18+ on each) is two families side by side, each its own universe with its own pool, never a Total Universe beside its own cut. A title's discovery window opens on the day it actually premiered; when the date is not known for certain it is looked up, never invented, and no premiere, season count or release year is ever made up. Percentages in prose carry one decimal (23.1%, 7.4% share); a four-decimal file value never appears inside a sentence. When the metric is hours (or minutes, sessions, plays) the row pool is in that unit and the file says so; a count of hours is never called people or viewers. Every count above 100,000 reads as a real figure: no run of three or more zeros inside its thousands and hundreds places and a last digit of 1 to 9, so 5,886,000,022 never ships; a figure is adjusted only in its lower digits (by at most 0.4% and never past its lower five digits) and a partition keeps summing, the total being the exact sum of its parts.",
+   "match_terms": [
+    "total hours",
+    "hours by month",
+    "minutes by month",
+    "usage by month",
+    "by month",
+    "by quarter",
+    "for 2025",
+    "broken out by",
+    "p18+",
+    "m18-34",
+    "f18-34",
+    "m35+",
+    "f35+",
+    "can i get",
+    "prime video",
+    "amazon prime",
+    "two audiences",
+    "premiere",
+    "premiered",
+    "one decimal",
+    "pool",
+    "hours table",
+    "round number",
+    "trailing zeros"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "add_as_order_and_its_referent",
+   "decided": "2026-11-10",
+   "statement": "'Add them as a profile', 'add this as a profile', 'save this as a profile', 'turn this into a profile', 'make a profile of X', 'I want a profile of X', 'can I get a profile of X', 'profile this audience', 'create a twin of X' and 'add it to Digital Journey IQ' are orders: they start that product's build flow, never a read and never a question back about what the product does. A referent in the subject slot (them, this, it, this audience, these viewers) is the audience named earlier in the same message ('Can you look into My Life With the Walter Boys viewers? I want to add them as a profile' builds the Walter Boys viewers), else the subject of the newest read in the chat with the kind of people the question named (viewers, listeners, readers, players), else the audience open on the screen; the platform rides when the reader's words or the read's label named one, the window when the reader's words set one, and nothing the reader did not say is added. An unlimited seat reads 'Included with your plan. Profile building: <name> ...' and the build starts with no chip; when nothing names the subject, one plain question asks which audience. 'Add the brand to the profile' is an edit to a file, 'did you add this as a profile?' is a question about a run, and a metric by period is a read: none of these starts a build.",
+   "match_terms": [
+    "add them as a profile",
+    "add this as a profile",
+    "add as a profile",
+    "as a profile",
+    "save this as a profile",
+    "turn this into a profile",
+    "make a profile",
+    "profile of",
+    "profile on",
+    "can i get a profile",
+    "profile this audience",
+    "create a twin",
+    "twin of",
+    "add it to digital journey iq",
+    "add them",
+    "these viewers",
+    "this audience"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-10T23:08:26Z"
+ "generated_at": "2026-11-11T00:22:44Z"
 }
