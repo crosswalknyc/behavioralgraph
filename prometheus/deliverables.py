@@ -163,8 +163,11 @@ def parse(text):
     m = _MADE_RX.match(t)
     if m:
         arts = _artifacts(m.group('art'))
+        # 'made': the words say a file was produced ("a pdf was created.
+        # where is it"), so this is a lookup of that file even with no
+        # subject named; the directions lane leaves it here
         return {'artifacts': arts, 'subject': _clean_subject(m.group('subj') or ''),
-                'when': ' '.join(str(m.group('when') or '').split())}
+                'when': ' '.join(str(m.group('when') or '').split()), 'made': True}
     return None
 
 

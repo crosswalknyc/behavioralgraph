@@ -270,7 +270,7 @@ def answer(text, ctx=None, host=None):
                 if bpv is not None:
                     line += f"; on {page} it reads {_pct(bpv)} of the audience"
                     if ixv:
-                        line += f" (index {ixv:.0f} against the US)"
+                        line += f" (index {ixv:,.0f} against the US)"
                 line += '.'
             elif page:
                 line += f". {page} does not carry a row for it in this window."

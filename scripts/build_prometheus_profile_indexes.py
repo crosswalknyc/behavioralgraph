@@ -270,6 +270,11 @@ def build_one_profile(s3, key, name, ctx):
     df, live_etag = pma.load_profile_df(s3, BUCKET, key)
     etag = live_etag or etag
     meta = pma._profile_meta(df, name)
+    # the same meta the live path builds with (prometheus_analysis.
+    # _profile_digest_cached): the key names an account-holder universe
+    # when the SUBJECT row does not, so the stored digest and the live
+    # one agree on the adults-only age split (2026-11-10 rule)
+    meta['s3_key'] = key
     digest_text = pma.build_profile_digest(df, meta, ctx['genpop'],
                                            norms=ctx['norms'])
     doc = build_index_doc(df, meta, name, key, etag, ctx, digest_text)

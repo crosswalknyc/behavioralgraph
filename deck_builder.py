@@ -644,6 +644,23 @@ def _num(v, default=0.0):
         return float(default)
 
 
+def _fmt_index(v):
+    """An index as a reader sees it: a whole number, with a thousands
+    separator at four digits or more (5,548). Text that is not a number
+    prints as it came."""
+    if v in (None, ""):
+        return ""
+    try:
+        from prometheus.index_format import fmt_index
+        out = fmt_index(v)
+    except Exception:
+        try:
+            out = f"{int(round(float(str(v).replace(',', '')))):,}"
+        except (TypeError, ValueError):
+            out = ""
+    return out or str(v).strip()
+
+
 def _fmt_val(v, suffix):
     """Bar value display: keep the model's precision, add the suffix."""
     n = _num(v)
@@ -761,7 +778,7 @@ def _reach_card(s, x, y, ch_in, c, dark):
     idx = c.get("index")
     if idx not in (None, ""):
         txt(s, fx, Inches(y + 0.76), Inches(_REACH_COL_W), Inches(0.24),
-            f"Index {int(_num(idx))}", size=11.5, bold=True, color=ink)
+            f"Index {_fmt_index(idx)}", size=11.5, bold=True, color=ink)
     if c.get("times"):
         txt(s, fx, Inches(y + 1.02), Inches(_REACH_COL_W), Inches(0.40),
             str(c.get("times")), size=10, color=body)
@@ -928,7 +945,7 @@ def _sl_bars(d, sl):
                 size=11, bold=True, color=val_c,
                 align=PP_ALIGN.RIGHT)
             txt(s, M + Inches(10.30), Inches(y), Inches(1.19),
-                Inches(0.28), str(r.get("index") or ""), size=11,
+                Inches(0.28), _fmt_index(r.get("index")), size=11,
                 color=body, align=PP_ALIGN.RIGHT)
         else:
             txt(s, bx + tw + Inches(0.12), Inches(y), Inches(1.00),
@@ -1442,7 +1459,7 @@ def _lead_fact(sl):
         def val(r):
             return _fmt_val(r.get("value"), suffix)
         top, sec, bot = rows[0], (rows[1] if len(rows) > 1 else None), (rows[-1] if len(rows) > 1 else None)
-        idx = str(top.get("index") or "").strip() if sl.get("show_index") else ""
+        idx = _fmt_index(top.get("index")) if sl.get("show_index") else ""
         return ("ranked", str(top["label"]).strip(), val(top), idx,
                 str(sec["label"]).strip() if sec else "", val(sec) if sec else "",
                 str(bot["label"]).strip() if bot else "", val(bot) if bot else "", suffix)

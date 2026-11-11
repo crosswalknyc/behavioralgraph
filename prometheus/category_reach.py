@@ -32,6 +32,8 @@ import re
 import time
 import traceback
 
+from .index_format import fmt_index as _fmt_index
+
 try:
     from migration import category_rollup as cr
 except Exception:   # a host whose `migration` package is the build box's own: load ours by path
@@ -422,7 +424,7 @@ def _line(r, label, subject, members=None):
     if r.get('genpop') is not None:
         s += f"; US {r['genpop']:.1f}%"
     if r.get('index') is not None:
-        s += f"; index {r['index']} ({r['times']})"
+        s += f"; index {_fmt_index(r['index']) or r['index']} ({r['times']})"
     s += f". Largest single brand: {r['top']} {r['top_pct']:.1f}%."
     if members:
         s += " Brands counted: " + ', '.join(members[:MAX_MEMBERS]) + '.'

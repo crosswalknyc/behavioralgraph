@@ -64976,11 +64976,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         
         // Format index as plain number on 100-based scale: 100 = 100, 1.33 = 133 (no decimals).
         // Backend sends 100-based scale (100 = 1.0, 133 = 1.33). Display as integer.
+        // Four digits or more carry a thousands separator (5,548), everywhere a reader sees an index (2026-11-11).
         function formatIndex(index) {
             if (index === null || index === undefined) return '';
             const n = Number(index);
             if (!Number.isFinite(n) || n === 0) return '';
-            return String(Math.round(n));
+            return Math.round(n).toLocaleString('en-US');
         }
 
         function getIndexOverColor(resolved) {
@@ -170832,7 +170833,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (!r || !isFinite(Number(r.reach))) return '';
             var s = Number(r.reach).toFixed(1) + '% engage';
             if (r.index != null && isFinite(Number(r.index))) {
-                s += ', index ' + Math.round(Number(r.index));
+                s += ', index ' + Math.round(Number(r.index)).toLocaleString('en-US');
                 if (r.times) s += ' (' + r.times + ')';
             }
             return s;
@@ -170841,7 +170842,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (!r || !isFinite(Number(r.reach))) return '';
             var h = '<b>' + Number(r.reach).toFixed(1) + '%</b> engage';
             if (r.index != null && isFinite(Number(r.index))) {
-                h += ', index <b>' + Math.round(Number(r.index)) + '</b>';
+                h += ', index <b>' + Math.round(Number(r.index)).toLocaleString('en-US') + '</b>';
                 if (r.times) h += ' (' + String(r.times).replace(/[<>&"]/g, '') + ')';
             }
             return h;
@@ -170850,7 +170851,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var r = _piqCatReachFor(category);
             if (!r) return '';
             var out = ',"' + Number(r.reach).toFixed(1) + '% engage"';
-            if (r.index != null && isFinite(Number(r.index))) out += ',"index ' + Math.round(Number(r.index)) + '"';
+            if (r.index != null && isFinite(Number(r.index))) out += ',"index ' + Math.round(Number(r.index)).toLocaleString('en-US') + '"';
             return out;
         }
         // rows: [{cat, ord, reach, index}]; mode: 'default' | 'pct' | 'index'
@@ -175317,7 +175318,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var d = pcts[denKey || 'genpop'];
                         idx = (n == null || d == null || !isFinite(n) || !isFinite(d) || d === 0) ? '-' : String(Math.round((n / d) * 100));
                     } else {
-                        idx = (hasGp && gpDisp !== 'N/A') ? formatIndex(item.index || 0) : 'N/A';
+                        idx = (hasGp && gpDisp !== 'N/A') ? formatIndex(item.index || 0).replace(/,/g, '') : 'N/A';
                     }
                     cells.push(idx);
                 }
@@ -189421,18 +189422,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                         <div>
                                             <div style="font-size: 0.7rem; color: var(--accent-lime); margin-bottom: 0.25rem;">Top Over-Indexers:</div>
                                             ${b.topOverItems.slice(0, 3).map(item => `
-                                                <div class="has-tooltip" data-tooltip="${item.name} (${item.category}): Index ${item.index}" style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0;">
+                                                <div class="has-tooltip" data-tooltip="${item.name} (${item.category}): Index ${formatIndex(item.index) || item.index}" style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0;">
                                                     <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;">${item.name}</span>
-                                                    <span style="color: var(--accent-lime); font-weight: 600;">${item.index}</span>
+                                                    <span style="color: var(--accent-lime); font-weight: 600;">${formatIndex(item.index) || item.index}</span>
                                                 </div>
                                             `).join('')}
                                         </div>
                                         <div>
                                             <div style="font-size: 0.7rem; color: var(--accent-red); margin-bottom: 0.25rem;">Top Under-Indexers:</div>
                                             ${b.topUnderItems.slice(0, 3).map(item => `
-                                                <div class="has-tooltip" data-tooltip="${item.name} (${item.category}): Index ${item.index}" style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0;">
+                                                <div class="has-tooltip" data-tooltip="${item.name} (${item.category}): Index ${formatIndex(item.index) || item.index}" style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0;">
                                                     <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;">${item.name}</span>
-                                                    <span style="color: var(--accent-red); font-weight: 600;">${item.index}</span>
+                                                    <span style="color: var(--accent-red); font-weight: 600;">${formatIndex(item.index) || item.index}</span>
                                                 </div>
                                             `).join('') || '<div style="font-size: 0.65rem; color: var(--text-secondary);">None found</div>'}
                                         </div>

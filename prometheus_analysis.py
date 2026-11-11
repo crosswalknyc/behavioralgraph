@@ -1360,6 +1360,10 @@ def _digest_from_index(s3_client, bucket, s3_key, want_name, norms_ver,
             return None
         if dig.get('code_ver') != digest_code_version():
             return None
+        # the live path's meta carries the key (2026-11-10); an index
+        # built before the builder stamped it reads the same
+        if not meta.get('s3_key'):
+            meta = dict(meta, s3_key=s3_key)
         return text, meta
     except Exception:
         return None
@@ -3801,6 +3805,13 @@ def scrub_user_text(text):
     except Exception as _fx:
         _faults.note('analysis', _fx)
     s = re.sub(r'[ \t]{2,}', ' ', s)
+    # An index of four digits or more reads with its separator (2026-11-11:
+    # a deck card printed "index 5548"). One rule, every exit that calls this.
+    try:
+        from prometheus.index_format import separate_index_figures as _sep_idx
+        s = _sep_idx(s)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     if _held:
         try:
             s = _vd_meth.unshield_definitions(s, _held)
@@ -6532,7 +6543,7 @@ THE ARC (14 to 20 slides, in this shape)
 4-8. the audience case from the digest, one read per slide: interests (bars), the category retail or channel read (bars with show_index), the wallet or premium read (split_stats_bars or tiles_facts), adjacency or talent graph (bars), distribution and social (bars with show_index or tiles_facts). Pick the categories where the digest is strongest; every number on these slides comes from the digest.
 9-17. the behavior proof, one read per slide, reasoned from the subject's real-world scale: a hero slide (ground=accent) with the single sharpest behavioral stat; CTR or engagement vs the peer set (bars); search demand (split_stats_bars: unique searchers + query mix); second-screen or live-moment behavior (split_stats_bars) when the subject has live events; ad response (tiles_row: first-impression clicks, cart timing, repeat rate); same-session cross-shop (split_stats_bars); journeys (table: conversion with the subject on the path vs peers vs no talent); cart (table: start, complete, abandon, recover, AOV); spend per engager (hero_proof).
 18. paths: 9 to 12 example clickstream rows (kind: search/click/cart/play, url: realistic lowercase urls involving the subject and the relevant retail or platform domains, lit: true on cart and play rows).
-19. argument (ground=light): the buy. Four categories where the file and the journeys agree. Each card is a group of brands: "head" names the group, "brands" lists the digest brands in it, "body" gives two or three of them with their own figures (see CATEGORY FIGURES).
+19. argument (ground=light): the buy. Four categories this audience buys, picked where the profile data and the behavior proof point the same way. The page is a set of brand categories, so the title says so in plain words ("Four brand categories lead what this audience buys."): call them categories or groups of brands, never aisles, shelves, baskets or any other store word, and never name "the file" or "the journeys" in a title. Each card is a group of brands: "head" names the group, "brands" lists the digest brands in it, "body" gives two or three of them with their own figures (see CATEGORY FIGURES).
 20. close: four numbered cards restating the case, each ending on a number.
 
 Omit slides the data cannot carry (no live events means no second-screen slide; no avid cut means no avid tier tile). Never pad: a 14-slide deck that is all signal beats a 20-slide deck with filler.
@@ -6559,7 +6570,7 @@ SLIDE TYPES (exact JSON shapes)
 NUMBERS
 - Digest numbers are the source of truth for everything the digest covers: penetrations, indexes, demos, sample, projection, avid share. Quote them exactly as the digest states them.
 - Behavior-proof numbers (searchers, CTR, journey conversion, cart rates, AOV, spend per engager, co-visit multiples) are Crosswalk Unique ID reads you produce at realistic magnitude for the subject's actual fame and category: CTR on talent-tagged units runs 0.9 to 3.2 percent; journey conversion with a talent node runs 5 to 14 percent vs 2 to 5 without; cart completion 25 to 45 percent; AOV plausible for the category; unique searchers scaled to the subject's real search interest (a top-10 athlete or A-list name reads 8M to 25M unique US searchers over 12 months, a mid-tier name 1M to 6M, a niche name under 1M).
-- Every integer count is messy: the last digit is 1 to 9, never a round number, never a trailing zero. 542,306 not 542,000. 18,247,631 not 18,000,000. Display millions as 17.9M style. Percentages carry one decimal. Indexes are whole numbers and may be quoted bare (683). Dollar AOVs carry cents ($87.43).
+- Every integer count is messy: the last digit is 1 to 9, never a round number, never a trailing zero. 542,306 not 542,000. 18,247,631 not 18,000,000. Display millions as 17.9M style. Percentages carry one decimal. Indexes are whole numbers and may be quoted bare (683); four digits or more carry a thousands separator (5,548). Dollar AOVs carry cents ($87.43).
 - Counts are viewers, users, people, accounts, engagers, searchers. Never households.
 - Externally reported figures (box office, league viewership records) are quoted at their reported precision and attributed in the sentence, never invented.
 - Peer comparisons name real peers from the subject's world and keep the subject believable inside the set: near the top on its strongest metric, not sweeping every row.

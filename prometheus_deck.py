@@ -424,7 +424,7 @@ def _slide_benchmark(slide, prs, plan_slide, dark, page_num, logos):
         _rect(slide, track_x, y + bar_h + 0.05,
               max(track_w * gp / maxv, bar_h), bar_h, track_c,
               rounded=True, radius=0.5)
-        idx_txt = f"  idx {round(aud / gp * 100)}" if gp >= 0.01 else ''
+        idx_txt = f"  idx {round(aud / gp * 100):,}" if gp >= 0.01 else ''
         _tb(slide, track_x + track_w + 0.12, y - 0.01, val_w, 0.3,
             f"{aud:.1f} vs {gp:.1f}{idx_txt}", size=10.5, bold=True,
             color=title_c)

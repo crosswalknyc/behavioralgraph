@@ -19,12 +19,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
-WEBAPP = Path(os.environ.get("PM_TEST_WEBAPP") or (REPO / "bg-webapp"))
-if not (WEBAPP / "app.py").is_file():
-    for cand in (Path("/tmp/bgw-dtiq-nokind"), REPO / "bg-webapp"):
-        if (cand / "app.py").is_file():
-            WEBAPP = cand
-            break
+# This suite ships in both repos with the same bytes. Run from the parent,
+# REPO is the parent and the web app sits under it. Run from bg-webapp (a
+# bare worktree, the deploy, the build server, or the parent's bg-webapp
+# symlink, which resolve() follows), REPO is the web app itself.
+if os.environ.get("PM_TEST_WEBAPP"):
+    WEBAPP = Path(os.environ["PM_TEST_WEBAPP"])
+elif (REPO / "app.py").is_file():
+    WEBAPP = REPO
+else:
+    WEBAPP = REPO / "bg-webapp"
 
 FAILS: list[str] = []
 
@@ -39,20 +43,36 @@ def check(cond, msg, detail=""):
 def _load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, str(path))
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod             # a module with dataclasses looks itself up by name
     spec.loader.exec_module(mod)
     return mod
 
 
 def _find_helper() -> Path:
-    cands = [
+    """The door helper, wherever this suite runs: the pack the builders
+    themselves resolve (migration.design_skill: the full skill when the
+    parent checkout is present, else the packaged copy the web app
+    deploys with), then the two known homes by path."""
+    cands = []
+    for base in (WEBAPP, REPO):
+        ds_py = base / "migration" / "design_skill.py"
+        if not ds_py.is_file():
+            continue
+        try:
+            sd = _load(ds_py, f"design_skill_probe_{len(cands)}").scripts_dir()
+        except Exception:
+            sd = None
+        if sd is not None:
+            cands.append(Path(sd) / "cw_door_copy.py")
+    cands += [
         REPO / ".cursor" / "skills" / "crosswalk-design" / "scripts" / "cw_door_copy.py",
+        WEBAPP.parent / ".cursor" / "skills" / "crosswalk-design" / "scripts" / "cw_door_copy.py",
         WEBAPP / "design" / "crosswalk-design" / "scripts" / "cw_door_copy.py",
-        Path("/tmp/fc-dtiq-nokind/.cursor/skills/crosswalk-design/scripts/cw_door_copy.py"),
     ]
     for p in cands:
         if p.is_file():
             return p
-    raise SystemExit("cw_door_copy.py not found")
+    raise SystemExit("cw_door_copy.py not found (looked in: " + ", ".join(str(c) for c in cands) + ")")
 
 
 HELPER = _find_helper()
@@ -127,17 +147,19 @@ except Exception as e:
 print("[4] prompts and skill text")
 ban = "never use the word door"
 hits = []
+seen: set[str] = set()
 for p in (
     WEBAPP / "prometheus_analysis.py",
     WEBAPP / "migration" / "profile_iq_deck_builder.py",
     REPO / ".cursor" / "skills" / "crosswalk-design" / "SKILL.md",
     REPO / ".cursor" / "skills" / "crosswalk-plain-english" / "SKILL.md",
     REPO / ".cursor" / "rules" / "no-doors-in-decks.mdc",
-    Path("/tmp/fc-dtiq-nokind/.cursor/rules/no-doors-in-decks.mdc"),
-    Path("/tmp/fc-dtiq-nokind/.cursor/skills/crosswalk-design/SKILL.md"),
+    WEBAPP.parent / ".cursor" / "skills" / "crosswalk-design" / "SKILL.md",
+    WEBAPP.parent / ".cursor" / "rules" / "no-doors-in-decks.mdc",
 ):
-    if not p.is_file():
+    if not p.is_file() or str(p.resolve()) in seen:
         continue
+    seen.add(str(p.resolve()))
     src = p.read_text(encoding="utf-8", errors="replace").lower()
     if "never use the word door" in src or "never the word door" in src or "decks never use the word door" in src:
         hits.append(str(p))

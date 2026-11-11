@@ -893,7 +893,8 @@ def _pct(x):
 def _index_words(index, times):
     if index is None:
         return ''
-    return f"index {index} ({times})"
+    from .index_format import fmt_index   # four digits or more carry a separator: index 5,548
+    return f"index {fmt_index(index) or index} ({times})"
 
 
 def _read_line(res, plan_, by_key):

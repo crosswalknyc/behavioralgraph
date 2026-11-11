@@ -280,8 +280,8 @@ def wants(text):
             try:
                 from . import deliverables as _dlv
                 p = _dlv.parse(t)
-                if p and p.get('subject'):
-                    return False       # 'where is the Howdy deck' is a lookup, not directions
+                if p and (p.get('subject') or p.get('made')):
+                    return False       # 'where is the Howdy deck' and 'a pdf was created. where is it' are lookups, not directions
             except Exception:
                 pass
         if noun == 'profile' and not tgt.get('name') and re.search(r"\bprofile\b", t, re.I) and not _PRODUCT_OBJECT_RX.search(t) \

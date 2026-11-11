@@ -363,25 +363,57 @@ def finish_page(name: str, html: str) -> str:
     return html
 
 
-def _git_lastmod(name: str) -> str:
+def _shallow_commits() -> set:
+    """The commits where this checkout's history is cut (a shallow clone).
+    A file last touched before the cut reports the cut commit's date, which
+    is the clone's depth and says nothing about the page."""
+    try:
+        gd = subprocess.run(["git", "-C", str(BG), "rev-parse", "--git-common-dir"],
+                            capture_output=True, text=True, timeout=20).stdout.strip()
+        f = (Path(gd) if Path(gd).is_absolute() else BG / gd) / "shallow"
+        return {ln.strip() for ln in f.read_text().splitlines() if ln.strip()} if f.is_file() else set()
+    except Exception:
+        return set()
+
+
+def _sitemap_lastmods() -> dict:
+    """{loc: lastmod} from the sitemap already on disk."""
+    try:
+        text = (SITE / "sitemap.xml").read_text(encoding="utf-8")
+    except Exception:
+        return {}
+    return dict(re.findall(r"<loc>(.*?)</loc><lastmod>(\d{4}-\d{2}-\d{2})</lastmod>", text))
+
+
+def _git_lastmod(name: str, existing: str = "", shallow: set | None = None) -> str:
+    """The page's last change. A lastmod never moves backward and never
+    depends on how much history this checkout carries: the date already
+    published stands unless the page changed after it (2026-11-11: the
+    check failed on a clean tree because the published dates had been
+    written from a shallow clone, whose cut commit dated every older
+    page)."""
     try:
         dirty = subprocess.run(["git", "-C", str(BG), "status", "--porcelain", "--", f"site/{name}"],
                                capture_output=True, text=True, timeout=20).stdout.strip()
         if dirty:
             return date.today().isoformat()
-        out = subprocess.run(["git", "-C", str(BG), "log", "-1", "--format=%cs", "--", f"site/{name}"],
-                             capture_output=True, text=True, timeout=20).stdout.strip()
-        return out or date.today().isoformat()
+        out = subprocess.run(["git", "-C", str(BG), "log", "-1", "--format=%H %cs", "--", f"site/{name}"],
+                             capture_output=True, text=True, timeout=20).stdout.split()
+        sha, when = (out + ["", ""])[:2]
+        if existing and (not when or sha in (shallow or set()) or existing > when):
+            return existing
+        return when or existing or date.today().isoformat()
     except Exception:
-        return date.today().isoformat()
+        return existing or date.today().isoformat()
 
 
 def build_sitemap(pages: list[str]) -> str:
     ordered = sorted(pages, key=lambda n: (n != "index.html", n not in PAGES, n))
+    have, shallow = _sitemap_lastmods(), _shallow_commits()
     rows = []
     for name in ordered:
         loc = ORIGIN + "/" + ("" if name == "index.html" else name)
-        rows.append(f"  <url><loc>{loc}</loc><lastmod>{_git_lastmod(name)}</lastmod></url>")
+        rows.append(f"  <url><loc>{loc}</loc><lastmod>{_git_lastmod(name, have.get(loc, ''), shallow)}</lastmod></url>")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "\n".join(rows) + "\n</urlset>\n")
 

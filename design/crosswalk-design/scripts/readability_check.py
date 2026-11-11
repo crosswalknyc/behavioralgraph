@@ -22,6 +22,8 @@ Reports:
       that repeat an opener, and phrases of five or more words that
       recur across cards or pages
     - door / doors metaphor (no-doors-in-decks.mdc, 2026-10-28)
+    - a store word standing in for a category or a group in a header
+      ("Four aisles where ...", 2026-11-11): say categories or groups
 
 Exit code 0 when there are no flags, 1 otherwise. No dependencies
 beyond the standard library; python-pptx is used only when a .pptx
@@ -183,6 +185,20 @@ def fk_grade(text: str) -> float | None:
     return round(0.39 * (len(words) / len(sents)) + 11.8 * (syl / len(words)) - 15.59, 1)
 
 
+# A store word used as the name of a grouping: a count or a pointer right
+# before aisles / shelves / baskets ("Four aisles where the file and the
+# journeys agree", a deck's buy page, 2026-11-11). The literal uses carry
+# their own noun and stay clean: 'the snack aisle', 'shelf space',
+# 'basket size', 'four grocery aisles'.
+STORE_METAPHOR_RX = re.compile(
+    r"\b(?:two|three|four|five|six|seven|eight|nine|ten|\d{1,2}|several|these|those|each|every)\s+"
+    r"(?:aisles?|shel(?:f|ves)|baskets?)\b(?!\s+(?:sizes?|space|placements?|share|values?|totals?))", re.I)
+
+
+def store_metaphor_hits(text: str) -> list[str]:
+    return [m.group(0) for m in STORE_METAPHOR_RX.finditer(text or "")]
+
+
 def clever_flags(header: str) -> list[str]:
     flags = []
     h = header.strip()
@@ -203,6 +219,8 @@ def clever_flags(header: str) -> list[str]:
             flags.append(f"idiom or metaphor: '{idiom}'")
     if re.search(r"\bisn't\b|\bain't\b", low):
         flags.append("wordplay contraction")
+    for snippet in store_metaphor_hits(h):
+        flags.append(f"store metaphor for a group: '{snippet}' -> say categories or groups")
     return flags
 
 

@@ -87,13 +87,21 @@ REGISTRY = {
         # "include reach, the age and gender split ... deliver as a CSV" is a requirement on the file, never a cut or a
         # second subject). That section prunes out of the worst case measured here, so the measured size and the budget
         # stay at 13,405; a build order with notes reads the bullet (about 120 tokens) inside its own pruned book.
-        'budget_tokens': 13405, 'target_tokens': 9000,
+        # 2026-11-11: the ACCOUNT-HOLDER UNIVERSES ARE ADULTS rule Jenna mandated on 2026-11-10 (Grace Yin's Amazon order)
+        # added 216 tokens to this book and to the plain one (13,621 and 5,011 measured) with no re-baseline. Paid for
+        # the same day by removing text the book said twice (the one-line gloss of each audience_type above its own
+        # 'Set ...' bullet, the legacy-name note and the closing null bullet on follower_ceiling, the anchor kinds
+        # restated on the universe_anchor schema line, the account-holder list restated on its schema line): 13,384 and
+        # 4,774 measured, under both old budgets. Budgets re-set to that size plus the few tokens the date lines move.
+        # Brain rules 70 to 73 (2026-11-11) live in the knowledge pack and are in none of the prompts registered here.
+        'budget_tokens': 13390, 'target_tokens': 9000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'the whole rulebook with candidates (worst case); 19,838 before the 2026-10-14 diet'},
     'interpret.rulebook.plain': {
         'version': '2026.10.14', 'owner': 'build drafting',
         'loader': lambda: _rulebook(reading={'intent': 'build_profile', 'confidence': 0.95, 'subjects': [{'as_written': 'Taylor Swift', 'catalog': 'Taylor Swift'}], 'flags': []}),
-        'budget_tokens': 4800, 'target_tokens': 4000,
+        # 2026-11-11: 4,774 measured after the same-day diet (see the note on the full book); only shrinks from here
+        'budget_tokens': 4780, 'target_tokens': 4000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'a plain profile ask with a confident reading: the Reader-aware prune; 8,901 before the 2026-10-14 diet, 19,838 before the audit'},
     'analysis.system': {'version': '2026.10.14', 'owner': 'page answers', 'loader': _analysis, 'budget_tokens': 6520, 'target_tokens': 3500,   # ratchet reset to current size, 2026-11-05; only shrinks from here
