@@ -27,7 +27,8 @@ Hermetic: a stub host, no model, no S3, no ledger. Covered:
      and "men" never bind a library subject; a cut of a brand's
      audience, a title ask, an order and a two-attribute ask are not
      this class
-  8. a segment not on record is not answered here: the question names
+  8. a segment not on record is not answered here: it is quoted whole as
+     one custom ask on the segment the words name, the question names
      its own universe and the read lane gets the frame
   9. the lane's place in the order, deterministic and never priced
  10. the ledger side: the banking payload carries the same figures, the
@@ -161,7 +162,7 @@ class TheQuestionClass(unittest.TestCase):
             self.assertNotIn(d['reason'], ('build_order', 'dataset_build', 'build_or_other', 'product_fact'), q)
 
     def test_the_lanes_that_took_it_stand_down(self):
-        from prometheus import guards, multi_ask, sizing_lane, unprojected
+        from prometheus import catalog_lane, guards, multi_ask, sizing_lane, unprojected
         for q in (VERBATIM,) + REWORDED_WITH_BRAND + REWORDED_SEGMENT_ONLY:
             self.assertFalse(unprojected.wants_unprojected(q), q)      # "$50k" is a filter, never a figure to unproject
             self.assertIsNone(unprojected.answer(q, []), q)
@@ -169,6 +170,7 @@ class TheQuestionClass(unittest.TestCase):
             self.assertFalse(sizing_lane.wants_sizing(q), q)           # never "aged 30-55" and "income $50k-$200k" sized one by one
             self.assertIsNone(sizing_lane.answer(q), q)
             self.assertIsNone(multi_ask.parse(q), q)                   # the segment and its split are one read
+            self.assertIsNone(catalog_lane.roster_ask(q), q)           # people in the data, not the roster of profiles
 
     def test_the_other_lanes_keep_their_asks(self):
         from prometheus import guards, unprojected
@@ -417,12 +419,31 @@ class ServiceEndToEnd(unittest.TestCase):
         self.assertEqual(self.calls, [])
         _figures_ok(self, env2['text'])
 
-    def test_a_segment_not_on_record_goes_on_whole_as_a_question(self):
-        for surface in ('analyze', 'interpret'):
-            env, _st = self._ask(NotOnRecord.Q, surface=surface)
-            self.assertNotIn(env['decision']['reason'], ('segment_sizing', 'unprojected', 'product_fact', 'multi_ask', 'build_order'))
-            self.assertEqual(env['decision']['surface'], 'analyze', surface)
-            self.assertEqual(self.calls, [('analyze', NotOnRecord.Q)], surface)    # one question, read whole, never a draft
+    def test_a_segment_not_on_record_is_quoted_whole_as_one_custom_ask(self):
+        asks = ((NotOnRecord.Q, 'women aged 25 to 44 with household income of $75,000 to $150,000 in healthcare occupations'),
+                # the segment on record with a brand that is not: the same segment, quoted, never Dixxon's figures
+                ("How many people in your database are blue-collar men aged 30-55 with income $50k-$200k, and how many of them "
+                 "have and haven't had touchpoints with Carhartt?",
+                 'men aged 30 to 55 with household income of $50,000 to $200,000 in blue-collar occupations'),
+                ('how many hispanic blue-collar men 30 to 55 earning 50 to 200k are in your database',
+                 'Hispanic men aged 30 to 55 with household income of $50,000 to $200,000 in blue-collar occupations'))
+        page = {'primary': {'name': 'Men 18-34', 's3_key': 'Men_18-34_10_21_2026_12_00.csv'}}
+        for q, label in asks:
+            for surface in ('analyze', 'interpret'):
+                for pg in (None, page):
+                    env, _st = self._ask(q, surface=surface, page=pg)
+                    self.assertEqual(env['decision']['reason'], 'custom_ask_offer', (q, surface))   # a question, quoted first
+                    self.assertEqual(env['decision']['surface'], 'analyze')
+                    self.assertEqual(self.calls, [], (q, surface))                 # no read before the approval, never a draft
+                    offer = env['raw'].get('panel_offer') or {}
+                    self.assertEqual(offer.get('subject'), label)                  # ONE subject: the segment as named
+                    self.assertEqual(offer.get('question'), q)                     # the whole question rides the approval
+                    self.assertIn(label, env['text'])
+                    self.assertIn('Pulling this data will cost $100.', env['text'])
+                    self.assertNotIn('Men 18-34', env['text'])                     # never the page, never a library file
+                    self.assertNotIn(f"{TOUCH_US:,}", env['text'])
+                    self.assertNotIn('Which subject', env['text'])
+                    self.assertNotIn('Which audiences', env['text'])
 
     def test_an_order_on_the_same_segment_is_still_an_order(self):
         env, _st = self._ask('Please queue one Profile IQ: blue-collar men 30-55 with income $50k-$200k', surface='interpret')

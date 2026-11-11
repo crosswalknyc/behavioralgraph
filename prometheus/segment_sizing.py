@@ -37,11 +37,15 @@ How it is handled:
     any wording: the insights ledger entry banked for it (route
     decision_of_record_segment_read) and the bundled copy in
     segment_reads.json. Never a fresh draw.
-  * A segment not on record is not answered here: the sizing lanes, the
-    unprojected lane and the product fact stand down for it
-    (``is_segment_ask``), the question names its own universe
-    (prometheus.question_universe), and the read lane gets the frame in
-    ``framing_lines`` so the read it prices and runs has the same shape.
+  * A segment not on record is new numbers: it is not answered here. The
+    sizing lanes, the unprojected lane, the product fact, the roster
+    offer and the multi-ask splitter stand down for it
+    (``is_segment_ask``); the work gate quotes it as ONE custom ask on
+    the segment the words name (prometheus.priced_read: ``classify``,
+    ``bound_subject``; the segment label is the subject, never a library
+    file and never the page); the question names its own universe
+    (prometheus.question_universe) and the read it runs is held to the
+    frame in ``framing_lines``.
 
 Definitions the reply states: income is household income; blue-collar
 occupations are construction and extraction, installation, maintenance
@@ -64,7 +68,7 @@ import re
 
 from . import projection as _pj
 
-__all__ = ['enabled', 'parse', 'is_segment_ask', 'wants', 'resolve', 'segment_key', 'segment_label', 'record_for',
+__all__ = ['enabled', 'parse', 'is_segment_ask', 'is_segment_label', 'wants', 'resolve', 'segment_key', 'segment_label', 'record_for',
            'answer', 'framing_lines', 'registry', 'ledger_payloads', 'TEN_M_PHRASE', 'ROUTE', 'BLUE_COLLAR_LINE',
            'TOUCHPOINT_LINE', 'INCOME_LINE', 'is_clean']
 
@@ -370,6 +374,15 @@ def is_segment_ask(text):
     return _plain_segment(t, parse(t))
 
 
+def is_segment_label(text):
+    """True when the words are a demographic segment as this module labels
+    one (three or more attributes): a subject in its own right."""
+    try:
+        return parse(text).get('n', 0) >= MIN_ATTRIBUTES
+    except Exception:
+        return False
+
+
 def resolve(text, history=None):
     """The segment the ask is about: the one its own words name, or, for
     a follow-up that points back ("how many of them touched Dixxon"),
@@ -459,7 +472,8 @@ def segment_label(sig):
     household income of $50,000 to $200,000 in blue-collar occupations'."""
     ex = sig.get('extras') or {}
     who = {'male': 'men', 'female': 'women'}.get(sig.get('gender') or '', 'people')
-    lead = [ex[k].replace('_', ' ') for k in ('ethnicity', 'relationship', 'education') if ex.get(k)]
+    lead = [(ex[k].replace('_', ' ').title().replace(' American', '-American') if k == 'ethnicity' else ex[k].replace('_', ' '))
+            for k in ('ethnicity', 'relationship', 'education') if ex.get(k)]
     label = ' '.join(lead + [who])
     if sig.get('age'):
         lo, hi = sig['age']
@@ -472,9 +486,11 @@ def segment_label(sig):
                 f"{_money_words(lo)} or more" if lo is not None else f"under {_money_words(hi)}"))
     if sig.get('occupation'):
         label += f" in {sig['occupation'].replace('_', '-') if sig['occupation'].endswith('_collar') else sig['occupation'].replace('_', ' ')} occupations"
-    for k in ('parental', 'location'):
-        if ex.get(k):
-            label += f", {ex[k].replace('_', ' ')}"
+    if ex.get('parental'):
+        label += f", {ex['parental'].replace('_', ' ')}"
+    if ex.get('location'):
+        loc = ex['location'].replace('_', ' ')
+        label += f", {loc}" if loc in ('rural', 'urban', 'suburban') else f", in {loc.title().replace(' Dma', ' DMA')}"
     return label
 
 

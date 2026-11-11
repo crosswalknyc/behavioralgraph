@@ -194,6 +194,12 @@ def roster_ask(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 260:
         return None
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(t):
+            return None      # "how many people in your database are blue-collar men 30-55 ..." sizes a segment of people, not the roster (2026-11-11)
+    except Exception:
+        pass
     m = _ROSTER_RX.search(t)
     if not m:
         return None

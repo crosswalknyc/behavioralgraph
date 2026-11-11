@@ -454,6 +454,14 @@ def bound_subject(text, history=None, ctx=None, fallback='', reading=None):
     Reader's reading, when the caller has one, feeds the binder."""
     page = _page_name(ctx)
     try:
+        # a demographic segment is its own subject: the segment as the words name it, never a library file
+        # one of the filter's words resembles and never the page (2026-11-11)
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(text):
+            return _seg.segment_label(_seg.parse(text))
+    except Exception:
+        pass
+    try:
         from . import subject_rules as _sr
         s = _sr.bind(text, history, page, reading=reading) if reading else _sr.bind(text, history, page)
         if s and s.source == 'words':
@@ -613,6 +621,16 @@ def classify(text, history=None, ctx=None):
         t = ' '.join(str(text or '').split())
     if not t or len(t) > 800:
         return None
+    try:
+        # a count of the people who fit a demographic profile, not yet on record, is new numbers on ONE joint
+        # segment: a custom ask on the segment the words name, never sized attribute by attribute and never a
+        # metered single figure (prometheus.segment_sizing, 2026-11-11). A segment on record answered upstream.
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(t):
+            return {'kind': 'custom', 'via': 'generate', 'usd': 100, 'same_frame': False, 'frame': 'custom',
+                    'subject': _seg.segment_label(_seg.parse(t))}
+    except Exception:
+        pass
     if is_talk(t) or is_single_figure(t):
         return None
     if is_product_order(t):
@@ -791,6 +809,12 @@ def display_subject(subject, question='', page=''):
         return ''
     if _SIZE_PREFIX_RX.match(s):
         return ''
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_label(s):
+            return s          # a demographic segment reads as the words name it, never title-cased as a brand (2026-11-11)
+    except Exception:
+        pass
     try:
         from . import subject_rules as _sr
         if _sr.is_metric_phrase(s):
@@ -1320,6 +1344,12 @@ def looks_like_subject(subject):
         return False
     if _QUESTION_LEAD_RX.match(s):
         return False
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_label(s):
+            return True       # 'men aged 30 to 55 with household income of $50,000 to $200,000 in blue-collar occupations': the dollar figures are the filter (2026-11-11)
+    except Exception:
+        pass
     if re.search(r"\d{1,3}(?:,\d{3})+|\d{5,}", s):
         return False
     toks = [t for t in re.findall(r"[A-Za-z0-9&'+.-]+", s)]
