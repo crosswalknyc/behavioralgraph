@@ -28,7 +28,9 @@ error. Text content is expected to be pre-scrubbed by the caller
 """
 from __future__ import annotations
 
+import copy
 import os
+import re
 
 from lxml import etree
 from pptx import Presentation
@@ -60,6 +62,8 @@ ORCHID_FOOT = RGBColor(0x4A, 0x24, 0x58)
 
 SW, SH = Inches(13.333), Inches(7.500)
 M, BAND, GUT = Inches(0.920), Inches(11.493), Inches(0.280)
+# the eyebrow may grow toward the lockup (x 11.083 in) keeping the 0.280 gutter
+EYEBROW_MAX_W = Inches(11.083 - 0.280 - 1.129)
 A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 
 
@@ -156,10 +160,12 @@ def _str_w_in(text, size, bold=False):
 
 
 def _line_count(text, size, width_in, bold=False):
-    """Greedy-wrap line count for text in a box width_in wide."""
+    """Greedy-wrap line count for text in a box width_in wide. A pair
+    bound with a non-breaking space (the widow fix) is one word here, as
+    it is to every renderer."""
     total = 0
     for seg in str(text or "").split("\n"):
-        words = seg.split()
+        words = [w for w in seg.split(" ") if w.strip()]
         if not words:
             total += 1
             continue
@@ -205,20 +211,65 @@ def _fit_body(text, size_opts, width_in, max_h):
     return " ".join(words), size
 
 
+# ---- widows (2026-11-10) ----------------------------------------------------
+# The Las Culturistas deck reached a Lionsgate seat with twelve single words
+# alone on a card's last line. Every paragraph is now measured against its
+# box with the pack's own wrap model and font metrics (the model the brand
+# lint checks with); when the last line would carry one word, the last two
+# words are bound with a non-breaking space so they wrap together, and the
+# box is widened (when the caller has room) or narrowed a little so the
+# check sees two words there as well. Never a line break, never shortened
+# copy. Geist Mono rows and chrome under 9pt are left alone.
+
+def _widow_proof(text, x, w, h, size, bold, face, spc, align, max_w):
+    """(text, x, w, size) for one text box, widow-proofed."""
+    ds = _design()
+    s = "" if text is None else str(text)
+    if ds is None or face == "Geist Mono" or not s.strip():
+        return s, x, w, size
+    try:
+        w_in = float(w) / 914400.0
+        h_in = float(h) / 914400.0 if h else None
+        tr = (float(spc) / 100.0) if spc else 0.0
+        if "\n" in s:
+            parts = []
+            for part in s.split("\n"):
+                fit = ds.widow_fit(part, size, w_in, face=face, bold=bold, tracking_pt=tr)
+                parts.append(fit.text if fit.action != "none" else part)
+            return "\n".join(parts), x, w, size
+        max_w_in = (float(max_w) / 914400.0) if max_w else None
+        fit = ds.widow_fit(s, size, w_in, height_in=h_in, face=face, bold=bold,
+                           tracking_pt=tr, max_width_in=max_w_in)
+        if fit.action == "none":
+            return s, x, w, size
+        new_w = w
+        if abs(fit.width_in - w_in) > 1e-6:
+            new_w = Emu(int(round(fit.width_in * 914400)))
+            if align == PP_ALIGN.RIGHT:
+                x = Emu(int(x) + (int(w) - int(new_w)))
+            elif align == PP_ALIGN.CENTER:
+                x = Emu(int(x) + (int(w) - int(new_w)) // 2)
+        return fit.text, x, new_w, fit.size_pt
+    except Exception:
+        return s, x, w, size
+
+
 def txt(s, x, y, w, h, text, *, size=12, bold=False, color=GRAPHITE,
         align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP,
-        font="Crosswalk Inter", spc=None, light=False):
-    box = s.shapes.add_textbox(x, y, w, h)
-    tf = box.text_frame
-    tf.word_wrap = True
-    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
-    tf.vertical_anchor = anchor
+        font="Crosswalk Inter", spc=None, light=False, max_w=None):
     face = "Crosswalk Inter Light" if light else font
     try:
         from migration.design_skill import scrub_door_metaphor
         text = scrub_door_metaphor(text)
     except Exception:
         text = text
+    text, x, w, size = _widow_proof(text, x, w, h, size, bold, face, spc,
+                                    align, max_w)
+    box = s.shapes.add_textbox(x, y, w, h)
+    tf = box.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    tf.vertical_anchor = anchor
     for i, line in enumerate(str(text).split("\n")):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = align
@@ -468,29 +519,41 @@ def _add_photo_fill(s, blob, x, y, w, h):
 
 
 def _photo_moment(s, blob, alpha_pct):
-    """Full-bleed photo plus scrim; a bad blob renders the slide
-    text-only instead of failing the deck."""
+    """Full-bleed photo under the graphite scrim, as the slide BACKGROUND
+    (2026-11-10): the photo is cover-cropped to the page at 3840 x 2160
+    and the scrim is baked into the pixels, so no full-page shape sits
+    under the content and no image is low resolution (the design pack:
+    set the image as the slide background; scrim type over photographs,
+    baked in). A bad blob renders the slide text-only instead of
+    failing the deck."""
+    ds = _design()
+    if ds is None:
+        return False
     try:
-        _add_photo_fill(s, blob, 0, 0, SW, SH)
+        baked = ds.bake_photo_background(
+            blob, scrim_hex="#%02X%02X%02X" % tuple(GRAPHITE),
+            alpha=int(alpha_pct) / 100.0)
+        ds.set_slide_background_image(s, baked)
     except Exception:
         return False
-    _scrim(s, alpha_pct)
     return True
 
 
-def _scrim(s, alpha_pct=64, color=GRAPHITE):
-    """Graphite veil over a full-bleed photo so type stays readable
-    (brand rule: scrim type over photographs)."""
-    sh = rect(s, 0, 0, SW, SH, color)
+def _page_gradient(s, name="graphiteWash"):
+    """The pack's gradient at full resolution as the slide background
+    (the dark ground of the template's covers), when a cover or close
+    carries no photo. Falls back to the solid page color silently."""
+    ds = _design()
+    if ds is None:
+        return False
     try:
-        from pptx.oxml.ns import qn
-        srgb = sh.fill.fore_color._xFill.find(qn('a:srgbClr'))
-        if srgb is not None:
-            srgb.append(srgb.makeelement(
-                qn('a:alpha'), {'val': str(int(alpha_pct) * 1000)}))
+        data = ds.gradient_image_bytes(name)
+        if not data:
+            return False
+        ds.set_slide_background_image(s, data)
+        return True
     except Exception:
-        pass
-    return sh
+        return False
 
 
 class _Deck:
@@ -532,7 +595,8 @@ class _Deck:
         eb = f"{page:02d}  {eyebrow}" if eyebrow else f"{page:02d}"
         dot(s, M, Inches(0.540))
         txt(s, Inches(1.129), Inches(0.540), Inches(9.4), Inches(0.22),
-            str(eb).upper(), size=10.5, bold=True, color=body, spc=260)
+            str(eb).upper(), size=10.5, bold=True, color=body, spc=260,
+            max_w=EYEBROW_MAX_W)
         self.logo(s, white=dark or orchid)
         band_in = float(BAND) / 914400.0
         t_size = _fit_size(str(title or ""), (34, 31, 28, 26),
@@ -599,12 +663,12 @@ def _items(sl, key, cap):
 
 def _sl_cover(d, sl):
     s = d.new_slide(dark=True)
-    if sl.get("_photo"):
-        _photo_moment(s, sl["_photo"], 64)
+    if not (sl.get("_photo") and _photo_moment(s, sl["_photo"], 64)):
+        _page_gradient(s, "graphiteWash")
     dot(s, M, Inches(0.540))
     txt(s, Inches(1.129), Inches(0.540), Inches(9.4), Inches(0.22),
         str(sl.get("eyebrow") or "CROSSWALK").upper(),
-        size=10.5, bold=True, color=BODY_DK, spc=260)
+        size=10.5, bold=True, color=BODY_DK, spc=260, max_w=EYEBROW_MAX_W)
     d.logo(s, True)
     band_in = float(BAND) / 914400.0
     t_size = _fit_size(str(sl.get("title") or ""), (34, 31, 28),
@@ -1023,6 +1087,18 @@ def _sl_hero_proof(d, sl):
         y += 1.32
 
 
+_CLICKSTREAM_ROW = re.compile(
+    r"(^[a-z0-9.-]+\.[a-z]{2,}(/|$|\?))|(^https?://)|(/[a-z0-9_\-]+)|(\?[a-z0-9_]+=)", re.I)
+
+
+def _is_clickstream_row(url):
+    """True for a raw clickstream address (a host, a path, a query); a
+    brand name or a figure is not one and is set in Inter (Geist Mono
+    is for raw clickstream rows only, the design pack)."""
+    u = str(url or "").strip()
+    return bool(u) and bool(_CLICKSTREAM_ROW.search(u))
+
+
 def _sl_paths(d, sl):
     s = d.new_slide(dark=True)
     d.chrome(s, sl.get("eyebrow") or "Paths", sl.get("title") or "",
@@ -1034,20 +1110,25 @@ def _sl_paths(d, sl):
             rrect(s, M, Inches(y), BAND, Inches(0.245), SLATE,
                   radius=0.06)
         c = SIGNAL if lit else MUTED_DK
+        mono = _is_clickstream_row(r.get("url"))
+        face = "Geist Mono" if mono else "Crosswalk Inter"
+        # a raw address sits in 8.5pt mono; a row that is a name or a
+        # figure is body copy and never drops below 10pt
+        size = 8.5 if mono else 10
         txt(s, M + Inches(0.16), Inches(y), Inches(1.1),
             Inches(0.245), str(r.get("kind") or "").upper(),
-            size=8.5, color=c, font="Geist Mono",
+            size=size, color=c, font=face,
             anchor=MSO_ANCHOR.MIDDLE, spc=80)
         txt(s, M + Inches(1.36), Inches(y), BAND - Inches(1.52),
-            Inches(0.245), r.get("url") or "", size=8.5, color=c,
-            font="Geist Mono", anchor=MSO_ANCHOR.MIDDLE)
+            Inches(0.245), r.get("url") or "", size=size, color=c,
+            font=face, anchor=MSO_ANCHOR.MIDDLE)
         y += 0.28
 
 
 def _sl_close(d, sl):
     s = d.new_slide(dark=True)
-    if sl.get("_photo"):
-        _photo_moment(s, sl["_photo"], 70)
+    if not (sl.get("_photo") and _photo_moment(s, sl["_photo"], 70)):
+        _page_gradient(s, "graphiteWash")
     d.chrome(s, sl.get("eyebrow") or "Close", sl.get("title") or "",
              dark=True, sub=sl.get("sub"))
     _cards_2x2(d, s, _items(sl, "cards", 4), dark=True)
@@ -1138,6 +1219,315 @@ def _apply_theme_faces(pptx_path, face="Crosswalk Inter"):
         pass
 
 
+# ---- repeated phrases (2026-11-10) ------------------------------------------
+# The planner wrote one subhead template on four slides of the Las
+# Culturistas deck ("..., penetration of the audience with index against
+# the average American") and reused a closer's phrase three times; the
+# pack's readability check flags a phrase of five words on three or more
+# units as a template. Before rendering, the plan is read the way that
+# check reads it. A subhead template is retired: the first slide that
+# uses index and penetration defines them once, in plain words, and every
+# later slide gets a subhead that names its own content from its own
+# rows. A phrase still carried by three or more units is thinned on the
+# later closers (the read line, rebuilt from the slide's own figures) and
+# stat labels (the card's kicker and figure); titles and card bodies are
+# never rewritten. Everything is deterministic and comes from the plan
+# itself, so a repeat render stays identical.
+
+_DEDUPE_STOP = {
+    "the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "but",
+    "with", "from", "by", "as", "is", "are", "was", "were", "be", "been", "it",
+    "its", "that", "this", "these", "those", "who", "which", "what", "her",
+    "his", "their", "she", "he", "they", "them", "we", "our", "you", "your",
+    "not", "no", "than", "then", "so", "if", "into", "over", "under", "about",
+    "after", "before", "up", "down", "out", "off", "all", "any", "each",
+    "every", "more", "most", "much", "many", "some", "such", "same", "other",
+    "one", "two", "has", "have", "had", "do", "does", "did", "can", "will",
+    "would", "should", "could", "there", "here", "when", "where", "while",
+    "how", "also", "just", "only", "very", "per", "vs", "within", "between",
+}
+_PHRASE_N = 5
+_PHRASE_FLAG_MIN = 3
+_UNIT_MIN_WORDS = 8
+
+
+def _words_of(text):
+    return [w for w in re.findall(r"[A-Za-z0-9$%'.,-]+", str(text or ""))
+            if re.search(r"[A-Za-z0-9]", w)]
+
+
+def _ptoks(text):
+    return [t for t in (re.sub(r"[^a-z0-9']", "", w.lower()) for w in _words_of(text)) if t]
+
+
+def _grams(text):
+    toks = _ptoks(text)
+    out = set()
+    for i in range(len(toks) - _PHRASE_N + 1):
+        g = tuple(toks[i:i + _PHRASE_N])
+        if any(re.search(r"\d", t) for t in g):
+            continue
+        if sum(1 for t in g if t not in _DEDUPE_STOP) < 2:
+            continue
+        out.add(g)
+    return out
+
+
+def _is_chrome_unit(text):
+    u = str(text or "").strip()
+    return (u.lower().startswith("source")
+            or bool(re.search(r"CROSSWALK\s*/\s*BEHAVIORAL INTELLIGENCE|CONFIDENTIAL", u, re.I)))
+
+
+_LIST_FIELDS = {
+    "cards": ("head", "body"), "tiles": ("label", "body"), "facts": ("label", "note"),
+    "stat_cards": ("kicker", "label"), "rows": ("label", "url"), "proofs": ("label",),
+    "stats": ("label",),
+}
+_TEXT_FIELDS = ("sub", "intro", "line", "support", "read", "read2", "bars_title")
+
+
+def _plan_units(slides):
+    """Every written unit the readability check compares, with its
+    address: (slide index, path, text). Titles always; other text when it
+    runs eight words or more and is not chrome; a line repeated near
+    verbatim on two or more slides (a window line) does not count."""
+    raw = []
+    for i, sl in enumerate(slides):
+        if str(sl.get("title") or "").strip():
+            raw.append((i, ("title",), str(sl["title"]).strip(), True))
+        for f in _TEXT_FIELDS:
+            v = sl.get(f)
+            if isinstance(v, str) and v.strip():
+                raw.append((i, (f,), v.strip(), False))
+        for lf, keys in _LIST_FIELDS.items():
+            items = sl.get(lf)
+            if not isinstance(items, list):
+                continue
+            for j, it in enumerate(items):
+                if isinstance(it, dict):
+                    for k in keys:
+                        v = it.get(k)
+                        if isinstance(v, str) and v.strip():
+                            raw.append((i, (lf, j, k), v.strip(), False))
+                elif isinstance(it, list):      # table rows
+                    for k, cell in enumerate(it):
+                        if isinstance(cell, str) and cell.strip():
+                            raw.append((i, (lf, j, k), cell.strip(), False))
+    running = {}
+    for i, path, text, is_title in raw:
+        key = re.sub(r"\d+", "#", " ".join(_ptoks(text)))
+        running.setdefault(key, set()).add(i)
+    units = []
+    for i, path, text, is_title in raw:
+        if is_title:
+            units.append((i, path, text))
+            continue
+        if len(_words_of(text)) < _UNIT_MIN_WORDS or _is_chrome_unit(text):
+            continue
+        if len(running.get(re.sub(r"\d+", "#", " ".join(_ptoks(text))), ())) >= 2:
+            continue
+        units.append((i, path, text))
+    return units
+
+
+def _sub_lead(sub, sl):
+    """The slide's own subject in its subhead: the words before the first
+    comma, colon or period ('Purchased categories'); the eyebrow when the
+    subhead has no such lead."""
+    head = re.split(r"[,:;.]", str(sub or ""), 1)[0].strip()
+    if 0 < len(head.split()) <= 6 and len(head) < len(str(sub).strip()):
+        return head[0].upper() + head[1:]
+    eb = str(sl.get("eyebrow") or "").strip()
+    if eb:
+        return eb[0].upper() + eb[1:].lower()
+    return "This read"
+
+
+def _lead_fact(sl):
+    """What the slide itself leads with, for a subhead or closer rebuilt
+    from its own data: ('ranked', top, value, index, second, value2,
+    bottom, value_b) for ranked rows, ('tile', label, big) for tiles and
+    stat cards, ('card', head) for numbered cards, or None."""
+    t = str(sl.get("type") or "").lower()
+    rows = [r for r in (sl.get("rows") or []) if isinstance(r, dict) and r.get("label")]
+    if t in ("bars", "split_stats_bars") and rows:
+        suffix = str(sl.get("value_suffix") if sl.get("value_suffix") is not None else "%")
+        def val(r):
+            return _fmt_val(r.get("value"), suffix)
+        top, sec, bot = rows[0], (rows[1] if len(rows) > 1 else None), (rows[-1] if len(rows) > 1 else None)
+        idx = str(top.get("index") or "").strip() if sl.get("show_index") else ""
+        return ("ranked", str(top["label"]).strip(), val(top), idx,
+                str(sec["label"]).strip() if sec else "", val(sec) if sec else "",
+                str(bot["label"]).strip() if bot else "", val(bot) if bot else "", suffix)
+    tiles = [x for x in (sl.get("tiles") or sl.get("stat_cards") or sl.get("stats") or sl.get("proofs") or [])
+             if isinstance(x, dict) and (x.get("label") or x.get("kicker")) and (x.get("big") or x.get("fig"))]
+    if tiles:
+        x = tiles[0]
+        lab = str(x.get("label") or x.get("kicker") or "").strip().rstrip(".")
+        big = str(x.get("big") or x.get("fig") or "").strip()
+        second = tiles[1] if len(tiles) > 1 else None
+        return ("tile", lab, big,
+                str(second.get("label") or second.get("kicker") or "").strip().rstrip(".") if second else "",
+                str(second.get("big") or second.get("fig") or "").strip() if second else "")
+    cards = [c for c in (sl.get("cards") or []) if isinstance(c, dict) and c.get("head")]
+    if cards:
+        return ("card", str(cards[0]["head"]).strip().rstrip("."))
+    return None
+
+
+def _define_index_sub(lead):
+    return f"{lead}: penetration is the share of this audience, index 100 = the average American."
+
+
+def _content_sub(sl, lead, k):
+    """A subhead naming this slide's own content, varied by position so
+    no two read as one template."""
+    f = _lead_fact(sl)
+    if f and f[0] == "ranked":
+        _, top, v, idx, sec, v2, _bot, _vb, suffix = f
+        of_aud = " of the audience" if suffix == "%" else ""
+        # no verb agrees with an unknown label (singular or plural), so
+        # every variant is built without one
+        variants = [
+            f"{lead}: {top} at {v}" + (f", index {idx}." if idx else "."),
+            f"{lead}, led by {top} at {v}" + (f" and index {idx}." if idx else "."),
+            f"{lead}. {top}: {v}{of_aud}" + (f", index {idx}." if idx else "."),
+            f"{lead}: {top} first at {v}" + (f", then {sec} at {v2}." if sec else "."),
+            f"{lead}, with {top} on top at {v}" + (f" and {sec} next at {v2}." if sec else "."),
+        ]
+        return variants[k % len(variants)]
+    if f and f[0] == "tile":
+        _, lab, big, lab2, big2 = f
+        variants = [
+            f"{lead}: {lab} at {big}.",
+            f"{lead}, starting with {lab} at {big}.",
+            f"{lead}. {lab}: {big}" + (f"; {lab2}: {big2}." if lab2 else "."),
+        ]
+        return variants[k % len(variants)]
+    if f and f[0] == "card":
+        return f"{lead}: {f[1]}."
+    return f"{lead}."
+
+
+def _content_closer(sl, k):
+    """A read line rebuilt from the slide's own figures; '' when the slide
+    has none to read from (the field is then dropped)."""
+    f = _lead_fact(sl)
+    if f and f[0] == "ranked":
+        _, top, v, idx, sec, v2, bot, vb, suffix = f
+        variants = [
+            f"{top} at {v}" + (f" against {bot} at {vb}." if bot else "."),
+            f"The range runs from {top} at {v}" + (f" down to {bot} at {vb}." if bot else "."),
+            f"Top of the list: {top} at {v}" + (f", then {sec} at {v2}." if sec else "."),
+        ]
+        return variants[k % len(variants)]
+    if f and f[0] == "tile":
+        _, lab, big, lab2, big2 = f
+        return f"{lab} at {big}" + (f"; {lab2} at {big2}." if lab2 else ".")
+    return ""
+
+
+def _set_path(sl, path, value):
+    if len(path) == 1:
+        if value:
+            sl[path[0]] = value
+        else:
+            sl.pop(path[0], None)
+        return
+    lf, j, k = path
+    sl[lf][j][k] = value
+
+
+def dedupe_plan_copy(slides):
+    """Retire repeated phrases in a slide plan, in place. Returns notes
+    (one line per rewrite) for the job record."""
+    notes = []
+    # A. a subhead template shared across slides
+    subs = [(i, sl["sub"]) for i, sl in enumerate(slides)
+            if isinstance(sl.get("sub"), str) and len(_words_of(sl["sub"])) >= 4]
+    gram_of = {i: _grams(t) for i, t in subs}
+    parent = {i: i for i, _t in subs}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    for a, _ta in subs:
+        for b, _tb in subs:
+            if a < b and gram_of[a] & gram_of[b]:
+                parent[find(a)] = find(b)
+    groups = {}
+    for i, _t in subs:
+        groups.setdefault(find(i), []).append(i)
+    for members in groups.values():
+        members.sort()
+        if len(members) < 2:
+            continue
+        first = members[0]
+        sub0 = slides[first]["sub"]
+        lead0 = _sub_lead(sub0, slides[first])
+        if re.search(r"\b(index|penetration)\b", sub0, re.I):
+            slides[first]["sub"] = _define_index_sub(lead0)
+            notes.append(f"slide {first + 1}: subhead defines index and penetration once")
+        for k, idx in enumerate(members[1:]):
+            old = slides[idx]["sub"]
+            slides[idx]["sub"] = _content_sub(slides[idx], _sub_lead(old, slides[idx]), k)
+            notes.append(f"slide {idx + 1}: subhead template retired, names its own content")
+    # B. any phrase still carried by three or more units: thin the later
+    #    closers and stat labels until it reads on two at most
+    closer_k = {}
+    for _round in range(3):
+        units = _plan_units(slides)
+        counts = {}
+        for ui, (i, path, text) in enumerate(units):
+            for g in _grams(text):
+                counts.setdefault(g, set()).add(ui)
+        offenders = sorted((g for g, s in counts.items() if len(s) >= _PHRASE_FLAG_MIN),
+                           key=lambda g: (-len(counts[g]), g))
+        if not offenders:
+            break
+        changed = False
+        for g in offenders:
+            members = sorted(counts[g])
+            # the first occurrence stays; later ones give way, closers
+            # first (the read line), then a subhead, then a stat label
+            def _prio(ui):
+                f = units[ui][1][0]
+                return {"read": 0, "read2": 0, "sub": 1, "stat_cards": 2}.get(f, 9), ui
+            for ui in sorted(members[1:], key=_prio):
+                if len(counts[g]) < _PHRASE_FLAG_MIN:
+                    break
+                i, path, text = units[ui]
+                sl = slides[i]
+                new = None
+                if path[0] in ("read", "read2"):
+                    k = closer_k.get(i, 0)
+                    new = _content_closer(sl, k)
+                    closer_k[i] = k + 1
+                elif path[0] == "stat_cards" and path[2] == "label":
+                    card = sl["stat_cards"][path[1]]
+                    kicker = str(card.get("kicker") or "").strip().lower()
+                    big = str(card.get("big") or "").strip()
+                    if kicker and big:
+                        new = f"{big} {kicker}"
+                elif path[0] == "sub":
+                    new = _content_sub(sl, _sub_lead(text, sl), closer_k.get(i, 0))
+                    closer_k[i] = closer_k.get(i, 0) + 1
+                if new is None or new == text:
+                    continue
+                _set_path(sl, path, new)
+                counts[g].discard(ui)
+                changed = True
+                what = "/".join(str(x) for x in path)
+                notes.append(f"slide {i + 1}: {what} rewritten from the slide's own figures "
+                             f"(phrase '{' '.join(g)}' on {len(members)} units)")
+        if not changed:
+            break
+    return notes
+
+
 def render_insights_deck(plan, out_path, static_dir=None,
                         photo_subject='', photo_kind=''):
     """Render a slide-plan dict to a finished PPTX at out_path.
@@ -1155,8 +1545,14 @@ def render_insights_deck(plan, out_path, static_dir=None,
     d = _Deck(prs, lw, lk)
     # Render from copies: the caller's plan is never mutated, so a
     # repeat render of the same plan is deterministic.
-    _slides = [dict(sl) for sl in (plan.get("slides") or [])
+    _slides = [copy.deepcopy(sl) for sl in (plan.get("slides") or [])
                if isinstance(sl, dict)]
+    # Repeated phrases come off before anything is laid out (2026-11-10):
+    # one subhead template across slides, a closer reused three times.
+    try:
+        plan['_copy_notes'] = dedupe_plan_copy(_slides)
+    except Exception:
+        plan['_copy_notes'] = []
     try:
         _p_subj = str(plan.get("image_subject")
                       or photo_subject or '').strip()
@@ -1192,11 +1588,15 @@ def render_insights_deck(plan, out_path, static_dir=None,
     _apply_theme_faces(out_path)
     # 2026-10-21 (Jenna: the design skill is always used): every delivered
     # deck carries Crosswalk Inter embedded and passes the pack's checks.
-    # The finish fixes in place and never holds the file.
+    # The finish fixes in place and never holds the file. What it ran,
+    # what it changed and the check counts ride on the plan for the job
+    # record (2026-11-10).
     ds = _design()
+    plan['_finish'] = {'ready': None, 'copy_notes': list(plan.get('_copy_notes') or [])}
     if ds is not None:
         try:
-            ds.finish(out_path)
-        except Exception:
-            pass
+            rep = ds.finish(out_path)
+            plan['_finish'].update(rep.job_record())
+        except Exception as e:
+            plan['_finish']['error'] = f"{type(e).__name__}: {e}"[:200]
     return rendered

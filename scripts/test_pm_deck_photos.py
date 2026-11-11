@@ -3,7 +3,13 @@
 scrim on the cover, the first statement page, and the close -
 mirroring the manually designed decks. Offline by construction: the
 photo cache is injected with a locally generated image, and the
-kill-switch path proves a text-only render when nothing resolves."""
+kill-switch path proves a text-only render when nothing resolves.
+
+2026-11-10: the photo is the slide BACKGROUND (p:bg with a blip), the
+scrim baked into the pixels at 3840 x 2160, never a full-page picture
+plus a veil shape (the design pack's lint fails those and flags a
+low-resolution page image). A text-only cover or close carries the
+pack's graphite-wash gradient as its background instead."""
 import os
 import struct
 import sys
@@ -53,6 +59,33 @@ def pics(slide):
     return [sh for sh in slide.shapes
             if sh.shape_type == MSO_SHAPE_TYPE.PICTURE
             and sh.width > 9000000]  # full-bleed only, not the logo
+
+
+NS_A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
+NS_P = '{http://schemas.openxmlformats.org/presentationml/2006/main}'
+NS_R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
+
+
+def bg_image(slide):
+    """The slide's background image (PIL Image) or None."""
+    import io
+    from PIL import Image
+    blip = slide._element.find(f'.//{NS_P}bg//{NS_A}blip')
+    if blip is None:
+        return None
+    part = slide.part.related_part(blip.get(f'{NS_R}embed'))
+    return Image.open(io.BytesIO(part.blob)).convert('RGB')
+
+
+def is_photo_bg(slide, src_rgb=(40, 90, 120)):
+    """A baked photo background: full resolution and the source color
+    darkened under the graphite scrim (never the flat gradient)."""
+    im = bg_image(slide)
+    if im is None or im.size != (3840, 2160):
+        return False
+    r, g, b = im.resize((1, 1)).getpixel((0, 0))
+    # the flat teal source under a 64-70% graphite veil keeps a blue cast
+    return b > r and b > g and sum((r, g, b)) / 3 < 80
 
 
 def text_boxes(slide):
@@ -110,24 +143,23 @@ n = db.render_insights_deck(PLAN, out)
 check('all slides rendered', n == 4, f'({n})')
 
 prs = Presentation(out)
-check('cover carries a full-bleed photo', len(pics(prs.slides[0])) == 1)
-check('hero carries a full-bleed photo', len(pics(prs.slides[1])) == 1)
-check('data slide stays photo-free', len(pics(prs.slides[2])) == 0)
-check('close carries a full-bleed photo', len(pics(prs.slides[3])) == 1)
+check('cover carries the photo as its slide background', is_photo_bg(prs.slides[0]))
+check('hero carries the photo as its slide background', is_photo_bg(prs.slides[1]))
+check('data slide stays photo-free', bg_image(prs.slides[2]) is None and len(pics(prs.slides[2])) == 0)
+check('close carries the photo as its slide background', is_photo_bg(prs.slides[3]))
+check('no full-bleed picture shape sits on a photo slide',
+      all(len(pics(prs.slides[i])) == 0 for i in (0, 1, 3)))
 
-pic = pics(prs.slides[0])[0]
-# 1216x812 (1.4975) into 13.333x7.5 (1.7777): crop top+bottom, with
-# the window biased toward the top so faces stay in frame
-frac = 1.0 - (1216.0 / 812.0) / (13.333 / 7.5)
-check('cover photo is cover-cropped, never distorted',
-      abs((pic.crop_top + pic.crop_bottom) - frac) < 0.01
-      and pic.crop_top < pic.crop_bottom and pic.crop_left == 0,
-      f'top={pic.crop_top:.4f} bottom={pic.crop_bottom:.4f} '
-      f'frac~{frac:.4f}')
+# 1216x812 into 3840x2160: cover-cropped (top and bottom lose equal-ish
+# strips, the window biased toward the top), never distorted
+im0 = bg_image(prs.slides[0])
+check('baked background is the page at 288 ppi', im0 is not None and im0.size == (3840, 2160))
 
 xml1 = prs.slides[0].shapes._spTree.xml
-check('scrim veils the cover photo (64% graphite)',
-      'val="64000"' in xml1)
+check('no scrim shape remains over the cover (the veil is baked in)',
+      'val="64000"' not in xml1 and 'val="70000"' not in xml1)
+r, g, b = im0.resize((1, 1)).getpixel((0, 0))
+check('the scrim darkens the photo (64% graphite)', sum((r, g, b)) / 3 < 80, f'mean=({r}, {g}, {b})')
 
 # photo slides stay overlap-clean
 clean = True
@@ -147,8 +179,8 @@ PLAN2['slides'] = [dict(s) for s in PLAN['slides']]
 PLAN2['slides'][0]['photo'] = False
 n = db.render_insights_deck(PLAN2, '/tmp/deck_photo_test2.pptx')
 prs2 = Presentation('/tmp/deck_photo_test2.pptx')
-check('photo:false keeps the cover type-only',
-      len(pics(prs2.slides[0])) == 0)
+check('photo:false keeps the cover type-only (the gradient ground, no photo)',
+      len(pics(prs2.slides[0])) == 0 and not is_photo_bg(prs2.slides[0]))
 
 # kill switch: uncached subject with photos disabled never fetches
 os.environ['PROMETHEUS_DECK_PHOTOS'] = '0'
@@ -161,7 +193,7 @@ try:
     n = db.render_insights_deck(PLAN3, '/tmp/deck_photo_test3.pptx')
     prs3 = Presentation('/tmp/deck_photo_test3.pptx')
     check('no photos means text-only render, never a failure',
-          n == 4 and all(len(pics(s)) == 0 for s in prs3.slides))
+          n == 4 and all(len(pics(s)) == 0 and not is_photo_bg(s) for s in prs3.slides))
 finally:
     os.environ.pop('PROMETHEUS_DECK_PHOTOS', None)
 
@@ -172,7 +204,7 @@ PLANG['slides'] = [dict(s) for s in PLAN['slides']]
 n = db.render_insights_deck(PLANG, '/tmp/deck_photo_test4.pptx')
 prs4 = Presentation('/tmp/deck_photo_test4.pptx')
 check('corrupt photo bytes never fail the deck',
-      n == 4 and all(len(pics(s)) == 0 for s in prs4.slides))
+      n == 4 and all(len(pics(s)) == 0 and not is_photo_bg(s) for s in prs4.slides))
 
 # plan enforcement carries the art fields
 cleaned = pma.enforce_insights_plan(

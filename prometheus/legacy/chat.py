@@ -18879,7 +18879,10 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
             photo_subject=str(subject or p_meta.get('name') or ''),
             photo_kind=deck_builder.photo_kind_for_category(p_meta.get('brand_category')))
         base.update(image_subject=plan.get('_photo_subject') or plan.get('image_subject'),
-                    photo_sources=plan.get('_photo_sources') or [])
+                    photo_sources=plan.get('_photo_sources') or [],
+                    # the pre-ship pass on the finished deck: ready, lint and
+                    # readability counts, what it changed (2026-11-10)
+                    finish=plan.get('_finish') or {})
         s3_key = f"{_PM_DECK_FILE_PREFIX}{job_id}/{fname}"
         with open(local, 'rb') as fh:
             _H.s3_client.put_object(

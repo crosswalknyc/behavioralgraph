@@ -39,9 +39,34 @@ raises and never holds a file: the fixes are applied in place and the
 report carries what ran.
 ``gate_attachment`` is the same for in-memory bytes (the outbound mail
 door).
+
+Pre-ship fixes on a deck (2026-11-10, the Las Culturistas deck: 14 lint
+FAILs and 2 readability flags reached a Lionsgate seat). Before the embed
+and the checks, ``finish`` now corrects in place what the pack's own
+checks would fail:
+
+  * widows: every paragraph is measured against its box with the pack's
+    wrap model and font metrics (``assets/font-metrics.json``, the same
+    model ``cw_brand_lint.py`` checks with); when the last line would
+    carry one word, the last two words are bound with a non-breaking
+    space (U+00A0) so they wrap together, and the box is widened (when
+    there is room) or narrowed a little so the pack's check sees at least
+    two words on that line too. Never a line break, never shortened copy.
+  * backgrounds: a full-page shape or picture acting as the page (a
+    photo under a scrim, a solid rectangle) becomes the slide background
+    itself, the scrim baked into the image at 3840 px across (288 ppi on
+    a 16:9 page), so no shape sits under the content and no image is
+    low resolution.
+
+The deck builders call the same helpers while they lay type
+(``widow_fit``, ``set_slide_background_image``, ``gradient_image_bytes``)
+so a fresh deck is already clean; the pass in ``finish`` is the net for
+every other builder. The report carries what changed (``Report.fixes``)
+and the lint / readability counts (``Report.counts``) for the job record.
 """
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -355,6 +380,8 @@ class Report:
     ready: bool = False
     steps: list = field(default_factory=list)      # (name, ok, output)
     skipped: list = field(default_factory=list)    # (name, why)
+    fixes: dict = field(default_factory=dict)      # what the pre-ship pass changed in place
+    counts: dict = field(default_factory=dict)     # lint_fail, lint_warn, readability_flags
 
     def add(self, name: str, ok: bool, output: str = "") -> None:
         self.steps.append((name, bool(ok), str(output or "")[-4000:]))
@@ -363,15 +390,29 @@ class Report:
         self.skipped.append((name, str(why)))
 
     @property
+    def copy_ok(self) -> bool:
+        """The plain-English check ran and found nothing to flag."""
+        return any(n == "readability" and ok for n, ok, _o in self.steps)
+
+    @property
     def summary(self) -> str:
         bits = [f"{n}: {'ok' if ok else 'FAIL'}" for n, ok, _o in self.steps]
         bits += [f"{n}: skipped ({w})" for n, w in self.skipped]
         return f"{Path(self.path).name}: " + ("READY" if self.ready else "NOT READY") + (" (" + "; ".join(bits) + ")" if bits else "")
 
     def as_dict(self) -> dict:
-        return {"path": self.path, "ready": self.ready,
+        return {"path": self.path, "ready": self.ready, "copy_ok": self.copy_ok,
+                "fixes": dict(self.fixes), "counts": dict(self.counts),
                 "steps": [{"name": n, "ok": ok, "output": o} for n, ok, o in self.steps],
                 "skipped": [{"name": n, "why": w} for n, w in self.skipped]}
+
+    def job_record(self) -> dict:
+        """The short form that rides on a deck job record: ready, the
+        check counts, and what the pre-ship pass changed. No tool output."""
+        return {"ready": self.ready, "copy_ok": self.copy_ok, "counts": dict(self.counts),
+                "fixes": dict(self.fixes),
+                "steps": {n: ("ok" if ok else "FAIL") for n, ok, _o in self.steps},
+                "skipped": {n: w for n, w in self.skipped}}
 
 
 def _run(script: str, args: list, timeout: int = 600):
@@ -566,6 +607,10 @@ def brand_lint(path, report: Optional[Report] = None) -> Report:
         return rep
     rc, out = got
     rep.add("brand_lint", rc == 0, out)
+    m = re.search(r"(\d+) failure\(s\), (\d+) warning\(s\)", out or "")
+    if m:
+        rep.counts["lint_fail"] = int(m.group(1))
+        rep.counts["lint_warn"] = int(m.group(2))
     return rep
 
 
@@ -577,20 +622,53 @@ def readability(path, report: Optional[Report] = None) -> Report:
         return rep
     rc, out = got
     rep.add("readability", rc == 0, out)
+    m = re.search(r"(\d+) flag\(s\)", out or "")
+    if m:
+        rep.counts["readability_flags"] = int(m.group(1))
     return rep
 
 
-def finish(path, *, render_check: bool = False, lint: bool = True, copy_check: bool = False) -> Report:
-    """Finish one client-facing file in place: embed and check the fonts,
-    then the brand lint (FAILs reported) and, when asked, the plain-English
-    check. Never raises; never holds the file. ``ready`` means the embed
-    passed and the lint found no FAIL."""
+def preship_fix(path, report: Optional[Report] = None) -> Report:
+    """The in-place corrections on a deck before the checks run: page
+    backgrounds set as backgrounds (a full-page shape or photo under a
+    scrim becomes the slide background at 3840 px), then widows bound
+    and their boxes fitted. Never raises; never holds the file."""
+    rep = report or Report(str(path))
+    if Path(str(path)).suffix.lower() != ".pptx":
+        return rep
+    try:
+        bg = fix_backgrounds_in_pptx(path)
+        rep.fixes.update({f"background_{k}": v for k, v in bg.items() if v})
+    except Exception as e:
+        rep.fixes["background_error"] = f"{type(e).__name__}: {e}"[:200]
+    try:
+        wd = fix_widows_in_pptx(path)
+        rep.fixes.update({f"widow_{k}": v for k, v in wd.items() if v})
+    except Exception as e:
+        rep.fixes["widow_error"] = f"{type(e).__name__}: {e}"[:200]
+    rep.add("preship_fix", not any(k.endswith("_error") for k in rep.fixes),
+            ", ".join(f"{k}={v}" for k, v in sorted(rep.fixes.items())) or "nothing to fix")
+    return rep
+
+
+def finish(path, *, render_check: bool = False, lint: bool = True,
+           copy_check: Optional[bool] = None) -> Report:
+    """Finish one client-facing file in place: the pre-ship fixes on a
+    deck (backgrounds, widows, door metaphors), then embed and check the
+    fonts, then the brand lint (FAILs reported) and the plain-English
+    check (on every deck; on other files when asked). Never raises; never
+    holds the file. ``ready`` means the embed passed and the lint found
+    no FAIL; ``copy_ok`` means the plain-English check found no flag."""
     rep = Report(str(path))
     try:
-        embed_fonts(path, render_check=render_check, report=rep)
         ext = Path(str(path)).suffix.lower()
+        if copy_check is None:
+            copy_check = ext == ".pptx"
         if lint and ext in (".pptx", ".docx", ".html", ".htm", ".md", ".txt"):
             scrub_doors_in_file(path, report=rep)
+        if lint and ext == ".pptx":
+            preship_fix(path, report=rep)
+        embed_fonts(path, render_check=render_check, report=rep)
         if lint and ext in (".pptx", ".docx", ".html", ".htm"):
             brand_lint(path, report=rep)      # the linter reads Office, HTML and text; a .pdf is verified above
         if copy_check and ext in (".pptx", ".docx", ".html", ".htm", ".md", ".txt"):
@@ -700,6 +778,587 @@ def widow_safe_width(text: str, size_pt: float, width_in: float, *, bold: bool =
     return width_in
 
 
+# --------------------------------------------------- pre-ship fixes (2026-11-10)
+NBSP = "\u00a0"
+MONO_FAMILY = "Geist Mono"
+EMU_PER_IN = 914400
+PAGE_PX = (3840, 2160)          # a 16:9 page at about 288 ppi, the pack's high-res bar
+_NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
+_NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_A = "{%s}" % _NS_A
+_P = "{%s}" % _NS_P
+_R = "{%s}" % _NS_R
+
+
+@dataclass
+class WidowFit:
+    text: str
+    width_in: float
+    size_pt: float
+    action: str = "none"        # none | bound | widened | narrowed | resized | bound-only
+    lines: int = 1
+
+    @property
+    def bound(self) -> bool:
+        return NBSP in self.text and self.action != "none"
+
+
+def bind_last_two(text) -> str:
+    """Join the last two words of a paragraph with a non-breaking space so
+    they wrap together. Only the final gap between two words changes; a
+    paragraph of fewer than two words, or one already bound there, comes
+    back as it was."""
+    s = "" if text is None else str(text)
+    body = s.rstrip()
+    tail = s[len(body):]
+    m = re.search(r"[ \t]+(?=[^\s\u00a0]+$)", body)
+    if not m:
+        return s
+    return body[:m.start()] + NBSP + body[m.end():] + tail
+
+
+def _model_lines(mod, text, size_pt, width_in, wt, tracking_pt, scale):
+    chars = [(ch, wt, float(size_pt), float(tracking_pt)) for ch in str(text).replace("\n", " ")]
+    return mod._wrap(chars, float(width_in) * 72.0 * scale)
+
+
+def widow_lines(text, size_pt, width_in, *, face: Optional[str] = None, bold: bool = False,
+                tracking_pt: float = 0.0) -> tuple:
+    """(lone, lines) under the pack's wrap model across its renderer scales:
+    ``lone`` when the last line carries one word at any scale, ``lines``
+    the most lines any scale needs. A bound pair (U+00A0) is one word to
+    the model, exactly as the lint reads it. (False, 1) without the pack."""
+    mod = lint_module()
+    if mod is None or width_in <= 0 or size_pt <= 0:
+        return False, 1
+    wt = mod._weight_key(face or FONT_FAMILY, bold)
+    lone, n = False, 1
+    for k in mod.WRAP_SCALES:
+        ls = _model_lines(mod, text, size_pt, width_in, wt, tracking_pt, k)
+        n = max(n, len(ls))
+        if len(ls) >= 2 and len(ls[-1][0]) == 1:
+            lone = True
+    return lone, n
+
+
+def widow_fit(text, size_pt: float, width_in: float, *, height_in: Optional[float] = None,
+              face: Optional[str] = None, bold: bool = False, tracking_pt: float = 0.0,
+              leading: float = 1.22, max_width_in: Optional[float] = None,
+              min_scale: float = 0.60) -> WidowFit:
+    """Widow-proof one paragraph for a text box ``width_in`` wide.
+
+    Measured with the pack's wrap model (the metrics the lint checks with).
+    When the last line would carry one word: the last two words are bound
+    with U+00A0 so they wrap together in every renderer; then, because the
+    pack's check reads a bound pair as one word, the box is widened (up to
+    ``max_width_in`` when the caller has room) or narrowed in 0.02 in steps
+    (never below ``min_scale`` of the width) until the check sees two words
+    on the last line without adding a line the layout did not budget for
+    (``height_in`` allows one more line when the box has the room); failing
+    that, the type steps down a half point or two (never below 10 pt on
+    body copy). The copy is never shortened and no line break is inserted.
+    Chrome (under 9 pt), short labels (under 3 words) and Geist Mono rows
+    come back untouched."""
+    s = "" if text is None else str(text)
+    out = WidowFit(s, float(width_in), float(size_pt))
+    words = s.split()
+    if (lint_module() is None or len(words) < 3 or size_pt < 9 or width_in <= 0
+            or (face or "") == MONO_FAMILY or "\n" in s):
+        return out
+    lone0, n0 = widow_lines(s, size_pt, width_in, face=face, bold=bold, tracking_pt=tracking_pt)
+    out.lines = n0
+    if not lone0:
+        return out
+    bound = bind_last_two(s)
+    out.text = bound
+    out.action = "bound-only"
+    if size_pt < 10:                      # notes: the check skips them; the binding is the whole fix
+        out.action = "bound"
+        return out
+
+    def ok(t, size, w, allow):
+        lone, n = widow_lines(t, size, w, face=face, bold=bold, tracking_pt=tracking_pt)
+        return (not lone) and n <= allow, n
+
+    allowed = n0
+    # one more line only when the box clearly has the room for it (0.15 in
+    # of slack beyond the extra line), so a read above a source line or a
+    # label in a tight slot never grows into its neighbor
+    if height_in is not None and (n0 + 1) * size_pt * leading / 72.0 <= float(height_in) - 0.15:
+        allowed = n0 + 1
+    fine, n = ok(bound, size_pt, width_in, allowed)
+    if fine:
+        out.action, out.lines = "bound", n
+        return out
+    # widen when the caller has room to the right
+    if max_width_in is not None and max_width_in > width_in + 0.005:
+        w = width_in
+        while w + 0.02 <= max_width_in + 1e-6:
+            w = round(w + 0.02, 3)
+            fine, n = ok(bound, size_pt, w, allowed)
+            if fine:
+                out.width_in, out.action, out.lines = w, "widened", n
+                return out
+    # narrow a little: the same copy, the last line carrying two words
+    floor = width_in * min_scale
+    w = width_in
+    while w - 0.02 >= floor - 1e-6:
+        w = round(w - 0.02, 3)
+        fine, n = ok(bound, size_pt, w, allowed)
+        if fine:
+            out.width_in, out.action, out.lines = w, "narrowed", n
+            return out
+    # a half point or two smaller, then the same search
+    steps = (size_pt - 0.5, size_pt - 1.0) if size_pt < 20 else (size_pt - 2.0, size_pt - 3.0)
+    for sz in steps:
+        if sz < 10:
+            break
+        fine, n = ok(bound, sz, width_in, allowed)
+        if fine:
+            out.size_pt, out.action, out.lines = sz, "resized", n
+            return out
+        w = width_in
+        while w - 0.02 >= floor - 1e-6:
+            w = round(w - 0.02, 3)
+            fine, n = ok(bound, sz, w, allowed)
+            if fine:
+                out.size_pt, out.width_in, out.action, out.lines = sz, w, "resized", n
+                return out
+    return out
+
+
+def _slide_parts(z) -> tuple:
+    """(slide part names in deck order, slide width EMU, slide height EMU)."""
+    pres = z.read("ppt/presentation.xml").decode("utf8", "ignore")
+    m = re.search(r'<p:sldSz cx="(\d+)" cy="(\d+)"', pres)
+    sw, sh = (int(m.group(1)), int(m.group(2))) if m else (12192000, 6858000)
+    rels = z.read("ppt/_rels/presentation.xml.rels").decode("utf8", "ignore")
+    rid2t = dict(re.findall(r'Id="(rId\d+)"[^>]*Target="([^"]+)"', rels))
+    rid2t.update({a: b for b, a in re.findall(r'Target="([^"]+)"[^>]*Id="(rId\d+)"', rels)})
+    order = [rid2t[r] for r in re.findall(r'<p:sldId [^>]*r:id="(rId\d+)"', pres) if r in rid2t]
+    slides = ["ppt/" + t.lstrip("/").replace("ppt/", "") for t in order]
+    return slides, sw, sh
+
+
+def _rewrite_zip(path, replace: dict, add: Optional[dict] = None) -> None:
+    """Write the package back with ``replace`` {name: bytes} swapped in and
+    ``add`` {name: bytes} appended. Entry order is kept."""
+    import zipfile
+    src = Path(str(path))
+    data = src.read_bytes()
+    zin = zipfile.ZipFile(io.BytesIO(data))
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            payload = replace.get(item.filename, zin.read(item.filename))
+            zout.writestr(item, payload)
+        for name, payload in (add or {}).items():
+            zout.writestr(name, payload)
+    src.write_bytes(out.getvalue())
+
+
+def _shape_rects(root) -> list:
+    """Every placed shape as (x, y, cx, cy, filled_without_text), the lint's
+    own view of the page for ``room_right``."""
+    rects = []
+    for shp in root.iter(f"{_P}sp", f"{_P}pic", f"{_P}graphicFrame"):
+        if shp.tag == f"{_P}graphicFrame":
+            off, ext = shp.find(f"{_P}xfrm/{_A}off"), shp.find(f"{_P}xfrm/{_A}ext")
+        else:
+            off, ext = shp.find(f".//{_A}xfrm/{_A}off"), shp.find(f".//{_A}xfrm/{_A}ext")
+        if off is None or ext is None:
+            continue
+        sp_ = shp.find(f"{_P}spPr")
+        filled = shp.tag == f"{_P}pic" or (sp_ is not None and (
+            sp_.find(f"{_A}solidFill") is not None or sp_.find(f"{_A}gradFill") is not None))
+        tb = shp.find(f"{_P}txBody")
+        has_txt = tb is not None and "".join(t.text or "" for t in tb.iter(f"{_A}t")).strip() != ""
+        if filled or has_txt or shp.tag != f"{_P}sp":
+            rects.append((int(off.get("x")), int(off.get("y")), int(ext.get("cx")), int(ext.get("cy")),
+                          filled and not has_txt))
+    return rects
+
+
+def fix_widows_in_pptx(path) -> dict:
+    """Bind and fit every widowed paragraph in a saved deck, in place (the
+    net under every builder). Returns counts: bound, widened, narrowed,
+    resized, unresolved."""
+    import zipfile
+    from lxml import etree
+    mod = lint_module()
+    counts = {"bound": 0, "widened": 0, "narrowed": 0, "resized": 0, "unresolved": 0}
+    if mod is None:
+        return counts
+    z = zipfile.ZipFile(str(path))
+    names = z.namelist()
+    slides, sw, sh = _slide_parts(z)
+    portrait = sh > sw
+    replace = {}
+    for sp in slides:
+        if sp not in names:
+            continue
+        root = etree.fromstring(z.read(sp))
+        rects = _shape_rects(root)
+        touched = False
+        for shp in root.iter(f"{_P}sp"):
+            tx = shp.find(f"{_P}txBody")
+            off, ext = shp.find(f".//{_A}xfrm/{_A}off"), shp.find(f".//{_A}xfrm/{_A}ext")
+            if tx is None or off is None or ext is None:
+                continue
+            bp = tx.find(f"{_A}bodyPr")
+            if bp is not None and (bp.get("wrap") == "none" or bp.get("vert") not in (None, "horz")):
+                continue
+            lins = int(bp.get("lIns", 91440)) if bp is not None else 91440
+            rins = int(bp.get("rIns", 91440)) if bp is not None else 91440
+            tins = int(bp.get("tIns", 45720)) if bp is not None else 45720
+            bins = int(bp.get("bIns", 45720)) if bp is not None else 45720
+            sx, sy, cx, cy = (int(off.get("x")), int(off.get("y")), int(ext.get("cx")), int(ext.get("cy")))
+            width_in = (cx - lins - rins) / EMU_PER_IN
+            if width_in <= 0:
+                continue
+            paras = [p_ for p_ in tx.iter(f"{_A}p")
+                     if "".join(t.text or "" for t in p_.iter(f"{_A}t")).strip()]
+            single = len(paras) == 1
+            for p_ in paras:
+                kids = [el for el in p_ if el.tag in (f"{_A}r", f"{_A}fld", f"{_A}br")]
+                runs = [el for el in kids if el.tag == f"{_A}r"]
+                if not runs or len(runs) != len(kids):
+                    continue                      # fields and manual breaks: leave the paragraph alone
+                texts = [(r.find(f"{_A}t").text or "") if r.find(f"{_A}t") is not None else "" for r in runs]
+                text = "".join(texts)
+                rprs = [r.find(f"{_A}rPr") for r in runs]
+                sizes = [int(rp.get("sz")) / 100 for rp in rprs if rp is not None and rp.get("sz")]
+                size = max(sizes) if sizes else 18.0
+                rp0 = rprs[0]
+                tracking = int(rp0.get("spc")) / 100 if rp0 is not None and rp0.get("spc") else 0.0
+                lat = rp0.find(f"{_A}latin") if rp0 is not None else None
+                face = lat.get("typeface") if lat is not None else None
+                bold = rp0 is not None and rp0.get("b") == "1"
+                if face == MONO_FAMILY:
+                    continue
+                algn = (p_.find(f"{_A}pPr").get("algn") if p_.find(f"{_A}pPr") is not None else None) or "l"
+                room = None
+                if single:
+                    try:
+                        limit = mod.room_right(sx, sy, cx, cy, sw, portrait, rects)
+                        room = (limit - sx - lins - rins) / EMU_PER_IN
+                    except Exception:
+                        room = None
+                fit = widow_fit(text, size, width_in, height_in=(cy - tins - bins) / EMU_PER_IN,
+                                face=face, bold=bold, tracking_pt=tracking,
+                                max_width_in=room if (single and algn == "l") else None)
+                if fit.action == "none":
+                    continue
+                # the binding lands in whichever run holds the final gap
+                m = re.search(r"[ \t]+(?=[^\s\u00a0]+\s*$)", text)
+                if m is not None:
+                    pos = 0
+                    first = True
+                    for r, t in zip(runs, texts):
+                        a, b = max(m.start(), pos), min(m.end(), pos + len(t))
+                        if a < b:
+                            la, lb = a - pos, b - pos
+                            t_el = r.find(f"{_A}t")
+                            t_el.text = t[:la] + (NBSP if first else "") + t[lb:]
+                            first = False
+                        pos += len(t)
+                    counts["bound"] += 1
+                    touched = True
+                if fit.action in ("widened", "narrowed", "resized") and single:
+                    if abs(fit.width_in - width_in) > 1e-6:
+                        new_cx = int(round(fit.width_in * EMU_PER_IN)) + lins + rins
+                        if algn == "r":
+                            off.set("x", str(sx + (cx - new_cx)))
+                        elif algn == "ctr":
+                            off.set("x", str(sx + (cx - new_cx) // 2))
+                        ext.set("cx", str(new_cx))
+                    if abs(fit.size_pt - size) > 1e-6:
+                        for rp in rprs:
+                            if rp is not None:
+                                rp.set("sz", str(int(round(fit.size_pt * 100))))
+                    counts[fit.action] += 1
+                elif fit.action == "bound-only":
+                    counts["unresolved"] += 1
+        if touched:
+            replace[sp] = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+    z.close()
+    if replace:
+        _rewrite_zip(path, replace)
+    return counts
+
+
+def _hex_to_rgb(h: str) -> tuple:
+    h = str(h or "").lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def cover_crop(im, size=PAGE_PX, top_bias: float = 0.22):
+    """Cover-fill a Pillow image into ``size`` with no distortion: a wide
+    source loses equal strips left and right; a tall one keeps the window
+    toward the top (``top_bias`` of the lost height above) so faces stay
+    in frame. Upscaled with Lanczos when the source is smaller."""
+    from PIL import Image
+    im = im.convert("RGB")
+    tw, th = size
+    sw_, sh_ = im.size
+    tgt, src = tw / th, sw_ / sh_
+    if src > tgt + 1e-6:
+        new_w = int(round(sh_ * tgt))
+        left = (sw_ - new_w) // 2
+        im = im.crop((left, 0, left + new_w, sh_))
+    elif src < tgt - 1e-6:
+        new_h = int(round(sw_ / tgt))
+        top = int(round((sh_ - new_h) * top_bias))
+        im = im.crop((0, top, sw_, top + new_h))
+    return im.resize((tw, th), Image.LANCZOS)
+
+
+def bake_photo_background(image_bytes: bytes, *, scrim_hex: str = "#0C1618", alpha: float = 0.64,
+                          size=PAGE_PX, quality: int = 88, crop=None) -> bytes:
+    """A photo as a page background the house way: cover-cropped to the
+    page at 3840 x 2160, the graphite scrim baked into the pixels (never a
+    shape over the picture). ``crop`` is an optional (l, t, r, b) fraction
+    set already applied in the deck (an a:srcRect) to honor first."""
+    from PIL import Image
+    im = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    if crop and any(crop):
+        l, t, r_, b = crop
+        W0, H0 = im.size
+        im = im.crop((int(round(l * W0)), int(round(t * H0)), int(round(W0 * (1 - r_))), int(round(H0 * (1 - b)))))
+    im = cover_crop(im, size)
+    if alpha and alpha > 0:
+        veil = Image.new("RGB", im.size, _hex_to_rgb(scrim_hex))
+        im = Image.blend(im, veil, min(max(float(alpha), 0.0), 1.0))
+    out = io.BytesIO()
+    im.save(out, format="JPEG", quality=int(quality), optimize=True, progressive=True)
+    return out.getvalue()
+
+
+_GRADIENT_CACHE: dict = {}
+
+
+def gradient_image_bytes(name: str = "graphiteWash", size=PAGE_PX, fmt: str = "JPEG") -> Optional[bytes]:
+    """The pack's gradient (``assets/tokens.json`` -> gradient.<name>) built
+    at full resolution and dithered, the way ``make_gradients.py`` builds
+    it: a page gradient goes into the slide background as an image, never
+    as a shape. Names: signal, orchid, signalDeep, orchidDeep, offWhiteEdge,
+    graphiteWash (also accepted in the script's dashed spelling). Cached
+    per process; None when the pack carries no such gradient."""
+    key = (str(name), tuple(size), fmt)
+    if key in _GRADIENT_CACHE:
+        return _GRADIENT_CACHE[key]
+    g = token("gradient")
+    if not isinstance(g, dict):
+        return None
+    aliases = {"signal-deep": "signalDeep", "orchid-deep": "orchidDeep", "offwhite-edge": "offWhiteEdge",
+               "graphite-wash": "graphiteWash", "glow-card": "glowCard"}
+    spec = g.get(aliases.get(str(name), str(name)))
+    if not isinstance(spec, dict) or not spec.get("stops"):
+        return None
+    try:
+        import math
+        import numpy as np
+        from PIL import Image
+        w, h = size
+        stops = spec["stops"]
+        if isinstance(stops[0], str):
+            stops = [[0.0, stops[0]], [1.0, stops[1]]]
+        a = math.radians(float(spec.get("angle", 47)))
+        ys, xs = np.mgrid[0:h, 0:w].astype(np.float64)
+        p = xs * math.cos(a) + ys * math.sin(a)
+        t = (p - p.min()) / max(p.max() - p.min(), 1e-9)
+        pos = np.array([float(s[0]) for s in stops])
+        cols = np.array([_hex_to_rgb(s[1]) for s in stops], dtype=np.float64)
+        rgb = np.stack([np.interp(t, pos, cols[:, c]) for c in range(3)], axis=-1)
+        rng = np.random.default_rng(7)
+        d = (rng.random((h, w)) - rng.random((h, w)))[..., None]      # triangular noise, one level
+        arr = np.clip(np.floor(rgb + d + 0.5), 0, 255).astype(np.uint8)
+        out = io.BytesIO()
+        if fmt.upper() in ("JPG", "JPEG"):
+            Image.fromarray(arr, "RGB").save(out, format="JPEG", quality=95, optimize=True, progressive=True)
+        else:
+            Image.fromarray(arr, "RGB").save(out, format="PNG", compress_level=6)
+        _GRADIENT_CACHE[key] = out.getvalue()
+        return _GRADIENT_CACHE[key]
+    except Exception:
+        return None
+
+
+def set_slide_background_image(slide, image_bytes: bytes) -> str:
+    """Set a python-pptx slide's background to an image (``p:bg`` with a
+    blip fill, stretched to the page). Returns the relationship id."""
+    from lxml import etree
+    image_part, rId = slide.part.get_or_add_image_part(io.BytesIO(image_bytes))
+    cSld = slide._element.find(f"{_P}cSld")
+    old = cSld.find(f"{_P}bg")
+    if old is not None:
+        cSld.remove(old)
+    xml = (f'<p:bg xmlns:p="{_NS_P}" xmlns:a="{_NS_A}" xmlns:r="{_NS_R}"><p:bgPr>'
+           f'<a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="{rId}"/>'
+           f'<a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>')
+    cSld.insert(0, etree.fromstring(xml))
+    return rId
+
+
+def _bg_xml_image(rid: str) -> bytes:
+    return (f'<p:bg xmlns:p="{_NS_P}" xmlns:a="{_NS_A}" xmlns:r="{_NS_R}"><p:bgPr>'
+            f'<a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="{rid}"/>'
+            f'<a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>').encode()
+
+
+def _bg_xml_solid(hex6: str) -> bytes:
+    return (f'<p:bg xmlns:p="{_NS_P}" xmlns:a="{_NS_A}"><p:bgPr><a:solidFill><a:srgbClr val="{hex6}"/>'
+            f'</a:solidFill><a:effectLst/></p:bgPr></p:bg>').encode()
+
+
+def fix_backgrounds_in_pptx(path) -> dict:
+    """Turn full-page shapes acting as the page into real slide backgrounds,
+    in place. A solid rectangle becomes the background color; a full-page
+    picture (with any scrim rectangles over it) is baked into one 3840 px
+    background image, scrim included; a translucent veil over a solid page
+    becomes the blended color. The leading full-page shapes come off the
+    page; everything above them stays. Returns counts: solid, image."""
+    import zipfile
+    from lxml import etree
+    from PIL import Image
+    counts = {"solid": 0, "image": 0}
+    z = zipfile.ZipFile(str(path))
+    names = z.namelist()
+    slides, sw, sh = _slide_parts(z)
+    replace, add = {}, {}
+    media_n = 0
+    ct_name = "[Content_Types].xml"
+    ct_xml = z.read(ct_name).decode("utf8", "ignore") if ct_name in names else ""
+    need_jpg_default = False
+    for sp in slides:
+        if sp not in names:
+            continue
+        root = etree.fromstring(z.read(sp))
+        cSld = root.find(f"{_P}cSld")
+        tree = cSld.find(f"{_P}spTree") if cSld is not None else None
+        if tree is None:
+            continue
+        rels_name = sp.replace("slides/", "slides/_rels/") + ".rels"
+        rels_xml = z.read(rels_name).decode("utf8", "ignore") if rels_name in names else ""
+        rmap = dict(re.findall(r'Id="(rId\d+)"[^>]*Target="([^"]+)"', rels_xml))
+        rmap.update({a: b for b, a in re.findall(r'Target="([^"]+)"[^>]*Id="(rId\d+)"', rels_xml)})
+
+        def full_page(el):
+            off, ext = el.find(f".//{_A}xfrm/{_A}off"), el.find(f".//{_A}xfrm/{_A}ext")
+            if off is None or ext is None:
+                return False
+            x, y, cx, cy = (int(off.get("x")), int(off.get("y")), int(ext.get("cx")), int(ext.get("cy")))
+            return cx >= 0.95 * sw and cy >= 0.95 * sh and abs(x) <= 0.03 * sw and abs(y) <= 0.03 * sh
+
+        stack = []
+        for el in tree:
+            if el.tag in (f"{_P}nvGrpSpPr", f"{_P}grpSpPr"):
+                continue
+            if el.tag == f"{_P}pic" and full_page(el):
+                stack.append(el)
+                continue
+            if el.tag == f"{_P}sp" and full_page(el):
+                tb = el.find(f"{_P}txBody")
+                has_txt = tb is not None and "".join(t.text or "" for t in tb.iter(f"{_A}t")).strip() != ""
+                sppr = el.find(f"{_P}spPr")
+                if not has_txt and sppr is not None and sppr.find(f"{_A}solidFill/{_A}srgbClr") is not None:
+                    stack.append(el)
+                    continue
+            break
+        if not stack:
+            continue
+        # the page color under the stack (the existing background, when solid)
+        base_hex = None
+        bg = cSld.find(f"{_P}bg")
+        if bg is not None:
+            c = bg.find(f".//{_A}solidFill/{_A}srgbClr")
+            if c is not None and bg.find(f".//{_A}blip") is None and bg.find(f".//{_A}gradFill") is None:
+                base_hex = c.get("val")
+        image = None
+        color = _hex_to_rgb(base_hex) if base_hex else None
+        for el in stack:
+            if el.tag == f"{_P}pic":
+                blip = el.find(f".//{_A}blip")
+                target = rmap.get(blip.get(f"{_R}embed")) if blip is not None else None
+                part = None
+                if target:
+                    import posixpath
+                    part = posixpath.normpath(posixpath.join(posixpath.dirname(sp), target))
+                if part and part in names:
+                    try:
+                        crop = None
+                        src = el.find(f".//{_A}srcRect")
+                        if src is not None:
+                            crop = tuple(int(src.get(k, "0")) / 100000 for k in ("l", "t", "r", "b"))
+                        im = Image.open(io.BytesIO(z.read(part))).convert("RGB")
+                        if crop and any(crop):
+                            l, t, r_, b = crop
+                            W0, H0 = im.size
+                            im = im.crop((int(round(l * W0)), int(round(t * H0)),
+                                          int(round(W0 * (1 - r_))), int(round(H0 * (1 - b)))))
+                        image = cover_crop(im, PAGE_PX)
+                        color = None
+                    except Exception:
+                        image = None
+                continue
+            srgb = el.find(f"{_P}spPr").find(f"{_A}solidFill/{_A}srgbClr")
+            rgb = _hex_to_rgb(srgb.get("val"))
+            alpha_el = srgb.find(f"{_A}alpha")
+            alpha = int(alpha_el.get("val")) / 100000 if alpha_el is not None else 1.0
+            alpha = min(max(alpha, 0.0), 1.0)
+            if image is not None:
+                veil = Image.new("RGB", image.size, rgb)
+                image = Image.blend(image, veil, alpha)
+            elif color is not None:
+                color = tuple(int(round(c0 * (1 - alpha) + c1 * alpha)) for c0, c1 in zip(color, rgb))
+            else:
+                color = rgb
+        if image is None and color is None:
+            continue
+        for el in stack:
+            tree.remove(el)
+        if bg is not None:
+            cSld.remove(bg)
+        if image is not None:
+            out = io.BytesIO()
+            image.save(out, format="JPEG", quality=88, optimize=True, progressive=True)
+            media_n += 1
+            media_name = f"ppt/media/cwbg{media_n}.jpg"
+            while media_name in names or media_name in add:
+                media_n += 1
+                media_name = f"ppt/media/cwbg{media_n}.jpg"
+            add[media_name] = out.getvalue()
+            ids = set(re.findall(r'Id="(rId\d+)"', rels_xml))
+            n = 1
+            while f"rId{n}" in ids:
+                n += 1
+            rid = f"rId{n}"
+            rel = (f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+                   f'relationships/image" Target="../media/{media_name.split("/")[-1]}"/>')
+            if rels_xml:
+                rels_xml = rels_xml.replace("</Relationships>", rel + "</Relationships>")
+            else:
+                rels_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                            + rel + "</Relationships>")
+            replace[rels_name] = rels_xml.encode("utf8")
+            cSld.insert(0, etree.fromstring(_bg_xml_image(rid)))
+            need_jpg_default = True
+            counts["image"] += 1
+        else:
+            cSld.insert(0, etree.fromstring(_bg_xml_solid("%02X%02X%02X" % color)))
+            counts["solid"] += 1
+        replace[sp] = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+    z.close()
+    if need_jpg_default and ct_xml and 'Extension="jpg"' not in ct_xml:
+        ct_xml = ct_xml.replace("<Default ", '<Default Extension="jpg" ContentType="image/jpeg"/><Default ', 1)
+        replace[ct_name] = ct_xml.encode("utf8")
+    if replace or add:
+        _rewrite_zip(path, replace, add)
+    return counts
+
+
 def render_preview(path, out_dir=None, dpi: int = 90) -> Optional[Path]:
     """Page images through the pack's ``render_preview.py`` (needs
     LibreOffice). Returns the output directory or None."""
@@ -739,4 +1398,8 @@ __all__ = [
     "register_reportlab", "tokens", "token", "color", "template_path", "deck_template", "logo_path",
     "scripts_dir", "lint_module", "door_copy_module", "widow_safe_width", "Report", "verify_pdf_fonts", "embed_fonts", "brand_lint", "readability", "scrub_door_metaphor", "scrub_doors_in_file", "finish", "gate_attachment",
     "finish_bytes", "render_preview", "soffice_available", "status",
+    # pre-ship fixes (2026-11-10)
+    "NBSP", "MONO_FAMILY", "PAGE_PX", "WidowFit", "bind_last_two", "widow_lines", "widow_fit",
+    "fix_widows_in_pptx", "fix_backgrounds_in_pptx", "preship_fix", "cover_crop", "bake_photo_background",
+    "gradient_image_bytes", "set_slide_background_image",
 ]
