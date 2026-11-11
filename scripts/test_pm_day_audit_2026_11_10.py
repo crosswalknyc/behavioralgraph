@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 from prometheus import figures as F  # noqa: E402
 from prometheus import question_universe as QU  # noqa: E402
+from prometheus import reader as RD  # noqa: E402
 from prometheus import subject_rules as SR  # noqa: E402
 
 KEITH_1 = "I'd like to know the percentage of Claire's shoppers that also shop at Target, Walmart and Kohl's?"
@@ -49,6 +50,8 @@ LIZ_2 = ("what is the average monthly churn rate for subscribers on each path (A
          "State how churn is defined.?")
 LIZ_READING = {'intent': 'analyze', 'subjects': [{'as_written': 'Amazon', 'catalog': 'Amazon Music', 'kind': 'brand'}]}
 CATALOG = ['Amazon Music', 'Amazon Prime Video', 'HBO Max', 'Peacock', 'Target', 'Walmart', "Kohl's"]
+# the live reading on Keith's first ask: Target was its only library match
+KEITH_READING_LIVE = dict(KEITH_READING, subjects=[KEITH_READING['subjects'][0], KEITH_READING['subjects'][1]])
 
 
 class AlsoBaseIsTheNamedAudience(unittest.TestCase):
@@ -103,6 +106,30 @@ class ALibrarySubjectAfterAlsoIsNotTheBase(unittest.TestCase):
 
     def test_a_subject_named_as_the_universe_keeps_its_file(self):
         self.assertFalse(QU.names_other_universe("How many Costco members shop at Target too?", 'Costco', page=''))
+
+
+class TheReaderNeverHandsOverAnOverlapSubject(unittest.TestCase):
+    """reader.steer binds the reading's one library subject for the read
+    core. Target was Keith's only library match and it was the overlap,
+    not the base: with the words in hand, steer hands over nothing."""
+
+    def test_keiths_reading_binds_no_library_subject(self):
+        dec = {'surface': 'analyze', 'reason': 'question'}
+        out = RD.steer(KEITH_READING_LIVE, dec, has_ctx=False, text=KEITH_1)
+        self.assertIsNone(out)
+
+    def test_a_reading_whose_one_library_subject_is_the_base_still_binds(self):
+        r = {'intent': 'analyze', 'confidence': 0.9, 'flags': [],
+             'subjects': [{'as_written': 'Target shoppers', 'catalog': 'Target', 'kind': 'brand'}]}
+        dec = {'surface': 'analyze', 'reason': 'question'}
+        out = RD.steer(r, dec, has_ctx=False, text='How do Target shoppers split by age band?')
+        self.assertIsNotNone(out)
+        self.assertEqual(out[1], 'Target')
+
+    def test_without_the_words_the_old_hand_over_stands(self):
+        dec = {'surface': 'analyze', 'reason': 'question'}
+        out = RD.steer(KEITH_READING_LIVE, dec, has_ctx=False)
+        self.assertEqual((out or ('', ''))[1], 'Target')
 
 
 class UnclosedTokenNeverReachesAReader(unittest.TestCase):

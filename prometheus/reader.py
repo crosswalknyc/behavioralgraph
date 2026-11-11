@@ -610,7 +610,27 @@ def capability_reply(reading):
     return {'reply': reply, 'followups': [chip]}
 
 
-def steer(reading, decision, *, has_ctx=False, min_conf=0.7):
+def _single_library_subject(r, text=''):
+    """The one library subject a reading carries, or ''. Never one the
+    words name only as the overlap of their own universe (Keith,
+    2026-11-10: "the percentage of Claire's shoppers that also shop at
+    Target, Walmart and Kohl's" carried Target as its only library match
+    and the read ran on the Target file)."""
+    cats = [s['catalog'] for s in r.get('subjects') or [] if isinstance(s, dict) and s.get('catalog')]
+    if len(cats) != 1:
+        return ''
+    bind = cats[0]
+    if text:
+        try:
+            from . import question_universe as _qu
+            if _qu.names_other_universe(text, bind):
+                return ''
+        except Exception:
+            traceback.print_exc()
+    return bind
+
+
+def steer(reading, decision, *, has_ctx=False, min_conf=0.7, text=''):
     """(decision, bind_subject) when a confident reading should pick the
     surface; None to keep the router's decision. Only overrides the
     analyze / interpret / deck choice; armed steps never reach here."""
@@ -633,16 +653,12 @@ def steer(reading, decision, *, has_ctx=False, min_conf=0.7):
             # the surface already agrees; still hand over a single library subject
             bind = ''
             if want == 'analyze' and intent in ('analyze',) and not refers_to_page(r):
-                cats = [s['catalog'] for s in r.get('subjects') or [] if s.get('catalog')]
-                if len(cats) == 1:
-                    bind = cats[0]
+                bind = _single_library_subject(r, text)
             return (dict(decision, reason=f"{(decision or {}).get('reason') or 'router'}+reader:{intent}"), bind) if bind else None
         new = dict(decision or {}, surface=want, reason=f"reader:{intent}", client_hint=None)
         bind = ''
         if want == 'analyze' and intent == 'analyze' and not refers_to_page(r):
-            cats = [s['catalog'] for s in r.get('subjects') or [] if s.get('catalog')]
-            if len(cats) == 1:
-                bind = cats[0]
+            bind = _single_library_subject(r, text)
         print(f"[reader] steer {cur or '?'} -> {want} ({intent}, {r.get('confidence')})")
         return new, bind
     except Exception:

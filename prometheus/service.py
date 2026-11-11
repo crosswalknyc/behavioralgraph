@@ -2452,7 +2452,7 @@ def ask(user, body, *, via='session'):
         # the Reader's confident intent picks the surface (2026-10-14)
         try:
             from . import reader as _rd2
-            _steer = _rd2.steer(reading, decision, has_ctx=has_ctx)
+            _steer = _rd2.steer(reading, decision, has_ctx=has_ctx, text=text)
             if _steer:
                 decision, _bind = _steer
                 if _bind and not body.get('bind_subject'):
