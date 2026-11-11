@@ -299,7 +299,7 @@ check('- Shop at Target: 84.4% of the audience, 7,579,255 US people, index 285 (
 check('- Have an interest in Technology: 88.9% of the audience' in ra, "the interest row beside it")
 check('cut of the audience' in ra and 'deck page' in ra and any(c.startswith('Build a cut of Chime Banking Customers who') for c in ans['followups']),
       "offers the cut and the deck page", ans.get('followups'))
-check(orders.is_order(ans['followups'][0]), "the cut chip is an order the build flow takes")
+check(orders.is_order(ans['followups'][0]) and len(ans['followups']) == 1, "the one chip is the cut, an order the build flow takes")
 check(75.0 < ct['share_pct'] < 84.4 and ct['us'] < 7_579_255 and ct['in_data'] < 229_744, "the group sits inside both single rows", ct)
 check(abs(ct['us'] - ct['in_data'] / 10_000_000 * 329_900_000) < 200 and ct['us'] % 10 and ct['in_data'] % 10, "house count math, no trailing zero", ct)
 check(ct['share_pct'] == round(r2['share'] * 100, 2) and ct['index'] == r2['index'], "the lane's figure is the engine's figure")
@@ -377,9 +377,8 @@ from prometheus import cross_sizing as cx  # noqa: E402
 BANK.clear()
 split = cx.answer("how many Chime Banking Customers are there, of those how many are on Netflix, on Hulu", {}, host=HOST)
 pairx = xt.answer("Chime Banking Customers who use Netflix and Hulu", {}, host=HOST, user=PAYING)
-both_share = (split or {}).get('sizing', [{}])[0].get('both', 0) / max(1, (split or {}).get('sizing', [{}])[0].get('us', 1))
-check(split and pairx and abs(both_share * 100 - pairx['crosstab']['share_pct']) < 0.6,
-      "one figure for the people on both, in the split and in the cross", (both_share, pairx and pairx['crosstab']['share_pct']))
+check(split and pairx and split['sizing'][0]['both'] == pairx['crosstab']['us'] and f"- On both: {pairx['crosstab']['us']:,} ({pairx['crosstab']['share_pct']:.1f}%)" in split['reply'],
+      "one figure for the people on both, in the split and in the cross", (split and split['sizing'][0].get('both'), pairx and pairx['crosstab']['us']))
 check(split and 'On both' in split['reply'] and 'On neither' in split['reply'], "the split keeps its own shape", split and split['reply'][:200])
 
 # ------------------------------------------------------------ [7] a whole category

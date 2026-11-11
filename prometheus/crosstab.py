@@ -808,9 +808,9 @@ def compute(profile_key, subject, df, conditions, *, host=None, username='', tie
 
 
 def pair_on_profile(profile_key, subject, rows, *, host=None):
-    """The share (a fraction) of one profile's audience on both of two
-    of its own rows ([(COLUMN, value), (COLUMN, value)]), from the same
-    estimator and the same record as every cross, or None. The split of
+    """{'share' (a fraction), 'us'} for one profile's audience on both
+    of two of its own rows ([(COLUMN, value), (COLUMN, value)]), from the
+    same estimator and the same record as every cross, or None. The split of
     a base across two services (prometheus.cross_sizing) reads its
     'both' here so the two reads agree. Writes nothing."""
     try:
@@ -830,7 +830,7 @@ def pair_on_profile(profile_key, subject, rows, *, host=None):
                 return None
             conds.append(bx._condition(row, prof, gp_map))
         res = compute(profile_key, subject, df, conds, host=host, record=False)
-        return float(res['share']) if res else None
+        return {'share': float(res['share']), 'us': int(res['us'])} if res else None
     except Exception:
         traceback.print_exc()
         return None
@@ -983,7 +983,7 @@ def answer(text, ctx=None, *, host=None, history=None, user=None, plan_=None):
         if not res:
             return None
         reply = render(res, p)
-        chips = [f"Build a cut of {p['label']}"[:160], f"What else stands out about {p['label']}?"[:160]]
+        chips = [f"Build a cut of {p['label']}"[:160]]
         _persist_ledger(p, res, reply, text, uname)
         page_name, page_key = _page(ctx)
         on_page = bool(page_key and page_key == p['key'])

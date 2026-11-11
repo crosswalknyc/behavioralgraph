@@ -397,25 +397,28 @@ def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window=''):
         both_n = neither_n = None
         if len(known) == 2:
             p1, p2 = known[0]['share'], known[1]['share']
-            p_both = None
+            p_both, both_us = None, None
             if base.get('source') == 'profile' and base.get('key') and all(s.get('basis') == 'base_profile' for s in known):
                 # both shares are the base profile's own rows: the people on both are the cross of
                 # those two rows read on that profile (prometheus.crosstab, 2026-11-11), so this
                 # split and "<base> who use A and B" state one figure
                 try:
                     from . import crosstab as _xt
-                    p_both = _xt.pair_on_profile(base['key'], base['name'], [s['row'] for s in known], host=host)
+                    _pair = _xt.pair_on_profile(base['key'], base['name'], [s['row'] for s in known], host=host)
+                    if _pair:
+                        p_both, both_us = _pair['share'], _pair['us']
                 except Exception:
                     traceback.print_exc()
-                    p_both = None
+                    p_both, both_us = None, None
             if p_both is None:
                 a = _assoc(host, ctx, known[0]['target'], known[1]['target'], p2)
                 p_both = p1 * a
             p_both = min(min(p1, p2) * 0.985, max(max(0.0, p1 + p2 - 1.0), p_both))
-            p_both = _jitter(p_both, 'cross-both', q['base_entity'], known[0]['target'], known[1]['target'], pp=0.0008)
-            p_both = min(min(p1, p2) * 0.985, max(max(0.0, p1 + p2 - 1.0), p_both))
+            if both_us is None:
+                p_both = _jitter(p_both, 'cross-both', q['base_entity'], known[0]['target'], known[1]['target'], pp=0.0008)
+                p_both = min(min(p1, p2) * 0.985, max(max(0.0, p1 + p2 - 1.0), p_both))
             p_neither = max(0.0, 1.0 - p1 - p2 + p_both)
-            both_n = _messy(p_both * us, 'cross-both-n', q['base_entity'])
+            both_n = both_us if both_us is not None else _messy(p_both * us, 'cross-both-n', q['base_entity'])
             neither_n = _messy(p_neither * us, 'cross-neither-n', q['base_entity'])
             # two services split four ways; both and neither are always part of the read
             lines.append(f"- On both: {_fmt(both_n)} ({_pct(p_both)})")
