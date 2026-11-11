@@ -1545,16 +1545,62 @@ def _variants(name: str) -> list:
         [base, joined, base.replace(" ", "-"), base.replace(" ", "_")]))
 
 
+def _hold_count(salt, tag, value, f) -> int:
+    """A count at the share `f` of itself, messy, never below 1 when it
+    was above 0."""
+    try:
+        v = float(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    if v <= 0:
+        return 0
+    return max(1, _messy((salt, "hold", tag), v * f))
+
+
+def _hold_reach(reach: dict, f: float, salt: str, reach_us: int) -> dict:
+    """The campaign's reach lines at the share `f`: every people count
+    moves together, the union is `reach_us`, and the counts of pieces,
+    events and views (facts of the campaign, not people) stay."""
+    out = dict(reach)
+    for k in ("gross_people", "site_people", "press_people", "social_people", "commercial_people",
+              "event_people", "search_people"):
+        if out.get(k):
+            out[k] = _hold_count(salt, k, out[k], f)
+    lines = []
+    for ln in (reach.get("lines") or []):
+        ln = dict(ln)
+        ln["people"] = _hold_count(salt, ("line", ln.get("line")), ln.get("people"), f)
+        lines.append(ln)
+    out["lines"] = lines
+    out["reach_us"] = int(reach_us)
+    # a line of people reached cannot exceed the union
+    for k in ("site_people", "press_people", "social_people", "commercial_people", "event_people", "search_people"):
+        if out.get(k) and out[k] > out["reach_us"]:
+            out[k] = out["reach_us"]
+    for ln in out["lines"]:
+        if ln.get("people") and ln["people"] > out["reach_us"]:
+            ln["people"] = out["reach_us"]
+    return out
+
+
 def build_payload(inputs: dict, prim: dict, *,
                   created_by: str = "prometheus",
-                  campaign: Optional[dict] = None) -> dict:
+                  campaign: Optional[dict] = None,
+                  hold: Optional[float] = None) -> dict:
     """Derive the full BPIQ payload from reasoned primitives.
 
     Every downstream number (users, lifts, projections, control group,
     EMV breakdown, valuation) is computed here so the payload is
     internally coherent by construction. Every salted draw is seeded
     by the run key (not the display name), so one ask in any spelling
-    draws the same values."""
+    draws the same values.
+
+    `hold` (a share between 0 and 1, from migration.bpiq_anchors) builds
+    the same valuation with every count at that share of what the
+    research gave: the people reached, the reach lines, the engaged and
+    converting people, the drop's units and orders, the touchpoint and
+    sentiment counts. Shares, lifts and rates do not move, so every lens
+    and line is recomputed from the held counts and the page adds up."""
     subject = f"{inputs['qualifier']} x {inputs['brand_partner']}"
     salt = run_salt(inputs)
     windows = _dates(inputs)
@@ -1575,6 +1621,24 @@ def build_payload(inputs: dict, prim: dict, *,
     else:
         n, projected = talent_n, int(prim["projected_audience_size"])
         audience_basis = "talent audience in the window"
+    # Held to a read already delivered on this pairing (2026-11-11): one
+    # share on every count, taken at the root so everything derived
+    # below moves with it.
+    try:
+        hold_f = float(hold) if hold is not None else None
+    except (TypeError, ValueError):
+        hold_f = None
+    if hold_f is not None and not (0.0 < hold_f < 1.0):
+        hold_f = None
+    if hold_f:
+        _w0 = projected / float(n)
+        projected = _hold_count(salt, "projected", projected, hold_f)
+        n = max(1, _messy((salt, "hold", "n"), projected / _w0))
+        if not prim.get("_talent_audience_in_window"):
+            talent_projected = projected
+        if reach:
+            reach = _hold_reach(reach, hold_f, salt, projected if audience_basis == "campaign reach"
+                                else _hold_count(salt, "reach_us", reach.get("reach_us"), hold_f))
     weight = projected / float(n)
 
     def proj(v):
@@ -1671,6 +1735,15 @@ def build_payload(inputs: dict, prim: dict, *,
     if audience_basis == "campaign reach" and (campaign or {}).get("collection_size") or \
             (audience_basis == "campaign reach" and (campaign or {}).get("products")):
         drop = _camp.derive_drop(campaign, fp, aov, salt)
+        if hold_f and int(drop.get("orders") or 0) > 0:
+            # the drop's units and orders at the held share; the price
+            # per order is the collection's own and does not move
+            drop = dict(drop)
+            drop["orders"] = _hold_count(salt, "orders", drop["orders"], hold_f)
+            drop["units_us"] = max(drop["orders"], _hold_count(salt, "units", drop.get("units_us"), hold_f))
+            drop["revenue_usd"] = round(drop["orders"] * float(drop.get("per_order_usd") or aov["aov"]), 2)
+            if drop.get("units_per_sku"):
+                drop["units_per_sku"] = round(float(drop["units_per_sku"]) * hold_f, 1)
         if int(drop.get("orders") or 0) > 0:
             conv_post_proj = int(drop["orders"])
             conv_post_u = max(_messy((salt, "cv_post_drop"), conv_post_proj / weight), conv_pre_u + 1)
@@ -1724,6 +1797,9 @@ def build_payload(inputs: dict, prim: dict, *,
     s = prim.get("sentiment") or {}
     s_pre = {k: int(v) for k, v in (s.get("pre") or {}).items()}
     s_post = {k: int(v) for k, v in (s.get("post") or {}).items()}
+    if hold_f:
+        s_pre = {k: (max(1, int(round(v * hold_f))) if v > 0 else 0) for k, v in s_pre.items()}
+        s_post = {k: (max(1, int(round(v * hold_f))) if v > 0 else 0) for k, v in s_post.items()}
     # count hygiene: the sentiment sample is the sum of the buckets and
     # never ends in 0; the post neutral bucket absorbs a salted nudge
     if (sum(s_pre.values()) + sum(s_post.values())) % 10 == 0 and s_post:
@@ -1757,9 +1833,9 @@ def build_payload(inputs: dict, prim: dict, *,
     tbp, tbp_pre = [], []
     for row in (prim.get("top_brand_properties") or [])[:12]:
         ph = _messy((salt, row["common_name"], "pre"),
-                    float(row.get("pre_hits", 0)))
+                    float(row.get("pre_hits", 0)) * (hold_f or 1.0))
         qh = _messy((salt, row["common_name"], "post"),
-                    float(row.get("post_hits", 0)))
+                    float(row.get("post_hits", 0)) * (hold_f or 1.0))
         tbp.append({"common_name": row["common_name"], "hits": qh,
                     "hits_projected": proj(qh)})
         tbp_pre.append({"common_name": row["common_name"], "hits": ph,
@@ -1837,7 +1913,8 @@ def build_payload(inputs: dict, prim: dict, *,
     # her share (2026-10-28): from the asset mix and the matched holdout,
     # never a constant; the dollar figure is set after the lenses settle
     _did = _mc.did_share(control_group) if control_group.get("enabled", True) else 1.0
-    talent = _camp.derive_talent_share(fp, campaign, reach or {}, _did, salt)
+    talent = _camp.derive_talent_share(fp, campaign, reach or {}, _did, salt,
+                                       matched=bool(control_group.get("enabled", True)))
     camp_block["audience_basis"] = audience_basis
     camp_block["talent_audience_in_window"] = talent_projected
     if reach:
@@ -2008,7 +2085,9 @@ def underpinnings_readme(inputs: dict, campaign: dict, aov: dict, payload: dict)
         "Brand engagement: the share of that audience with at least one brand touchpoint, before and during the campaign.",
         "Conversions: the share of the audience with a purchase action for the brand in the window.",
         "Average order value: what one converting order carries, from the collection's own price points.",
-        "Comparison group: a matched group of the same size with the same brand engagement before the campaign.",
+        ("Comparison group: a matched group of the same size with the same brand engagement before the campaign."
+         if ((payload or {}).get("control_group") or {}).get("enabled", True) else
+         "Brand lift: a before and after read of the same audience, the campaign window against the same number of days before it."),
         "",
         "Campaign facts",
     ]
@@ -2088,11 +2167,29 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             saved = None
     campaign = None
     prim = None
+    # A valuation never starts cold on a pairing Crosswalk already holds
+    # a read on (2026-11-11, migration.bpiq_anchors): the delivered read
+    # rides the research prompt and the finished valuation is held at or
+    # below it. A run read back from its underpinnings replays the hold
+    # it was saved with and looks nothing up.
+    banked, saved_hold = None, None
+    try:
+        from migration import bpiq_anchors as _ba
+    except Exception:
+        _ba = None
     if isinstance(saved, dict) and isinstance(saved.get("primitives"), dict) \
             and saved["primitives"].get("audience_size"):
         prim = dict(saved["primitives"])
         campaign = normalize_campaign(saved.get("campaign") or {}, inputs)
+        banked = saved.get("banked_read") if isinstance(saved.get("banked_read"), dict) else None
+        saved_hold = (saved.get("hold") or {}).get("factor") if isinstance(saved.get("hold"), dict) else None
         print(f"[bpiq-synth] underpinnings read back for {key}; no re-draw")
+    elif _ba is not None:
+        try:
+            banked = _ba.banked_read(inputs, windows)
+        except Exception as e:
+            print(f"[bpiq-synth] delivered-read lookup skipped: {e}")
+            banked = None
     if campaign is None:
         campaign = research_campaign(inputs, claude_json, tools=tools)
         print(f"[bpiq-synth] campaign research: {len(campaign.get('products') or [])} priced pieces, "
@@ -2109,7 +2206,9 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         win = {"start": ev.get("start"), "end": ev.get("end")} if isinstance(ev, dict) else None
         for label, name in (("qualifier", inputs.get("qualifier")),
                             ("brand_partner", inputs.get("brand_partner")),
-                            ("partnership", f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}")):
+                            ("partnership", f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}"),
+                            # the same pairing filed with the brand first (2026-11-11)
+                            ("partnership_brand_first", f"{inputs.get('brand_partner')} x {inputs.get('qualifier')}")):
             blk = _cc.anchors_block(_cc.anchors_for(str(name or ""), window=win), max_lines=24)
             if blk:
                 published[label] = blk
@@ -2185,6 +2284,7 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                                        "must agree with these where they overlap and "
                                        "sit inside them for a sub-window.")}
            if published else {}),
+        **(_ba.prompt_fields(banked) if (_ba is not None and banked) else {}),
     })
     if prim is None:
         prim = claude_json(research_prompt(), user_prompt,
@@ -2220,6 +2320,17 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         if not campaign.get("category") and prim.get("category"):
             campaign["category"] = str(prim.get("category") or "").strip().upper()
     payload = build_payload(inputs, prim, created_by=created_by, campaign=campaign)
+    hold_rec = {}
+    if _ba is not None and (banked or saved_hold):
+        try:
+            payload, hold_rec = _ba.hold(
+                payload, banked, inputs, windows,
+                rebuild=lambda _f: build_payload(inputs, prim, created_by=created_by, campaign=campaign, hold=_f),
+                salt=run_salt(inputs), factor=saved_hold)
+            if hold_rec:
+                payload.setdefault("diagnostics", {})["held_to_delivered_read"] = hold_rec
+        except Exception as e:
+            print(f"[bpiq-synth] delivered-read hold skipped: {e}")
     # The matching rules hold on every published valuation regardless
     # of what the model returned: a comparison group off in size or
     # pre-period engagement is re-drawn in place, never held.
@@ -2248,6 +2359,8 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                 "windows": windows,
                 "campaign": campaign,          # anchors and their sources: internal only
                 "primitives": prim,
+                "banked_read": banked,         # the delivered read this run was held to, if any
+                "hold": hold_rec,
                 "aov": aov_doc,
                 "readme": underpinnings_readme(inputs, campaign, aov_doc, payload),
                 "created_at": _dt.datetime.utcnow().isoformat() + "Z",

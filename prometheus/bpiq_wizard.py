@@ -15,6 +15,8 @@ import traceback
 from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
 
+from . import bpiq_slots as _slots   # what a sentence names: talent, brand, start (2026-11-11)
+
 FLOW = 'brand_partnership'
 WIZARD_FLOW = 'brand_partnership_wizard'
 DRAFT_TTL_S = 24 * 3600      # a draft waits a day, then the thread is free (matches pending_intake.TTL_S)
@@ -67,6 +69,30 @@ ASK_CONTROL = 'Include a control group?'
 ASK_ASSETS = ('Do you have specific campaign links to include, or should '
               'I find every applicable campaign asset?')
 ASK_LINKS = 'Paste the campaign links. One or many is fine.'
+# A step is never asked in the same words twice in a row (2026-11-11,
+# Samantha Kolton at CAA: "find the campaign asset" drew the assets
+# question a second time, word for word). The first reply that does not
+# answer a step gets the step again in other words; the second moves on
+# with the step's default, said in one plain line, when it has one.
+ASK_TALENT_ALT = 'I need the name of the talent or property in the partnership. Who is it?'
+ASK_CAMPAIGN_ALT = 'Which campaign or brand is the partnership with? A name like Gap x JYT works.'
+ASK_DATES_ALT = ("When did the campaign run? Give me a start and an end date, or a start date "
+                 "and 'to today' if it is still running.")
+ASK_DATES_HINT = ('You said it started in {hint}. What day did it start? If it is still '
+                  'running, I will run it through today.')
+ASK_DATES_HINT_ALT = ('What day in {hint} did it start? A date like {example} works. If you are '
+                      'not sure, I can run it from {first} through today.')
+ASK_DATES_UNREAD = 'I could not read those dates. Try something like October 7 - 28.'
+ASK_CONTROL_ALT = 'Should I include a control group? Yes or No.'
+ASK_ASSETS_ALT = ("If you have campaign links, paste them. If not, say 'find them' and I will "
+                  "look for every campaign asset myself.")
+ASK_LINKS_ALT = ("I did not catch a link. Paste one or more, or say 'find them' and I will "
+                 "look for the campaign assets myself.")
+ATTR_NUDGE = ' Accept this window, or use a different one.'
+ATTR_INFERRED_NOTE = ' If the campaign has ended, tell me the end date.'
+CHARGE_NUDGE = 'Say Accept to run it, or Decline to stop.'
+DEFAULT_FIND_LINE = "I'll find the campaign assets myself."
+DEFAULT_FIND_NO_LINK_LINE = "I did not catch a link, so I'll find the campaign assets myself."
 DECLINE_REPLY = "Okay, I won't run it."
 CANCEL_REPLY = 'No problem. Ask me anything else when ready.'
 RUNNING_REPLY = ("It's running. Keep talking here as usual. I'll email "
@@ -116,11 +142,22 @@ _NAMED_RANGE = re.compile(
     r'(?P<d2>\d{1,2})(?:st|nd|rd|th)?'
     r'(?:[,\s]+(?P<y2>(?:19|20)\d{2}))?',
     re.I)
+_OPEN_RANGE = re.compile(
+    r'^\W*(?:from\s+|since\s+)?(?P<s>.{3,40}?)\s*(?:-|to|through|thru|until|till|til)\s*'
+    r'(?:today|now|date|present|the\s+present|current)\W*$', re.I)
 _CANCEL_RE = re.compile(
     r'^\s*(never ?mind|not now|cancel( (that|it))?)\s*[.!?]?\s*$', re.I)
 _DECLINE_RE = re.compile(r'^\s*decline\s*[.!?]?\s*$', re.I)
 _YES_RE = re.compile(r'^\s*(yes|yeah|yep|y|sure|ok|okay)\s*[.!?]?\s*$', re.I)
 _NO_RE = re.compile(r'^\s*(no|nope|nah|n)\s*[.!?]?\s*$', re.I)
+# the control question answered in a few more words ("yes please",
+# "no thanks", "without one", "include it")
+_CONTROL_YES_RE = re.compile(
+    r"^\W*(?:(?:yes|yeah|yep|yup|sure|ok|okay)\b(?!\W+(?:no|not|without)\b)|include\b|add\b|with\s+(?:a\s+|the\s+)?control\b|"
+    r"please\s+(?:do|include|add)\b)", re.I)
+_CONTROL_NO_RE = re.compile(
+    r"^\W*(?:(?:no|nope|nah)\b|without\b|skip\b|none\b|not\s+(?:now|needed|this\s+time)\b|"
+    r"(?:do\s+not|don'?t|dont)\s+(?:include|add|need)\b|no\s+control\b)", re.I)
 _ACCEPT_RE = re.compile(
     r'^\s*(?:yes[,.!]?\s+)?(?:please\s+)?accept(?:\s+\$?\s*[\d,]+)?\s*[.!?]?\s*$',
     re.I)
@@ -216,6 +253,16 @@ def parse_dates(text, today=None):
         if b < a:
             a, b = b, a
         return a.isoformat(), b.isoformat()
+    # a start date and "to today" ("9/22/26 to today", "September 22
+    # through now"): the end is the wizard's own today (2026-11-11)
+    m = _OPEN_RANGE.match(t)
+    if m:
+        try:
+            one = _slots.single_date(m.group('s'), today)
+        except Exception:
+            one = None
+        if one and _d(one) <= today:
+            return one, today.isoformat()
     try:
         from prometheus.intake_reader import find_windows
         win = find_windows(t) or {}
@@ -305,20 +352,32 @@ def is_start(text):
 # name like "Jennifer Beals" after any of these is the answer, never
 # a new subject read.
 _PROMPT_TO_STEP = (
+    # a default taken on the reader's behalf is followed by the next
+    # step's own prompt; that later prompt names the step, so the recap
+    # and the window lead this table
+    ("Here's what I'll run", STEP_CHARGE),
+    ('I read the campaign as', STEP_ATTR),
     (ASK_TALENT, STEP_TALENT),
     ('Who is the property or talent', STEP_TALENT),
+    ('I need the name of the talent or property', STEP_TALENT),
     (ASK_CAMPAIGN, STEP_CAMPAIGN),
     ('What campaign should I value', STEP_CAMPAIGN),
+    ('Which campaign or brand is the partnership with', STEP_CAMPAIGN),
     (ASK_DATES, STEP_DATES),
     ('What are the campaign dates', STEP_DATES),
     ('I could not read those dates', STEP_DATES),
-    ('I read the campaign as', STEP_ATTR),
+    ('When did the campaign run', STEP_DATES),
+    ('What day did it start', STEP_DATES),
+    ('did it start? A date like', STEP_DATES),
     (ASK_ATTR_CUSTOM, STEP_ATTR_CUSTOM),
     ('What attribution window should I use', STEP_ATTR_CUSTOM),
     (ASK_CONTROL, STEP_CONTROL),
     ('Include a control group', STEP_CONTROL),
+    ('Should I include a control group', STEP_CONTROL),
     (ASK_ASSETS, STEP_ASSETS),
     ('Do you have specific campaign links', STEP_ASSETS),
+    ('If you have campaign links, paste them', STEP_ASSETS),
+    ('I did not catch a link. Paste one or more', STEP_LINKS),
     (ASK_LINKS, STEP_LINKS),
     ('Paste the campaign links', STEP_LINKS),
     ("Here's what I'll run", STEP_CHARGE),
@@ -383,9 +442,12 @@ _STEP_KIND = {
 }
 _STEP_ANSWER_PATTERNS = {
     STEP_ATTR: (_ACCEPT_RE, re.compile(r'\bdifferent\b', re.I), _YES_RE),
-    STEP_ASSETS: (_PASTE_RE, _FIND_RE, _YES_RE, _NO_RE),
+    # "find the campaign asset", "find it", "I don't have one", "not sure"
+    # are the assets step's own answers (2026-11-11)
+    STEP_ASSETS: (_PASTE_RE, _FIND_RE, _YES_RE, _NO_RE, _slots._FIND_RX, _slots._NO_LINKS_RX),
+    STEP_LINKS: (_slots._FIND_RX, _slots._NO_LINKS_RX),
     STEP_CHARGE: (_ACCEPT_RE, _DECLINE_RE),
-    STEP_CONTROL: (_YES_RE, _NO_RE),
+    STEP_CONTROL: (_YES_RE, _NO_RE, _CONTROL_YES_RE, _CONTROL_NO_RE),
 }
 
 
@@ -411,12 +473,44 @@ def answers_step(text, draft, today=None):
         return True
     d = dict(draft or empty_draft())
     step = d.get('step') or next_step(d)
+    # A sentence that names the talent, the brand or when it started is
+    # the answer whatever step is open, however long it runs (2026-11-11:
+    # "JYT is the talent and GAP is the brand. the partnership started in
+    # September 2026" read as a new question and a general read ran in
+    # the wizard's place). A question is still a question.
+    if names_slots(text, step, today=today):
+        return True
     try:
         _reply, chips = step_prompt(d, today=today)
     except Exception:
         chips = [CHIP_CANCEL]
     return _ig.is_answer_to_step(text, _STEP_KIND.get(step, 'text'), chips=chips,
                                  answer_patterns=_STEP_ANSWER_PATTERNS.get(step))
+
+
+def names_slots(text, step=None, today=None):
+    """True when the sentence names a slot by its role ("X is the talent",
+    "the brand is Y", "the partnership between X and Y"), or, while a
+    name or the dates are still open, says when the partnership started.
+    Never a question."""
+    t = str(text or '').strip()
+    if not t or '?' in t:
+        return False
+    try:
+        from prometheus import intake_guard as _ig
+        if _ig.has_interrogative_opener(t) or _ig.asks_a_figure(t):
+            return False
+        if _ig.is_build_order(t) and not _bpiq_intent(t):
+            return False      # an order for another product; a valuation order that names its slots is ours
+    except Exception:
+        pass
+    try:
+        got = _slots.parse(t, today=_today(today))
+    except Exception:
+        return False
+    if got.get('roles'):
+        return True
+    return bool(got.get('start')) and step in (STEP_TALENT, STEP_CAMPAIGN, STEP_DATES)
 
 
 def _stand_aside(draft):
@@ -572,6 +666,7 @@ def replay_history(history, today=None):
                 continue
             d2, err = apply_answer(d, txt, today=today)
             if not err:
+                d2.pop('_named', None)
                 d = d2
             pending = None
             saw = True
@@ -743,6 +838,111 @@ def _strip_ask_frame(rest):
     return r.strip()
 
 
+# A casing table a test (or a caller that already holds one) can set;
+# None means "ask the library" outside a hermetic run.
+CASING_LOOKUP = None
+
+
+def _casing_lookup():
+    """folded name -> the library's spelling, or None. Never raises and
+    never reaches the network in a hermetic run."""
+    if callable(CASING_LOOKUP):
+        return CASING_LOOKUP
+    try:
+        import os
+        if os.environ.get('REGRESSION_TEST_MODE') or os.environ.get('CORPUS_CATALOG', '1').strip() == '0':
+            return None
+        from migration.bpiq_synthesis import catalog_lookup
+        return catalog_lookup()
+    except Exception:
+        return None
+
+
+def _pair_name(talent, brand):
+    return f"{str(talent).strip()} x {str(brand).strip()}"
+
+
+def merge_slots(draft, text, today=None):
+    """(draft, named): the draft with every slot the sentence names
+    filled in, and what was named. A slot named by its role ("X is the
+    talent", "the brand is Y") is the reader's own word and replaces
+    what the draft held; a start date fills only empty dates. With the
+    talent and the brand both known and no campaign named, the campaign
+    is the pairing itself. `named` is empty when the sentence names
+    nothing (2026-11-11)."""
+    today = _today(today)
+    d = dict(draft or empty_draft())
+    try:
+        got = _slots.parse(str(text or ''), today=today)
+    except Exception:
+        got = {}
+    if not got:
+        return d, {}
+    named = {}
+    table = {'lk': False}
+
+    def _case(n):
+        n = str(n or '').strip()
+        if n and (n.isupper() or n.islower()):
+            if table['lk'] is False:
+                table['lk'] = _casing_lookup()
+            if table['lk']:
+                return _slots.known_casing(n, table['lk'])
+        return n
+
+    if got.get('talent'):
+        d['talent'] = _case(got['talent'])
+        named['talent'] = d['talent']
+    if got.get('brand'):
+        d['brand_partner'] = _case(got['brand'])
+        d['brand_named'] = True
+        named['brand'] = d['brand_partner']
+    if got.get('campaign'):
+        d['campaign'] = str(got['campaign']).strip()
+        d.pop('campaign_auto', None)
+        named['campaign'] = d['campaign']
+        if not d.get('brand_named'):
+            d['brand_partner'] = _brand_from_campaign(d['campaign'], d.get('talent'))
+    if (named.get('talent') or named.get('brand')) and d.get('talent') and d.get('brand_partner') \
+            and d.get('brand_named') and (not d.get('campaign') or d.get('campaign_auto')):
+        d['campaign'] = _pair_name(d['talent'], d['brand_partner'])
+        d['campaign_auto'] = True
+    if got.get('start') and not d.get('campaign_start'):
+        if got.get('start_precise'):
+            end = got.get('end') or today.isoformat()
+            a, b = sorted([got['start'], end])
+            d['campaign_start'], d['campaign_end'] = a, b
+            d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
+            d['attr_ok'] = False
+            if not got.get('end'):
+                d['dates_inferred'] = True      # the end is read as today; the window step says so
+            d.pop('start_hint', None)
+            d.pop('start_guess', None)
+            named['start'] = a
+        else:
+            # only a month was given: the dates step asks for the day
+            d['start_hint'] = got.get('start_label') or pretty_date(got['start'])
+            d['start_guess'] = got['start']
+            named['start_hint'] = d['start_hint']
+    return d, named
+
+
+def ack_line(named):
+    """One plain line saying what a sentence was read as: "Got it: JYT
+    is the talent and Gap is the brand." Empty when nothing was named."""
+    bits = []
+    if (named or {}).get('talent'):
+        bits.append(f"{named['talent']} is the talent")
+    if (named or {}).get('brand'):
+        bits.append(f"{named['brand']} is the brand")
+    if (named or {}).get('campaign'):
+        bits.append(f"the campaign is {named['campaign']}")
+    if not bits:
+        return ''
+    body = bits[0] if len(bits) == 1 else (', '.join(bits[:-1]) + ' and ' + bits[-1])
+    return f"Got it: {body}."
+
+
 def apply_ahead(draft, text, today=None):
     """Fill any fields the message already named. Never overwrites a
     field the wizard already has."""
@@ -750,6 +950,26 @@ def apply_ahead(draft, text, today=None):
     t = str(text or '').strip()
     if not t or is_chip(t):
         return d
+    # a sentence that names its own slots is read by role, never split on
+    # its commas and periods into a talent and a campaign (2026-11-11)
+    if names_slots(t, d.get('step') or next_step(d), today=today):
+        base = dict(d)
+        merged, named = merge_slots(d, t, today=today)
+        if named.get('talent') or named.get('brand') or named.get('campaign'):
+            for k in ('talent', 'campaign', 'brand_partner'):
+                if base.get(k):          # never over a field the wizard already has
+                    merged[k] = base[k]
+            for u in extract_urls(t):
+                if u not in (merged.get('links') or []):
+                    merged['links'] = list(merged.get('links') or []) + [u]
+                    merged['asset_mode'] = merged.get('asset_mode') or 'links'
+            return merged
+        if named:
+            # only the start was said ("Value the Stanley x Target
+            # partnership. It launched October 1"): keep it, and read the
+            # names from the rest of the words as usual
+            d = merged
+            t = _slots.strip_dates(t) or t
     urls = extract_urls(t)
     if urls and not d.get('links'):
         d['links'] = urls
@@ -774,7 +994,7 @@ def apply_ahead(draft, text, today=None):
             for b in re.split(r'\s*(?:,|\.\s|;|\?|!)\s*', rest) if b.strip(' .,:;?!')]
     bits = [b for b in bits if b]
     names = [b for b in bits if b and not parse_dates(b, today=today)[0]
-             and not _FRAME_LEFTOVER_RX.match(b)]
+             and not _FRAME_LEFTOVER_RX.match(b) and not _slots.is_filler(b)]
     if names and not d.get('talent'):
         # "Jennifer Beals, Ganni x Lululemon" or a lone name
         if len(names) == 1 and re.search(r'\s+[xX\u00d7]\s+', names[0]):
@@ -923,8 +1143,9 @@ def attr_reply(draft, today=None):
         lead = (f"{camp_name}: " if (in_camp or not talent) else f"{_cased(talent)}, {camp_name}: ")
     elif talent and brand and brand.lower() != talent.lower():
         lead = f"{_cased(talent)} x {_cased(brand)}: "
+    note = ATTR_INFERRED_NOTE if d.get('dates_inferred') else ''
     return (f"{lead}I read the campaign as {camp}. {why} "
-            f"Attribution window: {attr}.")
+            f"Attribution window: {attr}.{note}")
 
 
 def _payload(reply, followups, draft=None, **extra):
@@ -966,7 +1187,9 @@ def hold_payload(history=None, store=None, user=None, thread_id='',
     if not draft:
         draft = empty_draft()
         draft['step'] = STEP_TALENT
+    draft = sane_draft(draft)
     reply, chips = step_prompt(draft, today=today)
+    reply = vary(reply, draft.get('step') or next_step(draft), history, draft)
     return _payload(reply, chips, draft=_stamp(draft, thread_id))
 
 
@@ -977,6 +1200,11 @@ def step_prompt(draft, today=None):
     if step == STEP_CAMPAIGN:
         return ASK_CAMPAIGN, [CHIP_CANCEL]
     if step == STEP_DATES:
+        hint, guess = (draft or {}).get('start_hint'), (draft or {}).get('start_guess')
+        if hint and guess:
+            # the reader gave the month it started; ask for the day, with
+            # the first of that month through today one tap away
+            return ASK_DATES_HINT.format(hint=hint), [open_range_chip(guess), CHIP_CANCEL]
         return ASK_DATES, [CHIP_CANCEL]
     if step == STEP_ATTR:
         return attr_reply(draft, today=today), [
@@ -993,6 +1221,108 @@ def step_prompt(draft, today=None):
     return recap_reply(draft), [accept_chip(usd, included=included_seat(draft)), CHIP_DECLINE, CHIP_CANCEL]
 
 
+def open_range_chip(start):
+    """'September 1 to today' for a start date."""
+    return f"{_d(start).strftime('%B %-d')} to today"
+
+
+# The wording a step falls back to when its own prompt was the last
+# thing said: never the identical question twice in a row (2026-11-11).
+_STEP_ALT = {
+    STEP_TALENT: ASK_TALENT_ALT, STEP_CAMPAIGN: ASK_CAMPAIGN_ALT, STEP_DATES: ASK_DATES_ALT,
+    STEP_ATTR_CUSTOM: ASK_DATES_ALT, STEP_CONTROL: ASK_CONTROL_ALT, STEP_ASSETS: ASK_ASSETS_ALT,
+    STEP_LINKS: ASK_LINKS_ALT,
+}
+
+
+def vary(reply, step, history, draft=None):
+    """`reply`, or the step's other wording when `reply` is word for word
+    what the last agent turn said (or what it ended on, after a line that
+    said what was read)."""
+    prev = ' '.join(str((last_agent_turn(history) or {}).get('text') or '').split())
+    cur = ' '.join(str(reply or '').split())
+    if not prev or not cur or not (prev == cur or prev.endswith(' ' + cur)):
+        return reply
+    alt = _STEP_ALT.get(step)
+    d = draft or {}
+    if step == STEP_DATES and d.get('start_hint') and d.get('start_guess'):
+        g = _d(d['start_guess'])
+        alt = ASK_DATES_HINT_ALT.format(
+            hint=d['start_hint'], example=f"{g.month}/{min(g.day + 14, 28)}",
+            first=g.strftime('%B %-d'))
+    if alt and not prev.endswith(' '.join(alt.split())):
+        return alt
+    if step == STEP_ATTR:
+        return str(reply) + ATTR_NUDGE
+    if step == STEP_CHARGE:
+        return CHARGE_NUDGE + '\n' + str(reply)
+    return reply
+
+
+def miss_count(draft, step):
+    """How many replies in a row have not answered `step`."""
+    m = (draft or {}).get('misses')
+    if isinstance(m, dict) and m.get('step') == step:
+        try:
+            return int(m.get('n') or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def default_for(step, draft, today=None):
+    """(draft, line) with the step's default taken on the reader's
+    behalf, and the one plain line that says so; (None, '') for a step
+    with no default (a name, the control group: those are asked again in
+    other words)."""
+    d = dict(draft or {})
+    today = _today(today)
+    if step in (STEP_ASSETS, STEP_LINKS):
+        d['asset_mode'] = 'find'
+        d['links'] = []
+        line = DEFAULT_FIND_NO_LINK_LINE if step == STEP_LINKS else DEFAULT_FIND_LINE
+    elif step == STEP_DATES and d.get('start_guess'):
+        a, b = sorted([str(d['start_guess'])[:10], today.isoformat()])
+        d['campaign_start'], d['campaign_end'] = a, b
+        d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
+        d['attr_ok'] = False
+        d['dates_inferred'] = True
+        d.pop('start_hint', None)
+        d.pop('start_guess', None)
+        line = f"I'll run it from {pretty_date(a)} through today."
+    elif step in (STEP_ATTR, STEP_ATTR_CUSTOM) and d.get('attr_start') and d.get('attr_end'):
+        d['attr_ok'] = True
+        line = f"I'll use the standard window, {pretty_range(d['attr_start'], d['attr_end'])}."
+    else:
+        return None, ''
+    d.pop('misses', None)
+    d = _price_draft(d)
+    d['step'] = next_step(d)
+    return d, line
+
+
+def sane_draft(draft):
+    """A stored draft whose talent, campaign or brand is a bare yes / no
+    (a draft written before 2026-11-11) loses that field: the step is
+    asked again and the word is never shown as a name."""
+    if not isinstance(draft, dict):
+        return draft
+    d = dict(draft)
+    dirty = False
+    for k in ('talent', 'campaign', 'brand_partner'):
+        if d.get(k) and _slots.is_filler(d[k]):
+            d[k] = ''
+            dirty = True
+    if dirty:
+        step = d.get('step')
+        want = next_step(d)
+        order = [STEP_TALENT, STEP_CAMPAIGN, STEP_DATES, STEP_ATTR, STEP_ATTR_CUSTOM, STEP_CONTROL,
+                 STEP_ASSETS, STEP_LINKS, STEP_CHARGE]
+        if step not in order or order.index(want) < order.index(step):
+            d['step'] = want
+    return d
+
+
 def _clean_name(text):
     t = str(text or '').strip().strip('"\'').strip()
     t = re.sub(r'^(?:it(?:\'s| is)|the (?:talent|property|campaign) is)\s+',
@@ -1006,20 +1336,58 @@ def apply_answer(draft, text, today=None):
     step = d.get('step') or next_step(d)
     t = str(text or '').strip()
     today = _today(today)
+    d.pop('_named', None)
+
+    # A sentence that names its own slots ("JYT is the talent and GAP is
+    # the brand. the partnership started in September 2026") fills them
+    # by role at any step before the recap, and the wizard moves to the
+    # first step still open (2026-11-11).
+    if step != STEP_CHARGE and names_slots(t, step, today=today):
+        merged, named = merge_slots(d, t, today=today)
+        if named:
+            merged = _price_draft(merged)
+            merged['step'] = next_step(merged)
+            merged['_named'] = named
+            return merged, None
 
     if step == STEP_TALENT:
         name = _clean_name(t)
-        if not name or is_chip(name):
+        # a bare yes / no is never a talent (2026-11-11: "yes" was stored
+        # as the talent and led the window line as "Yes, gap x jyt")
+        if not name or is_chip(name) or _slots.is_filler(name):
             return d, ASK_TALENT
         d['talent'] = name
+        if d.get('brand_partner') and d.get('brand_named') and not d.get('campaign'):
+            d['campaign'] = _pair_name(name, d['brand_partner'])
+            d['campaign_auto'] = True
     elif step == STEP_CAMPAIGN:
         name = _clean_name(t)
-        if not name:
+        if not name or _slots.is_filler(name):
             return d, ASK_CAMPAIGN
         d['campaign'] = name
-        d['brand_partner'] = _brand_from_campaign(name, d.get('talent'))
+        d.pop('campaign_auto', None)
+        if not d.get('brand_named'):
+            d['brand_partner'] = _brand_from_campaign(name, d.get('talent'))
     elif step == STEP_DATES:
         start, end = parse_dates(t, today=today)
+        inferred = False
+        if not (start and end):
+            # one date on its own is the start; the campaign is read as
+            # running through today and the window step says so
+            one, end_said = None, None
+            try:
+                one = _slots.single_date(t, today, hint=d.get('start_guess'))
+                if not one:
+                    got = _slots.parse(t, today=today)
+                    if got.get('start') and got.get('start_precise'):
+                        one, end_said = got['start'], got.get('end')
+            except Exception:
+                one = None
+            if one:
+                start, end = one, (end_said or today.isoformat())
+                inferred = not end_said
+                if _d(end) < _d(start):
+                    start, end = end, start
         if not (start and end):
             # the could-not-read line is for an attempt at dates; a reply
             # that never tried is asked plainly (2026-11-05)
@@ -1029,13 +1397,18 @@ def apply_answer(draft, text, today=None):
             except Exception:
                 tried = True
             if not tried:
-                return d, ASK_DATES
-            return d, ('I could not read those dates. Try something like '
-                       'October 7 - 28.')
+                return d, step_prompt(d, today=today)[0]
+            return d, ASK_DATES_UNREAD
         d['campaign_start'], d['campaign_end'] = start, end
         d['attr_start'], d['attr_end'] = attribution_window(
             start, end, today=today)
         d['attr_ok'] = False
+        if inferred:
+            d['dates_inferred'] = True
+        else:
+            d.pop('dates_inferred', None)
+        d.pop('start_hint', None)
+        d.pop('start_guess', None)
     elif step == STEP_ATTR:
         low = _low(t)
         if low == _low(CHIP_DIFFERENT) or 'different' in low:
@@ -1046,12 +1419,28 @@ def apply_answer(draft, text, today=None):
             d['attr_ok'] = True
         else:
             start, end = parse_dates(t, today=today)
+            end_only = None
+            if not (start and end) and d.get('dates_inferred'):
+                try:
+                    end_only = _slots.parse(t, today=today).get('end') or (
+                        _slots.single_date(t, today, hint=d.get('campaign_end')))
+                except Exception:
+                    end_only = None
+            if d.get('dates_inferred') and ((start and end) or end_only):
+                # the end was read as today; dates typed here are the
+                # campaign's own, and the window is shown again
+                a, b = (start, end) if (start and end) else sorted([d['campaign_start'], end_only])
+                d['campaign_start'], d['campaign_end'] = a, b
+                d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
+                d['attr_ok'] = False
+                d.pop('dates_inferred', None)
+                d['step'] = STEP_ATTR
+                return _price_draft(d), None
             if start and end:
                 d['attr_start'], d['attr_end'] = start, end
                 d['attr_ok'] = True
             elif not (_YES_RE.match(t) or low in ('accept', 'ok', 'okay')):
-                return d, (attr_reply(d, today=today)
-                           + ' Accept this window, or use a different one.')
+                return d, (attr_reply(d, today=today) + ATTR_NUDGE)
             else:
                 d['attr_ok'] = True
     elif step == STEP_ATTR_CUSTOM:
@@ -1061,32 +1450,55 @@ def apply_answer(draft, text, today=None):
         d['attr_start'], d['attr_end'] = start, end
         d['attr_ok'] = True
     elif step == STEP_CONTROL:
-        if _YES_RE.match(t) or _low(t) == 'yes':
+        if _YES_RE.match(t) or _low(t) == 'yes' or (_CONTROL_YES_RE.match(t) and not _CONTROL_NO_RE.match(t)):
             d['control_group'] = True
-        elif _NO_RE.match(t) or _low(t) == 'no':
+        elif _NO_RE.match(t) or _low(t) == 'no' or _CONTROL_NO_RE.match(t):
             d['control_group'] = False
         else:
             return d, ASK_CONTROL
     elif step == STEP_ASSETS:
-        if _PASTE_RE.search(t) or _YES_RE.match(t) or _low(t) == _low(CHIP_PASTE):
+        urls = extract_urls(t)
+        if urls:
             d['asset_mode'] = 'links'
-            urls = extract_urls(t)
-            if urls:
-                d['links'] = urls
-        elif _FIND_RE.search(t) or _NO_RE.match(t) or _low(t) == _low(CHIP_FIND):
+            d['links'] = urls
+        elif (_FIND_RE.search(t) or _slots.finds_assets(t) or _slots.has_no_links(t) or _NO_RE.match(t)
+              or _low(t) == _low(CHIP_FIND)):
+            # "find the campaign asset", "find it", "you find it", "I don't
+            # have one", "not sure": the engine researches the campaign's
+            # assets itself (2026-11-11)
             d['asset_mode'] = 'find'
             d['links'] = []
+        elif _PASTE_RE.search(t) or _YES_RE.match(t) or _low(t) == _low(CHIP_PASTE):
+            d['asset_mode'] = 'links'
         else:
             return d, ASK_ASSETS
     elif step == STEP_LINKS:
         urls = extract_urls(t)
-        if not urls:
+        if urls:
+            d['links'] = urls
+            d['asset_mode'] = 'links'
+        elif _slots.finds_assets(t) or _slots.has_no_links(t) or _NO_RE.match(t) or _low(t) == _low(CHIP_FIND):
+            d['asset_mode'] = 'find'
+            d['links'] = []
+        else:
             return d, ASK_LINKS
-        d['links'] = urls
-        d['asset_mode'] = 'links'
+    d.pop('misses', None)
     d = _price_draft(d)
     d['step'] = next_step(d)
     return d, None
+
+
+def saved_valuation_block(text, window=None):
+    """The binding block a read's prompt carries when the question names
+    a pairing Crosswalk has already valued (migration.bpiq_anchors,
+    2026-11-11): the read states the valuation's own total and people
+    reached, never a second figure. '' when the words name no valued
+    pairing. Never raises."""
+    try:
+        from migration import bpiq_anchors as _ba
+        return _ba.valuation_block(text, window=window) or ''
+    except Exception:
+        return ''
 
 
 def copy_is_clean(text):
@@ -1338,12 +1750,12 @@ def _load_draft(store, user, thread_id, body, history, today=None):
     (user, thread) throughout (Jenna 2026-11-05)."""
     hit = _body_draft(body, thread_id, history)
     if hit:
-        return hit
+        return sane_draft(hit)
     if store is not None:
         try:
             hit = store.load(user, thread_id)
             if isinstance(hit, dict) and hit.get('step'):
-                return dict(hit)
+                return sane_draft(dict(hit))
         except Exception:
             pass
     # the thread's own turns: only when its last agent turn asked a step
@@ -1811,13 +2223,41 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
                 if store is not None:
                     store.save(uname or user, thread_id, draft)
                 reply, chips = step_prompt(draft, today=today)
+                if names_slots(t, STEP_TALENT, today=today) and draft.get('step') not in (STEP_ATTR, STEP_CHARGE):
+                    ack = ack_line({'talent': draft.get('talent'),
+                                    'brand': draft.get('brand_partner') if draft.get('brand_named') else ''})
+                    if ack:
+                        reply = f"{ack} {reply}"
                 return _payload(reply, chips, draft=draft)
         d2, err = apply_answer(draft, t, today=today)
         if err:
-            return _payload(err, step_prompt(d2, today=today)[1], draft=d2)
+            # A reply that did not answer the step. The first one gets the
+            # step again in other words; the second moves on with the
+            # step's default, said in one plain line (2026-11-11). A step
+            # with no default (a name, the control group) is asked again,
+            # never in the same words twice in a row.
+            step = d2.get('step') or next_step(d2)
+            n = miss_count(draft, step) + 1
+            if n >= 2:
+                d3, line = default_for(step, d2, today=today)
+                if d3 is not None:
+                    if store is not None:
+                        store.save(uname or user, thread_id, d3)
+                    reply, chips = step_prompt(d3, today=today)
+                    return _payload(f"{line}\n\n{reply}", chips, draft=d3)
+            d2['misses'] = {'step': step, 'n': n}
+            if store is not None:
+                store.save(uname or user, thread_id, d2)
+            return _payload(vary(err, step, history, d2), step_prompt(d2, today=today)[1], draft=d2)
+        named = d2.pop('_named', None) or {}
         if store is not None:
             store.save(uname or user, thread_id, d2)
         reply, chips = step_prompt(d2, today=today)
+        ack = ack_line(named)
+        if ack and d2.get('step') not in (STEP_ATTR, STEP_CHARGE):
+            reply = f"{ack} {reply}"       # the reader sees what the sentence was read as
+        else:
+            reply = vary(reply, d2.get('step'), history, d2)
         return _payload(reply, chips, draft=d2)
 
     if draft or last_agent_is_wizard(history) or collecting:

@@ -169,7 +169,9 @@ def test_wizard_dates_step():
     out = hook('Octobr 7 thru 28th', store, history=wizard_history(W.STEP_DATES))
     check("a failed dates attempt gets the could-not-read line", out and out['reply'].startswith('I could not read those dates'))
     out = hook('no idea', store, history=wizard_history(W.STEP_DATES))
-    check("a reply that never tried is asked plainly", out and out['reply'] == W.ASK_DATES)
+    # asked plainly, and never in the words the last turn already used (2026-11-11)
+    check("a reply that never tried is asked plainly", out and out['reply'] == W.ASK_DATES_ALT
+          and not out['reply'].startswith('I could not read'))
     # cancel cancels
     out = hook('cancel', store, history=wizard_history(W.STEP_DATES))
     check("cancel cancels", out and out['reply'] == W.CANCEL_REPLY and store.load('tester', 't1') is None)
@@ -237,7 +239,7 @@ def test_per_thread():
     check("collect flag alone does not arm a thread whose last turn is a notice", out is None)
     out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_wizard': echoed}, history=wizard_history(W.STEP_DATES), thread_id='A')
     check("the echo fills in on its own thread when the store missed (a name at the dates step is asked for dates again, plainly)",
-          out is not None and out['reply'] == W.ASK_DATES)
+          out is not None and out['reply'] == W.ASK_DATES_ALT and W.step_from_prompt(out['reply']) == W.STEP_DATES)
     out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_wizard': echoed}, history=other, thread_id='A')
     check("the echo alone does not arm a thread that moved on (the store and the thread are the truth)", out is None)
     # an unstamped echo (minted before the stamp) follows the same rule

@@ -62,6 +62,10 @@ READER_NOTE = ("Compared against a matched group of the same size with the "
 # helpers
 # ---------------------------------------------------------------------------
 
+BEFORE_AFTER_NOTE = ("A before and after read of the same audience: the campaign window "
+                     "against the same number of days right before it.")
+
+
 def _h(*parts) -> int:
     return int(hashlib.blake2b("|".join(str(p) for p in parts).encode(),
                                digest_size=8).hexdigest(), 16)
@@ -309,7 +313,8 @@ def apply_lenses(payload: dict, subject: str) -> dict:
             val["attributable_to_talent"] = round(float(val["total_brand_value"]) * float(val["talent_share"]), 2)
         except (TypeError, ValueError):
             pass
-    val["comparison_note"] = READER_NOTE
+    # the comparison group is named only when one was bought (2026-11-11)
+    val["comparison_note"] = READER_NOTE if cg.get("enabled", True) else BEFORE_AFTER_NOTE
     return payload
 
 

@@ -1139,6 +1139,17 @@ def _render_crosswalk_logo_png(on_dark: bool = True) -> str:
     white variant for dark backgrounds, black variant for light. If
     the shipped asset is missing (e.g. running outside the repo),
     fall back to a Pillow-rendered wordmark so the deck still builds."""
+    # The real lockup from the design pack (2026-11-11): a transparent
+    # PNG. The older static file is an opaque plate, so on any ground but
+    # pure black the logo sat in a black box.
+    _ds = _design()
+    if _ds is not None:
+        try:
+            _lp = _ds.logo_path("white" if on_dark else "black")
+            if _lp and os.path.exists(str(_lp)):
+                return str(_lp)
+        except Exception:
+            pass
     target = _BRAND_LOGO_WHITE if on_dark else _BRAND_LOGO_BLACK
     if os.path.exists(target):
         return target
@@ -1211,6 +1222,35 @@ class DeckCtx:
     has_yearly:     bool
     sources_line:   str
     data:           dict
+    has_control:    bool = True
+
+
+def _has_control(data: dict) -> bool:
+    """True when the valuation carries a comparison group (the $1,000
+    valuation). A valuation bought without one (2026-11-11) is a before
+    and after read: no page may speak of a matched group, an adjusted
+    lift or a held baseline."""
+    cg = _dict(_dict(data).get("control_group"))
+    if not cg or not bool(cg.get("enabled", True)):
+        return False
+    return _count(cg.get("control_size")) > 0 or cg.get("incremental_lift_pp") is not None
+
+
+def _pre_days_phrase(data: dict) -> str:
+    """'the 51 days before the campaign' from the payload's pre window."""
+    days = _count(_dict(_dict(data).get("pre_period")).get("days"))
+    return f"the {days} days before the campaign" if days > 0 else "the days before the campaign"
+
+
+def _plain_basis(text: str, has_control: bool) -> str:
+    """A share's stated basis with any comparison-group clause removed
+    when no comparison group was bought."""
+    t = str(text or "").strip()
+    if has_control or not t:
+        return t
+    kept = [c.strip() for c in re.split(r";\s*", t)
+            if c.strip() and not re.search(r"matched|holdout|comparison group|control", c, re.I)]
+    return "; ".join(kept)
 
 
 def _adjusted_lift_rel(cg: dict) -> float:
@@ -1303,12 +1343,13 @@ def _derive_context(data: dict, image_url: Optional[str],
         post_pen=post_pen,
         delta_pp=delta_pp,
         delta_rel=delta_rel,
-        incr_lift_pp=_num(cg.get("incremental_lift_pp")),
+        # with no comparison group the lift is the before and after rise
+        incr_lift_pp=(_num(cg.get("incremental_lift_pp")) if _has_control(data) else delta_pp),
         # the adjusted lift the deck argues from is the matched lift as a
         # share of the exposed group's own baseline (the ratio the house
         # attributable formula uses); against the comparison group's tiny
         # drift it read as thousands of percent (2026-10-28)
-        incr_lift_rel=_adjusted_lift_rel(cg),
+        incr_lift_rel=(_adjusted_lift_rel(cg) if _has_control(data) else round(delta_rel, 1)),
         campaign_window=win,
         attribution_d=_count(data.get("attribution_window_days")),
         panel_size=_count(data.get("audience_size")),
@@ -1318,6 +1359,7 @@ def _derive_context(data: dict, image_url: Optional[str],
         has_yearly=has_yearly,
         sources_line=src,
         data=data,
+        has_control=_has_control(data),
     )
 
 
@@ -1369,6 +1411,12 @@ def _engagement_headline(ctx: DeckCtx) -> str:
     display with 2 decimals so a +0.15pp lift never renders as
     "0.1pt" while the pre/post percentages show 0.2pp apart. Two-line
     sentence with terminal punctuation on both lines."""
+    if ctx.delta_pp <= 0 and not ctx.has_control:
+        return (
+            f"{ctx.brand} engagement was level before and after.\n"
+            f"{fmt_num(ctx.post_users_proj)} consumers engaged with the brand "
+            f"in the campaign window."
+        )
     if ctx.delta_pp <= 0:
         return (
             f"The campaign held {ctx.brand}'s baseline.\n"
@@ -1431,6 +1479,23 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
     window run."""
     if ctx.total_value <= 0:
         return ("The partnership ran.", "The audience didn't move.")
+    if not ctx.has_control:
+        # A before and after read (2026-11-11): the rise is stated against
+        # the days before the campaign, never against a group that was
+        # not bought.
+        rise = float(ctx.delta_rel or 0.0)
+        before = _pre_days_phrase(ctx.data)
+        if rise <= 0:
+            return (f"{ctx.brand} engagement did not rise.",
+                    f"It was level with {before}.")
+        if rise >= 100:
+            return (f"{ctx.brand} engagement more than doubled",
+                    f"against {before}.")
+        if rise >= 25:
+            return (f"{ctx.brand} engagement rose {rise:.0f}%",
+                    f"against {before}.")
+        return (f"A {rise:.1f}% rise in {ctx.brand} engagement,",
+                f"against {before}.")
     lift_rel = ctx.incr_lift_rel if ctx.incr_lift_rel is not None else ctx.delta_rel
     sig      = (ctx.data.get("diagnostics") or {}).get("significance") or {}
     is_sig   = bool(sig.get("significant"))
@@ -1842,6 +1907,12 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
         f"engaging with {ctx.brand} after the campaign, a "
         f"+{ctx.delta_rel:.1f}% relative lift over baseline."
     )
+    if not ctx.has_control:
+        read_as = (
+            f"Read As: {fmt_num(moved)} more U.S. consumers engaged with "
+            f"{ctx.brand} in the campaign window than in "
+            f"{_pre_days_phrase(ctx.data)}, a {ctx.delta_rel:+.1f}% change."
+        )
     _read, read_h = _add_body(s, Inches(0.6), Inches(6.25), Inches(12.1), read_as,
                               max_height=Inches(0.42), size=12, floor=NOTE_FLOOR,
                               italic=True, color=MUTED_LT, align="center")
@@ -1978,17 +2049,23 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
     note_top = Inches(5.55)
     attributable_txt = fmt_money(attributable)
     _add_text(s, Inches(0.6), Inches(4.75), Inches(6.5), Inches(0.35),
-              "OF WHICH ATTRIBUTABLE TO PARTNERSHIP",
+              ("OF WHICH ATTRIBUTABLE TO PARTNERSHIP" if ctx.has_control
+               else "OF WHICH NEW SINCE THE CAMPAIGN BEGAN"),
               size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
     _add_text(s, Inches(0.6), Inches(5.05), Inches(6.5), Inches(0.5),
               attributable_txt,
               size=_fit_stat(attributable_txt, 6.5, 32, floor=18), bold=True, color=FG_DARK,
               font=FONT_NUMERIC)
     _add_body(s, Inches(0.6), note_top, Inches(6.5),
-              "Brand Lift plus the adjusted-lift share of Conversion "
-              "Value (strictly incremental). Brand Engagement and "
-              "Earned Media price the observed audience footprint, "
-              "which includes pre-existing brand interest.",
+              ("Brand Lift plus the adjusted-lift share of Conversion "
+               "Value (strictly incremental). Brand Engagement and "
+               "Earned Media price the observed audience footprint, "
+               "which includes pre-existing brand interest."
+               if ctx.has_control else
+               "Brand Lift: the engagement that is new since the campaign "
+               "began. Brand Engagement and Earned Media price the whole "
+               "audience the campaign reached, including people who "
+               "already engaged with the brand."),
               max_height=tiles_top - note_top - Inches(0.05),
               size=9, floor=NOTE_FLOOR, spacing=1.3, min_spacing=1.1,
               italic=True, color=FG_DARK)
@@ -2008,7 +2085,7 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
                   size=_fit_stat(share_txt, 5.3, 32, floor=18), bold=True, color=FG_DARK,
                   font=FONT_NUMERIC)
         _add_body(s, Inches(7.3), note_top, Inches(5.3),
-                  str(_val.get("talent_share_basis") or "").strip().capitalize() + ".",
+                  _plain_basis(_val.get("talent_share_basis"), ctx.has_control).capitalize() + ".",
                   max_height=tiles_top - note_top - Inches(0.05),
                   size=9, floor=NOTE_FLOOR, spacing=1.3, min_spacing=1.1,
                   italic=True, color=FG_DARK)
@@ -2360,6 +2437,8 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     _add_bg(s, BG_DARK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
              _section_label(idx, "Brand Lift Value"), on_dark=True)
+    if not ctx.has_control:
+        return _slide_brand_lift_before_after(s, ctx, idx, total)
     _add_headline(s, f"{fmt_money(ctx.blv)} of net-new engagement\nabove a matched group.",
                   color=FG_LIGHT)
     rate = float((ctx.data.get("valuation") or {})
@@ -2441,6 +2520,61 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
               min_spacing=1.05, italic=True, color=MUTED_DK)
     # C8: source footer was missing on slide 8 (only BLV slide). Add
     # the Source: Crosswalk BehaviorGraph line explicitly.
+    _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
+              ctx.sources_line, size=7, italic=True, color=MUTED_DK)
+    _page_footer(s, idx, total, ctx.project, on_dark=True)
+    return s
+
+
+def _slide_brand_lift_before_after(s, ctx: DeckCtx, idx: int, total: int):
+    """The Brand Lift page of a valuation bought without a comparison
+    group (2026-11-11): a before and after read of the same audience.
+    The page states the rise in engagement and the people it adds; it
+    never speaks of a matched group or prints a zero lift against one."""
+    _add_headline(s, f"{fmt_money(ctx.blv)} of new engagement\nsince the campaign began.",
+                  color=FG_LIGHT)
+    rate = float((ctx.data.get("valuation") or {})
+                 .get("rates", {}).get("blv_per_incr_user") or 0)
+    delta = ctx.delta_pp
+    delta_txt = f"{delta:+.2f}pt" if abs(delta) < 1.0 else f"{delta:+.1f}pt"
+    _math_calculator(
+        s, Inches(0.6), Inches(2.85), Inches(8.0),
+        [
+            (f"Rise in engagement, before to after  "
+             f"({fmt_pct(ctx.pre_pen)} to {fmt_pct(ctx.post_pen)})",
+             delta_txt),
+            (f"x U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
+             fmt_num(ctx.incr_users)),
+            ("x $/new-consumer rate", f"$ {rate:.2f}"),
+        ],
+        total_label="Brand Lift Value",
+        total_value=fmt_money(ctx.blv),
+        on_dark=True,
+        accent=RGBColor(0xF5, 0x9E, 0x0B),
+        row_h=Inches(0.65),
+    )
+    detail = (
+        "Brand Lift Value is the engagement that is new since the campaign "
+        f"began: the people engaging with {ctx.brand} in the campaign window "
+        f"beyond those who did in {_pre_days_phrase(ctx.data)}. It is a "
+        "before and after read of the same audience."
+    )
+    _callout(s, Inches(9.0), Inches(2.85), Inches(3.85),
+             "WHY IT MATTERS", detail,
+             height=Inches(3.0), max_height=Inches(3.35),
+             line=ACCENT, line_w=1.0, label_color=ACCENT, body_color=FG_LIGHT,
+             body_size=9, floor=NOTE_FLOOR, spacing=1.35, min_spacing=1.15,
+             pad=0.2, body_top=0.5)
+    src_line = (
+        (ctx.data.get("valuation") or {})
+        .get("rate_sources", {})
+        .get("blv_per_incr_user")
+        or "Rate: Crosswalk internal valuation convention (2026). "
+           "Editable in the live dashboard."
+    )
+    _add_body(s, Inches(0.6), Inches(6.30), Inches(12.1), src_line,
+              max_height=Inches(0.42), size=9, floor=NOTE_FLOOR, spacing=1.25,
+              min_spacing=1.05, italic=True, color=MUTED_DK)
     _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
               ctx.sources_line, size=7, italic=True, color=MUTED_DK)
     _page_footer(s, idx, total, ctx.project, on_dark=True)
@@ -2898,6 +3032,9 @@ def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
         f"+{lift_rel:.1f}% adjusted engagement lift"
         if lift_rel > 0 else "lift at or below the matched group's own movement"
     )
+    if not ctx.has_control:
+        lift_label = (f"{ctx.delta_rel:+.1f}% engagement, before to after"
+                      if ctx.delta_rel > 0 else "engagement level before and after")
     closing = (
         f"{fmt_money(ctx.total_value)} in total brand value observed, "
         f"{fmt_num(ctx.post_users_proj)} U.S. consumers reached, "
@@ -2982,13 +3119,18 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
          "of campaign end: long enough to capture delayed brand "
          "behavior, tight enough to keep the causal read clean."),
         ("BRAND LIFT",
-         _matched_group_lines(ctx.data.get("control_group") or {})[0]
-         + " The lift is the exposed group's change in brand engagement "
-           "minus the matched group's change over the same windows. A "
-           "difference that was already there before the partnership "
-           "never reads as lift."
-         + ((" " + _matched_group_lines(ctx.data.get("control_group") or {})[1])
-            if _matched_group_lines(ctx.data.get("control_group") or {})[1] else "")),
+         (_matched_group_lines(ctx.data.get("control_group") or {})[0]
+          + " The lift is the exposed group's change in brand engagement "
+            "minus the matched group's change over the same windows. A "
+            "difference that was already there before the partnership "
+            "never reads as lift."
+          + ((" " + _matched_group_lines(ctx.data.get("control_group") or {})[1])
+             if _matched_group_lines(ctx.data.get("control_group") or {})[1] else ""))
+         if ctx.has_control else
+         ("A before and after read. The lift is the change in brand "
+          "engagement inside the same audience: the campaign window "
+          f"against {_pre_days_phrase(ctx.data)}. Only people newly "
+          "engaging count toward its value.")),
         ("SIGNIFICANCE",
          "Same-panel pre/post design. Primary test: pooled two-sample "
          "z on the paired marginals (conservative for a within-panel "

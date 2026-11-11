@@ -92645,11 +92645,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 var job = data.job_id;
+                // the server names the subject the deck is on and which deck it is (a deck
+                // made from a read says so); the older wording covers a reply without the line (2026-11-11)
                 _pmPushTurnFor(_po, 'agent',
+                    data.confirm_line ? String(data.confirm_line) : (
                     'Building the ' +
                     (data.subject ? data.subject + ' ' : '') +
                     'insights deck. The download link lands here when ' +
-                    'it is ready.');
+                    'it is ready.'));
                 try { _pmShowNotifyOffer(job, 'deck'); } catch (_) {}
                 // the build is on its own from here (up to ten minutes): its lines carry _po, and the ask in
                 // flight is over, so nothing typed meanwhile is filed under this thread (2026-11-11)

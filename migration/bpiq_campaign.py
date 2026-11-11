@@ -452,7 +452,7 @@ def derive_drop(campaign: Optional[dict], fp: Optional[dict], aov: dict, salt: s
 # ---------------------------------------------------------------------------
 
 def derive_talent_share(fp: Optional[dict], campaign: Optional[dict], reach: dict,
-                        did_share: float, salt: str) -> dict:
+                        did_share: float, salt: str, matched: bool = True) -> dict:
     """The talent's share of the campaign's value.
 
     a = the share of the campaign's exposure that carried her (the
@@ -495,9 +495,10 @@ def derive_talent_share(fp: Optional[dict], campaign: Optional[dict], reach: dic
         "asset_share": round(a, 4),
         "face_uplift": round(m, 3),
         "holdout_share": round(ds, 4),
+        # the comparison group is named only when one was bought (2026-11-11)
         "basis": (f"{a * 100:.0f}% of the campaign's exposure carried the talent; those assets drew "
-                  f"{(m - 1) * 100:.0f}% more response than the brand's alone; the matched group kept "
-                  f"{ds * 100:.0f}% of the lift"),
+                  f"{(m - 1) * 100:.0f}% more response than the brand's alone"
+                  + (f"; the matched group kept {ds * 100:.0f}% of the lift" if matched else "")),
     }
 
 

@@ -39,6 +39,7 @@ from prometheus import subiq_library as _subiq_library   # a question across the
 from prometheus import deck_sources as _deck_sources   # a deck of something already delivered or attached (2026-10-26)
 from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: intake, labs, Focus Group IQ, catalog, status, directions (2026-10-26)
 from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation wizard (2026-10-28)
+from prometheus import deck_pick as _deck_pick   # the deck is on the subject the reader picked; a deck from a read keeps its figures (2026-11-11)
 from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
 from prometheus import question_universe as _question_universe   # the base is the universe the question names; the page only when pointed at (2026-11-06)
 from prometheus import window_scope as _wscope   # the window is the one the reader asked for; the default is never a frozen pair (2026-11-10)
@@ -14605,8 +14606,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         traceback.print_exc()
     stages['measured'] = int((time.monotonic() - _t_stage) * 1000)
     _rm_led_block = led.get('block') or ''
-    try:
-        _cat_block = _pm_catalog_block(base.get('subject'))
+    try:   # a pairing Crosswalk has already valued hands the read the valuation's own figures (2026-11-11)
+        _cat_block = '\n\n'.join(x for x in (_bpiq_wiz.saved_valuation_block(text), _pm_catalog_block(base.get('subject'))) if x)
         if _cat_block:
             _rm_led_block = (_cat_block + '\n' + _rm_led_block) if _rm_led_block else _cat_block
     except Exception:
@@ -17474,8 +17475,8 @@ def _pm_analyze_core(user, body, text, history):
     # Corpus catalog (2026-10-05): dashboard figures on the subject
     # ride the binding block ahead of chat-stated ones.
     try:
-        _cat_block = _pm_catalog_block(
-            _led_subj, extra_subjects=[p_meta.get('name') if ctx.get('primary') else ''])
+        _cat_block = '\n\n'.join(x for x in (_bpiq_wiz.saved_valuation_block(text), _pm_catalog_block(
+            _led_subj, extra_subjects=[p_meta.get('name') if ctx.get('primary') else ''])) if x)
         if _cat_block:
             _led_block = (_cat_block + '\n' + _led_block) if _led_block else _cat_block
     except Exception:
@@ -18949,6 +18950,10 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         plan = pma.enforce_insights_plan(plan, subject)
         if not plan.get('slides'):
             raise RuntimeError('slide plan came back empty')
+        plan = _deck_pick.hold_plan_to_read(   # a deck made from a read keeps the read's figures (2026-11-11)
+            plan, ctx, replan=lambda _note: _pm_claude_json(
+                pma.INSIGHTS_DECK_SYSTEM_PROMPT, f"{_deck_prompt}\n\n{_note}", max_tokens=20000, temperature=0.4,
+                surface='deck', usage_extras=_ppu_extras).get('data'), post=lambda _p: pma.enforce_insights_plan(_p, subject))
         from prometheus import category_reach as _cre   # a card that is a group of brands carries its reach and index (2026-11-11)
         plan = _cre.annotate_deck(plan, ctx, subject)
         _pm_deck_status_write(job_id, {**base, 'status': 'rendering'})
@@ -19135,11 +19140,22 @@ def _pm_deck_core(user, body):
         # (2026-10-31): resolve that name, keep the ask as the angle
         _bind_pick = str(body.get('bind_subject') or '').strip()
         if _bind_pick and body.get('confirm_open_screen'):
-            resolution, res_err = _pm_resolve_deck_subject(f"build the {_bind_pick} insights deck", ctx)
-            if res_err or not resolution or resolution.get('clarify'):
-                resolution, res_err = _pm_resolve_deck_subject(text, ctx)
+            _dp_pick = _bind_pick
         else:
+            _dp_pick = ''
+        # the picked or named subject, or no deck: a library profile, else the read delivered on it in this thread,
+        # never another candidate from the list (prometheus.deck_pick, Samantha Kolton 2026-11-11)
+        if _ds:   # the material is something already delivered or attached: the words alone resolve it
             resolution, res_err = _pm_resolve_deck_subject(text, ctx)
+            _dp_msg = ''
+        else:
+            resolution, res_err, _dp_msg = _deck_pick.settle(
+                _dp_pick, text, ctx, history, _pm_resolve_deck_subject, load_read=lambda _j: _deck_pick.load_read_doc(
+                    _H.s3_client, _H.S3_BUCKET, _PM_READ_PREFIX, _j, user.get('username') or user.get('email') or ''))
+        if _dp_msg:
+            return jsonify({'success': False, 'guidance': True, 'error': _dp_msg}), 404
+        if resolution and resolution.get('from_read'):
+            angle = _deck_pick.read_angle(resolution.get('subject'), text)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/deck', e,
@@ -19219,7 +19235,7 @@ def _pm_deck_core(user, body):
     _args = (job_id, username, ctx, history[-14:], angle, _charge_user, deck_subject, deck_partner)
     if _faults.is_probe():   # the golden set grades the routing; a probe never builds a deck (2026-11-02)
         print(f"[pm-deck] probe ask: deck {job_id} on {deck_subject!r} not started")
-        return jsonify({'success': True, 'job_id': job_id, 'subject': deck_subject})
+        return jsonify({'success': True, 'job_id': job_id, 'subject': deck_subject, 'confirm_line': _deck_pick.confirm_line(resolution)})
     if _rr.queue_enabled():   # decks build on the Hetzner read worker like reads (2026-10-09); unclaimed in 150 s, the sweeper builds it here
         _head['resume'] = {'ctx': ctx, 'history': history[-14:], 'angle': angle, 'charge_user': _charge_user,
                            'subject': deck_subject, 'partner': deck_partner, 'extras': _deck_extras or {}}
@@ -19227,7 +19243,7 @@ def _pm_deck_core(user, body):
     else:
         _pm_deck_status_write(job_id, _head)
         threading.Thread(target=_pm_run_deck_job, args=_args, daemon=True).start()
-    return jsonify({'success': True, 'job_id': job_id, 'subject': deck_subject})
+    return jsonify({'success': True, 'job_id': job_id, 'subject': deck_subject, 'confirm_line': _deck_pick.confirm_line(resolution)})
 
 
 @_H.app.route('/api/brief-chat/pay-per-use', methods=['POST'])
