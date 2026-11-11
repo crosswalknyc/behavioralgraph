@@ -227,6 +227,9 @@ def sweep_empty_threads(idx, *, load, put, delete, key_for, now=None,
             continue
         age_from = _latest(th.get('created'), th.get('updated'), th.get('opened'), th.get('last_seen'))
         age = (now - age_from).total_seconds() if age_from is not None else None
+        if th.get('pinned') and (age is None or age < 48 * 3600):
+            keep.append(th)          # a key-surface thread waiting on its job is not an abandoned pane (2026-11-10)
+            continue
         if tid == active or (age is not None and age < min_age_s):
             if tid != active:
                 out['kept_recent'].append(tid)

@@ -1396,6 +1396,15 @@ def sweep(now=None, lookback=LOOKBACK):
         out.append((jid, 'deck-local'))
     if out:
         print(f"[pm-recover] sweep: {out}")
+    # builds that finished since the last pass get their line in the thread that launched them, whether or
+    # not a browser is open (2026-11-10, prometheus.build_ready); its own failures never reach the read sweep
+    try:
+        from . import build_ready as _br
+        from . import service as _svc
+        from .host import host as _host
+        _br.sweep_with_host(_host, _svc, now=now)
+    except Exception:
+        traceback.print_exc()
     return out
 
 

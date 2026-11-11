@@ -41,6 +41,12 @@ from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: int
 from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation wizard (2026-10-28)
 from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
 from prometheus import question_universe as _question_universe   # the base is the universe the question names; the page only when pointed at (2026-11-06)
+from prometheus import window_scope as _wscope   # the window is the one the reader asked for; the default is never a frozen pair (2026-11-10)
+from prometheus import named_platforms as _named_platforms   # a platform the client names is the universe's platform, strict (2026-11-10)
+from prometheus import door_words as _door_words   # the word door never reaches a chat read or a file name (2026-11-10)
+from prometheus import api_threads as _api_threads   # a key-surface job lands in a key thread, never a dashboard chat (2026-11-10)
+from prometheus import order_truth as _order_truth   # what is said about an order follows the artifact (2026-11-10)
+from prometheus import build_ready as _build_ready   # the server posts the finished line into the launching thread (2026-11-10)
 import io
 import hashlib
 import time
@@ -1519,6 +1525,12 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Prior chat turns count: if a previous user turn already named "
         "a window (e.g. 'trailing 60 days') and this turn is a follow-up "
         "about the same subject, keep explicit=true and reuse that window.\n"
+        "  * A year that only DESCRIBES the subject is not a window "
+        "(2026-11-10): 'Cruel Summer series was in 2021', 'it came out in "
+        "2021', 'aired in 2021', or a year inside a reply to a seasons / "
+        "title / platform question. explicit=false and the default window "
+        "stands; only words that ask for a window set one ('for 2021', "
+        "'in calendar 2021', 'viewers in 2021', dates written out).\n"
         "  * NEVER return true just because you filled in the default. "
         "The dashboard uses this flag to know whether to ask the user to "
         "confirm dates before proceeding.\n\n"
@@ -3595,23 +3607,30 @@ def _pm_universe_phrase(draft):
     universe', from the draft's consumption scope (2026-09-21, Jessie:
     a viewers build confirmed as 'the national total universe' reads
     like the wrong pull). The noun comes from the subject's own
-    audience word, falling back to consumer_verb on seeded builds."""
+    audience word, falling back to consumer_verb on seeded builds. A
+    draft scoped to the platform the client named says so ('total
+    viewers universe on Peacock', 2026-11-10)."""
+    phrase = 'total universe'
     try:
         d = draft or {}
         subj = str(d.get('subject') or d.get('name') or '')
         import re as _re_up
         m = _re_up.search(r'\b(viewers|listeners|readers|players)\b',
                           subj, _re_up.I)
-        if m:
-            return f'total {m.group(1).lower()} universe'
         verb = str(d.get('consumer_verb') or '').strip().lower()
-        if verb in ('viewers', 'listeners', 'readers', 'players'):
-            return f'total {verb} universe'
-        if str(d.get('seed_source') or '').startswith('content_map'):
-            return 'total viewers universe'
+        if m:
+            phrase = f'total {m.group(1).lower()} universe'
+        elif verb in ('viewers', 'listeners', 'readers', 'players'):
+            phrase = f'total {verb} universe'
+        elif str(d.get('seed_source') or '').startswith('content_map'):
+            phrase = 'total viewers universe'
     except Exception as _fx:
         _faults.note('chat', _fx)
-    return 'total universe'
+    try:
+        from prometheus import named_platforms as _np_up
+        return _np_up.universe_phrase(draft, phrase)
+    except Exception:
+        return phrase
 
 
 @_H.app.route('/api/brief-chat/clarify', methods=['POST'])
@@ -4052,8 +4071,8 @@ def api_synth_chat_clarify():
             head = (f"Got it - fresh pull for "
                     f"{draft.get('subject') or subject}, anchored to "
                     f"the existing file so the numbers stay "
-                    f"comparable. It runs on Jul 1 2025 to Jun 30 "
-                    f"2026 unless you named a window - to use a "
+                    f"comparable. It runs on {_H._draft_window_field(draft, 'time_shifted_refresh') or _wscope.default_label()} "
+                    f"unless you named a window - to use a "
                     f"different one, send it as a new message (like "
                     f"'{draft.get('subject') or subject} past 90 "
                     f"days') and I'll re-draft.")
@@ -4467,6 +4486,7 @@ def api_synth_chat_clarify():
                     "standard build.")
         elif chose_consumers and not chose_broad:
             _H._apply_ip_scope_to_draft(draft, 'consumers')
+            _named_platforms.promote(draft)   # the platform the ask described is the viewers universe's platform
             frac = data.get('fraction')
             try:
                 frac = float(frac)
@@ -6555,6 +6575,7 @@ def _pm_interpret_core(user, body, text, history):
         # consumers-only (viewers / readers / listeners / players,
         # home platform pinned at 100). If the words already said,
         # normalize silently; otherwise stash the question.
+        _named_platforms.bind(spec_draft, text, history, cuts_hit=_platform_hit)   # a platform the client names, in the ask or a follow-up, is the universe's platform (2026-11-10)
         try:
             _H._maybe_ask_ip_scope(spec_draft, text)
         except Exception as _ip_err:
@@ -7735,8 +7756,7 @@ def _spec_from_draft(draft):
     # pre-build (migration/event_window.ensure_event_window_resolved).
     _win_str = _H.get('_ew_window_string') or (
         lambda a, b: f"{a} TO {b}" if a and b else '')
-    _def_dates = _H.get('_standing_default_dates') or (
-        lambda today=None: ('2025-07-01', '2026-06-30'))
+    _def_dates = _H.get('_standing_default_dates') or __import__('prometheus.window_scope', fromlist=['standing_default']).standing_default
     if draft.get('engine_date_range'):
         spec['date_range'] = _scrub(draft['engine_date_range'],
                                     field='date_range', subject=subject,
@@ -7862,6 +7882,8 @@ def _spec_from_draft(draft):
     # YouTube choices ride the spec (strict on named platforms).
     from prometheus.streamscout_spec import stamp_client_scope
     stamp_client_scope(spec, draft, _scrub, subject)
+    from prometheus.named_platforms import stamp_spec as _stamp_platform_spec   # the kind the reader meant ('the special, not the podcast') and the strict mark
+    _stamp_platform_spec(spec, draft, _scrub, subject)
     # Viewer season/film scope (2026-08-27): the bound scope rides the
     # spec so the engine host resolves the scoped content URLs, folds
     # them into BRAND INPUT, and inserts the verified rows into the
@@ -8835,25 +8857,27 @@ def _pm_approve_core(user, body):
         except Exception as _fx:
             _faults.note('chat', _fx)
         _t_queue = time.monotonic()
-        resp = _requests.post(
+        # What the reply says follows the artifact (2026-11-10, prometheus.order_truth): a run id means it
+        # started; a refusal is tried once more and then answered plainly; a timeout or a reply with no run id
+        # is never called running. The calm promise is not made for an order that did not start.
+        queue_resp, _q_state, _q_detail = _order_truth.queue_post(lambda: _requests.post(
             f"{_H.SYNTH_QUEUE_URL}/synth/queue",
             json=payload, timeout=30,
             headers={'X-Synth-Auth': _H.SYNTH_QUEUE_SECRET,
                      'Content-Type': 'application/json'},
-        )
-        if resp.status_code != 200:
+        ), on_retry=lambda d: print(f"[synth_chat_run] {_order_truth.RETRY_LINE} ({d[:200]})"))
+        if queue_resp is None:
             _H._chatbot_error_email(
                 'brief-chat/approve',
-                f'queue returned {resp.status_code}: '
-                f'{_H._clean_queue_error_text(resp.text)[:400]}',
-                tb=str(resp.text or '')[:2000] or '(empty queue reply)')
-            return jsonify(_H._chatbot_calm_payload())
-        queue_resp = resp.json()
+                f'order {_q_state}: {_H._clean_queue_error_text(_q_detail)[:400]}',
+                tb=str(_q_detail or '')[:2000] or '(empty queue reply)')
+            return jsonify(_order_truth.not_started_payload(spec.get('name')) if _q_state == 'not_started'
+                           else _order_truth.unconfirmed_payload(spec.get('name')))
         _pm_ask_stage('approve_queue_post', t0=_t_queue)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/approve', e)
-        return jsonify(_H._chatbot_calm_payload())
+        return jsonify(_order_truth.not_started_payload(spec.get('name')))
 
     # Queue-returned-200-without-run_id parity fix (2026-08-19, Jessie
     # fix #4 applied to session route). If the queue accepted the POST
@@ -8874,7 +8898,18 @@ def _pm_approve_core(user, body):
             'queue accepted the run but returned no run_id: '
             + str(queue_resp)[:400],
             tb='(queue reply inspection)')
-        return jsonify(_H._chatbot_calm_payload())
+        return jsonify(_order_truth.unconfirmed_payload(spec.get('name')))
+    # The launch is on record with the thread it was asked in, so the server posts the finished line there
+    # itself, browser or no browser (2026-11-10, prometheus.build_ready).
+    try:
+        from prometheus import thread_scope as _tsc_bl
+        _build_ready.note_launch(
+            _pm_s3_put_json, run_id=_session_run_id, user=_approve_username,
+            thread_id=str(body.get('thread_id') or '') or _tsc_bl.current_thread_id(),
+            subject=spec.get('name'), decision=decision, engine_user=payload.get('user_email') or '',
+            via=('api' if _api_threads.is_api_request() else 'dashboard'))
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
     # Charge AFTER the queue accepted the run so the usage-history entry
     # carries the real run_id (same check -> queue -> charge order the
@@ -13078,6 +13113,7 @@ def _pm_csv_point(subject, question, family):
 
 def _pm_upload_csv(fname, csv_text):
     """Upload a CSV under generated_data/ and return (s3_key, 7-day url)."""
+    fname = _door_words.scrub_filename(fname)   # a generated file's name never carries the word (2026-11-10)
     s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
     _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=s3_key,
                             Body=csv_text.encode('utf-8'),
@@ -15153,7 +15189,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             elif _fe.get('wl'):
                 _frng = str(_fe['wl'])
             _fcsv = _H._stamp_csv_text(_fcsv, _frng)
-            _fn = _pm_csv_task_filename(_fe) or _fn
+            _fn = _door_words.scrub_filename(_pm_csv_task_filename(_fe) or _fn)
             _fkey = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{_fn}"
             _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=_fkey,
                                  Body=_fcsv.encode('utf-8'), ContentType='text/csv')
@@ -15393,8 +15429,10 @@ def _pm_read_job_doc(job_id):
         return None
 
 
-def _pm_job_bind_thread(job_id, username=None, resumed=False):
+def _pm_job_bind_thread(job_id, username=None, resumed=False, question=''):
     """The thread a job lands in, pinned at launch (prometheus.thread_scope.job_thread).
+    A job launched through the key surface never takes the dashboard's active thread: an ask that
+    named no conversation gets a key thread of its own (prometheus.api_threads, 2026-11-10).
     The launch's own record wins: ``resumed`` (the read worker running a queued job, a
     recovered copy) reads the thread already on the job document and never re-derives it
     (2026-11-11, Armine: the worker re-read "the reader's active thread" and her Mad Men
@@ -15417,8 +15455,13 @@ def _pm_job_bind_thread(job_id, username=None, resumed=False):
         if not tid and idx.get('threads'):
             tid = str((idx['threads'][0] or {}).get('id') or '')
         return tid
+    from prometheus import api_threads as _apit_b
+    _key_ask = _apit_b.is_api_request()
     tid = _tscope.job_thread(recorded=_rec, request=('' if resumed else str(getattr(_PM_REQ_THREAD, 'tid', '') or '')),
-                             stashed=_stashed, active=(_active if username else None), web=not resumed)
+                             stashed=_stashed, active=(_active if (username and not _key_ask) else None), web=not resumed)
+    if not tid and _key_ask and username and job_id and not resumed:
+        from prometheus import service as _svc_at
+        tid = _apit_b.mint_for_job(username, job_id, question, ensure=_svc_at.ensure_thread, save=_svc_at.save_thread)
     if tid and job_id:
         _PM_JOB_THREAD[job_id] = tid
     return tid or None
@@ -15428,13 +15471,15 @@ def _pm_thread_for_job(username, job_id):
     """The thread a finished job should land in, or None for the
     caller's active thread. Verifies the id still belongs to the user.
     The job document's thread_id serves a finishing process that did not launch it (2026-10-14)."""
-    tid = _PM_JOB_THREAD.pop(job_id, None) or __import__('prometheus.service', fromlist=['job_thread_id']).job_thread_id(job_id)
-    if not tid or not username:
+    _svc_tj = __import__('prometheus.service', fromlist=['job_thread_id'])
+    tid = _PM_JOB_THREAD.pop(job_id, None) or _svc_tj.job_thread_id(job_id)
+    if not username:
         return None
     try:
-        idx = _load_threads_index(username)
-        if any(t.get('id') == tid for t in idx.get('threads', [])):
-            return tid
+        # a key-surface job lands in a key thread, listed again when the index lost it; never the active thread (2026-11-10)
+        return __import__('prometheus.api_threads', fromlist=['landing_thread']).landing_thread(
+            username, job_id, tid, exists=lambda t: any(x.get('id') == t for x in _load_threads_index(username).get('threads', [])),
+            ensure=_svc_tj.ensure_thread, relist=_svc_tj.relist_thread, job_doc=(None if tid else (_svc_tj.find_job_doc(job_id)[0] or {})))
     except Exception as _fx:
         _faults.note('chat', _fx)
     return None
@@ -18862,7 +18907,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                           or subject
                           or p_meta.get('name')
                           or 'Insights')).strip('_')[:60] or 'Insights'
-        fname = f"{stem}_Insights.pptx"
+        fname = _door_words.scrub_filename(f"{stem}_Insights.pptx")
         local = os.path.join(tempfile.gettempdir(),
                              f"pm_deck_{job_id}.pptx")
         static_dir = os.path.join(

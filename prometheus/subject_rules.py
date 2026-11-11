@@ -641,11 +641,15 @@ def _mdays(y, m):
     return _cal.monthrange(y, m)[1]
 
 
-def window_in_text(text):
+def window_in_text(text, earlier_turn=False):
     """(start_iso, end_iso) named in plain words, or None.
     'june 2024- june 2025' -> 2024-06-01 to 2025-06-01; 'Jun 1 2024 to
     Jun 1 2025' as written; '2023-2024' -> Jan 1 2023 to Dec 31 2024;
-    'for 2025' -> the calendar year."""
+    'for 2025' -> the calendar year. A year that describes the subject
+    ('Cruel Summer series was in 2021', 'it came out in 2021') is not a
+    window (2026-11-10, Armine); in an earlier turn of the thread
+    (``earlier_turn``) a lone year counts only behind a window word
+    ('for 2025', 'in 2025', 'calendar 2025')."""
     t = ' '.join(str(text or '').split())
     if not t:
         return None
@@ -668,8 +672,15 @@ def window_in_text(text):
         y1, y2 = int(m.group(1)), int(m.group(2))
         if y2 >= y1:
             return f"{y1}-01-01", f"{y2}-12-31"
-    m = _ONE_YEAR_RX.search(t)
-    if m:
+    for m in _ONE_YEAR_RX.finditer(t):
+        try:
+            from . import inline_dates as _idw
+            if _idw.describes_subject_year(t, m.start(1), m.end(1)):
+                continue
+        except Exception:
+            pass
+        if earlier_turn and not re.match(r"(?:calendar|cy|for|in)\b", m.group(0), re.I):
+            continue
         y = int(m.group(1))
         return f"{y}-01-01", f"{y}-12-31"
     return None
@@ -681,7 +692,7 @@ def _window_from_thread(history, limit=6):
     turns = [x for x in (history or []) if isinstance(x, dict)][-limit:]
     for x in reversed(turns):
         if str(x.get('role') or '') == 'user':
-            w = window_in_text(x.get('text') or x.get('content') or '')
+            w = window_in_text(x.get('text') or x.get('content') or '', earlier_turn=True)
             if w:
                 return w
     for x in reversed(turns):

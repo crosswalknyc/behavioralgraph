@@ -3815,6 +3815,14 @@ def scrub_user_text(text):
         s = _sep_idx(s)
     except Exception as _fx:
         _faults.note('analysis', _fx)
+    # the word door never reaches a reader in a chat read or a file name
+    # (2026-11-10; the deck rule of 2026-10-28). prometheus.door_words.
+    if 'door' in s.lower():
+        try:
+            from prometheus import door_words as _dw
+            s = _dw.scrub_read(s)
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
     if _held:
         try:
             s = _vd_meth.unshield_definitions(s, _held)
@@ -6118,11 +6126,22 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
             "==================================================\n"
             f"{anchors_block}\n\n")
     ledger_txt = render_ledger_block(ledger_block)
+    # an open end in the ask ('to date', 'so far', 'to the most recent
+    # data') is resolved before the model reads it: yesterday, stated
+    # (2026-11-10, Armine's Mad Men 2025 vs 2026 compare read 'latest'
+    # as Sep 14). prometheus.window_scope.
+    window_txt = ''
+    try:
+        from prometheus import window_scope as _wsc
+        window_txt = _wsc.read_window_note(text)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return (
         f"{req_block}"
         f"{profile_txt}"
         f"{anchors_txt}"
         f"{ledger_txt}"
+        f"{window_txt}"
         "RECENT CONVERSATION\n"
         "===================\n"
         f"{hist_block}\n\n"
@@ -6537,7 +6556,7 @@ def build_deck_suggestions(query, catalog, ranked=None,
     return suggestions[:max_suggestions]
 
 
-INSIGHTS_DECK_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist, producing the slide plan for a FINISHED client-ready insights deck. This is a final deliverable a seller walks into a pitch with, not an outline. You get the subject's Profile IQ digest (first-party audience data), the recent conversation, and the ask. Return a strict JSON slide plan; a renderer lays it out in the Crosswalk deck system.
+_INSIGHTS_DECK_SYSTEM_PROMPT_T = """You are Prometheus, Crosswalk's senior audience strategist, producing the slide plan for a FINISHED client-ready insights deck. This is a final deliverable a seller walks into a pitch with, not an outline. You get the subject's Profile IQ digest (first-party audience data), the recent conversation, and the ask. Return a strict JSON slide plan; a renderer lays it out in the Crosswalk deck system.
 
 THE ARC (14 to 20 slides, in this shape)
 1. cover: the single sharpest commercial sentence as the headline, one intro line naming what the deck contains and the window, three proof stats (audience scale, the best conversion or behavior number, the best unit-performance number).
@@ -6585,7 +6604,7 @@ CATEGORY FIGURES
 VOICE
 - Titles are sentences in sentence case and end with a full stop. They state the finding: "They over-shop the sneaker channel at 3x." not "Channel Overview". Aim for 6 to 10 words; never more than 12. No puns, rhetorical questions, teasers, colon reveals, or metaphor headers.
 - Eyebrows are one or two words (Argument, Universe, Interests, Channel, Wallet, Graph, Click, Search, Journeys, Cart, Spend, Paths, Buy, Close).
-- source lines name the read and window in product language: "Profile IQ interest rows, Jul 1 2025 to Jun 30 2026." or "Crosswalk Unique ID journeys, Jul 1 2025 to Jun 30 2026. n=84,213 subject-path sessions." Never name any internal system, model, vendor, or process.
+- source lines name the read and window in product language: "Profile IQ interest rows, __T12_LABEL__." or "Crosswalk Unique ID journeys, __T12_LABEL__. n=84,213 subject-path sessions." Never name any internal system, model, vendor, or process.
 - reads are one or two sentences stating what the slide proves, with the key number. Hard counts stated flat; interpretive lines use leans, skews, reads as.
 - NEVER use em dashes or en dashes anywhere. No "actually", no "absolutely", no "real-time". Never the word "household".
 - NEVER use the word door or doors. Not the door to, opens the door, or a door for. State the finding. The Door NYC as a venue name is the only proper-name exception.
@@ -6712,6 +6731,13 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
         out['_so_what'] = True
     if multi:
         out['_multi'] = list(multi)
+    # an open end the ask stated ends on yesterday; no read's window ends
+    # after today (prometheus.window_scope, 2026-11-10)
+    try:
+        from prometheus import window_scope as _wsc
+        out = _wsc.hold_read_window(out, question)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return out
 
 
@@ -7390,7 +7416,8 @@ def _stamp_window_tokens(text):
             .replace('__T12_START__', start)
             .replace('__T12_END__', end)
             .replace('__T12_LABEL__', f"{_lbl(start)} to {_lbl(end)}")
-            .replace('__TODAY__', today_iso))
+            .replace('__TODAY__', today_iso)
+            .replace('__YESTERDAY__', (_dt.date.fromisoformat(today_iso) - _dt.timedelta(days=1)).isoformat()))
 
 
 def __getattr__(name):
@@ -7398,6 +7425,8 @@ def __getattr__(name):
         return _stamp_window_tokens(_SEARCH_DEMAND_SYSTEM_PROMPT_T)
     if name == 'REASONED_METRICS_SYSTEM_PROMPT':
         return _stamp_window_tokens(_REASONED_METRICS_SYSTEM_PROMPT_T)
+    if name == 'INSIGHTS_DECK_SYSTEM_PROMPT':     # its example source lines carry the standing window, never a frozen pair
+        return _stamp_window_tokens(_INSIGHTS_DECK_SYSTEM_PROMPT_T)
     raise AttributeError(
         f"module {__name__!r} has no attribute {name!r}")
 

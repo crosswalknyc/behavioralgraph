@@ -2785,6 +2785,115 @@ def _exact_if_fresh(e):
     return None
 
 
+_FIT_STOP = frozenset((
+    'the', 'and', 'for', 'with', 'who', 'that', 'this', 'from', 'into', 'over', 'their', 'they', 'them', 'are', 'was',
+    'have', 'has', 'had', 'not', 'use', 'uses', 'used', 'using', 'user', 'users', 'people', 'viewers', 'viewer',
+    'audience', 'audiences', 'cohort', 'total', 'universe', 'fans', 'fan', 'all', 'any', 'only', 'aged', 'ages', 'age',
+    'years', 'year', 'old', 'kids', 'kid', 'teens', 'teen', 'adults', 'adult', 'watch', 'watched', 'watching',
+    'buyers', 'buyer', 'shoppers', 'customers', 'members', 'subscribers', 'platform', 'platforms', 'window'))
+
+
+def _fit_tokens(text):
+    return {w for w in re.findall(r"[a-z0-9]+", str(text or '').lower()) if len(w) >= 3 and w not in _FIT_STOP}
+
+
+def _entry_default_like(entry):
+    """True when a stored read's window is what a question that names no
+    window asks for: no window at all, or the trailing 12 months as of
+    the day it was banked (or today). A custom window, and the fiscal
+    pair retired on 2026-09-14, are not."""
+    ws, we = str(entry.get('ws') or ''), str(entry.get('we') or '')
+    if not (ws and we):
+        return True
+    try:
+        from migration.event_window import default_window as _dw, LEGACY_DEFAULT_START as _ls, LEGACY_DEFAULT_END as _le
+        if (ws, we) == (_ls, _le):
+            return False
+        days = [None]
+        ts = None
+        try:
+            ts = datetime.strptime(str(entry.get('ts') or '')[:19], '%Y-%m-%dT%H:%M:%S')
+            days.append(ts.date())
+        except ValueError:
+            ts = None
+        if any((ws, we) == tuple(_dw(d)) for d in days):
+            return True
+        a = datetime.strptime(ws, '%Y-%m-%d')
+        b = datetime.strptime(we, '%Y-%m-%d')
+        # a trailing year banked on a day we cannot place: about twelve months, ending near its banking
+        return 360 <= (b - a).days <= 367 and (ts is None or abs((ts - b).days) <= 3)
+    except Exception:
+        return False
+
+
+def replay_fits(entry, question, subject=''):
+    """(True, '') when a stored read matched by its key or its meaning
+    may answer this question; (False, why) when it is at most context.
+
+    2026-11-11 (Armine at Lionsgate, the residual after the two-subject
+    guard): "which categories do best for digital original content on
+    YouTube" is a question about YouTube. The YouTube bucket held a read
+    another reader banked on a cohort, "Parents of teens 13-17, YouTube
+    users with no TikTok use", on calendar 2025; the meaning-level match
+    treated a question that names no cohort as unconstrained and handed
+    it back. A banked read answers a new question only when the subject
+    (resolved by the caller), the cohort or universe, and the window all
+    match what the question asks:
+
+      cohort   a read on a cohort answers only a question that names
+               that cohort (its age range, its parent / family marker,
+               and at least half of its other distinguishing words); a
+               question that names a cohort is never answered by a read
+               on the whole universe or on another cohort
+      window   a question that names a window is answered only by a
+               read on that window; a question that names none asks for
+               the standing window, so a read banked on a custom window
+               (or on the retired fiscal pair) does not answer it
+
+    The same question asked again replays as before (the caller checks
+    that first); the decision of record answers by its own rules.
+    """
+    try:
+        if not isinstance(entry, dict) or is_record_entry(entry):
+            return True, ''
+        q = str(question or '')
+        qsig = cohort_signature(q)
+        cohort = str(entry.get('cohort') or '').strip()
+        subj_toks = _fit_tokens(subject) | _fit_tokens(entry.get('subject'))
+        if cohort:
+            esig = cohort_signature(cohort)
+            if esig['parents'] != qsig['parents']:
+                return False, f"the read is on {cohort!r}; the question names no such cohort"
+            if esig['ages'] and esig['ages'] != qsig['ages']:
+                return False, f"the read is on {cohort!r}; the question names another age range or none"
+            ctoks = _fit_tokens(cohort) - subj_toks
+            ctoks = {w for w in ctoks if not w.isdigit()}
+            if ctoks:
+                qtoks = _fit_tokens(q)
+                hit = sum(1 for w in ctoks if w in qtoks or any(x.startswith(w[:5]) for x in qtoks if len(w) >= 5))
+                if hit * 2 < len(ctoks):
+                    return False, f"the read is on {cohort!r}; the question does not name that cohort"
+        elif qsig['ages'] is not None or qsig['parents']:
+            return False, 'the question names a cohort; the read is on the whole universe'
+        # the window
+        stated = []
+        try:
+            from prometheus import inline_dates as _idw
+            stated = _idw.all_windows(q)
+        except Exception:
+            stated = []
+        ws, we = str(entry.get('ws') or ''), str(entry.get('we') or '')
+        if stated:
+            want = (stated[0]['start'], stated[-1]['end'])
+            if (ws, we) != want:
+                return False, f"the question asks {want[0]} to {want[1]}; the read is on {ws or '-'} to {we or '-'}"
+        elif not _years_in(normalize_question(q)) and not _entry_default_like(entry):
+            return False, f"the question names no window; the read is on {ws} to {we}"
+        return True, ''
+    except Exception:
+        return True, ''
+
+
 def consult(subject=None, question=None, metric_family=None,
             window_start=None, window_end=None, prior_question=None,
             history=None):
@@ -2892,6 +3001,13 @@ def consult(subject=None, question=None, metric_family=None,
             if _others:
                 print(f"[insights-ledger] replay by meaning refused under {bucket.get('subject')!r}: "
                       f"the ask also names {', '.join(_others[:3])}")
+                exact, match = None, None
+        if exact is not None and _by_meaning:
+            # ... and it answers only a question on the same cohort and the
+            # same window (2026-11-11, the residual); otherwise it is context
+            _fit, _why = replay_fits(exact, question, subject=bucket.get('subject') or subject or '')
+            if not _fit:
+                print(f"[insights-ledger] replay by meaning refused under {bucket.get('subject')!r}: {_why}")
                 exact, match = None, None
         if not exact:
             # A decision of record the question itself names outranks the

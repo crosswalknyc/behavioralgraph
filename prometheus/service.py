@@ -140,16 +140,22 @@ def new_thread(uname, *, activate=False, title=None):
     return tid, idx
 
 
-def ensure_thread(uname, tid, *, title=None):
+def ensure_thread(uname, tid, *, title=None, via='api', auto=False):
     """A thread with this exact id exists for the user (created when it
     does not). Never changes the active thread: an API conversation must
-    not move what the dashboard shows."""
+    not move what the dashboard shows. The entry is marked as the key
+    surface's (``via: api``, ``pinned``: it is never the dashboard's
+    active thread and the empty-thread sweep leaves it alone while a job
+    runs); ``auto`` marks a thread minted for one conversation-less ask
+    (prometheus.api_threads, 2026-11-10)."""
     idx = threads_index(uname)
     if any(t.get('id') == tid for t in idx.get('threads', [])):
         return tid
     now = _now()
+    from . import api_threads as _apit
     idx.setdefault('threads', []).append(
-        {'id': tid, 'title': (title or 'API conversation')[:48], 'created': now, 'updated': now, 'turns': 0, 'api': True})
+        {'id': tid, 'title': (title or 'API conversation')[:48], 'created': now, 'updated': now, 'turns': 0,
+         **_apit.index_entry(auto=bool(auto))})
     cap = host.max_threads if host.has('max_threads') else 40
     if len(idx['threads']) > cap:
         # the dashboard's own threads keep their cap; API conversations are pruned oldest first
@@ -223,7 +229,8 @@ def repair_thread_labels(uname, idx=None, persist=True):
 def list_threads(uname, subject_key=None):
     from . import thread_presence as _tp
     idx, _changed = repair_thread_labels(uname)
-    threads = sorted(_tp.visible_threads(idx.get('threads', [])),   # an empty chat is never listed (2026-11-06)
+    threads = sorted([t for t in _tp.visible_threads(idx.get('threads', []))   # an empty chat is never listed (2026-11-06)
+                      if not t.get('api_auto')],                               # nor a thread minted for one key ask (2026-11-10)
                      key=lambda t: str(t.get('updated') or ''),
                      reverse=True)
     if subject_key:
@@ -2704,6 +2711,17 @@ def ask(user, body, *, via='session'):
         raw, status = host.calm_payload(), 200
     else:
         raw, status = _unpack(resp)
+        if surface == 'analyze' and client == 'api' and tid:
+            # a follow-up on a key conversation that names no subject of its own takes the thread's last read
+            # subject; a key caller cannot follow a handoff to the build flow or answer a which-subject card
+            # (2026-11-10, Liz: "Day 90 retention of Channels starts versus direct starts, by service")
+            try:
+                from . import api_threads as _apit
+                raw = _apit.retry_on_thread_subject(
+                    raw, history, body, text=text,
+                    run=lambda b: _unpack(host.analyze_core(user, _analyze_body(b, text, history, decision, tid), text, history))[0])
+            except Exception as _fx:
+                _faults.note('service.api_followup', _fx)
         if surface == 'analyze' and isinstance(raw, dict) and raw.get('action') == 'answer' and raw.get('reply'):
             raw = _after_answer(raw, text, uname, ctx)
         if body.get('_pm_included') and isinstance(raw, dict) and raw.get('success') and raw.get('reply'):
@@ -2730,6 +2748,19 @@ def ask(user, body, *, via='session'):
             # times.
             raw = _interpret_shape(raw)
 
+    if surface == 'interpret' and isinstance(raw, dict) and raw.get('success') is False and not raw.get('guidance'):
+        # What is said about an order follows the artifact (2026-11-10, prometheus.order_truth; admin's
+        # "Pull Subscriber IQ for The Paper ... on Peacock" drew "Confirmed your task is in progress" with
+        # nothing started): the draft step is tried once more, then the reply says plainly it did not start.
+        try:
+            from . import order_truth as _ot
+            raw, _settled = _ot.settle(
+                raw, text, calm_message=str((host.calm_payload() or {}).get('error') or ''),
+                retry=lambda: _unpack(host.interpret_core(user, _interpret_body(body, text, history, tid), text, history))[0])
+            if _settled:
+                host.ask_hint(route='order_truth', outcome=str(raw.get('order_state') or 'started_on_retry'))
+        except Exception as _fx:
+            _faults.note('service.order_truth', _fx)
     env = envelope.wrap(raw, surface=surface, decision=decision,
                         thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, raw, surface)

@@ -101,9 +101,10 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual((_win("from April to June 2024")['start'], _win("from April to June 2024")['end']), ('2024-04-01', '2024-06-30'))
         self.assertEqual((_win("between 2023 and 2024")['start'], _win("between 2023 and 2024")['end']), ('2023-01-01', '2024-12-31'))
         w = _win("sign-ups since March 2026")
-        self.assertEqual((w['start'], w['end'], w['kind']), ('2026-03-01', '2026-11-08', 'since'))
+        # an open end lands on yesterday, never on the day in progress (2026-11-10)
+        self.assertEqual((w['start'], w['end'], w['kind']), ('2026-03-01', '2026-11-07', 'since'))
         w = _win("sign-ups from March 3 2026 to date")
-        self.assertEqual((w['start'], w['end']), ('2026-03-03', '2026-11-08'))
+        self.assertEqual((w['start'], w['end']), ('2026-03-03', '2026-11-07'))
         w = _win("How many US people activated a new Prime membership between October 29 2025 and November 25, 2025 and watched Hazbin Hotel Season 2 in that window?")
         self.assertEqual((w['start'], w['end']), ('2025-10-29', '2025-11-25'))
         # both years missing: the most recent occurrence that has ended

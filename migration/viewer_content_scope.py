@@ -637,6 +637,24 @@ _TRAILING_QUALIFIER_RE = re.compile(
     r"\s+(viewers?|watchers?|streamers?|bingers?|binge[\s-]?watchers?)$",
     re.IGNORECASE)
 
+# A viewers universe scoped to the platform the client named carries the
+# platform after the noun ('Gilmore Girls Viewers ON HULU', 'My Life
+# with the Walter Boys Viewers on Netflix'). The scope words below go
+# in front of the noun and the platform tail stays where it is
+# ('Yellowstone Season 5 Viewers on Peacock').
+_PLATFORM_TAIL_RE = re.compile(
+    r"^(.*?\b(?:viewers?|watchers?|streamers?|bingers?|binge[\s-]?watchers?))"
+    r"(\s+on\s+\S.*)$", re.IGNORECASE)
+
+
+def _split_platform_tail(subject):
+    """('Yellowstone Viewers', ' on Peacock') for a platform-scoped
+    name; (subject, '') otherwise."""
+    m = _PLATFORM_TAIL_RE.match(str(subject or ""))
+    if not m:
+        return subject, ""
+    return m.group(1), m.group(2)
+
 
 def scoped_subject_name(subject, structure, scope):
     """Deliverable name for the scoped universe. TU = subject name per
@@ -648,6 +666,8 @@ def scoped_subject_name(subject, structure, scope):
     if not subj or not isinstance(scope, dict) \
             or scope.get("mode") not in ("latest", "specific"):
         return subj
+    whole = subj
+    subj, tail = _split_platform_tail(subj)
     m = _TRAILING_QUALIFIER_RE.search(subj)
     qual = m.group(1) if m else "Viewers"
     stem = subj[:m.start()].strip() if m else subj
@@ -655,14 +675,14 @@ def scoped_subject_name(subject, structure, scope):
     if kind == "series" and scope.get("season"):
         want = f"season {scope['season']}"
         if want in stem.lower():
-            return subj
-        return f"{stem} Season {scope['season']} {qual.title()}"
+            return whole
+        return f"{stem} Season {scope['season']} {qual.title()}{tail}"
     if kind == "franchise_film" and scope.get("film"):
         film = _strip_apostrophes(_clean(scope["film"]))
         if norm_token(film) in norm_token(stem):
-            return subj
-        return f"{film} {qual.title()}"
-    return subj
+            return whole
+        return f"{film} {qual.title()}{tail}"
+    return whole
 
 
 def scope_prose(structure, scope, assumed=False):
@@ -796,21 +816,23 @@ def audience_subject_name(subject, choice):
     if not subj:
         return subj
     low = subj.lower()
+    whole = subj
+    subj, tail = _split_platform_tail(subj)
     if choice == "parents":
         if low.startswith("parents of"):
-            return subj
+            return whole
         if not _TRAILING_QUALIFIER_RE.search(subj):
             subj = subj + " Viewers"
-        return f"Parents of {subj}"
+        return f"Parents of {subj}{tail}"
     if choice == "under18":
         if "under-18" in low or "under 18" in low:
-            return subj
+            return whole
         m = _TRAILING_QUALIFIER_RE.search(subj)
         if m:
             return (f"{subj[:m.start()].strip()} Under-18 "
-                    f"{m.group(1).title()}")
-        return f"{subj} Under-18 Viewers"
-    return subj
+                    f"{m.group(1).title()}{tail}")
+        return f"{subj} Under-18 Viewers{tail}"
+    return whole
 
 
 def audience_prose(structure, choice, assumed=False):

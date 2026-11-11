@@ -336,9 +336,18 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
     try:
         from flask import g as _g
         _g._pm_ppu_request_id = request_id
+        _g._pm_api_key_tag = str(kid or '')[:8]     # a job this ask launches lands in a thread of this key (api_threads)
     except Exception:
         pass
     env, _status = ask(user, req, via='api_key')
+    if not cid:
+        # an ask that named no conversation and launched a job got a thread of its own;
+        # the reply names it so a follow-up can continue there (2026-11-10)
+        try:
+            from . import api_threads as _apit
+            cid = _apit.minted_conversation() or cid
+        except Exception:
+            pass
     raw = env.get('_raw') if isinstance(env, dict) else None
     if isinstance(raw, dict) and str(raw.get('action') or '') in _SCREEN_ACTIONS:
         v1 = C.declined('unsupported', 'That action needs the dashboard screen. Ask for the figure itself and it comes back here.',

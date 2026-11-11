@@ -209,10 +209,33 @@ def _record_now(user, rec):
     _update(user, mutate)
 
 
-# Standing default build window (default-date-range rule). A stored
-# window only counts as a rememberable preference when it differs.
-DEFAULT_WINDOW_START = '2025-07-01'
-DEFAULT_WINDOW_END = '2026-06-30'
+# A stored window only counts as a rememberable preference when it is
+# not a default: the standing trailing 12 months as of the day it was
+# stored, or the fiscal pair retired on 2026-09-14 (recognized here so
+# an old record is never offered back; never produced).
+try:
+    from migration.event_window import (LEGACY_DEFAULT_START as DEFAULT_WINDOW_START,
+                                        LEGACY_DEFAULT_END as DEFAULT_WINDOW_END)
+except Exception:  # pragma: no cover - twin module missing
+    DEFAULT_WINDOW_START = DEFAULT_WINDOW_END = ''
+
+
+def _is_default_pair(ws, we, ts=None):
+    """The standing default on the day the record was stored (``ts``) or
+    today, or the retired fiscal pair."""
+    if ws == DEFAULT_WINDOW_START and we == DEFAULT_WINDOW_END:
+        return True
+    try:
+        import datetime as _dt
+        from migration.event_window import default_window as _dw
+        days = [None]
+        try:
+            days.append(_dt.date.fromisoformat(str(ts or '')[:10]))
+        except ValueError:
+            pass
+        return any((ws, we) == tuple(_dw(d)) for d in days)
+    except Exception:
+        return False
 
 
 def remember(user, question, subject=None, cohort=None, ledger_key=None,
@@ -374,7 +397,7 @@ def last_window(user, default_start=DEFAULT_WINDOW_START,
         ws, we = str(w.get('start') or ''), str(w.get('end') or '')
         if not (ws and we):
             continue
-        if ws == default_start and we == default_end:
+        if (ws == default_start and we == default_end) or _is_default_pair(ws, we, a.get('ts')):
             continue
         return {'start': ws, 'end': we}
     return None

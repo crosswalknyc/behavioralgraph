@@ -102,6 +102,13 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         _g.scrub_method_language_payload(raw)
     except Exception:
         pass
+    # ... and no door: a chat read says store, a metaphor is rewritten,
+    # a generated file's name carries neither (2026-11-10).
+    try:
+        from . import door_words as _dw
+        _dw.scrub_payload(raw)
+    except Exception:
+        pass
     # Reply shape (2026-10-06): chat answers read as answers, not
     # reports (no capital-letter headers, definitions out of the
     # sentence). Analyze surface only; briefs and guidance keep shape.

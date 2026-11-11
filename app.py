@@ -47533,13 +47533,14 @@ except Exception:  # pragma: no cover - twin module missing
         return None
 
     def _ew_default_window(today=None):
-        rel = _ew_resolve_relative('trailing 12 months', today=today)
-        if rel:
-            return rel[0], rel[1]
-        return '2025-07-01', '2026-06-30'
+        from prometheus import window_scope as _wsc0
+        return _wsc0.standing_default(today)
 
 
-_DEFAULT_WINDOW_LABEL = 'Jul 1, 2025 to Jun 30, 2026'
+# The retired fiscal pair is RECOGNIZED (a leftover draft that still
+# carries it is rewritten to the standing default) and never produced:
+# no fallback, label or prompt emits it (2026-11-10; regression
+# scripts/test_pm_window_scope_2026_11_10.py).
 _LEGACY_FISCAL_START = '2025-07-01'
 _LEGACY_FISCAL_END = '2026-06-30'
 
@@ -47548,11 +47549,19 @@ def _standing_default_dates(today=None):
     """Trailing 12 calendar months. The standing default as of 2026-09-14."""
     try:
         pair = _ew_default_window(today)
-        if pair and pair[0] and pair[1]:
+        if pair and pair[0] and pair[1] and (pair[0], pair[1]) != (_LEGACY_FISCAL_START, _LEGACY_FISCAL_END):
             return pair[0], pair[1]
     except Exception:
         pass
-    return _LEGACY_FISCAL_START, _LEGACY_FISCAL_END
+    from prometheus import window_scope as _wsc0
+    return _wsc0.standing_default(today)
+
+
+def _default_window_label(today=None):
+    """Plain label of the standing default ('Nov 11, 2025 to Nov 11,
+    2026'), computed when it is needed; never a frozen pair."""
+    s, e = _standing_default_dates(today)
+    return _ew_format_label(s, e) or f"{s} to {e}"
 
 
 def _stamp_default_engine_window(draft, start, end):
@@ -47958,8 +47967,29 @@ def _bind_shared_explicit_window(draft, user_text, decision=None):
         return False
 
 
+def _agent_question_before(chat_history):
+    """The agent turn the next user message answers ('' when the last
+    turn is not the agent's). prometheus.window_scope."""
+    try:
+        from prometheus import window_scope as _wsc
+        return _wsc.agent_question_before(chat_history)
+    except Exception:
+        return ''
+
+
+def _drop_described_year_window(draft, user_text, chat_history=None):
+    """A calendar year the model stamped from a description of the
+    subject ('Cruel Summer series was in 2021', 'it came out in 2021')
+    is not a window (2026-11-10, Armine). prometheus.window_scope."""
+    try:
+        from prometheus import window_scope as _wsc
+        return _wsc.drop_described_year_window(draft, user_text, chat_history, is_default=_ew_is_default)
+    except Exception:
+        return None
+
+
 def _bind_inline_date_window(draft, user_text, chat_history=None,
-                             decision=None):
+                             decision=None, question=None):
     """INLINE-DATE BINDING (2026-11-08, Grace Yin / Hazbin Hotel Season 1
     sign-ups): a range written into the ask IS the window. She asked
     'from January 19 and February 15, 2024' (then 'between January 19
@@ -47983,7 +48013,17 @@ def _bind_inline_date_window(draft, user_text, chat_history=None,
     never overwrites it, sets the plain label the confirm copy echoes
     ('Window: Jan 19 to Feb 15, 2024'), and routes the window onto the
     decision's engine / cut fields. No-op when no explicit range exists:
-    the standing trailing-12 default then stands. Never raises."""
+    the standing trailing-12 default then stands.
+
+    A year that describes the subject is never the window (2026-11-10,
+    Armine at Lionsgate: 'Cruel Summer series was in 2021 and it only
+    has 2 seasons for now', then 'can we build a profile for cruel
+    summer series' built on Jan 1 to Dec 31, 2021 off the earlier
+    turn). The reader skips 'was in / came out in / aired in <year>' on
+    every turn, and each turn is read against the agent's question it
+    answers (``question`` for the ask itself; the turn before it for an
+    earlier one), so a reply to a seasons or title clarifier sets a
+    window only with words that ask for one. Never raises."""
     try:
         from prometheus import inline_dates as _idw
     except Exception:
@@ -47991,15 +48031,20 @@ def _bind_inline_date_window(draft, user_text, chat_history=None,
     try:
         if not isinstance(draft, dict):
             return False
-        found = _idw.parse_inline_window(str(user_text or ''))
+        # The question each turn answers rides along (2026-11-10, Armine
+        # / Cruel Summer): 'it was in 2021, only 2 seasons' answered the
+        # seasons question, so the year is the show's, not the window's.
+        q_now = question if question is not None else _agent_question_before(chat_history)
+        found = _idw.parse_inline_window(str(user_text or ''), question=q_now)
         source = 'the ask'
         if not found:
             if draft.get('date_range_explicit'):
                 return False
-            recent_user = [t for t in (chat_history or [])[-8:]
-                           if (t.get('role') or '').lower() == 'user']
-            for t in reversed(recent_user[-4:]):
-                found = _idw.parse_inline_window(str(t.get('text') or ''))
+            turns = [t for t in (chat_history or [])[-8:] if isinstance(t, dict)]
+            user_idx = [i for i, t in enumerate(turns) if (t.get('role') or '').lower() == 'user']
+            for i in reversed(user_idx[-4:]):
+                found = _idw.parse_inline_window(str(turns[i].get('text') or ''),
+                                                 question=_agent_question_before(turns[:i]))
                 if found:
                     source = 'an earlier turn'
                     break
@@ -48053,6 +48098,9 @@ def _bind_explicit_windows(draft, user_text, chat_history=None,
         bound = 'inline'
     else:
         bound = ''
+        # nothing the reader wrote states a window: a calendar year the
+        # model took from a description of the subject is not one
+        _drop_described_year_window(draft, user_text, chat_history)
     _apply_standing_default_window(draft)
     return bound
 
@@ -48106,7 +48154,7 @@ def _ensure_cut_window_echo(draft, decision=None, fetch_parent=True):
             dr = draft.get('date_range') or {}
             date_label = _ew_format_label(dr.get('start'),
                                           dr.get('end')) \
-                or _DEFAULT_WINDOW_LABEL
+                or _default_window_label()
             win_label = date_label
             draft['date_window_label'] = win_label
         if not win_label:
@@ -48170,7 +48218,7 @@ def _draft_window_field(draft, decision=None):
     if d in ('new_build', 'time_shifted_refresh', 'cut_needs_parent'):
         dr = draft.get('date_range') or {}
         return _ew_format_label(dr.get('start'), dr.get('end')) \
-            or _DEFAULT_WINDOW_LABEL
+            or _default_window_label()
     return ''
 
 
@@ -48841,7 +48889,7 @@ def _sg_guard_fiscal_quarter(draft, text, history, decision,
                 "2026'), or reply 'calendar' to use calendar "
                 "dates.")}
         # One-shot surface: bind the standing window and say so.
-        lbl = (f"{_DEFAULT_WINDOW_LABEL} (fiscal calendar not "
+        lbl = (f"{_default_window_label()} (fiscal calendar not "
                f"specified; standard year used)")
         draft['date_window_label'] = lbl
         _append_identity_echo(draft, f"window read as {lbl}")
@@ -55036,6 +55084,24 @@ def _apply_ip_scope_to_draft(draft, scope):
     return draft
 
 
+def _bind_named_platforms(draft, text, chat_history=None, cuts_hit=None):
+    """A platform the client names is the universe's platform
+    (2026-11-10, Armine: 'only for the viewers on peacock' in a
+    follow-up; Jessie: 'viewers ONLY on Amazon and HBO MAX'). The scope
+    is strict (the StreamScout contract), the name takes the house shape
+    ('<Title> Viewers on Peacock') and the confirm line names the
+    platform. prometheus.named_platforms; never raises."""
+    try:
+        from prometheus import named_platforms as _npf
+        return _npf.bind(draft, text, chat_history, cuts_hit=cuts_hit)
+    except Exception as _np_err:
+        try:
+            print(f"[named-platforms] bind skipped (non-fatal): {_np_err}")
+        except Exception:
+            pass
+        return []
+
+
 def _maybe_ask_ip_scope(draft, prompt):
     """In-place: when the subject is IP content (series / movie / book /
     podcast / game) and the ask didn't say whether the universe is the
@@ -55615,9 +55681,13 @@ def _scrub_identity_prose(draft, title, medium, platform):
     supplies researched persona notes when it can; this is the floor."""
     where = f' on {platform}' if platform else ''
     noun = medium or 'title'
+    # the window the draft runs on, never a frozen pair (2026-11-10)
+    from prometheus import window_scope as _wsc_ip
+    _dr = draft.get('date_range') if isinstance(draft.get('date_range'), dict) else {}
+    _win = _wsc_ip.label_for(_dr.get('start'), _dr.get('end')) or _wsc_ip.default_label()
     draft['persona_notes'] = (
         f"Audience profile for {title}, the {noun}{where}, over the "
-        f"window Jul 1 2025 to Jun 30 2026. The audience shape (age, "
+        f"window {_win}. The audience shape (age, "
         f"gender, platform mix) derives from engagement with this "
         f"title only - no assumptions borrowed from similarly named "
         f"properties.")
@@ -57973,6 +58043,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     # otherwise the build covers all seasons / the whole franchise and
     # the assumed scope is stated in the brief summary below. Never an
     # override field (prompt-only contract).
+    _bind_named_platforms(draft, prompt)     # the platform the prompt names scopes a viewers universe, strict
     try:
         _apply_viewer_scope_guard(draft, prompt, allow_ask=False,
                                   decision=decision)

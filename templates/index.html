@@ -90418,7 +90418,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (cur === 'error' || cur === 'failed') {
                     lines = [SYNTH_CHAT_CALM_MSG];
                 }
-                if (cur === 'complete' && st.subiq_s3_key) {
+                // The server posts the finished line into the launching thread itself
+                // (prometheus.build_ready, 2026-11-10); when it is already here, this
+                // tab does not say it a second time.
+                var _pmSrvReady = (cur === 'complete') && Array.isArray(synthChatHistory) &&
+                    synthChatHistory.some(function(t) { return !!(t && t.meta && t.meta.build_run_id === runId); });
+                if (_pmSrvReady) {
+                    /* already said by the server turn */
+                } else if (cur === 'complete' && st.subiq_s3_key) {
                     _synthChatPushTurnWithMeta('agent', lines.join('\n'), {
                         run_id: runId, status: cur,
                         link: { url: window.location.origin + '/api/download-cached/' + encodeURIComponent(st.subiq_s3_key),

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "95da04df41bbbcc5cc5ca9f34700e13841daf3c88900079c27c01fdd829984e8",
+ "content_hash": "c7d080bcd67983b359cbc83a3b9ca49b9f100f658431a1a8f79ea84fd72eea82",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1129,7 +1129,72 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "window_is_the_one_asked",
+   "decided": "2026-11-10",
+   "statement": "The window a profile or a read runs on is the one the reader asked for. Only words that ask for a window set one: 'for 2021', 'in calendar 2021', 'viewers in 2021', dates written out, 'the last 90 days'. A year that describes the subject is never a window: 'the series was in 2021', 'it came out in 2021', 'aired in 2021' say when the title appeared, and a year inside a reply to a question about seasons, the title, the platform or the audience is the title's year too. With no window asked for, the standing window is the trailing 12 months ending today, stated as dates; a fixed twelve-month pair from an earlier year is never used. An open end is the last full day: 'to date', 'so far', 'latest', 'most recent data', 'this year', 'year to date' and 'since' a date end on yesterday, never today, never a later date, and never an earlier date of your choosing; the window line states that day. When the context carries a STATED WINDOW block, use its dates exactly in every label and line. A comparison of two periods keeps each period as asked, with only the open side ending yesterday.",
+   "match_terms": [
+    "to date",
+    "so far",
+    "latest",
+    "most recent",
+    "year to date",
+    "this year",
+    "since",
+    "came out in",
+    "aired in",
+    "was in",
+    "window",
+    "date range",
+    "trailing 12"
+   ],
+   "sources": [
+    "prometheus-brain.md",
+    "default-date-range.mdc"
+   ]
+  },
+  {
+   "id": "named_platform_scopes_the_universe",
+   "decided": "2026-11-10",
+   "statement": "When the reader names where the audience watches or listens ('viewers on Peacock', 'only on Amazon and HBO Max', 'Hulu viewers of Gilmore Girls', 'people who watched it on Prime Video'), in the first ask or in any follow-up before the profile is approved, that platform is the universe: the profile is the title's viewers on that platform and nothing else. The name says so in one shape, '<Title> Viewers on Peacock', with two platforms joined by 'and', and the confirmation says viewers on that platform only. If the title cannot be seen on the named platform the profile does not go ahead and the reader is told so plainly; another platform is never used in its place, and 'could not be checked yet' is never said as 'not there'. 'That aired on Peacock' describes the title: it scopes a viewers profile and is left alone on a broad one until the reader says viewers only. 'The special, not the podcast' names which title is meant; the special is one title and the podcast another. One title asked on several services as a list is one profile with a cut for each service.",
+   "match_terms": [
+    "viewers on",
+    "only on",
+    "watched it on",
+    "aired on",
+    "on peacock",
+    "on netflix",
+    "on hulu",
+    "on hbo max",
+    "on amazon",
+    "on prime video",
+    "not the podcast",
+    "the special"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "claims_follow_what_exists",
+   "decided": "2026-11-10",
+   "statement": "Say that something is running, on its way or in progress only when it has started: there is a run or a job to point at. An order that did not start is said plainly: it did not start, nothing is running, nothing was charged, send it again. When it cannot be confirmed either way, say that and how to check; never call it running. A finished profile is announced once, in the conversation that ordered it, with the name it carries in the Select Profile dropdown. Never write the word door or doors in an answer or a file name: a retail location is a store ('a three-store audience', 'retail store mix') and the metaphor is restated as the plain claim; brand names that contain the letters, such as DoorDash, are written as they are. An earlier answer on record answers a new question only when the subject, the group of people and the window are the ones the new question asks about: a read about one cohort is background, not the answer, for a question about the whole audience or another cohort, and a read on another window is background for a question about this one. The same question asked again gets the same figures.",
+   "match_terms": [
+    "is it running",
+    "did it start",
+    "in progress",
+    "status",
+    "door",
+    "doors",
+    "retail door",
+    "did you start",
+    "is it ready"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-11T20:34:19Z"
+ "generated_at": "2026-11-11T20:46:34Z"
 }

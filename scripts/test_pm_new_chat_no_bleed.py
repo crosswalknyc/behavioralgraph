@@ -679,13 +679,19 @@ class TheLedgerNeverAnswersForAnotherAudience(unittest.TestCase):
             self.assertIsNone(r.get('match'))
             self.assertTrue(r.get('entries'))                 # the published figures still ride the block
 
-    def test_the_guard_is_what_stopped_it(self):
-        # the same ledger without a TikTok subject: the read is matched by meaning (the behavior the guard narrows)
+    def test_a_one_subject_question_is_not_answered_by_another_cohorts_read(self):
+        # the same ledger without a TikTok subject. Until 2026-11-11 the read was matched by meaning here (a question
+        # that names no cohort bound whatever cohort the bucket held); a read on a cohort answers only a question
+        # that names that cohort, on its window. The published figures still ride the block as context.
         doc = {'subjects': {'youtube': self.doc['subjects']['youtube']}}
         self.il._load_index = lambda force=False: doc
         r = self.il.consult(subject=None, question='Looking at the digital original content such as YouTube, etc. What type of categories do best?')
-        self.assertEqual((r.get('exact') or {}).get('cohort'), YT_ENTRY['cohort'])
-        self.assertEqual(r.get('match'), 'semantic')
+        self.assertIsNone(r.get('exact'))
+        self.assertIsNone(r.get('match'))
+        self.assertTrue(r.get('entries'))
+        ok, why = self.il.replay_fits(YT_ENTRY, 'which categories do best for digital original content on YouTube', subject='YouTube')
+        self.assertFalse(ok)
+        self.assertIn('cohort', why)
 
     def test_the_same_question_still_replays(self):
         r = self.il.consult(subject=None, question=YT_BANKED_Q)       # it names YouTube and TikTok too; it is the same question
