@@ -322,7 +322,10 @@ def test_other_paths():
     check("service resets the mark per ask", '_ig0.reset_resume()' in svc)
     check("service lets the wizard stand aside (no hold_payload re-ask)", '_stood_aside' in svc)
     check("send-file clarifier does not take a question as the file name", 'is_question_shaped(text)' in svc and "mark_resume('send_file')" in svc)
-    check("dashboard asks fall back to the active thread on an unknown id", "if client == 'dashboard':" in svc)
+    # 2026-11-11: an unknown id from the dashboard is re-listed under its own id (prometheus.thread_scope);
+    # the ask never runs on the active thread
+    check("a dashboard ask naming an unknown thread stays on that thread, never the active one",
+          'resolve_ask_thread(' in svc and 'relist_thread(uname, t)' in svc and 'tid = active_thread_id(uname)' not in svc)
     env_src = open(os.path.join(ROOT, 'prometheus', 'envelope.py'), encoding='utf-8').read()
     check("every reply passes the attach", 'attach_resume_chip(env, hit)' in env_src)
     # the global cancel (Jenna 2026-11-05, prometheus.intake_reset) is the one lane ahead of the wizard
@@ -380,11 +383,12 @@ def test_service_end_to_end():
     env, st = S.ask(U, {'text': 'October 7 - 28', 'surface': 'analyze', 'client': 'dashboard', 'history': armed, 'thread_id': 'A'})
     check("dates at the armed step stay in the wizard", st == 200 and (env.get('decision') or {}).get('reason') == 'bpiq_wizard')
     check("the wizard moved on from the dates", env.get('text') != W.ASK_DATES)
-    # the dashboard naming a retired thread id falls back instead of a 404
+    # the dashboard naming a thread the index does not list is not a 404, and the ask stays on that
+    # thread (2026-11-11: it used to run on the active one)
     # (the armed history keeps this hermetic: the wizard answers, no reader runs)
     env, st = S.ask(U, {'text': 'October 7 - 28', 'surface': 'analyze', 'client': 'dashboard', 'history': armed, 'thread_id': 'gone'})
-    check("dashboard with an unknown thread id is not a 404 (falls back to the active thread)",
-          st == 200 and (env.get('decision') or {}).get('reason') == 'bpiq_wizard')
+    check("dashboard with an unknown thread id is not a 404 and stays on its own thread",
+          st == 200 and (env.get('decision') or {}).get('reason') == 'bpiq_wizard' and env.get('thread_id') == 'gone')
     env, st = S.ask(U, {'text': 'October 7 - 28', 'surface': 'analyze', 'client': 'api', 'history': armed, 'thread_id': 'gone'})
     check("an API caller with an unknown thread id still gets the 404", st == 404)
 

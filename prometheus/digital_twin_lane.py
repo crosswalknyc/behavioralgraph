@@ -615,13 +615,33 @@ def _active_twin_key_path(user):
     return ACTIVE_TWIN_PREFIX + pmm._user_key(user) + '.json'
 
 
+def _mine(doc):
+    """The record was written on the thread this ask runs on (2026-11-11,
+    prometheus.thread_scope): the twin or the room a reader was working
+    with in one chat is never the unnamed subject of another."""
+    try:
+        from . import thread_scope as _tsc
+        return _tsc.mine(doc)
+    except Exception:
+        return True
+
+
+def _stamped(doc):
+    try:
+        from . import thread_scope as _tsc
+        return _tsc.stamp(doc)
+    except Exception:
+        return doc
+
+
 def active_twin(user):
-    """The twin this reader last worked on (six hours), so 'put the
-    signal-led plan in the Spend Engine' needs no name in the words."""
+    """The twin this reader last worked on in this thread (six hours),
+    so 'put the signal-led plan in the Spend Engine' needs no name in
+    the words."""
     try:
         s3, bucket = _s3()
         doc = json.loads(s3.get_object(Bucket=bucket, Key=_active_twin_key_path(user))['Body'].read().decode('utf-8'))
-        if time.time() - float(doc.get('ts') or 0) > ACTIVE_TTL_S:
+        if time.time() - float(doc.get('ts') or 0) > ACTIVE_TTL_S or not _mine(doc):
             return ''
         return str(doc.get('key') or '')
     except Exception:
@@ -631,7 +651,7 @@ def active_twin(user):
 def set_active_twin(user, key):
     try:
         s3, bucket = _s3()
-        s3.put_object(Bucket=bucket, Key=_active_twin_key_path(user), Body=json.dumps({'key': key, 'ts': time.time()}).encode('utf-8'), ContentType='application/json')
+        s3.put_object(Bucket=bucket, Key=_active_twin_key_path(user), Body=json.dumps(_stamped({'key': key, 'ts': time.time()})).encode('utf-8'), ContentType='application/json')
     except Exception:
         pass
 
@@ -797,8 +817,8 @@ def active_session(user):
     try:
         s3, bucket = _s3()
         doc = json.loads(s3.get_object(Bucket=bucket, Key=_active_key(user))['Body'].read().decode('utf-8'))
-        if time.time() - float(doc.get('ts') or 0) > ACTIVE_TTL_S:
-            return None
+        if time.time() - float(doc.get('ts') or 0) > ACTIVE_TTL_S or not _mine(doc):
+            return None        # the room opened in another chat is not this chat's (2026-11-11)
         return doc
     except Exception:
         return None
@@ -807,7 +827,7 @@ def active_session(user):
 def set_active_session(user, key, sid):
     try:
         s3, bucket = _s3()
-        s3.put_object(Bucket=bucket, Key=_active_key(user), Body=json.dumps({'key': key, 'sid': sid, 'ts': time.time()}).encode('utf-8'), ContentType='application/json')
+        s3.put_object(Bucket=bucket, Key=_active_key(user), Body=json.dumps(_stamped({'key': key, 'sid': sid, 'ts': time.time()})).encode('utf-8'), ContentType='application/json')
     except Exception:
         pass
 

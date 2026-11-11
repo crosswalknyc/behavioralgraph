@@ -428,11 +428,15 @@ def upload():
         return jsonify(_C.declined('unsupported', 'Documents are not available on the key surface yet. Ask the question in text.')), 200
     from . import documents as _docs
     uname = service.username_of(user)
-    tid = str(request.form.get('thread_id') or '').strip() or None
-    if tid and not service.thread_exists(uname, tid):
-        tid = None
-    if not tid:
-        tid = service.active_thread_id(uname)
+    # the file joins the thread the tab named (prometheus.thread_scope, 2026-11-11): a thread the index lost is
+    # re-listed under its own id, and with none named the empty pane's thread or a new one; it used to join the
+    # reader's ACTIVE thread, another chat, when the id did not resolve
+    from . import thread_scope as _tscope
+    tid, _how = _tscope.resolve_ask_thread(
+        request.form.get('thread_id'), 'dashboard',
+        exists=lambda t: service.thread_exists(uname, t),
+        relist=lambda t: service.relist_thread(uname, t),
+        mint=lambda: service.unnamed_thread(uname))
     files = [f for f in request.files.getlist('file') if f and f.filename]
     if not files:
         return jsonify({'success': False, 'error': 'Attach a file: a PowerPoint, PDF, Word document, sheet or image.'}), 400

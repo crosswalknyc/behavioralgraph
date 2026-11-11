@@ -1322,6 +1322,41 @@ def _resolve_subject(index_doc, subject=None, question=None, live_only=False):
     return best_key
 
 
+def other_subjects_named(index_doc, question, skey, limit=4):
+    """The other banked subjects a question names beside the one it
+    resolved to: whole-phrase matches of another live bucket's name,
+    never the same subject under a longer or shorter spelling.
+
+    2026-11-11 (Armine at Lionsgate): "Looking at the digital original
+    content such as YouTube, TikTok, etc. What type of categories do
+    best?" resolved to the YouTube bucket because the name appears in
+    the words, and the meaning-level replay handed back a read banked
+    nineteen days earlier from another reader's question, "On Parents of
+    teens 13-17, YouTube users with no TikTok use". A question that
+    names two or more subjects is not a question about one of them: only
+    the same question, or the decision of record, replays for it."""
+    subjects = (index_doc or {}).get('subjects') or {}
+    own = normalize_subject((subjects.get(skey) or {}).get('subject') or str(skey or '').replace('_', ' '))
+    qn = ' ' + _fold_family_aliases(re.sub(r'[^a-z0-9]+', ' ', str(question or '').lower()).strip()[:1200]) + ' '
+    out = []
+    for k, v in subjects.items():
+        if k == skey:
+            continue
+        s_norm = normalize_subject(v.get('subject'))
+        if not s_norm or len(s_norm) < 4 or s_norm in _GENERIC_SUBJECT_TOKENS:
+            continue
+        if f' {s_norm} ' not in qn:
+            continue
+        if own and (f' {s_norm} ' in f' {own} ' or f' {own} ' in f' {s_norm} '):
+            continue        # the same subject, named longer or shorter
+        if not _has_live_entries(v):
+            continue
+        out.append(str(v.get('subject') or k))
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _find_exact_anywhere(subjects, question):
     """Global exact-question scan: the most recent stored entry whose
     normalized question matches, across every subject bucket. Replay
@@ -2816,9 +2851,13 @@ def consult(subject=None, question=None, metric_family=None,
             key = entry_key(bucket.get('subject') or subject or '',
                             metric_family, window_start, window_end)
         match = None
+        # _by_meaning: the read was matched on its key or its meaning, not
+        # on the question's own words (2026-11-11, other_subjects_named)
+        _by_meaning = False
         exact = find_exact(entries, question=question, key=key, ask_sig=_ask_sig)
         if exact:
             match = 'exact'
+            _by_meaning = exact.get('qn') != normalize_question(question) and not is_record_entry(exact)
         if not exact:
             gkey, gexact = _find_exact_anywhere(subjects, question)
             if gexact and journey_match(gexact, _ask_sig):
@@ -2844,6 +2883,16 @@ def consult(subject=None, question=None, metric_family=None,
             exact = find_semantic(entries, question, ask_sig=_ask_sig)
             if exact:
                 match = 'semantic'
+                _by_meaning = not is_record_entry(exact)
+        if exact is not None and _by_meaning:
+            # A question that names another subject beside this one is not
+            # a question about this one: a read matched by meaning never
+            # answers it (the published figures still ride the block).
+            _others = other_subjects_named(doc, question, skey)
+            if _others:
+                print(f"[insights-ledger] replay by meaning refused under {bucket.get('subject')!r}: "
+                      f"the ask also names {', '.join(_others[:3])}")
+                exact, match = None, None
         if not exact:
             # A decision of record the question itself names outranks the
             # bound subject's bucket (2026-11-10): an ask on the Amazon

@@ -19,6 +19,14 @@ told. It is written as short notes after an answer and read into the
 "who is asking" block of the next one. It never carries figures (those
 belong to the shared ring) and it never informs another reader.
 
+A note belongs to the thread it was written in (Jenna 2026-11-11: a new
+chat never carries a subject from an earlier one). "Is comparing Mad Men
+viewers year over year" is a fine note inside the Mad Men chat and a
+leak in the prompt of a new chat about Cruel Summer, so notes are
+stamped with their thread and read back only there
+(prometheus.thread_scope). Standing preferences ("always", "from now
+on") are rules the reader set for every answer and stay with the reader.
+
 Everything here is best effort and non-blocking: a write that fails
 costs nothing but the note; a read that fails means an ask runs the
 way it did yesterday.
@@ -263,7 +271,7 @@ NOTES_SYSTEM = (
     '{"notes": ["...", "..."]}. Return {"notes": []} when nothing is worth keeping.')
 
 
-def distill_notes(claude, *, user, question, reply, subject=''):
+def distill_notes(claude, *, user, question, reply, subject='', thread_id=''):
     """Private notes for the individual ring, via one small model call
     (``claude(system, user, **kw) -> dict``). Figures never make it in:
     anything with a digit is dropped. Returns the list written."""
@@ -281,21 +289,32 @@ def distill_notes(claude, *, user, question, reply, subject=''):
                 continue
             clean.append(t[:140] + '.')
         if clean:
-            add_notes(user, clean, subject=subject)
+            add_notes(user, clean, subject=subject, thread_id=thread_id)
         return clean
     except Exception:
         return []
 
 
-def add_notes(user, notes, subject=''):
+def _thread_now():
+    try:
+        from . import thread_scope as _tsc
+        return _tsc.current_thread_id()
+    except Exception:
+        return ''
+
+
+def add_notes(user, notes, subject='', thread_id=''):
     """Append notes to the reader's memory file (newest first, capped,
-    deduped case-insensitively, 90-day expiry on read)."""
+    deduped case-insensitively, 90-day expiry on read), stamped with the
+    thread they were written in."""
     try:
         import prometheus_memory as pmm
     except Exception:
         return False
     now = time.time()
-    new = [{'text': str(n)[:160], 'ts': now, 'subject': str(subject or '')[:120]} for n in notes if str(n or '').strip()]
+    tid = str(thread_id or '') or _thread_now()
+    new = [{'text': str(n)[:160], 'ts': now, 'subject': str(subject or '')[:120], 'thread': tid[:96]}
+           for n in notes if str(n or '').strip()]
     if not new:
         return False
 
@@ -315,16 +334,23 @@ def add_notes(user, notes, subject=''):
 
 
 def recall_notes(user, k=8):
-    """The reader's newest notes, newest first."""
+    """The reader's newest notes from this thread, newest first. A note
+    written in another chat is never read into this one (2026-11-11)."""
     try:
         import prometheus_memory as pmm
         doc, _etag = pmm._read_with_etag(user)
     except Exception:
         return []
+    try:
+        from . import thread_scope as _tsc
+        _mine = _tsc.mine
+    except Exception:
+        _mine = lambda _x: True   # noqa: E731
     now = time.time()
     out = []
     for x in (doc or {}).get('notes') or []:
-        if isinstance(x, dict) and now - float(x.get('ts') or 0) < NOTES_TTL_S and str(x.get('text') or '').strip():
+        if isinstance(x, dict) and now - float(x.get('ts') or 0) < NOTES_TTL_S and str(x.get('text') or '').strip() \
+                and _mine(x):
             out.append(str(x['text']))
         if len(out) >= k:
             break
@@ -432,7 +458,7 @@ def notes_block(user, k=8):
         parts.append(pb)
     notes = recall_notes(user, k=k)
     if notes:
-        parts.append('ABOUT THIS READER (private notes from earlier conversations; tone and defaults only, never echoed):\n' +
+        parts.append('ABOUT THIS READER (private notes from earlier in this conversation; tone and defaults only, never echoed):\n' +
                      '\n'.join(f'- {n}' for n in notes))
     return '\n\n'.join(parts)
 
@@ -442,9 +468,11 @@ def after_answer(il, claude, *, user, question, reply, subject='', followups=Non
     """Both rings, after a page answer: the figures to the shared
     ledger (each with its source), a few notes to the reader's own
     memory. Non-blocking."""
+    _tid = _thread_now()   # read here, on the request: the notes are written off it
+
     def _go():
         persist_answer(il, subject=subject, question=question, reply=reply, followups=followups,
                        base_profile_key=base_profile_key, window_start=window_start,
                        window_end=window_end, window_label=window_label, figures=figures)
-        distill_notes(claude, user=user, question=question, reply=reply, subject=subject)
+        distill_notes(claude, user=user, question=question, reply=reply, subject=subject, thread_id=_tid)
     _run(_go)

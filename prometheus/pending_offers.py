@@ -18,19 +18,22 @@ The offer is now a first-class pending item on the server:
     until it is approved, cancelled or superseded by a newer offer;
   * a bare approval ("Approve", "approve", "approved", "yes run it",
     "go ahead", "accept", "ok do it", the chip's own label) binds to
-    the most recent open offer across the user's recent threads, so a
-    thread-follow switch between the offer and the approval cannot
-    lose it, and runs the offered question with the same
-    ``panel_confirm`` the chip sends; a bare cancel closes it with the
-    nothing-was-charged line;
-  * the stored thread is the fallback when the store holds nothing
-    (an offer made before this module existed, or written by a client
-    that persists its own turns): the last agent turn carrying the
-    offer copy or the Approve / Cancel chips, with no real question
+    the open offer on THE THREAD IT IS TYPED IN and runs the offered
+    question with the same ``panel_confirm`` the chip sends; a bare
+    cancel closes it with the nothing-was-charged line;
+  * the thread's own turns are the fallback when the store holds
+    nothing (an offer made before this module existed, or written by a
+    client that persists its own turns): the last agent turn carrying
+    the offer copy or the Approve / Cancel chips, with no real question
     after it, is an open offer and its question is the user turn
     before it;
-  * "Nothing is waiting on an approval" is correct only when no offer
-    (and no brief) is open anywhere in the user's recent threads.
+  * an offer never crosses threads (Jenna 2026-11-11: a new chat never
+    carries a pending action from an earlier one). Until that date a
+    bare approval bound to the newest open offer on any of the reader's
+    recent threads, so "yes" typed in a new chat could run, and charge
+    for, a read quoted in another. ``open_elsewhere`` only names where
+    an open offer waits, so the no-pending line can say which chat to
+    open; it never approves anything.
 
 Never raises into a request; every S3 touch is fail-safe.
 """
@@ -46,7 +49,6 @@ from . import faults as _faults
 STORE_PREFIX = 'system/pm_pending_offers/'
 MAX_AGE_H = 24          # an offer older than this is stale, never approved by a bare word
 KEEP = 30               # offers kept per user
-SCAN_THREADS = 6        # other recent threads the fallback reads
 MAX_PARTS = 12          # parts kept on a multi-ask quote (multi_ask.MAX_ITEMS is 10; never truncate a quote's parts)
 
 _NO_PENDING_RX = re.compile(r"^\s*Nothing is waiting on (?:an approval|a yes)\b", re.I)
@@ -365,13 +367,11 @@ def _fill_from_question(offer, history_before, ctx):
 
 
 def find(uname, history=None, tid=None, ctx=None, now=None):
-    """The most recent open priced offer for this user: the store first
-    (the current thread's open offer, else the newest open offer on any
-    recent thread), then the stored threads read back (the current one,
-    then the others updated inside the window). None when nothing is
-    open anywhere."""
+    """The open priced offer on this thread: the thread's own turns
+    first (what the reader is looking at), then the store's record for
+    this thread. None when nothing is open here. An offer made on
+    another thread is never found from this one (2026-11-11)."""
     now = now or datetime.now(timezone.utc)
-    # the current thread's own turns first: what the reader is looking at
     hit = open_in_history(history, ctx, now)
     if hit:
         stored = _store_match(uname, hit, tid)
@@ -379,42 +379,59 @@ def find(uname, history=None, tid=None, ctx=None, now=None):
             return stored
         hit['thread_id'] = str(tid or '')
         return hit
+    if not str(tid or '').strip():
+        return None           # an ask on no thread has no offers of its own
     doc = _load(uname)
     opens = [o for o in doc.get('offers') or [] if o.get('status') == 'open' and _fresh(o.get('ts'), now)]
     opens.sort(key=lambda o: str(o.get('ts') or ''), reverse=True)
     for o in opens:
         if str(o.get('thread_id') or '') == str(tid or ''):
             return dict(o, source='store')
-    # the store across threads (the thread-follow switched between the
-    # offer and the approval), then the other recent threads' turns
-    if opens:
-        return dict(opens[0], source='store')
-    try:
-        from . import service as _svc
-        idx = _svc.threads_index(uname)
-        others = sorted([t for t in (idx.get('threads') or []) if t.get('id') and t.get('id') != tid],
-                        key=lambda t: str(t.get('updated') or ''), reverse=True)[:SCAN_THREADS]
-        for th in others:
-            if not _fresh(th.get('updated'), now):
-                continue
-            turns = _svc.load_thread(uname, th['id'])
-            found = open_in_history(turns, ctx, now)
-            if found:
-                found['thread_id'] = str(th['id'])
-                return found
-    except Exception as e:
-        _faults.note('pending_offers.scan', e)
     return None
 
 
+def open_elsewhere(uname, tid=None, now=None):
+    """The newest open offer the reader holds on a thread other than
+    ``tid``, with that thread's title when the index has one:
+    {'subject', 'question', 'thread_id', 'thread_title'}; None when
+    there is none. For the no-pending line only; never approved from
+    here."""
+    try:
+        now = now or datetime.now(timezone.utc)
+        doc = _load(uname)
+        opens = [o for o in doc.get('offers') or [] if o.get('status') == 'open' and _fresh(o.get('ts'), now)
+                 and str(o.get('thread_id') or '') and str(o.get('thread_id') or '') != str(tid or '')]
+        if not opens:
+            return None
+        opens.sort(key=lambda o: str(o.get('ts') or ''), reverse=True)
+        o = opens[0]
+        title = ''
+        try:
+            from . import service as _svc
+            for th in (_svc.threads_index(uname).get('threads') or []):
+                if th.get('id') == o.get('thread_id'):
+                    title = str(th.get('title') or '')
+                    break
+        except Exception as e:
+            _faults.note('pending_offers.elsewhere', e)
+        return {'subject': str(o.get('subject') or ''), 'question': str(o.get('question') or ''),
+                'thread_id': str(o.get('thread_id') or ''), 'thread_title': title}
+    except Exception as e:
+        _faults.note('pending_offers.elsewhere', e)
+        return None
+
+
 def _store_match(uname, hit, tid):
-    """The store's record for an offer the history also shows (so the
-    close lands on the right id)."""
+    """The store's record for an offer this thread's turns also show (so
+    the close lands on the right id). A record made on another thread
+    is another offer, even with the same question."""
     try:
         doc = _load(uname)
         q = ' '.join(str(hit.get('question') or '').lower().split())
         for o in sorted(doc.get('offers') or [], key=lambda o: str(o.get('ts') or ''), reverse=True):
             if o.get('status') != 'open':
+                continue
+            if str(o.get('thread_id') or '') != str(tid or ''):
                 continue
             if ' '.join(str(o.get('question') or '').lower().split()) == q:
                 return dict(o, source='store')
@@ -460,7 +477,7 @@ def resolve_reply(uname, tid, text, history, ctx=None):
 
 
 def anything_open(uname, history=None, tid=None):
-    """True when an offer is open anywhere in the user's recent threads."""
+    """True when an offer is open on this thread."""
     try:
         return find(uname, history, tid) is not None
     except Exception:

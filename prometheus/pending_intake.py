@@ -8,8 +8,15 @@ approval right now" (Debi's "go ahead", 2026-10-12). The proposal is
 now stashed per reader for a day; a run order with no payload picks
 it up.
 
+A brief belongs to the thread it was proposed on (Jenna 2026-11-11: a new
+chat never carries a pending action from an earlier one). The stash is
+stamped with that thread and answers a run order only there; "run it"
+typed in another chat finds nothing waiting. A stash written outside any
+request (a test, a sweeper) carries no thread and answers only where
+there is none.
+
 Layout: s3://dashboard-inputs/system/pm_pending_intake/<user_key>.json
-    {"flows": {"digital_journey": {"payload": {...}, "ts": ..., "run_label": "Run the journey"}, ...}}
+    {"flows": {"digital_journey": {"payload": {...}, "ts": ..., "run_label": "Run the journey", "thread": "<id>"}, ...}}
 """
 from __future__ import annotations
 
@@ -49,13 +56,33 @@ def _save(s3, bucket, user, doc):
         return False
 
 
+def _thread_now():
+    try:
+        from . import thread_scope as _tsc
+        return _tsc.current_thread_id()
+    except Exception:
+        return ''
+
+
+def _here(hit):
+    """The stash was proposed on the thread this request runs on
+    (prometheus.thread_scope.mine; outside an ask nothing is scoped)."""
+    try:
+        from . import thread_scope as _tsc
+        return _tsc.mine(hit)
+    except Exception:
+        return True
+
+
 def stash(s3, bucket, user, flow, payload, run_label=''):
-    """Remember the brief just proposed to this reader for `flow`."""
+    """Remember the brief just proposed to this reader for `flow`, on
+    the thread it was proposed on."""
     if not user or not flow or not isinstance(payload, dict):
         return False
     doc = _load(s3, bucket, user)
     flows = doc.get('flows') if isinstance(doc.get('flows'), dict) else {}
-    flows[str(flow)] = {'payload': payload, 'ts': time.time(), 'run_label': str(run_label or '')}
+    flows[str(flow)] = {'payload': payload, 'ts': time.time(), 'run_label': str(run_label or ''),
+                        'thread': _thread_now()}
     doc['flows'] = flows
     return _save(s3, bucket, user, doc)
 
@@ -79,6 +106,8 @@ def pick(s3, bucket, user, flow, text):
         doc['flows'] = flows
         _save(s3, bucket, user, doc)
         return None
+    if not _here(hit):
+        return None           # proposed on another thread: it waits there, untouched
     # a run order naming another flow's chip is not this flow's yes
     label = str(hit.get('run_label') or '').strip().lower()
     t = str(text or '').strip().lower().rstrip('.!')
@@ -102,6 +131,8 @@ def peek(s3, bucket, user, flow):
     if not isinstance(hit, dict):
         return None
     if time.time() - float(hit.get('ts') or 0) > TTL_S:
+        return None
+    if not _here(hit):
         return None
     payload = hit.get('payload')
     return payload if isinstance(payload, dict) else None
@@ -130,14 +161,16 @@ def save_doc(s3, bucket, user, doc):
     return _save(s3, bucket, user, doc)
 
 
-def active_flows(s3, bucket, user, now=None):
-    """Flow names still waiting on this reader (not older than a day)."""
+def active_flows(s3, bucket, user, now=None, any_thread=False):
+    """Flow names still waiting on this reader on this thread (not older
+    than a day). ``any_thread`` lists every thread's (the reset that
+    drops a reader's intakes clears them all)."""
     doc = _load(s3, bucket, user)
     flows = doc.get('flows') if isinstance(doc.get('flows'), dict) else {}
     t = time.time() if now is None else now
     out = []
     for name, hit in flows.items():
-        if isinstance(hit, dict) and t - float(hit.get('ts') or 0) <= TTL_S:
+        if isinstance(hit, dict) and t - float(hit.get('ts') or 0) <= TTL_S and (any_thread or _here(hit)):
             out.append(str(name))
     return out
 
@@ -151,4 +184,4 @@ def waiting(s3, bucket, user, text):
     doc = _load(s3, bucket, user)
     flows = doc.get('flows') if isinstance(doc.get('flows'), dict) else {}
     now = time.time()
-    return any(isinstance(h, dict) and now - float(h.get('ts') or 0) <= TTL_S for h in flows.values())
+    return any(isinstance(h, dict) and now - float(h.get('ts') or 0) <= TTL_S and _here(h) for h in flows.values())

@@ -456,6 +456,14 @@ def run_inline(job_id, status):
                                     json=body_json, headers=headers):
         from flask import session as _session
         _session['username'] = uname
+        try:
+            # the job runs on the thread the question was asked on, wherever
+            # the reader is now (prometheus.thread_scope, 2026-11-11)
+            from . import thread_scope as _tscope
+            _tscope.set_current_thread(status.get('thread_id'))
+            _tscope.set_request_thread(status.get('thread_id'))
+        except Exception:
+            pass
         resp = c._pm_generate_metrics_response(
             user, rr['text'], list(rr.get('history') or []), prefer_catalog=True,
             bind_subject=rr.get('bind_subject') or None, bind_cohort=rr.get('bind_cohort') or None,

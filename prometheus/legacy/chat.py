@@ -8970,7 +8970,9 @@ def api_synth_chat_history():
         if want and not any(t.get('id') == want for t in idx.get('threads', [])):
             if not opening:
                 return jsonify({'success': False, 'error': 'unknown thread'}), 404
-            want = ''   # a tab opening on a thread the rail retired decides on the active one
+            # a tab reopening on a thread the index does not list keeps its own pane (2026-11-11); it used to be
+            # handed the reader's ACTIVE thread, another chat's turns under the question about to be typed
+            return jsonify({'success': True, 'history': [], 'thread_id': want, 'unlisted': True, 'why': 'unlisted', 'rev': ''})
         if opening:
             # Reopen resumes unless idle 15 minutes (Jenna 2026-11-06): the
             # decision is the index's; a fresh pane names no thread and
@@ -14328,7 +14330,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                  mr, base, digest_block, anchors_block, led)
         _kw = {'panel_charge': panel_charge, 'probe': _probe, 'matrix_plan': _mplan}
         _pm_read_inflight_mark(_pm_user, text, job_id, _promised)
-        _head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user)   # the worker is another process (API conversations, 2026-10-14)
+        _head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user) if not inline_job_id else _pm_job_bind_thread(job_id, _pm_user, resumed=True)   # the worker is another process (2026-10-14); it keeps the launch's thread (2026-11-11)
         _head['via'] = 'api' if getattr(__import__('flask').g, '_pm_api_key_owner', None) else 'dashboard'
         if inline_job_id:            # the read worker runs the job right here
             _pm_read_status_write(job_id, _head)
@@ -15401,33 +15403,32 @@ def _pm_read_job_doc(job_id):
         return None
 
 
-def _pm_job_bind_thread(job_id, username=None):
-    """The thread a job lands in, pinned at launch. Every entry path
-    resolves one (2026-11-05): the request's own thread first (the body
-    the widget, an operator session or the partner API named), then the
-    thread the service stashed on the request (``g._pm_thread_id``),
-    then the user's active thread, then their first. A job document
-    without a thread_id is how a finished read landed in whatever thread
-    was active when the worker got to it."""
-    tid = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
-    if not tid:
-        try:
-            from flask import g as _g_bind, has_app_context as _has_ctx
-            if _has_ctx():
-                tid = str(getattr(_g_bind, '_pm_thread_id', '') or '')
-        except Exception:
-            tid = ''
-    if not tid and username:
-        # Dashboard launch (2026-10-01): pin the thread that is active
-        # now, so idle rotation while the job runs never moves the
-        # finished read or deck into the fresh chat.
-        try:
-            idx = _load_threads_index(username)
-            tid = str(idx.get('active') or '')
-            if not tid and idx.get('threads'):
-                tid = str((idx['threads'][0] or {}).get('id') or '')
-        except Exception:
-            tid = ''
+def _pm_job_bind_thread(job_id, username=None, resumed=False):
+    """The thread a job lands in, pinned at launch (prometheus.thread_scope.job_thread).
+    The launch's own record wins: ``resumed`` (the read worker running a queued job, a
+    recovered copy) reads the thread already on the job document and never re-derives it
+    (2026-11-11, Armine: the worker re-read "the reader's active thread" and her Mad Men
+    read landed in the Cruel Summer thread she had opened meanwhile). Then the request's
+    own thread, then the one the ask service stashed on the request (``g._pm_thread_id``);
+    the active thread, then the first, only for a web request that named none."""
+    from prometheus import thread_scope as _tscope
+    _rec = str((_pm_read_job_doc(job_id) or {}).get('thread_id') or '') if (resumed and job_id) else ''
+    _stashed = ''
+    try:
+        from flask import g as _g_bind, has_app_context as _has_ctx
+        if _has_ctx():
+            _stashed = str(getattr(_g_bind, '_pm_thread_id', '') or '')
+    except Exception:
+        _stashed = ''
+
+    def _active():
+        idx = _load_threads_index(username)
+        tid = str(idx.get('active') or '')
+        if not tid and idx.get('threads'):
+            tid = str((idx['threads'][0] or {}).get('id') or '')
+        return tid
+    tid = _tscope.job_thread(recorded=_rec, request=('' if resumed else str(getattr(_PM_REQ_THREAD, 'tid', '') or '')),
+                             stashed=_stashed, active=(_active if username else None), web=not resumed)
     if tid and job_id:
         _PM_JOB_THREAD[job_id] = tid
     return tid or None

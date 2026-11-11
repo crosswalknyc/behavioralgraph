@@ -87496,6 +87496,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                     synthChatHistory = (d && d.history) || [];
                     _pmHistoryTrack(d);
+                    try { _pmPaneTid = _pmHereTid(); _pmThreadHeaderRefresh(); } catch (_) {}   // the header names the thread a load resumed (2026-11-11)
                     window._pmLastActivityAt = Date.now();
                     // Idle rotation (2026-10-01 Jenna): the server
                     // parked the thread you left and opened a fresh
@@ -88066,17 +88067,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             return changed;
         }
+        var _pmResyncTimer = null;
         function _pmHistoryResync() {
-            // the thread this tab was on is gone (deleted or rolled off the rail elsewhere): take the server's active one
-            fetch('/api/brief-chat/history?peek=1', { credentials: 'same-origin' })
-                .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (d) {
-                    if (!d || !Array.isArray(d.history)) return;
-                    _pmHistoryTrack(d, true);
-                    _pmAdoptHistory(d.history);
-                    if (d.rev) _pmHistoryRev = String(d.rev);
-                    try { _pmThreadsLoad(true); } catch (_) {}
-                }).catch(function () {});
+            // The thread this tab is on is not in the reader's list (deleted elsewhere, or its entry was lost). The
+            // pane keeps its own conversation and never takes another thread's (2026-11-11): it used to adopt the
+            // server's ACTIVE thread on the spot, so an earlier chat's turns appeared under a question still being
+            // typed. With nothing typed the pane is simply fresh. With turns on screen it stays as it is: the next
+            // ask re-lists the thread under its own id on the server, and the save is tried once more after it.
+            try {
+                var typed = Array.isArray(synthChatHistory) && synthChatHistory.some(function (t) { return t && t.role === 'user'; });
+                if (!typed) { if (!_pmPendingNew) _pmGoFresh(null, false); return; }
+                if (_pmResyncTimer) return;
+                _pmResyncTimer = setTimeout(function () {
+                    _pmResyncTimer = null;
+                    try { _pmHistorySave({ leaving: true }); } catch (_) {}
+                }, 6000);
+            } catch (_) {}
         }
         function _pmHistorySave(opts) {
             // every save of this tab's copy; the merged thread comes back when the tab lacked turns
@@ -88160,7 +88166,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var label = _pmThreadBindingLabel();
                 sub.textContent = label ? ('On ' + label) : _PM_FOLLOW_SUB_DEFAULT;
                 sub.title = label ? ('This chat follows ' + label + '. Open another project and the chat follows it; open a thread from the rail to go back.') : '';
+                // a chat with no project still says which chat it is (2026-11-11): its own title, or New chat for
+                // a pane with no thread yet, so a resumed thread never passes for a new one
+                if (!label) { try { var _nm = _pmThreadNameHere(); if (_nm) { sub.textContent = _nm.text; sub.title = _nm.tip; } } catch (_) {} }
             } catch (_) {}
+        }
+        function _pmThreadNameHere() {
+            var fresh = { text: 'New chat', tip: 'A new chat. Nothing carries over from your earlier chats; they are in Chats & Tasks.' };
+            var tid = _pmHereTid();
+            if (!tid) return fresh;
+            var t = _pmThreadTitleOf(tid);
+            if (!t || t === 'New chat') {
+                // the rail has not titled it yet: the first question on screen names it
+                t = '';
+                for (var i = 0; i < synthChatHistory.length; i++) {
+                    var h = synthChatHistory[i];
+                    if (h && h.role === 'user' && h.text) { t = String(h.text); break; }
+                }
+            }
+            t = String(t || '').replace(/\s+/g, ' ').trim();
+            if (!t) return fresh;
+            return { text: 'Chat: ' + t, tip: 'This chat: ' + t + '. Your other chats are in Chats & Tasks.' };
         }
         function _pmThreadSwitchNote(label) {
             try {
@@ -88179,6 +88205,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var ident = _pmProjectIdentity();
             var key = ident ? ident.subject_key : '';
             if (key === _pmFollow.key) return;
+            // an ask in flight finishes in the thread it was asked in before the pane follows the page
+            // (2026-11-11); the two-second check picks the move up the moment the reply lands
+            try { if (typeof synthChatInflightController !== 'undefined' && synthChatInflightController) return; } catch (_) {}
             if (_pmFollow.inflight) { _pmFollow.pending = true; return; }
             _pmFollow.inflight = true;
             var body = ident ? ident : { subject_key: '', product: '' };
@@ -88205,17 +88234,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!d || !d.success) return;
                     _pmFollow.key = key;
                     var _prevActive = _pmThreadsIdx && _pmThreadsIdx.active;
-                    _pmThreadsIdx = { active: d.active, threads: d.threads || [] };
+                    if (d.fresh) {
+                        // no project open and no general chat used in the last fifteen minutes: an empty pane,
+                        // no thread until the first message (2026-11-11; the pane used to drop into the most
+                        // recently updated general thread, however old)
+                        if (!_pmPendingNew) _pmGoFresh(null, false);
+                        if (Array.isArray(d.threads) && _pmThreadsIdx) _pmThreadsIdx.threads = d.threads;
+                        _pmThreadsRender();
+                        _pmThreadHeaderRefresh();
+                        if (_pmFollow.pending) { _pmFollow.pending = false; _pmThreadFollow(); }
+                        return;
+                    }
+                    // the pane moves only when the conversation moved (2026-11-11): the server's active pointer
+                    // can be another tab's, and taking it without that thread's turns sent this tab's saves to a
+                    // thread it was not showing
+                    var _moved = !!(d.switched || d.created);
+                    _pmThreadsIdx = { active: _moved ? d.active : (_prevActive || null), threads: d.threads || [] };
                     // a fresh pane stays a fresh pane unless the conversation actually moved
                     // to the project's thread (2026-11-06)
-                    if (_pmPendingNew && !(d.switched || d.created)) _pmThreadsIdx.active = null;
-                    if (d.switched || d.created) {
+                    if (_pmPendingNew && !_moved) _pmThreadsIdx.active = null;
+                    if (_moved) {
                         _pmPendingNew = false;
                         window._pmLastActivityAt = Date.now();
-                        // the conversation this switch left rides as context for
-                        // the first asks in the new thread (2026-10-30)
-                        _pmCarried = (_prevActive && _prevActive !== d.active)
-                            ? { from: _prevActive, at: Date.now(), count: 0 } : null;
+                        // a thread the page opened carries nothing over from the one it left (2026-11-11)
                         _pmAdoptHistory(d.history || []);
                         _pmThreadSwitchNote(d.binding && d.binding.subject_label);
                     }
@@ -88284,13 +88325,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             try { _pmPpuOffer = null; } catch (_) {}
         }
         function _pmAdoptHistory(hist) {
+            // a pending brief waits on the thread it was drafted in: parked when the pane leaves that thread,
+            // back when the pane returns to it; Approve never runs another thread's brief (2026-11-11)
+            try { _pmDraftPark(_pmPaneTid); } catch (_) {}
             synthChatHistory = Array.isArray(hist) ? hist : [];
             _pmHistoryRev = null;
             _pmResetArmedStates();
             _pmSearchQ = '';
             var s = document.getElementById('pmThreadSearch');
             if (s) s.value = '';
+            try { _pmPaneTid = _pmHereTid(); _pmElsewhereNotes = []; } catch (_) {}
             synthChatRerender();
+            try { _pmDraftRestore(_pmPaneTid); } catch (_) {}
+            try { _pmThreadHeaderRefresh(); } catch (_) {}
         }
         // Idle rotation (2026-10-01 Jenna): "if you've been gone for a
         // while and come back it should open a new thread like ChatGPT
@@ -88315,7 +88362,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         var _pmReopenBusy = false;
         function _pmGoFresh(d, greet) {
             _pmPendingNew = true;
-            _pmCarried = null;
             window._pmFreshOpenedAt = Date.now();
             window._pmLastActivityAt = Date.now();
             _pmThreadsIdx = Object.assign({}, _pmThreadsIdx || { threads: [] }, { active: null });
@@ -88376,6 +88422,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         active: String(d.active),
                         threads: d.threads || (_pmThreadsIdx && _pmThreadsIdx.threads) || [] });
                     _pmHistoryRev = null;
+                    try { _pmPaneTid = String(d.active); } catch (_) {}   // the pane is this thread from its first message on (2026-11-11)
                     try { var idn = _pmProjectIdentity(); _pmFollow.key = idn ? idn.subject_key : ''; } catch (_) {}
                     _pmThreadsRender();
                     return String(d.active);
@@ -88404,7 +88451,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             pmNewChat();
         });
         function pmNewChat(done) {
-            _pmCarried = null;   // a fresh chat starts clean (2026-10-30)
             window._pmLastActivityAt = Date.now();
             // The thread being left keeps what was typed in it, and that save lands BEFORE the
             // new thread is asked for (2026-11-05). The two used to race: the server reuses an
@@ -88448,7 +88494,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
               }).catch(function () { if (typeof done === 'function') { try { done(null); } catch (_) {} } });
         }
         function pmSwitchThread(tid) {
-            _pmCarried = null;   // a thread opened by hand carries nothing over (2026-10-30)
             if (_pmThreadsIdx && _pmThreadsIdx.active === tid) return;
             window._pmLastActivityAt = Date.now();
             // Persist the current thread before leaving it, and let that save LAND before the
@@ -88552,6 +88597,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     '<button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="Sephora shoppers who bought at Ulta in the same window">Sephora shoppers who also bought at Ulta</button>' +
                     '<button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="Moms of tweens who buy Prime Video">Moms of tweens who buy Prime Video</button>' +
                     '</div></div>';
+                try { _pmElsewhereRedraw(box); } catch (_) {}
                 return;
             }
             _synthChatActiveOptions = null;
@@ -88618,6 +88664,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // bottom and must not steal the scroll anchor.
             var _lastTurnEl = box.lastElementChild;
             _pmReattachLiveBubbles(box);
+            try { _pmElsewhereRedraw(box); } catch (_) {}
             if (!box._synthOptWired) {
                 box._synthOptWired = true;
                 box.addEventListener('click', function(ev) {
@@ -88960,12 +89007,183 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             try { _synthChatReportClientError('brief-chat/blank-turn', 'agent turn pushed without text'); } catch (_) {}
             return SYNTH_CHAT_CALM_MSG;
         }
-        function synthChatPushTurn(role, text) {
-            text = _synthChatAgentText(role, text);
-            synthChatHistory.push({ role: role, text: text, ts: new Date().toISOString(), turn_id: _pmTurnId() });
+        // A turn belongs to the thread it was asked in (Jenna 2026-11-11, Armine at Lionsgate: "it will pull in
+        // information from past chats, like Mad Men, and switch the subject"). Every reply and every finished job
+        // used to be written into whichever thread was on screen when it arrived: her Mad Men "On it" line landed
+        // in the Cruel Summer thread she had opened while it ran, and the Cruel Summer read landed under the Mad
+        // Men question. The ask in flight and every poller now carry the thread they started from (the origin).
+        // A turn whose origin is not the thread on screen is saved to its own thread, and the pane only says
+        // where it went.
+        var _pmAskOrigin = null;      // the foreground ask: { tid, hist, q }
+        var _pmPushOrigin = null;     // set for the length of one push by a poller that knows its thread
+        var _pmPaneTid = '';          // the thread the pane showed as of the last adopt ('' for a fresh pane)
+        var _pmDraftsByThread = {};   // a pending brief waits on the thread it was drafted in
+        var _pmDraftHere = null;      // the brief the pane restored for the thread on screen: { tid, draft, batch, shown }
+        var _pmElsewhereNotes = [];   // "the answer is in the chat it was asked in" lines for this pane
+        function _pmHereTid() {
+            try {
+                return (typeof _pmThreadsIdx !== 'undefined' && _pmThreadsIdx && _pmThreadsIdx.active &&
+                        !(typeof _pmPendingNew !== 'undefined' && _pmPendingNew))
+                    ? String(_pmThreadsIdx.active) : '';
+            } catch (_) { return ''; }
+        }
+        function _pmOriginNow() {
+            // the thread work started from: a poller's own, the ask in flight's, else the one on screen
+            if (_pmPushOrigin && _pmPushOrigin.tid) return _pmPushOrigin;
+            if (_pmAskOrigin && _pmAskOrigin.tid) return _pmAskOrigin;
+            var tid = _pmHereTid();
+            return tid ? { tid: tid, hist: synthChatHistory, q: '' } : null;
+        }
+        function _pmOriginMoved(o) {
+            // the pane no longer shows the thread this work belongs to
+            return !!(o && o.tid && _pmHereTid() !== String(o.tid));
+        }
+        function _pmAskHist() {
+            // the turns of the thread the ask in flight belongs to, wherever the pane is now
+            var o = _pmAskOrigin;
+            if (o && o.tid && Array.isArray(o.hist) && _pmOriginMoved(o)) return o.hist;
+            return synthChatHistory;
+        }
+        function _pmWithOrigin(o, fn) {
+            var prev = _pmPushOrigin;
+            _pmPushOrigin = (o && o.tid) ? o : null;
+            try { return fn(); } finally { _pmPushOrigin = prev; }
+        }
+        function _pmPushTurnFor(o, role, text) {
+            return _pmWithOrigin(o, function () { synthChatPushTurn(role, text); });
+        }
+        function _pmPushMetaFor(o, role, text, meta) {
+            return _pmWithOrigin(o, function () { _synthChatPushTurnWithMeta(role, text, meta); });
+        }
+        function _pmPushGuidanceFor(o, text, data) {
+            return _pmWithOrigin(o, function () { _pmPushGuidanceTurn(text, data); });
+        }
+        function _pmThreadTitleOf(tid) {
+            try {
+                var th = ((_pmThreadsIdx && _pmThreadsIdx.threads) || []).filter(function (t) { return t && String(t.id) === String(tid); })[0];
+                return (th && th.title) ? String(th.title) : '';
+            } catch (_) { return ''; }
+        }
+        function _pmElsewhereDraw(box, note) {
+            var n = document.createElement('div');
+            n.className = 'pm-msg pm-msg-system';
+            n.setAttribute('data-pm-system', '1');
+            n.setAttribute('data-pm-elsewhere', String(note.tid));
+            n.setAttribute('role', 'button');
+            n.style.cssText = 'text-align:center; color:#9AA09B; font-size:0.7rem; letter-spacing:0.01em; padding:0.45rem 0.6rem 0.3rem; cursor:pointer; text-decoration:underline; text-underline-offset:2px;';
+            n.textContent = note.text;
+            n.onclick = function () { try { pmSwitchThread(String(note.tid)); } catch (_) {} };
+            box.appendChild(n);
+        }
+        function _pmElsewhereRedraw(box) {
+            // the lines survive a rerender of the pane they were shown in
+            for (var i = 0; i < _pmElsewhereNotes.length; i++) { _pmElsewhereDraw(box, _pmElsewhereNotes[i]); }
+        }
+        function _pmElsewhereNote(o) {
+            // one line per thread: the reply is in the chat that asked, one click away
+            try {
+                if (!o || !o.tid) return;
+                for (var i = 0; i < _pmElsewhereNotes.length; i++) { if (_pmElsewhereNotes[i].tid === String(o.tid)) return; }
+                var name = String(o.q || _pmThreadTitleOf(o.tid) || '').replace(/\s+/g, ' ').trim();
+                if (name === 'New chat') name = '';
+                if (name.length > 60) name = name.slice(0, 57).trim() + '...';
+                var note = { tid: String(o.tid),
+                             text: name ? ('The answer to "' + name + '" is in the chat it was asked in. Open that chat.')
+                                        : 'A reply just landed in the chat it was asked in. Open that chat.' };
+                _pmElsewhereNotes.push(note);
+                var box = document.getElementById('synthChatMessages');
+                if (!box) return;
+                _pmElsewhereDraw(box, note);
+                box.scrollTop = box.scrollHeight;
+            } catch (_) {}
+        }
+        function _pmDeliverElsewhere(o, turn) {
+            // the reply goes to the thread that asked: its turns, the server's copy of that thread; never this pane
+            try { if (Array.isArray(o.hist) && o.hist !== synthChatHistory) o.hist.push(turn); } catch (_) {}
+            try {
+                fetch('/api/brief-chat/history', {
+                    method: 'POST', credentials: 'same-origin', keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: (Array.isArray(o.hist) && o.hist.length && o.hist !== synthChatHistory) ? o.hist : [turn],
+                                           thread_id: String(o.tid) })
+                }).then(function () { try { _pmThreadsLoad(); } catch (_) {} }).catch(function () {});
+            } catch (_) {}
+            _pmElsewhereNote(o);
+        }
+        function _pmDeliverTurn(turn) {
+            var o = (_pmPushOrigin && _pmPushOrigin.tid) ? _pmPushOrigin : _pmAskOrigin;
+            if (o && o.tid && _pmOriginMoved(o)) { _pmDeliverElsewhere(o, turn); return false; }
+            synthChatHistory.push(turn);
             _synthChatBumpActivity();
             synthChatRerender();
             _pmHistorySave();
+            try { _pmThreadHeaderRefresh(); } catch (_) {}
+            return true;
+        }
+        function _pmAskOriginPin(text) {
+            // the ask is pinned to its thread once the thread exists (a fresh pane mints one on the first message)
+            try {
+                var o = _pmAskOrigin;
+                if (o && !o.tid) { o.tid = _pmHereTid(); o.hist = synthChatHistory; o.q = String(text || '').slice(0, 80); }
+            } catch (_) {}
+        }
+        function _pmAskOriginBeginHere() {
+            // work started by a button outside the composer (Approve) belongs to the thread on screen; an ask
+            // already in flight keeps its own origin
+            if (_pmAskOrigin && _pmAskOrigin.tid) return null;
+            var own = { tid: _pmHereTid(), hist: synthChatHistory, q: '' };
+            _pmAskOrigin = own;
+            return own;
+        }
+        function _pmAskOriginEnd(own) {
+            if (!own) return;
+            try {
+                if (own && own.tid && _pmAskOrigin === own && _pmOriginMoved(own)) {
+                    // the reply went to the thread that asked: whatever it armed (a clarify step, an offer, a brief)
+                    // waits there, never in the pane the reader moved to. A brief the pane had restored for the
+                    // thread now on screen is that thread's and stays.
+                    var here = _pmDraftHere;
+                    var untouched = !!(here && synthChatCurrentDraft === here.draft && synthChatBatchDrafts === here.batch);
+                    if (!untouched) {
+                        _pmDraftPark(own.tid);
+                        if (here) {
+                            _pmDraftsByThread[here.tid] = { draft: here.draft, batch: here.batch, shown: here.shown };
+                            _pmDraftRestore(here.tid);
+                        }
+                    }
+                    _pmReleaseArmedSteps();
+                }
+            } catch (_) {}
+            if (_pmAskOrigin === own) _pmAskOrigin = null;
+        }
+        function _pmDraftPark(tid) {
+            // a pending brief belongs to the thread it was drafted in: out of the pane when the pane leaves
+            var panel = document.getElementById('synthChatBriefPreview');
+            var has = !!(synthChatCurrentDraft || (synthChatBatchDrafts && synthChatBatchDrafts.length));
+            if (has && tid) {
+                _pmDraftsByThread[String(tid)] = { draft: synthChatCurrentDraft, batch: synthChatBatchDrafts,
+                                                   shown: !!(panel && panel.style.display !== 'none') };
+            }
+            synthChatCurrentDraft = null;
+            synthChatBatchDrafts = null;
+            _pmDraftHere = null;
+            if (panel) panel.style.display = 'none';
+        }
+        function _pmDraftRestore(tid) {
+            // and back when the pane returns to that thread
+            var d = tid ? _pmDraftsByThread[String(tid)] : null;
+            if (!d) return;
+            delete _pmDraftsByThread[String(tid)];
+            synthChatCurrentDraft = d.draft || null;
+            synthChatBatchDrafts = d.batch || null;
+            _pmDraftHere = { tid: String(tid), draft: synthChatCurrentDraft, batch: synthChatBatchDrafts, shown: !!d.shown };
+            if (d.shown && (synthChatCurrentDraft || (synthChatBatchDrafts && synthChatBatchDrafts.length))) {
+                try { _synthChatShowBrief(synthChatCurrentDraft || {}); } catch (_) {}
+            }
+        }
+        function synthChatPushTurn(role, text) {
+            text = _synthChatAgentText(role, text);
+            _pmDeliverTurn({ role: role, text: text, ts: new Date().toISOString(), turn_id: _pmTurnId() });
         }
 
         // Push a turn that also carries meta (e.g. run_id, status,
@@ -88974,10 +89192,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _synthChatPushTurnWithMeta(role, text, meta) {
             text = _synthChatAgentText(role, text);
             var turn = { role: role, text: text, ts: new Date().toISOString(), meta: meta || {}, turn_id: _pmTurnId() };
-            synthChatHistory.push(turn);
-            _synthChatBumpActivity();
-            synthChatRerender();
-            _pmHistorySave();
+            _pmDeliverTurn(turn);
         }
 
         // Push a guidance-error turn from Prometheus / brief-chat. If
@@ -89074,11 +89289,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     JSON.stringify((list || []).slice(-6)));
             } catch (_) {}
         }
-        function _pmTrackReadJob(id) {
+        function _pmTrackReadJob(id, tid) {
+            // the entry names the thread the read was asked in (2026-11-11): the list is shared by every tab of
+            // this browser, and a resumed poll used to write the read into whatever thread that tab was showing
+            var prev = null;
             var jobs = _pmReadJobsLoad().filter(function(j) {
-                return j && j.id !== id;
+                if (j && j.id === id) { prev = j; return false; }
+                return !!j;
             });
-            jobs.push({ id: id, ts: Date.now() });
+            jobs.push({ id: id, ts: Date.now(), tid: String(tid || (prev && prev.tid) || '') });
             _pmReadJobsSave(jobs);
         }
         function _pmUntrackReadJob(id) {
@@ -89095,6 +89314,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function _pmPollFwJob(jobId) {
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
             var waited = 0;
             while (waited < 1200000) {
                 await new Promise(function(res) { setTimeout(res, 9000); });
@@ -89107,7 +89327,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) { st = null; }
                 if (!st) continue;
                 if (st.status === 'done') {
-                    synthChatPushTurn('agent',
+                    _pmPushTurnFor(_po, 'agent',
                         'Your Flywheel is ready: ' +
                         (st.subject || 'the flywheel') +
                         ' is live on the Flywheel IQ page now.' +
@@ -89118,7 +89338,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (st.status === 'error') {
-                    synthChatPushTurn('agent',
+                    _pmPushTurnFor(_po, 'agent',
                         'This build could not be completed. Credits for this run have been refunded.');
                     return;
                 }
@@ -89134,6 +89354,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function _pmPollAiqJob(jobId) {
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
             var waited = 0;
             while (waited < 1200000) {
                 await new Promise(function(res) { setTimeout(res, 9000); });
@@ -89146,7 +89367,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) { st = null; }
                 if (!st) continue;
                 if (st.status === 'done') {
-                    synthChatPushTurn('agent',
+                    _pmPushTurnFor(_po, 'agent',
                         'Your Attribution tracking is live: ' +
                         (st.subject || 'the campaign') +
                         ' is in the Attribution IQ tab now with the ' +
@@ -89158,7 +89379,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (st.status === 'error') {
-                    synthChatPushTurn('agent',
+                    _pmPushTurnFor(_po, 'agent',
                         'The tracking setup hit a snag and the team ' +
                         'has been notified. Nothing further is needed ' +
                         'from you; we will follow up when it lands.');
@@ -89176,6 +89397,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function _pmPollTwinJob(jobId) {
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
             // Digital Twins IQ (2026-10-26): a build or a run on the queue.
             // The ready message is written by the API; the chip opens the page.
             var waited = 0;
@@ -89191,7 +89413,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!st) continue;
                 if (st.status === 'done') {
                     window._dtwLastHint = { view: 'digitalTwinsIQ', twin_key: st.s3_key || '', run_id: st.run_id || null, tab: st.run_id ? ({'launch': 'launch'}[st.kind] || 'twins') : 'twins' };
-                    _synthChatPushTurnWithMeta('agent', st.ready_message || ('Your twin is ready: ' + (st.subject || 'the twin') + ' is live on the Twins tab of Digital Twins IQ.'),
+                    _pmPushMetaFor(_po, 'agent', st.ready_message || ('Your twin is ready: ' + (st.subject || 'the twin') + ' is live on the Twins tab of Digital Twins IQ.'),
                         { options: [{ label: 'Open in Digital Twins IQ', send: 'Open in Digital Twins IQ' }], twin_key: st.s3_key || '' });
                     try {
                         if (window._dtw && window._dtw.loaded && typeof dtwLoadList === 'function') { dtwLoadList(true); }
@@ -89201,13 +89423,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (st.status === 'error' || st.status === 'cancelled') {
-                    synthChatPushTurn('agent', st.error || 'That twin did not finish. Nothing more is charged; ask again and it runs fresh.');
+                    _pmPushTurnFor(_po, 'agent', st.error || 'That twin did not finish. Nothing more is charged; ask again and it runs fresh.');
                     return;
                 }
             }
         }
 
         async function _pmPollJiqJob(jobId) {
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
             var waited = 0;
             while (waited < 1200000) {
                 await new Promise(function(res) { setTimeout(res, 9000); });
@@ -89224,7 +89447,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // the server names the count by what it is. The
                     // fallback below only runs for a job finished by an
                     // older server build.
-                    synthChatPushTurn('agent', st.ready_message ||
+                    _pmPushTurnFor(_po, 'agent', st.ready_message ||
                         ('Your Digital Journey is ready: ' +
                         (st.subject || 'the journey') +
                         ' is live in the Digital Journey tab now.' +
@@ -89244,7 +89467,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (st.status === 'error') {
-                    synthChatPushTurn('agent',
+                    _pmPushTurnFor(_po, 'agent',
                         'The journey hit a snag and the team has been ' +
                         'notified. Nothing further is needed from you; ' +
                         'we will follow up when it lands.');
@@ -89262,6 +89485,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function _pmPollBpiqJob(jobId) {
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
             var waited = 0;
             while (waited < 1200000) {
                 await new Promise(function(res) { setTimeout(res, 9000); });
@@ -89274,7 +89498,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) { st = null; }
                 if (!st) continue;
                 if (st.status === 'done') {
-                    synthChatPushTurn('agent',
+                    _pmPushTurnFor(_po, 'agent',
                         'Your Brand Partnership Valuation is ready: ' +
                         (st.subject || 'the partnership read') +
                         ' is live in the Brand Partnership tab now.' +
@@ -89286,7 +89510,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (st.status === 'error') {
-                    synthChatPushTurn('agent',
+                    _pmPushTurnFor(_po, 'agent',
                         'The valuation hit a snag and the team has ' +
                         'been notified. Nothing further is needed ' +
                         'from you; we will follow up when it lands.');
@@ -89295,8 +89519,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
         }
 
-        async function _pmPollReadJob(jobId) {
-            _pmTrackReadJob(jobId);
+        async function _pmPollReadJob(jobId, originTid) {
+            // the thread the read was asked in: named by a resume after a reload, else the ask in flight's (2026-11-11)
+            var _po = originTid ? { tid: String(originTid), hist: null, q: '' } : _pmOriginNow();
+            _pmTrackReadJob(jobId, _po && _po.tid);
             _pmReadIndicatorShow(jobId, 'reading the data');
             var waited = 0, misses = 0;
             while (waited < 900000) {
@@ -89375,14 +89601,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         _pmHistorySave();
                         return;
                     }
-                    _synthChatPushTurnWithMeta('agent', p.reply, _rjMeta);
+                    _pmPushMetaFor(_po, 'agent', p.reply, _rjMeta);
                     return;
                 }
                 if (st.status === 'error') {
                     _pmReadIndicatorHide(jobId);
                     _pmUntrackReadJob(jobId);
                     _pmHideNotifyOffer(jobId);
-                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
+                    _pmPushTurnFor(_po, 'agent', SYNTH_CHAT_CALM_MSG);
                     return;
                 }
             }
@@ -89473,7 +89699,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var jobs = _pmReadJobsLoad(), now = Date.now();
             jobs.forEach(function(j) {
                 if (j && j.id && (now - (j.ts || 0)) < 1200000) {
-                    try { _pmPollReadJob(j.id); } catch (_) {}
+                    try { _pmPollReadJob(j.id, j.tid || ''); } catch (_) {}
                 } else if (j && j.id) {
                     _pmUntrackReadJob(j.id);
                 }
@@ -92036,7 +92262,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _abody = {
                     text: text,
                     page_context: ctx,
-                    history: synthChatHistory.slice(0, -1).slice(-12),
+                    history: _pmAskHist().slice(0, -1).slice(-12),   // the asking thread's turns, wherever the pane is (2026-11-11)
                     mode: mode || _pmModeForText(text) || ''
                 };
                 if (extra && extra.bind_subject) {
@@ -92324,6 +92550,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function _pmStartDeck(text, boundCtx, angleOverride, confirmOpen, bindSubject) {
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
             var ctx = boundCtx || _pmCollectPageContext();
             var angle = (angleOverride && String(angleOverride)) ||
                 _pmPendingDeckAngle ||
@@ -92336,7 +92563,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     text: String(text || ''),
                     angle: angle,
                     page_context: ctx,
-                    history: synthChatHistory.slice(-14)
+                    history: _pmAskHist().slice(-14)   // the asking thread's turns, wherever the pane is (2026-11-11)
                 };
                 if (confirmOpen) _dbody.confirm_open_screen = true;
                 if (bindSubject) _dbody.bind_subject = String(bindSubject);
@@ -92347,7 +92574,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // same Yes/No chips; the ask replays after opt-in.
                     _pmPpuOffer = { kind: 'deck', angle: angle,
                                     text: String(text || '') };
-                    _synthChatPushTurnWithMeta('agent', data.reply, {
+                    _pmPushMetaFor(_po, 'agent', data.reply, {
                         options: [ { label: 'Yes', send: 'Yes' },
                                    { label: 'No', send: 'No' } ] });
                     return;
@@ -92379,7 +92606,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             return { label: o, send: o };
                         });
                     }
-                    _synthChatPushTurnWithMeta('agent',
+                    _pmPushMetaFor(_po, 'agent',
                         data.clarify.question ||
                             'Which profile should the deck cover?',
                         { options: copts });
@@ -92390,7 +92617,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _oscOpts = (data.followups || []).map(function(f) {
                         return { label: f, send: f };
                     });
-                    _synthChatPushTurnWithMeta('agent',
+                    _pmPushMetaFor(_po, 'agent',
                         data.reply ||
                             'Do you want this on the profile open on your screen?',
                         { options: _oscOpts });
@@ -92402,7 +92629,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         _synthChatReportClientError('brief-chat/deck',
                             'no parseable reply (status ' + (_fr.r && _fr.r.status) + ')');
                     }
-                    _pmPushGuidanceTurn(
+                    _pmPushGuidanceFor(_po, 
                         (data && data.guidance && data.error)
                             ? String(data.error)
                             : SYNTH_CHAT_CALM_MSG,
@@ -92410,12 +92637,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 var job = data.job_id;
-                synthChatPushTurn('agent',
+                _pmPushTurnFor(_po, 'agent',
                     'Building the ' +
                     (data.subject ? data.subject + ' ' : '') +
                     'insights deck. The download link lands here when ' +
                     'it is ready.');
                 try { _pmShowNotifyOffer(job, 'deck'); } catch (_) {}
+                // the build is on its own from here (up to ten minutes): its lines carry _po, and the ask in
+                // flight is over, so nothing typed meanwhile is filed under this thread (2026-11-11)
+                try { if (_pmAskOrigin === _po) _pmAskOrigin = null; } catch (_) {}
                 var waited = 0;
                 while (waited < 600000) {
                     await new Promise(function(res) { setTimeout(res, 5000); });
@@ -92435,7 +92665,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             synthChatRerender();
                             return;
                         }
-                        _synthChatPushTurnWithMeta('agent',
+                        _pmPushMetaFor(_po, 'agent',
                             'Deck ready: ' + (st.title || st.filename || 'Profile IQ deck') +
                             ' (' + (st.slides || '?') + ' slides). The link is good for 7 days.',
                             { link: { url: st.url, label: 'Download the deck' },
@@ -92445,11 +92675,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (st.status === 'error') {
                         _pmHideNotifyOffer(job);
                         console.error('[brief-chat] deck job errored');
-                        synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
+                        _pmPushTurnFor(_po, 'agent', SYNTH_CHAT_CALM_MSG);
                         return;
                     }
                 }
-                synthChatPushTurn('agent',
+                _pmPushTurnFor(_po, 'agent',
                     'The deck is taking longer than expected. It may still ' +
                     'finish; ask me again in a minute.');
             } finally {
@@ -92459,6 +92689,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function synthChatSubmit() {
+            // the ask keeps the thread it was sent from until its last reply lands (2026-11-11)
+            var _sb = document.getElementById('synthChatSubmitBtn');
+            if (_sb && _sb.dataset.pmStop === '1') return _synthChatSubmitAsk();   // Stop: the ask in flight keeps its origin
+            var _own = { tid: '', hist: null, q: '' };
+            _pmAskOrigin = _own;
+            try { return await _synthChatSubmitAsk(); }
+            finally { _pmAskOriginEnd(_own); }
+        }
+        async function _synthChatSubmitAsk() {
             var _stopBtn = document.getElementById('synthChatSubmitBtn');
             if (_stopBtn && _stopBtn.dataset.pmStop === '1') {
                 // The button is in its Stop state: abort the in-flight
@@ -92479,6 +92718,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             input.value = '';
             // a fresh pane gets its thread now, on the first message (2026-11-06)
             try { await _pmEnsureThread(); } catch (_) {}
+            _pmAskOriginPin(text);   // and the ask is this thread's from here on (2026-11-11)
             synthChatPushTurn('user', text);
 
             // Pay-as-you-go offer follow-through (2026-08-26, Jenna).
@@ -93410,7 +93650,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _pmRerouteText = '';
                 var _interpretBody = {
                     text: _interpretText,
-                    history: synthChatHistory.slice(0, -1)
+                    history: _pmAskHist().slice(0, -1)   // the asking thread's turns, wherever the pane is (2026-11-11)
                 };
                 if (_lockedSample) {
                     _interpretBody.locked_sample_tu =
@@ -94244,7 +94484,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             '/api/brief-chat/analyze': 'analyze',
             '/api/brief-chat/deck': 'deck'
         };
-        var _pmCarried = null;   // the thread an automatic switch left: { from, at, count }
         function _pmV1Request(url, body) {
             var surface = _PM_V1_SURFACES[url];
             if (!surface) return { url: url, body: body };
@@ -94255,19 +94494,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // before this the server took its own active thread, which another tab may have moved, and a
             // guided flow armed there read the questions typed here
             try {
+                // the ask in flight keeps the thread it started on, whatever the pane shows by the time a later
+                // step of it posts (2026-11-11); otherwise the thread this tab is on
+                if (!b.thread_id && typeof _pmAskOrigin !== 'undefined' && _pmAskOrigin && _pmAskOrigin.tid) {
+                    b.thread_id = String(_pmAskOrigin.tid);
+                }
                 if (!b.thread_id && typeof _pmThreadsIdx !== 'undefined' && _pmThreadsIdx && _pmThreadsIdx.active) {
                     b.thread_id = String(_pmThreadsIdx.active);
                 }
             } catch (_) {}
-            try {
-                if (_pmCarried && _pmCarried.from && _pmCarried.count < 4 &&
-                    (Date.now() - _pmCarried.at) < 30 * 60 * 1000) {
-                    b.carried_from = _pmCarried.from;
-                    _pmCarried.count++;
-                } else if (_pmCarried) {
-                    _pmCarried = null;
-                }
-            } catch (_) {}
+            // nothing rides in from another thread (2026-11-11): the thread a page switch left used to be named
+            // here for the first asks in the new one, and its turns answered the new chat's question
             return { url: '/api/prometheus/v1/ask', body: b };
         }
         // The envelope carries its schema tag (pm.envelope.v1). The
@@ -94302,21 +94539,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _synthChatUploading = true;
             var names = list.map(function(f) { return f.name; }).join(', ');
             try { await _pmEnsureThread(); } catch (_) {}   // a file joins a thread, so a fresh pane gets one first (2026-11-06)
-            synthChatPushTurn('user', 'Uploaded ' + names);
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
+            _pmPushTurnFor(_po, 'user', 'Uploaded ' + names);
             var _end = null;
             try { _end = _synthChatBeginThinking('upload'); } catch (_) {}
             try {
                 var fd = new FormData();
                 list.slice(0, 5).forEach(function(f) { fd.append('file', f, f.name); });
                 try {
-                    var _tid = (_pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '';
+                    var _tid = (_po && _po.tid) ? String(_po.tid) : ((_pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '');
                     if (_tid) fd.append('thread_id', _tid);
                 } catch (_) {}
                 var r = await fetch('/api/prometheus/v1/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
                 var data = null;
                 try { data = await r.json(); } catch (_) { data = null; }
                 if (!r.ok || !data || !data.success) {
-                    synthChatPushTurn('agent', (data && data.error) ? String(data.error)
+                    _pmPushTurnFor(_po, 'agent', (data && data.error) ? String(data.error)
                         : 'That file did not land. Try again, or send it a different way.');
                     return;
                 }
@@ -94324,13 +94562,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return { label: String(o.label || o.send || ''), send: String(o.send || o.label || '') };
                 }).filter(function(o) { return o.label; });
                 if (opts.length) {
-                    _synthChatPushTurnWithMeta('agent', String(data.reply || 'Got it.'), { options: opts });
+                    _pmPushMetaFor(_po, 'agent', String(data.reply || 'Got it.'), { options: opts });
                 } else {
-                    synthChatPushTurn('agent', String(data.reply || 'Got it.'));
+                    _pmPushTurnFor(_po, 'agent', String(data.reply || 'Got it.'));
                 }
             } catch (e) {
                 console.error('[prometheus] upload failed', e);
-                synthChatPushTurn('agent', 'That file did not land. Try again, or send it a different way.');
+                _pmPushTurnFor(_po, 'agent', 'That file did not land. Try again, or send it a different way.');
             } finally {
                 _synthChatUploading = false;
                 try { _end && _end(); } catch (_) {}
@@ -95283,6 +95521,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function synthChatApproveBrief(opts) {
+            if (!(opts && opts._pmRun)) {
+                // the build and its status lines stay in the thread the brief was drafted in (2026-11-11): the
+                // approve runs once more under an origin pinned to the thread on screen (an ask already in flight
+                // keeps its own), and whatever it arms stays with that thread
+                var _apOwn = null;
+                try { _apOwn = _pmAskOriginBeginHere(); } catch (_) {}
+                try { return await synthChatApproveBrief(Object.assign({}, opts || {}, { _pmRun: true })); }
+                finally { try { _pmAskOriginEnd(_apOwn); } catch (_) {} }
+            }
             // 2026-09-04 Jenna existing_match chip UX. opts.forceNewBuild
             // flips an existing_match draft to a fresh new_build via
             // the session-only force_new_build flag on the approve
@@ -95575,6 +95822,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         function _synthChatStartPolling(runId, subjectHint, knownStatus) {
             if (synthChatPollTimer) clearInterval(synthChatPollTimer);
+            var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
             // knownStatus seeds the change detector on a resume so a
             // page load never re-announces a status the chat already
             // carries - a bare "X is building." after the user's
@@ -95627,21 +95875,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             _pmBuildIndicatorHide();
                         }
                         if (cur === 'complete' && st.subiq_s3_key) {
-                            _synthChatPushTurnWithMeta('agent', msg, {
+                            _pmPushMetaFor(_po, 'agent', msg, {
                                 run_id: runId, status: cur,
                                 link: { url: window.location.origin + '/api/download-cached/' + encodeURIComponent(st.subiq_s3_key),
                                         label: 'Download the data' } });
                         } else {
-                            synthChatPushTurn('agent', msg);
+                            _pmPushTurnFor(_po, 'agent', msg);
                         }
-                        if (cur === 'complete' && data.pending_question) {
+                        if (cur === 'complete' && data.pending_question && _pmOriginMoved(_po)) {
+                            // the reader is in another chat now: the question waits in the thread that asked it,
+                            // never asked in this one (2026-11-11)
+                            _pmPushTurnFor(_po, 'agent', 'The profile is ready. Your original question is waiting here: "' +
+                                String(data.pending_question) + '". Send it again and I will answer it on the new profile.');
+                        } else if (cur === 'complete' && data.pending_question) {
                             // Build-first follow-through (2026-09-24):
                             // the run was approved to answer a stashed
                             // question; ask it now against the fresh
                             // base. Server pops the stash, so this
                             // fires exactly once.
                             var _pq = String(data.pending_question);
-                            synthChatPushTurn('agent',
+                            _pmPushTurnFor(_po, 'agent',
                                 'Now answering your original question.');
                             setTimeout(function() {
                                 try { synthChatChipSend(_pq); } catch (_) {}

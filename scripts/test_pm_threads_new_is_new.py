@@ -622,9 +622,12 @@ class WidgetSource(unittest.TestCase):
         self.assertIn('_pmReopenCheck()', self.html[self.html.index('window.prometheusExpand = function()'):self.html.index('window.prometheusCollapse = function()')])
         self.assertNotIn('pmNewChat(', self.html[self.html.index('window.prometheusExpand = function()'):self.html.index('window.prometheusCollapse = function()')])
         self.assertIn("'&seen=1'", self._fn('_pmServerTurnsPull'))
-        sub = self.html[self.html.index('async function synthChatSubmit()'):]
+        # 2026-11-11: synthChatSubmit is the wrapper that keeps the ask's thread; the ask itself is _synthChatSubmitAsk
+        sub = self.html[self.html.index('async function _synthChatSubmitAsk()'):]
         sub = sub[:sub.index('\n        }\n', 0) + 1] if '\n        }\n' in sub[:20000] else sub[:20000]
         self.assertLess(sub.index('await _pmEnsureThread()'), sub.index("synthChatPushTurn('user', text)"))
+        self.assertLess(sub.index('await _pmEnsureThread()'), sub.index('_pmAskOriginPin(text)'))
+        self.assertLess(sub.index('_pmAskOriginPin(text)'), sub.index("synthChatPushTurn('user', text)"))
 
 if __name__ == '__main__':
     unittest.main(verbosity=1)

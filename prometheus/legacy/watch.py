@@ -380,20 +380,35 @@ def _pm_page_confirm_key(user):
     return f"system/pm_page_confirms/{_pm_safe_user(user)}.json"
 
 
+def _pm_page_confirm_slot(page):
+    """The mark's key: the page, in the thread the reader kept it in
+    (2026-11-11: a yes given in one chat never stands in another; an ask
+    on no thread keeps no mark). Outside an ask the page alone, as before."""
+    from prometheus import thread_scope as _tscope
+    scoped, tid = _tscope.scope()
+    base = _H._normalize_for_match(page)
+    if not scoped:
+        return base
+    return (base + '@' + tid) if tid else ''
+
+
 def _pm_page_confirm_mark(user, page):
     """The user kept the open page for an ask (clicked "Yes, {page}", or
     re-sent the question after the confirm): remember it for 12 hours so
-    the same page is not confirmed again on every follow-up (2026-10-08,
-    eriley: twelve confirms in one session on one profile). Never
-    raises."""
+    the same page is not confirmed again on every follow-up in that
+    thread (2026-10-08, eriley: twelve confirms in one session on one
+    profile). Never raises."""
     try:
         if not user or not page:
+            return
+        slot = _pm_page_confirm_slot(page)
+        if not slot:
             return
         key = _pm_page_confirm_key(user)
         doc = _pm_s3_json(key, {}) or {}
         now = time.time()
         doc = {k: v for k, v in doc.items() if now - float(v or 0) < _PM_PAGE_CONFIRM_TTL_S}
-        doc[_H._normalize_for_match(page)] = now
+        doc[slot] = now
         _pm_s3_put_json(key, doc)
     except Exception:
         traceback.print_exc()
@@ -403,8 +418,11 @@ def _pm_page_confirmed_recently(user, page):
     try:
         if not user or not page:
             return False
+        slot = _pm_page_confirm_slot(page)
+        if not slot:
+            return False
         doc = _pm_s3_json(_pm_page_confirm_key(user), {}) or {}
-        ts = float(doc.get(_H._normalize_for_match(page)) or 0)
+        ts = float(doc.get(slot) or 0)
         return bool(ts) and time.time() - ts < _PM_PAGE_CONFIRM_TTL_S
     except Exception:
         return False

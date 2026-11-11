@@ -28,9 +28,10 @@ clears all of them:
     bulk pull (``bulk_profile_pull``), a stashed profile brief;
   * on an explicit cancel, every open priced offer recorded on that
     thread (``pending_offers``), so a stale Approve chip cannot re-arm
-    what the reader just dropped. A new thread leaves offers alone: a
-    typed approval in a new thread binding to the offer made a moment
-    ago in the old one is designed behavior (Casey Pearson, 2026-10-22).
+    what the reader just dropped. A new thread leaves offers alone: an
+    offer stays open on the thread it was made on and is approved only
+    there (2026-11-11; until then a typed approval in a new thread bound
+    to the offer made in the old one).
 
 The referent clarify and the memory confirm hold no server state: both
 read the last agent turn of the thread, so the cancel reply (or the
@@ -208,10 +209,13 @@ def _key_exists(s3, bucket, key):
         return False
 
 
-def _pending_flows(s3, bucket, uname):
+def _pending_flows(s3, bucket, uname, thread_id=None):
+    """The stashed briefs: this thread's when a thread is named (a brief
+    waits on the thread it was proposed on), every thread's otherwise
+    (the reset that drops a reader's intakes clears them all)."""
     try:
         from . import pending_intake as _pi
-        return [str(f) for f in (_pi.active_flows(s3, bucket, uname) or [])]
+        return [str(f) for f in (_pi.active_flows(s3, bucket, uname, any_thread=not thread_id) or [])]
     except Exception:
         return []
 
@@ -270,7 +274,7 @@ def _stored_flows(uname, thread_id=None):
     s3, bucket = _s3()
     if s3 is None or not uname:
         return found
-    found.extend(_pending_flows(s3, bucket, uname))
+    found.extend(_pending_flows(s3, bucket, uname, thread_id))
     uk = _user_key(uname)
     keys = _bpiq_thread_keys(s3, bucket, uk, thread_id)
     # a listing (no thread named) only returns keys that exist; a named
@@ -359,7 +363,7 @@ def drop_all(user, thread_id=None, *, close_offers=False, body=None, history=Non
         # bulk pull, a stashed brief); the document's other fields stay
         try:
             from . import pending_intake as _pi
-            if _pi.active_flows(s3, bucket, uname):
+            if _pi.active_flows(s3, bucket, uname, any_thread=True):
                 _pi.clear(s3, bucket, uname)
         except Exception as e:
             _faults.note('intake_reset.pending_intake', e)

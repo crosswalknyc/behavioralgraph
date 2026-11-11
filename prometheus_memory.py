@@ -31,6 +31,17 @@ Layout on S3 (bucket dashboard-inputs):
 Retention is light: the newest MAX_ASKS records inside RETENTION_DAYS.
 Writes ride a daemon thread (remember() adds zero reply latency);
 reads are cached briefly per user.
+
+2026-11-11 (Jenna, after Armine at Lionsgate: "it will pull in
+information from past chats, like Mad Men, and switch the subject"): a
+new chat never carries a subject, a cohort or a window from an earlier
+one. Every record is stamped with the thread it was asked on, and the
+referents, the last window and the last region are read only from
+records written on the thread the ask in flight runs on
+(prometheus.thread_scope). An earlier chat's subject is never offered
+back as a "do you mean" chip in another chat, never bound there, and
+never written into the model's "about this user" block. Outside an ask
+(a report, a test of this store on its own) the store reads as before.
 """
 
 import hashlib
@@ -221,12 +232,18 @@ def remember(user, question, subject=None, cohort=None, ledger_key=None,
                 return   # a probe ask is never remembered (2026-11-02)
         except Exception:
             pass
+        if not thread_id:
+            try:
+                from prometheus import thread_scope as _tsc
+                thread_id = _tsc.current_thread_id() or None   # the thread the ask ran on (2026-11-11)
+            except Exception:
+                thread_id = None
         rec = {
             'q': str(question)[:300],
             'subject': (str(subject)[:120] if subject else None),
             'cohort': (str(cohort)[:120] if cohort else None),
             'ledger_key': (str(ledger_key)[:200] if ledger_key else None),
-            'thread': (str(thread_id)[:64] if thread_id else None),
+            'thread': (str(thread_id)[:96] if thread_id else None),
             'view': (str(view)[:48] if view else None),
             'route': (str(route)[:32] if route else None),
             'ts': _now_iso(),
@@ -250,9 +267,22 @@ def remember(user, question, subject=None, cohort=None, ledger_key=None,
         pass
 
 
+def _this_thread(asks):
+    """The records the ask in flight may read: the ones written on its
+    own thread (prometheus.thread_scope.only_mine). Outside an ask every
+    record reads as before."""
+    try:
+        from prometheus import thread_scope as _tsc
+        return _tsc.only_mine(asks)
+    except Exception:
+        return list(asks or [])
+
+
 def recall(user, k=MAX_ASKS):
     """The user's recent asks, newest first. Briefly cached. Strictly
-    per-user: the store key derives from THIS user only."""
+    per-user: the store key derives from THIS user only. Every thread's
+    records (the replay guard and the reports read them all); the
+    referents, the window and the region below read this thread's."""
     uk = _user_key(user)
     if not uk:
         return []
@@ -305,7 +335,7 @@ def recent_referents(user, k=2):
     newest first - the candidates a grounded confirm offers when an
     underspecified ask has no thread or session referent."""
     seen, out = set(), []
-    for a in recall(user):
+    for a in _this_thread(recall(user)):      # this thread's own asks, never an earlier chat's (2026-11-11)
         subj = str(a.get('subject') or '').strip()
         if not subj:
             continue
@@ -335,8 +365,9 @@ def last_window(user, default_start=DEFAULT_WINDOW_START,
     """The user's most recent NON-DEFAULT build window, or None. A
     user who always accepts the standing default has no window
     preference to lead with, so the clarify keeps its current
-    wording."""
-    for a in recall(user):
+    wording. Read from this thread's own builds only: a window used in
+    an earlier chat is never offered in a new one (2026-11-11)."""
+    for a in _this_thread(recall(user)):
         w = a.get('window')
         if not isinstance(w, dict):
             continue
@@ -350,8 +381,9 @@ def last_window(user, default_start=DEFAULT_WINDOW_START,
 
 
 def last_region(user):
-    """The user's most recent named market(s) from a build, or None."""
-    for a in recall(user):
+    """The user's most recent named market(s) from a build on this
+    thread, or None."""
+    for a in _this_thread(recall(user)):
         r = str(a.get('region') or '').strip()
         if r:
             return r
@@ -382,9 +414,14 @@ def referent_label(ref):
 # --------------------------------------------------------- user profile
 def user_profile(user, users_doc=None, ask_days=14):
     """Who this user is, for the brain (2026-10-06, audit item 8):
-    company and role from the account record, the products they live
-    in and the subjects they asked about recently, and their last
-    custom window. Compact, deterministic, fail-safe to {}."""
+    company and role from the account record and the products they live
+    in. Compact, deterministic, fail-safe to {}.
+
+    The subjects they asked about recently and their last custom window
+    are no longer part of it (2026-11-11): the block rides every prompt
+    in every thread, so "Recent subjects: Mad Men" sat in the prompt of
+    a brand-new chat about Cruel Summer and came back as a comparison
+    chip. Who is asking stays; what they asked elsewhere does not."""
     out = {'user': str(user or '')}
     try:
         rec = {}
@@ -399,19 +436,6 @@ def user_profile(user, users_doc=None, ask_days=14):
         for k in ('company', 'role', 'title', 'display_name', 'name', 'email'):
             if rec.get(k):
                 out[k] = str(rec[k])[:80]
-    except Exception:
-        pass
-    try:
-        asks = recall(user)
-        subs = []
-        for a in asks:
-            s = str(a.get('subject') or '').strip()
-            if s and s not in subs:
-                subs.append(s)
-        out['recent_subjects'] = subs[:6]
-        w = last_window(user)
-        if w:
-            out['last_window'] = w
     except Exception:
         pass
     try:
@@ -451,11 +475,9 @@ def user_block(profile):
         bits.append(f"{who or 'This user'}{(' at ' + p['company']) if p.get('company') else ''}.")
     if p.get('views'):
         bits.append("Works mostly in: " + ', '.join(p['views']) + '.')
-    if p.get('recent_subjects'):
-        bits.append("Recent subjects: " + ', '.join(p['recent_subjects']) + '.')
-    if p.get('last_window'):
-        w = p['last_window']
-        bits.append(f"Last custom window: {w.get('start')} to {w.get('end')}.")
+    # no subjects and no window from earlier chats (2026-11-11): this
+    # block rides every thread's prompt; a profile that still carries
+    # 'recent_subjects' / 'last_window' renders without them
     if not bits:
         return ''
     return ("ABOUT THIS USER (for tone and defaults; never repeat it back to them):\n" +

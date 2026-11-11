@@ -240,7 +240,8 @@ class JobDocumentCarriesAThread(unittest.TestCase):
 
     def test_the_launch_stamps_the_thread_on_the_job_document(self):
         src = _legacy_fn('_pm_generate_metrics_response')
-        self.assertIn("_head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user)", src)
+        # 2026-11-11: a resumed copy (the read worker) keeps the thread the launch recorded
+        self.assertIn("_head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user) if not inline_job_id else _pm_job_bind_thread(job_id, _pm_user, resumed=True)", src)
         self.assertLess(src.index("_head['thread_id'] = _pm_job_bind_thread"), src.index('_rr.enqueue(job_id, _head)'))
 
     def test_the_job_body_keeps_the_launch_thread_on_every_stage_write(self):
@@ -487,9 +488,11 @@ class SameContractEverywhere(unittest.TestCase):
         self.assertIn('async function _pmRefreshLandedRead(jobId, tries)', html)
         self.assertIn('function _pmTurnIsLanded(t)', html)
         self.assertIn('function _pmTurnJobKey(t)', html)
-        poll = html[html.index('async function _pmPollReadJob(jobId)'):html.index('async function _pmRefreshLandedRead')]
+        # 2026-11-11: the poll carries the thread the read was asked in (_po) and its lines land there
+        poll = html[html.index('async function _pmPollReadJob(jobId, originTid)'):html.index('async function _pmRefreshLandedRead')]
         self.assertIn("await _pmRefreshLandedRead(jobId, 2)", poll)
-        self.assertLess(poll.index('await _pmRefreshLandedRead(jobId, 2)'), poll.index("_synthChatPushTurnWithMeta('agent', p.reply, _rjMeta)"))
+        self.assertLess(poll.index('await _pmRefreshLandedRead(jobId, 2)'), poll.index("_pmPushMetaFor(_po, 'agent', p.reply, _rjMeta)"))
+        self.assertNotIn("_synthChatPushTurnWithMeta('agent', p.reply, _rjMeta)", poll)
         # the ack this tab holds under the job id is filled, never doubled
         self.assertIn('_ack.text = _synthChatAgentText(\'agent\', p.reply);', poll)
         # the pull takes the server's landed text into the turn the tab holds

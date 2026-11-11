@@ -557,6 +557,50 @@ def _raw_of(result):
     return raw if isinstance(raw, dict) else env
 
 
+def points_back(part):
+    """True when a later question of one message names no subject of its
+    own: "Can we summarize this in a powerpoint?", "Can we give some
+    examples?" after the question they belong to.
+
+    2026-11-11 (Armine at Lionsgate, a Las Culturistas profile open on
+    the page): her message asked about digital original content across
+    five categories and ended "Can we summarize this in a powerpoint?".
+    The split ran that last question on its own, "this" bound to the
+    profile on the page, and a read about a Las Culturistas deck landed
+    in a thread about digital original content. A question that names
+    nothing, inside a message that named its subject, is about that
+    subject, never about the page."""
+    t = ' '.join(str(part or '').split())
+    if not t:
+        return False
+    try:
+        from . import subject_rules as _sr
+        s = _sr.bind(t, None, '')
+        return not (s and s.source == 'words' and s.named)
+    except Exception:
+        return False
+
+
+def same_subject(a, b):
+    """Two subject names are one subject (one inside the other once
+    case and punctuation are set aside)."""
+    na = re.sub(r'[^a-z0-9]+', '', str(a or '').split(' - ')[0].lower())
+    nb = re.sub(r'[^a-z0-9]+', '', str(b or '').split(' - ')[0].lower())
+    return bool(na) and bool(nb) and (na == nb or na in nb or nb in na)
+
+
+def subject_of(result):
+    """The subject a part's answer was about, as the part's payload names
+    it ('' when it named none)."""
+    raw = _raw_of(result)
+    for k in ('subject', 'profile'):
+        v = raw.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    po = raw.get('panel_offer') if isinstance(raw.get('panel_offer'), dict) else {}
+    return str(po.get('subject') or '').strip()
+
+
 def _reply_of(raw):
     for k in ('reply', 'text', 'error'):
         v = raw.get(k)

@@ -6,7 +6,9 @@ The dashboard widget, the standalone app, and the API all land here
 with the same request shape::
 
     {'text': str,                    # required
-     'thread_id': str | None,        # defaults to the caller's active thread
+     'thread_id': str | None,        # the thread the ask belongs to; none named: the dashboard gets the empty
+                                     #   pane's thread or a new one, any other caller runs on no thread
+                                     #   (prometheus.thread_scope, 2026-11-11; never the active thread)
      'history': [...] | None,        # a client may send its own; else loaded
      'context': {...} | None,        # page facts: open profile, cuts, tabs
      'mode': str | None,             # explicit analyze mode (chip)
@@ -242,23 +244,84 @@ def thread_binding(uname, tid):
         return None
 
 
-def stash_binding(uname, tid=None):
+def relist_thread(uname, tid):
+    """Put a thread the index lost back under its own id (2026-11-11).
+
+    The index is one document every thread route reads, changes and
+    writes; two writes that cross can drop an entry a moment after it
+    was minted. The tab is still on that thread, so the ask stays on it:
+    the entry is re-listed, and a body that is still in the store keeps
+    every turn (nothing is written over it). Never moves the active
+    thread."""
+    idx = threads_index(uname)
+    if any(t.get('id') == tid for t in idx.get('threads', [])):
+        return tid
+    body = None
+    try:
+        body = host.s3_json(host.thread_key(uname, tid), None)
+    except Exception as _fx:
+        _faults.note('service.relist', _fx)
+    turns = body if isinstance(body, list) else []
+    now = _now()
+    title = 'New chat'
+    if turns:
+        try:
+            title = host.thread_title_from(turns) or title
+        except Exception as _fx:
+            _faults.note('service.relist', _fx)
+    idx.setdefault('threads', []).append(
+        {'id': tid, 'title': str(title)[:48], 'created': now, 'updated': now, 'last_seen': now, 'turns': len(turns)})
+    host.s3_put_json(host.threads_index_key(uname), idx)
+    if not isinstance(body, list):
+        host.s3_put_json(host.thread_key(uname, tid), [])
+    return tid
+
+
+def unnamed_thread(uname):
+    """The thread for a dashboard ask that named none (2026-11-11): the
+    reader's active thread when nobody has typed in it and no project is
+    bound to it (the empty pane the tab is on), else a new one, made
+    active. Never a thread that holds a conversation: the ask must not
+    borrow another chat's subject, binding or turns. Two asks in a row
+    with no thread named stay together in that empty thread until a
+    turn is saved to it."""
+    idx = threads_index(uname)
+    act = next((t for t in idx.get('threads', []) if t.get('id') == idx.get('active')), None)
+    if act and not act.get('turns') and not (isinstance(act.get('binding'), dict) and act['binding'].get('subject_key')):
+        try:
+            body = host.s3_json(host.thread_key(uname, act['id']), []) or []
+        except Exception as _fx:
+            _faults.note('service.unnamed_thread', _fx)
+            body = [None]
+        if not body:
+            return act['id']
+    return new_thread(uname, activate=True)[0]
+
+
+def stash_binding(uname, tid=None, *, strict=False):
     """Put the thread's project on the request (``g._pm_thread_id`` /
     ``g._pm_thread_binding``) so the binder reads it as the thread
     subject and the ask log records it. The explicit id wins when the
-    caller sent one that is theirs; else the active thread. Never
-    raises."""
+    caller sent one that is theirs. ``strict`` (every ask through
+    ``ask``): an ask that names no thread, or one the reader does not
+    have, carries no thread, no binding and no pin; it never borrows the
+    active thread's (2026-11-11). Without it (the legacy routes, which
+    name no thread) the active thread stands in. Never raises."""
     try:
         from flask import g as _g
         from . import thread_binding as _tb
         from . import thread_subject as _ts
+        from . import thread_scope as _tsc
         idx = threads_index(uname)
         t = str(tid or '').strip() or None
         if t and not any(x.get('id') == t for x in idx.get('threads', [])):
             t = None
-        if not t:
+        if not t and not strict:
             t = idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
         _g._pm_thread_id = t
+        if strict:
+            _g._pm_thread_scoped = True   # an ask on no thread reads nothing any thread wrote (thread_scope.scope)
+        _tsc.set_request_thread(t)   # the legacy per-worker marker follows this request, never the last one
         try:
             _g._pm_thread_binding = _tb.binding_of_thread(idx, t) if t else None
         except Exception as _fx:
@@ -280,11 +343,31 @@ def thread_for_subject(uname, subject_key, subject_label=None, product=None, *, 
     exists; an empty subject_key activates the general chat. Persists
     the index and the bodies of any thread the cap retired.
 
-    Returns {'tid', 'created', 'switched', 'binding', 'history'}."""
+    Returns {'tid', 'created', 'switched', 'binding', 'history'}, plus
+    'fresh': True (tid None) when the page left every project and the
+    general chat holds a conversation whose last activity is fifteen
+    minutes or more old (2026-11-11). Before this, closing a profile
+    dropped the reader into the most recently updated general thread,
+    however old, with nothing but a small note to say so; the next
+    question was then answered inside an earlier chat. The pane opens
+    fresh instead (no thread until the first message), the same rule a
+    reopen follows (prometheus.thread_presence). A general chat nobody
+    has typed in is the empty pane already and is activated as before."""
     from . import thread_binding as _tb
     # the label is the key's: the catalog's display name for it, else
     # the name the key spells; a client label only supplies casing
     idx, _repaired = repair_thread_labels(uname, persist=False)
+    if not str(subject_key or '').strip():
+        try:
+            from . import thread_presence as _tp
+            _gen = _tb.general_thread(idx)
+            if _gen is not None and _tp.turn_count(_gen) > 0 and _tp.fresh_decision(idx, tid=_gen.get('id'))[0]:
+                if _repaired:
+                    host.s3_put_json(host.threads_index_key(uname), idx)
+                return {'tid': None, 'created': False, 'switched': False, 'binding': None, 'retired': [],
+                        'history': [], 'fresh': True}
+        except Exception as _fx:
+            _faults.note('service.general_fresh', _fx)
     cap = host.max_threads if host.has('max_threads') else 40
     out = _tb.bind(idx, subject_key, subject_label, product, cap=cap, create=create,
                    lookup=project_lookup())
@@ -553,48 +636,44 @@ def ask(user, body, *, via='session'):
                             via=via)
         return env, 200
 
-    # Thread: explicit id must belong to the caller; else the active one.
-    # The dashboard names the thread its tab is on (2026-11-05: before
-    # this the server took its own active thread, which another tab may
-    # have moved, and a wizard armed there read the asks typed here); a
-    # tab holding an id the rail has since retired falls back to the
-    # active one instead of a 404 the widget cannot act on.
-    tid = str(body.get('thread_id') or '').strip() or None
-    if tid and not thread_exists(uname, tid):
-        if client == 'dashboard':
-            tid = None
-        else:
-            return envelope.wrap({'success': False, 'error': 'unknown thread'},
-                                 surface='interpret',
-                                 decision={'reason': 'bad_thread'}, via=via), 404
-    if not tid:
-        tid = active_thread_id(uname)
+    # Thread: the thread this ask belongs to (prometheus.thread_scope,
+    # Jenna 2026-11-11: a new chat never carries anything from an earlier
+    # one). A named thread the caller owns is that thread. The dashboard
+    # naming a thread the index lost keeps it, re-listed under its own id
+    # (before this the ask ran on the reader's ACTIVE thread: its pinned
+    # subject, its project binding, its stored turns). No thread named:
+    # the dashboard gets the empty pane's thread or a new one, never one
+    # that holds a conversation (unnamed_thread); any other caller (the
+    # key surface with no conversation id, a probe) runs on no thread at
+    # all, never on the thread the dashboard happens to have open.
+    from . import thread_scope as _tscope
+    _probe_ask = _tscope.probe_request()     # a probe names a thread or runs on none; nothing is minted for it
+    tid, _tid_how = _tscope.resolve_ask_thread(
+        body.get('thread_id'), client,
+        exists=lambda t: thread_exists(uname, t),
+        relist=(None if _probe_ask else (lambda t: relist_thread(uname, t))),
+        mint=(None if _probe_ask else (lambda: unnamed_thread(uname))))
+    if _tid_how == 'unknown':
+        return envelope.wrap({'success': False, 'error': 'unknown thread'},
+                             surface='interpret',
+                             decision={'reason': 'bad_thread'}, via=via), 404
     # The project this thread is bound to rides the request (2026-10-21,
     # Debi: the conversation follows the project). The binder reads it as
     # the thread's subject ahead of the history and the page; the ask log
-    # records it; nothing else in the ask changes.
-    stash_binding(uname, tid)
+    # records it; nothing else in the ask changes. An ask on no thread
+    # carries no binding and no pin.
+    stash_binding(uname, tid, strict=True)
 
     history = body.get('history')
     if not isinstance(history, list):
         history = load_thread(uname, tid) if tid else []
-    # Memory across an automatic thread switch (Jenna 2026-10-30): the
-    # chat follows the page (Debi 2026-10-21), so a conversation begun in
-    # one thread continues in the project's thread the moment a profile
-    # opens. The widget names the thread it just left (carried_from) for
-    # the first asks in the new one; its last turns ride ahead of this
-    # thread's own history as context for the binder and the model.
-    # Never persisted here (persist_turn drops them), never for a thread
-    # that already has a conversation of its own.
-    try:
-        _carried_from = str(body.get('carried_from') or '').strip()
-        if _carried_from and _carried_from != (tid or '') and thread_exists(uname, _carried_from) \
-                and sum(1 for t in history if isinstance(t, dict) and str(t.get('role') or '') == 'user') <= 3:
-            _prev = [t for t in (load_thread(uname, _carried_from) or []) if isinstance(t, dict) and str(t.get('text') or '').strip()]
-            if _prev:
-                history = [dict(t, carried=True) for t in _prev[-8:]] + list(history)
-    except Exception as _fx:
-        _faults.note('service.carried_context', _fx)
+    # Nothing rides in from another thread (Jenna 2026-11-11). The widget
+    # used to name the thread an automatic switch had just left
+    # (carried_from, 2026-10-30) and its last eight turns rode ahead of
+    # this thread's own history for the binder and the model; that is how
+    # an earlier chat's subject answered a new chat's question. The field
+    # is ignored: a thread's context is its own turns.
+    history = [t for t in history if not (isinstance(t, dict) and t.get('carried'))]
     # the thread's pinned subject applies to the conversation in hand: a
     # history with no trace of it (a cleared chat, another conversation
     # under the same id) gets none (prometheus.thread_subject)
@@ -1802,6 +1881,8 @@ def ask(user, body, *, via='session'):
             from . import multi_ask as _multi
             _mrb = {k: v for k, v in body.items() if k not in _ARMED_BODY_KEYS and k not in _ANALYZE_PASSTHROUGH and k != 'extra'}
 
+            _multi_subject = {'name': ''}      # what the message's earlier questions were about
+
             def _multi_run_one(q, part_pc, prior=None, _rb=_mrb):
                 # the earlier questions ride as the turns just before this one
                 # so "they" / "that audience" in a later part binds to them
@@ -1809,7 +1890,28 @@ def ask(user, body, *, via='session'):
                 part_body = dict(_rb, text=q, _multi_part=True, persist=False, history=_hist)
                 if isinstance(part_pc, dict) and part_pc:
                     part_body['panel_confirm'] = part_pc
-                return ask(user, part_body, via=via)
+                # a later question that names nothing of its own ("can we summarize
+                # this in a powerpoint?") is about the question before it in the
+                # same message, never about the profile open on the page
+                # (2026-11-11, multi_ask.points_back): when the message is about
+                # something other than the page, the page is set aside for that
+                # part and it runs on the earlier question's subject
+                try:
+                    if prior and _multi_subject['name'] and _multi.points_back(q):
+                        from . import subject_rules as _sr_mp
+                        _page_nm = _sr_mp._page_name(ctx)
+                        if _page_nm and not _multi.same_subject(_multi_subject['name'], _page_nm):
+                            part_body.pop('context', None)
+                            part_body.pop('page_context', None)
+                            part_body['bind_subject'] = _multi_subject['name']
+                except Exception as _fx:
+                    _faults.note('service.multi_ask_pointer', _fx)
+                _res = ask(user, part_body, via=via)
+                try:
+                    _multi_subject['name'] = _multi.subject_of(_res) or _multi_subject['name']
+                except Exception as _fx:
+                    _faults.note('service.multi_ask_pointer', _fx)
+                return _res
 
             _multi_raw = _multi.handle(text, body, _multi_run_one)
         except Exception as _fx:
@@ -3273,6 +3375,21 @@ def _bare_reply(body, text, history, has_ctx, uname=''):
                 pass
             return _promised, None
         if re.search(r'approv|go|run|ship|do it|proceed', low):
+            # an offer stays with the chat it was made in (2026-11-11): a yes
+            # typed here never runs it; the line says where it waits
+            try:
+                from . import pending_offers as _pe
+                from . import thread_scope as _tsc_b
+                _else = _pe.open_elsewhere(uname, _tsc_b.current_thread_id()) if uname else None
+            except Exception as _fx:
+                _faults.note('service.offer_elsewhere', _fx)
+                _else = None
+            if _else:
+                _what = (' on ' + _else['subject']) if _else.get('subject') else ''
+                _where = (' ("' + _else['thread_title'] + '")') if _else.get('thread_title') else ''
+                return None, _p(
+                    'Nothing is waiting on an approval in this chat. Your open offer' + _what + ' is in another chat'
+                    + _where + '. Open it from Chats & Tasks and approve it there, or ask the question again here.')
             return None, _p(
                 'Nothing is waiting on an approval right now. If you were '
                 'approving a brief, use the Approve & run button on its '

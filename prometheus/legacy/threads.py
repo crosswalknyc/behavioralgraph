@@ -84,9 +84,11 @@ def api_synth_chat_threads_bind():
     the dashboard has open (``page_context`` or an explicit
     ``subject_key`` / ``subject_label`` / ``product``); the thread bound
     to that project becomes active, created when none exists; an empty
-    key activates the general chat. Returns the active id, whether it
-    switched or was created, the binding and the thread's history so the
-    widget can swap in one round trip. Session-only."""
+    key returns to the general chat the reader left under fifteen minutes
+    ago, else says ``fresh`` (an empty pane, no thread). Returns the
+    active id, whether it switched or was created, the binding and the
+    thread's history so the widget can swap in one round trip.
+    Session-only."""
     user, err = _C._synth_chat_gate(allow_api_key=False)
     if err:
         return err
@@ -105,6 +107,7 @@ def api_synth_chat_threads_bind():
     return jsonify({'success': True, 'active': out.get('tid'),
                     'switched': bool(out.get('switched')),
                     'created': bool(out.get('created')),
+                    'fresh': bool(out.get('fresh')),   # no project open and no general chat to resume: an empty pane (2026-11-11)
                     'binding': out.get('binding'),
                     'history': out.get('history') or [],
                     'threads': sorted(_tp.visible_threads(idx.get('threads', [])),

@@ -63,26 +63,31 @@ class Unbound(unittest.TestCase):
         self.assertEqual(SR.thread_subjects(GG_READ, page=PAGE), ['Gilmore Girls'])
 
 
-class CarriedContext(unittest.TestCase):
-    """Memory across an automatic thread switch: the widget names the
-    thread it left (carried_from); the service rides its last turns ahead
-    of the new thread's history, never persists them, and a bare follow-up
-    binds to what that conversation was about."""
+class NothingCarriedAcrossThreads(unittest.TestCase):
+    """2026-11-11 (Jenna, after Armine at Lionsgate): a thread's context is
+    its own turns. The 2026-10-30 carry (the widget named the thread an
+    automatic switch had left as carried_from, and the service rode its
+    last eight turns ahead of the new thread's history) is retired: that
+    is how an earlier chat's subject answered a new chat's question. The
+    full behavior is held by scripts/test_pm_new_chat_no_bleed.py."""
 
-    def test_service_and_widget_wiring(self):
+    def test_service_and_widget_carry_nothing(self):
         svc = open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8').read()
-        self.assertIn("body.get('carried_from')", svc)
-        self.assertIn("dict(t, carried=True)", svc)
-        self.assertIn("if not (isinstance(t, dict) and t.get('carried'))", svc)
+        self.assertNotIn("body.get('carried_from')", svc)
+        self.assertNotIn("dict(t, carried=True)", svc)
+        # a turn a stale client still marks carried is dropped at the door and never persisted
+        self.assertIn("history = [t for t in history if not (isinstance(t, dict) and t.get('carried'))]", svc)
         html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
-        self.assertIn('b.carried_from = _pmCarried.from', html)
-        self.assertIn("_pmCarried = (_prevActive && _prevActive !== d.active)", html)
-        self.assertEqual(html.count('_pmCarried = null;'), 5)   # the declaration, expiry, a thread opened by hand, a new chat, a fresh pane (_pmGoFresh, 2026-11-06)
+        self.assertNotIn('carried_from', html)
+        self.assertNotIn('_pmCarried', html)
 
-    def test_carried_turns_bind_the_follow_up(self):
-        carried = [dict(t, carried=True) for t in GG_READ]
-        s = SR.bind('how about the men?', carried, PAGE)
+    def test_a_follow_up_binds_inside_its_own_thread(self):
+        # the same turns as the thread's own history: the follow-up inherits, as it always did
+        s = SR.bind('how about the men?', list(GG_READ), PAGE)
         self.assertEqual(s.name, 'Gilmore Girls')
+        # and with no history of its own (a new thread) nothing is inherited
+        s0 = SR.bind('how about the men?', [], PAGE)
+        self.assertNotEqual(s0.name, 'Gilmore Girls')
 
 
 if __name__ == '__main__':

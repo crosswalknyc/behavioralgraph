@@ -363,19 +363,22 @@ def _pm_file_stash_write(username, url, filename, s3_key,
                          subject='', question=''):
     """Remember the most recent file handed to this account so
     "Email me this file" can serve it (2026-09-29 Jenna: every data
-    answer creates a CSV the user can download or have emailed)."""
+    answer creates a CSV the user can download or have emailed). The
+    stash carries the thread the file was handed in (2026-11-11): "this
+    file" typed in another chat is never that one."""
     try:
         uname = str(username or '').strip().lower()
         if not uname:
             return
+        from prometheus import thread_scope as _tscope
         _H.s3_client.put_object(
             Bucket=_H.S3_BUCKET,
             Key=f"{_PM_LAST_FILE_PREFIX}{uname}.json",
-            Body=json.dumps({
+            Body=json.dumps(_tscope.stamp({
                 'url': url, 'filename': filename, 's3_key': s3_key,
                 'subject': str(subject or '')[:120],
                 'question': str(question or '')[:300],
-                'ts': time.time()}).encode('utf-8'),
+                'ts': time.time()})).encode('utf-8'),
             ContentType='application/json')
     except Exception:
         traceback.print_exc()
@@ -390,7 +393,8 @@ def _pm_file_stash_read(username):
             Bucket=_H.S3_BUCKET,
             Key=f"{_PM_LAST_FILE_PREFIX}{uname}.json")['Body'].read()
         doc = json.loads(raw)
-        return doc if isinstance(doc, dict) else {}
+        from prometheus import thread_scope as _tscope
+        return doc if isinstance(doc, dict) and _tscope.mine(doc) else {}   # this thread's last file only (2026-11-11)
     except Exception:
         return {}
 
