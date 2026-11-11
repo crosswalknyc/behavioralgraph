@@ -244,6 +244,12 @@ _PERIOD_SPLIT_RX = re.compile(
 
 def wants_sizing(text):
     """A question about how many people an audience holds."""
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(text):
+            return False   # one joint segment, read whole (prometheus.segment_sizing); its attributes are never sized one by one (2026-11-11)
+    except Exception:
+        pass
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 400 or t.endswith(':'):
         return False
@@ -670,6 +676,12 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
             return None   # answered from the record by prometheus.reconcile_lane, never sized again (2026-11-04)
         if is_scope_ask(text):
             return None   # answered from the house definition by prometheus.us_scope (2026-11-04)
+        try:
+            from . import segment_sizing as _seg
+            if _seg.is_segment_ask(text):
+                return None   # a demographic segment is one joint read, never a list of sizes (2026-11-11)
+        except Exception:
+            traceback.print_exc()
         try:
             from . import overlap_read as _ov
             if _ov.is_overlap_read(text):

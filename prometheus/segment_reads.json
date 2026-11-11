@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "note": "Segment reads of record: a demographic segment sized in the data and in the US, split by a brand's touchpoints. scripts/bank_segment_reads.py writes each read to the insights ledger as a decision of record; prometheus/segment_sizing.py answers from the ledger first and from this file when the ledger cannot be read. Figures, definitions and windows only; the trail behind a read lives in the ledger entry and in the parent repo's reference/segment_reads/ notes and is never rendered.",
+  "reads": [
+    {
+      "id": "blue_collar_men_30_55_hhi_50k_200k",
+      "key": "gender:male|age:30-55|hhi:50000-200000|occ:blue_collar",
+      "subject": "Blue-collar men 30 to 55 with household income $50k to $200k",
+      "label": "men aged 30 to 55 with household income of $50,000 to $200,000 in blue-collar occupations",
+      "aliases": ["blue collar men", "blue-collar men 30 to 55", "blue collar men 30-55 income 50k-200k"],
+      "banked": "2026-11-11",
+      "asked_by": "client sizing question, entered by Jenna 2026-11-11",
+      "window": {"start": "2025-11-11", "end": "2026-11-11", "label": "Nov 11 2025 to Nov 11 2026"},
+      "segment": {"us": 9450563, "in_data": 286468},
+      "brands": {
+        "dixxon": {
+          "name": "Dixxon",
+          "aliases": ["dixxon", "dixxon flannel", "dixxon flannel co", "dixxon flannel company", "dixxon flannels", "dixon flannel", "dixon flannel co", "dixon flannel company", "dixxon.com"],
+          "touch": {"us": 256019, "in_data": 7761},
+          "no_touch": {"us": 9194544, "in_data": 278707},
+          "touch_pct": 2.7,
+          "no_touch_pct": 97.3,
+          "brand_us_reach": {"us": 2318239, "in_data": 70271}
+        }
+      },
+      "trail_ref": "finished_codes/reference/segment_reads/dixxon_blue_collar_men_2026_11.md"
+    }
+  ]
+}

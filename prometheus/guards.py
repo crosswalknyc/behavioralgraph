@@ -982,6 +982,15 @@ def is_sample_size_ask(text) -> bool:
     # does not count; the ask has to be about the sample as a thing.
     if not _SAMPLE_SELF_RE.search(t):
         return False
+    # a demographic segment inside the sample ("how many of your panel are
+    # blue-collar men 30 to 55 earning 50 to 200k") is a sizing of that
+    # segment, never the size of the sample itself (2026-11-11)
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(t):
+            return False
+    except Exception:
+        pass
     # A named brand or title in the ask ("Netflix viewers in the sample")
     # is a question about THAT audience inside the sample, not about
     # the sample itself. Months, Crosswalk, US and the opening word are

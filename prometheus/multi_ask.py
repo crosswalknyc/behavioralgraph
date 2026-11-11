@@ -170,6 +170,12 @@ def parse(text, pma=None):
     Items are in the reader's order and keep the reader's numbers; a
     rider item is set aside (it rides every other item); past MAX_ITEMS
     the rest are counted in ``left``."""
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(text):
+            return None          # a demographic segment and its brand split are one read, never two asks (2026-11-11)
+    except Exception:
+        pass
     listed = numbered_items(text)
     if len(listed) >= 2:
         rider_parts, items, numbers = [], [], []

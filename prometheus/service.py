@@ -477,7 +477,7 @@ LANE_ORDER = (
     'bpiq_wizard', 'build_fix',
     'wayfinding',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
-    'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
+    'deck_conversion', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
@@ -494,10 +494,10 @@ DETERMINISTIC_LANES = frozenset((
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
-    'us_scope'))
+    'us_scope', 'segment_sizing'))
 NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
-                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope'))
+                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope', 'segment_sizing'))
 
 
 def lane_markers(source=None):
@@ -1203,6 +1203,40 @@ def ask(user, body, *, via='session'):
                 raw = _interpret_shape(raw)
             try:
                 host.ask_hint(route='us_scope', outcome='answered', subject=str(_us_raw.get('subject') or '') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
+    # lane: segment_sizing
+    # "How many people in your database fit the following profile: men,
+    # aged 30-55, income $50k-$200k, blue-collar occupations? Of this
+    # group, how many have and haven't had touchpoints with Dixxon?"
+    # (Jenna 2026-11-11, a client's sizing question; the unprojected lane
+    # read "$50k" as a figure and answered "50k is 1,516"). A count over a
+    # demographic filter of three or more attributes is one joint segment
+    # of US people: a question, never an order; answered from the record
+    # when the segment is on record (the count in the data and the US
+    # count side by side, a brand's touchpoint split as two sides that add
+    # up), in any wording and on a follow-up that points back. A segment
+    # not on record is not answered here; the lanes below stand down on
+    # it and the read lane takes it under the same frame
+    # (prometheus.segment_sizing). Never the model, never a price.
+    if not _armed(body) and not _is_order:
+        try:
+            from . import segment_sizing as _seg
+            _seg_raw = _seg.answer(text, history, ctx=ctx)
+        except Exception as _fx:
+            _faults.note('service.segment_sizing', _fx)
+            _seg_raw = None
+        if _seg_raw:
+            raw = _seg_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'segment_sizing', 'client_hint': None}
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = dict(_interpret_shape(raw), segment_sizing=_seg_raw.get('segment_sizing'))
+            try:
+                host.ask_hint(route='segment_sizing', outcome='answered_from_record', subject=str(_seg_raw.get('subject') or '') or None)
             except Exception as _fx:
                 _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
@@ -3345,6 +3379,8 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['bpiq_wizard'] = raw['bpiq_wizard']
         if isinstance(raw, dict) and isinstance(raw.get('build_fix'), dict):
             meta['build_fix'] = raw['build_fix']   # the build-fix lane's question waits for the subject (2026-11-06)
+        if isinstance(raw, dict) and isinstance(raw.get('segment_sizing'), dict):
+            meta['segment_sizing'] = {'key': raw['segment_sizing'].get('key')}   # a follow-up that points back stays on the segment (2026-11-11)
         turns.append({'role': 'agent', 'text': env['text'],
                       'ts': _now(), 'meta': meta})
         save_thread(uname, tid, turns)

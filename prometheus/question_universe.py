@@ -384,6 +384,13 @@ def question_universe(text, page='', history=None):
     page = str(page or '').strip()
     if not t:
         return NONE
+    # a count over a demographic filter ("men, aged 30-55, income $50k-$200k,
+    # blue-collar occupations") names its own universe: one joint segment of
+    # US people, never the page and never a library file one of its words
+    # resembles (prometheus.segment_sizing, 2026-11-11)
+    seg = _segment_label(t)
+    if seg:
+        return Universe('named', seg, US_PEOPLE, (seg,), True)
     named = named_universe(t)
     if page and names_page(t, page):
         # the page named as the PLATFORM inside the question's own universe
@@ -419,6 +426,18 @@ def question_universe(text, page='', history=None):
 
 
 _WHO_OF_RX = re.compile(r"(?:people|those|anyone|everyone|parents|moms|mothers|dads|fathers|households|families|grandparents|caregivers)\s+(?:who|that|which|of|with)\b", re.I)
+
+
+def _segment_label(t):
+    """The demographic segment the words size, as a reader would say it,
+    or ''."""
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(t):
+            return _seg.segment_label(_seg.parse(t))
+    except Exception:
+        pass
+    return ''
 
 
 def _edit1(a, b):
@@ -600,6 +619,11 @@ def framing_block(universe, question=''):
         "- A library file may inform a rate (a lean, an index) as a comparison, named as a comparison, never as the base.",
     ]
     if question:
+        try:
+            from . import segment_sizing as _seg
+            lines.extend(_seg.framing_lines(question))      # a demographic segment: one joint group, both counts, the two-way split (2026-11-11)
+        except Exception:
+            pass
         lines.append(f"- Answer every part of the question: {_squash(question)[:400]}")
     return '\n'.join(lines)
 
@@ -653,6 +677,7 @@ path paths basis bases channel channels route routes cohort cohorts segment segm
 slice slices band bands billing pathway pathways funnel funnels storefront storefronts touchpoint touchpoints
 method methods mode modes option options variant variants version versions column columns row rows table tables
 metric metrics measure measures rate rates window windows period periods quarter quarters
+blue collar occupation occupations income incomes household households earning earnings aged database
 """.split())
 # "discover" is not a one-letter misspelling of Discovery+ (Cara Dorfman
 # 2026-11-10: "how did viewers discover off campus" bound the Discovery+

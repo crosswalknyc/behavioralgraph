@@ -166,6 +166,12 @@ def wants_unprojected(text):
             return False      # an order is queued, never deflected (Grace Yin 2026-11-10): "Deliver as a CSV with the unprojected count" rides the brief
     except Exception:
         pass
+    try:
+        from . import segment_sizing as _seg
+        if _seg.is_segment_ask(t):
+            return False      # a demographic filter ("income $50k-$200k") is a segment to size, never a figure to unproject (2026-11-11)
+    except Exception:
+        pass
     if re.search(r"\braw (?:data|file|csv|export|rows|table|download)\b", t, re.I) and not quoted_figures(t) \
             and not re.search(r"\b(?:number|count|figure|how many|total)\b", t, re.I):
         return False
