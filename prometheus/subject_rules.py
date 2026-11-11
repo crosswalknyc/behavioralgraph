@@ -1433,13 +1433,13 @@ def sentence_audience(text, casing=None):
 
 
 # "<Name> shoppers that also shop at ...", "<Name> (url) purchasers that
-# have also made a purchase at ...": a named audience, then who / that,
-# then also. The parenthetical a reader pastes after a name (a URL, "the
+# have also made a purchase at ...", "<Name> viewers also watched ...": a
+# named audience, then (who / that) also. The parenthetical a reader pastes after a name (a URL, "the
 # retail outlet") is dropped before the match.
 _ALSO_PAREN_RX = re.compile(r"\s*\((?:https?://)?[^)]*\)|\s*https?://\S+")
 _ALSO_NOUN_RX = re.compile(
     r"\b(?P<verb>viewers|fans|readers|listeners|players|watchers|buyers|purchasers|shoppers|users|customers|subscribers|"
-    r"drinkers|owners|members|visitors)\s+(?:who|that)\s+(?:have\s+|had\s+)?also\b", re.I)
+    r"drinkers|owners|members|visitors)\s+(?:(?:who|that)\s+)?(?:have\s+|had\s+)?also\b", re.I)
 _ALSO_TARGET_RX = re.compile(
     r"\balso\b[^.?!;]*?\b(?:at|on|from|with|to|in)\s+(?P<list>.+?)(?:[.?!;]|$)", re.I)
 _ALSO_CONNECT = frozenset(('of', 'the', 'and', '&', 'de', 'la'))
@@ -1478,7 +1478,7 @@ def also_base(text, casing=None):
     also; ('', '', []) when the words carry no such frame (no name
     before the who, or no also)."""
     t = ' '.join(str(text or '').split())
-    if not t or not re.search(r"\b(?:who|that)\s+(?:have\s+|had\s+)?also\b", t, re.I):
+    if not t or not re.search(r"\balso\b", t, re.I):
         return '', '', []
     t = ' '.join(_ALSO_PAREN_RX.sub('', t).split())
     m = _ALSO_NOUN_RX.search(t)
@@ -1494,6 +1494,8 @@ def also_base(text, casing=None):
     tm = _ALSO_TARGET_RX.search(t, m.end() - 4)
     if tm:
         for part in re.split(r",|\band\b|\bor\b|&", tm.group('list')):
+            # a window or a qualifier tail is not a target ("CVS in the last 12 months")
+            part = re.sub(r"\s+(?:in|over|during|within|since|for|across)\s+(?:the\s+)?(?:last|past|trailing|same|window|year|month|\d).*$", '', part, flags=re.I)
             p = ' '.join(part.split()).strip(" ,.;:")
             if not p or p.split()[0].lower() in _ALSO_TARGET_SKIP or not p[0].isupper():
                 continue

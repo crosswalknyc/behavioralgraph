@@ -78,6 +78,14 @@ class AlsoBaseIsTheNamedAudience(unittest.TestCase):
         self.assertEqual(s.name, 'Landman')
         self.assertEqual(s.qualifiers.get('verb'), 'viewers')
 
+    def test_the_frame_holds_without_a_relative_pronoun(self):
+        q = "What percent of Claire's purchasers also made a purchase at Target, Walmart, Kohl's and CVS in the last 12 months?"
+        self.assertEqual(SR.also_base(q), ("Claire's", 'purchasers', ['Target', 'Walmart', "Kohl's", 'CVS']))
+        self.assertTrue(QU.names_other_universe(q, 'Target', page=''))
+        self.assertFalse(QU.names_other_universe(q, "Claire's", page=''))
+        dec = {'surface': 'analyze', 'reason': 'question'}
+        self.assertIsNone(RD.steer(KEITH_READING_LIVE, dec, has_ctx=False, text=q))
+
     def test_nested_audience_without_a_name_still_binds_the_object(self):
         s = SR.bind("people who also watched Yellowstone", None, '')
         self.assertEqual(s.name, 'Yellowstone')
