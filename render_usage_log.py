@@ -595,6 +595,15 @@ def _put_ask_record(record: dict) -> None:
             print(f"[ask-log] job pointer put failed: {e}")
 
 
+def _is_missing_key(exc) -> bool:
+    """True when an S3 read failed because the object is not there."""
+    try:
+        code = str(((getattr(exc, 'response', None) or {}).get('Error') or {}).get('Code') or '')
+    except Exception:
+        code = ''
+    return code in ('NoSuchKey', '404') or type(exc).__name__ == 'NoSuchKey' or 'NoSuchKey' in str(exc)
+
+
 def settle_ask(job_id: str, *, outcome: str, reply: Optional[str] = None,
                ms: Optional[int] = None) -> bool:
     """Update the ask-log record that promised ``job_id``: outcome
@@ -605,7 +614,16 @@ def settle_ask(job_id: str, *, outcome: str, reply: Optional[str] = None,
         if not jid:
             return False
         c = _client()
-        ptr = json.loads(c.get_object(Bucket=S3_BUCKET, Key=f"{ASK_BY_JOB_PREFIX}{jid}.json")['Body'].read().decode('utf-8') or '{}')
+        try:
+            ptr = json.loads(c.get_object(Bucket=S3_BUCKET, Key=f"{ASK_BY_JOB_PREFIX}{jid}.json")['Body'].read().decode('utf-8') or '{}')
+        except Exception as e:
+            # No ask-log record promised this job (a read rerun by ops from a
+            # script, a job started outside the ask door): there is nothing to
+            # settle, and that is not a failure (2026-11-11: three ops reruns
+            # each logged 'settle failed ... NoSuchKey').
+            if _is_missing_key(e):
+                return False
+            raise
         key = str(ptr.get('key') or '')
         if not key:
             return False
