@@ -122,6 +122,12 @@ from super_fan_synthesis import (  # noqa: E402
 from audience_cut_synthesis import (  # noqa: E402
     _CAT_ROW_SYSTEM, SKIP_CATS,
 )
+# 2026-11-11 (Sony, 'Season 3 Viewers' sized as '3 children'): what a
+# label is about - a part of the content, or a family size.
+from cut_scope import (  # noqa: E402
+    content_scope, strip_content_scope, scope_row_fraction,
+    family_size_pin, is_demographic_category, SCOPE_FILLER,
+)
 
 try:
     from scripts._sample_size_jitter import ensure_messy_sample_size
@@ -643,6 +649,22 @@ def _promote_unpinned_pin_cut(df_source, cut_def: dict) -> tuple:
                 or "").strip()
     if not label or len(label) > 40:
         return cut_def, ""
+    # 2026-11-11: 'Season 3', 'Episode 4', 'Part 2', 'Volume 1',
+    # 'Chapter 5' name a part of the content. The number in them is
+    # never a demographic bucket and never a market.
+    if content_scope(label):
+        return cut_def, (f"content-scope label {label!r} - a slice of "
+                         f"the parent's own audience, never a pin")
+    # A label that IS about family size ('3 children', 'Parents of 3')
+    # is the parent's NUMBER_OF_CHILDREN bucket, a pin like any other.
+    _fam = family_size_pin(df_source, label)
+    if _fam:
+        promoted = dict(cut_def)
+        promoted["kind"] = "demo"
+        promoted["pin_category"] = _fam[0]
+        promoted["pin_buckets"] = list(_fam[1])
+        return promoted, (f"promoted family-size label {label!r} -> "
+                          f"{_fam[0]} pin {_fam[1]!r}")
 
     def _flat(s):
         return re.sub(r"[^a-z0-9]", "", str(s).casefold())
@@ -748,6 +770,10 @@ def _extract_brand_from_behavioral_label(cut_def: dict) -> str:
     """
     label = str(cut_def.get("name_label")
                 or cut_def.get("label") or "").strip()
+    # 'Season 3 Viewers' names no brand: the season words leave before
+    # the brand is read (2026-11-11; the '3' matched a family-size row).
+    _scope_words = SCOPE_FILLER if content_scope(label) else ()
+    label = strip_content_scope(label)
     if not label:
         return ""
     _STOP = {
@@ -775,7 +801,8 @@ def _extract_brand_from_behavioral_label(cut_def: dict) -> str:
     }
     toks = [t for t in re.split(r"[^a-z0-9]+", label.casefold()) if t]
     kept = [t for t in toks
-            if t not in _STOP and t not in _BEHAVIORAL_LABEL_WORDS]
+            if t not in _STOP and t not in _BEHAVIORAL_LABEL_WORDS
+            and t not in _scope_words]
     return " ".join(kept).strip()
 
 
@@ -818,7 +845,7 @@ def _find_parent_brand_ceiling(df_source, brand_query: str,
     cats_upper = df_source[cat_col].astype(str).str.upper().str.strip()
     for idx, r in df_source.iterrows():
         cat = str(cats_upper.iat[df_source.index.get_loc(idx)]).strip()
-        if cat in _SKIP_CATS:
+        if cat in _SKIP_CATS or is_demographic_category(cat):
             continue
         val = str(r.get(val_col, "")).strip()
         if not val:
@@ -1517,7 +1544,7 @@ def _find_defining_brand_rows(df, brand_query: str, subject: str):
     cats_upper = df["Column"].astype(str).str.upper().str.strip()
     for idx in df.index:
         cat = cats_upper.at[idx]
-        if cat in _SKIP_CATS:
+        if cat in _SKIP_CATS or is_demographic_category(cat):
             continue
         val = str(df.at[idx, "Value"]).strip()
         if not val:
@@ -2230,8 +2257,29 @@ def synthesize_demo_cut(
 
         audience["cohort_fraction"] = cf
         audience["deterministic_cf"] = False
-        print(f"[addon-cut]    reasoned cohort_fraction={cf:.4f} "
-              f"(behavioral - no deterministic source)")
+        # 2026-11-11: a season / episode / part / volume / chapter cut
+        # is sized from the parent's own row for that scope when the
+        # parent carries one (the row IS the count of the parent's
+        # people in the scope); otherwise the reasoned fraction stands.
+        _scope = content_scope(str(cut_def.get("name_label")
+                                   or cut_def.get("label") or ""))
+        _scope_cf, _scope_val, _scope_cat, _scope_bp = (
+            scope_row_fraction(df_source, _scope, subject)
+            if _scope else (None, "", "", 0.0))
+        if _scope_cf:
+            override_with_deterministic_fraction(
+                audience, _scope_cf,
+                note=(f"parent {_scope_cat} row {_scope_val!r} "
+                      f"@ {_scope_bp:.4f}%"))
+            cf = _scope_cf
+            print(f"[addon-cut]    content scope {_scope['text']!r}: "
+                  f"cohort_fraction={cf:.4f} from the parent's own "
+                  f"{_scope_cat} row {_scope_val!r}")
+        else:
+            print(f"[addon-cut]    reasoned cohort_fraction={cf:.4f} "
+                  + (f"(content scope {_scope['text']!r} - the parent "
+                     f"carries no row for it)" if _scope else
+                     "(behavioral - no deterministic source)"))
     else:
         det_cf, pin_shares, det_note = deterministic_cut_fraction(
             df_source, cut_def, universe_labels=(subject, source_label))
