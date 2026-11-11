@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "ba9eceb2052e5c1316942929edf326e555faa898aecc5c4e6f4ca47a930db494",
+ "content_hash": "fde457e2cb4ea6ee025606a929e0904e4abaecc7e9e877a02e708c9400a759f3",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1078,7 +1078,36 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "behavior_crosstab",
+   "decided": "2026-11-11",
+   "statement": "'Chime users who shop at Target and are interested in technology', 'of Wicked Tuna viewers, how many use Hulu and engage with Ford', 'cross Target shoppers with Netflix and Costco in this profile' ask for the group inside ONE audience that does every behavior named. It is a question, a read, never an order: only 'build', 'run' or 'create' a profile or a cut of that group is an order, and that goes to the build flow at the cut's own price. A behavior is a brand row in a behavioral category, an interest row, a whole category, or a demographic bucket that narrows the group. The audience is the profile the words name, else the profile on screen when the words point at it or name no audience; 'people who' and 'US adults who' name their own universe and are not this read. Each behavior is its row on THAT profile, in the category the verb points at; a behavior the profile does not carry is said plainly with the nearest rows offered and is never swapped for another row. The file carries each behavior's own share of the audience, never how the behaviors sit together, so the group is never the single shares multiplied and never the smallest single share. It is one figure that never exceeds the smallest single share, sits above the multiplied figure only when the behaviors over-index together in this audience, stays in the low part of that range, and is the same in any order the behaviors are named. The same group is sized the same way in the US as a whole, so its index is like for like. The answer states the size in US people and as a share of the audience, the group's share of the US, the index with its plain comparison, each behavior on its own beside it, each pair when there are three, one line on what sets the size, the rows it read, and the offer to build the group as a cut or put it on a deck page. People in the data are the share times the profile's count in the data; US people are that count over 10,000,000 times 329,900,000; no count ends in a zero. A figure already stated for a profile and a group is on record and is restated exactly, in any wording; a narrower group never exceeds a wider one on record. For example, on Chime Banking Customers, Jan 1 to Dec 31, 2025: 84.4% shop at Target (index 285), 88.9% have an interest in Technology (index 232), and 76.5% do both, 6,864,526 US people, against 14.9% of the US, index 513 (5.1x the US average). When the cross has not been read yet and the page carries only the single rows, never put a made-up joint percentage in an answer: state the single rows flat and offer the cross as its own read.",
+   "match_terms": [
+    "cross-tab",
+    "crosstab",
+    "cross tab",
+    "cross them",
+    "who shop at",
+    "and shop at",
+    "and are interested in",
+    "who are interested in",
+    "and have an interest in",
+    "all three",
+    "do both",
+    "in this profile",
+    "behaviors",
+    "and eat at",
+    "who bank with",
+    "any qsr",
+    "and drive a",
+    "who use",
+    "and use"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-11T18:16:10Z"
+ "generated_at": "2026-11-11T18:21:14Z"
 }
