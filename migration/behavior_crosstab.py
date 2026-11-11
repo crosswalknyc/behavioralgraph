@@ -719,6 +719,64 @@ def _law_group(cond, side, matched_only=False):
     return {cond['key']: ties.Row(v, cond.get('law') or 'soft', cond.get('loading') or 0.0, col, csum)}
 
 
+def _shares_of(c):
+    """One bound behavior with its shares (fractions), index and law; None
+    when it carries no share."""
+    p = _num(c.get('pct'))
+    if p is None:
+        return None
+    g = _num(c.get('gp'))
+    d = dict(c)
+    d['law'] = c.get('law') or 'soft'
+    if d.get('kind') == 'category':
+        d['share'] = ties.reach_share(list(_law_group(dict(d, share=0), 0).values()))
+        gp_rows = list(_law_group(d, 1).values())
+        d['gp_share'] = ties.reach_share(gp_rows) if gp_rows else None
+        d['like_share'] = ties.reach_share(list(_law_group(d, 0, True).values())) if gp_rows else None
+        d['index'] = c.get('index_stated') if c.get('index_stated') is not None else _index(d['like_share'], d['gp_share'])
+    else:
+        d['share'] = max(0.0, min(1.0, p / 100.0))
+        d['gp_share'] = (max(0.0, min(1.0, g / 100.0)) if g is not None and g > 0 else None)
+        d['like_share'] = d['share']
+        d['index'] = _index(d['share'], d['gp_share'])
+    d['times'] = times_of(d['index'])
+    d['loading'] = ties.soft_loading(d['index']) if d['law'] == 'soft' else 0.0
+    return d
+
+
+def _counts_of(d, n, salt):
+    """The people behind one behavior: in the data ('raw') and in the US
+    ('us'). A single row prints the profile file's own counts, exactly as
+    the page does."""
+    want = d['share'] * n
+    fr, fu = d.get('file_raw'), d.get('file_us')
+    if n and fr and abs(fr - want) <= max(2.0, want * 0.001):
+        d['raw'] = int(fr)
+        d['us'] = int(fu) if fu and abs(fu - fr / PANEL * US_POP) <= max(40.0, fu * 0.001) else int(round(fr / PANEL * US_POP))
+    else:
+        d['raw'] = _natural(want, salt, d['key'], 'raw') if n else 0
+        d['us'] = _natural(d['raw'] / PANEL * US_POP, salt, d['key'], 'us') if n else 0
+    return d
+
+
+def single(condition, sample, *, salt=''):
+    """One behavior on its own, with the same share and the same people
+    counts a cross prints for it (2026-11-11): the figure a chat answer
+    quotes for 'how many people is that' is the cross's own, never a
+    second sum. None when the behavior carries no share."""
+    try:
+        d = _shares_of(condition) if isinstance(condition, dict) and condition.get('key') else None
+        if d is None:
+            return None
+        try:
+            n = int(round(float(sample or 0)))
+        except (TypeError, ValueError):
+            n = 0
+        return _counts_of(d, n, salt)
+    except Exception:
+        return None
+
+
 def cross(conditions, sample, *, held=None, salt=''):
     """The read for a group of behaviors on one profile.
 
@@ -739,26 +797,10 @@ def cross(conditions, sample, *, held=None, salt=''):
     for c in conditions or ():
         if not isinstance(c, dict) or not c.get('key') or c['key'] in seen:
             continue
-        p = _num(c.get('pct'))
-        if p is None:
+        d = _shares_of(c)
+        if d is None:
             continue
         seen.add(c['key'])
-        g = _num(c.get('gp'))
-        d = dict(c)
-        d['law'] = c.get('law') or 'soft'
-        if d.get('kind') == 'category':
-            d['share'] = ties.reach_share(list(_law_group(dict(d, share=0), 0).values()))
-            gp_rows = list(_law_group(d, 1).values())
-            d['gp_share'] = ties.reach_share(gp_rows) if gp_rows else None
-            d['like_share'] = ties.reach_share(list(_law_group(d, 0, True).values())) if gp_rows else None
-            d['index'] = c.get('index_stated') if c.get('index_stated') is not None else _index(d['like_share'], d['gp_share'])
-        else:
-            d['share'] = max(0.0, min(1.0, p / 100.0))
-            d['gp_share'] = (max(0.0, min(1.0, g / 100.0)) if g is not None and g > 0 else None)
-            d['like_share'] = d['share']
-            d['index'] = _index(d['share'], d['gp_share'])
-        d['times'] = times_of(d['index'])
-        d['loading'] = ties.soft_loading(d['index']) if d['law'] == 'soft' else 0.0
         conds.append(d)
     conds.sort(key=lambda d: d['key'])
     if len(conds) < 2 or len(conds) > MAX_CONDITIONS:
@@ -769,15 +811,7 @@ def cross(conditions, sample, *, held=None, salt=''):
         n = 0
     by_key = {d['key']: d for d in conds}
     for d in conds:
-        # a single row prints the profile file's own counts, exactly as the page does
-        want = d['share'] * n
-        fr, fu = d.get('file_raw'), d.get('file_us')
-        if n and fr and abs(fr - want) <= max(2.0, want * 0.001):
-            d['raw'] = int(fr)
-            d['us'] = int(fu) if fu and abs(fu - fr / PANEL * US_POP) <= max(40.0, fu * 0.001) else int(round(fr / PANEL * US_POP))
-        else:
-            d['raw'] = _natural(want, salt, d['key'], 'raw') if n else 0
-            d['us'] = _natural(d['raw'] / PANEL * US_POP, salt, d['key'], 'us') if n else 0
+        _counts_of(d, n, salt)
     held = held if isinstance(held, dict) else {}
     held_sets = {k: frozenset(k.split(' & ')) for k in held}
     shares = {frozenset([d['key']]): d['share'] for d in conds}

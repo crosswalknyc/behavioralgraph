@@ -109,6 +109,15 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         _dw.scrub_payload(raw)
     except Exception:
         pass
+    # A people count never passes the US population or the audience it is
+    # part of (2026-11-11: "about 392,312,555 insurance-active people" on an
+    # audience of 8,977,404). Corrected in place to the figure the answer
+    # carries, or the sentence goes; the reply always ships. Fail-safe.
+    try:
+        from . import people_bounds as _pb
+        _pb.guard_payload(raw)
+    except Exception:
+        pass
     # Reply shape (2026-10-06): chat answers read as answers, not
     # reports (no capital-letter headers, definitions out of the
     # sentence). Analyze surface only; briefs and guidance keep shape.

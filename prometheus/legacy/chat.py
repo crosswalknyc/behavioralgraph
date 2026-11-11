@@ -15783,6 +15783,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         # shaper runs here (2026-10-06).
         from prometheus import reply_shape as _rs
         _rs.shape_finished_read(payload, held)
+        __import__('prometheus.people_bounds', fromlist=['guard_payload']).guard_payload(payload)   # a people count never passes the US population or its own audience (2026-11-11)
         _stages = payload.pop('_stages_ms', None)
         if payload.get('success'):
             _done = {**head,

@@ -3808,6 +3808,14 @@ def scrub_user_text(text):
     except Exception as _fx:
         _faults.note('analysis', _fx)
     s = re.sub(r'[ \t]{2,}', ' ', s)
+    # A people count never passes the US population or the base its own
+    # sentence names (2026-11-11, prometheus.people_bounds): the sum done
+    # right, or the sentence dropped. One rule, every exit that calls this.
+    try:
+        from prometheus import people_bounds as _pb
+        s = _pb.clean(s)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     # An index of four digits or more reads with its separator (2026-11-11:
     # a deck card printed "index 5548"). One rule, every exit that calls this.
     try:

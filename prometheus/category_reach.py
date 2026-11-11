@@ -415,12 +415,42 @@ _BLOCK_HEAD = (
     "and the index (100 = US average). A percent or an index for a whole category or a group of brands is THIS "
     "figure: never add brand rows together, never average them, never use the largest brand. State it flat: the "
     "percent with one decimal, the index as a whole number with the plain comparison beside it (\"index 212, "
-    "2.1x the US average\"). Never describe how the figure is produced.")
+    "2.1x the US average\"). Never describe how the figure is produced. A line that carries \"projected US people\" "
+    "gives the people behind that share: quote that count exactly as written; never multiply a share by the audience "
+    "yourself.")
 
 
-def _line(r, label, subject, members=None):
+def people_for(df, genpop_map, s3_key, *, column=None, group=None):
+    """The US people behind a category's reach (or a named group's) on one
+    profile, or None (2026-11-11: an answer was left to multiply the share
+    by the audience itself and printed 392,312,555 people on an audience
+    of 8,977,404). It is the count a cross of behaviors prints for the
+    same category on its own line (migration.behavior_crosstab.single:
+    the same share, the same profile, the same digits), so the chat
+    answer and the cross never state two figures for one group."""
+    try:
+        if df is None or not s3_key:
+            return None
+        from migration import behavior_crosstab as bx
+        if column:
+            cond = bx.category_condition(df, bx.profile_context(df, genpop_map or {}), column)
+        elif group and group.get('reach') is not None:
+            cond = {'key': f"GROUP|{label_key(group.get('name'))}", 'kind': 'brand', 'pct': float(group['reach']), 'law': 'brand'}
+        else:
+            cond = None
+        d = bx.single(cond, bx.sample_of(df), salt=str(s3_key)) if cond else None
+        us = int(d.get('us') or 0) if d else 0
+        return us if us > 0 else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _line(r, label, subject, members=None, people=None):
     aud = audience_phrase(subject)
     s = f"  {label}: {r['reach']:.1f}% of {aud} engage with at least one {label} brand"
+    if people:
+        s += f"; projected US people {int(people):,} (quote verbatim)"
     if r.get('genpop') is not None:
         s += f"; US {r['genpop']:.1f}%"
     if r.get('index') is not None:
@@ -451,14 +481,15 @@ def block(df, genpop_map, text, *, s3_key='', subject=None, reason=None):
             r = cr.category_rollups(_only(df, col), genpop_map, subject).get(col)
             if not r:
                 return ''
-            return _BLOCK_HEAD + '\n' + _line(r, col.lower(), subject)
+            return _BLOCK_HEAD + '\n' + _line(r, col.lower(), subject, people=people_for(df, genpop_map, s3_key, column=col))
         # one brand by name is a brand row, not a group
         if cr.resolve_brands(df, [g], genpop_map, subject)[0]:
             return ''
         r = group_figure(df, genpop_map, g, s3_key=s3_key, subject=subject, reason=reason, by='chat')
         if not r:
             return ''
-        return _BLOCK_HEAD + '\n' + _line(r, r['name'], subject, r.get('members'))
+        return _BLOCK_HEAD + '\n' + _line(r, r['name'], subject, r.get('members'),
+                                          people=people_for(df, genpop_map, s3_key, group=r))
     except Exception:
         traceback.print_exc()
         return ''

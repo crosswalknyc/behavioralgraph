@@ -55,7 +55,7 @@ _HEADER_SOURCE = (
 _NUM_RX = re.compile(r"(?<![\w.,/$])(\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$?\d+(?:\.\d+)?%|\$?\d{4,}(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:M|K|B|million|thousand|billion)\b)(?![\w,]|\.\d)")
 _HEADER_RX = re.compile(r"^\s*([A-Z][A-Z0-9 /&#'-]{5,}?)(?=\s*\(|:|\s-\s|$|\s+[a-z])")
 _TOKEN_RX = re.compile(r"\[\s*f(\d+)\s*\]|\{\{\s*f(\d+)\s*\}\}")
-_CALC_RX = re.compile(r"\[\s*calc\s*:\s*([^\]|]+?)\s*(?:\|\s*(pct1|pct2|pct|count|money|x|raw))?\s*\]", re.I)
+_CALC_RX = re.compile(r"\[\s*calc\s*:\s*([^\]|]+?)\s*(?:\|\s*(pct1|pct2|pct|count|money|x|raw|index|idx))?\s*\]", re.I)
 # a token opened and never closed before the end of its line, with the
 # sentence it hangs off (back to the previous sentence end or line start)
 _UNCLOSED_TOKEN_RX = re.compile(r"\[\s*(?:calc\s*:|f\d*)[^\]\n]*$", re.I | re.M)
@@ -89,7 +89,8 @@ def _is_date(text, m):
 PROMPT_RULE = (
     "FIGURES BY TOKEN (hard rule): every count, percent and dollar figure you state must come from the FIGURES table below, "
     "written as its token, e.g. [f12], or as arithmetic on tokens, e.g. [calc: f3/f1*100 | pct] for a share, [calc: f2-f5 | count] for a "
-    "difference, [calc: f7/f8 | x] for a multiple. Never retype digits for a count that is in the table. Never invent a figure that is "
+    "difference, [calc: f7/f8 | x] for a multiple, [calc: f1*f9/100 | count] for a percent of a count (a percent token is a percent: "
+    "divide by 100). When the table already carries the people count for a share, quote that token; never work it out again. Never retype digits for a count that is in the table. Never invent a figure that is "
     "not in the table or derivable from it by arithmetic; if the table lacks what the question needs, say so in words. Percents already "
     "in the table are quoted by token too."
 )
@@ -119,6 +120,10 @@ def _fmt(value, kind):
         return f"{v:.1f}x"
     if kind == 'raw':
         return f"{v:g}"
+    if kind in ('index', 'idx'):
+        # an answer that works an index out writes "| index" (2026-11-11: the token was not a kind this
+        # renderer knew and the reader saw "index that figure"); it prints as an index does, a whole number
+        return f"{int(round(v)):,}"
     return _fmt_count(v)
 
 
@@ -148,6 +153,7 @@ class Registry:
     def __init__(self):
         self.figures = []          # [{'id','value','kind','label','source','detail'}]
         self._by_key = {}
+        self.evidence = []         # the block texts the figures were read from (prometheus.people_bounds reads them)
 
     # ------------------------------------------------------------ build
     def add(self, value, label, source='view_data', detail='', kind='count'):
@@ -178,6 +184,8 @@ class Registry:
         return reg
 
     def add_text(self, text, default_source='view_data', limit=120):
+        if str(text or '').strip():
+            self.evidence.append(str(text))
         cur_src = default_source
         cur_hdr = ''
         for line in str(text or '').split('\n'):
@@ -226,22 +234,52 @@ class Registry:
 
     def _calc(self, expr, kind):
         names = {f['id']: f['value'] for f in self.figures}
+        kinds = {f['id']: f['kind'] for f in self.figures}
         node = ast.parse(expr.strip(), mode='eval')
         ops = {ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul, ast.Div: _op.truediv, ast.USub: _op.neg, ast.UAdd: _op.pos}
+        # A percent token is a percent (2026-11-11, the Chime Banking Customers
+        # insurance read: "[calc: f8*f4 | count]" on an audience of 8,977,404
+        # and a 43.7% share printed 392,312,555 people; Grace Yin's 42,957,147
+        # of a 1,368,062 file three days earlier was the same sum). The value
+        # is walked with its dimension (counts, percents, hundreds the model
+        # wrote): a count times a percent is that share of the count, a count
+        # over a percent is the base the share sits on. A /100, *0.01, *100 or
+        # /0.01 in the expression is that same conversion, so it is never
+        # applied twice, and it never moves a sum that holds no percent token.
+        def settle(v, dim):
+            n_count, n_pct, n_hundreds = dim
+            if n_pct > 0 and n_count >= 0:           # a share of a count; a share of a share is a percent
+                owed = max(0, (n_pct if n_count >= 1 else n_pct - 1) + min(0, n_hundreds))
+                return v / (100.0 ** owed), (n_count, n_pct, n_hundreds - owed)
+            if n_pct < 0 and n_count >= 1:           # the base a share sits on
+                owed = max(0, -n_pct - max(0, n_hundreds))
+                return v * (100.0 ** owed), (n_count, n_pct, n_hundreds + owed)
+            return v, dim
 
-        def ev(n):
+        def ev(n, scale=False):
             if isinstance(n, ast.Expression):
                 return ev(n.body)
             if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
-                return float(n.value)
+                c = float(n.value)
+                return c, (0, 0, (1 if c == 100.0 else (-1 if c == 0.01 else 0)) if scale else 0)
             if isinstance(n, ast.Name) and n.id in names:
-                return float(names[n.id])
+                k = kinds.get(n.id)
+                return float(names[n.id]), ((0, 1, 0) if k in ('pct', 'pct1', 'pct2') else ((1, 0, 0) if k in ('count', 'money') else (0, 0, 0)))
             if isinstance(n, ast.BinOp) and type(n.op) in ops:
-                return ops[type(n.op)](ev(n.left), ev(n.right))
+                if isinstance(n.op, ast.Mult):
+                    (a, da), (b, db) = ev(n.left, True), ev(n.right, True)
+                    return a * b, tuple(x + y for x, y in zip(da, db))
+                if isinstance(n.op, ast.Div):
+                    (a, da), (b, db) = ev(n.left), ev(n.right, True)
+                    return a / b, tuple(x - y for x, y in zip(da, db))
+                # a sum: each side is settled on its own first
+                (a, da), (b, db) = settle(*ev(n.left)), settle(*ev(n.right))
+                return ops[type(n.op)](a, b), (db if isinstance(n.left, ast.Constant) else da)
             if isinstance(n, ast.UnaryOp) and type(n.op) in ops:
-                return ops[type(n.op)](ev(n.operand))
+                a, da = ev(n.operand)
+                return ops[type(n.op)](a), da
             raise ValueError('unsupported expression')
-        v = ev(node)
+        v, _dim = settle(*ev(node))
         return v
 
     def render(self, text):
@@ -372,6 +410,15 @@ def compose(reply, registry, evidence_text=''):
                 text, _sw = _sm.bind_to_evidence(text, evidence_text)
             except Exception:
                 pass
+        # A people count never passes the US population or the audience it is
+        # part of, and where the evidence carries the figure the words print
+        # it (2026-11-11, prometheus.people_bounds). In place, before the read
+        # is checked, banked or filed.
+        try:
+            from . import people_bounds as _pb
+            text = _pb.guard_composed(text, list(getattr(registry, 'evidence', None) or []) + [str(evidence_text or '')])
+        except Exception:
+            traceback.print_exc()
         led = registry.ledger(text) if registry else []
         return text, led
     except Exception:
