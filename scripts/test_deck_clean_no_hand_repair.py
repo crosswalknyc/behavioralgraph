@@ -389,6 +389,25 @@ check("builder with a rewriter: the flagged line goes to the model pass and its 
       and plan_rw["_finish"].get("ready") is True and plan_rw["_finish"].get("counts", {}).get("readability_flags") == 0,
       str(plan_rw["_finish"])[:300])
 
+# every page carries a headline, whatever the plan left out
+nt = [{"type": "cover", "eyebrow": "X"}, {"type": "close", "eyebrow": "Close", "cards": [{"head": "Scale", "body": "b"}]},
+      {"type": "bars", "sub": "Share of the audience buying each brand.", "rows": [{"label": "Nike", "value": 34.3}]},
+      {"type": "bars", "rows": [{"label": "Nike", "value": 34.3}, {"label": "Zara", "value": 11.0}]},
+      {"type": "argument", "title": "Kept as written.", "cards": []}]
+nn = db._ensure_titles(nt, "A small audience that buys like a big one.")
+check("a page the plan left without a headline takes one (the deck's title on a cover or a close, its subhead, or its lead row)",
+      nt[0]["title"] == "A small audience that buys like a big one." and nt[1]["title"] == "A small audience that buys like a big one."
+      and nt[2]["title"] == "Share of the audience buying each brand." and "sub" not in nt[2]
+      and nt[3]["title"] == "Nike leads at 34.3%." and nt[4]["title"] == "Kept as written." and len(nn) == 4, str([x.get("title") for x in nt]))
+no_title = {"title": "This audience is small in count and premium in behavior.",
+            "slides": [copy.deepcopy(PLAN_FLAGGED["slides"][0]), copy.deepcopy(PLAN_FLAGGED["slides"][4]),
+                       {k: v for k, v in copy.deepcopy(PLAN_FLAGGED["slides"][7]).items() if k != "title"}]}
+out_nt = os.path.join(TMP, "no_title_close.pptx")
+db.render_insights_deck(no_title, out_nt, static_dir=os.path.join(ROOT, "static"))
+check("deck: a close page with no title in the plan is laid with a headline",
+      any(si == 3 and t == "This audience is small in count and premium in behavior." for si, t in texts_of(out_nt)),
+      str([t for si, t in texts_of(out_nt) if si == 3][:4]))
+
 # (e) the deck lane hands the finisher a model pass over only the flagged lines
 chat_src = open(os.path.join(ROOT, "prometheus", "legacy", "chat.py"), encoding="utf-8").read()
 check("deck lane: the deck job builds the rewriter from its own model call and passes it to the builder",

@@ -2033,9 +2033,7 @@ def _set_path(sl, path, value):
 def dedupe_plan_copy(slides, thin_phrases=True):
     """Retire repeated phrases in a slide plan, in place. Returns notes
     (one line per rewrite) for the job record. ``thin_phrases=False``
-    stops after the subhead templates: a phrase on three pages is then
-    left for the plain-English repair after the first layout, where a
-    model pass rewords the line instead of rebuilding it from figures."""
+    stops after the subhead templates."""
     notes = []
     # A. a subhead template shared across slides
     subs = [(i, sl["sub"]) for i, sl in enumerate(slides)
@@ -2536,6 +2534,41 @@ def assert_page_bases(slides):
     return [f"slide {i + 1}: {label}: {old}% should read {new}%" for i, label, old, new in changes]
 
 
+def _ensure_titles(slides, deck_title=""):
+    """Every page carries a headline (2026-11-11: a plan came back with a
+    close page that had none, and the page was laid with a blank band).
+    A page without a title takes its subhead when that is a short
+    sentence; a cover or a close takes the deck's own title; any other
+    page says what leads its own rows. Returns notes."""
+    notes = []
+    deck_title = str(deck_title or "").strip()
+    for i, sl in enumerate(slides):
+        if str(sl.get("title") or "").strip():
+            continue
+        t = str(sl.get("type") or "").lower()
+        sub = str(sl.get("sub") or "").strip()
+        title = ""
+        if t == "cover" and deck_title:
+            title = deck_title
+        elif sub and 3 <= len(sub.split()) <= 12 and ":" not in sub:
+            title = sub
+            sl.pop("sub", None)
+        elif t == "close":
+            title = deck_title or "What to take from this read."
+        else:
+            f = _lead_fact(sl)
+            if f and f[0] == "ranked":
+                title = f"{f[1]} leads at {f[2]}."
+            elif f and f[0] == "tile":
+                title = f"{f[1]} reads {f[2]}."
+            elif f and f[0] == "card":
+                title = f"{f[1]}."
+        if title:
+            sl["title"] = title if title.endswith((".", "!", "?")) else title + "."
+            notes.append(f"slide {i + 1}: the page had no headline; it takes one from its own content")
+    return notes
+
+
 # ---- plan copy, cleaned before layout (2026-11-11) ---------------------------
 def _clean_plan_copy(slides):
     """Stock filler out ("does the work"), joining words a title-caser
@@ -2639,9 +2672,18 @@ def render_insights_deck(plan, out_path, static_dir=None,
         except Exception:
             _rewriter = None
     try:
-        notes += dedupe_plan_copy(_slides, thin_phrases=_rewriter is None)
+        notes += _ensure_titles(_slides, str(plan.get("title") or ""))
     except Exception:
         pass
+    # With no model pass at hand the fixed rewrites run now. With one, the
+    # flagged lines go to it after the first layout, and these run only on
+    # what it leaves (a subhead rebuilt by rule from column names reads
+    # worse than the same line reworded).
+    if _rewriter is None:
+        try:
+            notes += dedupe_plan_copy(_slides)
+        except Exception:
+            pass
     # Shares agree with the counts beside them before a page is written.
     base_notes, base_left = [], []
     try:
@@ -2717,14 +2759,27 @@ def render_insights_deck(plan, out_path, static_dir=None,
             if mod is not None:
                 import shutil as _sh
                 _sh.copyfile(out_path, probe)
-                res = mod.fix_file(probe, _rewriter)
+                if _rewriter is not None:
+                    res = mod.fix_file(probe, _rewriter, rounds=0)      # the model pass alone
+                else:
+                    res = mod.fix_file(probe, None)
                 if res.get("before"):
                     n_plan = _apply_copy_edits_to_plan(_slides, res.get("edits") or [])
                     notes.append(f"plain-English check: {res.get('before')} flag(s) on the first layout, "
                                  f"{int(res.get('rewritten') or 0)} unit(s) rewritten, "
                                  f"{int(res.get('fallback') or 0)} repaired by rule, "
                                  f"{n_plan} line(s) changed in the plan")
-                    if n_plan:
+                    n_rule = 0
+                    if _rewriter is not None and res.get("after"):
+                        # what the model pass left: the fixed rewrites (subhead
+                        # templates, a closer on three pages), then the finisher
+                        try:
+                            rule_notes = dedupe_plan_copy(_slides)
+                            n_rule = len(rule_notes)
+                            notes += rule_notes
+                        except Exception:
+                            pass
+                    if n_plan or n_rule:
                         try:
                             notes += retire_fragment_subs(_slides)
                         except Exception:

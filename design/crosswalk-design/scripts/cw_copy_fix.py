@@ -978,7 +978,7 @@ def fix_file(path, rewriter=None, *, llm_passes: int = LLM_PASSES, rounds: int =
             if a["count"] == 0:
                 return res
         # the fixed repair for whatever is left
-        for _round in range(max(1, int(rounds))):
+        for _round in range(max(0, int(rounds))):      # rounds=0: the model pass only
             tg = _targets(a)
             edits = []
             for k, t in tg.items():
