@@ -47,7 +47,7 @@ import re
 import time
 import traceback
 
-__all__ = ['parse', 'wants', 'decline', 'declined', 'plan', 'answer', 'bank_get', 'bank_put', 'compute', 'BANK_PREFIX', 'is_clean']
+__all__ = ['parse', 'wants', 'decline', 'declined', 'plan', 'answer', 'pair_on_profile', 'bank_get', 'bank_put', 'compute', 'BANK_PREFIX', 'is_clean']
 
 BANK_PREFIX = 'system/insights_ledger/crosstab/'
 GENPOP_KEY = 'Gen_Pop_2026.csv'
@@ -805,6 +805,35 @@ def compute(profile_key, subject, df, conditions, *, host=None, username='', tie
                        'singles': {k: by_key[k]['pct'] for k in cell['members']}}
         bank_put(profile_key, subject, new, window=window, by=username, host=host)
     return res
+
+
+def pair_on_profile(profile_key, subject, rows, *, host=None):
+    """The share (a fraction) of one profile's audience on both of two
+    of its own rows ([(COLUMN, value), (COLUMN, value)]), from the same
+    estimator and the same record as every cross, or None. The split of
+    a base across two services (prometheus.cross_sizing) reads its
+    'both' here so the two reads agree. Writes nothing."""
+    try:
+        bx = _engine()
+        host = _host(host)
+        df = _frame(host, profile_key)
+        try:
+            gp_map = bx.genpop_map(_frame(host, GENPOP_KEY))
+        except Exception:
+            gp_map = {}
+        prof = bx.profile_rows(df)
+        conds = []
+        for col, val in rows:
+            cu, f = bx.norm_col(col), bx._fold(val)
+            row = next((r for r in prof if r['column'] == cu and bx._fold(r['value']) == f), None)
+            if row is None or row['pct'] >= bx.PIN_AT:
+                return None
+            conds.append(bx._condition(row, prof, gp_map))
+        res = compute(profile_key, subject, df, conds, host=host, record=False)
+        return float(res['share']) if res else None
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 # ----------------------------------------------------------------- answer

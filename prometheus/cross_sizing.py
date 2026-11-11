@@ -293,7 +293,7 @@ def target_share(base, target, ctx, host):
         except Exception:
             row = None
         if row:
-            return {'share': row[2] / 100.0, 'basis': 'base_profile', 'name': row[1]}
+            return {'share': row[2] / 100.0, 'basis': 'base_profile', 'name': row[1], 'column': row[0]}
     # 2) the target's profile: the base entity's row there, turned around
     try:
         from . import sizing_lane as _szl
@@ -378,6 +378,7 @@ def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window=''):
                 continue
             sh = _jitter(ts['share'], 'cross', q['base_entity'], tg)
             shares.append({'target': _display(tg, ts.get('name')), 'share': sh, 'basis': ts['basis'],
+                           'row': (ts.get('column'), ts.get('name')),
                            'count': _messy(sh * base['us'], 'cross-count', q['base_entity'], tg)})
         known = [s for s in shares if s.get('share') is not None]
         if not known:
@@ -396,8 +397,20 @@ def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window=''):
         both_n = neither_n = None
         if len(known) == 2:
             p1, p2 = known[0]['share'], known[1]['share']
-            a = _assoc(host, ctx, known[0]['target'], known[1]['target'], p2)
-            p_both = p1 * a
+            p_both = None
+            if base.get('source') == 'profile' and base.get('key') and all(s.get('basis') == 'base_profile' for s in known):
+                # both shares are the base profile's own rows: the people on both are the cross of
+                # those two rows read on that profile (prometheus.crosstab, 2026-11-11), so this
+                # split and "<base> who use A and B" state one figure
+                try:
+                    from . import crosstab as _xt
+                    p_both = _xt.pair_on_profile(base['key'], base['name'], [s['row'] for s in known], host=host)
+                except Exception:
+                    traceback.print_exc()
+                    p_both = None
+            if p_both is None:
+                a = _assoc(host, ctx, known[0]['target'], known[1]['target'], p2)
+                p_both = p1 * a
             p_both = min(min(p1, p2) * 0.985, max(max(0.0, p1 + p2 - 1.0), p_both))
             p_both = _jitter(p_both, 'cross-both', q['base_entity'], known[0]['target'], known[1]['target'], pp=0.0008)
             p_both = min(min(p1, p2) * 0.985, max(max(0.0, p1 + p2 - 1.0), p_both))

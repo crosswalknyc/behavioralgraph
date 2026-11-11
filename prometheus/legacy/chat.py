@@ -9118,7 +9118,7 @@ _PM_CLASSIFY_CANDIDATES = (
     + ['claude-haiku-4-5-20251001', 'claude-haiku-5-5'])
 
 
-_PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify', 'reader_notes'))
+_PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify', 'reader_notes', 'crosstab_ties'))
 
 
 _pm_resolved_classify = {'name': None}

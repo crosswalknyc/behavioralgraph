@@ -372,6 +372,16 @@ xt._may_record = _real_may
 check(ties == {b_tech['condition']['key']: 0.0, b_target['condition']['key']: 1.0} and len(calls) == 1 and 'Chime Banking Customers' in calls[0],
       "the reasoning step answers per behavior, by the names it was given", ties)
 
+# the split of a base across two services states the same 'both' as the cross of the two rows
+from prometheus import cross_sizing as cx  # noqa: E402
+BANK.clear()
+split = cx.answer("how many Chime Banking Customers are there, of those how many are on Netflix, on Hulu", {}, host=HOST)
+pairx = xt.answer("Chime Banking Customers who use Netflix and Hulu", {}, host=HOST, user=PAYING)
+both_share = (split or {}).get('sizing', [{}])[0].get('both', 0) / max(1, (split or {}).get('sizing', [{}])[0].get('us', 1))
+check(split and pairx and abs(both_share * 100 - pairx['crosstab']['share_pct']) < 0.6,
+      "one figure for the people on both, in the split and in the cross", (both_share, pairx and pairx['crosstab']['share_pct']))
+check(split and 'On both' in split['reply'] and 'On neither' in split['reply'], "the split keeps its own shape", split and split['reply'][:200])
+
 # ------------------------------------------------------------ [7] a whole category
 print("[7] a whole category takes its share from the category reach module")
 whole = bind('QSR', 'eat', whole=True)
