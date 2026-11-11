@@ -1,10 +1,10 @@
 {
  "version": 1,
  "content_hash": "d421c107e7c2e4aef4a9e5bf56b105d72a750517962f915a896191883d0ea97b",
- "examples_hash": "8a4f564c5cd01293c951dfea6c54f745bec414cb6a4ee1741ca6ef41b97c03dd",
+ "examples_hash": "bef95290e38e4c1f37a57a62ad77210f35d0a54fef2e38fe36471e4278401fbf",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
-  ".cursor/rules/avid-and-cut-skin-rules.mdc": "ea9a8bdbc7c87b377e3e9a2433dd277c38f34f422d9a8e11a35380f37708897b",
+  ".cursor/rules/avid-and-cut-skin-rules.mdc": "793d90b9790bd8c2b6822f6abd36d2586f34ce6b5261af02b002da082acb03bf",
   ".cursor/rules/canonical-brand-category.mdc": "e02dbf7c1a29d819029e94cf49e96027ab7447a428a23e2740b25f9eb6b26d7e",
   ".cursor/rules/crosswalk-audience-vetting-framework.mdc": "2cc05b465e981135b41bae87fcedfff83ff82289ed97ad3e403574bced7a9ba0",
   ".cursor/rules/crosswalk-brand-standards.mdc": "4333c8dcd9da911f73a4d8859e184154c4430fb44e74722b6e1f4954ac406ee4",
@@ -187,7 +187,7 @@
   "sponsorship_fit": {
    "subject": "Howie Mandel",
    "title": "Howie Mandel | Jan 1 2025 to Dec 31 2025",
-   "q": "what brand partnerships make sense for Howie Mandell?",
+   "q": "what brand partnerships make sense for howie mandel?",
    "text": "On Howie Mandel:\n\nTheme parks and live experience is the sharpest partnership lane on this file: Universal Orlando Resort runs 32.4% of the audience at index 901, or 1,302,276 US people.\n\nProjected US audience reachable through a Howie Mandel partnership: 4,027,331, Universal Orlando Resort audience: 1,302,276, Carfax users: 1,852,929.\n\nPartnership category mix, Jan 1 2025 to Dec 31 2025 (share of the audience's above-average brand purchase and usage signals)\n- Theme parks and live experience: 18.3% share, 32.4% penetration. Universal Orlando Resort (901) and Universal Studios Hollywood (637) lead\n- Footwear and ..."
   },
   "subscriber_churn": {
