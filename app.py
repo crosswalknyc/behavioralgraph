@@ -16723,6 +16723,48 @@ def get_csv_data(s3_key):
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
 
 
+# Category reach (2026-11-11, Armine): for each behavioral category on a
+# profile, the share of the audience with at least one brand in it, the
+# same share for the US, and the index. One implementation
+# (migration/category_rollup.py) feeds this route, the insights deck and
+# Prometheus, so the three always print the same figure. Read-only and
+# computed when asked; nothing is written to a profile or to Gen Pop.
+_CATEGORY_REACH_CACHE = {}
+
+
+@app.route('/api/profile-iq/category-reach/<path:s3_key>')
+@requires_auth
+def profile_category_reach(s3_key):
+    ok, err = _require_profile_run_access(s3_key)
+    if not ok:
+        return err
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    if 'gen_pop' in str(s3_key).lower():
+        return jsonify({'success': True, 's3_key': s3_key, 'categories': {}})
+    try:
+        import prometheus_analysis as _pma
+        from migration import category_rollup as _cr
+        df, etag = _pma.load_profile_df(s3_client, S3_BUCKET, s3_key)
+        gp = _pma.load_genpop_map(s3_client, S3_BUCKET)
+        ck = (s3_key, etag, _pma._genpop_current_etag())
+        cats = _CATEGORY_REACH_CACHE.get(ck)
+        if cats is None:
+            roll = _cr.category_rollups(df, gp)
+            cats = {c: _cr.public(r) for c, r in roll.items()}
+            if len(_CATEGORY_REACH_CACHE) > 200:
+                _CATEGORY_REACH_CACHE.clear()
+            _CATEGORY_REACH_CACHE[ck] = cats
+        resp = jsonify({'success': True, 's3_key': s3_key, 'categories': cats})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
+    except Exception as e:
+        if 'NoSuchKey' in str(e):
+            return jsonify({'success': False, 'error': 'Profile not found'}), 404
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'Category figures are not available for this profile right now.'}), 500
+
+
 @app.route('/api/profile-run-metadata/<path:s3_key>')
 @requires_auth
 def get_profile_run_metadata(s3_key):

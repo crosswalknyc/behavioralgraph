@@ -247,6 +247,10 @@ def load_profile_df(s3_client, bucket, s3_key):
     etag = (resp.get('ETag') or '').strip('"')
     content = resp['Body'].read().decode('utf-8', 'replace')
     df = pd.read_csv(io.StringIO(content)).fillna('')
+    try:
+        df.attrs['s3_key'] = s3_key   # a named group of brands is kept per profile (prometheus.category_reach)
+    except Exception:
+        pass
     with _cache_lock:
         _df_cache[s3_key] = (etag, time.time(), df)
         if len(_df_cache) > _DF_CACHE_MAX:
@@ -588,7 +592,21 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
     budget = max_chars - len(peer_txt)
     if len(out) > budget:
         out = out[:budget] + "\n  [digest truncated]"
-    return out + peer_txt
+    # Category reach (2026-11-11, Armine): each behavioral category's
+    # share of the audience with at least one brand, the US share and
+    # the index, from the one shared rollup. Rides after the cap so a
+    # long profile never loses it.
+    reach_txt = _category_reach_section(df, genpop_map, name)
+    return out + (('\n' + reach_txt) if reach_txt else '') + peer_txt
+
+
+def _category_reach_section(df, genpop_map, name):
+    try:
+        from prometheus import category_reach as _cre
+        return _cre.digest_section(df, genpop_map, name)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+        return ''
 
 
 def _peer_norms_section(meta, genpop_map, norms, demo_rows, beh_rows):
@@ -891,10 +909,26 @@ def _entity_lines(val, rows, max_rows_per_entity=4, who='this audience'):
 
 def build_named_entity_rows(df, genpop_map, text, limit=8,
                             max_rows_per_entity=4):
+    """Verbatim base-file rows for entities the question names, plus,
+    for a category-level ask ("what percent engage with workwear
+    brands", "how does the automobile category index"), the bound
+    category reach from the shared rollup (2026-11-11). Returns ''
+    when the question names nothing the file carries. Never raises."""
+    core = _named_entity_rows_core(df, genpop_map, text, limit, max_rows_per_entity)
+    reach = ''
+    try:
+        from prometheus import category_reach as _cre
+        reach = _cre.block(df, genpop_map, text)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+    return (core + '\n\n' + reach) if (core and reach) else (core or reach)
+
+
+def _named_entity_rows_core(df, genpop_map, text, limit=8,
+                            max_rows_per_entity=4):
     """Verbatim base-file rows for entities the question names, with
     the file's own projected count and mirrored categories collapsed
-    to one line. Returns '' when the question names nothing the file
-    carries. Never raises."""
+    to one line."""
     try:
         if df is None or not str(text or '').strip():
             return ''
@@ -1250,7 +1284,12 @@ def digest_code_version():
         src = ''.join(inspect.getsource(f) for f in (
             _norm_cat, _norm_brand, _bp_col, _fuzzy_col, _parse_bp,
             _profile_meta, _norm_lookup, _fmt_row, build_profile_digest,
-            _peer_norms_section))
+            _peer_norms_section, _category_reach_section))
+        try:
+            from prometheus import category_reach as _cre
+            src += f"|reach:{_cre.cr.RHO}:{_cre.cr.CAP}:" + inspect.getsource(_cre.digest_section)
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
         _digest_code_ver_memo = hashlib.sha1(
             src.encode('utf-8')).hexdigest()[:12]
     return _digest_code_ver_memo
@@ -1388,7 +1427,7 @@ _DIGEST_SHARED_TTL_S = 36 * 3600
 
 def _digest_shared_key(s3_key, etag, norms_ver, want_name=''):
     gp = _genpop_current_etag() or ''
-    h = hashlib.sha256(f"{s3_key}|{etag}|{norms_ver}|{gp}|{want_name or ''}".encode('utf-8')).hexdigest()[:24]
+    h = hashlib.sha256(f"{s3_key}|{etag}|{norms_ver}|{gp}|{want_name or ''}|{digest_code_version()}".encode('utf-8')).hexdigest()[:24]
     return f"{DIGEST_SHARED_PREFIX}{h}.json"
 
 
@@ -6490,7 +6529,7 @@ THE ARC (14 to 20 slides, in this shape)
 4-8. the audience case from the digest, one read per slide: interests (bars), the category retail or channel read (bars with show_index), the wallet or premium read (split_stats_bars or tiles_facts), adjacency or talent graph (bars), distribution and social (bars with show_index or tiles_facts). Pick the categories where the digest is strongest; every number on these slides comes from the digest.
 9-17. the behavior proof, one read per slide, reasoned from the subject's real-world scale: a hero slide (ground=accent) with the single sharpest behavioral stat; CTR or engagement vs the peer set (bars); search demand (split_stats_bars: unique searchers + query mix); second-screen or live-moment behavior (split_stats_bars) when the subject has live events; ad response (tiles_row: first-impression clicks, cart timing, repeat rate); same-session cross-shop (split_stats_bars); journeys (table: conversion with the subject on the path vs peers vs no talent); cart (table: start, complete, abandon, recover, AOV); spend per engager (hero_proof).
 18. paths: 9 to 12 example clickstream rows (kind: search/click/cart/play, url: realistic lowercase urls involving the subject and the relevant retail or platform domains, lit: true on cart and play rows).
-19. argument (ground=light): the buy. Four categories where the file and the journeys agree, each with its numbers.
+19. argument (ground=light): the buy. Four categories where the file and the journeys agree. Each card is a group of brands: "head" names the group, "brands" lists the digest brands in it, "body" gives two or three of them with their own figures (see CATEGORY FIGURES).
 20. close: four numbered cards restating the case, each ending on a number.
 
 Omit slides the data cannot carry (no live events means no second-screen slide; no avid cut means no avid tier tile). Never pad: a 14-slide deck that is all signal beats a 20-slide deck with filler.
@@ -6503,7 +6542,7 @@ HEADLINES FIT THE PAGE
 
 SLIDE TYPES (exact JSON shapes)
 - cover: {"type":"cover","eyebrow":"SUBJECT  \\u00b7  PREPARED FOR PARTNER  \\u00b7  CONTEXT","title":...,"intro":...,"stats":[{"big","label"}x3],"accent_index":1}
-- argument: {"type":"argument","ground":"dark"|"light","eyebrow","title","sub","cards":[{"head","body"}x4]}
+- argument: {"type":"argument","ground":"dark"|"light","eyebrow","title","sub","cards":[{"head","body","brands":optional list of digest brand names}x4]}
 - tiles_facts: {"type":"tiles_facts","eyebrow","title","sub","source","tiles":[{"big","label"}x3-4],"accent_index":int|null,"facts":[{"label","fig","note"}x0-6],"read":optional}
 - bars: {"type":"bars","ground":"light"|"dark","eyebrow","title","sub","source","show_index":bool,"value_suffix":"%"|"x"|"","rows":[{"label","value":number,"index":int optional,"accent":bool}x4-9],"read":one sentence}
 - split_stats_bars: {"type":"split_stats_bars","eyebrow","title","sub","source","stat_cards":[{"kicker","big","label","accent":bool}x2],"bars_title":"CAPS LABEL","value_suffix","rows":[...x4-8],"read"}
@@ -6521,6 +6560,10 @@ NUMBERS
 - Counts are viewers, users, people, accounts, engagers, searchers. Never households.
 - Externally reported figures (box office, league viewership records) are quoted at their reported precision and attributed in the sentence, never invented.
 - Peer comparisons name real peers from the subject's world and keep the subject believable inside the set: near the top on its strongest metric, not sweeping every row.
+
+CATEGORY FIGURES
+- A percent or an index for a whole category or a group of brands is never the sum of brand rows, never their average, and never the largest brand. For a whole digest category, quote its CATEGORY REACH figures exactly ("61.3% engage with at least one automobile brand, index 119, 1.2x the US average").
+- On the buy slide, and on any argument card that is a group of brands, the card carries "brands": every digest brand that belongs to the group, 3 to 10 names spelled exactly as the digest spells them. Do NOT write a percent or an index for the group as a whole anywhere on that slide: the renderer prints the share of the audience with at least one brand in the group, and its index, on each card.
 
 VOICE
 - Titles are sentences in sentence case and end with a full stop. They state the finding: "They over-shop the sneaker channel at 3x." not "Channel Overview". Aim for 6 to 10 words; never more than 12. No puns, rhetorical questions, teasers, colon reveals, or metaphor headers.

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "ff0c20ebd6690d9f518ca733aa0618e88b7064bba7ce10ceb8030cd058112dae",
+ "content_hash": "c71afa3ecf2342ef8de0632cd1333838148a69ea49d253a8ff1225d2143c8e4a",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1107,7 +1107,29 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "category_reach",
+   "decided": "2026-11-11",
+   "statement": "A percent or an index for a whole behavioral category (automobile, QSR, streaming) or for a named group of brands (workwear and tools, outdoor gear) is the category reach: the share of the audience that engages with at least one brand in the group, the same share for the US on the same brands, and the index of the first against the second, where 100 is the US average. It is never the sum of the brand rows, never their average and never the largest brand's figure. The context carries it: every profile carries a CATEGORY REACH line for each behavioral category, and an ask about a category or a group of brands carries the figure for that group with the brands it counts. Quote that figure exactly and state it flat: the percent with one decimal, the index as a whole number with the plain comparison beside it, as in '48.6% engage with workwear and tools brands, index 212 (2.1x the US average)'. Name two or three of the brands it counts with their own figures when that helps. Never say how the figure is produced. The same group on the same profile is the same figure in a deck, on the Profiles page and in an answer; a group keeps the brands it was first given. A group's figure is never below any one brand in it. Demographics, location and the interest list carry no category figure. When the context carries no figure for the group asked about, give the leading brands with their own figures and say the group figure can be added; never build one from the brand rows. On a deck slide whose cards are groups of brands, each card lists its brands and leaves the group's percent and index to the page, which prints them.",
+   "match_terms": [
+    "category",
+    "categories",
+    "engage with",
+    "at least one",
+    "overall percentage",
+    "overall percent",
+    "overall index",
+    "as a whole",
+    "group of brands",
+    "brands combined",
+    "category reach",
+    "workwear"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-11T18:25:06Z"
+ "generated_at": "2026-11-11T18:42:36Z"
 }

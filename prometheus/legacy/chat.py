@@ -18863,6 +18863,8 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         plan = pma.enforce_insights_plan(plan, subject)
         if not plan.get('slides'):
             raise RuntimeError('slide plan came back empty')
+        from prometheus import category_reach as _cre   # a card that is a group of brands carries its reach and index (2026-11-11)
+        plan = _cre.annotate_deck(plan, ctx, subject)
         _pm_deck_status_write(job_id, {**base, 'status': 'rendering'})
         stem = re.sub(r'[^A-Za-z0-9_]+', '_',
                       str(plan.get('filename_stem')

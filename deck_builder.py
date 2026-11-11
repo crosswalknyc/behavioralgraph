@@ -698,14 +698,29 @@ def _sl_cover(d, sl):
                  d.page, size=8, color=FOOTER)
 
 
-def _cards_2x2(d, s, cards, dark):
+def _cards_2x2(d, s, cards, dark, read=None):
     top = d.content_top
+    cards = cards[:4]
+    # A card that is a group of brands carries its category reach and
+    # index (2026-11-11, Armine: "the overall percentage and index for
+    # each category"). The figures come from the shared rollup
+    # (migration.category_rollup via prometheus.category_reach); the
+    # renderer only places them. All four cards or none, so the boxes in
+    # the row match.
+    figs = bool(cards) and all(str(c.get("reach") or "").strip()
+                               for c in cards)
     cw, ch_in = Inches(5.607), 1.82
-    for i, c in enumerate(cards[:4]):
+    rows = (len(cards) + 1) // 2
+    band_in = float(BAND) / 914400.0
+    read_h = _block_h(read, 11.5, band_in) if (figs and read) else 0.0
+    for i, c in enumerate(cards):
         x = M + (i % 2) * (cw + GUT)
         y = top + (i // 2) * (ch_in + 0.22)
         rrect(s, x, Inches(y), cw, Inches(ch_in),
               SLATE if dark else CARD)
+        if figs:
+            _reach_card(s, x, y, ch_in, c, dark)
+            continue
         txt(s, x + Inches(0.26), Inches(y + 0.22), Inches(0.7),
             Inches(0.42), f"{i + 1:02d}", size=30,
             color=SIGNAL if dark else OLIVE, light=True)
@@ -721,14 +736,85 @@ def _cards_2x2(d, s, cards, dark):
         txt(s, x + Inches(1.05), Inches(y + body_top), Inches(4.25),
             Inches(max(0.28, ch_in - body_top - 0.12)), body_txt,
             size=body_sz, color=BODY_DK if dark else BODY_LT)
+    if read_h:
+        y_end = top + rows * ch_in + (rows - 1) * 0.22
+        txt(s, M, Inches(y_end + 0.24), BAND, Inches(read_h), read,
+            size=11.5, color=BODY_DK if dark else BODY_LT)
+
+
+# the figure column of a group-of-brands card, and the copy column beside it
+_REACH_COL_W = 1.78
+_REACH_COPY_X = 0.26 + _REACH_COL_W + 0.20
+_REACH_COPY_W = 5.607 - _REACH_COPY_X - 0.26
+
+
+def _reach_card(s, x, y, ch_in, c, dark):
+    """One group-of-brands card: the share of the audience with at least
+    one brand in the group (the one accent), the index and its plain
+    comparison under it, the group's name and copy beside them."""
+    ink = WHITE if dark else GRAPHITE
+    body = BODY_DK if dark else BODY_LT
+    fx = x + Inches(0.26)
+    txt(s, fx, Inches(y + 0.22), Inches(_REACH_COL_W), Inches(0.46),
+        str(c.get("reach") or ""), size=26, bold=True,
+        color=SIGNAL if dark else OLIVE)
+    idx = c.get("index")
+    if idx not in (None, ""):
+        txt(s, fx, Inches(y + 0.76), Inches(_REACH_COL_W), Inches(0.24),
+            f"Index {int(_num(idx))}", size=11.5, bold=True, color=ink)
+    if c.get("times"):
+        txt(s, fx, Inches(y + 1.02), Inches(_REACH_COL_W), Inches(0.40),
+            str(c.get("times")), size=10, color=body)
+    cx = x + Inches(_REACH_COPY_X)
+    head_h = max(0.36, _block_h(c.get("head") or "", 14, _REACH_COPY_W,
+                                bold=True))
+    txt(s, cx, Inches(y + 0.28), Inches(_REACH_COPY_W), Inches(head_h),
+        c.get("head") or "", size=14, bold=True, color=ink)
+    body_top = max(0.68, 0.28 + head_h + 0.08)
+    room = max(0.28, ch_in - body_top - 0.12)
+    body_txt, body_sz = _fit_body(c.get("body") or "", (11.5, 10.5, 10),
+                                  _REACH_COPY_W, room)
+    txt(s, cx, Inches(y + body_top), Inches(_REACH_COPY_W), Inches(room),
+        body_txt, size=body_sz, color=body)
+
+
+def _chrome_top(title, sub):
+    """Where the content band will start under this title and subhead
+    (the same arithmetic _Deck.chrome uses), so a slide can decide its
+    layout before the chrome is drawn."""
+    band_in = float(BAND) / 914400.0
+    t_size = _fit_size(str(title or ""), (34, 31, 28, 26), band_in, 2)
+    t_h = max(0.50, _block_h(title or "", t_size, band_in, bold=True))
+    top = max(2.330, 1.050 + t_h + 0.30)
+    if sub:
+        sub_y = max(1.846, 1.050 + t_h + 0.14)
+        s_h = max(0.30, _block_h(sub, 16, band_in))
+        top = max(2.330, sub_y + s_h + 0.22)
+        if _line_count(sub, 16, band_in) >= 2:
+            top = max(top, 2.750)
+    return top
 
 
 def _sl_argument(d, sl):
     dark = str(sl.get("ground") or "dark").lower() != "light"
     s = d.new_slide(dark=dark)
+    cards = _items(sl, "cards", 4)
+    sub, read = sl.get("sub"), None
+    if sl.get("_reach") and sl.get("read") and cards and all(
+            str(c.get("reach") or "").strip() for c in cards):
+        # The line that says what the figures mean sits under the cards
+        # when the page has room for it; otherwise it is the subhead.
+        read = str(sl.get("read"))
+        band_in = float(BAND) / 914400.0
+        rows = (len(cards) + 1) // 2
+        end = (_chrome_top(sl.get("title"), sub) + rows * 1.82
+               + (rows - 1) * 0.22 + 0.24 + _block_h(read, 11.5, band_in))
+        floor = 6.50 if sl.get("source") else 6.92
+        if end > floor:
+            sub, read = read, None
     d.chrome(s, sl.get("eyebrow") or "Argument", sl.get("title") or "",
-             dark=dark, sub=sl.get("sub"), source=sl.get("source"))
-    _cards_2x2(d, s, _items(sl, "cards", 4), dark)
+             dark=dark, sub=sub, source=sl.get("source"))
+    _cards_2x2(d, s, cards, dark, read=read)
 
 
 def _sl_tiles_facts(d, sl):
