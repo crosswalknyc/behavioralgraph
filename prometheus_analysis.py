@@ -1288,6 +1288,9 @@ def digest_code_version():
         try:
             from prometheus import category_reach as _cre
             src += f"|reach:{_cre.cr.RHO}:{_cre.cr.CAP}:" + inspect.getsource(_cre.digest_section)
+            # the one law's either/or columns change a category's reach (2026-11-11): stored digests refresh
+            from migration import behavior_ties as _bt
+            src += f"|ties:{','.join(sorted(_bt.EITHER_OR_COLS))}:{_bt.PICK}:{_bt.PICK_MAX}"
         except Exception as _fx:
             _faults.note('analysis', _fx)
         _digest_code_ver_memo = hashlib.sha1(

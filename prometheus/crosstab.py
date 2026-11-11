@@ -28,10 +28,14 @@ The read:
 - once stated, the figure is on the record for the profile and the
   group (``bank``), so a later chat, the page and a deck return the
   same number and a narrower group never exceeds a wider one;
-- it is a cross of two or more things: a custom ask at the standing
-  price, quoted by the sizing lane's one offer shape
-  (prometheus.priced_read). An order (build / run / create a profile or
-  a cut) is never this lane: the build flow takes it.
+- it is free when every behavior is a row on a profile the reader can
+  open (Jenna, the same day: "Build it on the page, free for anyone
+  with the profile"): no quote, no Approve, no wallet touch, on the
+  page (``page_options`` / ``page_read``, the Cross behaviors section in
+  the Data Cuts panel) and in chat alike, through one ``deliver``. A
+  reader who cannot open the profile keeps the standing custom ask
+  quote (prometheus.priced_read). An order (build / run / create a
+  profile or a cut) is never this lane: the build flow takes it.
 
 Fail-safe: ``parse`` returns None for anything that is not this ask and
 ``plan`` returns None when the audience has no profile, so the standing
@@ -47,9 +51,11 @@ import re
 import time
 import traceback
 
-__all__ = ['parse', 'wants', 'decline', 'declined', 'plan', 'answer', 'pair_on_profile', 'bank_get', 'bank_put', 'compute', 'BANK_PREFIX', 'is_clean']
+__all__ = ['parse', 'wants', 'decline', 'declined', 'plan', 'answer', 'pair_on_profile', 'deliver', 'page_options', 'page_read',
+           'can_open', 'load_profile', 'bank_get', 'bank_put', 'compute', 'BANK_PREFIX', 'is_clean']
 
 BANK_PREFIX = 'system/insights_ledger/crosstab/'
+LEDGER_SLOTS = 6
 GENPOP_KEY = 'Gen_Pop_2026.csv'
 
 _AUD_NOUN = (r"(?:users?|viewers?|fans?|customers?|shoppers?|subscribers?|audience|listeners?|buyers?|members?|"
@@ -414,6 +420,50 @@ def _frame(host, key):
     return _bf(host, key)
 
 
+_GP_MAP = {'frame': None, 'map': {}}
+_CTX = {}      # {profile key: (frame, US lookup, bind context)}: a search box asks many times in a row
+
+
+def load_profile(profile_key, host=None):
+    """(profile frame, US lookup, bind context) for one profile: the one
+    loader the chat answer and the page read share, so both see the same
+    rows and the same US figures."""
+    bx = _engine()
+    host = _host(host)
+    df = _frame(host, profile_key)
+    try:
+        gdf = _frame(host, GENPOP_KEY)
+    except Exception:
+        gdf = None
+    if gdf is None:
+        gp_map = {}
+    elif _GP_MAP['frame'] is gdf:
+        gp_map = _GP_MAP['map']
+    else:
+        gp_map = bx.genpop_map(gdf)
+        _GP_MAP['frame'], _GP_MAP['map'] = gdf, gp_map
+    hit = _CTX.get(profile_key)
+    if hit and hit[0] is df and hit[1] is gp_map:
+        return df, gp_map, hit[2]
+    bctx = bx.profile_context(df, gp_map)
+    if len(_CTX) > 24:
+        _CTX.clear()
+    _CTX[profile_key] = (df, gp_map, bctx)
+    return df, gp_map, bctx
+
+
+def can_open(user, profile_key, host=None):
+    """True when this reader can open the profile file (the profile
+    page's own gate). A host that cannot say is a no."""
+    try:
+        host = _host(host)
+        if not host.has('can_open_profile'):
+            return False
+        return bool(host.can_open_profile(user, profile_key))
+    except Exception:
+        return False
+
+
 def _host(host):
     if host is not None:
         return host
@@ -582,40 +632,6 @@ def bank_put(profile_key, subject, cells, *, window=None, by='', host=None, forc
         return 0
 
 
-# -------------------------------------------------------------- reasoning
-_TIES_SYSTEM = (
-    "You judge how behaviors relate inside one audience. For each behavior, say whether the people in this audience "
-    "who do it are the same kind of people who do the OTHER behaviors named: 'tied' when they plainly go together in "
-    "real life for this audience, 'loose' when there is some link, 'apart' when one says nothing about the others or "
-    "they are alternatives a person picks between. Be conservative: when unsure, answer 'apart'. "
-    "Return only JSON: {\"ties\": {\"<behavior exactly as given>\": \"tied\" | \"loose\" | \"apart\"}}.")
-_TIE_VALUE = {'tied': 1.0, 'loose': 0.5, 'apart': 0.0}
-
-
-def _reasoned_ties(host, subject, conds, username=''):
-    """{condition key: 0..1} from one compact reasoning call, or {}. It
-    can only loosen a tie the profile shows, never tighten one. Off for
-    probes, tests and with PM_CROSSTAB_REASONING=0."""
-    try:
-        if os.environ.get('PM_CROSSTAB_REASONING', '1') == '0' or not _may_record(username):
-            return {}
-        if host is None or not host.has('claude_data'):
-            return {}
-        names = {f"{c['label']} ({str(c.get('column') or '').title()})": c['key'] for c in conds}
-        user = f"Audience: {subject}. Behaviors: " + '; '.join(names.keys()) + '.'
-        data = host.claude_data(_TIES_SYSTEM, user, max_tokens=300, temperature=0.0, surface='crosstab_ties') or {}
-        ties = data.get('ties') if isinstance(data, dict) else None
-        out = {}
-        for label, v in (ties or {}).items():
-            k = names.get(label)
-            if k and str(v).strip().lower() in _TIE_VALUE:
-                out[k] = _TIE_VALUE[str(v).strip().lower()]
-        return out
-    except Exception:
-        traceback.print_exc()
-        return {}
-
-
 # ------------------------------------------------------------------- plan
 def _verb_for(cond, hint=''):
     bx = _engine()
@@ -690,25 +706,20 @@ def plan(text, ctx=None, *, host=None, history=None):
             return {'reply': _free("Which audience do you mean: " + _join_or(names) + "? Name one and I will size the group. "
                                    "Nothing has been pulled or charged.", '', [c for c in chips if c])}
         try:
-            df = _frame(host, prof['key'])
+            df, _gp_map, bctx = load_profile(prof['key'], host)
         except Exception:
             traceback.print_exc()
             return None
-        try:
-            gdf = _frame(host, GENPOP_KEY)
-        except Exception:
-            gdf = None
         bx = _engine()
         subject = _display(prof['name'])
-        gp_map = bx.genpop_map(gdf) if gdf is not None else {}
         bound, missing, everyone, phrases = [], [], [], {}
         todo = list(q['behaviors'])
         while todo:
             b = todo.pop(0)
-            r = bx.bind(df, b['name'], hint=b['hint'], whole=b['whole'], genpop=gp_map, gdf=gdf, subject=subject)
+            r = bx.bind(df, b['name'], hint=b['hint'], whole=b['whole'], context=bctx)
             if r['status'] == 'missing' and todo and not todo[0].get('verb') and not b['whole']:
                 # a row whose own name carries an "and" ('Health and Wellness', 'Bed Bath and Beyond')
-                joined = bx.bind(df, f"{b['name']} and {todo[0]['name']}", hint=b['hint'], genpop=gp_map, gdf=gdf, subject=subject)
+                joined = bx.bind(df, f"{b['name']} and {todo[0]['name']}", hint=b['hint'], context=bctx)
                 if joined['status'] == 'bound':
                     todo.pop(0)
                     r = joined
@@ -732,8 +743,8 @@ def plan(text, ctx=None, *, host=None, history=None):
                 nm = bx.pretty_value(mrow['name']) if str(mrow['name']).isupper() else str(mrow['name'])
                 nm = nm[:1].upper() + nm[1:]
                 if mrow.get('whole') and mrow.get('column'):
-                    lines.append(f"A whole-category figure for {bx.pretty_column(mrow['column'])} is not available on the "
-                                 f"{subject} profile yet. Name one brand in it and I will use that row.")
+                    lines.append(f"The {subject} profile has no {bx.pretty_column(mrow['column'])} rows to count as a whole "
+                                 f"category. Name one brand and I will use that row.")
                     continue
                 near = mrow.get('nearest') or []
                 if near:
@@ -758,17 +769,27 @@ def plan(text, ctx=None, *, host=None, history=None):
                     f"Those name the same row on the {subject} profile ({bound[0]['label']}, "
                     f"{bx.pretty_column(bound[0]['column'])}). Name a second behavior and I will cross them.", subject)}
             return None
-        order = sorted(bound, key=lambda c: c['kind'] == 'demo')     # as the reader named them, a demographic bucket last
-        doing = _join([phrases[c['key']] for c in order])
-        label = f"{subject} who {doing}"
-        lead = (f"I can size the group inside {subject} who {doing}: share of the audience, US people and the index "
-                f"against the US.")
-        return {'subject': subject, 'key': prof['key'], 'conditions': bound, 'phrases': phrases, 'order': [c['key'] for c in order],
-                'label': label, 'doing': doing, 'lead': lead, 'df': df, 'sample': bx.sample_of(df),
-                'window': bx.window_of(df), 'question': _squash(text)}
+        return _bound_plan(prof['key'], subject, df, bound, phrases, question=_squash(text))
     except Exception:
         traceback.print_exc()
         return None
+
+
+def _bound_plan(profile_key, subject, df, bound, phrases=None, question=''):
+    """The plan for behaviors already bound on a profile (the words in
+    chat, the picks on the page)."""
+    bx = _engine()
+    phrases = dict(phrases or {})
+    for c in bound:
+        phrases.setdefault(c['key'], _noun_phrase(c))
+    order = sorted(bound, key=lambda c: c['kind'] == 'demo')     # as the reader gave them, a demographic bucket last
+    doing = _join([phrases[c['key']] for c in order])
+    label = f"{subject} who {doing}"
+    lead = (f"I can size the group inside {subject} who {doing}: share of the audience, US people and the index "
+            f"against the US.")      # read only when the reader cannot open the profile (the standing quote)
+    return {'subject': subject, 'key': profile_key, 'conditions': bound, 'phrases': phrases, 'order': [c['key'] for c in order],
+            'label': label, 'doing': doing, 'lead': lead, 'df': df, 'sample': bx.sample_of(df),
+            'window': bx.window_of(df), 'question': question}
 
 
 def _swap(text, old, new):
@@ -783,23 +804,35 @@ def _swap(text, old, new):
 
 
 # ---------------------------------------------------------------- compute
-def compute(profile_key, subject, df, conditions, *, host=None, username='', ties=None, record=True, window=None):
+def compute(profile_key, subject, df, conditions, *, host=None, username='', record=True, window=None):
     """The engine's read for bound conditions on one profile, with the
     figures on the record held and the new ones put there. The one call
-    a chat answer, a page and a deck builder share."""
+    a chat answer, the page and a deck builder share."""
     bx = _engine()
     held_cells = bank_get(profile_key, host)
     held = {k: {'share': c.get('share'), 'gp': c.get('gp')} for k, c in held_cells.items() if isinstance(c, dict)}
-    res = bx.cross(conditions, bx.sample_of(df), held=held, ties=ties, salt=str(profile_key))
+    res = bx.cross(conditions, bx.sample_of(df), held=held, salt=str(profile_key))
     if not res:
         return None
+    # a count on the record is the count returned, to the person
+    for sk, cell in res['cells'].items():
+        hc = held_cells.get(sk)
+        if isinstance(hc, dict) and cell.get('on_record') and abs(float(hc.get('share') or 0) - cell['share']) < 1e-9:
+            if hc.get('us') and hc.get('raw'):
+                cell['us'], cell['raw'] = int(hc['us']), int(hc['raw'])
+                if cell.get('either') and len(cell['members']) == 2:
+                    a_, b_ = (next(c for c in res['conditions'] if c['key'] == m) for m in cell['members'])
+                    cell['either'] = {'share': a_['share'] + b_['share'] - cell['share'],
+                                      'raw': a_['raw'] + b_['raw'] - cell['raw'], 'us': a_['us'] + b_['us'] - cell['us']}
+    top = res['cells'][res['key']]
+    res['us'], res['raw'] = top['us'], top['raw']
     if record:
         by_key = {c['key']: c for c in res['conditions']}
         new = {}
         for sk, cell in res['cells'].items():
             if sk in held_cells:
                 continue
-            new[sk] = {'share': round(cell['share'], 6), 'gp': (round(cell['gp'], 6) if cell['gp'] is not None else None),
+            new[sk] = {'share': round(cell['share'], 9), 'gp': (round(cell['gp'], 9) if cell['gp'] is not None else None),
                        'index': cell['index'], 'raw': cell['raw'], 'us': cell['us'], 'members': cell['members'],
                        'labels': [by_key[k]['label'] for k in cell['members']],
                        'singles': {k: by_key[k]['pct'] for k in cell['members']}}
@@ -807,30 +840,41 @@ def compute(profile_key, subject, df, conditions, *, host=None, username='', tie
     return res
 
 
-def pair_on_profile(profile_key, subject, rows, *, host=None):
+def deliver(plan_, *, host=None, username='', question=''):
+    """Read a bound plan, put it on the record, and file the delivered
+    read. The chat answer and the page both end here, so a figure reads
+    the same wherever it is asked. Returns (result, reply text) or
+    (None, '')."""
+    res = compute(plan_['key'], plan_['subject'], plan_['df'], plan_['conditions'], host=host, username=username,
+                  window=plan_.get('window'))
+    if not res:
+        return None, ''
+    reply = render(res, plan_)
+    _persist_ledger(plan_, res, reply, question, username)
+    return res, reply
+
+
+def pair_on_profile(profile_key, subject, rows, *, host=None, username=''):
     """{'share' (a fraction), 'us'} for one profile's audience on both
     of two of its own rows ([(COLUMN, value), (COLUMN, value)]), from the
     same estimator and the same record as every cross, or None. The split of
     a base across two services (prometheus.cross_sizing) reads its
-    'both' here so the two reads agree. Writes nothing."""
+    'both' here so the two reads agree; a figure on the record wins, and
+    a figure delivered to a real reader goes on it (a probe writes
+    nothing)."""
     try:
         bx = _engine()
         host = _host(host)
-        df = _frame(host, profile_key)
-        try:
-            gp_map = bx.genpop_map(_frame(host, GENPOP_KEY))
-        except Exception:
-            gp_map = {}
-        prof = bx.profile_rows(df)
+        df, _gp_map, bctx = load_profile(profile_key, host)
         conds = []
         for col, val in rows:
-            cu, f = bx.norm_col(col), bx._fold(val)
-            row = next((r for r in prof if r['column'] == cu and bx._fold(r['value']) == f), None)
-            if row is None or row['pct'] >= bx.PIN_AT:
+            r = bx.bind(df, val, column=col, context=bctx)
+            if r['status'] != 'bound':
                 return None
-            conds.append(bx._condition(row, prof, gp_map))
-        res = compute(profile_key, subject, df, conds, host=host, record=False)
-        return {'share': float(res['share']), 'us': int(res['us'])} if res else None
+            conds.append(r['condition'])
+        res = compute(profile_key, subject, df, conds, host=host, username=username, record=bool(username),
+                      window=_engine().window_of(df))
+        return {'share': float(res['share']), 'us': int(res['us']), 'on_record': bool(res.get('on_record'))} if res else None
     except Exception:
         traceback.print_exc()
         return None
@@ -928,7 +972,203 @@ def public(res, plan_):
         'pairs': [{'labels': [conds[m]['label'] for m in cell['members']], 'share_pct': round(cell['share'] * 100.0, 2),
                    'us': cell['us'], 'in_data': cell['raw'], 'index': cell['index'], 'times': cell['times']}
                   for cell in res['cells'].values() if len(cell['members']) == 2 and len(res['conditions']) > 2],
+        # two behaviors: the people with at least one of them, so either + both = the two singles, to the person
+        'either': ({'share_pct': round(res['cells'][res['key']]['either']['share'] * 100.0, 2),
+                    'us': res['cells'][res['key']]['either']['us'], 'in_data': res['cells'][res['key']]['either']['raw']}
+                   if len(res['conditions']) == 2 and res['cells'][res['key']].get('either') else None),
     }
+
+
+CSV_HEADER = ['Column', 'Value', 'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
+              'US Gen Pop Projection', 'Gen Pop Penetration', 'Index vs Gen Pop']
+CSV_GROUP_COLUMN = 'CROSS BEHAVIORS'
+
+
+def csv_rows(res, plan_):
+    """The read as rows in the Profile CSV's own columns: the sample
+    line, each behavior's own row, then each pair and the whole group
+    under CROSS BEHAVIORS. The same figures the reply and the page state."""
+    bx = _engine()
+    conds = {c['key']: c for c in res['conditions']}
+    order = [conds[k] for k in plan_['order'] if k in conds]
+    w = plan_.get('window') or {}
+    n = int(res.get('sample') or 0)
+
+    def pct(x):
+        return '' if x is None else f"{x * 100.0:.4f}"
+
+    def idx(a, g, stated=None):
+        if stated is not None:
+            return f"{float(stated):.1f}"
+        return '' if (a is None or not g) else f"{a / g * 100.0:.1f}"
+    rows = [list(CSV_HEADER),
+            ['SUBJECT', plan_['subject'], '100.0', '', n, bx._natural(n / bx.PANEL * bx.US_POP, plan_['key'], 'subject-us') if n else '', '', ''],
+            ['SAMPLE SIZE', ('SAMPLE SIZE (' + str(w.get('start')) + ' TO ' + str(w.get('end')) + ')') if w.get('start') else 'SAMPLE SIZE',
+             '100.0', '', n, '', '', '']]
+    rows[2][5] = rows[1][5]
+    for c in order:
+        val = c['value'] if c.get('kind') != 'category' else ('ANY ' + str(c['column']))
+        rows.append([c['column'], val, pct(c['share']), '', c['raw'], c['us'], pct(c['gp_share']),
+                     idx(c.get('like_share'), c['gp_share'], c.get('index'))])
+    cells = sorted(res['cells'].values(), key=lambda cell: (len(cell['members']), -cell['share']))
+    for cell in cells:
+        mem = sorted((conds[m] for m in cell['members']), key=lambda c: plan_['order'].index(c['key']))
+        rows.append([CSV_GROUP_COLUMN, _join([c['label'] for c in mem]), pct(cell['share']), '', cell['raw'], cell['us'],
+                     pct(cell['gp']), '' if cell['index'] is None else f"{float(cell['index']):.1f}"])
+    return rows
+
+
+def page_payload(res, plan_):
+    """What the page shows for a read: the headline, the table of
+    singles, pairs and the whole group, the one line on what it means,
+    the rows read, the export rows and the words that order it as a cut."""
+    bx = _engine()
+    out = public(res, plan_)
+    conds = {c['key']: c for c in res['conditions']}
+    order = [conds[k] for k in plan_['order'] if k in conds]
+    table = []
+    for c in order:
+        ph = plan_['phrases'][c['key']]
+        table.append({'group': ph[:1].upper() + ph[1:], 'kind': 'single', 'share_pct': round(c['share'] * 100.0, 1), 'us': c['us'],
+                      'us_share_pct': (round(c['gp_share'] * 100.0, 1) if c['gp_share'] is not None else None),
+                      'index': c['index'], 'times': c['times']})
+    if len(order) > 2:
+        pairs = sorted((cell for cell in res['cells'].values() if len(cell['members']) == 2), key=lambda cell: -cell['share'])
+        for cell in pairs:
+            a, b = sorted((conds[m] for m in cell['members']), key=lambda c: plan_['order'].index(c['key']))
+            table.append({'group': f"{a['label']} and {b['label']}", 'kind': 'pair', 'share_pct': round(cell['share'] * 100.0, 1),
+                          'us': cell['us'], 'us_share_pct': (round(cell['gp'] * 100.0, 1) if cell['gp'] is not None else None),
+                          'index': cell['index'], 'times': cell['times']})
+    k = len(order)
+    table.append({'group': 'Both' if k == 2 else f"All {('three', 'four', 'five')[k - 3] if 3 <= k <= 5 else k}", 'kind': 'all',
+                  'share_pct': round(res['share'] * 100.0, 1), 'us': res['us'],
+                  'us_share_pct': (round(res['gp'] * 100.0, 1) if res['gp'] is not None else None),
+                  'index': res['index'], 'times': res['times']})
+    out.update({'share_text': _pct(res['share']), 'table': table, 'read': _read_line(res, plan_, conds),
+                'rows_read': _join([f"{c['label']} ({bx.pretty_column(c['column'])})" for c in order]),
+                'csv': csv_rows(res, plan_), 'cut_order': f"Build a cut of {plan_['label']}"[:200],
+                'doing': plan_['doing']})
+    return out
+
+
+_ROLLUPS = {'key': None, 'frame': None, 'roll': {}}
+
+
+def _rollups(profile_key, df, gp_map):
+    """Each column's reach, read once per profile frame (the search
+    box lists whole categories with it)."""
+    if _ROLLUPS['key'] == profile_key and _ROLLUPS['frame'] is df:
+        return _ROLLUPS['roll']
+    try:
+        from migration import category_rollup as _cr
+        roll = _cr.category_rollups(df, gp_map)
+    except Exception:
+        roll = {}
+    _ROLLUPS.update({'key': profile_key, 'frame': df, 'roll': roll})
+    return roll
+
+
+def page_options(profile_key, q='', *, host=None, limit=30):
+    """The rows a reader can pick on the page: behaviors and interests
+    matching what they typed (largest first when nothing is typed),
+    whole categories, and every demographic bucket. Each with its
+    category and its own share."""
+    try:
+        bx = _engine()
+        df, gp_map, bctx = load_profile(profile_key, host)
+        toks = bx._tokens(q)
+        rows = [r for r in bctx['rows'] if r['pct'] < bx.PIN_AT]
+
+        def hit(r):
+            if not toks:
+                return True
+            hay = bx._tokens(r['value']) + bx._tokens(bx.pretty_column(r['column']))
+            return all(any(h.startswith(t) for h in hay) for t in toks)
+
+        def opt(r, kind):
+            return {'column': r['column'], 'value': r['value'], 'label': bx.pretty_value(r['value']),
+                    'category': bx.pretty_column(r['column']), 'share_pct': round(r['pct'], 1), 'kind': kind}
+        seen, behaviors = set(), []
+        pool = sorted((r for r in rows if r['column'] not in bx._DEMO_SET and hit(r)),
+                      key=lambda r: (-r['pct'], bx._column_rank(r['column'], ()), r['value']))
+        for r in pool:
+            twin = (bx._fold(r['value']), round(r['pct'], 4))      # one brand mirrored across columns is one pick
+            if twin in seen:
+                continue
+            seen.add(twin)
+            behaviors.append(opt(r, 'interest' if r['column'] == 'INTEREST' else 'brand'))
+            if len(behaviors) >= limit:
+                break
+        cats = []
+        if toks:
+            words = [t for t in toks if t not in ('any', 'all', 'whole', 'category')] or toks
+            for cu, roll in sorted(_rollups(profile_key, df, gp_map).items()):
+                names = bx._tokens(bx.pretty_column(cu)) + [t for a in bx.COLUMN_ALIASES.get(cu, ()) for t in bx._tokens(a)]
+                if all(any(n.startswith(t) for n in names) for t in words):
+                    lab = bx.any_label(cu)
+                    cats.append({'column': cu, 'value': cu, 'label': lab[:1].upper() + lab[1:], 'category': 'Whole category',
+                                 'share_pct': roll.get('reach'), 'kind': 'category', 'whole': True})
+        demos = [opt(r, 'demo') for r in rows if r['column'] in bx._DEMO_SET]
+        demos.sort(key=lambda d: (bx.DEMO_COLS.index(d['column'].replace(' ', '_')) if d['column'].replace(' ', '_') in bx.DEMO_COLS else 99,
+                                  -d['share_pct']))
+        return {'success': True, 'behaviors': behaviors, 'categories': cats[:6], 'demographics': demos,
+                'has_interests': any(r['column'] == 'INTEREST' for r in rows), 'window': bx.window_of(df)}
+    except Exception:
+        traceback.print_exc()
+        return {'success': False, 'message': 'The rows for this profile are not available right now.'}
+
+
+def page_read(profile_key, picks, *, host=None, username='', subject=''):
+    """The page's read: the picks bound to their rows on the profile,
+    the same figures a chat answer states, on the same record. Free for
+    anyone who can open the profile (the route checks that). Returns
+    {'success': True, ...page_payload, 'notes'} or {'success': False,
+    'message'} when there is nothing to size yet."""
+    try:
+        bx = _engine()
+        host = _host(host)
+        df, _gp_map, bctx = load_profile(profile_key, host)
+        subject = _display(subject) or 'this audience'
+        bound, notes, seen = [], [], {}
+        for pk in (picks or [])[:8]:
+            if not isinstance(pk, dict):
+                continue
+            col, val = str(pk.get('column') or '').strip(), str(pk.get('value') or '').strip()
+            if not col or not val:
+                continue
+            r = bx.bind(df, val, column=col, whole=bool(pk.get('whole')), context=bctx)
+            nice = bx.pretty_value(val) if val.isupper() else val
+            if r['status'] == 'everyone':
+                notes.append(f"{r.get('label') or nice} is the audience itself, so it was left out.")
+                continue
+            if r['status'] != 'bound':
+                return {'success': False, 'message': f"{nice} is not a row on this profile. Pick another."}
+            c = r['condition']
+            if c['key'] in seen:
+                notes.append(f"{c['label'][:1].upper() + c['label'][1:]} was picked twice and is counted once.")
+                continue
+            seen[c['key']] = c
+            bound.append(c)
+        cats = {c['column'] for c in bound if c['kind'] == 'category'}
+        for c in list(bound):
+            if c['kind'] == 'category' and any(o['kind'] != 'category' and bx._cr.norm_cat(o['column']) == c['column'] for o in bound):
+                inside = next(o for o in bound if o['kind'] != 'category' and bx._cr.norm_cat(o['column']) == c['column'])
+                notes.append(f"{inside['label']} is already inside {c['label']}, so the whole category was left out.")
+                bound.remove(c)
+        if len(bound) < 2:
+            return {'success': False, 'message': 'Pick at least two different behaviors to size a group.', 'notes': notes}
+        if len(bound) > bx.MAX_CONDITIONS:
+            return {'success': False, 'message': 'Pick up to three behaviors and one demographic bucket.', 'notes': notes}
+        plan_ = _bound_plan(profile_key, subject, df, bound, question='page')
+        res, _reply = deliver(plan_, host=host, username=username, question='page')
+        if not res:
+            return {'success': False, 'message': 'That group could not be sized. Try other rows.', 'notes': notes}
+        out = page_payload(res, plan_)
+        out.update({'success': True, 'notes': notes})
+        return out
+    except Exception:
+        traceback.print_exc()
+        return {'success': False, 'message': 'That group could not be sized right now.'}
 
 
 def _persist_ledger(plan_, res, reply, question, username):
@@ -951,7 +1191,12 @@ def _persist_ledger(plan_, res, reply, question, username):
         if res['index'] is not None:
             metrics.append({'name': f'xt_{h}_index', 'label': 'Index against the US', 'value': int(res['index']), 'unit': 'index',
                             'definition': 'The same group in this audience against the same group in the US, 100 = average.'})
-        il.persist(subject=plan_['subject'], metric_family='audience', question=str(question or plan_['label'])[:300],
+        # A reader on the page can size many groups in a sitting. The ledger keeps a short shelf of
+        # crosses per subject (LEDGER_SLOTS; a newer one in the same slot replaces the older), so
+        # they never push the subject's other reads out. The record above holds every figure.
+        slot = int(h, 16) % LEDGER_SLOTS
+        il.persist(subject=plan_['subject'], metric_family='audience',
+                   question=f"cross of behaviors on {plan_['subject']} shelf {slot + 1}"[:300],
                    route='crosstab', metrics=metrics, window_start=w.get('start') or '', window_end=w.get('end') or '',
                    window_label=w.get('label') or '', reply=reply, base_profile_key=plan_['key'], cohort=plan_['label'][:120],
                    universe=plan_['subject'], provenance='operator',
@@ -974,17 +1219,10 @@ def answer(text, ctx=None, *, host=None, history=None, user=None, plan_=None):
             uname = str((user or {}).get('username') or (user or {}).get('email') or '').strip()
         except Exception:
             uname = ''
-        top_key = _engine().set_key([c['key'] for c in p['conditions']])
-        ties = None
-        if top_key not in bank_get(p['key'], host):
-            ties = _reasoned_ties(host, p['subject'], p['conditions'], uname) or None
-        res = compute(p['key'], p['subject'], p['df'], p['conditions'], host=host, username=uname, ties=ties,
-                      window=p.get('window'))
+        res, reply = deliver(p, host=host, username=uname, question=text)
         if not res:
             return None
-        reply = render(res, p)
         chips = [f"Build a cut of {p['label']}"[:160]]
-        _persist_ledger(p, res, reply, text, uname)
         page_name, page_key = _page(ctx)
         on_page = bool(page_key and page_key == p['key'])
         return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips,

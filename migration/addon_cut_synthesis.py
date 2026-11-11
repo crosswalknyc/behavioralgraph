@@ -976,9 +976,135 @@ def _research_brand_us_audience(brand: str, subject: str,
     return n, src
 
 
+_CROSS_SPLIT_RX = re.compile(
+    r"\s*(?:&|\+|,|;|/(?=\s)|\band\b|\bwho\b|\bthat\b|\bwith\b|\bx\b)\s*", re.I)
+_CROSS_LEAD_RX = re.compile(
+    r"^(?:(?:people|those|users|viewers|customers|shoppers|fans|members|"
+    r"audience)\s+)?(?:also\s+)?(?:shop(?:s|ped)?\s+at|use[sd]?|"
+    r"watch(?:es|ed)?|buy|buys|bought|eat(?:s)?\s+at|drive[s]?|"
+    r"bank(?:s)?\s+with|engage[sd]?\s+with|(?:are\s+)?interested\s+in|"
+    r"(?:have\s+|with\s+)?(?:an?\s+)?interest\s+in|are|is)\s+", re.I)
+_CROSS_BANK_PREFIX = "system/insights_ledger/crosstab/"
+
+
+def _cross_behaviors_of(df_source, cut_def: dict, subject: str) -> list:
+    """The parent's rows a multi-behavior cut names, as bound
+    conditions for the cross of behaviors (behavior_crosstab). Read from
+    the cut's own words (cohort_description, label, name_label); a piece
+    that is not plainly one of the parent's rows is left out, which only
+    ever makes the ceiling looser, never wrong. [] when fewer than two
+    bind or the module is not on this build."""
+    try:
+        try:
+            from migration import behavior_crosstab as _bx
+        except Exception:
+            import behavior_crosstab as _bx  # type: ignore
+    except Exception:
+        return []
+    texts = [str(cut_def.get(k) or "").strip()
+             for k in ("cohort_description", "label", "name_label")]
+    # the parent's own US shares ride on the file; the tie of an
+    # interest row reads them
+    gp_map = {}
+    try:
+        gp_col = next((c for c in df_source.columns
+                       if "gen pop" in str(c).lower()
+                       and "penetration" in str(c).lower()), None)
+        if gp_col is not None:
+            for col, val, g in zip(df_source["Column"], df_source["Value"],
+                                   df_source[gp_col]):
+                g = _bx._num(g)
+                if g is not None and g > 0:
+                    gp_map[(_bx._cr.norm_cat(col),
+                            _bx._cr.norm_brand(val))] = g
+    except Exception:
+        gp_map = {}
+    ctx = _bx.profile_context(df_source, gp_map)
+    best = []
+    for text in texts:
+        if not text:
+            continue
+        low = text
+        if subject and low.lower().startswith(str(subject).lower()):
+            low = low[len(str(subject)):]
+        low = re.sub(r"^\s*[-:]\s*", "", low)
+        bound, seen = [], set()
+        for piece in _CROSS_SPLIT_RX.split(low):
+            piece = _CROSS_LEAD_RX.sub("", str(piece or "").strip())
+            piece = piece.strip(" .()")
+            if len(piece) < 2:
+                continue
+            try:
+                r = _bx.bind(df_source, piece, context=ctx, loose=True)
+            except Exception:
+                continue
+            if r.get("status") != "bound":
+                continue
+            c = r["condition"]
+            if c["key"] in seen or c.get("kind") == "category":
+                continue
+            seen.add(c["key"])
+            bound.append(c)
+        if len(bound) > len(best):
+            best = bound
+    return best if len(best) >= 2 else []
+
+
+def _banked_cross_share(parent_key: str, set_key: str):
+    """The share on the record for this parent and this group of
+    behaviors (the cross a reader was already given), or None."""
+    if not parent_key or not set_key:
+        return None
+    try:
+        import hashlib
+        import json
+        import boto3
+        key = (_CROSS_BANK_PREFIX + hashlib.sha1(
+            str(parent_key).encode("utf-8", "replace")).hexdigest()[:24]
+            + ".json")
+        doc = json.loads(boto3.client("s3", region_name=REGION).get_object(
+            Bucket=BUCKET, Key=key)["Body"].read())
+        v = ((doc.get("cells") or {}).get(set_key) or {}).get("share")
+        return float(v) if v is not None else None
+    except Exception:
+        return None
+
+
+def _cross_behavior_ceiling(df_source, cut_def: dict, subject: str,
+                            parent_key: str = None) -> tuple:
+    """(ceiling_cf, note) for a cut that names two or more of the
+    parent's behaviors: the people who do all of them can never number
+    more than the cross of those rows on the parent. The figure on the
+    record for the parent and the group wins (a reader may already hold
+    it); with nothing on the record, the cross is read the same way a
+    reader would get it. (None, '') for any other cut."""
+    conds = _cross_behaviors_of(df_source, cut_def, subject)
+    if not conds:
+        return None, ""
+    try:
+        try:
+            from migration import behavior_crosstab as _bx
+        except Exception:
+            import behavior_crosstab as _bx  # type: ignore
+        res = _bx.cross(conds, _bx.sample_of(df_source),
+                        salt=str(parent_key or subject))
+        if not res:
+            return None, ""
+        names = " & ".join(c["label"] for c in res["conditions"])
+        banked = None
+        if parent_key and os.environ.get("ADDON_CUT_CROSS_RECORD", "1") != "0":
+            banked = _banked_cross_share(parent_key, res["key"])
+        if banked is not None and 0.0 < banked <= 1.0:
+            return float(banked), f"on the record: {names}"
+        return float(res["share"]), f"cross of {names}"
+    except Exception as e:
+        return None, f"cross ceiling failed: {e}"
+
+
 def _apply_behavioral_ceilings(cf: float, df_source, cut_def: dict,
                                subject: str, old_sample: float,
-                               old_uspop: float) -> tuple:
+                               old_uspop: float,
+                               parent_key: str = None) -> tuple:
     """Apply the (INTERNAL, EXTERNAL) ceilings to a phase-1 cohort
     fraction. Returns (adjusted_cf, notes_dict). Never raises. Both
     ceilings are additive: whichever binds harder wins; when neither
@@ -987,6 +1113,28 @@ def _apply_behavioral_ceilings(cf: float, df_source, cut_def: dict,
     notes = {"phase1_cf": cf, "internal_ceiling": None,
              "external_ceiling": None, "final_cf": cf,
              "brand": "", "brand_source": "", "note": ""}
+    # --- Cross ceiling (2026-11-11, Jenna): a cut that names two or
+    # more of the parent's behaviors can never be larger than the cross
+    # of those rows on the parent, and never larger than the figure a
+    # reader already holds for that group. Same salted jitter below.
+    try:
+        cross_cf, cross_note = _cross_behavior_ceiling(
+            df_source, cut_def, subject, parent_key)
+    except Exception as e:
+        cross_cf, cross_note = None, f"cross ceiling failed: {e}"
+    if cross_cf is not None:
+        notes["cross_ceiling"] = cross_cf
+        notes["cross_source"] = cross_note
+        notes["internal_ceiling"] = cross_cf
+        notes["brand"] = cross_note
+        notes["brand_source"] = "cross of the parent's own rows"
+        final = cf
+        if cross_cf < cf:
+            salt = f"{subject}|{cut_def.get('label', '')}|behavioral_ceiling"
+            u = _seed_jitter(salt, 0.09)  # in [-0.045, +0.045]
+            final = max(0.005, min(cross_cf, cross_cf * (0.945 + u)))
+        notes["final_cf"] = final
+        return final, notes
     brand_query = _extract_brand_from_behavioral_label(cut_def)
     if not brand_query:
         notes["note"] = "no brand token in label; ceilings skipped"
@@ -2036,7 +2184,8 @@ def synthesize_demo_cut(
         try:
             cf_new, ceiling_notes = _apply_behavioral_ceilings(
                 cf, df_source, cut_def, subject,
-                _old_sample, _old_uspop)
+                _old_sample, _old_uspop,
+                parent_key=(source if kind != "local_path" else None))
         except Exception as e:
             print(f"[addon-cut]    ceiling application failed "
                   f"(fail-safe pass-through): {e}")

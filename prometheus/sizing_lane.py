@@ -662,7 +662,7 @@ def reader_safe(msg, staff=True):
     return _VERDICT_LINE_RX.sub('', str(msg or '')).strip()
 
 
-def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True, reader_subjects=None):
+def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True, reader_subjects=None, username=''):
     """A finished reply payload for a sizing ask, else None. `subjects`
     (from the Reader) overrides the phrase extraction. `staff` is False
     for a reader outside Crosswalk (the operator's verdict line leaves).
@@ -690,7 +690,7 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
             traceback.print_exc()
         try:
             from . import cross_sizing as _cx
-            _cross = _cx.answer(text, ctx, host=host, reader_subjects=reader_subjects or subjects)
+            _cross = _cx.answer(text, ctx, host=host, reader_subjects=reader_subjects or subjects, username=username)
         except Exception:
             traceback.print_exc()
             _cross = None

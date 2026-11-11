@@ -52,14 +52,19 @@ from statistics import NormalDist
 
 import numpy as np
 
+try:
+    from . import behavior_ties as _ties
+except Exception:      # run as a loose module
+    import behavior_ties as _ties  # type: ignore
+
 # ------------------------------------------------------------ constants
 # One association for every group, both sides. Higher = brands overlap
 # more = lower reach. 0.70 lands toward the low end of the defensible
 # range (the unrelated-brands figure is the ceiling, the largest brand
 # is the floor).
-RHO = 0.70
+RHO = _ties.RHO       # one definition, shared with the cross of behaviors (migration/behavior_ties.py)
 # A group's reach stops here unless one brand in it is higher on its own.
-CAP = 99.4
+CAP = _ties.CAP * 100.0
 # A row at or above this is a pin (the subject's own row), not a brand.
 PIN_AT = 99.95
 # Below this US reach an index is not stated.
@@ -216,10 +221,14 @@ def times_of(index):
     return f"{index / 100.0:.1f}x the US average"
 
 
-def rollup_pairs(pairs, name=''):
+def rollup_pairs(pairs, name='', column_sums=None):
     """Roll one group up.
 
-    ``pairs``: iterable of (brand, audience_pct, genpop_pct or None).
+    ``pairs``: iterable of (brand, audience_pct, genpop_pct or None) or
+    (brand, audience_pct, genpop_pct or None, COLUMN). ``column_sums``:
+    {COLUMN: (sum of the column's audience percents, sum of its US
+    percents)} for an either/or column when the group is only part of it
+    (a named list of brands); a whole column needs none.
     Returns {'name', 'reach', 'genpop', 'index', 'times', 'brands',
     'matched', 'top', 'top_pct'} or None when no brand carries a
     penetration. ``reach`` and ``genpop`` are one-decimal percents,
@@ -231,7 +240,9 @@ def rollup_pairs(pairs, name=''):
     so it is never below any one of them.
     """
     seen = {}
-    for brand, a, g in pairs or ():
+    for item in pairs or ():
+        brand, a, g = item[0], item[1], item[2]
+        col = norm_cat(item[3]) if len(item) > 3 else ''
         a = _num(a)
         if a is None or a <= 0:
             continue
@@ -243,13 +254,35 @@ def rollup_pairs(pairs, name=''):
             g = None
         prev = seen.get(key)
         if prev is None or a > prev[1]:
-            seen[key] = (str(brand), min(a, 100.0), g)
+            seen[key] = (str(brand), min(a, 100.0), g, col)
     if not seen:
         return None
     rows = sorted(seen.values(), key=lambda r: (-r[1], r[0]))
     all_a = [r[1] for r in rows]
     matched = [r for r in rows if r[2] is not None]
-    reach_all = union_reach(all_a)
+    # A column where a person typically holds one row at a time (a
+    # carrier, an insurer) is read under the either/or part of the one
+    # law (migration/behavior_ties.py), the same on both sides, so the
+    # reach and a cross of two of its rows add up. Every other group is
+    # the fixed association above, unchanged.
+    either_or = any(_ties.is_either_or(r[3]) for r in rows)
+    if either_or:
+        sums = dict(column_sums or {})
+        for c in {r[3] for r in rows if _ties.is_either_or(r[3])}:
+            if c not in sums:
+                sums[c] = (sum(r[1] for r in rows if r[3] == c),
+                           sum(r[2] for r in matched if r[3] == c))
+
+        def reach_of(use, side):
+            law = [_ties.Row(r[1 + side] / 100.0,
+                             'pick' if _ties.is_either_or(r[3]) else 'brand', 0.0, r[3],
+                             (sums.get(r[3]) or (0.0, 0.0))[side] / 100.0)
+                   for r in use]
+            return 100.0 * _ties.reach_share(law)
+    else:
+        def reach_of(use, side):
+            return union_reach([r[1 + side] for r in use])
+    reach_all = reach_of(rows, 0)
     out = {
         'name': str(name or ''),
         'reach': round(reach_all, 1),
@@ -258,9 +291,8 @@ def rollup_pairs(pairs, name=''):
         'top': rows[0][0], 'top_pct': round(rows[0][1], 1),
     }
     if matched:
-        gp = union_reach([r[2] for r in matched])
-        a_m = reach_all if len(matched) == len(rows) else union_reach(
-            [r[1] for r in matched])
+        gp = reach_of(matched, 1)
+        a_m = reach_all if len(matched) == len(rows) else reach_of(matched, 0)
         gp1 = round(gp, 1)
         out['genpop'] = gp1
         if gp1 >= MIN_GENPOP_FOR_INDEX:
@@ -343,7 +375,7 @@ def category_rollups(df, genpop_map, subject=None, min_brands=1):
         if len(rows) < min_brands:
             continue
         r = rollup_pairs(
-            ((b, p, gp.get((cu, norm_brand(b)))) for b, p in rows), name=cu)
+            ((b, p, gp.get((cu, norm_brand(b))), cu) for b, p in rows), name=cu)
         if r:
             out[cu] = r
     return out
@@ -407,6 +439,21 @@ def resolve_brands(df, brands, genpop_map, subject=None, prefer=()):
     return pairs, missing
 
 
+def column_sums(df, genpop_map, subject=None):
+    """{COLUMN: (sum of the column's audience percents, sum of its US
+    percents over the rows the US file carries)} for every either/or
+    column on the profile. The either/or part of the one law reads these,
+    here and in the cross of behaviors, so both see the same column."""
+    out = {}
+    gp = genpop_map or {}
+    for cu, rows in profile_rows(df, subject).items():
+        if not _ties.is_either_or(cu):
+            continue
+        g = [gp.get((cu, norm_brand(b))) for b, _ in rows]
+        out[cu] = (sum(p for _, p in rows), sum(x for x in g if x is not None and x > 0))
+    return out
+
+
 def cluster_rollup(df, genpop_map, brands, name='', subject=None,
                    prefer=()):
     """Roll a named list of brands up on one profile. The rollup dict
@@ -414,7 +461,10 @@ def cluster_rollup(df, genpop_map, brands, name='', subject=None,
     'missing' (names the profile does not carry), or None when none of
     the brands is on the profile."""
     pairs, missing = resolve_brands(df, brands, genpop_map, subject, prefer)
-    r = rollup_pairs(((b, a, g) for b, a, g, _ in pairs), name=name)
+    sums = None
+    if any(_ties.is_either_or(cu) for _, _, _, cu in pairs):
+        sums = column_sums(df, genpop_map, subject)
+    r = rollup_pairs(((b, a, g, cu) for b, a, g, cu in pairs), name=name, column_sums=sums)
     if not r:
         return None
     r['members'] = [b for b, _, _, _ in pairs]

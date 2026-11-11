@@ -357,7 +357,7 @@ def _fmt(n):
     return f"{int(n):,}"
 
 
-def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window=''):
+def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window='', username=''):
     """A finished reply payload for a cross ask, else None."""
     try:
         q = parse(text, reader_subjects)
@@ -401,10 +401,12 @@ def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window=''):
             if base.get('source') == 'profile' and base.get('key') and all(s.get('basis') == 'base_profile' for s in known):
                 # both shares are the base profile's own rows: the people on both are the cross of
                 # those two rows read on that profile (prometheus.crosstab, 2026-11-11), so this
-                # split and "<base> who use A and B" state one figure
+                # split and "<base> who use A and B" state one figure. A figure on the record for
+                # the profile and the pair is the figure stated; a figure delivered here goes on it.
                 try:
                     from . import crosstab as _xt
-                    _pair = _xt.pair_on_profile(base['key'], base['name'], [s['row'] for s in known], host=host)
+                    _pair = _xt.pair_on_profile(base['key'], base['name'], [s['row'] for s in known], host=host,
+                                                username=username)
                     if _pair:
                         p_both, both_us = _pair['share'], _pair['us']
                 except Exception:

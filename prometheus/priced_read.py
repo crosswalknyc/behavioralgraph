@@ -1578,13 +1578,28 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
     xt_plan = None
     if hit and hit.get('frame') == 'crosstab':
         # a cross of behaviors inside one audience (prometheus.crosstab): every behavior binds
-        # to its row on the audience's profile before a price is named; a row the profile does
-        # not carry is said plainly, free. An audience with no profile is not that lane's: the
-        # words are read again without it and the standing lanes take the ask as before.
+        # to its row on the audience's profile; a row the profile does not carry is said
+        # plainly. An audience with no profile is not that lane's: the words are read again
+        # without it and the standing lanes take the ask as before. A reader who cannot open
+        # the profile gets the standing quote below, unchanged.
         from . import crosstab as _xt
         xt_plan = _xt.plan(text, ctx, host=host, history=history)
         if xt_plan and xt_plan.get('reply'):
             return xt_plan['reply']
+        if xt_plan and _xt.can_open(user, xt_plan['key'], host):
+            # Free (Jenna 2026-11-11: "Build it on the page, free for anyone with the profile"):
+            # every behavior is a row on a profile this reader can open, the page sizes the
+            # same group at no charge, so chat does too. No quote, no Approve, no wallet touch;
+            # the read is answered now and goes on the record like any other. Only this lane,
+            # only when every behavior bound: a build, a new pull or a group that is not on a
+            # profile keeps its price and its gate.
+            free = _xt.answer(text, ctx, host=host, history=history, user=user, plan_=xt_plan)
+            if free:
+                out = dict(free)
+                out['priced_lane'] = 'crosstab'
+                out['free_read'] = True
+                return out
+            xt_plan = None
         if not xt_plan:
             _xt.decline(text)
             hit = classify(text, history, ctx)
@@ -1625,7 +1640,7 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
         from . import crosstab as _xt
         raw = _xt.answer(text, ctx, host=host, history=history, user=user, plan_=xt_plan)
     else:
-        raw = _sz.answer(text, ctx, host=host, history=history, staff=staff_user(user))
+        raw = _sz.answer(text, ctx, host=host, history=history, staff=staff_user(user), username=uname)
     paid = {'kind': hit['kind'], 'frame': hit.get('frame'), 'usd': (0 if included else hit.get('usd')),
             'subject': subject, 'pull_type': (payload or {}).get('pull_type'), 'included': included}
     if not raw:

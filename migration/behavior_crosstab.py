@@ -19,26 +19,28 @@ driver.
 
 The estimator
 -------------
-Every behavior i has its share p_i in the audience, its share g_i in
-the US, and so its index. How much a behavior moves with the audience's
-common driver is its loading a_i, read off the index: nothing at or
-under the US average, rising with the index, full at IDX_FULL, never
-above A_MAX. Two behaviors are tied by a_i * a_j, so a pair of rows the
-audience is known for sits above the unrelated figure and a pair of
-average rows sits on it. The share doing all of them is integrated on a
-fixed grid, so the same inputs always give the same output.
+How rows sit together is ONE law, written once in
+migration/behavior_ties.py and read here and by the category reach
+(migration/category_rollup.py): brand rows move with one common driver
+at the category reach's own association; rows of an either/or column (a
+carrier, an insurer) are a person's one pick plus looking around, so
+two of them sit a little under the multiplied figure; interests and
+demographic buckets tie by their index. The share doing every behavior
+is read off the reaches of the behaviors pooled every which way, so for
+any two rows either + both = A + B, and a whole column's reach is what
+its own rows' crosses imply.
 
 Properties (each one is tested):
 - never above the smallest single share, never below
   max(0, sum of shares - (k - 1));
-- never below the unrelated figure, and well inside the bottom third of
-  the range above it, on purpose: Jenna's standing rule is that we
-  anchor low (calibrate-low-anchor-to-actuals);
 - the same for any order the behaviors are named in;
 - nested: A and B and C never exceeds A and B, which never exceeds A,
   for every sub-group, and every sub-group is returned with the read;
-- the SAME loadings run on the audience and on the US, so the index is
-  like for like;
+- with the category reach: either + both = A + B for any two rows, to
+  the person; a whole column crossed with one of its own rows is that
+  row;
+- the SAME law runs on the audience and on the US, so the index is like
+  for like;
 - a figure already on the record stands, and every new figure is held
   inside the ones on the record (``held``).
 
@@ -58,35 +60,31 @@ import itertools
 import math
 import re
 import unicodedata
-from statistics import NormalDist
 
-__all__ = ['A_MAX', 'IDX_FULL', 'MAX_CONDITIONS', 'US_POP', 'PANEL', 'loading', 'joint', 'unrelated',
+try:
+    from . import behavior_ties as ties
+    from . import category_rollup as _cr
+except Exception:      # run as loose modules
+    import behavior_ties as ties  # type: ignore
+    import category_rollup as _cr  # type: ignore
+
+__all__ = ['A_MAX', 'IDX_FULL', 'MAX_CONDITIONS', 'US_POP', 'PANEL', 'loading', 'joint', 'all_share', 'unrelated', 'profile_context',
            'cross', 'set_key', 'times_of', 'profile_rows', 'genpop_map', 'sample_of', 'window_of',
            'bind', 'category_condition', 'DEMO_COLS', 'pretty_column', 'pretty_value']
 
 US_POP = 329_900_000
 PANEL = 10_000_000
-# The most a behavior moves with the audience's common driver. Two fully
-# tied behaviors share A_MAX squared (0.36), which lands a pair between a
-# fifth and a third of the way from the unrelated figure to the smallest
-# single share: the low end of the defensible range.
-A_MAX = 0.60
-# The index at which a behavior is fully tied (3x the US average).
-IDX_FULL = 300.0
-# At or under this index a behavior is not tied at all.
-IDX_FLOOR = 105.0
+# The tie parameters live in migration/behavior_ties.py, one set for this
+# read and the category reach.
+A_MAX = ties.A_MAX
+IDX_FULL = ties.IDX_FULL
+IDX_FLOOR = ties.IDX_FLOOR
 # A row at or above this share is the whole audience (the subject's own
 # row), not a behavior to cross.
 PIN_AT = 99.95
 # Below this US share an index is not stated.
 MIN_GENPOP_FOR_INDEX = 0.0005
 MAX_CONDITIONS = 5
-
-_ND = NormalDist()
-_GRID = [-8.0 + 0.1 * i for i in range(161)]
-_W = [math.exp(-0.5 * z * z) for z in _GRID]
-_WS = sum(_W)
-_W = [w / _WS for w in _W]
 
 METADATA_COLS = frozenset(('BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'SUBJECT', 'INPUT_METADATA',
                            'INPUT METADATA', 'AVID FAN', 'CASUAL FAN'))
@@ -204,21 +202,14 @@ _DEMO_ALIASES = {
 
 # ----------------------------------------------------------------- math
 def loading(index):
-    """How much a behavior moves with the audience's common driver, 0 to
-    A_MAX, from its index against the US (100 = average)."""
-    try:
-        ix = float(index)
-    except (TypeError, ValueError):
-        return 0.0
-    if ix != ix or ix <= IDX_FLOOR:
-        return 0.0
-    x = math.log(ix / 100.0) / math.log(IDX_FULL / 100.0)
-    return round(A_MAX * max(0.0, min(1.0, x)), 6)
+    """How much an interest or a demographic bucket moves with the common
+    driver, from its index against the US (the one law's soft tie)."""
+    return ties.soft_loading(index)
 
 
 def unrelated(shares):
     """The figure the behaviors would give if they had nothing to do
-    with one another (a fraction). The floor of the read."""
+    with one another (a fraction)."""
     out = 1.0
     for p in shares:
         out *= max(0.0, min(1.0, float(p)))
@@ -230,33 +221,37 @@ def _bounds(shares):
     return max(0.0, sum(ps) - (len(ps) - 1)), (min(ps) if ps else 0.0)
 
 
+def all_share(groups):
+    """The share (a fraction) with at least one row of EVERY group, under
+    the one law: the reaches of the groups pooled every which way, added
+    and subtracted. ``groups``: a list of {row id: ties.Row}. Symmetric
+    in its arguments by construction, so the order never matters; for
+    two single rows it is A + B - (A or B), to the digit."""
+    groups = [g for g in groups if g]
+    if not groups:
+        return 0.0
+    if len(groups) == 1:
+        return ties.reach_share(list(groups[0].values()))
+    total = 0.0
+    for size in range(1, len(groups) + 1):
+        sign = 1.0 if size % 2 else -1.0
+        for combo in itertools.combinations(range(len(groups)), size):
+            pool = {}
+            for i in combo:
+                pool.update(groups[i])
+            total += sign * ties.reach_share([pool[k] for k in sorted(pool)])
+    singles = [ties.reach_share(list(g.values())) for g in groups]
+    lo, hi = _bounds(singles)
+    return max(lo, min(hi, total))
+
+
 def joint(shares, loadings):
-    """The share (a fraction) doing every one of the behaviors, each
-    held at its own share, tied by its own loading. Symmetric in its
-    arguments by construction, so the order never matters."""
-    pairs = sorted((max(0.0, min(1.0, float(p))), max(0.0, min(0.999, float(a)))) for p, a in zip(shares, loadings))
-    if not pairs:
+    """The share doing every one of single behaviors given as shares and
+    soft loadings (kept for callers that hold plain numbers)."""
+    groups = [{i: ties.Row(p, 'soft', a)} for i, (p, a) in enumerate(sorted(zip(shares, loadings)))]
+    if any(float(p) <= 0.0 for p in shares):
         return 0.0
-    if any(p <= 0.0 for p, _ in pairs):
-        return 0.0
-    lo, hi = _bounds([p for p, _ in pairs])
-    live = [(p, a) for p, a in pairs if p < 1.0]
-    if not live:
-        return 1.0
-    if len(live) == 1:
-        return live[0][0]
-    if all(a <= 0.0 for _, a in live):
-        est = unrelated([p for p, _ in live])
-    else:
-        thr = [(_ND.inv_cdf(min(max(p, 1e-12), 1.0 - 1e-12)), a, math.sqrt(1.0 - a * a)) for p, a in live]
-        est = 0.0
-        for z, w in zip(_GRID, _W):
-            pr = w
-            for t, a, s in thr:
-                pr *= _ND.cdf((t - a * z) / s) if a > 0.0 else _ND.cdf(t)
-            est += pr
-        est = max(est, unrelated([p for p, _ in live]))
-    return max(lo, min(hi, est))
+    return all_share(groups)
 
 
 def times_of(index):
@@ -279,10 +274,12 @@ def _salt_int(*parts):
     return int(h[:8], 16)
 
 
-def _natural(n, *salt):
+def _natural(n, *salt, also=None):
     """A count that never ends in a zero and never carries three zeros
     in a row in its thousands and hundreds places; moved by a hair,
-    always downward (we anchor low), the same on every run."""
+    always downward (we anchor low), the same on every run. ``also`` is
+    one more test the figure must pass (a pair's either count must read
+    naturally too)."""
     try:
         v = int(round(float(n)))
     except (TypeError, ValueError):
@@ -291,10 +288,16 @@ def _natural(n, *salt):
         return 0
 
     def ok(x):
-        return x % 10 != 0 and not (x > 100_000 and '000' in str(x)[-6:-2])
+        return x % 10 != 0 and not (x > 100_000 and '000' in str(x)[-6:-2]) and (also is None or also(x))
     if ok(v):
         return v
     h = _salt_int(*salt, v)
+    if not (v > 100_000 and '000' in str(v)[-6:-2]):
+        # only the last digit (or the pair's either count) reads wrong: a step of one to nine
+        for i in range(9):
+            cand = v - (((h + i) % 9) + 1)
+            if cand > 0 and ok(cand):
+                return cand
     span = max(9, min(99_999, int(v * 0.0004)))
     for i in range(200):
         cand = v - 1 - ((h + i * 7919) % span)
@@ -388,36 +391,45 @@ def profile_rows(df):
     bp = _col(df, 'penetration', 'row') or _col(df, 'penetration', avoid=('gen pop',))
     if bp is None:
         return out
-    gpc = _col(df, 'gen pop', 'penetration')
+    n = len(df)
+    blank = [None] * n
     rawc = _col(df, 'raw')
-    for i, (col, val, pct) in enumerate(zip(df['Column'], df['Value'], df[bp])):
+    usc = _col(df, 'projection')
+    raws = list(df[rawc]) if rawc is not None else blank
+    uss = list(df[usc]) if usc is not None else blank
+    for col, val, pct, raw, us in zip(df['Column'], df['Value'], df[bp], raws, uss):
         cu = norm_col(col)
         if not cu or cu in METADATA_COLS or cu in _NOT_CROSSED:
             continue
         p = _num(pct)
         if p is None or p <= 0:
             continue
-        out.append({'column': cu, 'value': str(val).strip(), 'pct': min(p, 100.0),
-                    'gp': (_num(df[gpc].iloc[i]) if gpc is not None else None),
-                    'raw': (_num(df[rawc].iloc[i]) if rawc is not None else None)})
+        out.append({'column': cu, 'value': str(val).strip(), 'pct': min(p, 100.0), 'raw': _num(raw), 'us': _num(us)})
     return out
 
 
 def genpop_map(gdf):
     """{(COLUMN, folded value): percent} from the US general population
-    frame."""
-    gp = {}
-    if gdf is None or 'Column' not in getattr(gdf, 'columns', ()):
-        return gp
-    bp = _col(gdf, 'penetration', 'row') or _col(gdf, 'penetration', avoid=('gen pop',))
-    if bp is None:
-        return gp
-    for col, val, pct in zip(gdf['Column'], gdf['Value'], gdf[bp]):
-        cu = norm_col(col)
-        p = _num(pct)
-        if cu and cu not in METADATA_COLS and p is not None:
-            gp[(cu, _fold(val))] = p
-    return gp
+    frame, in the category reach's own keys (one lookup for both reads)."""
+    try:
+        return _cr.genpop_map_from_df(gdf) if gdf is not None else {}
+    except Exception:
+        return {}
+
+
+def _gp(gp_map, column, value):
+    v = (gp_map or {}).get((_cr.norm_cat(column), _cr.norm_brand(value)))
+    return v if v is not None and v > 0 else None
+
+
+def profile_context(df, gp_map=None, subject=None):
+    """What a bind needs from the profile, read once: the rows, the US
+    lookup, and each either/or column's sums (the one law reads those)."""
+    try:
+        sums = _cr.column_sums(df, gp_map or {}, subject)
+    except Exception:
+        sums = {}
+    return {'rows': profile_rows(df), 'gp': gp_map or {}, 'sums': sums, 'subject': subject}
 
 
 def sample_of(df):
@@ -475,42 +487,72 @@ def _column_rank(cu, prefer):
     return (2, 0)
 
 
-def _condition(row, rows, gp_map, kind=None):
+def _is_soft(cu):
+    """Interests and demographic buckets: rows the category reach does
+    not roll up; they tie by their index."""
+    return cu in _DEMO_SET or _cr.norm_cat(cu) in _cr.NON_BRAND_COLS or _cr.norm_cat(cu) in _cr.DEMO_COLS
+
+
+def _condition(row, ctx, kind=None):
+    rows, gp_map = ctx['rows'], ctx['gp']
     cu, val, pct = row['column'], row['value'], row['pct']
     f = _fold(val)
     # the same brand mirrored at one value across columns is one behavior
     twins = sorted({r['column'] for r in rows if _fold(r['value']) == f and abs(r['pct'] - pct) < 5e-5} | {cu})
-    g = gp_map.get((cu, f)) if gp_map else None
+    g = _gp(gp_map, cu, val)
     if g is None:
-        g = next((gp_map.get((t, f)) for t in twins if gp_map and gp_map.get((t, f)) is not None), None)
-    if g is None:
-        g = row.get('gp')
-    if g is not None and g <= 0:
-        g = None
+        g = next((x for x in (_gp(gp_map, t, val) for t in twins) if x is not None), None)
     kind = kind or ('demo' if cu in _DEMO_SET else ('interest' if cu == 'INTEREST' else 'brand'))
+    nc = _cr.norm_cat(cu)
+    law = 'soft' if _is_soft(cu) else ('pick' if ties.is_either_or(nc) else 'brand')
+    sums = (ctx.get('sums') or {}).get(nc) or (0.0, 0.0)
     return {'key': f"{twins[0]}|{f}", 'kind': kind, 'column': cu, 'value': val, 'label': pretty_value(val),
-            'pct': round(pct, 4), 'gp': (round(g, 4) if g is not None else None)}
+            'pct': round(pct, 4), 'gp': (round(g, 4) if g is not None else None), 'law': law,
+            'column_sum': (float(sums[0]), float(sums[1])),
+            # the row's own counts as the profile file prints them (the page shows these)
+            'file_raw': (int(round(row['raw'])) if row.get('raw') and row['raw'] > 0 else None),
+            'file_us': (int(round(row['us'])) if row.get('us') and row['us'] > 0 else None)}
 
 
-def category_condition(df, gdf, column, subject=None):
-    """A whole column as one behavior ('any QSR'): its reach comes from
-    the category reach module, never from here. None when that module is
-    not on this build or carries no figure for the column."""
-    cu = norm_col(column)
+_ANY_LABEL = {'QSR': 'QSR', 'WHERE THEY SHOP': 'retailer', 'WHERE THEY DINE': 'restaurant',
+              'STREAMING/PLATFORM': 'streaming service', 'STREAMING/MUSIC': 'music service', 'SOCIAL MEDIA': 'social platform',
+              'BANKING': 'bank', 'DIGITAL BANKING': 'digital bank', 'TELECOM': 'telecom brand', 'INSURANCE': 'insurance brand',
+              'AUTOMOBILE': 'automobile brand', 'TRAVEL': 'travel brand', 'BETTING': 'betting brand', 'GAMES': 'game',
+              'WORKOUT FACILITY': 'gym', 'PHARMACY': 'pharmacy', 'CREDIT PROVIDER': 'credit provider', 'PODCAST': 'podcast'}
+
+
+def any_label(column):
+    """'any QSR', 'any retailer', 'any Technology Brand': a whole column
+    in plain words."""
+    cu = _cr.norm_cat(column)
+    plain = _ANY_LABEL.get(cu)
+    if not plain:
+        plain = pretty_column(cu)
+        if not re.search(r"\b(?:brands?|services?|platforms?|teams?|providers?)$", plain, re.I):
+            plain += ' brand'
+    return f"any {plain}"
+
+
+def category_condition(df, ctx, column, subject=None):
+    """A whole column as one behavior ('any QSR'): the people with at
+    least one of its rows. Its share, US share and index are the category
+    reach's own figures (migration/category_rollup.py), and it carries
+    the column's rows so a cross with it is read under the same law.
+    None when the column has no rows to roll up."""
+    cu = _cr.norm_cat(column)
     try:
-        try:
-            from migration import category_rollup as _cr
-        except Exception:
-            import category_rollup as _cr  # type: ignore
-        rolls = _cr.category_rollups(df, _cr.genpop_map_from_df(gdf) if gdf is not None else {}, subject=subject)
-        r = rolls.get(_cr.norm_cat(cu)) if isinstance(rolls, dict) else None
-        if not r or r.get('reach') is None:
+        gp_map = ctx['gp']
+        roll = _cr.category_rollups(df, gp_map, subject=subject).get(cu)
+        rows = _cr.profile_rows(df, subject).get(cu) or []
+        if not roll or not rows:
             return None
-        g = r.get('genpop')
-        return {'key': f"ANY|{cu}", 'kind': 'category', 'column': cu, 'value': cu,
-                'label': f"any {pretty_column(cu)} brand" if cu != 'QSR' else 'any QSR',
-                'pct': round(float(r['reach']), 4), 'gp': (round(float(g), 4) if g else None),
-                'brands': r.get('brands'), 'top': r.get('top')}
+        members = [(f"{cu}|{_cr.norm_brand(b)}", float(p), _gp(gp_map, cu, b)) for b, p in rows]
+        sums = (ctx.get('sums') or {}).get(cu) or (sum(m[1] for m in members), sum(m[2] for m in members if m[2]))
+        return {'key': f"ANY|{cu}", 'kind': 'category', 'column': cu, 'value': cu, 'label': any_label(cu),
+                'pct': float(roll['reach']), 'gp': (float(roll['genpop']) if roll.get('genpop') else None),
+                'index_stated': roll.get('index'), 'law': 'pick' if ties.is_either_or(cu) else 'brand',
+                'members': members, 'column_sum': (float(sums[0]), float(sums[1])),
+                'brands': roll.get('brands'), 'top': roll.get('top')}
     except Exception:
         return None
 
@@ -542,8 +584,8 @@ def _nearest(rows, name, prefer, limit=3):
         if cur is None or (score, -_column_rank(r['column'], prefer)[0]) > (cur[0], -_column_rank(cur[1]['column'], prefer)[0]):
             scored[f] = (score, r)
     best = sorted(scored.values(), key=lambda s: (-s[0], -s[1]['pct'], s[1]['value']))[:limit]
-    return [{'column': r['column'], 'value': r['value'], 'label': pretty_value(r['value']), 'pct': round(r['pct'], 4)}
-            for _, r in best]
+    return [{'column': r['column'], 'value': r['value'], 'label': pretty_value(r['value']), 'pct': round(r['pct'], 4),
+             'score': round(sc, 3)} for sc, r in best]
 
 
 def _column_for(name):
@@ -557,7 +599,7 @@ def _column_for(name):
     return ''
 
 
-def bind(df, name, *, hint='', whole=False, genpop=None, gdf=None, subject=None):
+def bind(df, name, *, hint='', whole=False, genpop=None, subject=None, context=None, column=None, loose=False):
     """Find the row a named behavior means on THIS profile.
 
     Returns {'status': 'bound', 'condition': {...}}, or
@@ -566,13 +608,29 @@ def bind(df, name, *, hint='', whole=False, genpop=None, gdf=None, subject=None)
     nothing is ever substituted), or {'status': 'everyone', 'name'} when
     the row is the audience itself. ``hint`` is a HINT_COLUMNS key read
     off the verb; ``whole`` says the words asked for a whole column
-    ('any QSR'). ``genpop`` is a ``genpop_map``; ``gdf`` the US frame
-    (only a whole-column read needs it)."""
+    ('any QSR'). ``genpop`` is a ``genpop_map``; ``context`` a
+    ``profile_context`` when several behaviors bind on one profile.
+    ``column`` binds the row in exactly that column (a pick on a page),
+    never another column's row of the same name. ``loose`` also accepts a
+    plain short form of one row's name ('Tech' for Technology); only a
+    ceiling on a cut's size reads loosely, never an answer."""
     name = ' '.join(str(name or '').split()).strip(' ?.!,;:"\'')
-    rows = profile_rows(df)
-    gp_map = genpop or {}
+    ctx = context or profile_context(df, genpop or {}, subject)
+    rows = ctx['rows']
     if not name or not rows:
         return {'status': 'missing', 'name': name, 'nearest': []}
+    if column:
+        cu = norm_col(column)
+        if whole:
+            cond = category_condition(df, ctx, cu, subject) if cu not in _DEMO_SET else None
+            return {'status': 'bound', 'condition': cond} if cond else {'status': 'missing', 'name': name, 'nearest': [],
+                                                                         'column': cu, 'whole': True}
+        hit = [r for r in rows if r['column'] == cu and _value_matches(r['value'], _fold(name))]
+        if not hit:
+            return {'status': 'missing', 'name': name, 'nearest': _nearest(rows, name, (cu,))}
+        if hit[0]['pct'] >= PIN_AT:
+            return {'status': 'everyone', 'name': name, 'label': pretty_value(hit[0]['value'])}
+        return {'status': 'bound', 'condition': _condition(hit[0], ctx)}
     prefer = tuple(HINT_COLUMNS.get(str(hint or ''), ()))
     cols_here = {r['column'] for r in rows}
     # a whole column: 'any QSR', 'a streaming service'
@@ -580,7 +638,7 @@ def bind(df, name, *, hint='', whole=False, genpop=None, gdf=None, subject=None)
     if whole or (col_named and not any(_value_matches(r['value'], _fold(name)) for r in rows)):
         cu = col_named or (norm_col(name) if norm_col(name) in cols_here else '')
         if cu and cu in cols_here and cu not in _DEMO_SET:
-            cond = category_condition(df, gdf, cu, subject)
+            cond = category_condition(df, ctx, cu, subject)
             if cond:
                 return {'status': 'bound', 'condition': cond}
             return {'status': 'missing', 'name': name, 'nearest': [], 'column': cu, 'whole': True}
@@ -592,9 +650,10 @@ def bind(df, name, *, hint='', whole=False, genpop=None, gdf=None, subject=None)
         if fname in als or fname == bucket.lower():
             for r in rows:
                 if r['column'].replace(' ', '_') == dc and _fold(r['value']) == _fold(bucket):
-                    return {'status': 'bound', 'condition': _condition(r, rows, gp_map, kind='demo')}
+                    return {'status': 'bound', 'condition': _condition(r, ctx, kind='demo')}
     want = _fold(name)
     hits = [r for r in rows if _value_matches(r['value'], want)]
+    bare = name
     if not hits:
         # the audience noun rode along ('Target shoppers', 'Netflix users')
         bare = re.sub(r"\s+(?:shoppers?|users?|viewers?|customers?|subscribers?|members?|buyers?|fans?|drivers?|owners?|"
@@ -602,7 +661,14 @@ def bind(df, name, *, hint='', whole=False, genpop=None, gdf=None, subject=None)
         if bare != name:
             hits = [r for r in rows if _value_matches(r['value'], _fold(bare))]
     if not hits:
-        return {'status': 'missing', 'name': name, 'nearest': _nearest(rows, name, prefer)}
+        near = _nearest(rows, name, prefer)
+        if loose:
+            near_bare = _nearest(rows, bare, prefer) if bare != name else near
+            top = max((near_bare or []) + (near or []), key=lambda x: x.get('score', 0), default=None)
+            if top and top.get('score', 0) >= 0.93:
+                hits = [r for r in rows if r['column'] == top['column'] and r['value'] == top['value']]
+        if not hits:
+            return {'status': 'missing', 'name': name, 'nearest': near}
     demo_hits = [r for r in hits if r['column'] in _DEMO_SET]
     beh_hits = [r for r in hits if r['column'] not in _DEMO_SET]
     pool = beh_hits or demo_hits
@@ -612,7 +678,7 @@ def bind(df, name, *, hint='', whole=False, genpop=None, gdf=None, subject=None)
         if not others:
             return {'status': 'everyone', 'name': name, 'label': pretty_value(best['value'])}
         best = sorted(others, key=lambda r: (_column_rank(r['column'], prefer), -r['pct'], r['column']))[0]
-    return {'status': 'bound', 'condition': _condition(best, rows, gp_map)}
+    return {'status': 'bound', 'condition': _condition(best, ctx)}
 
 
 # ---------------------------------------------------------------- cross
@@ -630,23 +696,45 @@ def _held_share(held, key, field):
         return None
 
 
-def cross(conditions, sample, *, held=None, ties=None, salt=''):
+def _law_group(cond, side, matched_only=False):
+    """{row id: ties.Row} for one behavior on one side (0 the audience, 1
+    the US). A whole column carries all its rows; on the US side, and for
+    the like-for-like audience figure, only the rows the US file has."""
+    col = _cr.norm_cat(cond.get('column'))
+    sums = cond.get('column_sum') or (0.0, 0.0)
+    csum = float(sums[side] or 0.0) / 100.0
+    if cond.get('kind') == 'category':
+        out = {}
+        for rid, a, g in cond.get('members') or ():
+            if (side == 1 or matched_only) and g is None:
+                continue
+            v = a if side == 0 else g
+            if v is None or v <= 0:
+                continue
+            out[rid] = ties.Row(min(v, 100.0) / 100.0, cond.get('law') or 'brand', 0.0, col, csum)
+        return out
+    v = cond.get('share') if side == 0 else cond.get('gp_share')
+    if v is None:
+        return {}
+    return {cond['key']: ties.Row(v, cond.get('law') or 'soft', cond.get('loading') or 0.0, col, csum)}
+
+
+def cross(conditions, sample, *, held=None, salt=''):
     """The read for a group of behaviors on one profile.
 
-    ``conditions``: bound conditions (``bind``) or dicts with 'key',
-    'pct' (the audience share in percent) and 'gp' (the US share in
-    percent, or None). ``sample``: the profile's sample. ``held``:
-    {set key: {'share', 'gp'}} figures already on the record for this
-    profile (fractions); they stand, and every new figure is held inside
-    them. ``ties``: {condition key: 0..1} from a reasoning step; it can
-    only loosen a behavior's tie, never tighten it. ``salt``: the
-    profile's identity, for the count digits.
+    ``conditions``: bound conditions (``bind``). ``sample``: the
+    profile's sample. ``held``: {set key: {'share', 'gp'}} figures
+    already on the record for this profile (fractions); they stand, and
+    every new figure is held inside them. ``salt``: the profile's
+    identity, for the count digits.
 
     Returns None for fewer than two distinct behaviors, else
     {'key', 'conditions' (in key order, each with 'share', 'gp_share',
-    'index', 'times', 'loading', 'raw', 'us'), 'share', 'gp', 'index',
-    'times', 'raw', 'us', 'unrelated', 'cells': {set key: {...}} for
-    every sub-group of two or more, 'sample'}. Shares are fractions."""
+    'index', 'times', 'raw', 'us'), 'share', 'gp', 'index', 'times',
+    'raw', 'us', 'unrelated', 'cells': {set key: {...}} for every
+    sub-group of two or more (a pair also carries 'either': the people
+    with at least one of the two, so either + both = A + B to the
+    person), 'sample'}. Shares are fractions."""
     seen, conds = set(), []
     for c in conditions or ():
         if not isinstance(c, dict) or not c.get('key') or c['key'] in seen:
@@ -657,17 +745,20 @@ def cross(conditions, sample, *, held=None, ties=None, salt=''):
         seen.add(c['key'])
         g = _num(c.get('gp'))
         d = dict(c)
-        d['share'] = max(0.0, min(1.0, p / 100.0))
-        d['gp_share'] = (max(0.0, min(1.0, g / 100.0)) if g is not None and g > 0 else None)
-        d['index'] = _index(d['share'], d['gp_share'])
+        d['law'] = c.get('law') or 'soft'
+        if d.get('kind') == 'category':
+            d['share'] = ties.reach_share(list(_law_group(dict(d, share=0), 0).values()))
+            gp_rows = list(_law_group(d, 1).values())
+            d['gp_share'] = ties.reach_share(gp_rows) if gp_rows else None
+            d['like_share'] = ties.reach_share(list(_law_group(d, 0, True).values())) if gp_rows else None
+            d['index'] = c.get('index_stated') if c.get('index_stated') is not None else _index(d['like_share'], d['gp_share'])
+        else:
+            d['share'] = max(0.0, min(1.0, p / 100.0))
+            d['gp_share'] = (max(0.0, min(1.0, g / 100.0)) if g is not None and g > 0 else None)
+            d['like_share'] = d['share']
+            d['index'] = _index(d['share'], d['gp_share'])
         d['times'] = times_of(d['index'])
-        tie = 1.0
-        try:
-            if ties and c['key'] in ties:
-                tie = max(0.0, min(1.0, float(ties[c['key']])))
-        except (TypeError, ValueError):
-            tie = 1.0
-        d['loading'] = round(loading(d['index']) * tie, 6)
+        d['loading'] = ties.soft_loading(d['index']) if d['law'] == 'soft' else 0.0
         conds.append(d)
     conds.sort(key=lambda d: d['key'])
     if len(conds) < 2 or len(conds) > MAX_CONDITIONS:
@@ -678,13 +769,24 @@ def cross(conditions, sample, *, held=None, ties=None, salt=''):
         n = 0
     by_key = {d['key']: d for d in conds}
     for d in conds:
-        d['raw'] = _natural(d['share'] * n, salt, d['key'], 'raw') if n else 0
-        d['us'] = _natural(d['raw'] / PANEL * US_POP, salt, d['key'], 'us') if n else 0
+        # a single row prints the profile file's own counts, exactly as the page does
+        want = d['share'] * n
+        fr, fu = d.get('file_raw'), d.get('file_us')
+        if n and fr and abs(fr - want) <= max(2.0, want * 0.001):
+            d['raw'] = int(fr)
+            d['us'] = int(fu) if fu and abs(fu - fr / PANEL * US_POP) <= max(40.0, fu * 0.001) else int(round(fr / PANEL * US_POP))
+        else:
+            d['raw'] = _natural(want, salt, d['key'], 'raw') if n else 0
+            d['us'] = _natural(d['raw'] / PANEL * US_POP, salt, d['key'], 'us') if n else 0
     held = held if isinstance(held, dict) else {}
     held_sets = {k: frozenset(k.split(' & ')) for k in held}
     shares = {frozenset([d['key']]): d['share'] for d in conds}
+    likes = {frozenset([d['key']]): d['like_share'] for d in conds}
     gps = {frozenset([d['key']]): d['gp_share'] for d in conds}
     all_gp = all(d['gp_share'] is not None for d in conds)
+    side_a = {d['key']: _law_group(d, 0) for d in conds}
+    side_like = {d['key']: _law_group(d, 0, True) for d in conds}
+    side_g = {d['key']: _law_group(d, 1) for d in conds}
     cells = {}
     for size in range(2, len(conds) + 1):
         for combo in itertools.combinations([d['key'] for d in conds], size):
@@ -703,36 +805,57 @@ def cross(conditions, sample, *, held=None, ties=None, salt=''):
                 if size == 3:
                     hi = min(hi, 1.0 - sum(singles) + sum(subs))
                 # anything on the record for a wider group sits inside this one
-                for hk, hset in held_sets.items():
-                    if hset > fs:
-                        hv = _held_share(held, hk, hfield)
-                        if hv is not None:
-                            lo = max(lo, hv)
-                on_record = _held_share(held, sk, hfield)
+                if hfield:
+                    for hk, hset in held_sets.items():
+                        if hset > fs:
+                            hv = _held_share(held, hk, hfield)
+                            if hv is not None:
+                                lo = max(lo, hv)
+                on_record = _held_share(held, sk, hfield) if hfield else None
                 val = on_record if on_record is not None else model
                 if lo > hi:
                     lo = hi
                 return max(lo, min(hi, val)), on_record is not None
 
-            share, kept = clamp(joint([m['share'] for m in members], [m['loading'] for m in members]),
-                                shares, 'share', [m['share'] for m in members])
+            share, kept = clamp(all_share([side_a[k] for k in combo]), shares, 'share', [m['share'] for m in members])
             shares[fs] = share
-            gp = None
+            gp = like = None
             if all(m['gp_share'] is not None for m in members):
-                gp, _ = clamp(joint([m['gp_share'] for m in members], [m['loading'] for m in members]),
-                              gps, 'gp', [m['gp_share'] for m in members])
+                gp, _ = clamp(all_share([side_g[k] for k in combo]), gps, 'gp', [m['gp_share'] for m in members])
                 gps[fs] = gp
-            raw = _natural(share * n, salt, sk, 'raw') if n else 0
-            # a narrower group never counts more people than a wider one
-            cap = min([by_key[k]['raw'] for k in combo] + [cells[set_key(fs - {k})]['raw'] for k in combo if size > 2])
-            if n and raw > cap:
-                raw = _natural(cap, salt, sk, 'cap')
-            cells[sk] = {'key': sk, 'members': list(combo), 'share': share, 'gp': gp, 'index': _index(share, gp),
-                         'times': times_of(_index(share, gp)), 'unrelated': base, 'raw': raw,
-                         'us': (_natural(raw / PANEL * US_POP, salt, sk, 'us') if n else 0), 'on_record': kept}
+                # the audience figure over the same rows the US side has: equal to the share
+                # unless a whole column carries rows the US file does not
+                if kept or all(side_like[k] == side_a[k] for k in combo):
+                    like = share
+                else:
+                    like, _ = clamp(all_share([side_like[k] for k in combo]), likes, '', [m['like_share'] for m in members])
+                likes[fs] = like
+            raw_cap = min([by_key[k]['raw'] for k in combo] + [cells[set_key(fs - {k})]['raw'] for k in combo if size > 2])
+            either = None
+            if size == 2:
+                a_, b_ = members
+                ok = (lambda x: (a_['raw'] + b_['raw'] - x) % 10 != 0) if n else None
+                raw = _natural(min(share * n, raw_cap), salt, sk, 'raw', also=ok) if n else 0
+            else:
+                raw = _natural(share * n, salt, sk, 'raw') if n else 0
+                if n and raw > raw_cap:
+                    raw = _natural(raw_cap, salt, sk, 'cap')
+            us = _natural(raw / PANEL * US_POP, salt, sk, 'us') if n else 0
+            if size == 2:
+                us_cap = min(a_['us'], b_['us'])
+                if us > us_cap:
+                    us = us_cap
+                us = _natural(us, salt, sk, 'us2', also=(lambda x: (a_['us'] + b_['us'] - x) % 10 != 0)) if n else 0
+                either = {'share': a_['share'] + b_['share'] - share, 'raw': a_['raw'] + b_['raw'] - raw,
+                          'us': a_['us'] + b_['us'] - us}
+            cells[sk] = {'key': sk, 'members': list(combo), 'share': share, 'gp': gp, 'index': _index(like, gp),
+                         'times': times_of(_index(like, gp)), 'unrelated': base, 'raw': raw, 'us': us,
+                         'on_record': kept, 'either': either}
     for sk, cell in cells.items():
-        # the same guard on the US figure (digit moves can cross two near-equal counts)
-        subs = [cells[set_key(frozenset(cell['members']) - {k})]['us'] for k in cell['members'] if len(cell['members']) > 2]
+        if len(cell['members']) <= 2:
+            continue
+        # a narrower group never counts more US people than a wider one (digit moves can cross two near-equal counts)
+        subs = [cells[set_key(frozenset(cell['members']) - {k})]['us'] for k in cell['members']]
         cap = min([by_key[k]['us'] for k in cell['members']] + subs)
         if cell['us'] > cap:
             cell['us'] = _natural(cap, salt, sk, 'uscap')

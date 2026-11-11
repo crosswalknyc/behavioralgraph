@@ -16723,6 +16723,43 @@ def get_csv_data(s3_key):
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
 
 
+# Cross behaviors (2026-11-11, Jenna: "Build it on the page, free for
+# anyone with the profile"): inside one profile, the people who do two or
+# three behaviors, with an optional demographic bucket. The page asks
+# here; the read is prometheus.crosstab's, the same engine and the same
+# record a chat answer uses, so the page and the chat state one figure.
+# Same access gate as the profile file. No quote, no charge, no wallet
+# touch, no request flags.
+@app.route('/api/profile-iq/cross-behaviors/<path:s3_key>', methods=['GET', 'POST'])
+@requires_auth
+def profile_cross_behaviors(s3_key):
+    ok, err = _require_profile_run_access(s3_key)
+    if not ok:
+        return err
+    if not s3_client:
+        return jsonify({'success': False, 'message': 'S3 not configured'}), 500
+    if 'gen_pop' in str(s3_key).lower():
+        return jsonify({'success': False, 'message': 'Open a profile to size a group inside it.'})
+    try:
+        from prometheus import crosstab as _xt
+        if request.method == 'GET':
+            out = _xt.page_options(s3_key, str(request.args.get('q') or '')[:80])
+        else:
+            body = request.get_json(silent=True) or {}
+            picks = body.get('behaviors') if isinstance(body.get('behaviors'), list) else []
+            user = get_current_user() or {}
+            out = _xt.page_read(s3_key, picks, username=str(user.get('username') or ''),
+                                subject=_priced_profile_display_name(s3_key))
+        resp = jsonify(out)
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
+    except Exception as e:
+        if 'NoSuchKey' in str(e):
+            return jsonify({'success': False, 'message': 'Profile not found'}), 404
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'That group could not be sized right now.'}), 500
+
+
 # Category reach (2026-11-11, Armine): for each behavioral category on a
 # profile, the share of the audience with at least one brand in it, the
 # same share for the US, and the index. One implementation
@@ -18474,6 +18511,28 @@ def _require_profile_run_access(s3_key: str):
             's3_key': s3_key,
         }), 403)
     return True, None
+
+
+def _pm_can_open_profile(user, s3_key):
+    """True when this reader can open the profile file: the gate the
+    profile page itself uses. Prometheus asks it before a read that is
+    free for anyone who holds the profile (the cross of behaviors,
+    Jenna 2026-11-11). A signed-in reader goes through
+    _require_profile_run_access; an admin opens every file; any other
+    caller (a key with no session) is a no and keeps the standing quote."""
+    try:
+        role = _normalize_role((user or {}).get('role', 'user'))
+        if role in ('admin', 'super_admin'):
+            return True
+        cur = get_current_user()
+        if not cur:
+            return False
+        if str(cur.get('username') or '') != str((user or {}).get('username') or cur.get('username') or ''):
+            return False
+        ok, _err = _require_profile_run_access(s3_key)
+        return bool(ok)
+    except Exception:
+        return False
 
 
 def _priced_profile_display_name(s3_key: str) -> str:

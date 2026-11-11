@@ -418,8 +418,9 @@ ROWS = [
         'note': 'A cross of behaviors inside one audience: the people in it '
                 'who do behavior A and B and C (a brand row, an interest row, '
                 'a whole category, a demographic bucket). A question, read '
-                'from the audience\'s own profile at the custom ask price, '
-                'with a page open or with the audience named in the words; '
+                'from the audience\'s own profile, free when the reader can '
+                'open that profile (the page sizes the same group at no '
+                'charge), with a page open or with the audience named; '
                 'an order to build that group as a cut goes to the build '
                 'flow (2026-11-11, Jenna).',
         'examples': [('Chime users who shop at Target and are interested in home improvement', False),
