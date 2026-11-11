@@ -1386,13 +1386,136 @@ def _entry_window(e):
     return {'start': ws, 'end': we} if ws and we else None
 
 
+# --- which file a fact and an entry are about (2026-11-11) -----------------
+# A subject's catalog page holds the facts of every file under the subject:
+# the base profile, its Avid Fan cut, every other cut. The reconcile used to
+# compare each ledger entry with every one of them, so the base profile's
+# own record (US audience 2,573,979) was retired minutes after it banked,
+# when the Avid Fan cut (501,151) was indexed: 83 of the 98 entries retired
+# in the two weeks to 2026-11-11 went that way. A cut of the same subject is
+# never evidence that the base profile's read is stale, and the base is
+# never evidence about a read of the cut.
+_CUT_LABEL_RX = re.compile(r'\s-\s')
+_KEY_STAMP_RX = re.compile(r'_\d{2}_\d{2}_\d{4}(?:_\d{2}_\d{2})?$')
+_DELIVERED_KEY_RX = re.compile(r'Profile IQ profile:?\s+(.+?)\s*$')
+# a metric that states the whole audience (two-sided compare); any other
+# count of people is a part of it and only conflicts when it exceeds it
+_TOTAL_METRIC_RX = re.compile(
+    r'\b(us audience|projected (?:us )?audience|total audience|audience size|total (?:us )?viewers|'
+    r'us viewers|unique us viewers|projected us viewers|projected us people|us people|'
+    r'twin audience|total universe)\b', re.I)
+_PART_METRIC_RX = re.compile(
+    r'\b(aged|ages?|core|tier|avid|casual|buyers?|shoppers?|purchasers?|women|men|female|male|who|'
+    r'with|without|among|season|episode|share|segment|cohort|parents?|subscribers?)\b|\bon\s', re.I)
+
+
+def _file_label(name):
+    """A profile key or display name as a plain lowercase label: no
+    extension, no build timestamp, underscores as spaces."""
+    t = re.sub(r'\.csv$', '', str(name or '').strip(), flags=re.I)
+    t = _KEY_STAMP_RX.sub('', t).replace('_', ' ')
+    return ' '.join(t.lower().split())
+
+
+def _cut_of(label):
+    """The cut a label names ('avid fan', 'season 3 viewers'), or ''."""
+    lab = _file_label(label)
+    if not _CUT_LABEL_RX.search(lab):
+        return ''
+    return lab.rsplit(' - ', 1)[1].strip()
+
+
+def _entry_file(e):
+    """(key, cut) for the file a ledger entry is about: its base profile
+    key when it banked with one, otherwise the profile a delivered record
+    names ('Profile IQ profile <key>'). cut is '' for a base profile."""
+    key = str(e.get('base') or '').strip()
+    if not key and str(e.get('route') or '') == 'delivered_profile':
+        for field in ('reply', 'q'):
+            m = _DELIVERED_KEY_RX.search(str(e.get(field) or ''))
+            if m:
+                key = m.group(1).strip()
+                break
+    return key, _cut_of(key)
+
+
+_NAMED_CUT_RX = re.compile(r'\b(avid fans?|casual fans?|super fans?)\b', re.I)
+
+
+def _fact_cut(f):
+    """The cut a catalog fact is about ('avid fan'), or '' for a base
+    profile's fact."""
+    fkey = str((f.get('source') or {}).get('key') or '').strip()
+    fcut = _cut_of(fkey)
+    if f.get('cut') and not fcut:
+        fcut = _cut_of(str(f.get('note') or '').replace('Profile IQ:', '')) or 'cut'
+    return fcut
+
+
+def _fact_applies(f, e, cuts=()):
+    """True when a catalog fact and a ledger entry are about the same
+    audience. The same file always is. A cut's fact speaks only for an
+    entry about that cut (its key, or an entry with no key that names the
+    cut in its subject, cohort, universe or question). A base profile's
+    fact never speaks for an entry about a cut, whether the entry carries
+    the cut's key or names the cut in words (``cuts``: the cut labels the
+    subject is known to have, beside avid and casual fans)."""
+    fkey = str((f.get('source') or {}).get('key') or '').strip()
+    fcut = _fact_cut(f)
+    ekey, ecut = _entry_file(e)
+    if ekey and fkey and _file_label(ekey) == _file_label(fkey):
+        return True
+    if ekey and fkey and str(f.get('product') or '') == 'profile':
+        return False            # another profile under the same subject: another audience
+    named = ' '.join(' '.join(str(e.get(k) or '') for k in ('subject', 'cohort', 'universe', 'q')).lower().split())
+    if fcut:
+        if ekey:
+            return False        # another file of the subject
+        return fcut != 'cut' and re.search(r'\b' + re.escape(fcut) + r'\b', named) is not None
+    if ecut:
+        return False
+    if not ekey and (_NAMED_CUT_RX.search(named)
+                     or any(c and c != 'cut' and re.search(r'\b' + re.escape(c) + r'\b', named) for c in cuts)):
+        return False
+    return True
+
+
+def _conflicts(value, label, facts, tolerance):
+    """The fact a metric conflicts with, or None. A metric that states
+    the whole audience conflicts when it agrees with none of the facts
+    that apply; a count of part of the audience conflicts only when it is
+    larger than every one of them (a part can never exceed the whole)."""
+    if not facts:
+        return None
+    whole = bool(_TOTAL_METRIC_RX.search(label)) and not _PART_METRIC_RX.search(label)
+    worst = None
+    for f in facts:
+        fv = float(f.get('value') or 0)
+        if fv <= 0:
+            continue
+        if whole:
+            if abs(value - fv) / fv <= tolerance:
+                return None
+        elif value <= fv * (1.0 + tolerance):
+            return None
+        worst = worst or f
+    return worst
+
+
 def retire_conflicting_entries(subject, facts, tolerance=0.05):
     """Dashboard figures win (2026-10-06, Jenna). For the subject's
     ledger entries, any audience-size metric that disagrees with a
     Profile IQ / Journey / Attribution / Brand Partnership figure on
     the same window by more than `tolerance` is retired: it leaves the
     prompt block and never replays. The entry stays in the index with
-    a `retired` stamp for audit. Returns the number retired."""
+    a `retired` stamp for audit. Returns the number retired.
+
+    2026-11-11: a figure is only compared with the entries it speaks
+    for (`_fact_applies`: the base profile's figure for reads of the
+    base, a cut's figure for reads of that cut, never across), a metric
+    is in conflict only when it agrees with none of them, and a count of
+    part of the audience is in conflict only when it is larger than the
+    audience itself (`_conflicts`)."""
     sizes = [f for f in (facts or []) if isinstance(f, dict)
              and f.get('kind') in ('audience_size', 'platform_count')
              and f.get('unit') == 'people' and f.get('product') != 'chat']
@@ -1404,51 +1527,19 @@ def retire_conflicting_entries(subject, facts, tolerance=0.05):
         return 0
     retired = []
 
-    def _same_window(a, b):
-        return (a and b and str(a.get('start'))[:10] == str(b.get('start'))[:10]
-                and str(a.get('end'))[:10] == str(b.get('end'))[:10])
-
     def _mut(d):
         bucket = (d.get('subjects') or {}).get(skey) or {}
         for e in (bucket.get('entries') or []):
             if not isinstance(e, dict) or e.get('retired'):
                 continue
-            ew = _entry_window(e)
-            for m in (e.get('metrics') or []):
-                if str(m.get('unit') or '') in ('pct', 'percent', '%', 'usd'):
-                    continue
-                label = f"{m.get('label') or ''} {m.get('name') or ''} {m.get('definition') or ''}"
-                if not _AUDIENCE_METRIC_RX.search(label):
-                    continue
-                try:
-                    v = float(m.get('value'))
-                except (TypeError, ValueError):
-                    continue
-                if v < 1000:
-                    continue
-                for f in sizes:
-                    fw = f.get('window')
-                    if ew and fw and not _same_window(ew, fw):
-                        continue
-                    # a platform figure only compares with a platform metric
-                    if f.get('kind') == 'platform_count':
-                        plat = str(f.get('label') or '').lower().replace('us viewers on ', '')
-                        if plat.split('/')[0].split()[0] not in label.lower():
-                            continue
-                    elif 'on ' in label.lower() and f.get('kind') == 'audience_size':
-                        continue
-                    fv = float(f.get('value') or 0)
-                    if fv <= 0:
-                        continue
-                    if abs(v - fv) / fv > tolerance:
-                        e['retired'] = {'by': 'corpus_catalog', 'metric': m.get('label'),
-                                        'value': v, 'dashboard_value': fv,
-                                        'fact_source': (f.get('source') or {}).get('key'),
-                                        'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
-                        retired.append(e.get('k'))
-                        break
-                if e.get('retired'):
-                    break
+            hit = conflicting_fact(e, sizes, tolerance)
+            if hit:
+                m, f = hit
+                e['retired'] = {'by': 'corpus_catalog', 'metric': m.get('label'),
+                                'value': float(m.get('value')), 'dashboard_value': float(f.get('value') or 0),
+                                'fact_source': (f.get('source') or {}).get('key'),
+                                'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+                retired.append(e.get('k'))
         return d if retired else None
 
     _update_index(_mut)
@@ -1456,6 +1547,52 @@ def retire_conflicting_entries(subject, facts, tolerance=0.05):
         print(f"[insights-ledger] retired {len(retired)} entr{'y' if len(retired) == 1 else 'ies'} "
               f"for {subject!r}: dashboard figure wins")
     return len(retired)
+
+
+def conflicting_fact(e, sizes, tolerance=0.05):
+    """(metric, fact) for the first audience metric of a ledger entry
+    that a dashboard figure contradicts, or None. Pure: the reconcile
+    and the audit that restores a wrongly retired entry share it."""
+    def _same_window(a, b):
+        return (a and b and str(a.get('start'))[:10] == str(b.get('start'))[:10]
+                and str(a.get('end'))[:10] == str(b.get('end'))[:10])
+
+    ew = _entry_window(e)
+    cuts = {c for c in (_fact_cut(f) for f in sizes) if c}
+    for m in (e.get('metrics') or []):
+        if not isinstance(m, dict) or str(m.get('unit') or '') in ('pct', 'percent', '%', 'usd'):
+            continue
+        name_label = f"{m.get('label') or ''} {m.get('name') or ''}".replace('_', ' ')
+        label = f"{name_label} {m.get('definition') or ''}"
+        if not _AUDIENCE_METRIC_RX.search(label):
+            continue
+        try:
+            v = float(m.get('value'))
+        except (TypeError, ValueError):
+            continue
+        if v < 1000:
+            continue
+        applicable = []
+        for f in sizes:
+            if not _fact_applies(f, e, cuts):
+                continue
+            fw = f.get('window')
+            if ew and fw and not _same_window(ew, fw):
+                continue
+            # a platform figure only compares with a platform metric
+            if f.get('kind') == 'platform_count':
+                plat = str(f.get('label') or '').lower().replace('us viewers on ', '')
+                if plat.split('/')[0].split()[0] not in label.lower():
+                    continue
+            elif f.get('kind') == 'audience_size' and re.search(r'\bon\s', label.lower()):
+                continue        # 'viewers on Hulu' is a platform count, not the audience
+            applicable.append(f)
+        # platform figures and audience figures are different wholes
+        for kind in ('audience_size', 'platform_count'):
+            f = _conflicts(v, name_label, [x for x in applicable if x.get('kind') == kind], tolerance)
+            if f:
+                return m, f
+    return None
 
 
 # the prompt block stays bounded; a stored matrix read (36 rows with
