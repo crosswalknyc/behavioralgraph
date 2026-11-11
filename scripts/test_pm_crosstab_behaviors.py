@@ -26,8 +26,12 @@ who shop at Target and have an interest in X."), then, the same day:
       to the person; a whole category crossed with one of its own rows
       is that row; a whole category's reach is what its rows' crosses
       imply; the reach of every ordinary category is unchanged
-  [8] either/or columns (a carrier, an insurer): two rows of one sit
-      under the multiplied figure, on both sides, by a category signal
+  [8] Telecom and Insurance read as they always did (Jenna 2026-11-11:
+      the reach is anchored low; the either/or list is empty): the two
+      categories' reach is the fixed-association figure, two carriers
+      add up with their two-brand reach and with the category, a group
+      inside a category never passes it, adding a brand never lowers it;
+      the either/or part of the law still holds its own arithmetic
   [9] the split of a base across two services ("on A, on B, both,
       neither"): a figure on the record keeps winning
   [10] the page: options, picks by column, duplicate / missing / one
@@ -284,27 +288,49 @@ before = {'QSR': None}
 moved = []
 for col, r in cr.category_rollups(CHIME, GP).items():
     plain = round(cr.union_reach([p for _, p in cr.profile_rows(CHIME)[col]]), 1)
-    if ties.is_either_or(col):
-        check(r['reach'] > plain, f"{col}: an either/or column reads above the pulled-together figure", (r['reach'], plain))
-    elif r['reach'] != plain:
+    if r['reach'] != plain:
         moved.append(col)
-check(not moved, "every other category's reach is the fixed-association figure, unchanged", moved)
+check(not moved, "every category's reach is the fixed-association figure, Telecom and Insurance included", moved)
 
-# ------------------------------------------------------------ [8] either/or columns
-print("[8] either/or columns sit under the multiplied figure")
-check(ties.EITHER_OR_COLS == frozenset(('TELECOM', 'INSURANCE')), "the signal is a short list of columns, never a list of brands", ties.EITHER_OR_COLS)
+# ------------------------------------------------------------ [8] Telecom and Insurance read low
+print("[8] Telecom and Insurance read as they always did")
+check(ties.EITHER_OR_COLS == frozenset(), "the either/or list is empty: no column raises its category's reach", ties.EITHER_OR_COLS)
+check(not ties.is_either_or('TELECOM') and not ties.is_either_or('INSURANCE'), "Telecom and Insurance are ordinary brand columns")
 tm, vz = bind('T-Mobile')['condition'], bind('Verizon')['condition']
-check(tm['law'] == 'pick' and vz['law'] == 'pick' and tm['column_sum'][0] > 100, "two carriers bind as either/or rows and carry their column's sum", (tm['law'], tm['column_sum']))
+check(tm['law'] == 'brand' and vz['law'] == 'brand', "two carriers bind as ordinary brand rows", (tm['law'], vz['law']))
+rolls = cr.category_rollups(CHIME, GP)
+for col in ('TELECOM', 'INSURANCE'):
+    rows_c = cr.profile_rows(CHIME)[col]
+    plain = round(cr.union_reach([p for _, p in rows_c]), 1)
+    check(rolls[col]['reach'] == plain, f"{col}: the category's reach is the fixed-association figure", (rolls[col]['reach'], plain))
+    # a group inside the category never passes it, and adding a brand never lowers the reach
+    names = [b for b, _ in sorted(rows_c, key=lambda r: -r[1])]
+    last, ok_up, ok_in = 0.0, True, True
+    for n in range(1, len(names) + 1):
+        g = cr.cluster_rollup(CHIME, GP, names[:n], prefer=(col,))
+        ok_up = ok_up and g['reach'] >= last
+        ok_in = ok_in and g['reach'] <= rolls[col]['reach']
+        last = g['reach']
+    check(ok_up, f"{col}: adding a brand never lowers the reach")
+    check(ok_in and last == rolls[col]['reach'], f"{col}: a group of its brands never reads above the category, and all of them is the category", (last, rolls[col]['reach']))
 rc = bx.cross([tm, vz], SAMPLE, salt=CHIME_KEY)
-check(rc['share'] < rc['unrelated'] and rc['share'] > 0.85 * rc['unrelated'], "T-Mobile and Verizon: under the multiplied figure, a little", (rc['share'], rc['unrelated']))
-check(rc['gp'] < (tm['gp'] / 100) * (vz['gp'] / 100), "and the same on the US side, so the index is like for like", rc['gp'])
+either_tv = cr.union_reach([tm['pct'], vz['pct']])
+check(abs(rc['share'] * 100 + either_tv - tm['pct'] - vz['pct']) < 1e-6, "T-Mobile and Verizon: either (category reach) + both (cross) = A + B", (rc['share'], either_tv))
+e_tv = rc['cells'][rc['key']]['either']
+s_tm, s_vz = (next(c for c in rc['conditions'] if c['key'] == x['key']) for x in (tm, vz))
+check(e_tv['us'] + rc['us'] == s_tm['us'] + s_vz['us'] and e_tv['raw'] + rc['raw'] == s_tm['raw'] + s_vz['raw'],
+      "and to the person", (e_tv, rc['us']))
 cl = cr.cluster_rollup(CHIME, GP, ['T-Mobile', 'Verizon'])
-check(abs(cl['reach'] - round((tm['pct'] + vz['pct']) - rc['share'] * 100, 1)) < 0.051, "either carrier (category reach) + both (cross) = A + B", (cl['reach'], rc['share']))
+check(abs(cl['reach'] - round(e_tv['share'] * 100, 1)) < 0.051 and cl['reach'] <= rolls['TELECOM']['reach'],
+      "either carrier is the two-brand reach, and it sits inside Telecom", (cl['reach'], rolls['TELECOM']['reach']))
+check(rc['share'] * 100 >= tm['pct'] + vz['pct'] - rolls['TELECOM']['reach'] - 0.051,
+      "with Telecom's reach held low, both carriers is at least A + B - Telecom", (rc['share'] * 100, tm['pct'] + vz['pct'] - rolls['TELECOM']['reach']))
+check(rc['share'] > rc['unrelated'], "so two carriers read like any two brands of one category, above the multiplied figure", (rc['share'], rc['unrelated']))
 geico = bind('Geico')['condition']
 rg = bx.cross([tm, geico], SAMPLE, salt=CHIME_KEY)
-check(abs(rg['share'] - rg['unrelated']) < 1e-9, "a carrier and an insurer (two different either/or columns) are the multiplied figure", (rg['share'], rg['unrelated']))
-rb = bx.cross([tm, b_target['condition']], SAMPLE, salt=CHIME_KEY)
-check(abs(rb['share'] - rb['unrelated']) < 1e-9, "a carrier and a retailer are the multiplied figure", (rb['share'], rb['unrelated']))
+either_tg = cr.union_reach([tm['pct'], geico['pct']])
+check(abs(rg['share'] * 100 + either_tg - tm['pct'] - geico['pct']) < 1e-6, "a carrier and an insurer add up the same way", (rg['share'], either_tg))
+# the either/or part of the law, kept for a column Jenna may add later, holds its own arithmetic
 h, look = ties.pick_parts(0.31, 1.86)
 check(abs(h - ties.PICK * 0.31) < 1e-12 and abs(h + (1 - h) * look - 0.31) < 1e-12, "a row's pick and its looking around add back to its own share")
 h2, _ = ties.pick_parts(0.31, 5.0)
@@ -553,6 +579,11 @@ check(chase and [b['kind'] for b in chase['crosstab']['behaviors']] == ['brand',
       "a behavior narrowed by a demographic bucket", chase and chase['reply'][:300])
 carriers = xt.answer("Chime users who use T-Mobile and Verizon", {}, host=HOST, user=PAYING)
 
+low_line = xt._read_line({'index': 94, 'conditions': [
+    {'key': 'a', 'share': 0.306, 'index': 90, 'times': '0.9x the US average', 'label': 'Verizon'},
+    {'key': 'b', 'share': 0.311, 'index': 104, 'times': 'in line with the US average', 'label': 'T-Mobile'}]},
+    {'phrases': {'a': 'use Verizon', 'b': 'use T-Mobile'}}, {})
+check('Verizon is what holds it down, at index 90 (0.9x the US average). ' in low_line, "a group under the US average names the row that holds it down, one set of brackets", low_line)
 # ------------------------------------------------------------ [11] wording
 print("[11] the text a reader sees")
 BANNED = re.compile(r"\b(?:modell?ed|modeling|model|synth\w*|estimat\w*|joint probabilit\w*|independen\w*|projected[- ]from|household\w*|hhs?|"
@@ -562,8 +593,9 @@ page_text = ' \n'.join([pg3['read'], pg3['rows_read'], pg3['doing'], pg3['label'
                        + [r['group'] for r in pg3['table']] + dup['notes'] + inside['notes']
                        + [o['label'] + ' ' + o['category'] for o in opts['behaviors'] + oq['categories'] + opts['demographics']])
 for name, text in (('missing row', r_missing), ('quote', ro), ('pair', ra), ('triple', tr), ('open profile', pgr), ('demographic', chase['reply']),
-                   ('carriers', carriers['reply']), ('split', split['reply']), ('page', page_text)):
+                   ('carriers', carriers['reply']), ('below average', low_line), ('split', split['reply']), ('page', page_text)):
     bad = BANNED.findall(text)
+    check(not re.search(r"\([^()]*\(", text), f"{name}: no brackets inside brackets", re.findall(r"\([^()]*\([^()]*\)[^()]*\)", text)[:2])
     check(not bad and '\u2014' not in text and '\u2013' not in text and xt.is_clean(text), f"{name}: no banned word, no dash", bad)
     for m in re.finditer(r"index (\d+)", text):
         check(re.match(r" \((?:\d+\.\dx the US average|in line with the US average)\)", text[m.end():m.end() + 40]) is not None,

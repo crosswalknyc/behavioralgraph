@@ -260,11 +260,11 @@ def rollup_pairs(pairs, name='', column_sums=None):
     rows = sorted(seen.values(), key=lambda r: (-r[1], r[0]))
     all_a = [r[1] for r in rows]
     matched = [r for r in rows if r[2] is not None]
-    # A column where a person typically holds one row at a time (a
-    # carrier, an insurer) is read under the either/or part of the one
-    # law (migration/behavior_ties.py), the same on both sides, so the
-    # reach and a cross of two of its rows add up. Every other group is
-    # the fixed association above, unchanged.
+    # A column on the one law's either/or list (migration/behavior_ties.py)
+    # would be read under that part of the law, the same on both sides.
+    # The list is empty (Jenna 2026-11-11: the reach is anchored low and
+    # Telecom and Insurance read as they always did), so every group is
+    # the fixed association above.
     either_or = any(_ties.is_either_or(r[3]) for r in rows)
     if either_or:
         sums = dict(column_sums or {})

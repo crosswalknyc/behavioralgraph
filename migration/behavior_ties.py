@@ -26,13 +26,25 @@ with one common driver at the category reach's fixed association RHO.
 That is exactly what the category reach already assumed, so none of its
 figures move for these columns.
 
-EITHER/OR rows (columns in EITHER_OR_COLS: a person typically holds one
-wireless carrier, one insurer) are not pulled together. Part of each
-row's share (PICK) is the person's ONE pick in the column, the rest is
-looking around, unrelated to the pick. Two rows of such a column
-therefore sit a little BELOW the figure their shares multiplied would
-give, and the column's reach sits a little above the unrelated figure.
-A small, explicit list of columns; never a list of brands.
+EITHER/OR rows (columns in EITHER_OR_COLS) are the one exception the law
+can carry: part of each row's share (PICK) is the person's ONE pick in
+the column, the rest is looking around, unrelated to the pick, so two
+rows of such a column sit a little below the figure their shares
+multiplied would give. A list of columns, never a list of brands.
+
+THE LIST IS EMPTY (Jenna, 2026-11-11). Telecom and Insurance were on it
+for a few hours that day. Two rows that rarely go together cover more
+people between them, so the reach of those two categories rose (Chime
+Banking Customers Telecom 49.8% to 89.2%). The lower figures were
+already on the Profiles page, the standing rule is to anchor low
+(calibrate-low-anchor-to-actuals), and a figure a reader has seen is not
+re-drawn upward. So every behavioral column is a BRAND column again and
+every category reach is what it was. The price of that, stated plainly:
+with a category's reach held low, two of its rows cannot sit under the
+multiplied figure. either + both = A + B, and "either" can never pass
+the category, so both >= A + B - the category's reach (T-Mobile 31.1% +
+Verizon 30.6% - Telecom 49.8% = at least 11.9%, against 9.5% multiplied).
+Do not add a column here without that trade in front of Jenna.
 
 SOFT rows (interests and demographic buckets, which the category reach
 does not roll up) tie to the same common driver by their index against
@@ -67,9 +79,11 @@ CAP = 0.994
 A_MAX = 0.60
 IDX_FULL = 300.0
 IDX_FLOOR = 105.0
-# Columns where a person typically holds one row at a time. Explicit and
-# small on purpose; add a column here, never a brand.
-EITHER_OR_COLS = frozenset(('TELECOM', 'INSURANCE'))
+# Columns read under the either/or part of the law. EMPTY on purpose
+# (Jenna 2026-11-11): a column here raises its category's reach, and the
+# reach is anchored low. See the note at the top before adding one; add a
+# column, never a brand.
+EITHER_OR_COLS = frozenset()
 # The part of an either/or row's share that is the person's one pick, and
 # the most of a column's people who can hold a pick at all.
 PICK = 0.25

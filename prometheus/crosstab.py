@@ -919,8 +919,8 @@ def _read_line(res, plan_, by_key):
     if ix >= 95:
         return f"This group is about as common here as anywhere in the US. " + gate
     weak = min((c for c in conds if c['index'] is not None), key=lambda c: c['index'], default=small)
-    return (f"This group is less common here than in the US as a whole; {weak['label']} is what holds it down "
-            f"({_index_words(weak['index'], weak['times'])}). " + gate)
+    return (f"This group is less common here than in the US as a whole; {weak['label']} is what holds it down, "
+            f"at {_index_words(weak['index'], weak['times'])}. " + gate)
 
 
 def render(res, plan_):
