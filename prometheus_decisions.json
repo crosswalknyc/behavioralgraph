@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "1a03674a032f8283f090a43dbe192f3fd7c9f50b253e185447ef527ac92715f7",
+ "content_hash": "ba9eceb2052e5c1316942929edf326e555faa898aecc5c4e6f4ca47a930db494",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1056,7 +1056,29 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "how_others_count_a_view",
+   "decided": "2026-11-11",
+   "statement": "Our view is one person, counted once, with at least one second of play. The methodology says how two others count, as definitions only and never as the source of a figure. Nielsen reports time viewed, not a per-view threshold: its streaming charts total the minutes watched on TV screens in the US, without phones or computers, and its TV ratings average the people watching in a typical minute. Peacock has not published an official definition of a view; it reports programming starts and unique accounts to producers, a start counts the moment a title begins playing with no minimum watch time, and pausing and resuming the same title on one account is not a second start. So our counts are people, not starts or minutes, and will not match either figure. The counting block under a viewing read already carries the one line on each (Nielsen always, Peacock when the read names it), and a question about how a view is counted gets the standing answer: never restate either in your own words, never attribute a number to Nielsen or Peacock, never say a figure came from, was checked against or matches one, and never say where a description came from.",
+   "match_terms": [
+    "nielsen",
+    "peacock",
+    "count a view",
+    "counts as a view",
+    "define a view",
+    "definition of a view",
+    "programming starts",
+    "unique accounts",
+    "tv ratings",
+    "apples to apples",
+    "why is your number",
+    "differ from"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-11T18:08:12Z"
+ "generated_at": "2026-11-11T18:16:10Z"
 }

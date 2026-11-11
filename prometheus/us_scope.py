@@ -83,7 +83,7 @@ _WINDOW_LINE_RX = re.compile(r"(?m)^\s*-?\s*Window:\s*(?P<w>[^\n]+?)\.?\s*$")
 _PROMISE_RX = re.compile(r"^\s*On it\b|\bthe read will land right here\b|\bWorking on it\b|^\s*Already on it\b", re.I)
 _OWN_RX = re.compile(r"^\s*" + re.escape(OPENER))
 _SAMPLE_MENTION_RX = re.compile(r"\b(?:across|inside|within|in)\s+(?:a\s+|the\s+)?$", re.I)
-_BLOCK_LINE_RX = re.compile(r"^\s*-?\s*(?:window|base|what we count as a view|carriage paths|sessions|threshold):", re.I)
+_BLOCK_LINE_RX = re.compile(r"^\s*-?\s*(?:window|base|what we count as a view|how nielsen counts|how peacock counts|carriage paths|sessions|threshold):", re.I)
 
 
 def enabled():

@@ -44965,7 +44965,11 @@ def _view_definition_copy(short=False, period=False):
         from prometheus import methodology as _meth
         if period:
             return f"{_meth.PERIOD_HEADER} {_meth.PERIOD_NOTE}"
-        return _meth.VIEW_NOTE_SHORT if short else _meth.VIEW_DEFINITION
+        if short:
+            return _meth.VIEW_NOTE_SHORT
+        # the long text under "more" carries how others count a view (Jenna
+        # 2026-11-11); the short footnote stays as it was
+        return _meth.view_definition_panel()
     except Exception:
         return ''
 

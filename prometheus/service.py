@@ -2671,6 +2671,22 @@ def _standing_answer(text, user=None, uname=''):
     nothing else in prose (Jenna 2026-10-26, Mark Valdez). Returns a raw
     reply or None."""
     try:
+        # What counts as a view, ours beside how Nielsen and Peacock count
+        # one (Jenna 2026-11-11). Ahead of the no-digital-trace gate: a
+        # question that sets our figure against "Nielsen ratings" asks why
+        # the definitions differ, not for linear tune-in.
+        from . import methodology_answers as _ma_vd
+        if _ma_vd.is_view_definition_question(text):
+            _vd_raw = _ma_vd.answer(text, host=host)
+            if _vd_raw:
+                try:
+                    host.ask_hint(route='methodology', outcome='answered')
+                except Exception:
+                    pass
+                return _vd_raw
+    except Exception as _fx:
+        _faults.note('service.view_definition', _fx)
+    try:
         import prometheus_analysis as _pma
         gate = _pma.classify_quantifiability(text)
         if gate:

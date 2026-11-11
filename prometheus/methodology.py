@@ -12,6 +12,15 @@ without it, whatever the model wrote. Vocabulary follows the standing
 rules: no vendor names (the citation scrub would drop the sentence),
 "panel" never appears (the scrub rewrites it), counts are persons.
 
+One exception, by Jenna's ask (2026-11-11): right after our own view
+definition the methodology says how Nielsen and Peacock count a view,
+as definitions only and never as the source of a figure. The compact
+lines ride the viewing block (Nielsen always, Peacock when the read
+names it); the full part is the methodology answer and the standing
+panel. Those exact strings (OTHERS_ALLOWLIST) are held out of the house
+scrubs by shield_definitions; nothing else that names a ratings service
+gets through.
+
 The block fits the read's family (2026-11-06): the family the lane
 stamps on the read (metric_family, the ledger family) picks the lines.
 Viewing reads keep the view, threshold, carriage and session lines;
@@ -72,6 +81,128 @@ VIEW_DEFINITION = (
 VIEW_NOTE_SHORT = ("Views here are US viewers (persons) credited at one second of "
                    "playback, counted once per person; not comparable to subscriber "
                    "counts, TV ratings, or play counts.")
+
+
+# How others count a view (Jenna 2026-11-11: "where we talk about views in
+# methodology add a part that says how nelisen classifies a view ... and
+# then list this ... for how peacock classifys a view"). Two definitions
+# beside our own so a reader knows why the counts differ. They are
+# definitions only, never the source of a figure. Nielsen is written from
+# what Nielsen itself publishes (its Top 10 chart notes, The Gauge FAQ and
+# its ratings explainers, read 2026-11-11): its streaming charts are total
+# minutes viewed through a television in the US, its TV ratings are an
+# average-minute audience, and it publishes no per-view threshold. Peacock
+# has never published a definition; the entry says so and gives the two
+# measures it reports to producers. The research trail and the internal
+# notes live in the brain, never here.
+#
+# These exact strings are the only sentences in the product that may name a
+# ratings service or a platform's own reporting. The house scrubs carry
+# them through by exact text (OTHERS_ALLOWLIST, shield_definitions); every
+# other mention of a ratings service or a source is still dropped.
+OTHERS_HEADER = 'How others count a view:'
+NIELSEN_LONG = (
+    "Nielsen reports time viewed rather than a per-view threshold: its streaming charts rank "
+    "titles by the total minutes people in the US watched on TV screens, and viewing on phones "
+    "and computers is not in them. Its TV ratings are the average number of people watching "
+    "during a typical minute of a program.")
+PEACOCK_LONG = (
+    "Peacock has not published an official definition of a view. What it reports to producers "
+    "is programming starts and unique accounts. A start counts the moment a title begins "
+    "playing, with no minimum watch time, so one minute and thirty minutes count the same, and "
+    "pausing and resuming the same title on one account is not a second start.")
+OTHERS_CLOSE = (
+    "Our view is one person, counted once, with at least one second of play, so our counts are "
+    "people, not starts or minutes, and will not match either figure.")
+# the compact form, one line each, for the counting block under a viewing read
+NIELSEN_LINE = (
+    "How Nielsen counts: time viewed, not views. Its streaming charts total the minutes watched "
+    "on TV screens in the US, without phones or computers, and its TV ratings average the "
+    "people watching in a typical minute.")
+PEACOCK_LINE = (
+    "How Peacock counts: Peacock has not published an official definition. It reports "
+    "programming starts and unique accounts, and a start counts the moment a title begins "
+    "playing, with no minimum watch time.")
+# the standing panel form (one paragraph; the dashboard footnote's long text)
+OTHERS_PANEL = f"{OTHERS_HEADER} {NIELSEN_LONG} {PEACOCK_LONG} {OTHERS_CLOSE}"
+OTHERS_ALLOWLIST = (NIELSEN_LONG, PEACOCK_LONG, NIELSEN_LINE, PEACOCK_LINE)
+
+_PEACOCK_RX = re.compile(r"\bpeacock\b", re.I)
+_SHIELD_TOKEN = 'xqviewdefq{}qx'
+_SHIELD_TOKEN_RX = re.compile(r"xqviewdefq(\d+)qx", re.I)   # a scrub may capitalize a sentence it re-joins
+
+
+def names_peacock(*texts):
+    """True when the read is on Peacock or names it (the Peacock entry
+    rides the counting block only then)."""
+    return bool(_PEACOCK_RX.search(' '.join(str(t or '') for t in texts)))
+
+
+def others_lines(peacock=False):
+    """The compact entries for the counting block: Nielsen on every
+    viewing read, Peacock when the read is on Peacock or names it."""
+    return [NIELSEN_LINE] + ([PEACOCK_LINE] if peacock else [])
+
+
+def others_part(lead=True):
+    """The full part as text: our own definition first (with `lead`),
+    then the two entries and the line that ties them back to ours."""
+    out = []
+    if lead:
+        out += [f"{VIEW_HEADER} {VIEW_DEFINITION}", '']
+    out += [OTHERS_HEADER, f"- {NIELSEN_LONG}", f"- {PEACOCK_LONG}", '', OTHERS_CLOSE]
+    return '\n'.join(out)
+
+
+def view_definition_panel():
+    """The standing panel text: our definition, then how others count."""
+    return f"{VIEW_DEFINITION} {OTHERS_PANEL}"
+
+
+def carries_others(text):
+    t = str(text or '')
+    return any(s in t for s in OTHERS_ALLOWLIST)
+
+
+def shield_definitions(text):
+    """Hold the allowlisted definition lines out of a scrub: each exact
+    string is swapped for an inert token (its closing period stays in the
+    text so sentence splitting is unchanged) and comes back, untouched,
+    through unshield_definitions. Exact text only: a sentence that names a
+    ratings service in any other words is not held and the scrub drops it
+    as before. Returns (text, held). Never raises."""
+    try:
+        t = str(text or '')
+        if 'Nielsen' not in t and 'Peacock' not in t:
+            return t, []
+        t = _SHIELD_TOKEN_RX.sub('', t)        # a token is only ever ours
+        held = []
+        for i, s in enumerate(OTHERS_ALLOWLIST):
+            core = s[:-1] if s.endswith('.') else s
+            if core in t:
+                t = t.replace(core, _SHIELD_TOKEN.format(i))
+                held.append(i)
+        return t, held
+    except Exception:
+        return str(text or ''), []
+
+
+def unshield_definitions(text, held):
+    """Put the held definition lines back, byte for byte."""
+    try:
+        t = str(text or '')
+        if not held:
+            return t
+
+        def _back(m):
+            i = int(m.group(1))
+            if i in held and 0 <= i < len(OTHERS_ALLOWLIST):
+                s = OTHERS_ALLOWLIST[i]
+                return s[:-1] if s.endswith('.') else s
+            return ''
+        return _SHIELD_TOKEN_RX.sub(_back, t)
+    except Exception:
+        return str(text or '')
 
 
 # What we count as a purchase (Jenna 2026-11-04: "most purchased brands IS
@@ -459,12 +590,15 @@ def pool_noun_for(res, question=''):
 
 
 def block(window_start=None, window_end=None, window_label='',
-          base_label='', base_people=None, text='', family=None, noun=''):
+          base_label='', base_people=None, text='', family=None, noun='', context=''):
     """The counting block as lines (header first). `family` is one of
     FAMILIES (or a lane family label); callers that name none get the
     viewing block, as before. `noun` is the Base line's people noun
     (pool_noun); unset, viewing reads say viewers and the other
-    families take the noun their words pick."""
+    families take the noun their words pick. `context` is the words
+    around the read (the ask, the subject, the platform) beyond `text`
+    and the base label; a viewing read that names Peacock in any of them
+    carries the Peacock entry under the Nielsen one (2026-11-11)."""
     fam = canon_counting_family(family) or VIEWING
     noun = str(noun or '').strip() or ('viewers' if fam == VIEWING else pool_noun(fam, text))
     win = str(window_label or '').strip()
@@ -505,6 +639,10 @@ def block(window_start=None, window_end=None, window_label='',
     # sessions are counted (always on a viewing read)
     if fam == VIEWING:
         lines.append(f"- {VIEW_HEADER} {VIEW_DEFINITION}")
+        # how others count a view, compact, right after our own definition;
+        # never on a purchase, engagement or sizing block
+        for ln in others_lines(peacock=names_peacock(text, base_label, context)):
+            lines.append(f"- {ln}")
         if THRESHOLD_RX.search(str(text or '')):
             lines.append(f"- Threshold: {THRESHOLD}")
         lines.append(f"- {CARRIAGE}")
@@ -536,6 +674,30 @@ def carries_family_definition(text, family=None):
 
 
 _ANY_FIGURE_RX = re.compile(r"\d+(?:\.\d+)?\s?%|\d{1,3}(?:,\d{3})+|\d{4,}")
+
+
+def ensure_others(reply, context=''):
+    """A counting block that already carries our view definition gains
+    the compact entries once, right under it (the Nielsen line always,
+    the Peacock line when the read names Peacock). Only a block under
+    the house header is touched; idempotent; never raises."""
+    try:
+        text = str(reply or '')
+        if HEADER not in text or VIEW_HEADER not in text:
+            return reply
+        want = [ln for ln in others_lines(peacock=names_peacock(text, context)) if ln not in text]
+        if not want:
+            return reply
+        head, tail = text.split(HEADER, 1)
+        out, done = [], False
+        for line in tail.split('\n'):
+            out.append(line)
+            if not done and line.lstrip('- ').startswith(VIEW_HEADER):
+                out.extend(f"- {ln}" for ln in want)
+                done = True
+        return head + HEADER + '\n'.join(out) if done else reply
+    except Exception:
+        return reply
 
 
 # Period totals next to their quarters (2026-10-09, item 6; Bria's
@@ -678,7 +840,10 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
             fam = VIEWING
         elif fam != VIEWING and not _ANY_FIGURE_RX.search(text):
             return ensure_purchase_note(reply)
+        ctx = ' '.join([str(question or ''), pool_context(res)])
         if carries_definition(text) or carries_family_definition(text, fam):
+            if fam == VIEWING:
+                reply = ensure_others(reply, context=ctx)
             return ensure_purchase_note(reply)
         lines = block(window_start=res.get('window_start'),
                       window_end=res.get('window_end'),
@@ -687,7 +852,7 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
                       base_people=base_people if base_people is not None
                       else res.get('_base_people'),
                       text=text, family=fam,
-                      noun=pool_noun_for(res, question))
+                      noun=pool_noun_for(res, question), context=ctx)
         body = text.rstrip()
         if HEADER in body:
             # merge under the existing header

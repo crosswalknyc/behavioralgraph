@@ -1446,6 +1446,29 @@ _PARTNER_SKIP_KEYS = _SCRUB_SKIP_KEYS | frozenset((
     'unit', 'product', 'reason', 'action', 'status', 'basis', 'webhook_url', 'next', 'window'))
 
 
+def _hold_view_definitions(t):
+    """The views methodology may say how Nielsen and Peacock count a view
+    (Jenna 2026-11-11), as a definition, never as a source. Those exact
+    lines (prometheus.methodology.OTHERS_ALLOWLIST) are held out of the
+    belt and put back untouched; any other sentence that names a vendor
+    still goes. Returns (text, held)."""
+    try:
+        from . import methodology as _meth
+        return _meth.shield_definitions(t)
+    except Exception:
+        return t, []
+
+
+def _release_view_definitions(t, held):
+    if not held:
+        return t
+    try:
+        from . import methodology as _meth
+        return _meth.unshield_definitions(t, held)
+    except Exception:
+        return t
+
+
 def partner_violations(text):
     """The banned words still present in a key-facing string, in context.
     Vendor and infrastructure names, method words and the attribution
@@ -1454,6 +1477,7 @@ def partner_violations(text):
     t = str(text or '')
     if not t.strip():
         return []
+    t = _hold_view_definitions(t)[0]      # the allowlisted definition lines are not violations
     out = []
     for m in _PARTNER_HARD_RX.finditer(t):
         out.append(m.group(0))
@@ -1504,6 +1528,7 @@ def scrub_partner_text(text, fallback=''):
     t = str(text or '')
     if not t.strip():
         return t
+    t, _held = _hold_view_definitions(t)
     t = _PARTNER_PAREN_SOURCE_RX.sub('', t)
     t = _PARTNER_SOURCE_INLINE_RX.sub('', t)
     t = _PARTNER_ATTRIB_RX.sub('', t)
@@ -1543,7 +1568,7 @@ def scrub_partner_text(text, fallback=''):
     t = re.sub(r'\n{3,}', '\n\n', t).strip()
     if not t or partner_violations(t):
         return fallback
-    return t
+    return _release_view_definitions(t, _held)
 
 
 def scrub_partner_payload(obj, skip_keys=_PARTNER_SKIP_KEYS, _depth=0):

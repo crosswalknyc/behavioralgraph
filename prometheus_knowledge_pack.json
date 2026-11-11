@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "e0592325b8bd968cb47d5b400885546b84f437dfb4ca91776997abb4dfa327c2",
+ "content_hash": "e3af6e34783a10ba5328fd513ca583c0b727614ff8b756a2b6866e7c6aee5bc5",
  "examples_hash": "8a4f564c5cd01293c951dfea6c54f745bec414cb6a4ee1741ca6ef41b97c03dd",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
@@ -12,7 +12,7 @@
   ".cursor/rules/in-place-corrections.mdc": "e08bf4274b45dd991fec142789918289f13b136f31ed9c56ba7150f2acf5faad",
   ".cursor/rules/individual-level-language.mdc": "e36c375ca8def4264dd9f826db8ee60d0166f278ebbdb517a53300fcf467692b",
   ".cursor/rules/no-em-dashes.mdc": "1ae6da8a97e7a094889cd9e32270afec82a5ac8088982e1ed8c42fe2b241399d",
-  ".cursor/rules/no-modeled-or-source-language.mdc": "43b4eecfae0589958d4b56626f9ae866b92dc598bf15e76e32cd44fbf4dd72e6",
+  ".cursor/rules/no-modeled-or-source-language.mdc": "e7068751d105193a3407b93d6716da75c094b68ba8e3d2f337d63cd9e1785c39",
   ".cursor/rules/no-operator-hints-in-dashboard.mdc": "11cf4f4e4941733d2f53abf4cff647d07c3992752792ace9eaf77dd7a7324334",
   ".cursor/rules/no-round-numbers-in-deliverables.mdc": "b588ce6a0d7aefb7e8439863e540fde63be4085b43335011686a7a86b372116c",
   ".cursor/rules/no-round-sample-sizes.mdc": "e5e519707c0164136da81c82b5c8fccece70a183d809783e488a84a0bbd4e2a3",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "a1ea9b0d5dc179f646e6d2f1dea001ccc58cfc9779e6311abdb41bca7283f89e",
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "eddfb2ab4876b905089873846de04400089c89bf434dc2ad629114d6d62b3b5c",
   ".cursor/skills/crosswalk-design/SKILL.md": "3820d5b6a581e967d3272d7652cc9cbc9f9d7166945597965ba654114f4d75ad",
   ".cursor/skills/crosswalk-design/references/company.md": "ac29b7962918715d9b337a01f23befb4990b4af6c7afb3cf50fdb6a493b64d83"
  },
@@ -209,5 +209,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-11-11T18:08:12Z"
+ "generated_at": "2026-11-11T18:16:10Z"
 }

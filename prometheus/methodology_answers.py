@@ -22,6 +22,12 @@ shapes live here:
   age_source whether age is the person's own or a household guess
   in_data    how many of the 10 million US consumers we measure are a
              demographic group ("how many US panelists are men 18-34")
+  view_definition
+             what counts as a view, ours beside how Nielsen and Peacock
+             count one (Jenna 2026-11-11: "how do you count a view", "why
+             does your number differ from Nielsen", "how does Peacock
+             count a view"). The copy is prometheus.methodology's; the two
+             names are definitions only, never the source of a figure.
 
 ``answer(text)`` returns the standing payload for one question or for
 a numbered list whose items are all methodology shapes ("Taking your
@@ -37,7 +43,7 @@ from __future__ import annotations
 import re
 
 __all__ = ['answer', 'shape_of', 'coverage_line', 'duration_line', 'age_source_line', 'in_data_line',
-           'demographic_count']
+           'demographic_count', 'view_definition_line', 'is_view_definition_question']
 
 TEN_M = 10_000_000
 
@@ -71,6 +77,34 @@ _IN_DATA_RX = re.compile(
     r"are (?:there )?(?:in (?:your|the|our) (?:data|dataset|base))?)?\s*(?:are |is |were )?(?P<group>(?:us |u\.s\. )?(?:men|women|males|females|adults|people|persons|"
     r"individuals|consumers|users)\s+(?:aged?\s+|ages?\s+|between\s+)?\d{2}\s*(?:-|to|\u2013|and)\s*\d{2}\+?|(?:men|women|males|females)\s+\d{2}\s*(?:-|to|\u2013)\s*\d{2}\+?|"
     r"(?:men|women|males|females)\s+(?:aged?\s+|ages?\s+)?(?:over|under|above|below)\s+\d{2}|(?:people|adults|persons|individuals) (?:aged?|ages?) \d{2}\s*(?:-|to|\u2013)\s*\d{2})\b", re.I)
+# What counts as a view, and how that sits beside Nielsen and Peacock
+# (2026-11-11). Three ways in: the question asks how a view is counted or
+# defined; it puts our figure next to Nielsen (we hold no Nielsen figures,
+# so every "compare to / differ from Nielsen" is a question about
+# definitions); or it asks how Peacock counts, or sets our figure against
+# what Peacock itself reports. A bare "compare that to Peacock" is a
+# request for a Peacock read and stays with the lanes.
+_VIEW_DEF_RX = re.compile(
+    r"\b(?:what (?:counts|qualifies|is counted|do you count) as a view|"
+    r"what(?:'s| is| are) (?:a view\b|(?:your |the )?definition of a view)|"
+    r"how (?:do|does|did|would) (?:you|we|crosswalk|prometheus|it|nielsen|peacock|nbcu(?:niversal)?) "
+    r"(?:guys )?(?:count|define|classify|measure|credit|qualify|tally) (?:a |the |your |its |their )?views?\b|"
+    r"how (?:is|are) (?:a |your |the )?views? (?:counted|defined|classified|measured|credited)|"
+    r"(?:your|crosswalk'?s?|nielsen'?s?|peacock'?s?) (?:definition|threshold) (?:of|for) a view|"
+    r"what (?:does|do) (?:a view|views?) mean\b|define a view\b)", re.I)
+_NIELSEN_RX = re.compile(r"\bnielsen(?:'s)?\b", re.I)
+_PEACOCK_RX = re.compile(r"\bpeacock(?:'s)?\b", re.I)
+_COMPARE_RX = re.compile(
+    r"\b(?:compar(?:e|es|ed|ing|able|ison)|differ(?:s|ed|ent|ence)?|match(?:es|ed)?|line[sd]? up|square[sd]? with|"
+    r"vs\.?|versus|same as|higher than|lower than|bigger than|smaller than|more than|less than|off from|"
+    r"apples to apples|reconcile[sd]?)\b", re.I)
+_COUNT_WORD_RX = re.compile(r"\b(?:count(?:s|ed|ing)?|defin(?:e|es|ed|ition)|classif(?:y|ies|ied)|measur(?:e|es|ed|ement)|"
+                            r"a view|views?|viewers?|number|numbers|figure|figures)\b", re.I)
+_PEACOCK_OWN_RX = re.compile(
+    r"\bpeacock(?:'s)?\s+(?:own\s+|internal\s+|reported\s+)?(?:reports?|reported|says|said|numbers?|figures?|counts?|starts?|"
+    r"programming starts|definition|metrics?|data)\b|\b(?:what|how) peacock (?:reports?|counts?|says|measures?|tells)\b", re.I)
+_DO_WORK_RX = re.compile(r"^\W*(?:please\s+|can you\s+|could you\s+)?(?:build|pull|run|create|generate|make|email|send|queue|launch|rank|list|"
+                         r"show me|give me|get me)\b", re.I)
 _YOU_NEED_RX = re.compile(r"\b(?:you need|need(?:ed|s)? (?:about |at least |roughly )?[\d,]+|to mean anything|statistically)\b", re.I)
 _NUMBERED_RX = re.compile(r"(?m)^\s*(\d{1,2})[.)]\s+")
 
@@ -79,11 +113,37 @@ def _squash(text):
     return ' '.join(str(text or '').split())
 
 
+def is_view_definition_question(text):
+    """True when the question asks what counts as a view, how ours sits
+    beside Nielsen, or how Peacock counts one."""
+    t = _squash(text)
+    if not t or len(t) > 400 or _DO_WORK_RX.search(t):
+        return False
+    if _VIEW_DEF_RX.search(t):
+        return True
+    if _NIELSEN_RX.search(t) and _COMPARE_RX.search(t):
+        return True
+    if _PEACOCK_RX.search(t) and _PEACOCK_OWN_RX.search(t) and (_COMPARE_RX.search(t) or _COUNT_WORD_RX.search(t)) \
+            and re.search(r"\b(?:why|how|what|is|are|does|do|did|should|will|can)\b", t, re.I) \
+            and re.search(r"\b(?:your|you|our|ours|this|that|these|those|the read|crosswalk)\b", t, re.I):
+        return True
+    return False
+
+
+def view_definition_line():
+    """Our view definition, then how Nielsen and Peacock count one, then
+    the line that ties them back (prometheus.methodology, one source)."""
+    from prometheus import methodology as _meth
+    return _meth.others_part()
+
+
 def shape_of(text):
-    """'coverage' | 'duration' | 'age_source' | 'in_data' | '' for one question."""
+    """'view_definition' | 'coverage' | 'duration' | 'age_source' | 'in_data' | '' for one question."""
     t = _squash(text)
     if not t or len(t) > 700:
         return ''
+    if is_view_definition_question(t):
+        return 'view_definition'
     if _AGE_SOURCE_RX.search(t):
         return 'age_source'
     if _IN_DATA_RX.search(t) and re.search(r"\b(?:how many|number of|count of)\b", t, re.I) \
@@ -210,6 +270,8 @@ def in_data_line(text, host=None):
 
 
 def _one(text, shape, host=None):
+    if shape == 'view_definition':
+        return view_definition_line()
     if shape == 'coverage':
         return coverage_line()
     if shape == 'duration':

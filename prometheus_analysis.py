@@ -3722,6 +3722,17 @@ def scrub_user_text(text):
     s = str(text or '')
     if not s:
         return s
+    # The views methodology may say how Nielsen and Peacock count a view
+    # (Jenna 2026-11-11), as a definition, never as a source. Those exact
+    # lines (prometheus.methodology.OTHERS_ALLOWLIST) are held out of the
+    # scrub and put back untouched; a ratings service named in any other
+    # sentence is dropped below, as before.
+    _held = []
+    try:
+        from prometheus import methodology as _vd_meth
+        s, _held = _vd_meth.shield_definitions(s)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     s = s.replace('\u2014', ' - ').replace('\u2013', '-')
     s = s.replace('\u2015', ' - ')
     for rx, rep in _SCRUB_COMPILED:
@@ -3748,6 +3759,11 @@ def scrub_user_text(text):
     except Exception as _fx:
         _faults.note('analysis', _fx)
     s = re.sub(r'[ \t]{2,}', ' ', s)
+    if _held:
+        try:
+            s = _vd_meth.unshield_definitions(s, _held)
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
     return s
 
 
