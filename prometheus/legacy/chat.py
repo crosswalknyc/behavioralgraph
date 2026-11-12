@@ -42,6 +42,7 @@ from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation 
 from prometheus import deck_pick as _deck_pick   # the deck is on the subject the reader picked; a deck from a read keeps its figures (2026-11-11)
 from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
 from prometheus import question_universe as _question_universe   # the base is the universe the question names; the page only when pointed at (2026-11-06)
+from prometheus import ledger_gate as _ledger_gate   # a probe's ask never banks in the shared ledger, on any route (2026-11-11)
 from prometheus import window_scope as _wscope   # the window is the one the reader asked for; the default is never a frozen pair (2026-11-10)
 from prometheus import named_platforms as _named_platforms   # a platform the client names is the universe's platform, strict (2026-11-10)
 from prometheus import door_words as _door_words   # the word door never reaches a chat read or a file name (2026-11-10)
@@ -13770,6 +13771,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if not _stands:   # the open profile is context, never a default subject; a name the reader said no to is no base (2026-10-06, 2026-10-24)
             print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} dropped ({_why})")
             switch_page, base = (switch_page or str(base.get('subject') or '')), None
+    _ps = None if _pinned_base else __import__('prometheus.platform_scope', fromlist=['for_read']).for_read(text, history, base, il, bind_subject)
+    if _ps:   # a platform the question adds scopes the subject on record; it never replaces it (2026-11-11, Armine: 'YouTube original content' ran on everyone who uses YouTube)
+        base, digest_block, subj_hint, bind_subject, bind_cohort = None, '', _ps['subject'], (bind_subject or _ps['subject']), (bind_cohort or _ps['cohort'])
     # The anchor is reasoned, not inherited (Jenna 2026-11-04): a profile
     # of a PERSON (ACTOR, MUSICIAN/BAND, creator ...) counts the people with
     # digital touchpoints to that person. A question about viewers of the
@@ -14376,6 +14380,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _rr.enqueue(job_id, _head)   # the Hetzner read worker picks it up
         else:                        # local thread (fallback / kill switch)
             _pm_read_status_write(job_id, _head)
+            _ledger_gate.note_job(job_id, _pm_user, _probe)   # the thread has no request: who asked rides with the job (a probe never banks, 2026-11-11)
             threading.Thread(target=_pm_run_read_job, args=_args, kwargs=_kw, daemon=True).start()
         _pm_ask_hint(outcome='answered', subject=_promised)
         return jsonify({
@@ -15763,6 +15768,7 @@ def _pm_genpop_dimension_shares(dimension):
         return None
 
 
+@_ledger_gate.job_scope()
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led,
                      panel_charge=None, probe=False, matrix_plan=None):
@@ -18879,6 +18885,7 @@ def _pm_resolve_deck_subject(text, ctx):
 _PM_DECK_PPU_EXTRAS = {}
 
 
+@_ledger_gate.job_scope(probe_kw='')
 def _pm_run_deck_job(job_id, username, ctx, history, angle,
                      charge_user='', subject='', partner=''):
     """Background insights-deck build: digest -> full slide plan ->
@@ -19247,6 +19254,7 @@ def _pm_deck_core(user, body):
         _rr.enqueue_deck(job_id, _head)
     else:
         _pm_deck_status_write(job_id, _head)
+        _ledger_gate.note_job(job_id, username)
         threading.Thread(target=_pm_run_deck_job, args=_args, daemon=True).start()
     return jsonify({'success': True, 'job_id': job_id, 'subject': deck_subject, 'confirm_line': _deck_pick.confirm_line(resolution)})
 

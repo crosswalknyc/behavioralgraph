@@ -100,6 +100,35 @@ def _bucket_map(row):
     return out
 
 
+def _scope_of_result(res, ask_text=''):
+    """The platforms the new pass is scoped to: what the read says about
+    itself (its universe, cohort and table), and the question."""
+    try:
+        from . import platform_scope as _ps
+        bd = res.get('breakdown') if isinstance(res.get('breakdown'), dict) else {}
+        own = _ps.scope_of(res.get('universe'), res.get('cohort'), bd.get('dimension'), bd.get('share_basis'))
+        return own or _ps.scope_of(ask_text)
+    except Exception:
+        return frozenset()
+
+
+def _scope_of_entry(entry):
+    try:
+        from . import platform_scope as _ps
+        bd = entry.get('breakdown') if isinstance(entry.get('breakdown'), dict) else {}
+        own = _ps.scope_of(entry.get('universe'), entry.get('cohort'), bd.get('dimension'), bd.get('share_basis'))
+        return own or _ps.scope_of(entry.get('subject'), entry.get('q'))
+    except Exception:
+        return frozenset()
+
+
+def _same_scope(new_res, entry, ask_text=''):
+    """A figure on record binds a table on the same platform scope only
+    (2026-11-11, Armine: the all-platform category shares were carried
+    into a YouTube-only table)."""
+    return _scope_of_result(new_res, ask_text) == _scope_of_entry(entry)
+
+
 def _stored_rows(prior_entries, new_res, ask_text):
     """{(dimension, label): (row, entry)} from the newest compatible
     entry that carries that row; bucket rows and plain rows alike."""
@@ -108,7 +137,7 @@ def _stored_rows(prior_entries, new_res, ask_text):
     ents.sort(key=lambda e: str(e.get('ts') or ''), reverse=True)
     for e in ents:
         bd = e.get('breakdown') if isinstance(e.get('breakdown'), dict) else None
-        if not bd or not _same_window(new_res, e, ask_text):
+        if not bd or not _same_window(new_res, e, ask_text) or not _same_scope(new_res, e, ask_text):
             continue
         for r in (bd.get('rows') or []):
             if not isinstance(r, dict) or not str(r.get('label') or '').strip():
@@ -129,7 +158,7 @@ def _stored_metrics(prior_entries, new_res, ask_text):
     ents = [e for e in (prior_entries or []) if isinstance(e, dict) and not e.get('retired')]
     ents.sort(key=lambda e: str(e.get('ts') or ''), reverse=True)
     for e in ents:
-        if not _same_window(new_res, e, ask_text):
+        if not _same_window(new_res, e, ask_text) or not _same_scope(new_res, e, ask_text):
             continue
         coh = _norm(e.get('cohort'))
         for m in (e.get('metrics') or []):

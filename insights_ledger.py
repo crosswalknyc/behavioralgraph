@@ -74,7 +74,8 @@ US_PER_SAMPLE = 32.99
 # metric units that are not projected people counts (no count behind them)
 _NON_COUNT_UNIT_RX = re.compile(
     r"pct|percent|%|share|index|rate|ratio|usd|\$|dollar|hour|minute|second|day|week|month|year|"
-    r"title|asset|episode|season|post|brand|category|rank|score|x\b", re.I)
+    r"title|asset|episode|season|post|brand|category|rank|score|x\b|"
+    r"\b(?:sessions?|visits?|views|plays|streams|orders?|transactions?|impressions?|clicks?|searches|videos?)\b", re.I)
 
 # Test hook: when True, persist() runs inline so unit tests can assert
 # on the written index synchronously.
@@ -100,6 +101,47 @@ def _client():
             if _s3 is None:
                 _s3 = boto3.client('s3')
     return _s3
+
+
+# ---------------------------------------------------------------------------
+# Who may bank (2026-11-11): a probe's ask never writes here, on any route
+# ---------------------------------------------------------------------------
+
+def _gate():
+    try:
+        from prometheus import ledger_gate as _lg
+        return _lg
+    except Exception as e:   # the gate ships in the same package; say so loudly if it ever does not load
+        print(f"[insights-ledger] ledger gate unavailable: {e}")
+        return None
+
+
+def _asker_label(asker=None):
+    """The asker a write is stamped with: the one named, else the one in
+    flight ('' when nobody can be named)."""
+    if asker is not None and str(asker).strip():
+        return str(asker).strip()[:80]
+    lg = _gate()
+    try:
+        return str(lg.current_label() or '')[:80] if lg else ''
+    except Exception:
+        return ''
+
+
+def may_bank(asker=None, where='', subject='', question=''):
+    """False when the asker (named, or the work in flight) is a probe
+    identity: canary:*, a smoke or golden grader, a replay, a sandbox
+    key. Every write path asks; the refusal is logged, never raised."""
+    lg = _gate()
+    if lg is None:
+        return True
+    try:
+        if lg.may_bank(asker):
+            return True
+        lg.refuse(where or 'ledger', subject=subject, question=question, asker=asker)
+        return False
+    except Exception:
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +397,28 @@ def _put_entry_object(entry):
 # Entries
 # ---------------------------------------------------------------------------
 
+# A figure typed with no unit of its own ('count') is still not people
+# when its own name says what it measures (2026-11-11, Cara Dorfman's
+# hours by month: "Pool 5,885,924,493 viewers" where every figure was
+# viewing hours). People nouns win: 'viewers with 10+ hours' counts people.
+_PEOPLE_NAME_RX = re.compile(
+    r"(?<![a-z])(?:viewers?|people|persons?|users?|accounts?|individuals?|subscribers?|buyers?|shoppers?|households|"
+    r"audiences?|listeners?|readers?|players?|fans?|customers?|members?|signups?|sign ups|adults|panelists?|visitors?)(?![a-z])", re.I)
+_MEASURE_NAME_RX = re.compile(
+    r"(?<![a-z])(?:hours?|hrs|minutes?|mins|seconds?|sessions?|visits?|views|plays|streams|episodes?|titles?|orders?|"
+    r"transactions?|impressions?|clicks?|searches|dollars?|revenue|spend|posts?|videos?)(?![a-z])", re.I)
+
+
+def names_non_people_measure(metric):
+    """True when a metric's own name or label says it measures time or
+    volume (hours, sessions, plays ...) and names no people."""
+    try:
+        words = ' '.join(str(metric.get(k) or '') for k in ('name', 'label')).replace('_', ' ')
+        return bool(_MEASURE_NAME_RX.search(words)) and not _PEOPLE_NAME_RX.search(words)
+    except Exception:
+        return False
+
+
 def is_count_metric(metric):
     """A metric that counts projected US people (viewers, people,
     accounts, signups ...): the kind that has a count in the data behind
@@ -363,6 +427,8 @@ def is_count_metric(metric):
         return False
     unit = str(metric.get('unit') or 'count').strip()
     if _NON_COUNT_UNIT_RX.search(unit):
+        return False
+    if unit.lower() in ('count', '', 'number', 'total') and names_non_people_measure(metric):
         return False
     try:
         return float(metric.get('value')) >= 100
@@ -468,6 +534,7 @@ def make_entry(*, subject, metric_family, question, route, metrics,
     # a quote is never an answer: an offer sentence or its chips never
     # bank as a reply (2026-11-05); a tab icon is never part of a subject
     reply = '' if is_offer_reply(reply) else reply
+    reply = _reply_pool_unit(reply, metrics, breakdown, question)
     try:
         from prometheus.subject_display import strip_emoji as _strip_emoji
         subject = _strip_emoji(subject) or subject
@@ -521,6 +588,29 @@ def make_entry(*, subject, metric_family, question, route, metrics,
                                          else str(v)[:40])
                            for k, v in list(verify.items())[:8]}
     return entry
+
+
+_POOL_PEOPLE_RX = re.compile(
+    r"\b([Pp]ool [\d,]+) (?:viewers|people|listeners|readers|players|subscribers|buyers|shoppers|individuals)\b")
+
+
+def _reply_pool_unit(reply, metrics, breakdown, question=''):
+    """A table whose pools are hours (or minutes) is stored saying so.
+    The read's own metrics and share basis decide; a reply written with
+    a people noun on those pools is corrected before it banks, so the
+    figure can never replay as a count of people (2026-11-11, Cara
+    Dorfman's hours by month: "Pool 5,885,924,493 viewers")."""
+    try:
+        text = str(reply or '')
+        if not text or not _POOL_PEOPLE_RX.search(text):
+            return reply
+        noun = _pool_noun({'metrics': metrics or [], 'breakdown': breakdown if isinstance(breakdown, dict) else {},
+                           'q': question})
+        if noun in ('hours', 'minutes'):
+            return _POOL_PEOPLE_RX.sub(lambda m: f"{m.group(1)} {noun}", text)
+    except Exception:
+        pass
+    return reply
 
 
 def _clip_window_label(window_label):
@@ -855,6 +945,10 @@ def bucket_key_for(index_doc, subject):
 
 
 def _record_entry_now(entry):
+    # the last step before S3: a probe's entry never lands, whichever
+    # route built it (2026-11-11)
+    if not may_bank(entry.get('asker') or None, where='record', subject=entry.get('subject'), question=entry.get('q')):
+        return
     batch = [entry] + _derive_list_subentries(entry)
     for e in batch:
         try:
@@ -951,7 +1045,7 @@ def persist(*, subject, metric_family, question, route, metrics,
             window_label='', reply='', followups=None,
             base_profile_key='', cohort='', breakdown=None,
             derivation='', provenance='', verify=None, sync=False,
-            universe='', journey=None):
+            universe='', journey=None, asker=None):
     """Persist one delivered read. Never raises; never blocks the
     caller (daemon thread) unless `sync` or _SYNC_FOR_TESTS. Batch
     jobs (the conversation distiller, the artifact ingester) pass
@@ -962,8 +1056,16 @@ def persist(*, subject, metric_family, question, route, metrics,
     carries the universe the reply named, so the figures reconcile later
     (2026-11-04). ``journey`` is the resolved viewing chain for a chain
     read (see make_entry); callers on a thread pass
-    ``ask_journey(question, history=history)``."""
+    ``ask_journey(question, history=history)``.
+
+    ``asker`` (2026-11-11): who asked. Read off the work in flight when
+    not given (prometheus.ledger_gate), stamped on the entry, and
+    refused here when it is a probe identity: a canary, a smoke or
+    golden grader, a replay or a sandbox key never banks, on any route."""
     try:
+        if not may_bank(asker, where=f'persist:{route}', subject=subject, question=question):
+            return
+        _who = _asker_label(asker)
         entry = make_entry(
             subject=subject, metric_family=metric_family,
             question=question, route=route,
@@ -977,6 +1079,8 @@ def persist(*, subject, metric_family, question, route, metrics,
             journey=journey)
         if not entry['metrics'] and not entry['reply']:
             return
+        if _who:
+            entry['asker'] = _who
         if sync or _SYNC_FOR_TESTS:
             _record_entry_now(entry)
             return
@@ -990,7 +1094,7 @@ def bank_record(*, subject, source, metrics, question, reply,
                 window_start='', window_end='', window_label='',
                 universe='', cohort='', breakdown=None, anchors=None,
                 derivation='', metric_family='', followups=None,
-                questions=None, retire_others=True, subject_aliases=None):
+                questions=None, retire_others=True, subject_aliases=None, asker=None):
     """Bank a published deliverable's figures as the decision of record
     for its subject (Jenna 2026-11-10: "anything pulled here is stored
     for Prometheus"). Synchronous; returns the list of entry keys written.
@@ -1007,6 +1111,8 @@ def bank_record(*, subject, source, metrics, question, reply,
     published never replays against the record. Never raises; the trail
     (the anchors, the derivation) stays internal and never renders."""
     try:
+        if not may_bank(asker, where='bank_record', subject=subject, question=question):
+            return []
         src = re.sub(r'[^a-z0-9]+', '_', str(source or 'deliverable').lower()).strip('_')[:32] or 'deliverable'
         route = RECORD_ROUTE_PREFIX + src
         fam = canon_family(metric_family or family_from_question(question) or 'subscribers')
@@ -1123,7 +1229,7 @@ def ingest_deck_anchors(*, subject, metrics, source_name='',
                         window_start='', window_end='',
                         window_label='', basis_notes=None,
                         metric_family='delivered_anchors',
-                        provenance=PROV_DELIVERED):
+                        provenance=PROV_DELIVERED, asker=None):
     """Record a shipped deliverable's headline figures as anchor
     entries for the subject (2026-08-27, Jenna: generated reads and
     decks must stay commensurate with what was already delivered).
@@ -1142,6 +1248,8 @@ def ingest_deck_anchors(*, subject, metrics, source_name='',
     lookups land, and every anchor carries delivered provenance,
     the top conflict rank."""
     try:
+        if not may_bank(asker, where='deck_anchors', subject=subject, question=source_name):
+            return
         clean = []
         notes = {str(k).strip().lower(): str(v)[:200]
                  for k, v in (basis_notes or {}).items()}
@@ -3065,6 +3173,24 @@ def consult(subject=None, question=None, metric_family=None,
             # under its own subject answers it, 2026-11-10)
             skey = _resolve_subject(doc, subject=None, question=question, live_only=True) \
                 or _resolve_subject(doc, subject=subject, question=question, live_only=True)
+        # A platform the question adds scopes the subject on record; it
+        # never replaces it (2026-11-11, Armine: "YouTube original content
+        # across five categories" was looked up under `youtube` and the
+        # read held under the digital original content subject was never
+        # seen). The lookup moves to that subject's bucket: the one filed
+        # on the same platform first; an all-platform bucket still bounds
+        # the read but never replays as a platform-only answer.
+        _scoped = None
+        if skey:
+            try:
+                from prometheus import platform_scope as _psc
+                _scoped = _psc.held_bucket(doc, skey, question, live=_has_live_entries)
+            except Exception:
+                _scoped = None
+            if _scoped and _scoped.get('key') in subjects:
+                print(f"[insights-ledger] {(subjects.get(skey) or {}).get('subject')!r} is where, not who: "
+                      f"consulting {_scoped.get('subject')!r}")
+                skey = _scoped['key']
         if not skey:
             # Exact-ask replay must not depend on subject resolution:
             # scan all buckets for this normalized question.
@@ -3163,6 +3289,9 @@ def consult(subject=None, question=None, metric_family=None,
                         exact, match = rexact, 'semantic'
         if not _can_replay:
             exact, match = None, None
+        if _scoped and not _scoped.get('same_scope') and exact is not None \
+                and exact.get('qn') != normalize_question(question):
+            exact, match = None, None     # an all-platform read is context for a platform-only question, never its answer
         exact = _exact_if_fresh(exact)
         return {'subject': bucket.get('subject'), 'skey': skey,
                 'entries': entries, 'block': render_block(entries),

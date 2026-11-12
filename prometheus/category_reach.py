@@ -227,8 +227,12 @@ def _store_key(s3_key):
 
 
 def _s3():
+    """The host's S3 client and bucket. The registry object, not the
+    module that holds it: `from . import host` handed back the module,
+    `host.has` did not exist, and a named brand group's member list was
+    never saved or read back for any profile (2026-11-11)."""
     try:
-        from . import host
+        from .host import host
         if host.has('s3_client') and host.has('bucket'):
             return host.s3_client, host.bucket
     except Exception:
@@ -258,6 +262,12 @@ def save_group(s3_key, label, brands, by='chat', s3=None, bucket=None):
     name keeps the members it was first given). Best effort."""
     if not s3_key or not brands:
         return False
+    try:   # first writer wins, so a probe's ask never writes one (the same gate as the ledger, 2026-11-11)
+        from . import ledger_gate as _lg
+        if _lg.is_probe():
+            return False
+    except Exception:
+        pass
     if s3 is None:
         s3, bucket = _s3()
     if s3 is None:
@@ -513,9 +523,43 @@ def _subject_of(df):
 
 
 # --------------------------------------------------------------- digest
-def digest_section(df, genpop_map, subject=None, min_brands=3, max_cats=70):
+def category_people(df, genpop_map, s3_key, columns):
+    """{COLUMN: projected US people} behind each category's reach on one
+    profile, read in one pass. The count a cross of behaviors prints for
+    the same category on its own line and the count `people_for` hands a
+    category ask (the same condition, the same sample, the same digits),
+    so an answer served from the digest alone states the cross's figure
+    and never one worked out from a rounded share (2026-11-11). {} when
+    the profile has no key or no sample."""
+    try:
+        s3_key = s3_key or str(getattr(df, 'attrs', {}).get('s3_key') or '')
+        if df is None or not s3_key:
+            return {}
+        from migration import behavior_crosstab as bx
+        n = bx.sample_of(df)
+        if not n:
+            return {}
+        gp = genpop_map or {}
+        ctx = bx.profile_context(df, gp)
+        full = cr.category_rollups(df, gp, subject=None)
+        rows = cr.profile_rows(df, None)
+        out = {}
+        for c in columns:
+            cond = bx.category_condition(df, ctx, c, rollups=full, rows_by_column=rows)
+            d = bx.single(cond, n, salt=str(s3_key)) if cond else None
+            us = int(d.get('us') or 0) if d else 0
+            if us > 0:
+                out[cr.norm_cat(c)] = us
+        return out
+    except Exception:
+        traceback.print_exc()
+        return {}
+
+
+def digest_section(df, genpop_map, subject=None, min_brands=3, max_cats=70, s3_key=''):
     """The lines every profile digest carries: each behavioral category's
-    reach, the US reach and the index. '' when there is nothing."""
+    reach, the US reach, the index and the projected US people behind the
+    reach. '' when there is nothing."""
     try:
         roll = cr.category_rollups(df, genpop_map, subject, min_brands=min_brands)
         rows = [(c, r) for c, r in roll.items() if r.get('index') is not None]
@@ -523,10 +567,16 @@ def digest_section(df, genpop_map, subject=None, min_brands=3, max_cats=70):
             return ''
         rows.sort(key=lambda cr_: (-cr_[1]['brands'], cr_[0]))
         rows = sorted(rows[:max_cats], key=lambda cr_: cr_[0])
+        people = category_people(df, genpop_map, s3_key, [c for c, _r in rows])
         head = ("CATEGORY REACH (share of this audience with at least one brand in the category | the same share "
-                "for the US | index, 100 = US average). A percent or index for a WHOLE category is this figure, "
-                "quoted exactly; never add or average brand rows, never use the largest brand:")
-        body = '; '.join(f"{c} {r['reach']:.1f} | {r['genpop']:.1f} | {r['index']}" for c, r in rows)
+                "for the US | index, 100 = US average"
+                + (" | projected US people behind the share" if people else '')
+                + "). A percent or index for a WHOLE category is this figure, "
+                "quoted exactly; never add or average brand rows, never use the largest brand"
+                + ("; a people count for a category is the one printed here, quoted exactly, never a share "
+                   "multiplied by the audience" if people else '') + ":")
+        body = '; '.join(f"{c} {r['reach']:.1f} | {r['genpop']:.1f} | {r['index']}"
+                         + (f" | {people[c]:,}" if c in people else '') for c, r in rows)
         return head + '\n  ' + body
     except Exception:
         traceback.print_exc()

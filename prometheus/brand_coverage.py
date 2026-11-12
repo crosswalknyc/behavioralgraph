@@ -221,7 +221,7 @@ def answer(text, ctx=None, host=None):
         return None
     if host is None:
         try:
-            from . import host as _host
+            from .host import host as _host   # the registry object, not its module (2026-11-11)
             host = _host
         except Exception:
             return None

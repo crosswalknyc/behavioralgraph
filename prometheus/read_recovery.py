@@ -176,6 +176,8 @@ def start_engine_job(kind, job_id, username, inputs, extras, status_write, runne
     head = {'job_id': job_id, 'user': username, 'status': 'queued', 'job_type': kind,
             'started_at': time.time(), 'inputs': _jsonable(inputs),
             'resume': {'inputs': _jsonable(inputs), 'extras': _jsonable(extras) or {}}}
+    if _ledger_gate().is_probe(username):   # read here, on the request: a probe's job never banks (2026-11-11)
+        head['probe'] = True
     if queue_enabled():
         try:
             s3, bucket = _s3()
@@ -189,8 +191,14 @@ def start_engine_job(kind, job_id, username, inputs, extras, status_write, runne
         except Exception:
             traceback.print_exc()
     status_write(job_id, head)
-    threading.Thread(target=runner, args=(job_id, username, inputs, extras), daemon=True).start()
+    threading.Thread(target=_ledger_gate().carry(runner, username, probe=head.get('probe')),
+                     args=(job_id, username, inputs, extras), daemon=True).start()
     return head
+
+
+def _ledger_gate():
+    from . import ledger_gate as _lg
+    return _lg
 
 
 def _jsonable(obj):
@@ -219,7 +227,8 @@ def run_engine_inline(kind, job_id, status):
         return False
     _INFLIGHT_ENGINE[job_id] = (kind, dict(status))
     try:
-        _engine_runner(kind)(job_id, uname, inputs, dict((rr or {}).get('extras') or {}))
+        with _ledger_gate().as_asker(uname, probe=bool(status.get('probe'))):   # the job banks as its asker, a probe's never
+            _engine_runner(kind)(job_id, uname, inputs, dict((rr or {}).get('extras') or {}))
     finally:
         _INFLIGHT_ENGINE.pop(job_id, None)
     return True
@@ -303,6 +312,8 @@ def enqueue_deck(job_id, head):
     rec = dict(head)
     rec.update({'status': 'queued', 'job_type': 'deck', 'queued': True,
                 'queued_at': time.time(), 'stage': 'lining up the deck'})
+    if _ledger_gate().is_probe(rec.get('user')):   # read on the request thread; the worker carries it
+        rec['probe'] = True
     _chat()._pm_deck_status_write(job_id, rec)
     s3.put_object(Bucket=bucket, Key=_marker_key('deck', job_id),
                   Body=json.dumps({'job_id': job_id, 'kind': 'deck',
@@ -415,9 +426,10 @@ def run_deck_inline(job_id, status):
             c._PM_DECK_PPU_EXTRAS[job_id] = dict(rr['extras'])
     except Exception:
         pass
-    c._pm_run_deck_job(job_id, uname, rr['ctx'], list(rr.get('history') or []),
-                       str(rr.get('angle') or ''), str(rr.get('charge_user') or ''),
-                       str(rr.get('subject') or ''), str(rr.get('partner') or ''))
+    with _ledger_gate().as_asker(uname, probe=bool(status.get('probe'))):
+        c._pm_run_deck_job(job_id, uname, rr['ctx'], list(rr.get('history') or []),
+                           str(rr.get('angle') or ''), str(rr.get('charge_user') or ''),
+                           str(rr.get('subject') or ''), str(rr.get('partner') or ''))
     return True
 
 

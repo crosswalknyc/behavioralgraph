@@ -533,17 +533,19 @@ def any_label(column):
     return f"any {plain}"
 
 
-def category_condition(df, ctx, column, subject=None):
+def category_condition(df, ctx, column, subject=None, rollups=None, rows_by_column=None):
     """A whole column as one behavior ('any QSR'): the people with at
     least one of its rows. Its share, US share and index are the category
     reach's own figures (migration/category_rollup.py), and it carries
     the column's rows so a cross with it is read under the same law.
-    None when the column has no rows to roll up."""
+    None when the column has no rows to roll up. ``rollups`` and
+    ``rows_by_column`` are the profile's rollup and rows when the caller
+    already read them (the digest sizes every category in one pass)."""
     cu = _cr.norm_cat(column)
     try:
         gp_map = ctx['gp']
-        roll = _cr.category_rollups(df, gp_map, subject=subject).get(cu)
-        rows = _cr.profile_rows(df, subject).get(cu) or []
+        roll = (rollups if rollups is not None else _cr.category_rollups(df, gp_map, subject=subject)).get(cu)
+        rows = (rows_by_column if rows_by_column is not None else _cr.profile_rows(df, subject)).get(cu) or []
         if not roll or not rows:
             return None
         members = [(f"{cu}|{_cr.norm_brand(b)}", float(p), _gp(gp_map, cu, b)) for b, p in rows]

@@ -373,7 +373,7 @@ def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window='', u
         if not q:
             return None
         if host is None:
-            from . import host as _host
+            from .host import host as _host   # the registry object, not its module (2026-11-11)
             host = _host
         base = resolve_base(q['base'], q['base_entity'], ctx, host)
         if not base:

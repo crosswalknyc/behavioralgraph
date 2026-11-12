@@ -1,0 +1,328 @@
+"""A platform named in a question scopes the subject; it does not become
+the subject (2026-11-11, Armine Meseldzhyan at Lionsgate).
+
+Armine had a read on digital original content categories (Comedy,
+Lifestyle / Arts & Culture, Faith, Young Adult, Horror). Hours later, in
+a new chat: "Let's pull performance data on YouTube original content
+across five categories: Comedy, Lifestyle/Arts & Culture, Faith, Young
+Adult, and Horror?" The words carry a library name, YouTube, so the base
+resolved to the YouTube profile. Every category was then sized against
+everyone who uses YouTube (98,443,018 for Comedy against the 4.7M on
+record), the ledger was asked for the subject `youtube`, and the read
+held under the digital original content subject was never seen. A third
+pass then carried the all-platform shares into a table that covered
+YouTube only.
+
+Three rules, one reading:
+
+  * `resolve(text, base_subject, ...)`: when the base the lane picked is
+    a platform's own profile, the words name that platform as where
+    something happens ("on YouTube", "YouTube original content",
+    "YouTube only"), and the ledger or the thread holds another subject
+    the rest of the words name, the platform scopes that subject. The
+    lane runs on the held subject with the platform as its cohort, and
+    the held figures bound the answer. A question about the platform's
+    own audience ("who uses YouTube", "YouTube viewers", "the YouTube
+    audience") still takes the platform's profile.
+  * `held_bucket(index_doc, skey, question)`: the ledger's side of the
+    same rule. A lookup that resolved to the platform's bucket moves to
+    the bucket of the subject the words name; the bucket already filed
+    on that platform's scope first, the all-platform bucket otherwise
+    (its figures still bound a platform-only read, but never replay as
+    one).
+  * `scope_of(*texts)` / `same_scope(a, b)`: the platforms a table is
+    scoped to. A figure on record binds a new table only on the same
+    scope: an all-platform share never lands in a YouTube-only table.
+
+Pure text and dicts; no S3, no model. Never raises.
+Regression: scripts/test_pm_platform_scopes_subject.py.
+"""
+from __future__ import annotations
+
+import re
+
+__all__ = ['PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read']
+
+# canonical name -> the ways it is written
+PLATFORMS = {
+    'YouTube': ('youtube', 'you tube', 'yt'),
+    'TikTok': ('tiktok', 'tik tok'),
+    'Instagram': ('instagram', 'ig', 'insta'),
+    'Facebook': ('facebook',),
+    'Snapchat': ('snapchat',),
+    'X': ('twitter',),
+    'Reddit': ('reddit',),
+    'Twitch': ('twitch',),
+    'Pinterest': ('pinterest',),
+    'Spotify': ('spotify',),
+    'Netflix': ('netflix',),
+    'Hulu': ('hulu',),
+    'Peacock': ('peacock',),
+    'HBO Max': ('hbo max', 'hbomax', 'max'),
+    'Paramount+': ('paramount+', 'paramount plus', 'paramount'),
+    'Prime Video': ('amazon prime video', 'prime video', 'amazon prime'),
+    'Disney+': ('disney+', 'disney plus'),
+    'Apple TV+': ('apple tv+', 'apple tv plus', 'apple tv'),
+    'Tubi': ('tubi',),
+    'Pluto TV': ('pluto tv', 'pluto'),
+    'Roku': ('the roku channel', 'roku channel', 'roku'),
+    'Starz': ('starz',),
+    'Discovery+': ('discovery+', 'discovery plus'),
+}
+# a platform's name inside a longer product name is that product, not the
+# platform as a place ("started through Amazon Prime Video Channels" is a
+# billing path; "YouTube TV" is a television service)
+_PRODUCT_TAILS = {
+    'Prime Video': re.compile(r"\s+channels?\b", re.I),
+    'YouTube': re.compile(r"\s+(?:tv|music|kids|premium)\b", re.I),
+    'Hulu': re.compile(r"\s*(?:\+|with|plus)\s*live\b", re.I),
+    'Peacock': re.compile(r"\s+premium\b", re.I),
+    'Spotify': re.compile(r"\s+premium\b", re.I),
+    'Paramount+': re.compile(r"\s+(?:with showtime|pictures|global|network)\b", re.I),
+    'Roku': re.compile(r"\s+(?:devices?|players?|tvs?|sticks?)\b", re.I),
+    'Apple TV+': re.compile(r"\s+(?:devices?|box(?:es)?|4k|hd)\b", re.I),
+}
+_AMBIGUOUS = frozenset(('max', 'ig', 'yt', 'paramount', 'pluto', 'roku'))   # a scope only beside scope words
+_ALIAS = {}
+for _c, _names in PLATFORMS.items():
+    _ALIAS[_c.lower()] = _c
+    for _n in _names:
+        _ALIAS[_n] = _c
+_ALT = '|'.join(sorted((re.escape(a) for a in _ALIAS), key=len, reverse=True))
+_P = rf"(?P<p>{_ALT})(?![\w+])"
+
+# the thing that happens on the platform: the platform is where, not who
+_CONTENT = (r"(?:original(?:s| content| programming| series| shows| videos)?|content|videos?|shows?|series|channels?|"
+            r"creators?|categories|category|genres?|programming|viewing|viewership|views|titles?|clips?|shorts?|episodes?|"
+            r"podcasts?|performance|engagement)")
+# the platform's own audience: the platform is who
+_AUDIENCE = (r"(?:users?|audiences?|viewers?|watchers?|subscribers?|members?|fans?|customers?|shoppers?|profile|file|"
+             r"universe|households|people)")
+_SCOPE_RXS = (
+    re.compile(rf"\b(?:on|in|within|inside|across|via|through|for|at)\s+(?:the\s+)?{_P}(?!\s+{_AUDIENCE}\b)", re.I),
+    re.compile(rf"(?<![\w+]){_P}\s*[- ]\s*only\b|\bonly\s+(?:on\s+)?{_P.replace('<p>', '<p2>')}", re.I),
+    re.compile(rf"(?<![\w+]){_P}(?:'s)?\s+(?:digital\s+|big\s+|top\s+)?{_CONTENT}\b", re.I),
+)
+_SUBJECT_RXS = (
+    re.compile(rf"(?<![\w+]){_P}(?:'s)?\s+{_AUDIENCE}\b", re.I),
+    re.compile(rf"\b(?:who|people who|those who|anyone who)\s+(?:use[sd]?|watch(?:es|ed)?|(?:is|are)\s+on|subscribe[sd]?\s+to)\s+{_P}", re.I),
+    re.compile(rf"\b(?:the\s+)?{_AUDIENCE}\s+(?:of|on|for)\s+{_P}", re.I),
+    re.compile(rf"\b(?:size|sizing|profile|demographics?|audience)\s+(?:of|for)\s+{_P}", re.I),
+)
+# a platform listed as an example of the kind of thing is not a scope
+_EXAMPLE_RX = re.compile(rf"\b(?:such as|like|e\.?g\.?|including|for example|for instance)\s+(?:[\w+' ]+,\s*)*(?:and\s+)?{_P}", re.I)
+_ETC_RX = re.compile(r"\betc\b|\band (?:others|more|the rest)\b", re.I)
+
+_POPULATION_RX = re.compile(r"\b(?:people|everyone|anyone|americans|adults|households|consumers|gen pop|general population|"
+                            r"the us|us population)\b", re.I)
+_STOP = frozenset("""
+a an and are as at be by can could do does for from give have how i in include including is it its let lets me my of on or our
+please pull run show tell that the their them these this those to us was we what when where which who why will with would you
+your across each every all big top more most also both per between into over about data performance audience size viewership
+examples example engagement content category five six four three two one seven eight nine ten many some any other
+""".split())
+_GENERIC = frozenset(('viewers', 'viewer', 'fans', 'fan', 'audience', 'users', 'user', 'profile', 'universe', 'total',
+                      'series', 'show', 'movie', 'subscribers', 'customers', 'consumers', 'on', 'only'))
+
+
+def canon(name):
+    """The canonical platform a name is, or ''."""
+    n = re.sub(r"\s+", " ", str(name or '').strip().lower())
+    n = re.sub(r"\s*-\s.*$", "", n)          # 'YouTube - Avid Fan' is YouTube's own cut
+    return _ALIAS.get(n, '')
+
+
+def _words(text):
+    t = re.sub(r"['\u2018\u2019]", "", str(text or '').lower())
+    return [w for w in re.split(r"[^a-z0-9+]+", t) if w]
+
+
+def _platform_words(platform):
+    out = set()
+    for a in (platform.lower(),) + tuple(PLATFORMS.get(platform, ())):
+        out.update(_words(a))
+    return out
+
+
+def named(text):
+    """{platform: how} for every platform the words carry: 'scope' (where
+    something happens), 'subject' (the platform's own audience),
+    'example' (listed as a kind of thing) or 'mention'."""
+    t = str(text or '')
+    out = {}
+    try:
+        for m in re.finditer(rf"(?<![\w+]){_P}", t, re.I):
+            c = _ALIAS.get(m.group('p').lower())
+            if c and not (m.group('p').lower() in _AMBIGUOUS and c not in out):
+                out.setdefault(c, 'mention')
+        for m in _EXAMPLE_RX.finditer(t):
+            # every platform in the listed run is an example
+            run = t[m.start():m.end() + 80]
+            for m2 in re.finditer(rf"(?<![\w+]){_P}", run, re.I):
+                c = _ALIAS.get(m2.group('p').lower())
+                if c:
+                    out[c] = 'example'
+        for rx in _SCOPE_RXS:
+            for m in rx.finditer(t):
+                grp = 'p' if m.groupdict().get('p') else 'p2'
+                raw = (m.groupdict().get(grp) or '').lower()
+                c = _ALIAS.get(raw)
+                if not c or out.get(c) == 'example':
+                    continue
+                tail = _PRODUCT_TAILS.get(c)
+                if tail and tail.match(t[m.end(grp):]):
+                    continue            # 'Amazon Prime Video Channels', 'YouTube TV': a product of its own, not where
+                out[c] = 'scope'
+        for rx in _SUBJECT_RXS:
+            for m in rx.finditer(t):
+                c = _ALIAS.get(m.group('p').lower())
+                if c and out.get(c) != 'example':
+                    out[c] = 'subject'
+    except Exception:
+        return {}
+    return out
+
+
+def scope_of(*texts):
+    """The platforms a read or a table is scoped to, as a frozenset. An
+    all-platform read, or one that lists platforms as examples, has no
+    scope."""
+    found = set()
+    for t in texts:
+        if not str(t or '').strip():
+            continue
+        n = named(t)
+        scoped = {p for p, how in n.items() if how == 'scope'}
+        if scoped and _ETC_RX.search(str(t)) and len(n) > 1:
+            continue        # 'on YouTube, TikTok, etc.' is every platform
+        found |= scoped
+    return frozenset(found)
+
+
+def same_scope(a, b):
+    """Two reads sit on the same platform scope (both unscoped counts)."""
+    return frozenset(a or ()) == frozenset(b or ())
+
+
+def _distinct(subject, drop=()):
+    return [w for w in dict.fromkeys(_words(subject)) if w not in _GENERIC and w not in drop and len(w) > 1]
+
+
+def _coverage(subject, qwords, drop=()):
+    toks = _distinct(subject, drop)
+    if not toks:
+        return 0, 0.0, 0
+    hit = [w for w in toks if w in qwords]
+    return len(hit), len(hit) / float(len(toks)), sum(len(w) for w in hit)
+
+
+def held_bucket(index_doc, skey, question, live=None):
+    """The bucket of the subject the words name when the lookup resolved
+    to a platform's own bucket and the words name that platform as a
+    scope. Returns {'key', 'subject', 'platform', 'same_scope'} or None."""
+    try:
+        subjects = (index_doc or {}).get('subjects') or {}
+        cur = subjects.get(skey) or {}
+        plat = canon(cur.get('subject') or str(skey or '').replace('_', ' '))
+        if not plat:
+            return None
+        if named(question).get(plat) != 'scope':
+            return None
+        pw = _platform_words(plat)
+        qwords = set(_words(question)) - pw
+        best, best_score = None, None
+        for k, v in subjects.items():
+            if k == skey or not isinstance(v, dict):
+                continue
+            subj = str(v.get('subject') or k.replace('_', ' '))
+            if canon(subj):
+                continue                         # another platform's bucket is not the subject
+            if live is not None and not live(v):
+                continue
+            n, frac, chars = _coverage(subj, qwords, drop=pw)
+            if n < 3 or frac < 0.6 or chars < 14:
+                continue
+            on_scope = plat in scope_of(subj)
+            score = (1 if on_scope else 0, frac, n)
+            if best_score is None or score > best_score:
+                best, best_score = {'key': k, 'subject': subj, 'platform': plat, 'same_scope': on_scope}, score
+        return best
+    except Exception:
+        return None
+
+
+def _thread_subject(history):
+    """The subject the thread's last answer landed on ('' when none)."""
+    try:
+        for turn in reversed(list(history or [])[-12:]):
+            if not isinstance(turn, dict) or str(turn.get('role') or '') in ('user',):
+                continue
+            meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+            s = str(meta.get('subject') or turn.get('subject') or '').strip()
+            if s:
+                return s
+            m = re.match(r"\s*On\s+([^:\n]{2,140}?)\s*(?::|\n)", str(turn.get('text') or turn.get('content') or ''))
+            if m:
+                return m.group(1).strip()
+    except Exception:
+        pass
+    return ''
+
+
+def resolve(text, base_subject, *, ledger_doc=None, history=None, thread_subject='', live=None):
+    """The held subject a platform scopes, when the lane's base is the
+    platform's own profile. Returns {'platform', 'subject', 'bucket',
+    'source', 'cohort', 'same_scope'} or None (the base stands)."""
+    try:
+        plat = canon(str(base_subject or '').split(' - ')[0])
+        if not plat:
+            return None
+        how = named(text).get(plat)
+        if how != 'scope':
+            return None                          # the platform's own audience, or only a mention
+        hit = held_bucket({'subjects': dict((ledger_doc or {}).get('subjects') or {}, **{'__p__': {'subject': plat}})},
+                          '__p__', text, live=live) if ledger_doc else None
+        if hit:
+            return {'platform': plat, 'subject': hit['subject'], 'bucket': hit['key'], 'source': 'ledger',
+                    'cohort': f"on {plat}", 'same_scope': bool(hit['same_scope'])}
+        ts = str(thread_subject or '').strip() or _thread_subject(history)
+        if ts and not canon(ts.split(' - ')[0]) and plat.lower() not in ts.lower() \
+                and not _POPULATION_RX.search(str(text or '')):
+            # the thread is on another subject and the words only add where
+            # ("and on YouTube?", "the same split on TikTok only"); a
+            # question about people at large is its own universe
+            pw = _platform_words(plat)
+            rest = [w for w in _words(text) if w not in pw and w not in _STOP]
+            if len(rest) <= 4 or _coverage(ts, set(rest), drop=pw)[0] >= 1:
+                return {'platform': plat, 'subject': ts, 'bucket': '', 'source': 'thread',
+                        'cohort': f"on {plat}", 'same_scope': False}
+        return None
+    except Exception:
+        return None
+
+
+def for_read(text, history, base, ledger, bind_subject=''):
+    """The read lane's hook: resolve() against the live ledger for the
+    base the lane picked. None when the base stands (not a platform's
+    profile, a base the reader chose on a chip, a resumed job)."""
+    try:
+        if not isinstance(base, dict) or str(base.get('source') or '') not in ('catalog', 'page'):
+            return None
+        subj = str(base.get('subject') or '')
+        if not canon(subj.split(' - ')[0]):
+            return None
+        if str(bind_subject or '').strip() and canon(str(bind_subject).split(' - ')[0]) == canon(subj.split(' - ')[0]):
+            return None                          # the reader picked the platform's profile
+        doc = None
+        try:
+            doc = ledger._load_index() if ledger is not None else None
+        except Exception:
+            doc = None
+        live = getattr(ledger, '_has_live_entries', None) if ledger is not None else None
+        hit = resolve(text, subj, ledger_doc=doc, history=history, live=live)
+        if hit:
+            print(f"[pm-base] {subj!r} is where, not who: the words scope {hit['subject']!r} to {hit['platform']} "
+                  f"({hit['source']}); the platform's own profile is not the base")
+        return hit
+    except Exception:
+        return None

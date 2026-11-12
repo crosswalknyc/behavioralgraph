@@ -54,6 +54,13 @@ _SKIP_SENT_RX = re.compile(
     r'\b(?:\$\s?\d+(?:,\d{3})*(?:\.\d\d)?\s+(?:per|a|each|on approval)|credits?|runs \$|it runs|price[sd]? at)\b'
     r'|\b(?:19|20)\d\d\b(?!\S)', re.IGNORECASE)
 _YEAR_RX = re.compile(r'^(?:19|20)\d\d$')
+_AFTER_UNIT_RX = re.compile(r"\s+(?:total\s+|viewing\s+|watch\s+|streaming\s+|listening\s+)?"
+                            r"(hours?|hrs|minutes?|mins|sessions?|visits?|views|plays|streams|episodes?|titles?|orders?|"
+                            r"transactions?|impressions?|clicks?|searches|posts?|videos?)\b", re.I)
+_AFTER_UNITS = {'hour': 'hours', 'hr': 'hours', 'minute': 'minutes', 'min': 'minutes', 'session': 'sessions', 'visit': 'visits',
+                'view': 'views', 'play': 'plays', 'stream': 'streams', 'episode': 'episodes', 'title': 'titles', 'order': 'orders',
+                'transaction': 'transactions', 'impression': 'impressions', 'click': 'clicks', 'searche': 'searches',
+                'search': 'searches', 'post': 'posts', 'video': 'videos'}
 
 
 def _sync():
@@ -64,6 +71,11 @@ def _run(fn):
     if _sync():
         fn()
         return
+    try:   # the thread has no request: the asker seen here rides with it (a probe never banks, 2026-11-11)
+        from . import ledger_gate as _lg
+        fn = _lg.carry(fn)
+    except Exception:
+        pass
     threading.Thread(target=fn, daemon=True).start()
 
 
@@ -94,6 +106,13 @@ def figures_from_reply(reply, limit=14):
             num, unit = _numeric(v)
             if num is None:
                 continue
+            if unit == 'count':
+                # the noun right after the figure is its unit: hours,
+                # sessions and visits are not people (2026-11-11, a
+                # measure in hours was stored as a count of viewers)
+                _nm = _AFTER_UNIT_RX.match(s[m.end():])
+                if _nm:
+                    unit = _AFTER_UNITS.get(_nm.group(1).lower().rstrip('s'), unit)
             # a short label: the words right before the figure
             head = s[:m.start()].strip()
             label = ' '.join(head.split()[-6:]).strip(' ,;:(') or 'figure'

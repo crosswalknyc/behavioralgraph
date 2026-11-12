@@ -198,6 +198,11 @@ def sweep(host, now=None, dry_run=False, stale_min=STALE_MIN, start_thread=True)
                         if not _write(host, key, new):
                             continue
                         runner = getattr(host, rcap)
+                        try:   # the restarted job banks as its asker; a probe's job never does (2026-11-11)
+                            from . import ledger_gate as _lg
+                            runner = _lg.carry(runner, user, probe=bool(doc.get('probe')), from_request=False)
+                        except Exception:
+                            pass
                         if start_thread:
                             threading.Thread(target=runner, args=(job_id, user, inputs, {}), daemon=True).start()
                         else:
