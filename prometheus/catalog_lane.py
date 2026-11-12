@@ -292,10 +292,79 @@ def _fmt_people(v):
         return str(v)
 
 
+_MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+
+
+def _plain_date(d):
+    """'2025-11-01' -> 'Nov 1, 2025'. Anything else is returned as it came."""
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", str(d or '').strip()[:10])
+    if not m or not 1 <= int(m.group(2)) <= 12:
+        return str(d or '')
+    return f"{_MONTHS[int(m.group(2)) - 1]} {int(m.group(3))}, {m.group(1)}"
+
+
 def _window_text(w):
+    """A window in plain words: ' (Nov 1, 2025 to Oct 31, 2026)'."""
     if not isinstance(w, dict) or not w.get('start'):
         return ''
-    return f" ({w.get('start')} to {w.get('end')})"
+    if not w.get('end'):
+        return f" (from {_plain_date(w.get('start'))})"
+    return f" ({_plain_date(w.get('start'))} to {_plain_date(w.get('end'))})"
+
+
+# Initials that carry a vowel and stay in capitals. A word of capitals with no vowel (TV, NBC, MLB,
+# CDW) is read as initials without a list.
+_INITIALS = frozenset("""AI ABC AEW AMC AMD AOC AOL ATP ATV AVOD BBC BET BMO BYD BYU CEO CIA CSI CTV DIY DNA EA EPL ESPN
+EST EV FAQ FBI FIFA FKA GE GMA GURT HBO IBM IHOP II III IKEA IMDB IT ITV IV KPOP LA LPGA LSU MILB MMA NASA NBA NCAA NCIS
+NOS OTT PGA SUV SVOD SVU TVOD UCLA UEFA UFC UFO UK UPS US USA USC USPS VI VIP WNBA WSOP WTA WWE""".split())
+_SMALL_WORDS = frozenset(('a', 'an', 'and', 'at', 'for', 'in', 'of', 'on', 'the', 'to', 'with'))
+
+
+def name_as_shown(display, text=''):
+    """The profile's name as the dashboard lists it, without the shouting.
+
+    The dashboard's list keeps any word of two to four capitals as it
+    found it in the file name, to protect initials (FBI, NCIS, HBO).
+    A title whose file was named in capitals therefore reads half
+    shouted: 'Helluva BOSS', 'Gilmore Girls Viewers ON HULU', 'KATY
+    Perry'. In a reply:
+
+      * a word the reader wrote as a word is written the reader's way
+        ('Helluva Boss'); a word the reader wrote in capitals stays;
+      * otherwise capitals stay when they are initials (no vowel, or
+        on the list above) and become a word when they are not.
+
+    Only the words that rule leaves behind are touched (two to four
+    capitals inside a name that otherwise mixes cases). A name that is
+    all capitals ('FBI') has nothing to compare against and is left,
+    and a longer word in capitals is the name as it was registered."""
+    name = ' '.join(str(display or '').split())
+    words = name.split(' ')
+    if not name or not any(any(ch.islower() for ch in w) for w in words):
+        return name
+    asked = {}
+    for w in re.findall(r"[A-Za-z][A-Za-z']*", str(text or '')):
+        if len(w) >= 2:
+            asked.setdefault(w.lower(), []).append(w)
+    out = []
+    for i, w in enumerate(words):
+        core = w.strip(".,:;!?()'\"")
+        if not (2 <= len(core) <= 4 and core.isalpha() and core.isupper()):
+            out.append(w)
+            continue
+        seen = asked.get(core.lower()) or []
+        if any(x[0].isupper() and x[1:].islower() for x in seen):
+            fixed = core.title()
+        elif any(x.isupper() for x in seen):
+            fixed = core
+        elif core in _INITIALS or not (set(core) & set('AEIOU')):
+            fixed = core
+        elif i and core.lower() in _SMALL_WORDS:
+            fixed = core.lower()
+        else:
+            fixed = core.title()
+        out.append(w.replace(core, fixed))
+    return ' '.join(out)
 
 
 def _summarize(anchors):
@@ -524,18 +593,20 @@ def answer(text, ctx=None):
                         'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': _title}
             if _on[0] == 'home':
                 _, pa, display, _title, _home = _on
-                reply = (f"{display}: {_fmt_people(pa['audience_size'])} US people"
-                         f"{_window_text(pa.get('window'))}, {_fmt_people(pa.get('sample_size'))} "
-                         f"inside the 10 million sample. {_ssm_home_line(_title, _home)}")
+                # one number, one definition (2026-11-12): the US people, the window in plain words
+                reply = (f"{name_as_shown(display, text)}: {_fmt_people(pa['audience_size'])} US people"
+                         f"{_window_text(pa.get('window'))}. {_ssm_home_line(_title, _home)}")
                 return {'success': True, 'action': 'answer', 'reply': reply,
                         'followups': [f"Open {display}", f"Who is the {display} audience?"],
                         'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': display}
             pa, display = _on
         if not pa or not pa.get('audience_size'):
             return None  # the reasoning path sizes it
-        reply = (f"{display}: {_fmt_people(pa['audience_size'])} US people"
-                 f"{_window_text(pa.get('window'))}, {_fmt_people(pa.get('sample_size'))} "
-                 f"inside the 10 million sample. That is the profile on the dashboard.")
+        # One number, one definition (2026-11-12). The reply used to add the count inside the sample; the
+        # house scrub then took the words off and left a second, unlabelled figure ("13,732,978 US people
+        # (...), 416,277."). A size reply carries the US people and nothing beside them.
+        reply = (f"{name_as_shown(display, text)}: {_fmt_people(pa['audience_size'])} US people"
+                 f"{_window_text(pa.get('window'))}. That is the profile on the dashboard.")
         return {'success': True, 'action': 'answer', 'reply': reply,
                 'followups': [f"Open {display}", f"Who is the {display} audience?"],
                 'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True,

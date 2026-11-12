@@ -703,6 +703,23 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
 
         old_bp = _fbp(df.at[idx, bp_col])
         if old_bp is None:
+            # A parent row whose penetration cell cannot be read still
+            # holds a people count. Skipping it left the PARENT's count
+            # on the CUT's smaller sample, and the next recovery read it
+            # as the cut's reach: the parent's times the sample ratio
+            # (2026-11-12, Happy's Place Avid Fan: 3,675 rows, Tubi
+            # 48,290 people in both files). The row's reach is the
+            # parent's count over the PARENT's sample; it is then set
+            # like any other row and its count follows the cut's sample.
+            try:
+                try:
+                    from migration.cut_parent_counts import reach_from_count as _rfc
+                except ImportError:
+                    from cut_parent_counts import reach_from_count as _rfc  # type: ignore
+                old_bp = _rfc(df.at[idx, raw_col], old_sample)
+            except Exception:
+                old_bp = None
+        if old_bp is None:
             continue
 
         # Subject self-pin: still 100% -- both genders & both intensities

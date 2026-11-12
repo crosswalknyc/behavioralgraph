@@ -122,7 +122,7 @@ class ATitleOnThreeScopes(unittest.TestCase):
     def test_paramount_plus(self):
         with _Catalog(georgie_page()):
             r = CL.answer(f"How many people watched {T} on Paramount+?")
-        self.assertIn('1,285,455 US people (2024-10-25 to 2026-11-10), 38,965 inside', r['reply'])
+        self.assertIn('1,285,455 US people (Oct 25, 2024 to Nov 10, 2026). That is the profile', r['reply'])
         self.assertNotIn('957,139', r['reply'])
         # under the profile's own name, as the dashboard lists it
         self.assertTrue(r['reply'].startswith("GEORGIE & MANDY'S FIRST MARRIAGE Viewers (Paramount+):"), r['reply'])
@@ -132,7 +132,7 @@ class ATitleOnThreeScopes(unittest.TestCase):
         with _Catalog(georgie_page()):
             for q in (f"How many people watched {T} on HBO Max?", f"How big is the {T} audience on HBO Max?"):
                 r = CL.answer(q)
-                self.assertIn('404,556 US people (2026-08-07 to 2026-11-10), 12,263 inside', r['reply'], q)
+                self.assertIn('404,556 US people (Aug 7, 2026 to Nov 10, 2026). That is the profile', r['reply'], q)
                 self.assertTrue(r['reply'].startswith("Georgie & Mandy's First Marriage Viewers (HBO Max):"), r['reply'])
 
     def test_a_service_nothing_is_held_on_steps_aside(self):
@@ -165,7 +165,7 @@ class OtherSubjects(unittest.TestCase):
         with _Catalog(gilmore_page()):
             on_hulu = CL.answer('How many people watched Gilmore Girls on Hulu?')
             whole = CL.answer('How many people watched Gilmore Girls?')
-        self.assertIn('Gilmore Girls Viewers ON HULU: 1,371,988 US people', on_hulu['reply'])
+        self.assertIn('Gilmore Girls Viewers on Hulu: 1,371,988 US people', on_hulu['reply'])
         self.assertIn('9,489,178 US people', whole['reply'])                               # the profile on no one service answers the plain ask
 
     def test_a_profile_name_from_its_file(self):

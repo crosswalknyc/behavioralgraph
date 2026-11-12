@@ -12889,7 +12889,7 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     # the fixed BPs.
     try:
         df, n = renormalize_demographics_to_100(
-            df, subject=subject, tolerance=0.5, verbose=verbose,
+            df, subject=subject, verbose=verbose,
         )
         total += n
     except Exception as e:
@@ -15006,12 +15006,98 @@ def apply_lux_confirmed_purchase_caps(df, *, subject=None, verbose=True):
     return df, ops
 
 
-def renormalize_demographics_to_100(df, *, subject=None, tolerance=0.5,
+DEMO_SUM_TOLERANCE = 0.02     # a demographic group sums to 100 within this (2026-11-12)
+DEMO_PIN_FLOOR = 99.0         # a bucket this high is a cut's pinned target: kept, the others absorb
+
+
+def demo_group_sums(df) -> dict:
+    """{group: sum of its shares} for the nine demographic groups a frame carries."""
+    out = {}
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return out
+    bp_col, _cs, _raw, _proj = _detect_cols(df)
+    if bp_col not in df.columns:
+        return out
+    cats_upper = df['Column'].astype(str).str.strip().str.upper()
+    for cat in _DEMO_CATS_NINE:
+        mask = cats_upper == cat
+        if mask.any():
+            out[cat] = float(df.loc[mask, bp_col].apply(_bp).sum())
+    return out
+
+
+def zero_sum_demo_boundary_jitter(df, subject):
+    """Move a demographic share off a two-decimal boundary without
+    moving the group's sum: each row on a boundary takes a few
+    ten-thousandths (salted by subject and bucket) from the largest row
+    that is not on one. When every row of a group sits on a boundary
+    the first of them gives instead, so the sum still does not move.
+    Shares of exactly 0 and 100 are left. Returns (df, rows moved).
+
+    (The body of run_final_invariant_polish's demo step, given a name
+    2026-11-12 so the in-place demographic fixer uses the same pass.)"""
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    n_demo_jit = 0
+    if not bp_col:
+        return df, 0
+    cat_u = df['Column'].astype(str).str.strip().str.upper()
+    for demo_cat in sorted(DEPIN_DEMO_CATS):
+        idxs = list(df.index[cat_u == demo_cat])
+        if not idxs:
+            continue
+        bps = {}
+        for i in idxs:
+            try:
+                bps[i] = float(str(df.at[i, bp_col])
+                               .replace('%', '').strip())
+            except Exception:
+                bps[i] = None
+        on2 = [i for i in idxs
+               if bps.get(i) is not None
+               and abs(bps[i] * 100 - round(bps[i] * 100)) < 1e-9
+               and bps[i] not in (0.0, 100.0)]
+        if not on2:
+            continue
+        donor = max((i for i in idxs
+                     if i not in on2 and bps.get(i) is not None),
+                    key=lambda i: bps[i], default=None)
+        if donor is None and len(on2) >= 2:
+            # every row is on a boundary: the largest gives to the rest
+            donor = max(on2, key=lambda i: bps[i])
+            on2 = [i for i in on2 if i != donor]
+        for i in on2:
+            d = abs(_jitter_for(subject, str(df.at[i, 'Value']),
+                                salt=f'polish|{demo_cat}',
+                                lo=0.0021, hi=0.0093))
+            if donor is None:
+                continue        # a lone bucket: nothing to take from, the sum is not moved
+            df.at[i, bp_col] = round(bps[i] + d, 4)
+            bps[donor] -= d
+            n_demo_jit += 1
+        if donor is not None:
+            if abs(bps[donor] * 100 - round(bps[donor] * 100)) < 1e-9 and on2:
+                # the giver landed on a boundary itself: trade one more ten-thousandth with the first row
+                bps[donor] -= 0.0003
+                df.at[on2[0], bp_col] = round(float(df.at[on2[0], bp_col]) + 0.0003, 4)
+            df.at[donor, bp_col] = round(bps[donor], 4)
+    return df, n_demo_jit
+
+
+def renormalize_demographics_to_100(df, *, subject=None, tolerance=DEMO_SUM_TOLERANCE,
                                     verbose=True):
     """Rescale BPs within each of the 9 demographic categories so each
     sums to exactly 100% (within rounding). Recomputes Category Share,
     Original Raw Numbers, and US Gen Pop Projection from the new BPs
     using the canonical sample-size formula.
+
+    2026-11-12: the tolerance was half a point, so THE HAIL MARY - Avid
+    Fan shipped AGE 99.91, OCCUPATION 99.91 and PARENTAL_STATUS 100.09
+    and neither this pass nor the ship gate's I5 said a word. A group
+    now sums to 100 within 0.02. A bucket at 99 or higher is a cut's
+    pinned target (a gender cut's FEMALE 99.99): it is kept and the
+    other buckets absorb the difference. The four-decimal rounding
+    remainder goes to the largest bucket that is not a pin, so the
+    group sums to 100.0000.
 
     Idempotent: a second pass on an already-renormalized df is a no-op.
     Safe on string-typed columns (parses via `_bp`). Skips categories
@@ -15026,8 +15112,27 @@ def renormalize_demographics_to_100(df, *, subject=None, tolerance=0.5,
     if bp_col not in df.columns or 'Column' not in df.columns:
         return df, 0
 
-    sample_size = _detect_sample_size(df, bp_col, raw_col)
     cats_upper = df['Column'].astype(str).str.strip().str.upper()
+    # The file's own anchor first (the BRAND INPUT row, then SAMPLE SIZE):
+    # a sample back-computed from an arbitrary row is only as exact as that
+    # row's rounding, which on a 101-person row is half a percent of every
+    # count this pass rewrites (2026-11-12).
+    sample_size = None
+    if raw_col:
+        for _anchor in ('BRAND INPUT', 'SAMPLE SIZE'):
+            _rows = df[cats_upper == _anchor]
+            if not len(_rows):
+                continue
+            try:
+                _ab = _bp(_rows.iloc[0][bp_col])
+                _ar = float(str(_rows.iloc[0][raw_col] or '0').replace(',', ''))
+            except Exception:
+                continue
+            if _ab and _ab > 0 and _ar > 0:
+                sample_size = _ar / (_ab / 100.0)
+                break
+    if sample_size is None:
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
     adjusted = 0
     adj_log: list[tuple[str, float, float, int]] = []
 
@@ -15043,8 +15148,22 @@ def renormalize_demographics_to_100(df, *, subject=None, tolerance=0.5,
         if deviation <= tolerance:
             continue
 
-        scale = 100.0 / bp_sum
-        new_bps = (bp_floats * scale).round(4)
+        pinned = bp_floats >= DEMO_PIN_FLOOR
+        free_sum = float(bp_floats[~pinned].sum())
+        if pinned.any() and free_sum > 0:
+            # a cut's pinned target stays; the other buckets take what is left
+            new_bps = bp_floats.copy()
+            new_bps[~pinned] = (bp_floats[~pinned] * ((100.0 - float(bp_floats[pinned].sum())) / free_sum))
+            new_bps = new_bps.round(4)
+        elif pinned.any():
+            continue        # nothing but the pin to move: left for a person, never rescaled off its target
+        else:
+            scale = 100.0 / bp_sum
+            new_bps = (bp_floats * scale).round(4)
+        _rem = round(100.0 - float(new_bps.sum()), 4)
+        if abs(_rem) >= 0.00005:
+            _free = new_bps[~pinned] if (~pinned).any() else new_bps
+            new_bps[_free.idxmax()] = round(float(new_bps[_free.idxmax()]) + _rem, 4)
         # Ensure cell-type compatibility: coerce BP col to object/numeric
         # before assignment to avoid the str-dtype TypeError we hit in
         # adjust_platform_to_100_percent.
@@ -18162,40 +18281,7 @@ def run_final_invariant_polish(df, subject, *, verbose: bool = True):
         if verbose:
             print(f'   ⚠️ final-polish within-cat dejitter failed: {e}')
     try:
-        bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
-        n_demo_jit = 0
-        if bp_col:
-            cat_u = df['Column'].astype(str).str.strip().str.upper()
-            for demo_cat in sorted(DEPIN_DEMO_CATS):
-                idxs = list(df.index[cat_u == demo_cat])
-                if not idxs:
-                    continue
-                bps = {}
-                for i in idxs:
-                    try:
-                        bps[i] = float(str(df.at[i, bp_col])
-                                       .replace('%', '').strip())
-                    except Exception:
-                        bps[i] = None
-                on2 = [i for i in idxs
-                       if bps.get(i) is not None
-                       and abs(bps[i] * 100 - round(bps[i] * 100)) < 1e-9
-                       and bps[i] not in (0.0, 100.0)]
-                if not on2:
-                    continue
-                donor = max((i for i in idxs
-                             if i not in on2 and bps.get(i) is not None),
-                            key=lambda i: bps[i], default=None)
-                for i in on2:
-                    d = abs(_jitter_for(subject, str(df.at[i, 'Value']),
-                                        salt=f'polish|{demo_cat}',
-                                        lo=0.0021, hi=0.0093))
-                    df.at[i, bp_col] = round(bps[i] + d, 4)
-                    if donor is not None:
-                        bps[donor] -= d
-                        n_demo_jit += 1
-                if donor is not None:
-                    df.at[donor, bp_col] = round(bps[donor], 4)
+        df, n_demo_jit = zero_sum_demo_boundary_jitter(df, subject)
         stats['demo_boundary_jitter'] = n_demo_jit
         if verbose and n_demo_jit:
             print(f'   🎲 final-polish: zero-sum jittered {n_demo_jit} '

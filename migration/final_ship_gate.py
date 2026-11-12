@@ -37,7 +37,7 @@ Invariants asserted (each returns structured violations):
                          cuts also per-brand subset coherence (blocks
                          on 10x count impossibilities where parent
                          reach >= 1%).
-  I5 demo sums           9 canonical demos each sum to 100 +/- 0.5;
+  I5 demo sums           9 canonical demos each sum to 100 +/- 0.02;
                          LOCATION to 100 +/- 1.5; no negative bucket.
   I6 chain math          Raw == round(BP/100 x sample) +/- 1 and
                          Proj == round(Raw/10M x 329.9M) +/- 18
@@ -1313,7 +1313,10 @@ def _check_i5(rows):
                     f"share.",
                 ))
     for cu, total in sums.items():
-        tol = 1.5 if cu == "LOCATION" else 0.5
+        # 2026-11-12: a demographic group sums to 100 within 0.02 (it was
+        # half a point, and THE HAIL MARY - Avid Fan shipped AGE 99.91
+        # unseen). The writer's I5 fix renormalizes to the same bar.
+        tol = 1.5 if cu == "LOCATION" else 0.02
         if abs(total - 100.0) > tol:
             out.append(_v(
                 "I5", "demo sums", cu, f"{total:.2f}%",

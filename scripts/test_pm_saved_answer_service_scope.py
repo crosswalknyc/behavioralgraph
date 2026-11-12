@@ -238,7 +238,7 @@ class TheSizeLookup(unittest.TestCase):
                       f"How many people watched {T} on Prime Video and HBOMax?"):
                 r = CL.answer(q)
                 self.assertIsNotNone(r, q)
-                self.assertIn('957,139 US people (2026-08-07 to 2026-11-10), 29,013 inside', r['reply'], q)
+                self.assertIn('957,139 US people (Aug 7, 2026 to Nov 10, 2026). That is the profile', r['reply'], q)
                 self.assertTrue(r['reply'].startswith(T + " Viewers (HBO Max & Amazon Prime):"), r['reply'])
 
     def test_one_service_is_never_the_two_service_profile(self):
@@ -251,7 +251,7 @@ class TheSizeLookup(unittest.TestCase):
         with _Catalog():
             r = CL.answer(f"How many people watched {T} from October 25 2024 to November 10 2026?")
             self.assertIsNotNone(r)
-            self.assertIn('6,220,660 US people across every service (2024-10-25 to 2026-11-10)', r['reply'])
+            self.assertIn('6,220,660 US people across every service (Oct 25, 2024 to Nov 10, 2026)', r['reply'])
             self.assertIn('the whole audience on record, not one service', r['reply'])
             self.assertTrue(r['reply'].startswith(T + ":"), r['reply'])
             for n in ('1,285,455', '957,139', '404,556'):

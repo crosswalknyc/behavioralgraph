@@ -36,7 +36,8 @@ from __future__ import annotations
 
 
 def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
-                            verbose=True, ship_gate=True):
+                            verbose=True, ship_gate=True,
+                            _skip_parent_counts=False):
     """Run the shared terminal invariant chain on a derived-cut frame.
 
     Returns ``(df, report)`` where report carries the polish stats, the
@@ -94,6 +95,31 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
             _sort_within_category,
         )
 
+    # 0.5. A cut never carries its parent's people counts on a smaller
+    #    sample (2026-11-12, Happy's Place Avid Fan: 3,675 of 4,861
+    #    shared rows held exactly the parent's count, so their reach was
+    #    the parent's times the sample ratio and nine rows read 99 or
+    #    higher). A cut that reaches the gate with that signature has
+    #    those rows reasoned for the cut, row by row, before anything
+    #    else runs on it; it is corrected in place and publishes, never
+    #    held (migration/cut_parent_counts.py and cut_parent_counts_fix.py).
+    #    The in-place corrector calls this gate itself and skips the step.
+    if parent_df is not None and not _skip_parent_counts:
+        try:
+            try:
+                from migration.cut_parent_counts_fix import correct_if_carried
+            except ImportError:
+                from cut_parent_counts_fix import correct_if_carried  # type: ignore
+            df, _pc = correct_if_carried(df, parent_df, subject, out_key=out_key)
+            if _pc is not None:
+                report['parent_counts'] = {
+                    'corrected': bool(_pc.get('corrected')),
+                    'carried_before': int((_pc.get('before') or {}).get('carried') or 0),
+                    'carried_after': int((_pc.get('after') or {}).get('carried') or 0),
+                }
+        except Exception as e:
+            print(f'   ⚠ cut-write-gate parent-counts check failed (non-fatal): {e}')
+
     # 1. terminal polish (includes cohort-label guard + SUBJECT row
     #    backstop + depin + safety net)
     try:
@@ -139,6 +165,82 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
     #    will resolve from S3 (falling back to the caller's in-memory
     #    parent_df when resolution fails, e.g. offline dry runs), so
     #    the cap and the gate can never disagree about the ceiling.
+    # 2.2. demographic groups sum to 100 (2026-11-12, THE HAIL MARY -
+    #    Avid Fan: AGE 99.91, OCCUPATION 99.91, PARENTAL_STATUS 100.09).
+    #    The cut path had no step that brings a group back to 100: the
+    #    polish only moves shares off a two-decimal boundary (zero-sum)
+    #    and the ship gate is report-only on a cut, so a group that
+    #    arrived off stayed off. Any of the nine groups outside 100 by
+    #    more than 0.02 is renormalized here, in place: a bucket at 99 or
+    #    higher is the cut's pinned target and is kept, the others absorb
+    #    the difference, counts follow, nothing lands on a boundary.
+    #    Transactional: a pass that leaves a group further off is undone.
+    try:
+        try:
+            from migration.post_generation_enforcers import (
+                DEMO_SUM_TOLERANCE as _DEMO_TOL,
+                demo_group_sums as _demo_sums,
+                renormalize_demographics_to_100 as _demo_fix,
+                zero_sum_demo_boundary_jitter as _demo_jit,
+            )
+        except ImportError:
+            from post_generation_enforcers import (  # type: ignore
+                DEMO_SUM_TOLERANCE as _DEMO_TOL,
+                demo_group_sums as _demo_sums,
+                renormalize_demographics_to_100 as _demo_fix,
+                zero_sum_demo_boundary_jitter as _demo_jit,
+            )
+        _before = _demo_sums(df)
+        _off = {k: v for k, v in _before.items() if abs(v - 100.0) > _DEMO_TOL}
+        report['demo_sums_off'] = {k: round(v, 4) for k, v in _off.items()}
+        if _off:
+            _snap = df.copy()
+            # the pass turns a whole text-typed column into numbers; give it
+            # plain object columns so it only writes the rows it moves
+            for _c in df.columns:
+                _lc = str(_c).lower()
+                if (('brand penetration' in _lc or 'category share' in _lc or 'original raw' in _lc
+                     or 'gen pop projection' in _lc) and str(df[_c].dtype) != 'object'):
+                    df[_c] = df[_c].astype(object)
+            df, _n_demo = _demo_fix(df, subject=subject, verbose=False)
+            df, _ = _demo_jit(df, subject)
+            # the pass writes numbers; a cut frame is text. Put the cells it
+            # touched back as text, four decimals on a share, whole people.
+            _cu = df['Column'].astype(str).str.strip().str.upper()
+            for _c in df.columns:
+                _lc = str(_c).lower()
+                _is_share = 'brand penetration' in _lc or 'category share' in _lc
+                _is_count = 'original raw' in _lc or 'gen pop projection' in _lc
+                if not (_is_share or _is_count):
+                    continue
+                for _i in df.index[_cu.isin(set(_off))]:
+                    _v, _was = df.at[_i, _c], _snap.at[_i, _c]
+                    if isinstance(_v, str) or not isinstance(_was, str):
+                        continue
+                    try:
+                        _f = float(_v)
+                    except (TypeError, ValueError):
+                        continue
+                    if _f != _f:
+                        df.at[_i, _c] = _was
+                    elif _is_share:
+                        df.at[_i, _c] = f'{_f:.4f}' + ('%' if _was.strip().endswith('%') else '')
+                    else:
+                        df.at[_i, _c] = str(int(round(_f)))
+            _after = _demo_sums(df)
+            if any(abs(_after.get(k, 100.0) - 100.0) > abs(v - 100.0) + 1e-9 for k, v in _before.items()):
+                df = _snap
+                report['demo_sums_fixed'] = 0
+                print('   ⚠ cut-write-gate demographic sums: the pass did not help; left as they came')
+            else:
+                report['demo_sums_fixed'] = len(_off)
+                if verbose:
+                    print(f'   ✅ cut-write-gate demographic sums: {len(_off)} group(s) brought to 100 '
+                          f'({", ".join(f"{k} {v:.4f}" for k, v in sorted(_off.items()))})')
+    except Exception as e:
+        report['demo_sums_fixed'] = -1
+        print(f'   ⚠ cut-write-gate demographic sums failed (non-fatal): {e}')
+
     _gate_parent_df = None
     try:
         try:

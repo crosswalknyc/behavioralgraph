@@ -352,8 +352,8 @@ class TheSizeLookup(unittest.TestCase):
             for q in ("How many people watched Fallout Season 2?", "How big is the Fallout Season 2 audience?"):
                 r = CL.answer(q)
                 self.assertIsNotNone(r, q)
-                self.assertEqual(r['reply'], "Fallout Season 2 Viewers on Prime Video: 13,732,978 US people (2025-11-01 to 2026-10-31), "
-                                             "416,277 inside the 10 million sample. Prime Video is the only US home of Fallout Season 2 "
+                self.assertEqual(r['reply'], "Fallout Season 2 Viewers on Prime Video: 13,732,978 US people (Nov 1, 2025 to Oct 31, 2026). "
+                                             "Prime Video is the only US home of Fallout Season 2 "
                                              "in this window, so this is the title's whole audience.")
 
     def test_my_life_with_the_walter_boys(self):
@@ -361,7 +361,8 @@ class TheSizeLookup(unittest.TestCase):
             for q in ("How many people watched My Life with the Walter Boys?", "How big is the My Life with the Walter Boys audience?"):
                 r = CL.answer(q)
                 self.assertIsNotNone(r, q)
-                self.assertIn("13,315,259 US people (2025-11-10 to 2026-11-10), 403,615 inside the 10 million sample.", r['reply'])
+                self.assertIn("13,315,259 US people (Nov 10, 2025 to Nov 10, 2026). Netflix is", r['reply'])
+                self.assertNotIn('403,615', r['reply'])
                 self.assertTrue(r['reply'].endswith("Netflix is the only US home of My Life with the Walter Boys in this window, "
                                                     "so this is the title's whole audience."), r['reply'])
 
