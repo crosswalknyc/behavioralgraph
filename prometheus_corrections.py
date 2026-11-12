@@ -27,6 +27,12 @@ import traceback
 import uuid
 from datetime import datetime, timezone
 
+try:      # in a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 S3_BUCKET = os.environ.get('S3_BUCKET', 'dashboard-inputs')
 S3_REGION = os.environ.get('S3_REGION', 'us-east-2')
 CTX_PREFIX = 'system/prometheus_corrections/ctx/'

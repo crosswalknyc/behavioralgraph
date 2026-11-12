@@ -45,6 +45,12 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
+try:      # in a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 S3_BUCKET = os.environ.get('RENDER_USAGE_BUCKET') or 'dashboard-inputs'
 CALLS_PREFIX = 'system/usage/render_calls/'
 

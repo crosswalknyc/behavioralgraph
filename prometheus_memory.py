@@ -55,6 +55,12 @@ from botocore.exceptions import ClientError, ParamValidationError
 
 import insights_ledger as il
 
+try:      # in a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 S3_BUCKET = il.S3_BUCKET
 MEMORY_PREFIX = 'system/prometheus_memory/'
 

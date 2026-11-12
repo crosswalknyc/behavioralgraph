@@ -584,7 +584,14 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
                 merged = dict(raw)
                 merged.setdefault('reply', payload.get('text'))
                 payload = merged
-        out['reply'] = _reply_text(payload)[:600]
+        out['reply'] = _reply_text(payload)[:6000]   # whole: a quote is judged by its price line, which a long reply ends on
+        if isinstance(payload, dict):
+            # what a thread stores with a quote, and what a run leaves behind: the nightly judges a
+            # quoted question sent again by these (same offer, no new run), never by the lane's name
+            if isinstance(payload.get('panel_offer'), dict):
+                out['offer'] = payload['panel_offer']
+            out['jobs'] = [str(j) for j in ([payload.get('read_job_id')] + list(payload.get('read_job_ids') or [])) if j]
+            out['options'] = [str(x) for x in (payload.get('followups') or []) if x][:6]
         if not rec:
             out['route'] = out['route'] or 'unlogged'
             out['outcome'] = out['outcome'] or (

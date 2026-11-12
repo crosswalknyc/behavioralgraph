@@ -61,6 +61,12 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+try:      # in a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 
 # ---------------------------------------------------------------------------
 # Pricing config

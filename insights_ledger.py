@@ -210,6 +210,11 @@ def use_test_ledger(index=None):
 def _client():
     global _s3
     if _test_mode():
+        try:                                          # and no write from this process reaches a live store, whoever makes it
+            import test_guard_boot as _tgb
+            _tgb.install()
+        except Exception:
+            pass
         if _s3 is None or _is_live_client(_s3):       # never the live store, also when one was made before the mode was set
             with _s3_lock:
                 if _s3 is None or _is_live_client(_s3):

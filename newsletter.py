@@ -32,6 +32,12 @@ from flask import Blueprint, Response, jsonify, redirect, render_template, reque
 
 import newsletter_linkedin as nli
 
+try:      # in a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 newsletter_bp = Blueprint("newsletter", __name__)
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "dashboard-inputs")

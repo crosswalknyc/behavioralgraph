@@ -805,6 +805,11 @@ def thread_replay(text, history):
             # back as the earlier answer; the question runs again
             if meta.get('corrected_at') or meta.get('retired'):
                 continue
+            # a quote is not a read: sent again, the question draws the same
+            # quote from the place quotes are made, never "Same read as
+            # earlier in this thread" over a price line (2026-11-12)
+            if meta.get('panel_offer') or re.search(r"(?:will cost|runs? (?:it|all \w+) for)\s+(?:US)?[$\u00a3\u20ac]\s?\d", ans):
+                continue
             # a landed read carries its follow-up chips as options; it is the
             # answer, not a question with chips (2026-10-26)
             landed = bool(meta.get('read_job_id')) or str(meta.get('kind') or '') == 'read'

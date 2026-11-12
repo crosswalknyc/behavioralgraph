@@ -54,6 +54,7 @@ must never be the reason a board goes dark.
 from __future__ import annotations
 
 import json
+import os
 import logging
 import re
 import threading
@@ -127,6 +128,7 @@ def build(refresh_all: bool = False, s3=None) -> dict:
     Incremental: a folder already in the stored calendar is not read
     again, because a published day's measurement date never changes.
     """
+    handed = s3 is not None
     s3 = s3 or _s3()
     known: dict = {}
     if not refresh_all:
@@ -151,6 +153,12 @@ def build(refresh_all: bool = False, s3=None) -> dict:
                 if measured:
                     known[folder] = measured
     out = {f: known[f] for f in folders if f in known}
+    if not handed and os.environ.get('REGRESSION_TEST_MODE') == '1':
+        # A test reads the calendar; it never rewrites the live one. Two
+        # trends suites run by hand with credentials replaced the stored
+        # calendar on every run (2026-11-12). A test that wants the write
+        # hands its own store in.
+        return out
     try:
         s3.put_object(Bucket=BUCKET, Key=CALENDAR_KEY,
                       Body=json.dumps({'folders': out},

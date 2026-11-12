@@ -877,6 +877,11 @@ def _record_spelling(name, ctx=None):
         fold = lambda x: re.sub(r"[^a-z0-9]+", '', str(x).lower().replace('&', 'and'))   # noqa: E731
         if fold(rec) in (fold(n), 'the' + fold(n)):
             return rec
+        # the record's name goes on after the title ("My Life with the Walter Boys Viewers on Netflix"): the
+        # title's own words, in the record's spelling
+        head = ' '.join(rec.split()[:len(n.split())])
+        if fold(head) == fold(n) and len(n.split()) >= 2:
+            return head
     except Exception:
         pass
     return ''
@@ -905,8 +910,11 @@ def sizing_lead(text, ctx=None):
             if not s or _sr.is_metric_phrase(s):
                 continue
             core = _sz.strip_audience_nouns(s) or s
-            if re.match(r"The [A-Z0-9]", s) and core == s[4:]:
-                core = s             # the title's own "The" ("The Rainmaker") is part of the name, not an article
+            # a title's own first word is part of the name, not an article or a pointer ("The Rainmaker", "My Life
+            # with the Walter Boys", "Our Flag Means Death", "This Is Us"): the catalog holds a title that starts
+            # with it, or the reader wrote it with a capital in front of a capitalised name (sizing_lane.keeps_lead)
+            if core != s and s.endswith(core) and _sz.keeps_lead(s[:len(s) - len(core)].strip(), core, ctx):
+                core = s
             # a name the dashboard holds is printed as the record carries it (its capitals, its ampersand, its
             # leading "The"): the words were only trimmed and lower-cased on the way here (2026-11-12)
             named = _record_spelling(core, ctx)
@@ -989,7 +997,8 @@ def price_plan(hit, username=None, history=None):
 # ----------------------------------------------------------------- the offer
 _AUDIENCE_TAIL_RX = re.compile(
     r"\b(?:viewers|fans|readers|listeners|players|watchers|users|customers|buyers|shoppers|"
-    r"subscribers|drinkers|audience|owners|members|attendees|households|people)\s*$", re.I)
+    r"subscribers|drinkers|audience|owners|members|attendees|households|people)"
+    r"(?:\s+(?:on|in|at|from|across)\s+[^.?!]{2,60})?\s*$", re.I)       # "... Viewers on Netflix" already names its people
 
 
 def _as_audience(subj):
@@ -1543,6 +1552,17 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                         '(one line is enough) and I will take it from there.')
             return 'offer', {'success': True, 'action': 'answer', 'reply': line, 'followups': [],
                              'offer_deck': False, 'deck_angle': None, 'subject': '', 'subject_unclear': True}
+    # A quote never swaps a named service silently (2026-11-12: a question about Fallout Season 2 on Netflix was
+    # quoted "on Prime Video"). The record settles it and the quote says so in one sentence, or the quote is on
+    # what was asked (prometheus.quote_service). Nothing is priced on a service the title is not on.
+    service_line = ''
+    if not isinstance(panel_confirm, dict) and kind not in ('sizing', 'derived'):
+        try:
+            from . import quote_service as _qs
+            subj, service_line = _qs.settle(text, history, subj)
+            subj = str(subj or '').strip() or 'that subject'
+        except Exception:
+            service_line = ''
     # Included with your plan (Jenna 2026-11-08): an unlimited seat (a
     # covered client seat, never called staff) or Crosswalk staff never
     # sees the offer, the price or a chip; the read is charged at zero
@@ -1576,6 +1596,8 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
         reply, chips, off = offer(subj, label, text, kind=kind, frame=frame, years=years,
                                   dimension=dimension, verb=verb, series=series,
                                   condition=condition, span=span, what=what, work=work, service=service)
+        if service_line:
+            reply = f"{service_line} {reply}"
         return 'offer', {'success': True, 'action': 'answer', 'reply': reply,
                          'followups': chips, 'offer_deck': False, 'deck_angle': None,
                          'panel_offer': off, 'subject': subj}

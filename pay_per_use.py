@@ -69,6 +69,12 @@ from datetime import datetime, timedelta, timezone
 
 import render_usage_log
 
+try:      # in a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 ACCESS_PULLS_ONLY = 'pulls_only'
 ACCESS_FULL = 'full'
 

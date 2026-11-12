@@ -354,7 +354,38 @@ def names_an_audience(text, ctx=None):
 _SPLIT_NO_AMP_RX = re.compile(r"\s*(?:,|;|\band\b|\bvs\.?\b|\bversus\b|\bthen\b|\bplus\b)\s*", re.I)
 
 
-def _split_subjects(body, ctx=None):
+_AND_RX = re.compile(r"\s+and\s+", re.I)
+
+
+def _split_keeping_titles(body, ctx=None, t=''):
+    """The list a sizing ask names, split on commas, "and", "vs", "then",
+    "plus". An "and" inside one title stays in it ("An Officer and a
+    Gentleman", "Of Mice and Men", "Beauty and the Beast"): the dashboard
+    holds the whole, or what follows the "and" opens with a small article
+    in front of a capitalised word, or the run opens with a capitalised
+    word that only a title opens with ("Of", "An", "A")."""
+    parts = []
+    for chunk in re.split(r"\s*(?:,|;|\bvs\.?\b|\bversus\b|\bthen\b|\bplus\b)\s*", str(body or ''), flags=re.I):
+        chunk = re.sub(r"^\s*and\s+", '', chunk)       # "a, b, and c": the list's own "and" (a title's "And" has its capital)
+        if not chunk or not _AND_RX.search(chunk):
+            parts.append(chunk)
+            continue
+        one = False
+        try:
+            raw = re.sub(r"\s+(?:audiences?|viewers|fans)\s*[?.!]*$", '', ' '.join(chunk.split()), flags=re.I).strip(' ?.!')
+            wholes = dict.fromkeys((raw, re.sub(r"^the\s+", '', raw, flags=re.I), _clean(chunk)))
+            if t:                                    # with a first word the lead-in took ("the of mice and men audience")
+                wholes.update(dict.fromkeys(_restore_lead(t, w, ctx) for w in list(wholes) if w))
+            one = any(on_record_title(w, ctx) for w in wholes if w) \
+                or bool(re.search(r"\band\s+(?:a|an|the)\s+[A-Z0-9]", chunk)) \
+                or bool(re.match(r"\s*(?:the\s+)?(?:Of|An|A)\s+[A-Z][\w']*\s+and\s+[A-Z]", chunk))
+        except Exception:
+            one = False
+        parts.extend([chunk] if one else _AND_RX.split(chunk))
+    return parts
+
+
+def _split_subjects(body, ctx=None, t=''):
     """The phrases a sizing ask lists. An ampersand joins a name ("Law &
     Order", "Ben & Jerry's", "Georgie & Mandy's First Marriage"): it
     separates two subjects only when the dashboard holds each side and
@@ -363,7 +394,7 @@ def _split_subjects(body, ctx=None):
     things and quoted as "Georgie and the Mandy's First Marriage
     audience"."""
     out = []
-    for part in _SPLIT_NO_AMP_RX.split(body):
+    for part in _split_keeping_titles(body, ctx, t):
         if '&' not in str(part or ''):
             out.append(part)
             continue
@@ -378,10 +409,12 @@ def _split_subjects(body, ctx=None):
     return out
 
 
+# the lead-in's own vocabulary: a capitalised one of these is still the lead-in ("What is the Size of ..."), never
+# the first word of a name. Determiners are not here: "Our Flag Means Death", "This Is Us", "No Country for Old Men".
 _LEAD_WORDS = frozenset(('size', 'sizes', 'sizing', 'sample', 'incidence', 'headcount', 'reach', 'total', 'projected', 'estimated',
-                         'approximate', 'overall', 'audience', 'audiences', 'the', 'these', 'those', 'both', 'our', 'your', 'two', 'three', 'four',
-                         'no', 'ok', 'okay', 'so', 'and', 'also', 'alright', 'right', 'well', 'hey', 'hi', 'um', 'what', 'how', 'can', 'could',
-                         'tell', 'give', 'show', 'do', 'we', 'you'))
+                         'approximate', 'overall', 'audience', 'audiences',
+                         'ok', 'okay', 'so', 'and', 'also', 'alright', 'right', 'well', 'hey', 'hi', 'um', 'what', 'how', 'can', 'could',
+                         'tell', 'give', 'show', 'do', 'we', 'you', 'is', 'are', 'was', 'were', 'big', 'large', 'many'))
 _NAME_HEAD_RX = re.compile(r"(?:^|\s)(?P<w>[A-Z][\w'&.:-]*)\s+(?:(?:of|for|on|the)\s+)*$")
 
 
@@ -400,6 +433,85 @@ def _give_back_name(t, body):
         return eaten[m.start('w'):] + body
     except Exception:
         return body
+
+
+def on_record_title(phrase, ctx=None):
+    """The dashboard's own name for a title that starts with these
+    words, or ''. "my life with the walter boys" -> "My Life with the
+    Walter Boys Viewers on Netflix". Never raises."""
+    try:
+        p = ' '.join(str(phrase or '').split())
+        if len(p) < 3:
+            return ''
+        fold = lambda x: re.sub(r"[^a-z0-9]+", ' ', str(x).lower().replace('&', ' and ')).strip()   # noqa: E731
+        want = fold(p)
+        hit = resolve(p, ctx)
+        name = ' '.join(str((hit or {}).get('name') or '').split())
+        if name and (fold(name) == want or fold(name).startswith(want + ' ')):
+            return name
+    except Exception:
+        pass
+    return ''
+
+
+def keeps_lead(lead, rest, ctx=None, mid_sentence=True):
+    """True when `lead` (a word or two the lead-in or the cleaner took
+    off the front) is the first word of the name `rest` belongs to.
+    Decided by the catalog and the words, never by a list of articles:
+    the dashboard holds a title that starts with those words, or the
+    reader wrote the word with a capital, inside the sentence, in front
+    of a capitalised name ("the My Life with the Walter Boys audience",
+    "is A Quiet Place", "of This Is Us")."""
+    lead = ' '.join(str(lead or '').split())
+    rest = ' '.join(str(rest or '').split())
+    if not lead or not rest or len(lead.split()) > 3:
+        return False
+    if on_record_title(f"{lead} {rest}", ctx):
+        return True
+    first = lead.split()[0]
+    return bool(mid_sentence and first[:1].isupper() and (rest[:1].isupper() or rest[:1].isdigit())
+                and first.lower() not in _LEAD_WORDS and first != 'I')
+
+
+# the words the lead-in, the cleaner and the audience-noun trim take off the front of a phrase
+_STRIPPED_WORDS = frozenset(('the', 'a', 'an', 'of', 'for', 'on', 'these', 'those', 'both', 'our', 'your', 'my', 'this', 'that', 'no'))
+
+
+def _restore_lead(t, c, ctx=None):
+    """`c` with the name's own first word(s) put back when the lead-in or
+    the cleaner took them off: the words that stand right in front of it
+    in the ask."""
+    try:
+        if not c:
+            return c
+        m = re.search(r"(?<![\w'])" + re.escape(c), t, re.I)
+        if not m or not m.start():
+            return c
+        before = t[:m.start()].rstrip()
+        words = before.split()
+        best = c
+        for n in (1, 2, 3):
+            if len(words) < n:
+                break
+            lead = ' '.join(words[-n:])
+            if not re.fullmatch(r"[A-Za-z'][\w']*(?: [A-Za-z'][\w']*)*", lead):
+                break
+            start_of_sentence = len(words) == n or words[-n - 1][-1:] in '.?!:'
+            # by the words, only what the lead-in and the cleaner take off is put back ("On the" + Road, "My" + Life):
+            # a capitalised first word, small words after it. A name in front of an "and" is another subject.
+            stripped = all(w.lower() in _STRIPPED_WORDS for w in words[-n:]) and all(w.islower() for w in words[-n:][1:])
+            if on_record_title(f"{lead} {c}", ctx) or (stripped and keeps_lead(lead, c, None, mid_sentence=not start_of_sentence)):
+                best = f"{lead} {c}"
+        return best
+    except Exception:
+        return c
+
+
+def _reads_as_title(phrase):
+    """Two or more words, each written with a capital or a number: a
+    title, whatever its words are ("This Is Us")."""
+    ws = str(phrase or '').split()
+    return len(ws) >= 2 and all(w[:1].isupper() or w[:1].isdigit() for w in ws)
 
 
 def _held_name(phrase, ctx=None):
@@ -442,7 +554,7 @@ def subjects(text, ctx=None):
     given = _give_back_name(t, body)
     if given != body:
         own, body = given[:len(given) - len(body)].strip(), given
-    parts = [p for p in _split_subjects(body, ctx) if p and p.strip()]
+    parts = [p for p in _split_subjects(body, ctx, t) if p and p.strip()]
     out = []
     for i, p in enumerate(parts):
         c = _clean(p)
@@ -450,10 +562,11 @@ def subjects(text, ctx=None):
             continue
         if i == 0 and own and not c.lower().startswith(own.lower() + ' '):
             c = own + ' ' + c
+        c = _restore_lead(t, c, ctx)
         if _DEIXIS_RX.match(c):
             out.append('__page__')
             continue
-        if (_plausible(c) or _held_name(c, ctx)) and not _is_panel_self(c):
+        if (_plausible(c) or _reads_as_title(c) or _held_name(c, ctx)) and not _is_panel_self(c):
             out.append(c)
     page = ''
     try:

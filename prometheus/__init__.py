@@ -26,6 +26,13 @@ tested slices behind the same contract, so no client ever changes.
 
 __version__ = '1.0.0'
 
+# In a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else.
+try:
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 
 def init_app(app, host_module):
     """Bind the host capabilities and register the HTTP surface.

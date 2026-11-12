@@ -409,6 +409,44 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
     # and the calm line never apply to it (2026-10-22: three deploys in
     # thirty minutes walked the smoke into the calm line).
     probe = _pid.asks_on_purpose(uname, user if isinstance(user, dict) else None)
+    # ---- a quote the reader turned down is not drawn again in this thread
+    # (Jenna 2026-11-12). A quoted question sent again with no answer in
+    # between gets the same quote (below: the quote stands). One the reader
+    # said no to ("No, run what I asked", "not that", "cancel") and then
+    # sent again is the rejected pair: no quote, no run, no charge, one
+    # plain line. "Quote it again" after that line is the reader asking for
+    # the quote, and gets it.
+    if not body.get('panel_confirm') and not body.get('bind_subject'):
+        try:
+            from . import declined_quote as _dq
+            _again = _dq.wants_requote(text, history)
+            if _again:
+                try:
+                    host.ask_hint(route='repeat_guard', outcome='requote_asked')
+                except Exception as _fx:
+                    _faults.note('turn_gate', _fx)
+                return {'text': _again, 'body': dict(body, text=_again, _pm_requote=True)}
+            from . import pending_offers as _po_dq
+            if _dq.turned_down_now(text, history) and not _po_dq.is_cancel(text):
+                # "not that", "No, run what I asked": on prod this drew a second quote in other words. A no is a no.
+                raw = {'success': True, 'action': 'answer', 'reply': _dq.NO_LINE, 'followups': [],
+                       'offer_deck': False, 'deck_angle': None, 'offer_declined': True}
+                return _answer(raw, 'offer_declined', route='repeat_guard', outcome='offer_declined', **common)
+            if not body.get('_pm_requote') and _dq.declined(text, history):
+                raw = {'success': True, 'action': 'answer', 'reply': _dq.DECLINED_LINE, 'followups': ['Quote it again'],
+                       'offer_deck': False, 'deck_angle': None, 'declined_stands': True}
+                return _answer(raw, 'declined_stands', route='repeat_guard', outcome='declined_stands', **common)
+            # ---- the same question again after a price quote: the quote
+            # stands, and it is handed back as it was stored (same words,
+            # same price, same offer behind Approve). Nothing runs to make
+            # it again: a question in parts sent twice started its free
+            # part a second time and re-priced a part between the sends.
+            # A third send is the escalation below, as before.
+            _st = _dq.standing(text, history, uname, tid, ctx) if repeat_count(text, history) == 1 else None
+            if _st:
+                return _answer(_dq.stored_raw(_st), 'offer_stands', route='repeat_guard', outcome='panel_offer', **common)
+        except Exception as _fx:
+            _faults.note('turn_gate.declined_quote', _fx)
     n_rep = 0 if probe else repeat_count(text, history)
     # ---- the same question again while its read runs or after it landed:
     # the same read, never a second copy. Before the guard and whatever the

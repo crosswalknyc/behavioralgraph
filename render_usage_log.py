@@ -153,6 +153,11 @@ def _client():
         if _s3 is None:
             if os.environ.get('REGRESSION_TEST_MODE') == '1':
                 _s3 = _HermeticClient()
+                try:                                   # the storage rule for the whole process (migration/storage_test_guard.py)
+                    import test_guard_boot as _tgb
+                    _tgb.install()
+                except Exception:
+                    pass
             else:
                 import boto3
                 _s3 = boto3.client('s3')

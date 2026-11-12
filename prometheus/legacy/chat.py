@@ -5617,7 +5617,7 @@ def _ask_logged(surface):
             user_sig = None
             try:
                 from prometheus import user_signal as _us
-                user_sig = _us.detect(question, ask_history)
+                user_sig = _us.detect(question, ask_history, body)   # an approval of a quote is a yes, never a repeat
                 _g._pm_user_signal = user_sig
             except Exception:
                 user_sig = None

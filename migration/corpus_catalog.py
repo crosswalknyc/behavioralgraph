@@ -112,11 +112,28 @@ def _client():
 def set_client(cl):
     """Tests inject a fake S3 client here."""
     with _lock:
+        _state['handed'] = cl is not None
         _state['client'] = cl
         _state['index'] = None
         _state['index_etag'] = None
         _state['index_ts'] = 0.0
         _state['pages'] = {}
+
+
+def _test_without_a_store():
+    """True in a test process that handed the catalog no store of its
+    own and would therefore write to the real one. A test reads the
+    catalog; it never writes to it (2026-11-12: a chat suite and a
+    drilldown suite, run with credentials, each rewrote a live subject
+    page on every run). A fake handed in by set_client, or a stand-in
+    that is not a real storage client, takes the writes as before."""
+    if os.environ.get('REGRESSION_TEST_MODE') != '1' or _state.get('handed'):
+        return False
+    try:
+        from botocore.client import BaseClient
+        return isinstance(_client(), BaseClient)
+    except Exception:
+        return False
 
 
 def _now_iso():
@@ -662,6 +679,8 @@ def _is_precondition_failed(err):
 
 def _put_json_cas(key, doc, etag):
     global _SUPPORTS_CONDITIONAL_PUT
+    if _test_without_a_store():
+        return True                 # nothing is written; the caller has nothing to retry
     s3 = _client()
     kwargs = dict(Bucket=S3_BUCKET, Key=key, Body=json.dumps(doc, separators=(',', ':')).encode('utf-8'),
                   ContentType='application/json')
@@ -1276,6 +1295,8 @@ def write_trends_latest(day, entries):
     for the latest Trends IQ snapshot day. One document, replaced
     whole; read lazily by anchors_for."""
     doc = {'day': day, 'updated': _now_iso(), 'subjects': entries}
+    if _test_without_a_store():
+        return False
     try:
         _client().put_object(Bucket=S3_BUCKET, Key=TRENDS_KEY,
                              Body=json.dumps(doc, separators=(',', ':')).encode('utf-8'),

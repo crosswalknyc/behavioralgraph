@@ -52,6 +52,12 @@ from typing import Optional, Tuple
 from flask import (Blueprint, jsonify, redirect, request, send_from_directory,
                    session)
 
+try:      # in a test process no write reaches a live store (migration/storage_test_guard.py); nothing happens anywhere else
+    import test_guard_boot as _test_guard_boot
+    _test_guard_boot.install()
+except Exception:
+    pass
+
 site_bp = Blueprint("site", __name__)
 
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")

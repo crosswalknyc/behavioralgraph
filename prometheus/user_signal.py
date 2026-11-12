@@ -228,11 +228,27 @@ def prior_turns(question, history):
     return prior_user, prior_agent
 
 
-def detect(question, history):
+def is_approval_body(body):
+    """True when the request is the reader approving a quote: the Approve
+    choice sends the question again with the offer it accepts. That is a
+    yes, never a repeat (Grace, 2026-11-08: her approval of a $100 quote
+    was logged as a repeat and banked as a rejected reply)."""
+    try:
+        if not isinstance(body, dict):
+            return False
+        extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+        return bool(body.get('panel_confirm') or extra.get('panel_confirm'))
+    except Exception:
+        return False
+
+
+def detect(question, history, body=None):
     """Online signal for the ask being logged now. Returns None, or
     {'signal': 'rejection'|'repeat', 'prior_question': str,
     'prior_reply': str}. Never raises."""
     try:
+        if is_approval_body(body):
+            return None
         prior_q, prior_a = prior_turns(question, history)
         if not (prior_q or prior_a):
             return None
@@ -319,6 +335,16 @@ def grade_sequence(records, window_s=300, skip_users=('unknown', ''),
                         started = t1
                     if (started - t0).total_seconds() <= chain_s:
                         continue
+                    # A quote followed by the same question as a run (it
+                    # carries the job, or it landed) is the reader's
+                    # approval of that quote: the Approve choice sends the
+                    # question again. Nothing was rejected, so nothing is
+                    # graded (26 of the 35 "repeat after a quote" cases
+                    # banked by 2026-11-12 were approvals).
+                    if str(cur.get('outcome') or '') == 'panel_offer' and (
+                            nxt.get('job_id') or str(nxt.get('outcome') or '') in ('landed', 'held', 'charged')
+                            or str(nxt.get('route') or '') == 'priced_offer_acceptance'):
+                        break
                 if is_flow_step(nq, cur.get('question')):
                     # The guided flow moved forward (date chip).
                     break

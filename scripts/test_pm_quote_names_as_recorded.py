@@ -165,6 +165,56 @@ class TheLeadInNeverEatsTheFrontOfAName(_Base):
             self.assertEqual(SZ.subjects(q), want, q)
 
 
+TITLES = ['My Life with the Walter Boys', 'My Big Fat Greek Wedding', 'A Quiet Place', 'An Officer and a Gentleman',
+          'Our Flag Means Death', 'This Is Us', 'No Country for Old Men', 'On the Road', 'For All Mankind', 'Of Mice and Men',
+          'The Office', 'Onyx Collective', 'Forbes']
+
+
+class ATitlesOwnFirstWordIsPartOfTheName(_Base):
+    """On prod: "How big is the My Life with the Walter Boys audience?" was quoted "I can size the Life with the
+    Walter Boys audience." The quote took "My" for a pointer at the reader's own audience. Decided by the catalog
+    and the words, never by a list of articles (Jenna 2026-11-12)."""
+
+    def _catalog(self, held):
+        def resolve(phrase, ctx=None):
+            k = ' '.join(str(phrase or '').lower().split())
+            for name in held:
+                if name.lower() == k or name.lower().startswith(k + ' '):
+                    return {'name': name}
+            return None
+        SZ.resolve = resolve
+
+    def test_by_the_words_with_no_catalog_to_ask(self):
+        self._catalog([])
+        for t in TITLES:
+            for q in (f"How big is the {t} audience?", f"How big is {t} audience?", f"What is the size of the {t} audience?"):
+                self.assertEqual(SZ.subjects(q), [t], q)
+                self.assertEqual(PR.sizing_lead(q), f"I can size {t}.", q)
+
+    def test_by_the_catalog_however_it_is_typed(self):
+        held = [t for t in TITLES if not t.startswith('My Life')] + ['My Life with the Walter Boys Viewers on Netflix']
+        self._catalog(held)
+        for t in TITLES:
+            for q in (f"How big is the {t} audience?", f"how big is the {t.lower()} audience", f"how big is {t.lower()} audience?"):
+                self.assertEqual(PR.sizing_lead(q), f"I can size {t}.", q)
+                self.assertEqual(len(SZ.subjects(q)), 1, q)
+
+    def test_a_pointer_is_still_a_pointer(self):
+        self._catalog([])
+        for q in ('what is the size of my audience', 'how big is our audience', 'How big is this audience?', 'How big is it?'):
+            self.assertEqual(SZ.subjects(q), [], q)
+        self.assertEqual(SZ.subjects('how big is your Costco audience'), ['Costco'])
+        self.assertEqual(SZ.subjects('How big is the Total Nike audience'), ['Nike'])
+        self.assertEqual(SZ.subjects('How big are the Nike and Adidas audiences?'), ['Nike', 'Adidas'])
+        self.assertEqual(SZ.subjects('how big is the Taylor Swift and Travis Kelce audience'), ['Taylor Swift', 'Travis Kelce'])
+        self.assertEqual(SZ.subjects('How big is the Beauty and the Beast audience?'), ['Beauty and the Beast'])
+
+    def test_an_audience_named_with_its_service_reads_plain(self):
+        self.assertEqual(PR.lead_for('path', 'My Life with the Walter Boys Viewers on Netflix'),
+                         'I can pull what My Life with the Walter Boys Viewers on Netflix did next.')
+        self.assertEqual(PR.lead_for('path', 'Costco'), 'I can pull what the Costco audience did next.')
+
+
 class EveryOtherQuoteLeavesTheNameAlone(_Base):
     def test_the_cleaner_and_the_plain_spelling(self):
         for name in NAMES:
