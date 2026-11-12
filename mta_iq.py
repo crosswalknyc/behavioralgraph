@@ -3139,6 +3139,59 @@ _CARD_CONFIG: dict[str, dict] = {
         },
         "paths_conversion_noun": "Chime site visit",
     },
+    # USA TODAY x Anthem sponsor stories (2026-11-12). Three articles, five
+    # video episodes and a program hub on usatoday.com, each in an Anthem
+    # Blue Cross version served to California and an Anthem Blue Cross and
+    # Blue Shield version served to Ohio, Indiana, Virginia and Georgia.
+    # Same funnel as the Chime read with a health insurer as the sponsor:
+    # looking Anthem up away from USA TODAY, then reaching an Anthem plan
+    # or care page, the Sydney Health app listing, or a page Anthem runs
+    # elsewhere. Member logins are left out of every step.
+    "usa_today_anthem_sponsor_stories": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["Anthem plan and care pages", "Sydney Health app listing",
+                                          "Anthem's own pages on other platforms",
+                                          "Anthem find care pages"],
+        "infoseek_overlap_surfaces":   ["Google search for Anthem", "Instagram, TikTok or Facebook search",
+                                          "Reddit threads", "Review and plan comparison sites",
+                                          "News coverage of Anthem"],
+        "assist_touchpoints":          ["Placement read", "Program hub visit",
+                                          "Anthem search", "Second Anthem placement on USA TODAY"],
+        "leak_competing_label":        "Reached a competing health plan instead",
+        "leak_competing_note":         ("Looked Anthem up within 14d and reached a different health "
+                                          "plan's site instead"),
+        "nest_labels": {
+            "2_infoseek": "Mid funnel: Looked Anthem up within 14d",
+            "3_ticketer": "Lower funnel: Reached an Anthem property within 14d",
+            "4_paid":     "Reached anthem.com within 14d",
+        },
+        "fork_questions": {
+            "1_exposed":  "Finished the piece",
+            "2_infoseek": "Looked Anthem up on more than one surface",
+            "3_ticketer": "Reached more than one Anthem property",
+        },
+        "archetypes": [
+            {"archetype": "Straight-through",
+             "description": "Placement to anthem.com through a link on the page, no research step"},
+            {"archetype": "Researched",
+             "description": "Placement to a Google or social search for Anthem to anthem.com"},
+            {"archetype": "Re-exposed",
+             "description": "Left after the first placement and came back after a second one or the program hub"},
+            {"archetype": "Compared",
+             "description": "Looked Anthem up on Reddit or a plan comparison site before reaching anthem.com"},
+        ],
+        "leak_labels": {
+            "infoseek_no_conv": (
+                "Looked Anthem up, no Anthem property",
+                "Searched for Anthem within 14d but never reached one of its own properties",
+            ),
+            "conv_visit_no_pay": (
+                "Anthem property, no website",
+                "Reached the Sydney Health app listing or an Anthem page on another platform within 14d but not anthem.com",
+            ),
+        },
+        "paths_conversion_noun": "Anthem site visit",
+    },
 }
 
 
