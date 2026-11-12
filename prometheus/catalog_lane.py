@@ -346,6 +346,57 @@ def _summarize(anchors):
     return lines
 
 
+_KEY_STAMP_RX = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$")
+
+
+def _profile_name(key):
+    """A profile file's own name: 'X_Viewers_(HBO_Max)_11_11_2026_15_44.csv' -> 'X Viewers (HBO Max)'."""
+    k = str(key or '').rsplit('/', 1)[-1]
+    k = k[:-4] if k.lower().endswith('.csv') else k
+    return ' '.join(_KEY_STAMP_RX.sub('', k).replace('_', ' ').split())
+
+
+def profile_on_the_services_asked(cc, anchors, text):
+    """One title held as several profiles, each on its own service or
+    services ('... Viewers (Paramount+)', '... Viewers (HBO Max)',
+    '... Viewers (HBO Max & Amazon Prime)'), is one subject in the
+    catalog, and the size lookup used to answer any of them with the
+    newest file's figure (2026-11-12: a Paramount+ ask about Georgie &
+    Mandy's First Marriage was told 957,139, the two-service profile).
+
+    Returns None when the subject holds no service-scoped profile (the
+    lane answers as before); () when it does and none is on exactly the
+    services the words name (the lane steps aside); else
+    (profile anchor, that profile's own name)."""
+    try:
+        from . import platform_scope as _ps
+        page = cc.load_subject_page(anchors.get('subject_key')) or {}
+        by_key = {}
+        for f in (page.get('facts') or []):
+            if (isinstance(f, dict) and f.get('product') == 'profile' and not f.get('cut')
+                    and f.get('kind') in ('sample_size', 'audience_size')):
+                key = str((f.get('source') or {}).get('key') or '')
+                if key and ' - ' not in _profile_name(key):
+                    by_key.setdefault(key, []).append(f)
+        scope = {k: frozenset(_ps.named(_profile_name(k))) for k in by_key}
+        if not any(scope.values()):
+            return None
+        asked = frozenset(pl for pl, how in _ps.named(text).items() if how in ('scope', 'subject'))
+        hits = [k for k, sc in scope.items() if sc == asked]
+        if not hits:
+            return ()
+        hits.sort(key=lambda k: max(str(f.get('as_of') or '') for f in by_key[k]), reverse=True)
+        key = hits[0]
+        pa = cc.profile_anchor({'facts': by_key[key]})
+        if not pa or not pa.get('audience_size'):
+            return ()
+        same = [str(a) for a in (page.get('aliases') or [])
+                if ' - ' not in str(a) and scope[key] and frozenset(_ps.named(str(a))) == scope[key]]
+        return pa, (cc.best_display(same) if same else _profile_name(key))
+    except Exception:
+        return None
+
+
 def answer(text, ctx=None):
     """A finished reply payload for an existence or size ask the
     catalog can settle, else None."""
@@ -383,6 +434,13 @@ def answer(text, ctx=None):
     display = anchors.get('subject') or subj
     if kind == 'size':
         pa = cc.profile_anchor(anchors) if facts else None
+        # a title held on several services answers from the profile on the
+        # services the words name, never from whichever file is newest
+        _on = profile_on_the_services_asked(cc, anchors, text) if facts else None
+        if _on is not None:
+            if not _on:
+                return None  # nothing held on exactly what was asked: the reasoning path answers
+            pa, display = _on
         if not pa or not pa.get('audience_size'):
             return None  # the reasoning path sizes it
         reply = (f"{display}: {_fmt_people(pa['audience_size'])} US people"
