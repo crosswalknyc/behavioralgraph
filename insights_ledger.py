@@ -94,8 +94,127 @@ _cache_lock = threading.Lock()
 _SUPPORTS_CONDITIONAL_PUT = True
 
 
+# A test process never reads or writes the live ledger (2026-11-12). The
+# suites run on machines that hold real credentials (a laptop with the
+# dashboard's environment loaded, the build server every night). Any test
+# that reached the ledger through the door without handing it a store
+# read the live index, so its result moved with whatever readers had
+# banked that day, and a write would have landed in the document every
+# reader's answers are checked against. Under REGRESSION_TEST_MODE=1 the
+# client is the store a test handed over (`_s3 = fake`, a replaced
+# `boto3.client`, `use_test_ledger(doc)`), else an in-memory ledger that
+# starts empty, or from the index named by PM_TEST_LEDGER_FIXTURE. It is
+# never a real S3 client.
+TEST_LEDGER_FIXTURE_ENV = 'PM_TEST_LEDGER_FIXTURE'
+
+
+def _test_mode():
+    return os.environ.get('REGRESSION_TEST_MODE') == '1'
+
+
+class _TestLedger:
+    """The ledger's store inside a test process: the handful of S3 calls
+    this module makes, held in memory, with the conditional put the index
+    update relies on."""
+
+    def __init__(self, index=None):
+        self.objects = {}
+        self._n = 0
+        if index is None:
+            path = os.environ.get(TEST_LEDGER_FIXTURE_ENV) or ''
+            if path:
+                try:
+                    with open(path, 'r', encoding='utf-8') as fh:
+                        index = json.load(fh)
+                except Exception:
+                    index = None
+        if isinstance(index, dict):
+            self._store(INDEX_KEY, json.dumps(index).encode('utf-8'))
+
+    def _store(self, key, body):
+        self._n += 1
+        self.objects[key] = (body if isinstance(body, bytes) else str(body).encode('utf-8'), f'"t{self._n}"')
+
+    @staticmethod
+    def _err(code, status, op):
+        return ClientError({'Error': {'Code': code}, 'ResponseMetadata': {'HTTPStatusCode': status}}, op)
+
+    def get_object(self, Bucket=None, Key=None, **kw):
+        if Key not in self.objects:
+            raise self._err('NoSuchKey', 404, 'GetObject')
+        body, etag = self.objects[Key]
+        import io
+        return {'Body': io.BytesIO(body), 'ETag': etag}
+
+    def head_object(self, Bucket=None, Key=None, **kw):
+        if Key not in self.objects:
+            raise self._err('404', 404, 'HeadObject')
+        return {'ETag': self.objects[Key][1]}
+
+    def put_object(self, Bucket=None, Key=None, Body=b'', IfMatch=None, IfNoneMatch=None, **kw):
+        cur = self.objects.get(Key)
+        if IfNoneMatch == '*' and cur is not None:
+            raise self._err('PreconditionFailed', 412, 'PutObject')
+        if IfMatch and (cur is None or cur[1].strip('"') != str(IfMatch).strip('"')):
+            raise self._err('PreconditionFailed', 412, 'PutObject')
+        self._store(Key, Body)
+        return {'ETag': self.objects[Key][1]}
+
+    def delete_object(self, Bucket=None, Key=None, **kw):
+        self.objects.pop(Key, None)
+        return {}
+
+    def list_objects_v2(self, Bucket=None, Prefix='', **kw):
+        return {'Contents': [{'Key': k} for k in sorted(self.objects) if k.startswith(Prefix or '')], 'IsTruncated': False}
+
+    def __getattr__(self, name):
+        if name.startswith('__'):
+            raise AttributeError(name)
+        return lambda *a, **k: {}
+
+
+def _is_live_client(c):
+    """True for a real botocore client (anything a test handed over is not one)."""
+    try:
+        return str(type(c).__module__ or '').startswith('botocore')
+    except Exception:
+        return False
+
+
+def _test_client():
+    """The store for a test process: what a test put behind `boto3.client`
+    when it is not a real client, else the in-memory ledger."""
+    try:
+        if str(getattr(boto3.client, '__module__', '') or '') != 'boto3':     # a test replaced boto3.client
+            c = boto3.client('s3')
+            if c is not None and not _is_live_client(c):
+                return c
+    except Exception:
+        pass
+    return _TestLedger()
+
+
+def use_test_ledger(index=None):
+    """Hand the ledger a store for a test: an in-memory ledger holding
+    `index` (None: empty). Returns it. Only inside a test process."""
+    global _s3
+    if not _test_mode():
+        raise RuntimeError('use_test_ledger is for test processes (REGRESSION_TEST_MODE=1)')
+    with _s3_lock:
+        _s3 = _TestLedger(index if index is not None else {})
+    with _cache_lock:
+        _index_cache.update(ts=0.0, doc=None)
+    return _s3
+
+
 def _client():
     global _s3
+    if _test_mode():
+        if _s3 is None or _is_live_client(_s3):       # never the live store, also when one was made before the mode was set
+            with _s3_lock:
+                if _s3 is None or _is_live_client(_s3):
+                    _s3 = _test_client()
+        return _s3
     if _s3 is None:
         with _s3_lock:
             if _s3 is None:

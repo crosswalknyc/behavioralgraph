@@ -1433,7 +1433,14 @@ def sentence_audience(text, casing=None):
     for m in _SENTENCE_AUDIENCE_RX.finditer(t):
         raw = m.group('name').strip()
         words = raw.split()
+        # a capital "The" inside the sentence, in front of a capitalised name, is the title's own ("What do The
+        # Rainmaker viewers buy"); so is one the library spells with it. A sentence's first word is only a word.
+        before = t[:m.start('name')].rstrip()
+        mid_sentence = bool(before) and before[-1] not in '.?!:'
         while words and words[0].lower() in _SENTENCE_STOP:
+            if words[0] == 'The' and len(words) > 1 and words[1][:1].isupper() and (
+                    mid_sentence or ('the ' + ' '.join(words[1:]).lower()) in (casing or {})):
+                break
             words = words[1:]
         if not words:
             continue

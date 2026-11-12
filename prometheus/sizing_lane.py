@@ -295,8 +295,10 @@ def _clean(phrase):
         if q == p:
             break
         p = q
-    # "Howie Mandel's audience" -> "Howie Mandel" once the noun is gone
-    p = re.sub(r"(?:'|’)s$", '', p.strip(' ?.!,;:"\''))
+    # "Howie Mandel's audience" -> "Howie Mandel" once the noun is gone; a name
+    # written with an ampersand keeps its own ("Ben & Jerry's")
+    if '&' not in p:
+        p = re.sub(r"(?:'|’)s$", '', p.strip(' ?.!,;:"\''))
     return p.strip(' ?.!,;:"\'')
 
 
@@ -321,7 +323,7 @@ def _is_panel_self(phrase):
 
 
 def _plausible(phrase):
-    toks = [t for t in re.split(r"[^a-z0-9+&']+", str(phrase or '').lower()) if t]
+    toks = [t for t in re.split(r"[^a-z0-9+&']+", str(phrase or '').lower()) if t and t != '&']   # the ampersand in a name is not a word of it
     if not toks or len(toks) > 8:
         return False
     if re.match(r"^\d", toks[0]) or not any(re.search(r"[a-z]{3,}", t) for t in toks):
@@ -347,6 +349,45 @@ def names_an_audience(text, ctx=None):
     return any(not _is_panel_self(s) for s in subjects(text, ctx))
 
 
+_SPLIT_NO_AMP_RX = re.compile(r"\s*(?:,|;|\band\b|\bvs\.?\b|\bversus\b|\bthen\b|\bplus\b)\s*", re.I)
+
+
+def _split_subjects(body, ctx=None):
+    """The phrases a sizing ask lists. An ampersand joins a name ("Law &
+    Order", "Ben & Jerry's", "Georgie & Mandy's First Marriage"): it
+    separates two subjects only when the dashboard holds each side and
+    does not hold the whole ("Nike & Adidas"). Before 2026-11-12 every
+    ampersand was a separator, so a title with one was sized as two
+    things and quoted as "Georgie and the Mandy's First Marriage
+    audience"."""
+    out = []
+    for part in _SPLIT_NO_AMP_RX.split(body):
+        if '&' not in str(part or ''):
+            out.append(part)
+            continue
+        pieces = [x for x in re.split(r"\s*&\s*", part) if x and x.strip()]
+        two = False
+        try:
+            if len(pieces) >= 2 and not resolve(_clean(part), ctx):
+                two = all(resolve(_clean(x), ctx) for x in pieces)
+        except Exception:
+            two = False
+        out.extend(pieces if two else [part])
+    return out
+
+
+def _held_name(phrase, ctx=None):
+    """A long name the dashboard holds as written ("Georgie & Mandy's
+    First Marriage Viewers (Amazon Prime Video & HBO Max)") is a name,
+    however many words it runs to."""
+    try:
+        if '&' not in str(phrase) and '(' not in str(phrase):
+            return False
+        return bool(resolve(phrase, ctx))
+    except Exception:
+        return False
+
+
 def subjects(text, ctx=None):
     """The audience phrases the ask names, in order; the open page when
     the ask points at it ('this audience') or names nothing."""
@@ -364,7 +405,7 @@ def subjects(text, ctx=None):
     body = _LEAD_RX.sub('', t, count=1)
     if body == t:
         body = re.sub(r"^.*?\b(?:size|sizes|sizing|incidence|how (?:big|large) (?:is|are)|how many)\b\s*(?:of|for|on|is|are)?\s*(?:the )?", '', t, count=1, flags=re.I)
-    parts = [p for p in _SPLIT_RX.split(body) if p and p.strip()]
+    parts = [p for p in _split_subjects(body, ctx) if p and p.strip()]
     out = []
     for p in parts:
         c = _clean(p)
@@ -373,7 +414,7 @@ def subjects(text, ctx=None):
         if _DEIXIS_RX.match(c):
             out.append('__page__')
             continue
-        if _plausible(c) and not _is_panel_self(c):
+        if (_plausible(c) or _held_name(c, ctx)) and not _is_panel_self(c):
             out.append(c)
     page = ''
     try:

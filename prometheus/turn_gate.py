@@ -92,22 +92,40 @@ def _parse_ts(v):
             return None
 
 
+def _asked(text):
+    """The question a message asks, apart from a deliverable asked for
+    with it ("... Summarize in powerpoint"). The door takes those words
+    off before the gate sees the turn, while the thread keeps the message
+    as it was typed, so a message with a deck asked at the end was never
+    recognised as the same question again (2026-11-11: Armine sent hers
+    twice in a row and got the same three answers twice)."""
+    t = str(text or '')
+    try:
+        from . import ride_along as _ra
+        plan = _ra.split(t)
+        if plan and str(plan.get('question') or '').strip():
+            return str(plan['question'])
+    except Exception:
+        pass
+    return t
+
+
 def repeat_count(text, history, window_s=REPEAT_WINDOW_S, now=None):
     """How many times this same question was asked in the thread within
     the window and drew a reply the reader did not accept. Counts the
     prior user turns that match, each followed by an agent turn."""
-    q = _norm_q(text)
+    q = _norm_q(_asked(text))
     if not q or len(q.split()) < 3:
         return 0
     turns = [t for t in (history or []) if isinstance(t, dict)]
-    if turns and str(turns[-1].get('role') or '') == 'user' and _norm_q(turns[-1].get('text') or turns[-1].get('content')) == q:
+    if turns and str(turns[-1].get('role') or '') == 'user' and _norm_q(_asked(turns[-1].get('text') or turns[-1].get('content'))) == q:
         turns = turns[:-1]
     now = now or _dt.datetime.now(_dt.timezone.utc)
     n = 0
     for i, t in enumerate(turns):
         if str(t.get('role') or '') != 'user':
             continue
-        if _norm_q(t.get('text') or t.get('content')) != q:
+        if _norm_q(_asked(t.get('text') or t.get('content'))) != q:
             continue
         ts = _parse_ts(t.get('ts'))
         if ts is not None and (now - ts).total_seconds() > window_s:

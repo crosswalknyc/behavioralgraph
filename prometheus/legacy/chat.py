@@ -42,7 +42,7 @@ from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation 
 from prometheus import deck_pick as _deck_pick, deck_subject as _deck_subject   # the deck is on the subject the reader picked or named; a deck from a read keeps its figures (2026-11-11)
 from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
 from prometheus import question_universe as _question_universe   # the base is the universe the question names; the page only when pointed at (2026-11-06)
-from prometheus import ledger_gate as _ledger_gate, probe_files as _probe_files, cut_list as _cut_list   # a probe's ask never banks in the shared ledger, on any route, and leaves no file where a reader's files live (2026-11-11)
+from prometheus import ledger_gate as _ledger_gate, probe_files as _probe_files, cut_list as _cut_list, primary_profile as _primary_profile   # a probe's ask never banks in the shared ledger, on any route, and leaves no file where a reader's files live (2026-11-11)
 from prometheus import window_scope as _wscope   # the window is the one the reader asked for; the default is never a frozen pair (2026-11-10)
 from prometheus import named_platforms as _named_platforms   # a platform the client names is the universe's platform, strict (2026-11-10)
 from prometheus import door_words as _door_words   # the word door never reaches a chat read or a file name (2026-11-10)
@@ -12896,7 +12896,7 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         traceback.print_exc()
     return None
 
-
+_pm_generation_base = _primary_profile.held(_pm_generation_base, lambda: _profile_catalog_for_chat())   # the primary is the default; a year cut only when the words name its year (2026-11-12)
 _PM_DATA_FILE_PREFIX = 'generated_data/'
 
 

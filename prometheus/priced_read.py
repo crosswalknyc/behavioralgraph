@@ -861,6 +861,27 @@ def _with_article(s):
     return 'the ' + s
 
 
+def _record_spelling(name, ctx=None):
+    """The dashboard's own spelling of a name it holds, when the name as
+    cleaned differs from it only by case, punctuation or a leading
+    "The"; else ''. Never raises."""
+    try:
+        from . import sizing_lane as _sz
+        n = ' '.join(str(name or '').split())
+        if not n:
+            return ''
+        hit = _sz.resolve(n, ctx)
+        rec = ' '.join(str((hit or {}).get('name') or '').split())
+        if not rec:
+            return ''
+        fold = lambda x: re.sub(r"[^a-z0-9]+", '', str(x).lower().replace('&', 'and'))   # noqa: E731
+        if fold(rec) in (fold(n), 'the' + fold(n)):
+            return rec
+    except Exception:
+        pass
+    return ''
+
+
 def sizing_lead(text, ctx=None):
     """The one sentence a sizing offer opens with, built from the things
     the ask names: 'I can size the market for prank content, horror and
@@ -884,6 +905,12 @@ def sizing_lead(text, ctx=None):
             if not s or _sr.is_metric_phrase(s):
                 continue
             core = _sz.strip_audience_nouns(s) or s
+            # a name the dashboard holds is printed as the record carries it (its capitals, its ampersand, its
+            # leading "The"): the words were only trimmed and lower-cased on the way here (2026-11-12)
+            named = _record_spelling(core, ctx)
+            if named and named != core:
+                s = named if core == s else s.replace(core, named, 1)
+                core = named
             # 'UFC fans' sizes as the UFC audience and says so; a bare
             # brand or title stays as written
             s = f"the {core} audience" if core != s and not _AUDIENCE_NOUN_RX.search(core) else core

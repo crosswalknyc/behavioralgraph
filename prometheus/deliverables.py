@@ -13,6 +13,17 @@ answered from the record with no model call:
   4. the dashboard catalog for the subject itself (the profile is live
      even when no deck exists)
 
+Fast by construction (2026-11-12). "Where is the howdy deck" took three
+minutes: with nothing on file it told the reader what they had asked
+about the subject, and found that by reading the whole ask log, every
+user's rows, one object at a time (about 2,000 reads by November, more
+with every ask anyone made); the mail log and the job records were read
+one at a time too. Now the reader's asks come from the rows kept under
+the reader's own name (render_usage_log, `_by_user/`), and every bounded
+set of records (the newest deck and read jobs, the reader's deliveries
+and threads, a fortnight of mail) is read in parallel. What is found,
+the links and the wording are unchanged.
+
 The reply names what is on file with a fresh link, or says plainly
 that nothing is and offers to build it. A subject named in the ask
 filters the list; an ask that names nothing ("where is the pdf") lists
@@ -25,6 +36,7 @@ import json
 import re
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote, urlparse
 
@@ -239,6 +251,29 @@ def _s3_json(s3, bucket, key):
         return None
 
 
+POOL = 10          # records read at once (the S3 client's own connection pool); every set read this way is bounded before it is read
+
+
+def _many(fn, items, workers=POOL):
+    """`fn` over `items`, results in the same order, read in parallel.
+    An item whose read fails yields None; nothing raises."""
+    items = list(items)
+
+    def safe(x):
+        try:
+            return fn(x)
+        except Exception:
+            return None
+    if len(items) <= 1:
+        return [safe(x) for x in items]
+    with ThreadPoolExecutor(max_workers=max(1, min(int(workers), len(items)))) as ex:
+        return list(ex.map(safe, items))
+
+
+def _json_many(s3, bucket, keys):
+    return _many(lambda k: _s3_json(s3, bucket, k), keys)
+
+
 def _deck_items(uname, subject, s3, bucket, deck_prefix, since):
     out = []
     try:
@@ -251,8 +286,8 @@ def _deck_items(uname, subject, s3, bucket, deck_prefix, since):
                 if ts >= since and str(o.get('Key') or '').endswith('.json'):
                     keys.append((ts, o['Key']))
         keys.sort(reverse=True)
-        for _, k in keys[:60]:
-            d = _s3_json(s3, bucket, k) or {}
+        for d in _json_many(s3, bucket, [k for _, k in keys[:60]]):
+            d = d or {}
             if str(d.get('user') or '').lower() != str(uname or '').lower():
                 continue
             if str(d.get('status') or '') != 'done' or not d.get('url'):
@@ -275,8 +310,8 @@ def _thread_items(uname, subject, s3, bucket, host, since):
     try:
         idx = host.load_threads_index(uname) or {}
         threads = sorted((idx.get('threads') or []), key=lambda t: str(t.get('updated') or ''), reverse=True)[:8]
-        for th in threads:
-            hist = host.s3_json(host.thread_key(uname, th.get('id')), []) or []
+        for hist in _many(lambda th: host.s3_json(host.thread_key(uname, th.get('id')), []), threads, workers=8):
+            hist = hist or []
             last_user = ''
             for turn in hist:
                 if not isinstance(turn, dict):
@@ -316,22 +351,23 @@ def _mail_items(email, subject, s3, bucket, since):
     try:
         day = datetime.now(timezone.utc)
         days = [(day - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(LOOKBACK_DAYS + 1)]
-        for d in days:
-            r = s3.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}{d}/")
-            for o in r.get('Contents') or []:
-                rec = _s3_json(s3, bucket, o['Key']) or {}
-                if not rec.get('sent'):
-                    continue
-                if str(rec.get('to') or '').lower() != str(email).lower():
-                    continue
-                subj = str(rec.get('subject') or '')
-                att = [str(rec.get(k) or '') for k in ('pdf_name', 'csv_name') if rec.get(k)]
-                if not _matches(subject, subj, ' '.join(att)):
-                    continue
-                lm = o.get('LastModified')
-                label, ts = _when(rec.get('logged_at') or (lm.timestamp() if hasattr(lm, 'timestamp') else time.time()))
-                out.append({'kind': 'email', 'label': subj or 'an email', 'subject': '', 'when': label,
-                            'ts': ts, 'url': '', 'attachments': att})
+        # a fortnight of the mail log: the days listed at once, the records read at once, taken in the same order
+        listed = _many(lambda d: s3.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}{d}/").get('Contents') or [], days)
+        objs = [o for day_objs in listed for o in (day_objs or [])]
+        for o, rec in zip(objs, _json_many(s3, bucket, [o['Key'] for o in objs])):
+            rec = rec or {}
+            if not rec.get('sent'):
+                continue
+            if str(rec.get('to') or '').lower() != str(email).lower():
+                continue
+            subj = str(rec.get('subject') or '')
+            att = [str(rec.get(k) or '') for k in ('pdf_name', 'csv_name') if rec.get(k)]
+            if not _matches(subject, subj, ' '.join(att)):
+                continue
+            lm = o.get('LastModified')
+            label, ts = _when(rec.get('logged_at') or (lm.timestamp() if hasattr(lm, 'timestamp') else time.time()))
+            out.append({'kind': 'email', 'label': subj or 'an email', 'subject': '', 'when': label,
+                        'ts': ts, 'url': '', 'attachments': att})
     except Exception:
         traceback.print_exc()
     return out
@@ -350,6 +386,7 @@ def _dashboard_deck_items(uname, subject, s3, bucket, since):
         return out
     try:
         pag = s3.get_paginator('list_objects_v2')
+        recent = []
         for page in pag.paginate(Bucket=bucket, Prefix='system/decks/'):
             for o in page.get('Contents') or []:
                 k = str(o.get('Key') or '')
@@ -359,19 +396,21 @@ def _dashboard_deck_items(uname, subject, s3, bucket, since):
                 ts = lm.timestamp() if hasattr(lm, 'timestamp') else time.time()
                 if ts < since:
                     continue
-                d = _s3_json(s3, bucket, k) or {}
-                people = {str(d.get('owner') or '').lower(), str(d.get('last_editor') or '').lower()}
-                for c in (d.get('collaborators') or []) + (d.get('shared_with') or []):
-                    people.add(str((c.get('username') if isinstance(c, dict) else c) or '').lower())
-                if u not in people:
-                    continue
-                name = str(d.get('name') or d.get('title') or '')
-                if not _matches(subject, name, str(d.get('description') or '')):
-                    continue
-                label, ts2 = _when(d.get('updated_at') or d.get('created_at'))
-                n = len(d.get('slides') or [])
-                out.append({'kind': 'deck', 'label': f"{name or 'deck'} ({n} slide{'s' if n != 1 else ''}, in the dashboard's Decks panel)",
-                            'subject': name, 'when': label, 'ts': ts2 or ts, 'url': ''})
+                recent.append((ts, k))
+        for (ts, k), d in zip(recent, _json_many(s3, bucket, [k for _, k in recent])):
+            d = d or {}
+            people = {str(d.get('owner') or '').lower(), str(d.get('last_editor') or '').lower()}
+            for c in (d.get('collaborators') or []) + (d.get('shared_with') or []):
+                people.add(str((c.get('username') if isinstance(c, dict) else c) or '').lower())
+            if u not in people:
+                continue
+            name = str(d.get('name') or d.get('title') or '')
+            if not _matches(subject, name, str(d.get('description') or '')):
+                continue
+            label, ts2 = _when(d.get('updated_at') or d.get('created_at'))
+            n = len(d.get('slides') or [])
+            out.append({'kind': 'deck', 'label': f"{name or 'deck'} ({n} slide{'s' if n != 1 else ''}, in the dashboard's Decks panel)",
+                        'subject': name, 'when': label, 'ts': ts2 or ts, 'url': ''})
     except Exception:
         traceback.print_exc()
     return out
@@ -391,8 +430,8 @@ def _read_items(uname, subject, s3, bucket, read_prefix, since):
                 if ts >= since and str(o.get('Key') or '').endswith('.json'):
                     keys.append((ts, o['Key']))
         keys.sort(reverse=True)
-        for _, k in keys[:80]:
-            d = _s3_json(s3, bucket, k) or {}
+        for d in _json_many(s3, bucket, [k for _, k in keys[:80]]):
+            d = d or {}
             if str(d.get('user') or '').lower() != str(uname or '').lower() or str(d.get('status') or '') != 'done':
                 continue
             payload = d.get('payload') if isinstance(d.get('payload'), dict) else {}
@@ -429,12 +468,15 @@ def _delivery_items(uname, subject, s3, bucket, since):
         return out
     try:
         r = s3.list_objects_v2(Bucket=bucket, Prefix=f'system/pm_deliveries/{u}/')
+        recent = []
         for o in r.get('Contents') or []:
             lm = o.get('LastModified')
             ts = lm.timestamp() if hasattr(lm, 'timestamp') else time.time()
             if ts < since:
                 continue
-            d = _s3_json(s3, bucket, o['Key']) or {}
+            recent.append((ts, lm, o['Key']))
+        for (ts, lm, _k), d in zip(recent, _json_many(s3, bucket, [k for _, _, k in recent])):
+            d = d or {}
             subj = str(d.get('subject') or '')
             files = [str(f) for f in (d.get('files') or []) if str(f or '').strip()]
             if not _matches(subject, subj, ' '.join(files), str(d.get('key') or '')):
@@ -452,11 +494,97 @@ def _delivery_items(uname, subject, s3, bucket, since):
     return out
 
 
+_ASK_PREFIX = 'system/usage/ask_log/'
+_READY = {'at': 0.0, 'ok': False}
+_READY_TTL_S = 300
+MAX_ASK_ROWS = 800          # one reader's rows read for a trail, newest first (the heaviest seat holds about half that in a season)
+_TRAIL_WANT_RX = re.compile(r"\b(?:deck|pdf|slides?|journey|build|profile|report|pull)\b", re.I)
+
+
+def _index_names():
+    try:
+        import render_usage_log as _rul
+        return _rul.ask_user_prefix, _rul.ASK_BY_USER_READY_KEY
+    except Exception:
+        from urllib.parse import quote
+        return (lambda u: f"{_ASK_PREFIX}_by_user/{quote(str(u or ''), safe='')}/"), 'system/ops/pm_ask_by_user_ready.json'
+
+
+def _index_ready(s3, bucket, now=None):
+    """True when the reader-keyed ask rows hold every ask the log holds
+    (the one-time backfill writes the marker). Looked up at most every
+    five minutes."""
+    now = float(now or time.time())
+    if now - _READY['at'] < _READY_TTL_S:
+        return _READY['ok']
+    ok = False
+    try:
+        doc = _s3_json(s3, bucket, _index_names()[1])
+        ok = bool(isinstance(doc, dict) and doc.get('ready'))
+    except Exception:
+        ok = False
+    _READY.update(at=now, ok=ok)
+    return ok
+
+
+def _list_all(s3, bucket, prefix):
+    out, token = [], None
+    while True:
+        kw = dict(Bucket=bucket, Prefix=prefix)
+        if token:
+            kw['ContinuationToken'] = token
+        r = s3.list_objects_v2(**kw)
+        out += list(r.get('Contents') or [])
+        if not r.get('IsTruncated'):
+            return out
+        token = r.get('NextContinuationToken')
+
+
+def _own_ask_rows(uname, s3, bucket, days):
+    """[(day, [row, ...]), ...] newest day first: the reader's own asks on
+    the days given, from the rows kept under the reader's name. None when
+    those rows are not in place (the caller walks a bounded stretch of
+    the log instead)."""
+    try:
+        if not _index_ready(s3, bucket):
+            return None
+        prefix = _index_names()[0](uname)
+        want = set(days)
+        by_day = {}
+        for o in _list_all(s3, bucket, prefix):
+            k = str(o.get('Key') or '')
+            tail = k[len(prefix):]
+            day = tail[:10]
+            if day in want and tail.endswith('.json'):
+                by_day.setdefault(day, []).append(k)
+        ordered = [(d, sorted(by_day[d])) for d in days if d in by_day]
+        keys = [k for _d, ks in ordered for k in ks][:MAX_ASK_ROWS]
+        docs = dict(zip(keys, _json_many(s3, bucket, keys)))
+        return [(d, [docs[k] for k in ks if isinstance(docs.get(k), dict)]) for d, ks in ordered]
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _walked_ask_rows(uname, s3, bucket, days):
+    """The bounded walk for when the reader-keyed rows are not in place:
+    the newest fortnight of the log, listed and read in parallel."""
+    days = list(days)[:LOOKBACK_DAYS + 1]
+    listed = _many(lambda d: _list_all(s3, bucket, f'{_ASK_PREFIX}{d}/'), days)
+    out = []
+    for d, objs in zip(days, listed):
+        keys = [str(o.get('Key') or '') for o in (objs or [])]
+        keys = [k for k in keys if '/_signals/' not in k and k.endswith('.json')]
+        out.append((d, [r for r in _json_many(s3, bucket, keys) if isinstance(r, dict)]))
+    return out
+
+
 def _ask_trail(uname, subject, s3, bucket, since, limit=3):
     """The person's own asks about the subject that would have produced a
-    file (a deck, a journey, a build) and what each came to, from the ask
-    log; what the plain 'nothing on file' reply points at so the person
-    knows what Prometheus did and did not do."""
+    file (a deck, a journey, a build) and what each came to; what the
+    plain 'nothing on file' reply points at so the person knows what
+    Prometheus did and did not do. Read from the rows kept under the
+    reader's own name, never by walking everyone's."""
     out = []
     u = str(uname or '')
     if not u or not subject:
@@ -464,19 +592,16 @@ def _ask_trail(uname, subject, s3, bucket, since, limit=3):
     try:
         day = datetime.now(timezone.utc)
         ndays = min(int((time.time() - since) / 86400) + 1, SUBJECT_LOOKBACK_DAYS)
-        want = re.compile(r"\b(?:deck|pdf|slides?|journey|build|profile|report|pull)\b", re.I)
-        for i in range(ndays):
-            d = (day - timedelta(days=i)).strftime('%Y-%m-%d')
-            r = s3.list_objects_v2(Bucket=bucket, Prefix=f'system/usage/ask_log/{d}/')
-            for o in r.get('Contents') or []:
-                k = str(o.get('Key') or '')
-                if '/_signals/' in k or not k.endswith('.json'):
-                    continue
-                rec = _s3_json(s3, bucket, k) or {}
+        days = [(day - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(ndays)]
+        rows = _own_ask_rows(u, s3, bucket, days)
+        if rows is None:
+            rows = _walked_ask_rows(u, s3, bucket, days)
+        for _d, recs in rows:              # newest day first, each day in the order it was asked
+            for rec in recs:
                 if str(rec.get('user') or '') != u:
                     continue
                 q = str(rec.get('question') or '')
-                if not want.search(q) or not _matches(subject, q, str(rec.get('subject') or '')):
+                if not _TRAIL_WANT_RX.search(q) or not _matches(subject, q, str(rec.get('subject') or '')):
                     continue
                 label, ts = _when(rec.get('ts'))
                 out.append({'when': label, 'ts': ts, 'question': q[:140], 'outcome': str(rec.get('outcome') or ''),

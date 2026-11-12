@@ -578,6 +578,70 @@ def _ask_key(record: dict) -> str:
 ASK_BY_JOB_PREFIX = 'system/usage/ask_log/_by_job/'
 
 
+# The reader's own asks, keyed to the reader (2026-11-12). "Where is the
+# howdy deck" tells a reader what they asked about the subject and what
+# each ask came to. It found that by walking the whole log, every user's
+# rows, one object at a time: about 2,000 reads and three minutes by
+# November, growing with every ask anyone made. Each record now also
+# lands, in short form, under the asker's own prefix, with the day in
+# the key, so that lookup lists one reader's rows and reads only those.
+# Same append-safe shape as the log itself (one object per ask, no
+# read-modify-write); the settle rewrites it with the record. A probe's
+# asks are not indexed. The 180-day retention sweeps it by the day in
+# the key (migration/pm_log_retention.py).
+ASK_BY_USER_PREFIX = 'system/usage/ask_log/_by_user/'
+# the marker the one-time backfill writes; kept outside the log's prefix so the 180-day sweep never takes it
+ASK_BY_USER_READY_KEY = 'system/ops/pm_ask_by_user_ready.json'
+_BY_USER_FIELDS = ('ts', 'user', 'view', 'surface', 'route', 'outcome', 'subject', 'job_id', 'settled_at')
+
+
+def ask_user_prefix(user) -> str:
+    """The prefix one reader's asks sit under (the name percent-encoded,
+    so every name maps to its own prefix)."""
+    from urllib.parse import quote
+    return f"{ASK_BY_USER_PREFIX}{quote(str(user or ''), safe='')}/"
+
+
+def ask_user_key(user, main_key) -> str:
+    """The reader-keyed twin of a log record's key."""
+    tail = str(main_key or '')[len(ASK_PREFIX):] if str(main_key or '').startswith(ASK_PREFIX) else str(main_key or '')
+    return ask_user_prefix(user) + tail
+
+
+def ask_user_row(record: dict, main_key: str = '') -> dict:
+    """What the reader-keyed copy carries: who, when, the question, the
+    subject and what it came to. Not the reply, the stages or the extras."""
+    row = {k: record[k] for k in _BY_USER_FIELDS if record.get(k) not in (None, '')}
+    row['question'] = str(record.get('question') or '')[:600]
+    if main_key:
+        row['key'] = main_key
+    return row
+
+
+def _indexable_user(user) -> bool:
+    u = str(user or '').strip()
+    if not u or u == 'unknown':
+        return False
+    try:
+        from prometheus import probe_identity as _pi
+        return not _pi.is_probe_user(u)
+    except Exception:
+        return not u.lower().startswith('canary')
+
+
+def _put_ask_user_row(record: dict, key: str) -> None:
+    """The reader-keyed copy. Never raises: the log record is the record."""
+    try:
+        if not _indexable_user(record.get('user')):
+            return
+        _client().put_object(
+            Bucket=S3_BUCKET, Key=ask_user_key(record.get('user'), key),
+            Body=json.dumps(ask_user_row(record, key)).encode('utf-8'),
+            ContentType='application/json')
+    except Exception as e:
+        print(f"[ask-log] reader index put failed: {e}")
+
+
 def _put_ask_record(record: dict) -> None:
     key = _ask_key(record)
     job_id = str(record.get('job_id') or '')
@@ -585,6 +649,7 @@ def _put_ask_record(record: dict) -> None:
         Bucket=S3_BUCKET, Key=key,
         Body=json.dumps(record).encode('utf-8'),
         ContentType='application/json')
+    _put_ask_user_row(record, key)
     if job_id:
         try:
             _client().put_object(
@@ -643,6 +708,7 @@ def settle_ask(job_id: str, *, outcome: str, reply: Optional[str] = None,
         rec['settled_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         c.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(rec).encode('utf-8'),
                      ContentType='application/json')
+        _put_ask_user_row(rec, key)      # the reader-keyed copy says what the ask came to as well
         try:
             from prometheus import store as _store
             if _store.enabled():
@@ -758,5 +824,6 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
 
 
 __all__ = ['record_call', 'record_ask', 'settle_ask', 'record_ppu_marker', 'cost_usd',
-           'PRICING_USD_PER_MTOK', 'ASK_PREFIX', 'PPU_MARKUP',
+           'PRICING_USD_PER_MTOK', 'ASK_PREFIX', 'ASK_BY_USER_PREFIX', 'ASK_BY_USER_READY_KEY', 'ask_user_prefix',
+           'ask_user_key', 'ask_user_row', 'PPU_MARKUP',
            'PPU_CALLS_PREFIX']

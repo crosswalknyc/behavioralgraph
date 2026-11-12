@@ -460,6 +460,14 @@ def _normalize(d, text, cands):
             cat = cand_names[cat.lower()]
         elif cat and cat.lower() not in cand_names:
             cat = ''   # never invent a library subject
+        if cat:
+            # the primary is the default; a year cut only when the words name its year (2026-11-12: the library
+            # list shows the year cuts beside the primary, and "Reba McEntire fans" was read on the 2024 file)
+            try:
+                from . import primary_profile as _pp
+                cat = _pp.settle_name(cat, text, _pp.library_names(cand_names.values()))
+            except Exception:
+                pass
         if aw or cat:
             subs.append({'as_written': aw or cat, 'catalog': cat, 'kind': str(s.get('kind') or 'unknown')[:16]})
     flags = [str(f)[:60] for f in (d.get('flags') or []) if str(f).strip()][:8]
