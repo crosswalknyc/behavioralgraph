@@ -136,6 +136,19 @@ class TheQuote(unittest.TestCase):
             self.assertIn('panel_offer', self._quote('How many people watched Fallout Season 2 on Netflix?'))
             CL.answer = lambda text, ctx=None: {'success': True, 'reply': 'No profile on the dashboard yet.', 'subject': FALLOUT}
             self.assertIn('panel_offer', self._quote('How many people watched Fallout Season 2 on Netflix?'))
+            # a figure for another title, or for another service, is not the figure for that home: the quote stands
+            for other in ('Fallout Viewers on Prime Video', 'Fallout Season 2 Viewers on Peacock', 'Fallout Season 2 Viewers'):
+                CL.answer = lambda text, ctx=None, _s=other: {'success': True, 'reply': held, 'subject': _s}
+                self.assertIn('panel_offer', self._quote('How many people watched Fallout Season 2 on Netflix?'), other)
+            # no service named, or the right one: the lane is never asked here and the quote is what it was
+            CL.answer = lane
+            del asked[:]
+            for q in ('How many people watched Fallout Season 2?', 'How many people watched Fallout Season 2 on Prime Video?',
+                      'How big is the Fallout Season 2 audience?', 'How big is the Fallout Season 2 audience on Prime Video?'):
+                pl = self._quote(q)
+                self.assertIn('panel_offer', pl, q)
+                self.assertIn('will cost $100', pl['reply'], q)
+            self.assertEqual(asked, [])
             # the record cannot settle it: nothing is said about another service, and the quote is on what was asked
             CL.answer = lane
             self.record = TWO_HOMES

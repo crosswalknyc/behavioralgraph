@@ -140,7 +140,14 @@ def held_figure(text, subject, sentence, ctx=None):
         if not isinstance(got, dict) or got.get('memory_confirm') or got.get('roster_ask'):
             return None
         words = ' '.join(str(got.get('reply') or '').split())
-        if not _FIGURE_RX.search(words) or not ssm.services_of_name(str(got.get('subject') or '')):
+        if not _FIGURE_RX.search(words):
+            return None
+        # only the figure for that home: the same title, on the service the sentence names and no other
+        got_subj = ' '.join(str(got.get('subject') or '').split())
+        on, home = ssm.services_of_name(got_subj), ssm.services_of_name(' '.join(str(subject or '').split()))
+        if not on or not home or not on <= home:
+            return None
+        if ' '.join(str(ssm.title_of_name(got_subj) or '').lower().split()) != ' '.join(title.lower().split()):
             return None
         out = dict(got)
         out['reply'] = f"{sentence} {words}"
