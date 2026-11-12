@@ -97,8 +97,19 @@ def settle(text, history, subject, record=None, window=None):
         if not subj or not held:
             return subject, ''
         asked = ssm.services_in_question(text, known=held)
-        if not asked or asked <= held:
-            return subject, ''                       # the reader named no service, or only ones the subject is on
+        if not asked:
+            return subject, ''                       # the reader named no service
+        if asked <= held:
+            # The subject came in on the service the reader named (it is read from the words on some
+            # turns and from the dashboard on others; the same question was quoted on Netflix three
+            # times in seven on prod, 2026-11-12). The record is asked all the same: a read is never
+            # priced on a service the title is not on.
+            title = ssm.title_of_name(subj)
+            home = _home(ssm, title, text, record, window) if title else ''
+            if home and home not in held:
+                return (f"{title} {_noun(subj)} on {ssm.home_name(home)}",
+                        f"{title} is on {ssm.home_name(home)} in the US, not {names(held, ssm)}.")
+            return subject, ''                       # only services the subject is on, and nothing on record says otherwise
         other = asked - held
         title = ssm.title_of_name(subj)
         if not title:

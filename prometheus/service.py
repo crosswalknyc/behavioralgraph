@@ -2889,7 +2889,8 @@ def ask(user, body, *, via='session'):
         if _wg:
             raw = _wg
             decision = dict(decision, reason=('custom_ask_offer' if _wg.get('panel_offer')
-                                              else ('audience_confirm' if _wg.get('audience_confirm') else 'custom_ask_funds')))
+                                              else ('audience_confirm' if _wg.get('audience_confirm')
+                                                    else ('catalog_lookup' if _wg.get('service_settled') else 'custom_ask_funds'))))
             if _client_surface == 'interpret':
                 raw = _interpret_shape(raw)
                 raw['followups'] = list(_wg.get('followups') or [])
@@ -2898,7 +2899,8 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='reasoned_metrics',
                               outcome=('panel_offer' if _wg.get('panel_offer')
-                                       else ('asked_audience' if _wg.get('audience_confirm') else 'panel_out_of_credits')),
+                                       else ('asked_audience' if _wg.get('audience_confirm')
+                                             else ('answered' if _wg.get('service_settled') else 'panel_out_of_credits'))),
                               subject=str(_wg.get('subject') or ''))
             except Exception as _fx:
                 _faults.note('service', _fx)

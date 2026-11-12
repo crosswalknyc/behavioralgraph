@@ -53,6 +53,19 @@ class TheRule(unittest.TestCase):
         subj, line = QS.settle('What did My Life with the Walter Boys viewers on Hulu watch next?', [], WALTER, record=ONLY_NETFLIX)
         self.assertEqual((subj, line), (WALTER, 'My Life with the Walter Boys is on Netflix in the US, not Hulu.'))
 
+    def test_the_subject_came_in_on_the_service_the_reader_named(self):
+        """Prod, 2026-11-12: the same question was quoted on Netflix three times in seven, because on those turns the
+        subject was read from the words ("... on Netflix") and the record was never asked."""
+        q = 'How many people watched Fallout Season 2 on Netflix?'
+        for came_in in ('Fallout Season 2 Viewers on Netflix', 'Fallout Season 2 viewers on Netflix'):
+            subj, line = QS.settle(q, [], came_in, record=ONLY_AMAZON)
+            self.assertEqual(line, 'Fallout Season 2 is on Prime Video in the US, not Netflix.', came_in)
+            self.assertEqual(subj.lower(), FALLOUT.lower(), came_in)
+        # the record shows two homes, holds no check, or the title is on the service named: left as asked
+        for rec in (TWO_HOMES, NO_CHECK, ONLY_NETFLIX):
+            self.assertEqual(QS.settle(q, [], 'Fallout Season 2 Viewers on Netflix', record=rec),
+                             ('Fallout Season 2 Viewers on Netflix', ''), rec)
+
     def test_the_record_cannot_settle_it_so_the_quote_is_on_what_was_asked(self):
         q = 'How many people watched Fallout Season 2 on Netflix?'
         for rec in (TWO_HOMES, NO_CHECK):
@@ -136,6 +149,12 @@ class TheQuote(unittest.TestCase):
             self.assertIn('panel_offer', self._quote('How many people watched Fallout Season 2 on Netflix?'))
             CL.answer = lambda text, ctx=None: {'success': True, 'reply': 'No profile on the dashboard yet.', 'subject': FALLOUT}
             self.assertIn('panel_offer', self._quote('How many people watched Fallout Season 2 on Netflix?'))
+            # the subject came in on the service the reader named: the same sentence and the same figure
+            CL.answer = lane
+            pl = self._quote('How many people watched Fallout Season 2 on Netflix?', subject='Fallout Season 2 Viewers on Netflix')
+            self.assertEqual(pl['reply'], 'Fallout Season 2 is on Prime Video in the US, not Netflix. ' + held)
+            self.assertNotIn('panel_offer', pl)
+            self.assertTrue(pl.get('service_settled'))
             # a figure for another title, or for another service, is not the figure for that home: the quote stands
             for other in ('Fallout Viewers on Prime Video', 'Fallout Season 2 Viewers on Peacock', 'Fallout Season 2 Viewers'):
                 CL.answer = lambda text, ctx=None, _s=other: {'success': True, 'reply': held, 'subject': _s}
