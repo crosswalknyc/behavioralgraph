@@ -61,6 +61,34 @@ def num(v):
         return None
 
 
+def at_parent_rows(parent_df, cut_df, span=0.1005):
+    """Rows of a cut that sit at the parent's value, within the salted
+    jitter an unreasoned row is given (plus or minus 0.10): the rows the
+    reasoner did not return on the last pass. Same shape as
+    ``carried_rows``: [(index, COLUMN, VALUE, cut reach, parent reach,
+    'at the parent')]. Demographics, place rows, metadata rows and pins
+    (a parent row at 99 or more) are never listed."""
+    p_bp = next((c for c in parent_df.columns if "Brand Penetration" in c), parent_df.columns[2])
+    c_bp = next((c for c in cut_df.columns if "Brand Penetration" in c), cut_df.columns[2])
+    parent = {}
+    for c, v, b in zip(parent_df["Column"], parent_df["Value"], parent_df[p_bp]):
+        n = num(b)
+        if n is not None:
+            parent.setdefault((str(c).strip().upper(), re.sub(r"\s+", " ", str(v).strip().upper())), n)
+    out = []
+    for idx, c, v, b in zip(cut_df.index, cut_df["Column"], cut_df["Value"], cut_df[c_bp]):
+        col = str(c).strip().upper()
+        if col in META or col in DEMOS or col in GEO:      # the build never reasons a place row: it is renormalized
+            continue
+        val = re.sub(r"\s+", " ", str(v).strip().upper())
+        cb, pb = num(b), parent.get((col, val))
+        if cb is None or pb is None or pb >= NEAR_TOTAL or cb >= NEAR_TOTAL:
+            continue
+        if abs(cb - pb) <= span:
+            out.append((idx, col, val, cb, pb, "at the parent"))
+    return out
+
+
 def reach_from_count(count, sample):
     """A row's reach from its people count over the sample that count
     was taken on. For a parent row whose penetration cell cannot be

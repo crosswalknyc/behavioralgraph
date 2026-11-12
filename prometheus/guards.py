@@ -1730,7 +1730,50 @@ _SAMPLE_LINE_RX = re.compile(r"^\s*-?\s*Sample:\s*([\d,]+)\s+(?:individuals|peop
 _AVID_LINE_RX = re.compile(r"^\s*-?\s*Avid tier:\s*([\d,]+)\s+(?:individuals|people)?\s*$", re.I | re.M)
 _US_LINE_RX = re.compile(r"^\s*-?\s*US audience in window:\s*(.+?)\s*$", re.I | re.M)
 _RANGE_LINE_RX = re.compile(r"^\s*-?\s*Audience range:\s*([\d,]+)\s+to\s+([\d,]+)\s+individuals\s*$", re.I | re.M)
-_CHECK_HEAD_RX = re.compile(r"^\s*Sample check for (?P<who>.+?)\s*\((?P<win>.*)\)\s*:\s*$", re.I | re.M)
+_CHECK_HEAD_RX = re.compile(r"^\s*Sample check for (?P<rest>.+?)\s*:\s*$", re.I | re.M)
+
+
+def split_check_head(rest):
+    """('who', 'window') from the heading of a sizing reply, 'who (window)'.
+
+    The window is the LAST bracket group, read with its own nested
+    brackets ('trailing year (10-20-2025 to 10-20-2026)'). A bracket
+    inside the name stays with the name. The heading used to be read as
+    'everything up to the first bracket' and 'everything from there to
+    the last one', so 'Reacher (Prime Video series) (the last 12
+    months)' came out as 'Reacher, Prime Video series) (the last 12
+    months' (2026-11-12)."""
+    s = ' '.join(str(rest or '').split())
+    if not s.endswith(')'):
+        return s, ''
+    depth = 0
+    for i in range(len(s) - 1, -1, -1):
+        if s[i] == ')':
+            depth += 1
+        elif s[i] == '(':
+            depth -= 1
+            if depth == 0:
+                return s[:i].rstrip(), s[i + 1:-1].strip()
+    return s, ''
+
+
+def balance_brackets(text):
+    """The same words with any bracket that has no partner taken out, so
+    a line never carries a stray one."""
+    out, stack = [], []
+    for ch in str(text or ''):
+        if ch == '(':
+            stack.append(len(out))
+            out.append(ch)
+        elif ch == ')':
+            if stack:
+                stack.pop()
+                out.append(ch)
+        else:
+            out.append(ch)
+    for i in reversed(stack):
+        del out[i]
+    return re.sub(r"[ \t]{2,}", ' ', ''.join(out))
 _INSIDE_RX = re.compile(r"\s*,?\s*(?:\(?\s*)?inside the (?:10|ten) million(?: sample| panel)?(?: and projected to the US)?\s*\)?", re.I)
 # "Estimated audience: 158,305 to 220,662 inside the 10 million sample,
 # about 5,222,482 to 7,279,639 US people": only the US people survive
@@ -1756,8 +1799,10 @@ def scrub_sample_vocabulary(text):
         return t
     m = _CHECK_HEAD_RX.search(t)
     if m:
-        who, win = m.group('who').strip(), plain_window(m.group('win'))
-        t = _CHECK_HEAD_RX.sub(f"{who}, {win}:" if win else f"{who}:", t, count=1)
+        who, win = split_check_head(m.group('rest'))
+        win = plain_window(win)
+        head = balance_brackets(f"{who}, {win}:" if win else f"{who}:")
+        t = _CHECK_HEAD_RX.sub(lambda _m: head, t, count=1)
     us_m = _US_LINE_RX.search(t)
     sm = _SAMPLE_LINE_RX.search(t)
     if sm:

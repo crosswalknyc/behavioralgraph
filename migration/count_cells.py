@@ -63,6 +63,14 @@ def _cell(v):
     return v
 
 
+def _is_numeric(series) -> bool:
+    try:
+        import pandas as pd
+        return bool(pd.api.types.is_numeric_dtype(series))
+    except Exception:
+        return str(getattr(series, "dtype", "")) not in ("object", "str", "string")
+
+
 def whole_counts(df):
     """The frame with its two count columns written as whole numbers.
     Returns a shallow copy when anything changes, the frame itself when
@@ -75,7 +83,10 @@ def whole_counts(df):
         for c in cols:
             new = df[c].map(_cell)
             try:
-                same = bool((new.astype(str) == df[c].astype(str)).all()) and str(df[c].dtype) == "object"
+                # a text column that is already whole is left as it is, whichever text type the frame gives it
+                # ('object' on pandas 2, 'str' on pandas 3: the build server read a clean frame as changed and
+                # copied it every time); only a numeric column, which writes '192535.0', is rewritten as text
+                same = bool((new.astype(str) == df[c].astype(str)).all()) and not _is_numeric(df[c])
             except Exception:
                 same = False
             if same:

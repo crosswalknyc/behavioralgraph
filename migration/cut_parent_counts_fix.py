@@ -398,6 +398,214 @@ def reason_rows(cut_df, parent_df, *, subject, label="Avid Fan", keep=(), reason
     return df, changes, stats
 
 
+# ------------------------------------------------------------------ rows the reasoner did not return
+_WATCH = threading.local()
+WHY = ("reasoned", "no answer for its chunk", "the answer for its chunk could not be read", "left out of the answer",
+       "answered out of range", "answered with a placeholder", "answered with a misfire",
+       "answered with one value for four or more rows (the house ladder guard reads that as no decision)")
+
+
+def _watch_reasoner(A):
+    """Record, per call, what the house reasoner got back: an answer or
+    none, whether it could be read, and the labels and values in it.
+    The reasoner itself is not changed; it is only observed."""
+    if getattr(A, "_cpc_watched", False):
+        return
+    real_call, real_parse = A._claude_messages_with_retry, A._extract_json_block
+
+    def call(*a, **k):
+        r = real_call(*a, **k)
+        cap = getattr(_WATCH, "cap", None)
+        if cap is not None:
+            cap["calls"] = cap.get("calls", 0) + 1
+            cap["answered"] = bool(r)
+        return r
+
+    def parse(resp):
+        o = real_parse(resp)
+        cap = getattr(_WATCH, "cap", None)
+        if cap is not None:
+            cap["read"] = isinstance(o, dict)
+            items = (o.get("items") or []) if isinstance(o, dict) else []
+            cap["items"] = {re.sub(r"\s+", " ", str(it.get("label", "")).strip().upper()): it.get("new_bp")
+                            for it in items if isinstance(it, dict)}
+        return o
+    A._claude_messages_with_retry, A._extract_json_block = call, parse
+    A._cpc_watched = True
+
+
+def house_chunk_fn(parent_df):
+    """One call of the house row reasoner on one chunk of rows, watched:
+    (subject, audience, category, [(LABEL, parent reach)]) ->
+    ({LABEL: value}, {'answered', 'read', 'items', 'calls'})."""
+    try:
+        from migration import avid_fan_row_by_row as A
+    except ImportError:                                 # pragma: no cover
+        import avid_fan_row_by_row as A  # type: ignore
+    _watch_reasoner(A)
+
+    def chunk_fn(subject_, audience_, cat, part):
+        _WATCH.cap = cap = {}
+        try:
+            got = A.reason_category_rows(subject_, audience_, cat, part, chunk_size=max(1, len(part)), df_source=parent_df) or {}
+        except Exception as e:
+            got, cap["raised"] = {}, f"{type(e).__name__}: {e}"[:120]
+        finally:
+            _WATCH.cap = None
+        return {re.sub(r"\s+", " ", str(k).strip().upper()): v for k, v in got.items()}, cap
+    return chunk_fn
+
+
+def reason_rows_again(cut_df, parent_df, *, subject, label="Avid Fan", keep=(), select=None, chunk=60, rounds=3,
+                      guard_rounds=2, workers=4, chunk_fn=None, log=print):
+    """Send the rows that sit at the parent's value to the house
+    reasoner again and say, row by row, what came back.
+
+    The first pass asks for a whole category at a time, 200 rows to a
+    call, and a row the answer does not carry falls back to the parent's
+    value with the salted jitter. Here only those rows are sent, in
+    chunks of ``chunk``, and a row still missing is sent again on its
+    own in a smaller chunk, up to ``rounds`` times. The house ladder
+    guard then runs as on a build, and a row it drops (the model gave
+    four or more rows of the category one identical value) is asked
+    again up to ``guard_rounds`` times before it is left at the
+    fallback. Returns (df, changes, stats); every change carries
+    ``how`` (one of WHY) and stats['why'] counts them.
+
+    ``chunk_fn(subject, audience, category, rows)`` -> ({LABEL: value},
+    capture) replaces the house call in a test."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    df = cut_df.copy()
+    cols = _cols(df)
+    for c in cols:
+        if df[c].dtype.name not in ("object", "O"):
+            df[c] = df[c].astype(object)
+    sample, uspop = _sample(df)
+    keep_set = {(str(c).strip().upper(), re.sub(r"\s+", " ", str(v).strip().upper())) for c, v in (keep or ())}
+    rows = [r for r in (select or CPC.at_parent_rows)(parent_df, df) if (r[1], r[2]) not in keep_set]
+    stats = {"sent": len(rows), "categories": len({r[1] for r in rows}), "reasoned": 0, "unreasoned": 0, "misfires": 0,
+             "calls": 0, "rounds": 0, "why": {}}
+    if not rows:
+        return df, [], stats
+    audience = audience_of(cut_df, parent_df, label, subject)
+    if chunk_fn is None:
+        chunk_fn = house_chunk_fn(parent_df)
+
+    values, why = {}, {}                 # (cat, val) -> value / reason it fell back
+    pending = {}
+    for idx, cat, val, cbp, pbp, _how in rows:
+        pending.setdefault(cat, []).append((val, pbp))
+    size = max(1, int(chunk))
+    for rnd in range(1, max(1, int(rounds)) + 1):
+        jobs = []
+        for cat, part in pending.items():
+            part = sorted(part, key=lambda kv: -kv[1])
+            jobs += [(cat, part[i:i + size]) for i in range(0, len(part), size)]
+        if not jobs:
+            break
+        stats["rounds"] = rnd
+
+        def _one(job):
+            cat, part = job
+            got, cap = chunk_fn(subject, audience, cat, part)
+            return cat, part, got, cap
+        nxt = {}
+        with ThreadPoolExecutor(max(1, min(workers, len(jobs)))) as ex:
+            for cat, part, got, cap in ex.map(_one, jobs):
+                stats["calls"] += int(cap.get("calls", 1) or 1)
+                answered = cap.get("answered", bool(got))
+                read = cap.get("read", bool(got))
+                items = cap.get("items") or {}
+                for val, pbp in part:
+                    if val in got:
+                        values[(cat, val)] = float(got[val])
+                        why.pop((cat, val), None)
+                        continue
+                    if not answered:
+                        why[(cat, val)] = WHY[1]
+                    elif not read:
+                        why[(cat, val)] = WHY[2]
+                    elif val in items:
+                        why[(cat, val)] = WHY[4]
+                    else:
+                        why[(cat, val)] = WHY[3]
+                    nxt.setdefault(cat, []).append((val, pbp))
+        log(f"[parent-counts] round {rnd}: {len(jobs)} calls of up to {size} rows; "
+            f"{sum(len(v) for v in pending.values()) - sum(len(v) for v in nxt.values())} rows answered, "
+            f"{sum(len(v) for v in nxt.values())} not")
+        pending = nxt
+        size = max(8, size // 3)
+    # The house ladder guard, as on a build: four or more rows of one category answered with one
+    # identical value is a templated answer, not a per-row decision, and those rows (all but one) take
+    # the fallback. A row the guard drops is asked again, in a small chunk, before it is left there.
+    def _guard(vals):
+        try:
+            try:
+                from migration.fractional_ladders import deladder_decision_map
+            except ImportError:                         # pragma: no cover
+                from fractional_ladders import deladder_decision_map  # type: ignore
+        except Exception as e:                          # pragma: no cover
+            log(f"[parent-counts] ladder guard skipped ({e})")
+            return vals, set()
+        by_cat = {}
+        for (cat, val), v in vals.items():
+            by_cat.setdefault(cat, {})[val] = v
+        with contextlib.redirect_stdout(io.StringIO()):
+            by_cat, _n = deladder_decision_map(by_cat, subject)
+        kept = {(cat, val): float(v) for cat, d in by_cat.items() for val, v in d.items()}
+        return kept, set(vals) - set(kept)
+
+    parent_of = {(cat, val): pbp for _i, cat, val, _c, pbp, _h in rows}
+    dropped = set()
+    for g in range(max(0, int(guard_rounds)) + 1):
+        kept, dropped = _guard(values)
+        if not dropped or g == int(guard_rounds):
+            values = kept
+            break
+        jobs, by = [], {}
+        for cat, val in sorted(dropped):
+            by.setdefault(cat, []).append((val, parent_of[(cat, val)]))
+        for cat, part in by.items():
+            part = sorted(part, key=lambda kv: -kv[1])
+            jobs += [(cat, part[i:i + 20]) for i in range(0, len(part), 20)]
+        again = 0
+        with ThreadPoolExecutor(max(1, min(workers, len(jobs)))) as ex:
+            for cat, part, got, cap in ex.map(lambda job: (job[0], job[1]) + tuple(chunk_fn(subject, audience, job[0], job[1])), jobs):
+                stats["calls"] += int(cap.get("calls", 1) or 1)
+                for val, _p in part:
+                    if val in got:
+                        values[(cat, val)] = float(got[val])
+                        again += 1
+        stats["guard_rounds"] = g + 1
+        log(f"[parent-counts] ladder guard: {len(dropped)} rows answered with a value shared by four or more rows; "
+            f"asked again in {len(jobs)} calls, {again} answered")
+    for k in dropped:
+        why[k] = WHY[7]
+
+    changes = []
+    for idx, cat, val, cbp, pbp, how in rows:
+        got = values.get((cat, val))
+        reason = why.get((cat, val), WHY[0] if got is not None else WHY[3])
+        if got is not None and any(abs(got - p_) < 0.0005 for p_ in _PLACEHOLDERS):
+            got, reason = None, WHY[5]
+        if got is not None and ((got >= 75.0 and pbp < 5.0) or (got >= 60.0 and pbp < 1.0)):
+            got, reason = None, WHY[6]
+            stats["misfires"] += 1
+        stats["why"][reason] = stats["why"].get(reason, 0) + 1
+        if got is None:
+            stats["unreasoned"] += 1          # the row stays where it is: the parent's value with its salted jitter
+            changes.append({"column": cat, "value": str(df.at[idx, "Value"]), "before": round(cbp, 4), "after": round(cbp, 4),
+                            "parent": round(pbp, 4), "carried": how, "how": reason})
+            continue
+        new = max(0.0001, min(99.49, round(got, 4)))
+        stats["reasoned"] += 1
+        _set_row(df, idx, new, sample, uspop, cols)
+        changes.append({"column": cat, "value": str(df.at[idx, "Value"]), "before": round(cbp, 4), "after": new,
+                        "parent": round(pbp, 4), "carried": how, "how": reason})
+    return df, changes, stats
+
+
 # ------------------------------------------------------------------ the chain
 def _chain_steps(subject, parent_df, cut_key, brand_category):
     """The steps a new cut goes through after its rows are set, in order."""
@@ -575,7 +783,7 @@ def keep_demographics(df, original, log=None) -> int:
 
 
 def correct(cut_df, parent_df, *, subject, cut_key="", label="Avid Fan", keep=(), reason_fn=None, chain=True,
-            gate=True, workers=4, keep_demos=True, audience_fn=None, multiple=None, trace=(), log=print):
+            gate=True, workers=4, keep_demos=True, audience_fn=None, multiple=None, trace=(), rows_fn=None, log=print):
     """Correct the carried rows of ``cut_df`` and run the frame through
     the cut chain. Returns (df, report). The frame returned is the last
     one that held every invariant; ``report['publish']`` says whether it
@@ -609,8 +817,12 @@ def correct(cut_df, parent_df, *, subject, cut_key="", label="Avid Fan", keep=()
         if dstats.get("reasoned") and not frame_invariants(demo_df, sample=sample, n_rows_min=len(cut_df)):
             demo_base = demo_df
             log(f"[parent-counts] demographics set for the cut: {dstats['rows']} rows in {dstats['groups']} groups")
-    df, changes, stats = reason_rows(demo_base, parent_df, subject=subject, label=label, keep=keep, reason_fn=reason_fn,
-                                     workers=workers, multiple=multiple, log=log)
+    if rows_fn is not None:
+        # another way of choosing and reasoning the rows (the rows the reasoner did not return last time)
+        df, changes, stats = rows_fn(demo_base, parent_df)
+    else:
+        df, changes, stats = reason_rows(demo_base, parent_df, subject=subject, label=label, keep=keep, reason_fn=reason_fn,
+                                         workers=workers, multiple=multiple, log=log)
     report["changes"], report["rows"] = changes, stats
     report["trace"] = []
 
