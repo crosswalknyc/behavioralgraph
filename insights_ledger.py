@@ -3388,6 +3388,11 @@ def consult(subject=None, question=None, metric_family=None,
                 print(f"[insights-ledger] the question names {_svc.get('services')}: consulting {_svc.get('subject')!r}")
                 skey = _svc['key']
                 _scoped = dict(_scoped or {}, key=skey, same_scope=True)
+            if not skey:
+                # a title filed on its one US home is found by its name alone (2026-11-12)
+                _hk = _ssm.home_bucket_for(doc, question, live=_has_live_entries)
+                if _hk in subjects:
+                    skey = _hk
         except Exception:
             _ssm, _svc_refuse = None, False
         if not skey:
@@ -3501,6 +3506,10 @@ def consult(subject=None, question=None, metric_family=None,
             if not _sfit:
                 print(f"[insights-ledger] replay refused under {bucket.get('subject')!r}: {_swhy}")
                 exact, match = None, None
+            elif str(_swhy).startswith('home:'):
+                # the one service is the title's only US home on record: the answer stands for a question that
+                # names no service, and it says so (prometheus.service_scope_match, 2026-11-12)
+                exact = _ssm.with_home_line(exact, _ssm.home_of_entry(exact, bucket)[1], str(_swhy)[5:])
         exact = _exact_if_fresh(exact)
         return {'subject': bucket.get('subject'), 'skey': skey,
                 'entries': entries, 'block': render_block(entries),

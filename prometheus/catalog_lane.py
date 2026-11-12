@@ -372,6 +372,11 @@ def _profile_name(key):
     return ' '.join(_KEY_STAMP_RX.sub('', k).replace('_', ' ').split())
 
 
+def _ssm_home_line(title, service_key):
+    from . import service_scope_match as _ssm
+    return _ssm.home_line(title, service_key)
+
+
 def profile_on_the_services_asked(cc, anchors, text):
     """One title held as several profiles, each on its own service or
     services ('... Viewers (Paramount+)', '... Viewers (HBO Max)',
@@ -388,8 +393,12 @@ def profile_on_the_services_asked(cc, anchors, text):
     lane answers as before); () when it does and none is on exactly the
     services the words name (the lane steps aside); ('whole', people,
     window, title) when the words name no service and the title's whole
-    audience is on record for the window they state; else
-    (profile anchor, that profile's own name)."""
+    audience is on record for the window they state; ('home', profile
+    anchor, that profile's own name, title, service key) when the words
+    name no service and the one profile on record is on the title's only
+    US home by the verified-carrier record (2026-11-12: there the
+    one-service audience is the whole audience); else (profile anchor,
+    that profile's own name)."""
     try:
         from . import service_scope_match as _ssm
         page = cc.load_subject_page(anchors.get('subject_key')) or {}
@@ -423,6 +432,22 @@ def profile_on_the_services_asked(cc, anchors, text):
                 whole = _ssm.whole_on_record(title, {'start': w.get('start'), 'end': w.get('end')}) if w else None
                 if whole:
                     return ('whole', whole['people'], whole['window'], title)
+                # a title on record on ONE service, and that service is its only US home for the profile's
+                # window by the verified-carrier record: the profile is the whole audience. Two services on
+                # the record, or no check on record, and the lane steps aside as before.
+                sets = {sc for sc in scope.values()}
+                if len(sets) == 1 and len(next(iter(sets))) == 1:
+                    keys = sorted(by_key, key=lambda k: max(str(f.get('as_of') or '') for f in by_key[k]), reverse=True)
+                    pa = cc.profile_anchor({'facts': by_key[keys[0]]})
+                    pw = (pa or {}).get('window') if isinstance((pa or {}).get('window'), dict) else None
+                    if pa and pa.get('audience_size') and pw and pw.get('start'):
+                        if w and not _ssm._same_window(pw, {'start': w.get('start'), 'end': w.get('end')}):
+                            return ()                  # another window than the profile's: the reasoning path
+                        home = _ssm.single_home(title, pw)
+                        if home and home in next(iter(sets)):
+                            same = [str(a) for a in (page.get('aliases') or []) if ' - ' not in str(a)
+                                    and _ssm.services_of_name(str(a)) == scope[keys[0]]]
+                            return ('home', pa, (cc.best_display(same) if same else _profile_name(keys[0])), title, home)
                 return ()
         hits = [k for k, sc in scope.items() if sc == asked]
         if not hits:
@@ -485,7 +510,7 @@ def answer(text, ctx=None):
         # a title held on several services answers from the profile on the
         # services the words name, never from whichever file is newest
         _on = profile_on_the_services_asked(cc, anchors, text) if facts else None
-        if _windowed and not (_on and _on[0] == 'whole'):
+        if _windowed and not (_on and _on[0] in ('whole', 'home')):
             return None  # a stated window is the reasoning path's, except for the whole on record
         if _on is not None:
             if not _on:
@@ -497,6 +522,14 @@ def answer(text, ctx=None):
                 return {'success': True, 'action': 'answer', 'reply': reply,
                         'followups': [f"How many watched {_title} on one service?"],
                         'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': _title}
+            if _on[0] == 'home':
+                _, pa, display, _title, _home = _on
+                reply = (f"{display}: {_fmt_people(pa['audience_size'])} US people"
+                         f"{_window_text(pa.get('window'))}, {_fmt_people(pa.get('sample_size'))} "
+                         f"inside the 10 million sample. {_ssm_home_line(_title, _home)}")
+                return {'success': True, 'action': 'answer', 'reply': reply,
+                        'followups': [f"Open {display}", f"Who is the {display} audience?"],
+                        'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': display}
             pa, display = _on
         if not pa or not pa.get('audience_size'):
             return None  # the reasoning path sizes it

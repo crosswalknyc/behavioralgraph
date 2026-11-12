@@ -90,10 +90,39 @@ def canon_service(label) -> str:
     if not f:
         return ""
     for tail in ("amazonchannel", "primevideochannel", "rokuchannel", "applechannel"):
-        if f.endswith(tail) and len(f) > len(tail):
+        if f.endswith(tail) and len(f) > len(tail) and f[: -len(tail)] != "the":      # 'The Roku Channel' is itself
             f = f[: -len(tail)]
             break
     return _ALIASES.get(f, f)
+
+
+# a tier or a plan of a service is that service ('Netflix Standard with
+# Ads', 'Amazon Prime Video with Ads', 'Prime Video (SVOD)', 'YouTube
+# (the official channel)')
+_TIER_RX = re.compile(
+    r"\([^()]*\)"
+    r"|\b(?:free\s+)?(?:standard|basic|premium|essentials?)?\s*(?:with|w/)\s+ads\b"
+    r"|\bad[- ]supported(?:\s+(?:tier|plan))?\b"
+    r"|\b(?:ad[- ]free|no\s+ads)(?:\s+(?:tier|plan))?\b"
+    r"|\b(?:svod|avod|tvod)\b"
+    r"|\b(?:standard|basic|premium)\s+(?:tier|plan)\b"
+    r"|\s+(?:premium(?:\s+plus)?|standard|basic|essentials?)\s*$", re.I)
+
+
+def carrier_services(names):
+    """The services a list of carriers is, one key each, sorted. A tier
+    of a service is the service. None when a name cannot be read at all
+    (then nothing is known about how many services there are)."""
+    keys = set()
+    for n in (names or []):
+        raw = " ".join(str(n or "").split())
+        if not raw:
+            continue
+        k = canon_service(_TIER_RX.sub(" ", raw)) or canon_service(raw)
+        if not k:
+            return None
+        keys.add(k)
+    return sorted(keys)
 
 
 def _unit(*parts) -> float:
@@ -259,12 +288,25 @@ def load_record(title, s3=None) -> dict:
         return {}
 
 
-def merge_record(rec, *, title="", whole=None, build=None, facts=None) -> dict:
+def merge_record(rec, *, title="", whole=None, build=None, facts=None, carriers=None) -> dict:
     """Pure: the record after a build settles. First-held wins: a whole
     already on record is never replaced, and a service set already
     settled keeps its first build (a different window is added beside
-    it; the first one stays the anchor)."""
+    it; the first one stays the anchor).
+
+    ``carriers`` is the verified-carrier record: every US service the
+    title could be watched on in a window, as a check found them
+    ({'services', 'window', 'basis', 'detail'}). The latest check
+    replaces the one before it; a check that could not be read is never
+    passed in, so it never replaces one that could."""
     rec = dict(rec or {})
+    if isinstance(carriers, dict) and carriers.get("services") and (carriers.get("window") or {}).get("start"):
+        svcs = sorted({canon_service(x) for x in carriers.get("services") or [] if canon_service(x)})
+        if svcs:
+            rec["carriers"] = {"services": svcs, "window": _win_dict_of(carriers.get("window")),
+                               "verified_at": carriers.get("verified_at") or _now(),
+                               "basis": [str(b)[:40] for b in (carriers.get("basis") or [])][:6],
+                               "detail": [str(d)[:240] for d in (carriers.get("detail") or [])][:12]}
     if title and not rec.get("title"):
         rec["title"] = str(title)
     if isinstance(whole, dict) and int(whole.get("people") or 0) > 0 and not rec.get("whole"):
@@ -286,7 +328,40 @@ def merge_record(rec, *, title="", whole=None, build=None, facts=None) -> dict:
     return rec
 
 
-def save_record(title, *, whole=None, build=None, facts=None, s3=None) -> bool:
+def _win_dict_of(win) -> dict:
+    win = win if isinstance(win, dict) else {}
+    return {"start": str(win.get("start") or "")[:10], "end": str(win.get("end") or "")[:10]}
+
+
+def _within(inner, outer) -> bool:
+    """``inner`` lies inside ``outer``, to within the days two windows are one window."""
+    try:
+        a0, a1 = date.fromisoformat(str(inner["start"])[:10]), date.fromisoformat(str(inner["end"])[:10])
+        b0, b1 = date.fromisoformat(str(outer["start"])[:10]), date.fromisoformat(str(outer["end"])[:10])
+        return (a0 - b0).days >= -SAME_WINDOW_DAYS and (b1 - a1).days >= -SAME_WINDOW_DAYS
+    except Exception:
+        return False
+
+
+def single_home(title, window, record=None, s3=None) -> str:
+    """The ONE US service a title could be watched on in ``window``, by
+    the verified-carrier record; '' when the record shows two or more,
+    when it holds no check, or when the check does not cover the window.
+    Unverified is never a single home. Never raises."""
+    try:
+        rec = record if record is not None else load_record(title, s3=s3)
+        c = (rec or {}).get("carriers") if isinstance(rec, dict) else None
+        if not isinstance(c, dict):
+            return ""
+        svcs = [x for x in (c.get("services") or []) if x]
+        if len(svcs) != 1 or not isinstance(window, dict) or not window.get("start"):
+            return ""
+        return str(svcs[0]) if _within(_win_dict_of(window), c.get("window") or {}) else ""
+    except Exception:
+        return ""
+
+
+def save_record(title, *, whole=None, build=None, facts=None, carriers=None, s3=None) -> bool:
     key = title_key(title)
     if not key or (_hermetic() and s3 is None):
         return False
@@ -298,7 +373,7 @@ def save_record(title, *, whole=None, build=None, facts=None, s3=None) -> bool:
 
         def _mut(obj):
             obj = obj if isinstance(obj, dict) else {}
-            obj[key] = merge_record(obj.get(key), title=title, whole=whole, build=build, facts=facts)
+            obj[key] = merge_record(obj.get(key), title=title, whole=whole, build=build, facts=facts, carriers=carriers)
             return obj
         if s3 is not None:
             update_json(STORE_BUCKET, STORE_KEY, _mut, s3=s3)
