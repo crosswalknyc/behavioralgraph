@@ -8180,7 +8180,7 @@ def _spec_from_draft(draft):
                 break
         if cb_clean:
             spec['competitor_brands'] = cb_clean
-    return spec
+    return __import__('migration.service_scope_sizing', fromlist=['normalize_spec']).normalize_spec(spec, subject)   # a title is never its own service; a one-service build is sized by rule, under the title's whole audience (2026-11-11)
 
 
 @_H.app.route('/api/brief-chat/rebind-window', methods=['POST'])

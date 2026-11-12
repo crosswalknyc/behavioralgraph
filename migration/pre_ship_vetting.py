@@ -2019,12 +2019,61 @@ def autocorrect_impossible_index(df, subject, gp_map, s3_key, *,
         return result
 
 
-def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
-                         s3_client=None,
-                         claude_call: Optional[Callable] = None,
-                         genpop_map=None, enforce=True, is_new=None,
-                         parent_df=None,
-                         sort_fn=None, ledger=True, verbose=True):
+STALL_DUMP_S = 300      # a review still running after this long writes every thread's stack to the log
+
+
+def run_pre_ship_vetting(df, subject, s3_key, **kwargs):
+    """The reasoned pre-publish review (see _run_pre_ship_vetting for the
+    contract), under a stall watch.
+
+    2026-11-11: the review of one Total Universe took 1,610s where the
+    median is 112s. The reasoning call returned inside it and the rest
+    reproduces offline in under a minute, while the process burned 71
+    CPU-minutes and peaked at 47.8 GB: something else in the process was
+    running, and the log could not say what. A review that passes
+    STALL_DUMP_S now writes every thread's stack to the worker log (and
+    again each STALL_DUMP_S after), and the verdict line and the ledger
+    carry the time each phase took, so the next slow one names its cause.
+    Fail-safe: the watch never raises and is always cancelled."""
+    _armed = False
+    try:
+        import faulthandler
+        import sys as _sys
+        if kwargs.get("verbose", True):
+            print(f"[pre-ship-vetting] {os.path.basename(str(s3_key))}: review started "
+                  f"{datetime.now(timezone.utc).strftime('%H:%M:%SZ')}", flush=True)
+        faulthandler.dump_traceback_later(STALL_DUMP_S, repeat=True, file=_sys.stdout)
+        _armed = True
+    except Exception:
+        pass
+    try:
+        return _run_pre_ship_vetting(df, subject, s3_key, **kwargs)
+    finally:
+        if _armed:
+            try:
+                faulthandler.cancel_dump_traceback_later()
+            except Exception:
+                pass
+
+
+def _phase_line(marks, total):
+    """'prescan 17s, review 31s, corrections 2s' from cumulative marks."""
+    out, prev = [], 0.0
+    for name in ("prescan", "review", "corrections"):
+        if name in marks:
+            out.append(f"{name} {max(0.0, marks[name] - prev):.0f}s")
+            prev = marks[name]
+    if out and total - prev >= 1.0:
+        out.append(f"closing {total - prev:.0f}s")
+    return ", ".join(out)
+
+
+def _run_pre_ship_vetting(df, subject, s3_key, *, category=None,
+                          s3_client=None,
+                          claude_call: Optional[Callable] = None,
+                          genpop_map=None, enforce=True, is_new=None,
+                          parent_df=None,
+                          sort_fn=None, ledger=True, verbose=True):
     """Reasoned pre-publish review. Returns (df, report).
 
     NO-REBUILD POLICY (2026-08-31): a built frame is never held here.
@@ -2053,6 +2102,7 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
     already passed, and an outage must not wedge every publish.
     """
     t0 = time.time()
+    _marks: dict = {}
     report = {"ran": False, "verdict": None, "subject": subject,
               "s3_key": s3_key, "findings": [], "autofix": [],
               "skipped": None}
@@ -2135,12 +2185,14 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
 
         user = _build_user_prompt(df, subject, key, category, facts,
                                   gp_map)
+        _marks["prescan"] = time.time() - t0
         call = claude_call or _default_claude_call
         try:
             raw = call(_SYSTEM_PROMPT, user)
         except Exception as e:
             raw = ""
             report["error"] = f"reasoning call raised: {e}"
+        _marks["review"] = time.time() - t0
         verdict_obj = _parse_verdict(raw)
         if verdict_obj is None:
             report["skipped"] = "reasoner unavailable or unparseable"
@@ -2612,6 +2664,7 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
             if hold:  # pragma: no cover - dead under the no-rebuild policy
                 return df, report
 
+        _marks["corrections"] = time.time() - t0
         if ledger:
             _ledger_append({
                 "ts": datetime.now(timezone.utc).isoformat(),
@@ -2624,12 +2677,15 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                 "autofix": report.get("autofix", [])[:40],
                 "prescan": report["prescan"],
                 "elapsed_s": round(time.time() - t0, 1),
+                "phases_s": {k: round(v, 1) for k, v in _marks.items()},
             }, s3c, verbose=verbose)
         if verbose:
+            _total = time.time() - t0
+            _ph = _phase_line(_marks, _total)
             print(f"[pre-ship-vetting] {base}: verdict "
                   f"{report['verdict']} "
                   f"({len(findings)} finding(s), "
-                  f"{time.time() - t0:.0f}s)")
+                  f"{_total:.0f}s" + (f": {_ph}" if _ph else "") + ")")
         return df, report
     except PreShipVettingError:
         raise
