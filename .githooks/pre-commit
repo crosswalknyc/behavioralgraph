@@ -20,6 +20,17 @@
 
 set -eu
 
+# users.json is the live users document's local mirror, rewritten by any process that loads users. It is never
+# part of a code commit: a bulk add that swept it in would publish a stale copy of every account (2026-11-12).
+# A deliberate change to the tracked copy says so: USERS_JSON_COMMIT=1 git commit ...
+if git diff --cached --name-only | grep -qE '^users\.json$' && [ "${USERS_JSON_COMMIT:-}" != "1" ]; then
+    echo "[pre-commit] COMMIT BLOCKED: users.json is staged."
+    echo "[pre-commit] It is a local mirror of the live users document, not code. Unstage it:"
+    echo "[pre-commit]     git restore --staged users.json && git checkout -- users.json"
+    echo "[pre-commit] (a deliberate change: USERS_JSON_COMMIT=1 git commit ...)"
+    exit 1
+fi
+
 # Case C (2026-10-02 RCA W3): twin modules are GENERATED from the parent
 # repo (scripts/module_twins.json + scripts/sync_module_twins.py). A
 # staged twin that does not match its source is a hand edit, and hand

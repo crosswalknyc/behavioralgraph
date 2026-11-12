@@ -1331,6 +1331,16 @@ def product_line_expansion(as_written, catalog_name):
     return all(w.rstrip('+') in _PRODUCT_LINE_WORDS for w in extra)
 
 
+def _listed_category(as_written, catalog, text):
+    try:
+        from . import cut_list as _cl
+        if not _cl.items(text):
+            return False
+        return _cl.is_item(as_written, text) or bool(catalog and _cl.is_cut(catalog, text))
+    except Exception:
+        return False
+
+
 def _reading_candidates(reading, page, norm, text=''):
     out = []
     if not isinstance(reading, dict):
@@ -1358,6 +1368,8 @@ def _reading_candidates(reading, page, norm, text=''):
         kind = str(s.get('kind') or '').strip().lower()
         if aw.lower().strip(" .?!") in _DEIXIS or aw.lower() == '<page>':
             continue
+        if text and _listed_category(aw, cat, text):
+            continue        # one of the categories the words list, or a profile reached through one, is a cut (prometheus.cut_list)
         if kind in ('metric', 'unknown', 'audience', 'cohort') and not cat:
             # 'audience' as the reader's kind for a named audience ("DraftKings users") still names a brand
             if kind != 'audience':
@@ -1527,7 +1539,45 @@ def _request_reading():
 
 
 def bind(text, history=None, page='', reading=None, catalog_names=None, normalize=None):
-    """The one binder. Words beat thread beat page."""
+    """The one binder. Words beat thread beat page.
+
+    A question that lists categories ("... digital original content:
+    Comedy, Faith, Drama and Horror") is bound by rule, whatever the
+    Reader made of the list (prometheus.cut_list, 2026-11-11: the first
+    category in the list was bound as the subject, and "I can pull that
+    read on Comedy" was the quote): a subject the words name by rule,
+    else the subject on record for the words, else a subject the Reader
+    found that is not one of the categories, else the thread, the page
+    the words point at, or nothing (and the lane asks)."""
+    try:
+        from . import cut_list as _cl
+        listed = bool(_cl.items(text))
+    except Exception:
+        listed = False
+    if not listed:
+        return _bind_words(text, history, page, reading, catalog_names, normalize)
+    try:
+        ruled = _bind_words(text, history, page, {}, catalog_names, normalize)     # the words alone, no reading
+        if ruled.source == 'words' and ruled.name and not _cl.is_cut(ruled.name, text) and not _cl._scope_platform(ruled.name, text):
+            return ruled
+        rec = _cl.record(text, history)
+        if rec:
+            return Subject('audience', rec['subject'], rec['subject'],
+                           {'on_record': True, 'record_cohort': rec.get('cohort') or '', 'record_source': rec.get('source') or ''},
+                           'words', 0.8, ruled.pointed)
+        read = _bind_words(text, history, page, reading, catalog_names, normalize)   # the Reader's subjects, the categories taken out
+        if read.source == 'words' and read.name and not _cl.is_cut(read.name, text) and not _cl._scope_platform(read.name, text):
+            return read
+        if ruled.source in ('thread', 'page') and ruled.name:
+            return ruled
+        if read.source in ('thread', 'page') and read.name and not _cl.is_cut(read.name, text):
+            return read
+        return Subject('none', '', '', {}, 'none', 0.0, ruled.pointed)
+    except Exception:
+        return _bind_words(text, history, page, reading, catalog_names, normalize)
+
+
+def _bind_words(text, history=None, page='', reading=None, catalog_names=None, normalize=None):
     norm = normalize or (lambda s: re.sub(r"[^a-z0-9]+", "", str(s or '').lower()))
     casing = {str(n).lower(): str(n) for n in (catalog_names or []) if n}
     t = ' '.join(str(text or '').split())

@@ -462,7 +462,7 @@ class TheDeckWaitsForEveryPart(unittest.TestCase):
     def test_the_line_says_once_and_the_record_holds_the_quoted_part(self):
         self.assertTrue(self.env['text'].rstrip().endswith(RA.DECK_ALL_PARTS_LINE))
         rec = self.w.get(self.key)
-        self.assertEqual((rec['state'], rec['job_ids'], rec['waits_on_quote'], rec['quoted']), ('pending', ['job-3'], True, [PARTS[0]]))
+        self.assertEqual((rec['state'], rec['job_ids'], rec['waits_on_quote'], rec['quoted']), ('pending', ['job-3'], True, PARTS[:2]))   # the priced part and the one included with it
         self.assertEqual(RA.quote_state(USER, self.tid, rec), 'open')
 
     def test_the_first_read_landing_no_longer_starts_the_deck(self):
@@ -505,10 +505,12 @@ class TheDeckWaitsForEveryPart(unittest.TestCase):
                 RA.start_deck = orig
         self.assertEqual(len(self.decks), 1)
         last = self.w.get(f'{THREADS}/{USER}/{self.tid}.json')[-1]
-        self.assertIn('It does not include the part that was not approved: "Looking at YouTube. What type of categories do best', last['text'])
-        self.assertEqual(last['meta']['ride_along']['not_included'], [RA._short(PARTS[0])])
+        self.assertIn('It does not include the parts that were not approved: "Looking at YouTube. What type of categories do best', last['text'])
+        self.assertIn('"Can we give some examples?"', last['text'])
+        self.assertEqual(last['meta']['ride_along']['not_included'], [RA._short(q) for q in PARTS[:2]])
         rec = self.w.get(self.key)
-        self.assertEqual((rec['state'], rec['not_included']), ('started', [PARTS[0]]))
+        self.assertEqual((rec['state'], rec['not_included']), ('started', PARTS[:2]))
+        self.assertEqual(RA.missing_line([PARTS[0]]), f' It does not include the part that was not approved: "{RA._short(PARTS[0])}".')
 
     def test_declined_while_the_read_is_still_running_waits_for_it(self):
         PO.close(USER, self.oid, 'cancelled')

@@ -381,7 +381,10 @@ def _carry(env, plan, user, body, via):
                 # deck waits for the read, on record against the thread
                 state = 'pending' if jobs else 'awaiting_read'
                 quoted = _quoted_parts(raw)
-                line = _named(DECK_ALL_PARTS_LINE if (jobs and quoted) else (DECK_NEXT_LINE if jobs else DECK_AFTER_APPROVAL_LINE),
+                # one read: "from the read when it lands". Several parts (answered now, quoted, or both): the deck
+                # comes once, when every part has landed
+                several = bool(jobs and quoted) or len(quoted) >= 2 or len(jobs) >= 2
+                line = _named(DECK_ALL_PARTS_LINE if several else (DECK_NEXT_LINE if jobs else DECK_AFTER_APPROVAL_LINE),
                               plan.get('words'))
                 mark = {'kind': 'deck', 'state': state}
                 if quoted:
@@ -621,7 +624,8 @@ def _quoted_parts(raw):
     parts = [p for p in (po.get('parts') or []) if isinstance(p, dict)]
     if not parts:
         return [_squash(po.get('question') or '')[:300]] if _squash(po.get('question') or '') else []
-    return [_squash(p.get('text') or '')[:300] for p in parts if str(p.get('status') or 'priced') == 'priced' and _squash(p.get('text') or '')]
+    return [_squash(p.get('text') or '')[:300] for p in parts
+            if str(p.get('status') or 'priced') in ('priced', 'included', 'held') and _squash(p.get('text') or '')]
 
 
 def quote_state(uname, tid, rec):
@@ -703,8 +707,11 @@ def _quote_answered(user, body, out):
         _put(key, rec)
         from . import service as _svc
         history = _svc.load_thread(uname, tid) or list((body or {}).get('history') or [])
-        if not rec.get('job_ids') and _in_flight_other(history, '') == 0 and int(rec.get('landed') or 0) > 0:
-            _finish(uname, tid, key, rec, history, quote='closed', user=user)
+        if not rec.get('job_ids') and _in_flight_other(history, '') == 0:
+            if int(rec.get('landed') or 0) > 0:
+                _finish(uname, tid, key, rec, history, quote='closed', user=user)
+            else:
+                _put(key, dict(rec, state='done', closed_at=time.time(), closed_why='the quote was declined and no part had landed'))
         return
     jobs = _job_ids(env)
     if jobs:

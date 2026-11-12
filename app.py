@@ -653,6 +653,13 @@ _llmo_flow_dest_token_sets_cache = None
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
+# A test process (a suite that boots the app in a child) mirrors the users document to a path of its own, so a
+# test run never rewrites the tracked users.json in the checkout (users_mirror.py, 2026-11-12)
+try:
+    from users_mirror import path_for_process as _users_mirror_path
+    USERS_FILE = _users_mirror_path(USERS_FILE)
+except Exception:
+    pass
 
 # AI Summary Cache Directory
 AI_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'ai_cache')

@@ -155,6 +155,9 @@ class APartRidesOnItsQuestion(unittest.TestCase):
         reaches the read step bound to the first question's subject, not left to find one."""
         w = World()
         question = RA.split(MULTI)['question']
+        # the read store holds her subject (it did on the night): the first question is bound to it by rule, the
+        # later parts inherit it (round four, prometheus.cut_list); with nothing on record the reader is asked
+        self.doc['subjects']['digital_original_content_categories'] = {'subject': 'Digital original content categories', 'entries': [{'k': 'doc|viewership|any|any', 'subject': 'Digital original content categories', 'q': 'delivered anchors', 'qn': 'delivered anchors', 'ts': '2026-11-11T20:12:06Z', 'route': 'delivered_deck', 'reply': ''}]}
         env, _st = _ask(w, question, history=[])
         parts = {c[1]: c[2] for c in w.calls if c[0] == 'analyze'}
         third = next(b for t, b in parts.items() if t.strip().lower().startswith('how is the audience like'))
@@ -162,7 +165,7 @@ class APartRidesOnItsQuestion(unittest.TestCase):
         self.assertEqual(third.get('bind_subject'), 'Digital original content categories')
         self.assertIsNone(third.get('page_context'))
         first = next(b for t, b in parts.items() if 'What type of categories do best' in t)
-        self.assertFalse(first.get('bind_subject'))                         # the question that names its subject is left alone
+        self.assertEqual(first.get('bind_subject'), 'Digital original content categories')   # the subject on record, by rule
 
     def test_with_a_page_open_the_part_still_rides_on_its_question_never_on_the_page(self):
         w = World()
@@ -170,6 +173,7 @@ class APartRidesOnItsQuestion(unittest.TestCase):
         page = {'view': 'profile-iq', 'primary': {'s3_key': 'Las_Culturistas_Culture_Awards_Viewers_11_10_2026_20_01.csv',
                                                    'name': 'Las Culturistas Culture Awards Viewers'},
                 'view_context': {'view_id': 'profileIQ', 'view_title': 'Las Culturistas Culture Awards Viewers', 'data': {}}}
+        self.doc['subjects']['digital_original_content_categories'] = {'subject': 'Digital original content categories', 'entries': [{'k': 'doc|viewership|any|any', 'subject': 'Digital original content categories', 'q': 'delivered anchors', 'qn': 'delivered anchors', 'ts': '2026-11-11T20:12:06Z', 'route': 'delivered_deck', 'reply': ''}]}
         _ask(w, question, history=[], page=page)
         third = next(c[2] for c in w.calls if c[0] == 'analyze' and c[1].strip().lower().startswith('how is the audience like'))
         self.assertEqual(third.get('bind_subject'), 'Digital original content categories')

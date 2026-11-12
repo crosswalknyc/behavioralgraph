@@ -2257,6 +2257,45 @@ def ask(user, body, *, via='session'):
                 _g_rd._pm_reading = reading
             except Exception as _fx:
                 _faults.note('service', _fx)
+        # A question that lists categories and names no subject of its own ("... digital original content: Comedy,
+        # Faith, Drama and Horror") is settled here, by rule, before anything acts on the reading: it runs on the
+        # subject on record, or the reader is asked which audience it is on. No lane takes a category, or a library
+        # profile that has the word in its name, as its subject (prometheus.cut_list, Armine 2026-11-11). Not a
+        # lane of its own: it only settles the subject the lanes run on.
+        _cg = None
+        if not _is_order and not _is_brief and not body.get('_meta_replay') and _client_surface != 'deck':
+            try:
+                from . import cut_list as _cutl
+                _cg = _cutl.gate(text, history, ctx, body, reading=reading if isinstance(reading, dict) else None)
+            except Exception as _fx:
+                _faults.note('service.cut_list', _fx)
+                _cg = None
+        if _cg and _cg.get('bind'):
+            body = dict(body, bind_subject=str(_cg['bind']))
+            if _cg.get('cohort') and not body.get('bind_cohort'):
+                body['bind_cohort'] = str(_cg['cohort'])
+            try:
+                host.ask_hint(subject=str(_cg['bind']))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+        elif _cg and _cg.get('ask'):
+            from . import priced_read as _prc
+            _wa = _prc.which_audience(text, ctx)
+            raw = _wa
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(_wa)
+                raw['followups'] = list(_wa.get('followups') or [])
+                if _wa.get('memory_confirm'):
+                    raw['memory_confirm'] = _wa['memory_confirm']
+            try:
+                host.ask_hint(route='audience_confirm', outcome='asked_audience')
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'audience_confirm',
+                                                                   'client_hint': None}, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+        if reading and not _cg:
             try:
                 # a brief is the read lane's, whole: the reader's sizing executor would size each title and drop the brief (prometheus.read_brief)
                 _rx = None if _is_brief else _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, persist, _client_surface)

@@ -802,6 +802,38 @@ def _plan_lines(parts, raws, descs, numbers, numbered):
     return entries
 
 
+def _count_word(n):
+    return _NUM_WORDS.get(int(n), str(int(n)))
+
+
+def _quote_head(priced, included, held, answered):
+    """The line above an itemized quote, written for one, two and several
+    priced parts, and saying plainly how many ride along at no charge
+    (2026-11-11: "1 priced reads here, quoted together and run
+    together" over one priced part and two included ones)."""
+    quoted = priced + included + held
+    if included == 0 and held == 0:
+        if priced == 1:
+            return "One of these is a priced read:" if answered else "One priced read here:"
+        if priced == 2:
+            return ("Two of these are priced reads" if answered else "Two priced reads here") + ", quoted together and run together:"
+        return (f"{priced} of these are priced reads" if answered else f"{priced} priced reads here") + ", quoted together and run together:"
+    qw = _count_word(quoted).capitalize()
+    lead = f"{qw} of these are reads, quoted together and run together." if answered \
+        else f"{qw} reads here, quoted together and run together."
+    price = "One carries a price" if priced == 1 else f"{_count_word(priced).capitalize()} carry a price"
+    if included == 1:
+        rest = "one is included at no extra charge" if (priced + included) < quoted or priced != 1 else "the other is included at no extra charge"
+    elif included > 1:
+        rest = (f"the other {_count_word(included)} are included at no extra charge" if priced + included == quoted
+                else f"{_count_word(included)} are included at no extra charge")
+    else:
+        rest = ''
+    if quoted == 2 and priced == 1 and included == 1:
+        rest = "the other is included at no extra charge"
+    return f"{lead} {price}" + (f"; {rest}" if rest else '') + ":"
+
+
 def combined_offer(text, parts, raws, approve_chip='Approve', cancel_chip='Cancel', *, plan=None):
     """One itemized quote for the priced parts; metered and free answers
     ride along. ``panel_offer`` carries every part Approve runs: the
@@ -836,9 +868,7 @@ def combined_offer(text, parts, raws, approve_chip='Approve', cancel_chip='Cance
     else:
         for e in answered:
             lines.append(_part_block(e['no'], e['q'], e['raw']))
-        head = ("Two of these are priced reads" if n == 2 else f"{n} of these are priced reads") if answered \
-            else ("Two priced reads here" if n == 2 else f"{n} priced reads here")
-        lines.append(head + ", quoted together and run together:")
+        lines.append(_quote_head(n, len(included), len(held), bool(answered)))
         k = 0
         for e in entries:
             if e['status'] in ('priced', 'included', 'held'):
@@ -863,6 +893,14 @@ def combined_offer(text, parts, raws, approve_chip='Approve', cancel_chip='Cance
             tail += f" ({_nos_phrase(hn)} as soon as you name the {_join(nouns)})"
     elif total and n == 2 and len(run_nos) == 2:
         tail = f"Approve runs both for {total} in all"
+    elif total and included and not numbered:
+        # which parts cost nothing is said in the closing line as well as on each part
+        k_of = {e['no']: i + 1 for i, e in enumerate(x for x in entries if x['status'] in ('priced', 'included', 'held'))}
+        free = [k_of[e['no']] for e in included]
+        tail = (f"Approve runs {'both' if len(run_nos) == 2 else 'all ' + _count_word(len(run_nos))} for {total} in all "
+                f"({_nos_phrase(free)} {'is' if len(free) == 1 else 'are'} included at no charge)")
+    elif total and len(run_nos) == 1:
+        tail = f"Approve runs it for {total}"
     elif total:
         tail = f"Approve runs all {len(run_nos)} for {total} in all"
     else:

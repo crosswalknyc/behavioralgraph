@@ -438,6 +438,19 @@ class AProgressLineHasARun(unittest.TestCase):
 
 # ============================================================================ 3
 class ADeliverableRidesThrough(unittest.TestCase):
+    def setUp(self):
+        # the read store holds the subject her question names, as it did on the night: a question that lists
+        # categories is bound to the subject on record by rule (round four, prometheus.cut_list)
+        import insights_ledger as _il
+        self._il, self._load = _il, _il._load_index
+        _il._load_index = lambda force=False: {'subjects': {'digital_original_content_categories': {
+            'subject': 'Digital original content categories', 'entries': [{
+                'k': 'doc|viewership|any|any', 'subject': 'Digital original content categories', 'q': 'delivered anchors',
+                'qn': 'delivered anchors', 'ts': '2026-11-11T20:12:06Z', 'route': 'delivered_deck', 'reply': ''}]}}}
+
+    def tearDown(self):
+        self._il._load_index = self._load
+
     def test_armines_words_are_a_question_and_a_powerpoint(self):
         for key in ('summarize_in_powerpoint', 'can_we_summarize_tail', 'can_we_summarize_head'):
             plan = RA.split(AW[key])
@@ -480,7 +493,7 @@ class ADeliverableRidesThrough(unittest.TestCase):
         for surface, text, _body, _seen in w.calls:
             self.assertNotEqual(surface, 'deck')
             self.assertNotRegex(text, r"(?i)power\s?point")                # nothing for a read to make a claim about
-        self.assertTrue(env['text'].rstrip().endswith(RA.DECK_NEXT_LINE))
+        self.assertTrue(env['text'].rstrip().endswith(RA.DECK_ALL_PARTS_LINE))   # three parts running: the deck comes once, when every part has landed
         self.assertEqual(env['ride_along']['state'], 'pending')
         rec = w.get(RA._key(USER, tid))
         self.assertEqual((rec['state'], rec['kinds'], rec['thread_id']), ('pending', ['deck'], tid))
@@ -580,7 +593,7 @@ class ADeliverableRidesThrough(unittest.TestCase):
         self.assertIsNone(w.get(RA._key(USER, tid)))
         self.assertTrue((env.get('ride_along') or {}).get('probe'))
         self.assertEqual(env['ride_along']['state'], 'pending')                # the probe reads the line a reader would
-        self.assertTrue(env['text'].rstrip().endswith(RA.DECK_NEXT_LINE))
+        self.assertTrue(env['text'].rstrip().endswith(RA.DECK_ALL_PARTS_LINE))   # three parts running: the deck comes once, when every part has landed
         # a quote to approve first: the deck waits for the read behind it, and is never built from the quote
         def _offer(user, body, text, history):
             w.calls.append(('analyze', text, dict(body), {}))

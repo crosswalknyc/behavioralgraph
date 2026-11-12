@@ -987,6 +987,11 @@ def lead_for(kind, subject, **kw):
     subj = str(subject or '').strip()
     if not subj:
         return _lead(kind, '')
+    try:
+        # a stored subject is said plainly: its name, the platform once, the cut once (what is priced is unchanged)
+        subj = __import__('prometheus.cut_list', fromlist=['quote_name']).quote_name(subj)
+    except Exception:
+        pass
     aud = _as_audience(subj)
     if kind == 'sizing':
         return f"I can size {subj}: US people in the window."
@@ -1472,6 +1477,20 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     """
     kind = str(kind or 'report')
     subj = str(subject or '').strip() or 'that subject'
+    # A category the words list is a cut, never the subject of a quote or a charge, whichever lane brought it
+    # and whatever the Reader made of the list (prometheus.cut_list, 2026-11-11: "I can pull that read on Comedy").
+    # The quote names the subject on record; with none on record the reader is asked which audience. On the
+    # Approve the subject is the one that was quoted.
+    try:
+        from . import cut_list as _cl
+        if _cl.items(text):
+            quoted_subj = str(panel_confirm.get('subject') or '').strip() if isinstance(panel_confirm, dict) else ''
+            settled, ask = _cl.settle(text, history, '' if subj == 'that subject' else subj, held=quoted_subj)
+            if ask and not isinstance(panel_confirm, dict):
+                return 'offer', which_audience(text, None)
+            subj = settled or subj
+    except Exception:
+        pass
     if not isinstance(panel_confirm, dict):
         # a misspelling of the thread's subject is the thread's subject; a
         # price never lands on words that name no audience (2026-10-30)
@@ -1827,6 +1846,7 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
             # (Cara Dorfman 2026-11-10)
             subject = platform_subject(words)
         subject = __import__('prometheus.platform_scope', fromlist=['quote_subject']).quote_subject(words, history, subject)   # a platform the words add scopes the subject on record; the quote never names the platform in its place (2026-11-11, Armine)
+        subject = __import__('prometheus.cut_list', fromlist=['settle']).settle(words, history, subject)[0]   # a listed category is a cut: the subject on record, or '' and the reader is asked (2026-11-11)
     if not subject:
         try:
             # The open product's own view ("this campaign", its title) is the

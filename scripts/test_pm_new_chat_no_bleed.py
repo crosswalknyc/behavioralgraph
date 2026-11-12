@@ -714,6 +714,14 @@ class APointerInsideOneMessageIsNeverThePage(unittest.TestCase):
     def setUp(self):
         self.w = World()
         self.tid = self.w.new_thread()
+        # the read store holds the subject her question names; a question that lists categories is bound to the
+        # subject on record by rule (prometheus.cut_list, 2026-11-12), and with none on record the reader is asked
+        import insights_ledger as _il
+        self._il, self._load = _il, _il._load_index
+        _il._load_index = lambda force=False: {'subjects': {'digital_original_content_categories': {'subject': 'Digital original content categories', 'entries': [{'k': 'doc|viewership|any|any', 'subject': 'Digital original content categories', 'q': 'delivered anchors', 'qn': 'delivered anchors', 'ts': '2026-11-11T20:12:06Z', 'route': 'delivered_deck', 'reply': ''}]}}}
+
+    def tearDown(self):
+        self._il._load_index = self._load
 
     def test_points_back(self):
         from prometheus import multi_ask as MA
