@@ -191,6 +191,93 @@ class NothingWider(unittest.TestCase):
         self.assertEqual(d['decision'], 'new_build')
 
 
+class OneDecisionEverywhere(unittest.TestCase):
+    """The key's check and run, chat approve and the operator tool's
+    default reach the same comparison (2026-11-12): ``decide``, from the
+    words when the surface has them, else from the draft itself."""
+
+    def _decide(self, d, text='', catalog=CATALOG):
+        with _Windows():
+            return M.decide(d, text, None, catalog)
+
+    def test_the_prompt_alone_decides_it(self):
+        for text in (JESSIE, JESSIE_REVERSED):
+            d = draft()
+            acted, _ = self._decide(d, text)
+            self.assertTrue(acted)
+            self.assertEqual((d['decision'], d['existing_match_s3_key']), ('existing_match', TWO_KEY))
+
+    def test_a_draft_that_carries_its_ask_or_its_scope(self):
+        d = draft(user_prompt=JESSIE)
+        self._decide(d)
+        self.assertEqual((d['decision'], d['existing_match_s3_key']), ('existing_match', TWO_KEY))
+        d = draft(subject=T + " Viewers (Amazon Prime Video & HBO Max)", named_platforms=['Amazon Prime Video', 'HBO Max'],
+                  platform_scope_strict=True)
+        self._decide(d)
+        self.assertEqual((d['decision'], d['existing_match_s3_key']), ('existing_match', TWO_KEY))
+        d = draft(subject=T + " Viewers on HBO Max")                      # the name alone carries the one service
+        self._decide(d)
+        self.assertEqual((d['decision'], d['existing_match_s3_key']), ('existing_match', HBO_KEY))
+        d = draft(subject=T + " Viewers on Amazon Prime Video")          # one service is never the two-service profile
+        self._decide(d)
+        self.assertEqual(d['decision'], 'new_build')
+
+    def test_it_is_settled_once(self):
+        d = draft()
+        self._decide(d, JESSIE)
+        before = dict(d)
+        acted, _ = self._decide(d)                                       # the normalizer's pass over the settled draft
+        self.assertFalse(acted)
+        self.assertEqual(d, before)
+
+    def test_the_reader_who_asked_for_the_build_keeps_it(self):
+        d = draft()
+        self._decide(d, JESSIE)
+        for k in ('existing_match_s3_key', 'existing_match_display_name', 'existing_match_days_old', 'existing_match_last_modified'):
+            d.pop(k, None)                                               # what 'No, run what I asked' does to the draft
+        d['decision'] = 'new_build'
+        acted, _ = self._decide(d, JESSIE)
+        self.assertFalse(acted)
+        self.assertEqual(d['decision'], 'new_build')
+
+    def test_the_catalog_is_read_only_when_the_ask_names_a_service(self):
+        calls = []
+
+        def cat():
+            calls.append(1)
+            return CATALOG
+        d = draft(subject='Nike', name='Nike', content_show='', is_ip_content=False)
+        self._decide(d, 'audience of Nike shoppers', catalog=cat)
+        self.assertEqual(calls, [])
+        d = draft()
+        self._decide(d, JESSIE, catalog=cat)
+        self.assertEqual((calls, d['decision']), ([1], 'existing_match'))
+
+    def test_cuts_and_other_decisions_are_left_alone(self):
+        for dec in ('derive_cut', 'cut_needs_parent'):
+            d = draft(decision=dec, user_prompt=JESSIE)
+            self.assertEqual(self._decide(d), (False, ''))
+            self.assertEqual(d['decision'], dec)
+        d = draft(platform_cuts=[{'platform': 'HBO Max'}], user_prompt=JESSIE)
+        self.assertEqual(self._decide(d), (False, ''))
+
+    def test_every_surface_calls_the_one_function(self):
+        app = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
+        one = app[app.index("def _service_scope_decision("):app.index("def _normalize_v1_decision(")]
+        self.assertIn("_ssm.decide(", one)
+        norm = app[app.index("def _normalize_v1_decision("):app.index("def _edit_distance_le(")]
+        self.assertIn("_service_scope_decision(draft)", norm)
+        self.assertIn("def _normalize_v1_decision(draft):", norm)         # the draft and nothing else: no switch
+        concl = app[app.index("def _v1_conclude("):app.index("def _v1_clean_competitor_name(")]
+        self.assertLess(concl.index("_service_scope_decision(draft, prompt)"), concl.index("_normalize_v1_decision(draft)"))
+        self.assertNotIn("request", one.split('"""')[2])                  # nothing a caller sends reaches the comparison
+        self.assertIs(M.settle.__code__.co_argcount, 6)
+        d = draft()
+        with _Windows():
+            M.settle(d, JESSIE, [], CATALOG)                              # the binder's name for it
+        self.assertEqual(d['decision'], 'existing_match')
+
+
 class TheCallSite(unittest.TestCase):
 
     def test_the_interpret_step_hands_the_binder_its_catalog(self):

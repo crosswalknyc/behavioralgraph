@@ -41,8 +41,9 @@ import re
 import time
 
 __all__ = ['services_of_name', 'services_named', 'services_asked', 'services_in_question', 'services_of_label',
-           'title_of_name', 'title_fold', 'window_of_draft', 'window_of_key', 'find_profile', 'settle',
-           'bucket_for', 'replay_fits_services', 'whole_on_record']
+           'title_of_name', 'title_fold', 'window_of_draft', 'window_of_key', 'find_profile', 'settle', 'decide',
+           'services_of_draft', 'bucket_for', 'replay_fits_services', 'whole_on_record', 'single_home',
+           'home_bucket_for']
 
 _NOUN_RX = re.compile(r"\b(?:viewers?|watchers?|streamers?|listeners?)\b", re.I)
 _WIN_CACHE = {}
@@ -229,32 +230,67 @@ def _take(draft, c, note):
     return True, note
 
 
-def settle(draft, text, history=None, catalog=None, window_fn=None, cuts_hit=None):
-    """Put the draft's decision right for a title's audience on named
-    services. Returns (acted, note). Mutates in place; never raises.
+def services_of_draft(draft) -> frozenset:
+    """The services a draft is already scoped to, read from the draft
+    itself: the strict scope the binder wrote, else the services its own
+    name carries after the audience noun. Empty when it names none."""
+    try:
+        if not isinstance(draft, dict):
+            return frozenset()
+        if draft.get('platform_scope_strict') and isinstance(draft.get('named_platforms'), list):
+            got = services_named(draft.get('named_platforms'))
+            if got:
+                return got
+        return services_of_name(draft.get('subject') or draft.get('name'))
+    except Exception:
+        return frozenset()
+
+
+def decide(draft, text='', history=None, catalog=None, window_fn=None, cuts_hit=None):
+    """THE comparison, for every surface (chat interpret, chat approve,
+    the key's check and run, the local operator tool's default). Puts
+    the draft's decision right for a title's audience on named services.
+    Returns (acted, note). Mutates in place; never raises.
 
       * new build, and the catalog holds the same title on exactly the
         same services and window: the existing match;
       * a match or a refresh the interpret step picked on a profile
         whose name carries a different set of services: the profile on
         the services asked when one is held on that window, otherwise
-        the build as asked."""
+        the build as asked.
+
+    The services are read from the words when the surface has them
+    (``text``, else the ask the draft carries), else from the draft's
+    own scope. ``catalog`` may be the list or a callable that returns
+    it (read only once the ask is seen to name services). A draft a
+    reader already turned down the match for ("No, run what I asked")
+    is left as they chose. Takes no instruction from the caller: there
+    is nothing here a request can switch off or on."""
     try:
-        if not isinstance(draft, dict) or cuts_hit or draft.get('platform_cuts') or not catalog:
+        if not isinstance(draft, dict) or cuts_hit or draft.get('platform_cuts'):
             return False, ''
         dec = str(draft.get('decision') or 'new_build').strip().lower()
         if dec not in ('new_build', 'existing_match', 'time_shifted_refresh'):
             return False, ''
+        if dec == 'new_build' and draft.get('service_scope_match') and not draft.get('existing_match_s3_key'):
+            return False, ''          # matched once, and the reader chose the build as asked
         title = _draft_title(draft)
-        asked = services_asked(text, history, title)
-        if not asked or not title:
+        if not title:
+            return False, ''
+        text = text or str(draft.get('user_prompt') or '')
+        asked = (services_asked(text, history, title) if text else frozenset()) or services_of_draft(draft)
+        if not asked:
+            return False, ''
+        if callable(catalog):
+            catalog = catalog()
+        if not catalog:
             return False, ''
         window = window_of_draft(draft, text)
         if dec == 'new_build':
             c = find_profile(title, asked, window, catalog, window_fn)
             if c is None:
                 return False, ''
-            return _take(draft, c, 'the same title, the same services and the same window as a profile on the dashboard')
+            return _take(draft, c, 'the same title, the same services and the same window as a profile already in the library')
         picked = str(draft.get('existing_match_display_name') or '')
         have = services_of_name(picked)
         if not have or have == asked:
@@ -272,6 +308,11 @@ def settle(draft, text, history=None, catalog=None, window_fn=None, cuts_hit=Non
         return False, ''
 
 
+def settle(draft, text, history=None, catalog=None, window_fn=None, cuts_hit=None):
+    """The name the chat binder calls ``decide`` by."""
+    return decide(draft, text, history, catalog, window_fn, cuts_hit)
+
+
 # ---------------------------------------------------------------- saved answers
 # The same reading of services for the saved-answer lookup (2026-11-12). A
 # title held as several profiles, each on its own service or services, has
@@ -279,6 +320,92 @@ def settle(draft, text, history=None, catalog=None, window_fn=None, cuts_hit=Non
 # exactly those services, "Amazon" and "Prime Video" being one. A question
 # that names no service is about the whole audience and is never answered
 # with one service's figure.
+#
+# One exception, and only on evidence (2026-11-12): a title whose
+# verified-carrier record shows it on exactly ONE US service for the
+# window. There the one-service audience is the whole audience, so a
+# question that names no service is answered from the one-service record,
+# and the reply says which service is the title's home. Two or more
+# services on the record, or no check on record, and nothing changes:
+# unverified is never a single home.
+
+_HOME_NAMES = {'amazon': 'Prime Video', 'hbomax': 'HBO Max', 'netflix': 'Netflix', 'youtube': 'YouTube', 'hulu': 'Hulu',
+               'paramount': 'Paramount+', 'peacock': 'Peacock', 'disney': 'Disney+', 'appletv': 'Apple TV+',
+               'mgmplus': 'MGM+', 'hallmarkplus': 'Hallmark+', 'youtubetv': 'YouTube TV', 'amcplus': 'AMC+',
+               'discoveryplus': 'discovery+', 'tubi': 'Tubi', 'starz': 'Starz', 'philo': 'Philo'}
+_HOME_MARK = 'only US home of'
+
+
+def single_home(title, window, record=None) -> str:
+    """The one US service ``title`` could be watched on in ``window`` by
+    the verified-carrier record, as a service key; '' when the record
+    shows several, holds no check, or the check does not cover the
+    window. Never raises."""
+    try:
+        return str(_S().single_home(title, window, record=record) or '')
+    except Exception:
+        return ''
+
+
+def home_name(service_key) -> str:
+    """A service's name as a reader knows it."""
+    k = str(service_key or '')
+    return _HOME_NAMES.get(k) or k.title()
+
+
+def home_line(title, service_key) -> str:
+    """The plain line that says what a one-service figure covers when
+    that service is the title's only US home."""
+    return (f"{home_name(service_key)} is the {_HOME_MARK} {str(title or 'the title').strip()} in this window, "
+            f"so this is the title's whole audience.")
+
+
+def with_home_line(entry, title, service_key):
+    """A saved answer, leading with the line that names the title's home
+    (a copy; the saved answer itself is not changed). The same entry
+    when it already says so."""
+    try:
+        reply = str(entry.get('reply') or '')
+        if not reply or _HOME_MARK in reply or reply.startswith('Profile IQ profile'):
+            return entry
+        out = dict(entry)
+        out['reply'] = home_line(title, service_key) + '\n\n' + reply
+        out['home_service'] = service_key
+        return out
+    except Exception:
+        return entry
+
+
+def _entry_window(entry):
+    """The window a saved answer is on: its own, else the window of the
+    profile a delivered-profile record names. None when neither is known."""
+    try:
+        w = _win(entry.get('ws'), entry.get('we'))
+        if w:
+            return w
+        m = re.search(r"Profile IQ profile\s+(.+?\.csv)\s*$", str(entry.get('reply') or '').strip())
+        if m:
+            return window_of_key(m.group(1).strip())
+    except Exception:
+        pass
+    return None
+
+
+def home_of_entry(entry, bucket):
+    """(service key, title) when the saved answer is filed on one
+    service and that service is the title's only US home for the
+    answer's window; ('', title) otherwise."""
+    try:
+        label = str((bucket or {}).get('subject') or '')
+        title = title_of_name(re.sub(r"\s*\([^()]*\)\s*$", '', label)) or label
+        have = services_of_label(entry.get('subject')) or _bucket_services(bucket or {})
+        if len(have) != 1:
+            return '', title
+        home = single_home(title, _entry_window(entry))
+        return (home if home and home in have else ''), title
+    except Exception:
+        return '', ''
+
 
 _LABEL_PAREN_RX = re.compile(r"\(([^()]*?)\s+(?:viewers?|watchers?|streamers?|listeners?)\b[^()]*\)", re.I)
 _LEAD_RX = re.compile(r"^\s*(?:on\s+)?(.+?)\s+(?:viewers?|watchers?|streamers?|listeners?)\b", re.I)
@@ -397,6 +524,30 @@ def bucket_for(index_doc, skey, question, live=None):
     return None
 
 
+def home_bucket_for(index_doc, question, live=None):
+    """The bucket of a title that is filed on one service, for a
+    question that names the title whole and no service, when that
+    service is the title's only US home on the verified-carrier record.
+    The bucket's key, or None. (Whether a given saved answer's window is
+    covered is judged per answer, in ``replay_fits_services``.)"""
+    try:
+        fam = _title_buckets(index_doc, question, live)
+        scoped = {k: sv for k, (v, sv) in fam.items() if sv}
+        if len(scoped) != 1:
+            return None
+        key, sv = next(iter(scoped.items()))
+        if len(sv) != 1 or services_in_question(question, sv):
+            return None
+        label = str(fam[key][0].get('subject') or '')
+        title = title_of_name(re.sub(r"\s*\([^()]*\)\s*$", '', label)) or label
+        c = (_S().load_record(title) or {}).get('carriers')
+        if isinstance(c, dict) and frozenset(c.get('services') or []) == sv:
+            return key
+    except Exception:
+        pass
+    return None
+
+
 def _is_platform_label(label) -> bool:
     try:
         from . import platform_scope as PS
@@ -432,6 +583,9 @@ def replay_fits_services(entry, bucket, question, subject=''):
         if asked == have:
             return True, ''
         if not asked:
+            home, _title = home_of_entry(entry, bucket)
+            if home:
+                return True, 'home:' + home           # the one service is the title's only US home: its audience is the whole audience
             return False, 'the saved answer is one service\'s figure and the question names no service'
         return False, 'the saved answer is on other services than the question names'
     except Exception:

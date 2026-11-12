@@ -56454,6 +56454,36 @@ def _enforce_normalized_existing_match(draft, candidates, prompt,
     return True, note
 
 
+def _service_scope_decision(draft, text=None, history=None, catalog=None):
+    """A title's audience on named services that matches a live profile
+    IS that profile, on every surface (2026-11-12). One comparison
+    (prometheus.service_scope_match.decide): the same title, exactly the
+    same set of services, the same window. Chat interpret reaches it
+    through the platform binder; the key's check and run reach it in
+    _v1_conclude with the prompt; every other caller (chat approve, the
+    batch paths, the local operator tool) reaches it through
+    _normalize_v1_decision, read from the draft itself.
+
+    Takes the ask and the draft, nothing else: no request field feeds
+    it, so no surface can switch it on or off. A one-service ask never
+    gets a two-service profile or the reverse, and another title is
+    never a match. Returns True when it changed the decision. Never
+    raises."""
+    try:
+        from prometheus import service_scope_match as _ssm
+        _acted, _note = _ssm.decide(
+            draft, text or '', history,
+            catalog if catalog is not None else _profile_catalog_for_chat)
+        if _acted:
+            try:
+                print(f"[service-scope] {_note}")
+            except Exception:
+                pass
+        return bool(_acted)
+    except Exception:
+        return False
+
+
 def _normalize_v1_decision(draft):
     """Return (decision, existing_match_s3_key, derive_type).
 
@@ -56479,6 +56509,7 @@ def _normalize_v1_decision(draft):
         prompt-injection surface: the worker never receives a
         staff-only key as parent_s3_key.
     """
+    _service_scope_decision(draft)   # the same title, services and window as a live profile is that profile (2026-11-12)
     decision = (draft.get('decision') or 'new_build').strip()
     ex_key = (draft.get('existing_match_s3_key') or '').strip()
     d_type = (draft.get('derive_type') or '').strip()
@@ -57845,6 +57876,11 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     except Exception:
         pass
 
+    # The same title on exactly the same services and window as a live
+    # profile is that profile, here as in chat (2026-11-12): read from
+    # the prompt, before the verdict, so a key is never quoted a build
+    # beside a profile it could have at no cost.
+    _service_scope_decision(draft, prompt)
     decision, ex_key, d_type = _normalize_v1_decision(draft)
     # Stale-cut guard (2026-08-28 client finding #1b): a matched CUT
     # file whose entity has a NEWER Total Universe parent in the
