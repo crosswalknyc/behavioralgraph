@@ -15040,6 +15040,11 @@ def zero_sum_demo_boundary_jitter(df, subject):
     n_demo_jit = 0
     if not bp_col:
         return df, 0
+    # a text-typed column refuses a number (pandas 3 'str'): the polish casts
+    # its columns before it calls this; a direct caller gets the same
+    if bp_col in df.columns and not (str(df[bp_col].dtype) == 'object'
+                                     or pd.api.types.is_numeric_dtype(df[bp_col])):
+        df[bp_col] = df[bp_col].astype(object)
     cat_u = df['Column'].astype(str).str.strip().str.upper()
     for demo_cat in sorted(DEPIN_DEMO_CATS):
         idxs = list(df.index[cat_u == demo_cat])
