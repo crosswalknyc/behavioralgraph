@@ -2183,11 +2183,59 @@ def underpinnings_readme(inputs: dict, campaign: dict, aov: dict, payload: dict)
     return "\n".join(lines)
 
 
+def window_still_open(inputs: dict, payload: dict) -> bool:
+    """Was the campaign still running when this valuation was ordered:
+    the order's window was open-ended ("to today", "so far"), or it
+    runs on the window of a figure the reader was given while the
+    campaign ran (the figure landed on, or the day after, the last day
+    of its own window). The saved file then says so (`windows.open`),
+    and the deck's opening line reads the value so far rather than as a
+    closed account (2026-11-11). An end date the reader named for a
+    window that has already closed is not open."""
+    d = inputs if isinstance(inputs, dict) else {}
+    if d.get("window_open"):
+        return True
+    p = payload if isinstance(payload, dict) else {}
+    end = str((p.get("post_period") or {}).get("end") or p.get("end_date") or "")[:10]
+    for k in ("pinned_read", "given_read"):
+        r = d.get(k)
+        if not isinstance(r, dict) or str(r.get("end") or "")[:10] != end or not end:
+            continue
+        try:
+            given = _dt.date.fromisoformat(str(r.get("as_of") or "")[:10])
+            last = _dt.date.fromisoformat(end)
+        except ValueError:
+            continue
+        if given <= last + _dt.timedelta(days=1):
+            return True
+    return False
+
+
 def synthesize(inputs: dict, claude_json: Callable, *,
                tools: Optional[list] = None,
                created_by: str = "prometheus",
                underpinnings=None, job_id: str = "",
                force_research: bool = False) -> dict:
+    """The valuation for one order (`_synthesize`), with the one thing
+    only the order knows written on the saved file: whether the campaign
+    was still running (`window_still_open`)."""
+    payload = _synthesize(inputs, claude_json, tools=tools, created_by=created_by,
+                          underpinnings=underpinnings, job_id=job_id, force_research=force_research)
+    try:
+        if isinstance(payload, dict) and window_still_open(inputs, payload):
+            if not isinstance(payload.get("windows"), dict):
+                payload["windows"] = {}
+            payload["windows"]["open"] = True
+    except Exception as e:
+        print(f"[bpiq-synth] open-window note skipped: {e}")
+    return payload
+
+
+def _synthesize(inputs: dict, claude_json: Callable, *,
+                tools: Optional[list] = None,
+                created_by: str = "prometheus",
+                underpinnings=None, job_id: str = "",
+                force_research: bool = False) -> dict:
     """Research + reason the primitives, then derive the payload.
 
     `underpinnings` (load(key) / save(key, doc)) keeps the research per

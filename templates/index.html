@@ -84348,14 +84348,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return r.blob();
             }).then(function(blob) {
-                var name = (_bpiqState.data && _bpiqState.data.project_name)
-                           || 'BPIQ_Deck';
+                var name = (_bpiqState.data && _bpiqState.data.project_name) || '';
                 var safe = String(name).replace(/[^a-zA-Z0-9._-]+/g, '_');
                 var slice = (_bpiqState.data && _bpiqState.data._bpiq_active_year)
                             ? ('_y' + _bpiqState.data._bpiq_active_year) : '';
                 var a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = safe + slice + '_Analysis_Deck.pptx';
+                // one name wherever the deck is handed over (the chat's link, the email, this
+                // download): the pairing as the cover prints it, then what the file is (2026-11-11)
+                safe = safe.replace(/^[._-]+|[._-]+$/g, '').replace(/_?Brand_Partnership_Valuation$/i, '');
+                a.download = (safe ? safe + slice + '_' : '') + 'Brand_Partnership_Valuation.pptx';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);

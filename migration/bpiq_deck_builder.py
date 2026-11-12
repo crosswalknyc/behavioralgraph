@@ -1447,6 +1447,8 @@ class DeckCtx:
     has_conversions:bool
     has_yearly:     bool
     has_control:    bool
+    open_window:    bool
+    site:           str
     draft:          bool
     sources_line:   str
     data:           dict
@@ -1607,17 +1609,37 @@ def _times(x: float) -> str:
 
 
 _CHANNEL_NAMES = {"x (twitter)": "X", "twitter": "X", "direct (brand site)": None}
+_HOST_RX = re.compile(r"(?<![\w.@-])([a-z0-9][a-z0-9-]*)\.(com|co|net|org|io|us|tv|shop|store)\b", re.I)
 
 
-def _channel(name: str, brand: str) -> str:
-    """A channel as the table prints it."""
+def _brand_site(data: dict, brand: str) -> str:
+    """The brand's own site as a reader knows it ('Gap.com'), read off
+    the pages the valuation itself lists: a host whose name is the
+    brand's. '' when the valuation lists none (the channel is then
+    'the brand's site and app'); a domain is never guessed."""
+    fold = re.sub(r"[^a-z0-9]", "", str(brand or "").lower())
+    if not fold or brand == NO_BRAND:
+        return ""
+    for key in ("top_brand_properties", "top_brand_properties_pre"):
+        for r in (_dict(data).get(key) or []):
+            if not isinstance(r, dict):
+                continue
+            for m in _HOST_RX.finditer(str(r.get("common_name") or "")):
+                if m.group(1).lower().replace("-", "") == fold:
+                    return f"{re.sub(r'[^A-Za-z0-9]', '', str(brand))}.{m.group(2).lower()}"
+    return ""
+
+
+def _channel(name: str, brand: str, site: str = "") -> str:
+    """A channel as the table prints it, by the name a reader knows:
+    'Gap.com and app' (2026-11-11), 'X'."""
     key = str(name or "").strip().lower()
     if key == "direct (brand site)":
-        return f"{brand} site and app"
+        return f"{site} and app" if site else f"{brand} site and app"
     return _CHANNEL_NAMES.get(key) or str(name or "").strip()
 
 
-def _channel_in_sentence(name: str, brand: str) -> str:
+def _channel_in_sentence(name: str, brand: str, site: str = "") -> str:
     """The same channel inside a sentence: 'press', 'the launch event'."""
     key = str(name or "").strip().lower()
     if key == "press":
@@ -1625,8 +1647,8 @@ def _channel_in_sentence(name: str, brand: str) -> str:
     if key == "launch event":
         return "the launch event"
     if key == "direct (brand site)":
-        return f"the {brand} site and app"
-    return _channel(name, brand)
+        return f"{site} and app" if site else f"the {brand} site and app"
+    return _channel(name, brand, site)
 
 
 _SMALL_LABEL_WORDS = {"and", "or", "to", "of", "than", "under", "older", "more", "not", "say", "over", "less"}
@@ -1694,6 +1716,7 @@ def _emv_rows(data: dict, brand: str) -> list:
     media value the deck prints (2026-11-11: LinkedIn was priced in the
     total and missing from the table)."""
     rows = []
+    site = _brand_site(data, brand)
     for r in (_dict(data.get("valuation")).get("emv_breakdown") or []):
         if not isinstance(r, dict):
             continue
@@ -1702,13 +1725,31 @@ def _emv_rows(data: dict, brand: str) -> list:
             continue
         rows.append({
             "name": str(r.get("platform") or "").strip(),
-            "display": _channel(str(r.get("platform") or ""), brand),
+            "display": _channel(str(r.get("platform") or ""), brand, site),
             "people": _count(r.get("incremental_users_projected")),
             "rate": _num(r.get("emv_per_user_rate")),
             "value": value,
         })
     rows.sort(key=lambda r: -r["value"])
     return rows
+
+
+def _window_open(data: dict, post_p: dict) -> bool:
+    """Is the valuation's window still open: the campaign was still
+    running when it was valued (the order said so, or it runs on a
+    figure given while the campaign ran), or the window ends on the day
+    the valuation was made. The opening line then says the value is the
+    value so far (2026-11-11); a window that closed before the
+    valuation was made keeps 'delivered'. Read from the valuation's own
+    fields, so the deck is the same deck on whatever day it is built."""
+    data = _dict(data)
+    if _dict(data.get("windows")).get("open") is True:
+        return True
+    if _dict(data.get("diagnostics")).get("post_window_clipped_to_today") is True:
+        return True
+    end = str(_dict(post_p).get("end") or data.get("end_date") or "")[:10]
+    made = str(data.get("created_at") or "")[:10]
+    return bool(_ymd(end) and _ymd(made) and end >= made)
 
 
 def _derive_context(data: dict, image_url: Optional[str],
@@ -1833,6 +1874,8 @@ def _derive_context(data: dict, image_url: Optional[str],
         has_conversions=has_conv,
         has_yearly=has_yearly,
         has_control=has_control,
+        open_window=_window_open(data, post_p),
+        site=_brand_site(data, brand),
         draft=is_draft(data),
         sources_line=src,
         data=data,
@@ -1919,7 +1962,7 @@ def _next_step(ctx: DeckCtx) -> tuple:
     and whether orders have followed."""
     days = _days_phrase(ctx.post_days)
     top = ctx.emv_rows[0] if ctx.emv_rows else None
-    channel = _channel_in_sentence(top["name"], ctx.brand) if top else "the earned channels"
+    channel = _channel_in_sentence(top["name"], ctx.brand, ctx.site) if top else "the earned channels"
     own = next((r["name"] for r in _touchpoints(ctx, 0) if r["new"]), "")
     where = own or f"{ctx.b}'s product pages"
     if not _moved(ctx):
@@ -2213,7 +2256,7 @@ def _tldr_rows(ctx: DeckCtx) -> list:
         where = f"{lens} carries {fmt_money(value)} of the total, or {cents:.0f} cents of every dollar."
         if lens == "Earned media" and ctx.emv_rows:
             top = ctx.emv_rows[0]
-            where += f" {_cap(_channel_in_sentence(top['name'], ctx.brand))} alone accounts for {fmt_money(top['value'])}."
+            where += f" {_cap(_channel_in_sentence(top['name'], ctx.brand, ctx.site))} alone accounts for {fmt_money(top['value'])}."
         rows.append(("Where the value sits", where))
     if ctx.blv > 0:
         if ctx.has_control:
@@ -2228,7 +2271,9 @@ def _tldr_rows(ctx: DeckCtx) -> list:
         orders = fmt_num(_base_for(ctx.cv, _rate(ctx, "conv_value_per_user"),
                                    _count(_dict(ctx.data.get("conversions")).get("post_users_projected"))))
         if min(ctx.lenses, key=lambda lv: lv[1])[0] == "Conversion":
-            sold = f"Sales are the smallest part so far. We count {orders} orders worth {fmt_money(ctx.cv)}."
+            # the headline already says "so far" on an open window; the row does not say it twice
+            part = "Sales are the smallest part." if ctx.open_window else "Sales are the smallest part so far."
+            sold = f"{part} We count {orders} orders worth {fmt_money(ctx.cv)}."
         else:
             sold = f"Orders add {fmt_money(ctx.cv)}. We count {orders} of them in the window."
         rows.append(("What sold", sold))
@@ -2243,7 +2288,14 @@ def _slide_tldr(prs, ctx: DeckCtx, idx: int, total: int):
     surf = S_LIGHT
     _ground(s, surf)
     who = f"{ctx.talent}'s partnership" if ctx.talent else "The partnership"
-    if ctx.total_value > 0:
+    if ctx.total_value > 0 and ctx.open_window:
+        # the campaign is still running, or the window ends the day it was valued: the value so far
+        # (2026-11-11: "delivered" read as a closed account of a partnership that was still running)
+        title = ctx.titles([
+            (f"{who} is worth {fmt_money(ctx.total_value)}", f" to {ctx.brand} so far."),
+            (f"The partnership is worth {fmt_money(ctx.total_value)}", " so far."),
+        ])
+    elif ctx.total_value > 0:
         title = ctx.titles([
             (f"{who} delivered {fmt_money(ctx.total_value)}", f" in brand value for {ctx.brand}."),
             (f"The partnership delivered {fmt_money(ctx.total_value)}", " in brand value."),
@@ -2385,6 +2437,9 @@ def _slide_measured(prs, ctx: DeckCtx, idx: int, total: int):
     return s
 
 
+ENGAGING_MEANS = "Engaging means a visit, a view or a follow. It does not mean an order."
+
+
 def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
     """Reach and value: the people, how many engaged, what it is worth."""
     s = _blank(prs)
@@ -2411,18 +2466,33 @@ def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
     for i, (label, value, cap, hero) in enumerate(cards):
         _stat_card(s, surf, M + i * (COL3 + GUT), top, COL3, h, _one_line(label, 9.5, COL3 - 0.52, tracking=1.0, bold=True),
                    value, cap, hero=hero, value_size=size)
-    # the headline as a picture: of everyone reached, the share who engaged
-    y = top + h + 0.34
+    # the headline as a picture: of everyone reached, the share who engaged;
+    # under the bar, what the word means, where the reader first meets the
+    # share (2026-11-11); then the page's plain line. The three share the
+    # room under the cards, so a two-line headline keeps all of them.
+    reading = f"What this means: every share in this deck is a share of these {fmt_num(ctx.audience_proj)} people."
+    d_h = _measure(ENGAGING_MEANS, 12, BAND, spacing=1.25).height_in
+    r_h = _measure(reading, 12, BAND, spacing=1.25).height_in
+    y = top + h
     share = max(0.0, min(ctx.post_pen, 100.0))
-    if CONTENT_BOTTOM - y >= 1.1:
+    bar = CONTENT_BOTTOM - y >= 0.2 + 0.54 + 0.12 + d_h + 0.06 + r_h
+    spare = CONTENT_BOTTOM - y - (0.54 if bar else 0.0) - d_h - r_h
+    g_bar = min(0.34, max(0.2, spare * 0.45))
+    g_def = min(0.18, max(0.12, spare * 0.3))
+    g_read = min(0.14, max(0.06, spare * 0.2))
+    if bar:
+        y += g_bar
         _label(s, M, y, 8.0, f"Share of people reached who engaged {ctx.after_word}", surf.card_label)
         T(s, RIGHT - 2.0, y - 0.06, 2.0, 0.28, f"{share:.1f}%", size=14, weight="Bold", color=surf.title, align="right")
         _card(s, M, y + 0.3, BAND, 0.24, fill=surf.rule, radius=0.12)
         if share > 0:
             _card(s, M, y + 0.3, max(0.24, BAND * share / 100.0), 0.24, fill=surf.accent, radius=0.12)
-        y += 0.3 + 0.24 + 0.24
-    _reading(s, surf, y,
-             f"What this means: every share in this deck is a share of these {fmt_num(ctx.audience_proj)} people.")
+        y += 0.3 + 0.24
+    y += g_def if bar else 0.3
+    if CONTENT_BOTTOM - y >= d_h:
+        T(s, M, y, BAND, round(d_h + 0.02, 3), ENGAGING_MEANS, size=12, color=surf.title, spacing=1.25)
+        y += d_h + g_read
+    _reading(s, surf, y, reading)
     return s
 
 
@@ -2443,6 +2513,22 @@ def _plate(slide, surf: Surf, x, y, w, h, label, pct, count_line, window_line, *
     T(slide, x + pad, cy, w - 2 * pad, 0.28, count_line, size=14, weight="SemiBold", color=c_fig)
     if window_line and cy + 0.3 + 0.2 <= y + h - 0.12:
         T(slide, x + pad, cy + 0.3, w - 2 * pad, 0.22, window_line, size=11, color=c_line)
+
+
+def _lift_count_line(ctx: DeckCtx) -> str:
+    """The count behind the move, from the two counts the page prints:
+    how many more people engaged, and the rise that is (2026-11-11: the
+    subhead described the share the headline had just stated). '' when
+    engagement held or the valuation carries no counts."""
+    pre, post = ctx.pre_users_proj, ctx.post_users_proj
+    gain = post - pre
+    if pre <= 0 or post <= 0 or abs(ctx.delta_pp) < 0.05 or gain == 0 or (gain > 0) != (ctx.delta_pp > 0):
+        return ""
+    if gain > 0:
+        return (f"{fmt_num(gain)} more people engaged with {ctx.b} {ctx.after_word} than before it, "
+                f"a {gain / pre * 100:.1f}% rise.")
+    return (f"{fmt_num(-gain)} fewer people engaged with {ctx.b} {ctx.after_word} than before it, "
+            f"a {-gain / pre * 100:.1f}% fall.")
 
 
 def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
@@ -2466,8 +2552,8 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
         sub = (f"A matched group{' of the same size' if _same_size(ctx) else ''} moved from "
                f"{ctx.c_pre_pen:.1f}% to {ctx.c_post_pen:.1f}%.")
     else:
-        sub = (f"The share of the {fmt_num(ctx.audience_proj)} people reached who had a "
-               f"{ctx.ba} touchpoint, window by window.")
+        sub = _lift_count_line(ctx) or (f"The share of the {fmt_num(ctx.audience_proj)} people reached who had a "
+                                        f"{ctx.ba} touchpoint, window by window.")
     top = _head(s, surf, idx, "Engagement before and after", title, sub, ctx.logo(surf), source=ctx.sources_line)
     room = CONTENT_BOTTOM - top
     strip_h = 0.84 if ctx.has_control else 0.0
@@ -2888,6 +2974,9 @@ def _change_cell(before: int, after: int, new: bool) -> tuple:
     return f"{pct:+.1f}%", ("up" if pct >= 0 else "down")
 
 
+NOT_LIVE = "Not live"
+
+
 def _slide_top_touchpoints(prs, ctx: DeckCtx, idx: int, total: int):
     """Where people met the brand: its pages and accounts by visits,
     before and after. A page the campaign created shows no visits before
@@ -2925,7 +3014,7 @@ def _slide_top_touchpoints(prs, ctx: DeckCtx, idx: int, total: int):
     note = ("A visit is one session on a page or account. One person can visit many times, "
             "so visits run higher than the people counts on other pages.")
     if any(r["new"] for r in rows):
-        note += " New marks a page that launched with the campaign, so it has no visits before."
+        note += f" {NOT_LIVE} marks a page or account that did not exist before the launch."
     note_h = _measure(note, 11, BAND, spacing=1.25).height_in + 0.04
     pitch = max(0.3, min(0.42, (CONTENT_BOTTOM - note_h - 0.16 - (top + 0.38)) / len(rows)))
     y = top + 0.38
@@ -2933,8 +3022,9 @@ def _slide_top_touchpoints(prs, ctx: DeckCtx, idx: int, total: int):
         name_size = _fit_stat(r["name"], c_name[1], 12.5, floor=10, bold=True)
         name = _break_long_token(r["name"], c_name[1], name_size, bold=True, max_lines=1)
         T(s, c_name[0], y, c_name[1], pitch, name, size=name_size, weight="SemiBold", color=surf.title, anchor="middle")
-        T(s, c_pre[0], y, c_pre[1], pitch, fmt_num(r["before"]), size=12,
-          color=surf.muted if r["before"] == 0 else surf.title, align="right", anchor="middle")
+        # a page that did not exist before the launch was not live; it never reads as a count of 0
+        T(s, c_pre[0], y, c_pre[1], pitch, NOT_LIVE if r["new"] else fmt_num(r["before"]), size=12,
+          color=surf.muted if (r["new"] or r["before"] == 0) else surf.title, align="right", anchor="middle")
         T(s, c_post[0], y, c_post[1], pitch, fmt_num(r["after"]), size=12, color=surf.title, align="right",
           anchor="middle")
         text, kind = _change_cell(r["before"], r["after"], r["new"])
@@ -3234,8 +3324,17 @@ def build_deck(data: dict,
     return build_deck_report(data, image_url=image_url, category=category, s3_client=s3_client)[0]
 
 
+FILE_SUFFIX = "Brand_Partnership_Valuation"
+
+
 def suggested_filename(data: dict, ext: str = "pptx") -> str:
+    """The deck's file name, the same wherever it is handed over (the
+    chat's link, the email's attachment, the tab's download): the
+    pairing as the cover prints it, then what the file is. No date and
+    no working word (2026-11-11): 'JYT_x_Gap_Brand_Partnership_Valuation.pptx'."""
     data = _dict(data)
-    name = safe_filename(str(data.get("project_name") or "BPIQ_Deck"))
-    stamp = str(data.get("created_at") or "")[:10] or "deck"
-    return f"{name}_Analysis_{stamp}.{ext}"
+    name = safe_filename(_normalize_project_label(str(data.get("project_name") or "")).strip())[:90].strip("._-") \
+        if str(data.get("project_name") or "").strip() else ""
+    if name.lower().replace("_", " ").endswith("brand partnership valuation"):
+        name = name[:-len(FILE_SUFFIX)].strip("._-")
+    return f"{name}_{FILE_SUFFIX}.{ext}" if name else f"{FILE_SUFFIX}.{ext}"

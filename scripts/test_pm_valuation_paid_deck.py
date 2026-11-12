@@ -23,6 +23,10 @@ or any real account, and nothing is mailed.
   D. the $1,000 order end to end: one charge, the total on the held
      figure, the comparison-group pages present and adding up
   E. the wiring in the job body, the widget and the email
+  F. the wording round (2026-11-11): the opening line follows the window,
+     what engaging means, the count behind the rise, "Not live", channel
+     names, one file name everywhere, a deck asked for while the
+     valuation runs, the cover photo
 
 Run: python3 scripts/test_pm_valuation_paid_deck.py
 Set PM_VALUATION_DECK_OUT=<dir> to keep the decks it builds.
@@ -36,6 +40,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import date
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -236,6 +241,7 @@ class Job:
             self.status_write(job_id, {
                 'job_id': job_id, 'user': uname, 'status': 'done', 'subject': payload.get('project_name'),
                 's3_key': bare_key, 'total_brand_value': (payload.get('valuation') or {}).get('total_brand_value'),
+                'finished_at': time.time(),
                 **BJ.hand_over(job_id, uname, inputs, bare_key, payload, category, self.host)})
             BJ.settle(reg, inputs, job_id, uname, bare_key, payload)
             tbv = (payload.get('valuation') or {}).get('total_brand_value')
@@ -434,7 +440,7 @@ def test_a2_her_own_path(first_pages):
         check(f"{tag} it is the valuation of record, to the cent", run['key'] == KEY and HF.same_as_review(run['payload']))
         deck_key = (o.s3.keys('generated_decks/') or [''])[0]
         pages = slide_texts(o.s3.objects[deck_key]) if deck_key else []
-        # the cover's date line and the file name carry the day it was built; nothing else moves
+        # the same valuation on a later day is the same deck: nothing on a page follows the day it was built
         check(f"{tag} the deck is the same deck, page for page", len(pages) == 14 and pages[1:] == first_pages[1:]
               and '$4,217,683.00' in pages[0])
         note = next((x for x in o.thread() if (x.get('meta') or {}).get('bpiq_job_id') == run['job_id']), {})
@@ -721,13 +727,302 @@ def test_e_the_wiring():
     check("every other note keeps its own attachment line", 'The raw data is attached (1 file).' in seen[1]['body'])
 
 
+# ------------------------------------------------------------------ F
+FILE_NAME = 'JYT_x_Gap_Brand_Partnership_Valuation.pptx'
+SO_FAR = "JYT's partnership is worth $4,217,683.00 to Gap so far."
+DELIVERED = "JYT's partnership delivered $4,217,683.00 in brand value for Gap."
+
+
+def _lines(page):
+    return [ln.strip() for ln in page.split('\n') if ln.strip()]
+
+
+def _build(payload, **kw):
+    with contextlib.redirect_stdout(io.StringIO()):
+        return B.build_deck_report(BD.deck_data(payload), category='FASHION', **kw)
+
+
+def _cover_background(pptx_bytes):
+    """The cover's background picture, decoded (None when the ground is flat)."""
+    from pptx import Presentation
+    from PIL import Image
+    slide = Presentation(io.BytesIO(pptx_bytes)).slides[0]
+    blips = slide._element.xpath('.//p:bg//a:blip')
+    if not blips:
+        return None
+    rid = blips[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+    return Image.open(io.BytesIO(slide.part.related_part(rid).blob)).convert('RGB')
+
+
+def _stand_in_photo():
+    """A busy, bright stand-in photograph (no real person's picture is used)."""
+    import random
+    from PIL import Image, ImageDraw
+    rnd = random.Random(7)
+    im = Image.new('RGB', (2400, 1600), (60, 60, 60))
+    d = ImageDraw.Draw(im)
+    for _ in range(1500):
+        x, y, r = rnd.randint(0, 2400), rnd.randint(0, 1600), rnd.randint(20, 90)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=tuple(rnd.randint(10, 200) for _ in range(3)))
+    buf = io.BytesIO()
+    im.save(buf, 'JPEG', quality=88)
+    return buf.getvalue()
+
+
+class SlowJob:
+    """A valuation that has been accepted and has not finished: the job
+    is recorded as running and held until `finish`."""
+
+    def __init__(self, job):
+        self.job, self.held = job, []
+
+    def run(self, job_id, uname, inputs, extras):
+        self.held.append((job_id, uname, dict(inputs), dict(extras or {})))
+        self.job.status_write(job_id, {'job_id': job_id, 'user': uname, 'status': 'running',
+                                       'subject': f"{inputs['qualifier']} x {inputs['brand_partner']}"})
+
+    def finish(self):
+        for args in self.held:
+            self.job.run(*args)
+        self.held = []
+
+
+def test_f_the_wording_round(o, run, body, pages):
+    print("F. the wording round: the review deck's wording where it read better, no figure moved")
+    p = run['payload']
+    st = o.job.status[run['job_id']]
+    # 1. the opening line follows the window
+    check("page 2 says the value so far on a campaign that is still running", _lines(pages[1])[3:4] == [SO_FAR]
+          or SO_FAR in _lines(pages[1]))
+    check("the header is one sentence of 12 words or fewer", len(SO_FAR.split()) <= 12 and SO_FAR.count('.') == 2)
+    check("the saved file says the campaign was still running", (p.get('windows') or {}).get('open') is True)
+    check("'so far' is said once on the page", pages[1].count('so far') == 1 and 'Sales are the smallest part.' in pages[1])
+    closed = copy.deepcopy(p)
+    closed['windows'].pop('open', None)
+    closed['created_at'] = '2026-12-20T15:00:00Z'
+    c_pages = slide_texts(_build(closed)[0])
+    check("a window that closed before the valuation was made keeps 'delivered'", DELIVERED in _lines(c_pages[1])
+          and 'so far.' in c_pages[1] and SO_FAR not in c_pages[1])
+    check("nothing else on the deck follows the window", c_pages[2:] == pages[2:] and c_pages[0] == pages[0])
+    same_day = copy.deepcopy(closed)
+    same_day['created_at'] = '2026-11-11T21:15:26Z'
+    check("a window that ends the day the valuation was made is the value so far",
+          B._window_open(same_day, same_day['post_period']) is True and B._window_open(closed, closed['post_period']) is False
+          and B._window_open(dict(closed, diagnostics={'post_window_clipped_to_today': True}), closed['post_period']) is True
+          and B._window_open(p, p['post_period']) is True)
+    end = p['post_period']['end']
+    check("the order knows: said open-ended, or run on a figure given while the campaign ran",
+          S.window_still_open({'window_open': True}, p) is True
+          and S.window_still_open({'pinned_read': {'end': end, 'as_of': end}}, p) is True
+          and S.window_still_open({'given_read': {'end': end, 'as_of': '2026-11-12'}}, p) is True
+          and S.window_still_open({'pinned_read': {'end': end, 'as_of': '2026-11-20'}}, p) is False
+          and S.window_still_open({'pinned_read': {'end': '2026-10-01', 'as_of': '2026-10-01'}}, p) is False
+          and S.window_still_open({'end_named': True}, p) is False and S.window_still_open({}, p) is False)
+    check("this order ran on the held figure's window, given the day that window ended",
+          str((run['inputs'].get('pinned_read') or run['inputs'].get('given_read') or {}).get('as_of')) == '2026-11-11')
+    # 2. what engaging means, under the bar
+    l4 = _lines(pages[3])
+    check("page 4 says what engaging means, in one line under the bar", B.ENGAGING_MEANS in l4
+          and B.ENGAGING_MEANS == 'Engaging means a visit, a view or a follow. It does not mean an order.'
+          and l4.index(B.ENGAGING_MEANS) > l4.index('SHARE OF PEOPLE REACHED WHO ENGAGED AFTER LAUNCH')
+          and l4.index(B.ENGAGING_MEANS) < next(i for i, ln in enumerate(l4) if ln.startswith('What this means')))
+    check("the label is still 'People reached'", 'PEOPLE REACHED' in [ln.upper() for ln in l4] and 'saw the campaign' not in pages[3].lower())
+    check("the definition is said once in the deck", '\n'.join(pages).count('a visit, a view or a follow') == 1)
+    # 3. the count behind the rise
+    want = '86,961 more people engaged with Gap after launch than before it, a 79.4% rise.'
+    gain = int(p['totals']['post_users_projected']) - int(p['totals']['pre_users_projected'])
+    check("page 5's subhead gives the new engagers and the rise", want in _lines(pages[4])
+          and 'window by window' not in pages[4])
+    check("both are the valuation's own figures", gain == 86961 and abs(float(p['totals']['lift_pct_users']) - 79.42) < 0.005
+          and f"{gain:,}" in pages[8] and round(gain / int(p['totals']['pre_users_projected']) * 100, 1) == 79.4)
+    # 4. a page that did not exist before the launch
+    l12 = _lines(pages[11])
+    i = l12.index('gap.com/browse/gap-x-jyt')
+    check("page 12 shows 'Not live' before the launch for the campaign's own page, never 0",
+          l12[i + 1:i + 4] == ['Not live', '138,293', 'New'] and '0' not in l12)
+    check("the note says what the mark means", 'Not live marks a page or account that did not exist before the launch.' in pages[11]
+          and 'New marks' not in pages[11])
+    check("a page with a history keeps its counts", l12[l12.index('gap.com homepage') + 1:][:3] == ['57,336', '165,845', '+189.3%'])
+    # 5. channel names as a reader knows them
+    l7 = _lines(pages[6])
+    values = [float(ln.replace('$', '').replace(',', '')) for ln in l7 if re.fullmatch(r"\$[\d,]+\.\d\d", ln)]
+    rows = values[:-2] if len(values) > 2 else values          # the channel values, before the total (printed in the head too)
+    check("page 7 names the brand's site and X the way a reader does", 'Gap.com and app' in l7 and 'X' in l7
+          and 'Gap site and app' not in pages[6] and 'Twitter' not in '\n'.join(pages) and 'Direct' not in pages[6])
+    check("the channels are still in value order with the total row", 'Total earned media' in l7 and '$3,215,733.50' in l7
+          and [v for v in values if v != 3215733.5 and v > 100] == sorted([v for v in values if v != 3215733.5 and v > 100], reverse=True)
+          and len(rows) >= 14)
+    check("a brand whose site the valuation does not list keeps the plain name",
+          B._brand_site({'top_brand_properties': [{'common_name': 'Acme on Instagram (@acme)'}]}, 'Acme') == ''
+          and B._channel('Direct (Brand Site)', 'Acme', '') == 'Acme site and app'
+          and B._brand_site({'top_brand_properties': [{'common_name': 'oldnavy.com homepage'}]}, 'Old Navy') == 'OldNavy.com'
+          and B._brand_site({'top_brand_properties': [{'common_name': 'gapinc.com newsroom'}]}, 'Gap') == '')
+    # 6. one file name, wherever the deck is handed over
+    sends = o.job.sends
+    link = (st.get('link') or {}).get('url') or ''
+    check("the chat's link, the stored deck and the email attachment carry one name", st['deck']['filename'] == FILE_NAME
+          and os.path.basename(run['deck_key']) == FILE_NAME and link.split('?')[0].endswith('/' + FILE_NAME)
+          and bool(sends) and FILE_NAME in [f[1] for f in sends[0]['files']])
+    check("the tab's download and a re-export take the same name", B.suggested_filename(p) == FILE_NAME
+          and B.suggested_filename(dict(p, created_at='2027-01-02T00:00:00Z')) == FILE_NAME)
+    check("no 'Analysis' and no date in the name", 'analysis' not in FILE_NAME.lower() and not re.search(r"\d", FILE_NAME)
+          and B.suggested_filename({}) == 'Brand_Partnership_Valuation.pptx'
+          and B.suggested_filename({'project_name': 'Ganni x Lululemon, Brand Partnership Valuation'})
+          == 'Ganni_x_Lululemon_Brand_Partnership_Valuation.pptx')
+    html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
+    export = html.split('function _bpiqExportDeck()')[1].split('\n        function ')[0]
+    check("the tab names its download the same way", "'Brand_Partnership_Valuation.pptx'" in export and '_Analysis_Deck' not in html
+          and "replace(/_?Brand_Partnership_Valuation$/i, '')" in export)
+    exp = open(os.path.join(ROOT, 'migration', 'bpiq_deck_export.py'), encoding='utf-8').read()
+    check("the tab's server side names the file from the same function", "fname = suggested_filename(data, ext='pptx')" in exp
+          and 'download_name=fname' in exp)
+    # 8. the cover photo
+    from migration import design_skill as DS
+    photo_key = 'brand-partnership-iq-images/stand_in.jpg'
+    o.s3.put_object(Bucket=BUCKET, Key=photo_key, Body=_stand_in_photo())
+    meta = o.host.load_bpiq_metadata()
+    plain_meta = copy.deepcopy(meta)
+    meta[run['bare_key']] = dict(meta.get(run['bare_key']) or {}, image_url='/api/profile-image-file/' + photo_key)
+    o.s3.put_object(Bucket=BUCKET, Key=o.host.BPIQ_METADATA_KEY, Body=json.dumps(meta).encode('utf-8'))
+    with contextlib.redirect_stdout(io.StringIO()):
+        with_photo = BD.deliver('bbbbbbbbbbbb', copy.deepcopy(p), host=o.host, bare_key=run['bare_key'])
+    keep('paid_500_cover_photo', FILE_NAME, with_photo.get('bytes') or b'')
+    im = _cover_background(with_photo.get('bytes') or b'') if with_photo else None
+    clean = _cover_background(body)
+    zones = [z + ((0x9A, 0xA0, 0x9B),) for z in B._COVER_ZONES]
+    # (a picture under the scrim still bends from block to block; the clean ground is an even wash)
+    check("with a photo in the valuation's sidecar, the chat deck's cover carries it as the page background",
+          im is not None and clean is not None and DS.image_detail(im) >= 1.0
+          and DS.image_detail(im) > 20 * DS.image_detail(clean) and abs(im.width / im.height - 16 / 9) < 0.01
+          and im.width >= 3800)
+    check("the photo is scrimmed until the cover's type reads over it (4.5 to 1 or better)",
+          im is not None and DS.zone_contrast(im, zones) >= DS.MIN_TEXT_CONTRAST)
+    check("the scrim is Graphite and the photo is still a photo under it",
+          im is not None and DS.zone_median_luminance(im, zones) < 0.12 and with_photo.get('ready') is True)
+    photo_pages = slide_texts(with_photo.get('bytes') or b'') if with_photo else []
+    check("the cover's words and every other page are the same with or without the photo", photo_pages == pages)
+    o.s3.put_object(Bucket=BUCKET, Key=o.host.BPIQ_METADATA_KEY, Body=json.dumps(plain_meta).encode('utf-8'))
+    wash = DS.gradient_image_bytes('graphiteWash')
+    check("with no photo in the sidecar the cover is the clean Graphite ground",
+          BD.sidecar(o.host, run['bare_key'])[0] is None and clean is not None and DS.image_detail(clean) < DS.PHOTO_DETAIL_MIN
+          and bool(wash))
+    meta[run['bare_key']]['image_url'] = '/api/profile-image-file/brand-partnership-iq-images/gone.jpg'
+    o.s3.put_object(Bucket=BUCKET, Key=o.host.BPIQ_METADATA_KEY, Body=json.dumps(meta).encode('utf-8'))
+    with contextlib.redirect_stdout(io.StringIO()):
+        gone = BD.deliver('cccccccccccc', copy.deepcopy(p), host=o.host, bare_key=run['bare_key'])
+    g_im = _cover_background(gone.get('bytes') or b'') if gone else None
+    check("a photo that cannot be read gives the same clean cover, and the deck is still handed over",
+          g_im is not None and DS.image_detail(g_im) < DS.PHOTO_DETAIL_MIN and gone.get('ready') is True
+          and slide_texts(gone['bytes']) == pages)
+    o.s3.put_object(Bucket=BUCKET, Key=o.host.BPIQ_METADATA_KEY, Body=json.dumps(plain_meta).encode('utf-8'))
+    for k in o.s3.keys('generated_decks/bbbbbbbbbbbb/') + o.s3.keys('generated_decks/cccccccccccc/'):
+        o.s3.delete_object(Bucket=BUCKET, Key=k)
+
+
+def test_f7_a_deck_asked_for_while_it_runs():
+    print("F7. a deck asked for while the valuation is still running gets one line, not a second order")
+    o = Order(record=True)
+    slow = SlowJob(o.job)
+    o.walk.engine = slow
+    o.walk.hist = [{'role': 'user', 'text': HER_WORDS},
+                   {'role': 'agent', 'text': HER_READ, 'meta': {'figures': [{'value': 4217683.0, 'kind': 'money'}],
+                                                                'read_job_id': 'f21c0ed76df6'}}]
+    o.walk.say('Can you turn this into a deck?')
+    for m in ('Accept', 'no', 'find the campaign asset'):
+        o.walk.say(m)
+    accepted = o.walk.say('Accept $500')
+    check("the order is accepted, charged once, and the valuation is running", accepted is not None
+          and accepted['reply'] == W.RUNNING_REPLY and o.charges() == [500.0] and len(slow.held) == 1 and not o.job.runs)
+    line = 'The JYT x Gap valuation is still running, and the deck comes with it when it finishes.'
+    seat = dict(o.led.data['users']['wallet_seat'])
+    g = {'_H': o.host, '_PM_BPIQ_JOB_PREFIX': 'system/pm_bpiq_jobs/',
+         '_pm_job_owner_ok': lambda owner, user: str(owner or '') == str((user or {}).get('username') or '')}
+    body = {'thread_id': o.walk.tid}
+    for words in ('Can you turn this into a deck?', 'send me the deck', 'make me a deck of the JYT x Gap valuation'):
+        n_hist = len(o.walk.hist)
+        with contextlib.redirect_stdout(io.StringIO()):
+            gate = W.deck_gate(seat, body, words, list(o.walk.hist), '', g, store=o.walk.store)
+        check(f"'{words}': the deck surface answers in one line", isinstance(gate, dict) and gate.get('reply') == line
+              and gate.get('guidance') is True and not gate.get('followups') and not gate.get('bpiq_wizard'))
+        out = o.walk.say(words)
+        check(f"'{words}': typed in chat, the answer is the same line and no order opens", out is not None
+              and out['reply'] == line and not out.get('bpiq_wizard') and not out.get('followups')
+              and out.get('bpiq_collect') is False and out.get('bpiq_job_id') == slow.held[0][0])
+        check(f"'{words}': nothing more is charged or started, and no draft is left behind", o.charges() == [500.0]
+              and len(slow.held) == 1 and not o.walk.store.load('wallet_seat', o.walk.tid))
+        del o.walk.hist[n_hist:]
+    check("the line is one sentence and says nothing about how anything is made", line.count('.') == 1
+          and not BANNED_RX.search(line) and '\u2014' not in line)
+    with contextlib.redirect_stdout(io.StringIO()):
+        other = W.deck_gate(seat, body, 'make a deck on Gap Customers', list(o.walk.hist), '', g, store=o.walk.store)
+        picked = W.deck_gate(seat, body, 'Run a deck on Paige Spiranac', list(o.walk.hist), 'Paige Spiranac', g, store=o.walk.store)
+    check("a deck on another subject is not answered with the running line",
+          not (isinstance(other, dict) and other.get('reply') == line) and not (isinstance(picked, dict) and picked.get('reply') == line))
+    later = list(o.walk.hist) + [{'role': 'user', 'text': 'who are Gap customers?'},
+                                 {'role': 'agent', 'text': 'Gap Customers skew female and 25 to 44. ' * 12,
+                                  'meta': {'kind': 'read', 'figures': [1]}}]
+    marker = o.walk.store.load_marker('wallet_seat', o.walk.tid)
+    check("after a later read, 'this' is that read; the valuation named in words still gets the line",
+          BD.running_valuation(later, 'turn this into a deck', marker=marker, g=g) is None
+          and (BD.running_valuation(later, 'make a deck of the JYT x Gap valuation', marker=marker, g=g) or {}).get('done') is False)
+    check("another thread of the same seat has no valuation running", W.running_deck_answer(
+        'send me the deck', [], '', o.walk.store, 'wallet_seat', 'another-thread', g) == (None, ''))
+    # a valuation that failed is not "still running"
+    o.job.status_write(slow.held[0][0], {'job_id': slow.held[0][0], 'user': 'wallet_seat', 'status': 'error'})
+    check("a valuation that stopped is never called running", BD.running_valuation(
+        list(o.walk.hist), 'send me the deck', marker=marker, g=g) is None)
+    o.job.status_write(slow.held[0][0], {'job_id': slow.held[0][0], 'user': 'wallet_seat', 'status': 'running'})
+    # it finishes: the deck arrives with it, and a deck asked for now is that deck
+    slow.finish()
+    run = o.job.runs[0] if o.job.runs else None
+    notes = [t for t in o.thread() if run and (t.get('meta') or {}).get('bpiq_job_id') == run['job_id']]
+    check("when it finishes the deck comes with it, as the line said", run is not None and len(notes) == 1
+          and ((notes[0].get('meta') or {}).get('link') or {}).get('url', '').split('?')[0].endswith('/' + FILE_NAME)
+          and o.charges() == [500.0])
+    hist = list(o.walk.hist) + list(o.thread())
+    check("once it is handed over, the running line is not said again",
+          BD.running_valuation(hist, 'send me the deck', marker=marker, g=g) is None
+          and (BD.thread_valuation(hist, 'send me the deck') or {}).get('job_id') == (run or {}).get('job_id'))
+    # finished, and the note has not reached the thread yet: the valuation deck from the saved file, no second order
+    landed = (BD.running_valuation(list(o.walk.hist), 'send me the deck', marker=marker, g=g) or {})
+    check("finished but not yet in the thread: the deck is built from the saved file", landed.get('done') is True
+          and landed.get('job_id') == (run or {}).get('job_id'))
+    o.walk.hist = [t for t in o.walk.hist]          # the walk's own turns: the note is in the server's copy only
+    out = o.walk.say('send me the deck')
+    check("typed in chat in that moment: one line that the deck is arriving, and no order opens", out is not None
+          and out['reply'] == 'The JYT x Gap valuation has just finished, and its deck is arriving in this thread now.'
+          and not out.get('bpiq_wizard') and out.get('bpiq_job_id') == (run or {}).get('job_id') and o.charges() == [500.0]
+          and not o.walk.store.load('wallet_seat', o.walk.tid))
+    del o.walk.hist[-2:]
+    # hours later, with the note out of view: nothing is called running or just finished; the deck
+    # surface still builds the valuation deck from the saved file
+    done_doc = dict(o.job.status[run['job_id']], finished_at=time.time() - 3 * 3600)
+    o.job.status_write(run['job_id'], done_doc)
+    old = (BD.running_valuation(list(o.walk.hist), 'send me the deck', marker=marker, g=g) or {})
+    check("a valuation that finished hours ago is not 'just finished' in chat", W.running_deck_answer(
+        'send me the deck', list(o.walk.hist), '', o.walk.store, 'wallet_seat', o.walk.tid, g, chat=True) == (None, '')
+        and old.get('done') is True and old.get('finished_seconds_ago', 0) > 3600)
+    stale = dict(marker, started_at='2026-11-01T00:00:00Z')
+    o.job.status_write(run['job_id'], {'job_id': run['job_id'], 'user': 'wallet_seat', 'status': 'running'})
+    check("a run left in a running state for days is not called running", BD.running_valuation(
+        list(o.walk.hist), 'send me the deck', marker=stale, g=g) is None)
+    o.job.status_write(run['job_id'], done_doc)
+    src = open(os.path.join(ROOT, 'prometheus', 'bpiq_wizard.py'), encoding='utf-8').read()
+    gate_src = src.split('def deck_gate(')[1].split('\ndef ')[0]
+    check("the deck surface asks about a running valuation before it opens any order",
+          gate_src.index('running_deck_answer(') < gate_src.index("pv_kind(text, history, pick=pick, body=body) != 'deck'"))
+    W.UNDERPINNINGS = None
+
+
 def main():
     o, run, body, pages = test_a_the_500_order()
+    test_f_the_wording_round(o, run, body, pages)
     test_b_a_deck_asked_for_afterwards(o, run, pages)
     test_a2_her_own_path(pages)
     test_c_the_tab_export(run, pages)
     test_d_the_1000_order()
     test_e_the_wiring()
+    test_f7_a_deck_asked_for_while_it_runs()
     BA.INDEX_FOR_TESTS = None
     BA.ASKER_LOOKUP = None
     BA.USERS_FOR_TESTS = None

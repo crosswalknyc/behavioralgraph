@@ -297,6 +297,8 @@ def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='
                          underpinnings=S3Underpinnings(s3, bucket), job_id=job_id, force_research=bool(research))
     category = payload.pop('_bpiq_category', None)
     payload['created_at'] = prior.get('created_at') or payload.get('created_at')   # the dated file keeps its build time
+    if isinstance(prior.get('windows'), dict) and prior['windows'].get('open') is True and isinstance(payload.get('windows'), dict):
+        payload['windows']['open'] = True          # a corrected file stays the read of a campaign that was still running
     payload['corrected_at'] = _t.strftime('%Y-%m-%dT%H:%M:%SZ', _t.gmtime())
     s3.put_object(Bucket=bucket, Key=key, Body=_json.dumps(payload, indent=2).encode('utf-8'),
                   ContentType='application/json')

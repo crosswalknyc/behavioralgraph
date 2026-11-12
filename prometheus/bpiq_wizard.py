@@ -357,7 +357,8 @@ def pin_to_read(draft, user, history=None):
             return d
         if not _ba.given_to(anchor, _uname(user), history=history):
             return d
-        note = {'key': anchor.get('key'), 'value_usd': anchor.get('value_usd'), 'start': w.get('start'), 'end': w.get('end')}
+        note = {'key': anchor.get('key'), 'value_usd': anchor.get('value_usd'), 'start': w.get('start'), 'end': w.get('end'),
+                'as_of': str(anchor.get('as_of') or '')[:10]}
         if d.get('window_open') and str(w.get('end') or '') != str(d['campaign_end'])[:10]:
             d['campaign_end'] = str(w['end'])
             d['attr_start'], d['attr_end'] = str(w['start']), str(w['end'])
@@ -942,6 +943,9 @@ def _wants(text, body, history, store, user, thread_id):
             store = store_for(body)
         except Exception:
             store = None
+    # a deck asked of the valuation still running on this thread is answered here, in one line
+    if running_deck_answer(text, history, '', store, user, thread_id, None, body=body, chat=True)[0]:
+        return True
     draft = open_draft(body, history, store, user, thread_id)
     if draft is None:
         return False
@@ -2594,7 +2598,58 @@ def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
     return _payload(' '.join(bits) + '\n\n' + reply, chips, draft=d)
 
 
-def deck_gate(user, body, text, history, pick='', g=None):
+def running_deck_answer(text, history, pick, store, user, thread_id, g, body=None, chat=False):
+    """(hit, line) for a deck asked of the valuation this thread's last
+    Accept started and has not handed over yet: the one line that says
+    it is running and the deck comes with it (2026-11-11: the ask
+    walked the whole order again to reach "already running"). (None, '')
+    when the deck asked for is any other deck. With `chat` (a typed
+    turn, as opposed to the deck surface) the words must ask for a deck
+    before anything is looked up and an order already open on the
+    thread keeps the turn. A valuation that has just finished and whose
+    note has not reached the thread yet gets `finished_line` in chat;
+    the deck surface builds its deck from the saved file. Never raises."""
+    try:
+        from prometheus import bpiq_deck as _bd
+        if chat:
+            from prometheus import partnership_value as _pv
+            words = [str(text or '')]
+            if isinstance(body, dict) and str(body.get('_pm_order_words') or '').strip():
+                words.append(str(body.get('_pm_order_words')))
+            if not any(_pv.deck_ask(w) for w in words):
+                return None, ''
+            if _load_draft(store, user, thread_id or '', body, None):
+                return None, ''
+        marker = _run_marker(store, user, thread_id)
+        if not marker:
+            return None, ''
+        g = dict(g or {})
+        if g.get('_H') is None:        # the job's own record is read wherever this is asked from
+            try:
+                from .host import host as _host
+                g['_H'] = _host
+            except Exception:
+                pass
+        hit = _bd.running_valuation(history, text, pick, marker=marker, g=g)
+        if not hit and isinstance(body, dict) and str(body.get('_pm_order_words') or '').strip():
+            hit = _bd.running_valuation(history, str(body.get('_pm_order_words')), pick, marker=marker, g=g)
+        if not hit:
+            return None, ''
+        if chat and hit.get('done'):
+            # finished a moment ago and its note has not reached the thread: the note and the deck's
+            # link are on their way (the job's own line), so the turn says so and opens nothing. One
+            # that finished longer ago is the deck surface's to build from the saved file.
+            ago = hit.get('finished_seconds_ago')
+            if ago is None or ago > _bd.JUST_FINISHED_SECONDS:
+                return None, ''
+            return hit, _bd.finished_line(hit.get('subject'))
+        return hit, _bd.running_line(hit.get('subject'))
+    except Exception:
+        traceback.print_exc()
+        return None, ''
+
+
+def deck_gate(user, body, text, history, pick='', g=None, store=None):
     """The deck surface asks here first: a deck of a read that stated a
     partnership's dollar value (the words, or the subject picked for
     the deck) is the valuation order, never a deck built from the read
@@ -2615,9 +2670,24 @@ def deck_gate(user, body, text, history, pick='', g=None):
                     return again
         except Exception:
             traceback.print_exc()
+        uname = _uname(user)
+        # a deck of the valuation still running here: one line, no second order
+        try:
+            run, line = running_deck_answer(
+                text, history, pick, store if store is not None else store_for(body, g), uname or user,
+                str((body or {}).get('thread_id') or ''), g, body=body)
+            if run and run.get('done'):
+                from prometheus import bpiq_deck as _bd_run
+                again = _bd_run.start_reexport(user, run, g or {})
+                if again is not None:
+                    return again
+            elif run:
+                return {'reply': line, 'followups': [], 'success': False, 'guidance': True, 'error': line,
+                        'bpiq_running': True}
+        except Exception:
+            traceback.print_exc()
         if pv_kind(text, history, pick=pick, body=body) != 'deck':
             return None
-        uname = _uname(user)
         b = dict(body or {}, _pv_pick=str(pick or ''))
         hit = analyze_hook(text, b, history, user, {}, uname, g or {})
         if isinstance(hit, dict):
@@ -2708,6 +2778,14 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     if first is True:
         intent = True
     confirm = (body or {}).get('bpiq_confirm')
+    # A deck asked of the valuation this thread's last Accept started, with no
+    # new order open: it is running and the deck comes with it. One line; the
+    # order is never walked again (2026-11-11).
+    if not confirm:
+        _run, _line = running_deck_answer(t, history, str((body or {}).get('_pv_pick') or ''), store, uname or user,
+                                          thread_id, g, body=body, chat=True)
+        if _run:
+            return _payload(_line, [], draft=None, bpiq_collect=False, bpiq_job_id=_run.get('job_id'))
     # The widget's collect flag (bpiq_inputs) is page state and follows
     # the reader across threads; it never arms a thread on its own. A
     # thread is collecting when ITS draft is open: the store's copy, the

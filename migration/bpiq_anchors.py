@@ -557,7 +557,7 @@ def pin_window(inputs: dict, anchor: Optional[dict]) -> tuple:
         d["event_end"] = a1.isoformat()
         d["post_start"], d["post_end"] = a0.isoformat(), a1.isoformat()
         d["pinned_read"] = {"key": anchor.get("key"), "start": a0.isoformat(), "end": a1.isoformat(),
-                            "value_usd": anchor.get("value_usd")}
+                            "value_usd": anchor.get("value_usd"), "as_of": str(anchor.get("as_of") or "")[:10]}
         d.pop("window_open", None)
         return d, True
     except Exception:

@@ -346,7 +346,27 @@ def test_short_version():
         check(f"{label}: three to five lines: what we found, why it matters, what to do",
               3 <= len(labels) <= 5 and labels[0] == "WHAT WE FOUND" and labels[-1] == "WHAT TO DO", labels)
         check(f"{label}: its headline states the total",
-              any(B.fmt_money(doc["valuation"]["total_brand_value"]) in t and "delivered" in t for t in tl), tl[:6])
+              any(B.fmt_money(doc["valuation"]["total_brand_value"]) in t and ("delivered" in t or "so far" in t) for t in tl),
+              tl[:6])
+    # the opening line follows the window (2026-11-11): the value so far while the campaign runs or on
+    # the day the window ends; "delivered" for a window that closed before the valuation was made
+    import copy as _copy
+    doc = DECKS[0][1]
+    money = B.fmt_money(doc["valuation"]["total_brand_value"])
+    end = str((doc.get("post_period") or {}).get("end") or doc.get("end_date"))[:10]
+    for name, change, want in (
+            ("a closed past window", {"created_at": "2099-01-01T00:00:00Z", "windows": {}}, "delivered"),
+            ("a window that ends the day it was valued", {"created_at": end + "T18:00:00Z", "windows": {}}, "so far"),
+            ("a campaign the order said was still running", {"created_at": "2099-01-01T00:00:00Z", "windows": {"open": True}},
+             "so far")):
+        d = _copy.deepcopy(doc)
+        d.setdefault("diagnostics", {}).pop("post_window_clipped_to_today", None)
+        d.update(change)
+        with contextlib.redirect_stdout(io.StringIO()):
+            head = pages(B.build_presentation(d, category="FASHION"))[1]
+        line = next((t for t in head if money in t), "")
+        check(f"{name}: the opening line says '{want}'", want in line and len(line.split()) <= 12
+              and ("delivered" in line) != ("so far" in line), line)
 
 
 # ------------------------------------------------------------------ [6]
@@ -467,10 +487,10 @@ def test_campaign_pages_have_no_history():
         with contextlib.redirect_stdout(io.StringIO()):
             tp = page_named(pages(B.build_presentation(doc, category="FASHION")), f"Where people met {BRAND}")
         i = tp.index(OWN_PAGE)
-        check(f"deck, {label}: the campaign's page shows 0 before and New, never a before count",
-              tp[i + 1] == "0" and tp[i + 3] == "New" and "2,211" not in " ".join(tp), tp[i:i + 4])
-        check(f"deck, {label}: the page says what New means",
-              any("New marks a page that launched with the campaign" in t for t in tp))
+        check(f"deck, {label}: the campaign's page shows Not live before and New, never a before count or a 0",
+              tp[i + 1] == "Not live" and tp[i + 3] == "New" and "2,211" not in " ".join(tp) and "0" not in tp, tp[i:i + 4])
+        check(f"deck, {label}: the page says what Not live means",
+              any("Not live marks a page or account that did not exist before the launch." in t for t in tp))
 
 
 # ------------------------------------------------------------------ [9]
@@ -479,8 +499,15 @@ def test_labels_as_written():
     for label, _doc, _prs, pg, blob in DECKS:
         check(f"{label}: sentence-case buckets and day counts",
               "17 and under" not in blob.lower() or "17 and under" in blob, "")
-        bad = re.findall(r"\b\d+ Days\b|\b\d+ And\b|\bOr Older\b|\bOr More\b|\bNot To Say\b|\b[A-Z][a-z]+\.com\b", blob)
+        # (the earned-media channel is the brand's site by the name a reader knows, 'Fernhill.com and app',
+        # 2026-11-11; a page the valuation lists still prints as the valuation names it)
+        channel = f"{BRAND}.com and app"
+        bad = re.findall(r"\b\d+ Days\b|\b\d+ And\b|\bOr Older\b|\bOr More\b|\bNot To Say\b|\b[A-Z][a-z]+\.com\b",
+                         blob.replace(channel, ""))
         check(f"{label}: nothing re-capitalized ('51 Days', '17 And under', 'Gap.com')", not bad, bad[:5])
+        check(f"{label}: the brand's own site is a channel by the name a reader knows", channel in blob
+              and f"{BRAND} site and app" not in blob and "Direct (" not in blob and "Twitter" not in blob)
+        check(f"{label}: the reach page says what engaging means, once", blob.count(B.ENGAGING_MEANS) == 1)
         check(f"{label}: a touchpoint prints as the valuation names it", OWN_PAGE in blob and "fernhill.com homepage" in blob)
     check("bucket labels read in sentence case, names keep their capitals",
           B._bucket_label("17 and Under") == "17 and under" and B._bucket_label("65 or Older") == "65 or older"

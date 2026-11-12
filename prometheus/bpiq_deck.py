@@ -21,6 +21,9 @@ Every way now goes through the one builder:
   are about it), so "turn this into a deck" after a valuation is the
   valuation deck again, never a second deck from the chat's words.
 - `start_reexport(...)`: that deck, built again from the saved file.
+- `running_valuation(...)`: the valuation still running on a thread a
+  deck was asked of. The answer is one line (`running_line`): it is
+  running and the deck comes with it. No second order is walked.
 
 The tab's export (`migration/bpiq_deck_export.py`) already calls the
 same builder, so chat, the tab and a re-export are one deck.
@@ -245,6 +248,117 @@ def thread_valuation(history, text='', pick=''):
         return None
 
 
+# ------------------------------- a deck asked for while the valuation runs
+RUNNING_STATES = ('queued', 'running', 'researching', 'building', 'started')
+RUNNING_FRESH_SECONDS = 2 * 3600
+JUST_FINISHED_SECONDS = 10 * 60
+
+
+def running_line(subject=''):
+    """The whole answer to a deck asked for while its valuation runs."""
+    s = ' '.join(str(subject or '').split())
+    return (f"The {s} valuation is still running, and the deck comes with it when it finishes." if s
+            else "The valuation is still running, and the deck comes with it when it finishes.")
+
+
+def finished_line(subject=''):
+    """A deck asked for in the moment between the valuation finishing
+    and its note reaching the thread."""
+    s = ' '.join(str(subject or '').split())
+    return (f"The {s} valuation has just finished, and its deck is arriving in this thread now." if s
+            else "The valuation has just finished, and its deck is arriving in this thread now.")
+
+
+def _job_doc(job_id, g):
+    try:
+        s3, bucket = _s3_of(_cap(g, '_H'))
+        if s3 is None or not re.fullmatch(r"[0-9a-f]{12}", str(job_id or '')):
+            return None
+        prefix = _cap(g, '_PM_BPIQ_JOB_PREFIX', 'system/pm_bpiq_jobs/')
+        doc = json.loads(s3.get_object(Bucket=bucket, Key=f"{prefix}{job_id}.json")['Body'].read().decode('utf-8'))
+        return doc if isinstance(doc, dict) else None
+    except Exception:
+        return None
+
+
+def _age_seconds(stamp):
+    try:
+        from datetime import datetime, timezone
+        t = datetime.fromisoformat(str(stamp).replace('Z', '+00:00'))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - t).total_seconds()
+    except Exception:
+        return None
+
+
+def running_valuation(history, text='', pick='', *, marker=None, g=None):
+    """The valuation this thread's last Accept started, when a deck is
+    asked of it before it has been handed over: {'job_id', 'subject',
+    'done'} or None. `marker` is the run marker that Accept left (the
+    job id it owns and the pairing). 'done' is True when the job has
+    finished and its note has not reached the thread yet (the caller
+    builds the valuation deck from the saved file); otherwise the
+    valuation is still running and the answer is `running_line`.
+
+    None when the thread already holds the hand-over note for that job
+    (`thread_valuation` answers then), when the job failed, when the
+    words or the picked subject name something else, or when a read
+    landed after the Accept and the words do not name the valuation."""
+    try:
+        from prometheus import partnership_value as _pv
+        from prometheus import deck_pick as _dp
+        m = marker if isinstance(marker, dict) else {}
+        job_id = str(m.get('job_id') or '')
+        if not job_id:
+            return None
+        hist = list(history or [])
+        _i, note_turn = valuation_turn(hist)
+        if note_turn is not None and str(_meta(note_turn).get('bpiq_job_id')) == job_id:
+            return None
+        doc = _job_doc(job_id, g) or {}
+        status = str(doc.get('status') or '').strip().lower()
+        if status in ('error', 'failed', 'refunded', 'cancelled', 'canceled'):
+            return None
+        done = status == 'done' and bool(str(doc.get('s3_key') or '').strip())
+        if not done:
+            # "still running" is only said of a run that started recently: the job's record says so,
+            # or (no record to read) the Accept itself is the evidence. A run left in a running
+            # state for hours is not called running.
+            age = _age_seconds(m.get('started_at'))
+            if (status and status not in RUNNING_STATES) or age is None or age > RUNNING_FRESH_SECONDS:
+                return None
+        talent = ' '.join(str(m.get('talent') or '').split())
+        campaign = ' '.join(str(m.get('campaign') or '').split())
+        subject = ' '.join(str(doc.get('subject') or '').split()) or campaign or talent
+        pair = tuple(_dp.pair_parts(subject) or _dp.pair_parts(campaign) or ())
+        hit = {'job_id': job_id, 'subject': subject, 'done': done, 's3_key': str(doc.get('s3_key') or '')}
+        if done:
+            try:
+                hit['finished_seconds_ago'] = max(0.0, time.time() - float(doc.get('finished_at')))
+            except (TypeError, ValueError):
+                hit['finished_seconds_ago'] = None
+        p = ' '.join(str(pick or '').split())
+        if p:
+            return hit if pair and not _pv._names_other_subject(p, pair) else None
+        t = ' '.join(str(text or '').split())
+        if not t or not _pv.deck_ask(t) or (pair and _pv._names_other_subject(t, pair)):
+            return None
+        named = bool(_VALUATION_WORD_RX.search(t)) or (
+            len(pair) == 2 and all(_pv._fold(x) and _pv._fold(x) in _pv._fold(t) for x in pair))
+        if named:
+            return hit
+        # "turn this into a deck": the valuation, unless a read landed in the thread after the Accept
+        start = max((i for i, x in enumerate(hist) if _is_agent(x) and (
+            str(_meta(x).get('bpiq_job_id') or '') == job_id
+            or str(x.get('text') or '').startswith("It's running"))), default=-1)
+        later_read = any(_pv._is_read_turn(x) for x in hist[start + 1:]) if start >= 0 else False
+        return None if later_read else hit
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def _cap(g, name, default=None):
     try:
         v = (g or {}).get(name)
@@ -357,5 +471,6 @@ def start_reexport(user, hit, g, sync=False):
 
 
 __all__ = ['build', 'deliver', 'note', 'charge_line', 'turn_meta', 'status_fields', 'thread_valuation', 'valuation_turn',
+           'running_valuation', 'running_line', 'finished_line',
            'start_reexport', 'run_reexport', 'owned_file', 'deck_data', 'page_count', 'public', 'confirm_line', 'money',
            'LINK_LABEL', 'DECK_PREFIX']

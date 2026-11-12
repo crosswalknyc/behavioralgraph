@@ -663,6 +663,10 @@ def test_builder_never_raises():
             check(f"{label}: a deck comes back ({n} slides)", data[:2] == b"PK" and n >= 1)
             fname = suggested_filename(doc)
             check(f"{label}: a filename comes back", fname.endswith(".pptx") and " " not in fname, fname)
+            # one name wherever the deck is handed over (2026-11-11): what the file is, no working word, no date
+            check(f"{label}: the name says what the file is, with no date",
+                  fname.endswith("Brand_Partnership_Valuation.pptx") and "Analysis" not in fname
+                  and not re.search(r"\d{4}-\d{2}-\d{2}", fname), fname)
         except Exception as e:  # noqa: BLE001
             check(f"{label}: never raises", False, repr(e))
     try:
