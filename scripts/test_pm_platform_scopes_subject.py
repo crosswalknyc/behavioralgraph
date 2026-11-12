@@ -200,7 +200,21 @@ check("a subject the lane already holds that is not the platform is kept",
 for t in ('who uses YouTube', 'what do YouTube users buy most', 'the YouTube audience by age and gender'):
     b = C._pm_generation_base('', t, prefer_catalog=True)
     check(f"{t!r}: the YouTube profile is the base", bool(b) and b.get('s3_key') == YT_KEY and PS.for_read(t, [], b, il) is None)
+# the quote comes first on the analyze lane, from the pricing gate; it names the same subject the read will run on
+check("the quote names the subject on record, never the platform in its place", PS.quote_subject(ARMINE, [], 'YouTube', il) == YT_SUBJ)
+check("the same when the words gave the quote no subject at all", PS.quote_subject(ARMINE, [], '', il) == YT_SUBJ)
+check("a quote on another subject is left alone", PS.quote_subject(ARMINE, [], 'Mad Men Viewers', il) == 'Mad Men Viewers')
+check("a question about the platform itself is quoted on the platform",
+      PS.quote_subject('How many people watched YouTube in 2025?', [], 'YouTube', il) == 'YouTube')
+check("a service read that names two services keeps its service",
+      PS.quote_subject('Can you pull total hours by month for 2025 for the US for Prime Video and YouTube', [], 'Prime Video', il) == 'Prime Video')
+_pr = open(os.path.join(ROOT, 'prometheus', 'priced_read.py'), encoding='utf-8').read()
+check("the pricing gate asks once, after it has read the subject from the words and before it asks which audience",
+      0 < _pr.index("subject = platform_subject(words)") < _pr.index("fromlist=['quote_subject']).quote_subject(words, history, subject)")
+      < _pr.index("if _vb.view_base(_vc) and _vb.names_view(words, _vc):"))
+
 use(index(('youtube', 'YouTube', [E_PLAT]), ('mad_men_viewers', 'Mad Men Viewers', [E_OTHER])))
+check("with nothing on record the quote keeps the platform", PS.quote_subject(ARMINE, [], 'YouTube', il) == 'YouTube')
 check("nothing on record and no thread: the base stands", PS.for_read(ARMINE, [], base, il) is None)
 check("a chip that chose the YouTube profile keeps it when nothing is on record", PS.for_read(ARMINE, [], base, il, bind_subject='YouTube') is None)
 check("a base that is not a platform is never touched",

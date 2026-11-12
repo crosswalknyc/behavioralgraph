@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read', 'apply_to_read']
+__all__ = ['PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read', 'apply_to_read', 'quote_subject']
 
 # canonical name -> the ways it is written
 PLATFORMS = {
@@ -364,3 +364,20 @@ def apply_to_read(text, history, ledger, base, digest_block, subj_hint, bind_sub
         return None, '', hit['subject'], hit['subject'], (bind_cohort or hit['cohort']), sw
     except Exception:
         return same
+
+
+def quote_subject(text, history, subject, ledger=None):
+    """The subject a quote names. When the words would put the quote on a
+    platform's bare name (or on nothing) and the ledger holds the subject
+    the words name, scoped to that platform, the quote names that
+    subject; otherwise the subject it was given, unchanged. Never raises."""
+    try:
+        s = str(subject or '').strip()
+        if s and not canon(s.split(' - ')[0]):
+            return subject
+        if ledger is None:
+            import insights_ledger as ledger
+        hit = for_read(text, history, None, ledger, '', s)
+        return hit['subject'] if hit else subject
+    except Exception:
+        return subject

@@ -1825,6 +1825,7 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
             # service; the words name it even when no reading rode in
             # (Cara Dorfman 2026-11-10)
             subject = platform_subject(words)
+        subject = __import__('prometheus.platform_scope', fromlist=['quote_subject']).quote_subject(words, history, subject)   # a platform the words add scopes the subject on record; the quote never names the platform in its place (2026-11-11, Armine)
     if not subject:
         try:
             # The open product's own view ("this campaign", its title) is the
