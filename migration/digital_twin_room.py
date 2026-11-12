@@ -4123,6 +4123,24 @@ def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optio
         return False
 
 
+# Job ids whose record ask_room put on the twin before it started the room's thread. The route that asked used to save the
+# twin again after ask_room returned, from the same objects the thread was by then writing to. A room that finished inside
+# that save (a fast model) had its landing overwritten by a copy taken part-way through, and the next session read showed
+# a finished record with no cost on its trail. The route now asks here first and saves only when the room did not.
+_SAVED_AT_START = set()
+_SAVED_GUARD = threading.Lock()
+
+
+def saved_at_start(job_id) -> bool:
+    """True, once, when ask_room already saved the twin for this job
+    (the id is forgotten on the way out, so the set never grows)."""
+    with _SAVED_GUARD:
+        if job_id and job_id in _SAVED_AT_START:
+            _SAVED_AT_START.discard(job_id)
+            return True
+    return False
+
+
 def _wait_for_record(s3, twin_key: str, session_id: str, qid: str, timeout: float = 6.0):
     """The route saves the twin right after ask_room returns; the thread
     waits for that save before its first in-place update."""
@@ -4147,6 +4165,12 @@ def _publish(ctx: dict, stage: str, status: str = 'running', extra: Optional[dic
     rec.setdefault('trail', {}).setdefault('stages', []).append({'stage': stage, 'at': _now(), 't': round(time.time() - ctx['t0'], 2)})
     s3 = ctx.get('s3')
     if s3 is not None:
+        # The session lands before the job document says so (2026-11-11). The page polls the job, and on 'done' it reads the
+        # session; with the job written first, that read could arrive between the two writes, take the finished record off
+        # the job document (which carries no trail) and save it over the room's own landing, losing the cost trail and the
+        # seats' carried memory. Written in this order, a job that reads done always has its session behind it.
+        if payload_too:
+            _update_payload(s3, ctx.get('twin_key') or '', ctx['session'].get('id'), rec, (ctx['session'].get('group') or {}).get('roster'), carry=_carry(ctx['session']))
         doc = {'job_id': ctx['job_id'], 'product': 'digital_twins_iq', 'op': 'panel_ask', 'user': ctx.get('asked_by') or '', 'status': status, 'stage': stage, 'stage_label': STAGE_LABEL.get(stage, stage),
                'twin_key': ctx.get('twin_key') or '', 's3_key': ctx.get('twin_key') or '', 'session_id': ctx['session'].get('id'), 'question_id': rec.get('id'), 'subject': ctx.get('subject') or '',
                'question': {k: v for k, v in rec.items() if k != 'trail'}, 'seats_answered': len(rec.get('answers') or []), 'seats': len(ctx['roster']),
@@ -4155,8 +4179,6 @@ def _publish(ctx: dict, stage: str, status: str = 'running', extra: Optional[dic
         if extra:
             doc.update(extra)
         _put_json(s3, job_key(ctx['job_id']), doc)
-        if payload_too:
-            _update_payload(s3, ctx.get('twin_key') or '', ctx['session'].get('id'), rec, (ctx['session'].get('group') or {}).get('roster'), carry=_carry(ctx['session']))
 
 
 def run_question(ctx: dict) -> dict:
@@ -4733,17 +4755,19 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
         return run_question(ctx)
     payload = twins_by_key.get(twin_key)
     if s3 is not None and isinstance(payload, dict) and any(s is session for s in all_sessions(payload)):
-        try:   # the record is on the twin before the thread starts; the route's own save is a harmless repeat
+        try:   # the record is on the twin before the thread starts, so the route has nothing left to save (saved_at_start)
             from migration import digital_twin_synthesis as SYN
             SYN.save_twin(s3, twin_key, payload)
             ctx['wait_for_save'] = False
+            with _SAVED_GUARD:
+                _SAVED_AT_START.add(job_id)
         except Exception as e:
             print(f"[twin-room] early save skipped: {e}")
     threading.Thread(target=run_question, args=(ctx,), daemon=True, name=f"twin-room-{job_id}").start()
     return rec
 
 
-__all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'media_desk', 'merge_media', 'talk_lines', 'coverage_lines',
+__all__ = ['ask_room', 'run_question', 'saved_at_start', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'media_desk', 'merge_media', 'talk_lines', 'coverage_lines',
            'match_targets', 'anchor_plan', 'anchor_rows', 'media_key', 'MEDIA_SYSTEM', 'RESEARCH_CLASS_GUIDANCE', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
            'allocate_seats', 'mirror_seats', 'retally', 'revoice_seat', 'headline_for', 'cohere_read', 'num_word', 'MIRROR_FLOOR_SEATS', 'MIRROR_SYSTEM',
            'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'short_read', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',

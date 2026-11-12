@@ -1237,6 +1237,33 @@ def _shape_rects(root) -> list:
     return rects
 
 
+def _run_weight(mod, rpr) -> str:
+    """The lint's weight key for one run (its face and its bold switch)."""
+    lat = rpr.find(f"{_A}latin") if rpr is not None else None
+    face = lat.get("typeface") if lat is not None else None
+    return mod._weight_key(face, rpr is not None and rpr.get("b") == "1")
+
+
+def _runs_widowed(mod, runs, width_in: float) -> bool:
+    """True when a paragraph ends on one word at any renderer scale, with
+    every run measured at its own weight, size and tracking (the lint's
+    own reading of a paragraph)."""
+    chars = []
+    for r in runs:
+        rpr = r.find(f"{_A}rPr")
+        t = r.find(f"{_A}t")
+        txt = (t.text or "") if t is not None else ""
+        sz = int(rpr.get("sz")) / 100 if rpr is not None and rpr.get("sz") else 18.0
+        tr = int(rpr.get("spc")) / 100 if rpr is not None and rpr.get("spc") else 0.0
+        wt = _run_weight(mod, rpr)
+        chars.extend((ch, wt, sz, tr) for ch in txt.replace("\v", " "))
+    for k in mod.WRAP_SCALES:
+        ls = mod._wrap(chars, float(width_in) * 72.0 * k)
+        if len(ls) >= 2 and len(ls[-1][0]) == 1:
+            return True
+    return False
+
+
 def fix_widows_in_pptx(path) -> dict:
     """Bind and fit every widowed paragraph in a saved deck, in place (the
     net under every builder). Returns counts: bound, widened, narrowed,
@@ -1293,6 +1320,14 @@ def fix_widows_in_pptx(path) -> dict:
                 face = lat.get("typeface") if lat is not None else None
                 bold = rp0 is not None and rp0.get("b") == "1"
                 if face == MONO_FAMILY:
+                    continue
+                # A paragraph set in more than one weight (a headline's bold
+                # claim and its light close) is read run by run, the way the
+                # lint reads it. Measured whole at the first run's weight, a
+                # bold opening made the line look wider than it sets, so a
+                # headline that wraps cleanly was bound and resized, and the
+                # lint then warned about the bound pair (2026-11-11).
+                if len({_run_weight(mod, rp) for rp in rprs}) > 1 and not _runs_widowed(mod, runs, width_in):
                     continue
                 algn = (p_.find(f"{_A}pPr").get("algn") if p_.find(f"{_A}pPr") is not None else None) or "l"
                 room = None

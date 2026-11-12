@@ -1361,7 +1361,16 @@ def dt_panel_ask(key, sid):
     # they arrive, then the finished record (read, options, voices) lands here on the session (2026-10-26).
     rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'), stimulus=stimulus,
                 voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key, ask_again=ask_again, usage_extras=_usage_extras(user))
-    DT.save_twin(_s3(), key, payload)
+    # A room that answers as a job put this record on the twin before its thread started, and that thread now owns the
+    # record. Saving again from here would write a copy taken while the room is working (2026-11-11); an answer that came
+    # back inline, or a room whose own save did not land, is saved here as before.
+    try:
+        from migration import digital_twin_room as _R
+        _landed = _R.saved_at_start(rec.get('job_id'))
+    except Exception:
+        _landed = False
+    if not _landed:
+        DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid'),
                     'question_cap': PR.question_cap(sess, _plan(user)), 'group_tier': PR.group_tier(sess, _plan(user)),
                     'job_id': rec.get('job_id'), 'stage': rec.get('stage')})

@@ -20,19 +20,23 @@ option and the route behind it:
       optional field
   [5] the output has no door, no em dash, no internal vocabulary, and
       the design pack's finish reports READY (fonts embedded, no lint
-      FAIL) when the pack is on this machine
+      FAIL, no plain-English flag) when the pack is on this machine
   [6] the cover photo (2026-10-29): a `/api/profile-image-file/<key>`
       image is read from the bucket (relative or on the dashboard's
-      origin) and lands on the cover, webp or AVIF converted to JPEG,
-      cropped to the slot, geometry unchanged; an http URL is fetched
-      with a browser User-Agent and a 404 or a refused connection lands
-      the plate; nothing ever raises; the route hands the sidecar's
-      image and the app's client to the builder
+      origin) and lands on the cover, webp or AVIF converted to JPEG.
+      Since 2026-11-11 it is the cover's background (cover-cropped to
+      the page, the scrim baked in), never a picture set beside a plate;
+      an http URL is fetched with a browser User-Agent and a 404 or a
+      refused connection lands the gradient ground; nothing ever raises;
+      the route hands the sidecar's image and the app's client to the
+      builder
   [7] layout (2026-10-29): the Jennifer Beals x Lululemon run put five
       collisions on the exported deck (cover subtitle under the DRAFT
       stamp, a 14-character total wrapping in its tile, the rate-sources
       note on the note below it, an eight-row AGE column on the source
-      line, two four-line methodology paragraphs on each other). Every
+      line, two four-line methodology paragraphs on each other). The
+      DRAFT stamp and the rate-sources note are gone since 2026-11-11
+      (scripts/test_bpiq_valuation_deck_clean.py holds that). Every
       block is now measured and fitted; `check_layout` proves on the
       finished presentation that no two text frames' rendered extents
       meet and no frame holds less than its text. The check itself is
@@ -443,6 +447,11 @@ def long_text_doc():
          "incremental_users_projected": 110782, "emv_per_user_rate": 9.0, "emv_value": 997038.0},
         {"platform": "Newsletter", "post_users_projected": 98021, "pre_users_projected": 61003,
          "incremental_users_projected": 37018, "emv_per_user_rate": 3.0, "emv_value": 111054.0}]
+    # the two added channels are in the earned media value and the total (a
+    # valuation's table always sums to its tile), and the talent's share follows
+    val["earned_media_value"] = round(val["earned_media_value"] + 997038.0 + 111054.0, 2)
+    val["total_brand_value"] = round(val["total_brand_value"] + 997038.0 + 111054.0, 2)
+    val["attributable_to_talent"] = round(val["total_brand_value"] * val["talent_share"], 2)
     doc["control_group"]["match"]["note"] = doc["control_group"]["match"]["note"] + filler
     doc["demographics"]["post"]["age"] = _demo(
         ("17 and Under", 1012, 1.6452), ("18-20", 2835, 4.6), ("21-24", 5000, 8.1334), ("25-29", 8252, 13.4143),
@@ -481,11 +490,14 @@ def slide_texts(pptx_bytes):
     return len(prs.slides), "\n".join(out)
 
 
+PAGE_FAILED = "This page could not be drawn."     # bpiq_deck_builder.PAGE_FAILED_LINE
+
+
 def deck_is_clean(label, pptx_bytes, min_slides=10):
     n, blob = slide_texts(pptx_bytes)
     low = blob.lower()
     check(f"{label}: a real deck ({n} slides)", n >= min_slides, n)
-    check(f"{label}: no slide fell back to the failure note", "Slide build failed" not in blob)
+    check(f"{label}: no slide fell back to the failure note", "Slide build failed" not in blob and PAGE_FAILED not in blob)
     check(f"{label}: no em dash or en dash", "\u2014" not in blob and "\u2013" not in blob)
     check(f"{label}: no door", not re.search(r"\bdoors?\b", low))
     hits = [w for w in BANNED if re.search(r"\b" + w + r"\b", low)]
@@ -687,6 +699,10 @@ def test_finish_ready(decks):
         check(f"{label}: the status is the truth (READY only with fonts, lint and plain-English all clean)",
               rep.ready == clean and ("NOT READY" in rep.summary) == (not rep.ready)
               and (rep.copy_ok or "flag(s) left)" in rep.summary), rep.summary)
+        # 2026-11-11: the valuation deck leaves the builder clean, so the finisher has
+        # nothing to report on any of these documents
+        check(f"{label}: READY, no lint FAIL, no plain-English flag", rep.ready and rep.copy_ok
+              and not rep.counts.get("lint_fail") and not rep.counts.get("readability_flags"), rep.summary)
 
 
 # ------------------------------------------------------------------ [6]
@@ -722,14 +738,28 @@ def _photo_bytes(fmt):
 
 
 def _cover_photo(pptx_bytes):
-    """The hero picture on slide 1 (the 7.6in slot at 5.8in), decoded."""
+    """The cover's background image, decoded, with its part (None, None
+    when the cover has a flat ground). Since 2026-11-11 the photo is the
+    slide background: cover-cropped to the page with the scrim baked in."""
     from pptx import Presentation
     from PIL import Image
     prs = Presentation(io.BytesIO(pptx_bytes))
-    for sh in prs.slides[0].shapes:
-        if sh.shape_type == 13 and abs(sh.left / 914400 - 5.8) < 0.05:
-            return Image.open(io.BytesIO(sh.image.blob)).convert("RGB"), sh
-    return None, None
+    slide = prs.slides[0]
+    ns = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+          "a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+    blips = slide._element.xpath(".//p:bg//a:blip")
+    if not blips:
+        return None, None
+    rid = blips[0].get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed")
+    part = slide.part.related_part(rid)
+    return Image.open(io.BytesIO(part.blob)).convert("RGB"), part
+
+
+def _cover_pictures(pptx_bytes):
+    """Picture shapes on the cover, as (left in, width in)."""
+    from pptx import Presentation
+    prs = Presentation(io.BytesIO(pptx_bytes))
+    return [(sh.left / 914400, sh.width / 914400) for sh in prs.slides[0].shapes if sh.shape_type == 13]
 
 
 def _mean_rgb(im):
@@ -739,8 +769,10 @@ def _mean_rgb(im):
 
 
 def _is_photo(im):
+    """The flat orange test photo under its Graphite scrim still reads
+    warm (red well above blue); the pack's Graphite wash reads cool."""
     m = _mean_rgb(im)
-    return all(abs(m[i] - PHOTO_RGB[i]) < 30 for i in range(3))
+    return m[0] - m[2] > 12
 
 
 def test_cover_photo():
@@ -751,7 +783,6 @@ def test_cover_photo():
         print("  skip  this Pillow cannot write webp; the cover photo checks use PNG instead")
         webp = _photo_bytes("PNG")
     doc = new_shape_doc()
-    slot = (7.6 / 7.5)
 
     # 1. the admin upload path: relative proxy path, read from the bucket
     s3 = FakeS3({PHOTO_KEY: webp})
@@ -759,15 +790,14 @@ def test_cover_photo():
     im, pic = _cover_photo(data)
     check("proxy path: the bucket is read for the bare key", s3.asked == [("dashboard-inputs", PHOTO_KEY)], s3.asked)
     check("proxy path: the photo lands on the cover", im is not None and _is_photo(im), im and _mean_rgb(im))
-    check("proxy path: a webp arrives as a JPEG python-pptx places",
-          pic is not None and pic.image.content_type == "image/jpeg", pic and pic.image.content_type)
-    check("proxy path: cropped to the cover slot's aspect",
-          im is not None and abs(im.width / im.height - slot) < 0.02, im and im.size)
-    check("proxy path: the slot geometry is unchanged (5.8in, 7.6 x 7.5)",
-          pic is not None and abs(pic.width / 914400 - 7.6) < 0.01 and abs(pic.height / 914400 - 7.5) < 0.01
-          and pic.top == 0)
+    check("proxy path: a webp arrives as a JPEG",
+          pic is not None and pic.content_type == "image/jpeg", pic and pic.content_type)
+    check("proxy path: cover-cropped to the page (16:9), at full resolution",
+          im is not None and abs(im.width / im.height - 16 / 9) < 0.01 and im.width >= 3800, im and im.size)
+    check("proxy path: the photo is the page background; the only picture on the cover is the logo",
+          len(_cover_pictures(data)) == 1 and _cover_pictures(data)[0][1] < 3.0, _cover_pictures(data))
     n, blob = slide_texts(data)
-    check("proxy path: the rest of the deck is untouched", n >= 12 and "Slide build failed" not in blob)
+    check("proxy path: the rest of the deck is untouched", n >= 12 and PAGE_FAILED not in blob)
 
     # 2. the same path written as an absolute URL on the dashboard's origin
     s3b = FakeS3({PHOTO_KEY: webp})
@@ -777,11 +807,11 @@ def test_cover_photo():
     check("absolute proxy URL: read from the bucket, photo on the cover",
           s3b.asked == [("dashboard-inputs", PHOTO_KEY)] and im is not None and _is_photo(im))
 
-    # 3. the bucket has no such object: the plate, never a raise
+    # 3. the bucket has no such object: the gradient ground, never a raise
     s3c = FakeS3({})
     data = B.build_deck(doc, image_url="/api/profile-image-file/brand-partnership-iq-images/missing.webp", s3_client=s3c)
     im, _ = _cover_photo(data)
-    check("missing object: the plate stands in", im is not None and not _is_photo(im))
+    check("missing object: the gradient ground stands in", im is not None and not _is_photo(im))
 
     # 4. http URLs: a 404 lands the plate; a 200 webp converts; a browser User-Agent is sent
     calls = []
@@ -804,14 +834,14 @@ def test_cover_photo():
     try:
         data = B.build_deck(doc, image_url="https://example.com/press/gone.jpg", s3_client=s3h)
         im, _ = _cover_photo(data)
-        check("http 404: the plate stands in", im is not None and not _is_photo(im))
+        check("http 404: the gradient ground stands in", im is not None and not _is_photo(im))
         data = B.build_deck(doc, image_url="https://example.com/press/photo.webp", s3_client=s3h)
         im, pic = _cover_photo(data)
         check("http 200 webp: the photo lands, converted to JPEG",
-              im is not None and _is_photo(im) and pic.image.content_type == "image/jpeg")
+              im is not None and _is_photo(im) and pic.content_type == "image/jpeg")
         data = B.build_deck(doc, image_url="https://example.com/press/refused.png", s3_client=s3h)
         im, _ = _cover_photo(data)
-        check("http connection failure: the plate stands in, no raise", im is not None and not _is_photo(im))
+        check("http connection failure: the gradient ground stands in, no raise", im is not None and not _is_photo(im))
         uas = [h.get("User-Agent", "") for _u, h in calls]
         check("http fetches carry a browser User-Agent",
               len(uas) == 3 and all(ua.startswith("Mozilla/5.0") for ua in uas), uas[:1])
@@ -832,11 +862,11 @@ def test_cover_photo():
         im, _ = _cover_photo(data)
         check("avif inside a .jpg: the photo lands on the cover", im is not None and _is_photo(im), im and _mean_rgb(im))
 
-    # 6. bytes no decoder reads: the plate, never a raise
+    # 6. bytes no decoder reads: the gradient ground, never a raise
     s3e = FakeS3({PHOTO_KEY: b"not an image at all, just text" * 20})
     data = B.build_deck(doc, image_url="/api/profile-image-file/" + PHOTO_KEY, s3_client=s3e)
     im, _ = _cover_photo(data)
-    check("undecodable bytes: the plate stands in", im is not None and not _is_photo(im))
+    check("undecodable bytes: the gradient ground stands in", im is not None and not _is_photo(im))
 
     # 7. the route hands the sidecar's image_url and the app's client to the builder
     try:
@@ -930,22 +960,28 @@ def test_layout_fits():
         issues = B.check_layout(prs)
         check(f"{label}: zero layout findings on {len(prs.slides)} slides", not issues, issues[:3])
         n, blob = slide_texts(data)
-        check(f"{label}: no slide fell back to the failure note", "Slide build failed" not in blob)
+        check(f"{label}: no slide fell back to the failure note", PAGE_FAILED not in blob)
         out[label] = (data, n)
     _n, blob = slide_texts(out["Beals x Lululemon"][0])
-    for fig in ("$33,409,966.88", "$22,319,522.50", "$5,074,590", "$2,882,985", "$3,132,869.38",
+    for fig in ("$33,409,966.88", "$22,319,522.50", "$5,074,590.00", "$2,882,985.00", "$3,132,869.38",
                 "3,593,822", "$6,949,273.11", "$4,145,261.43"):
         check(f"Beals x Lululemon: {fig} is on the deck", fig in blob)
-    check("Beals x Lululemon: the rate-sources note names every platform with a rate",
-          all(p in blob for p in ("Instagram $11.00", "Launch event $5.00", "Twitch $15.00")))
+    # 2026-11-11: every channel with value is a row of the table, with our rate and
+    # no name behind it (the rate-sources note named outside publications)
+    check("Beals x Lululemon: every channel that was priced is a row of the earned-media table",
+          all(p in blob for p in ("Instagram", "Launch event", "Twitch", "LinkedIn", "Press"))
+          and "Rates and sources" not in blob and "All platform rates" not in blob)
     low = blob.lower()
     check("Beals x Lululemon: the eight AGE buckets are all on the deck",
           all(b in low for b in ("17 and under", "65 or older", "other", "18-24", "55-64")))
     _n, blob = slide_texts(out["long text"][0])
     check("long text: the total and the talent's share survive the fit",
-          "$33,409,966.88" in blob and "$6,949,273.11" in blob)
-    check("long text: a shortened account still opens with its first sentence",
-          "About 19,873 pieces sold in the US" in blob and "The collection ran $70 to $280 a piece." in blob)
+          "$34,518,058.88" in blob and "$7,179,756.25" in blob)
+    # the campaign's account is written from the valuation's own fields (exact figures), and
+    # a filler sentence past thirty words never prints
+    check("long text: the campaign's account keeps its facts and drops the filler",
+          "19,873 pieces sold in the US across 13,267 orders." in blob
+          and "Pieces in the collection ran $70 to $280." in blob and "long-lead titles" not in blob)
     check("long text: every one of the ten AGE buckets is on the deck",
           all(b in blob.lower() for b in ("18-20", "21-24", "25-29", "30-34", "65 to 74 years old",
                                           "75 or older, including retirees")))

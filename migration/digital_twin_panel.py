@@ -838,13 +838,8 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
     for r in roster:
         base = r['name']
         bank = _NAMES_F if r['gender'] == 'F' else (_NAMES_X if r['gender'] == 'X' else _NAMES_M)
-        k = 0
-        while r['name'] in seen:
-            k += 1
-            if k < len(bank):
-                r['name'] = bank[(bank.index(base) + k * 7) % len(bank)]
-            else:   # the bank is spent in a big room: a last initial keeps the seat distinct
-                r['name'] = f"{base} {chr(ord('A') + (k - len(bank)) % 26)}."
+        if r['name'] in seen:
+            r['name'] = _free_name(base, bank, seen)
         seen.add(r['name'])
     spread_seat_people(roster, segs, seed)
     from migration.digital_twin_sizing import sizing_line
@@ -854,6 +849,30 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
     return annotate_seat_stands_for({'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
                                      'size_people': total_people, 'twin_people': int(sizing.get('twin_people') or 0), 'sizing': sizing,
                                      'in_room': in_room, 'roster': roster})
+
+
+def _free_name(base: str, bank: tuple, seen: set) -> str:
+    """A name for a seat whose drawn name is taken. The stride of seven
+    comes first (the names it lands on are the ones rooms have always
+    been given); the rest of the bank follows in order from the drawn
+    name, so a last initial is used only when every name in the bank is
+    seated. Until 2026-11-11 only the stride was walked: seven divides
+    the 28 names of a bank, so it reached four of them and a room of
+    twelve could seat 'Nora A.' with twenty names unused. Which rooms
+    did depended on the session id, so the same check passed or failed
+    from run to run."""
+    at = bank.index(base) if base in bank else 0
+    walk = [bank[(at + k * 7) % len(bank)] for k in range(1, len(bank))]
+    walk += [bank[(at + k) % len(bank)] for k in range(1, len(bank))]
+    for name in walk:
+        if name not in seen:
+            return name
+    k = 0
+    while True:   # the bank is spent in a big room: a last initial keeps the seat distinct
+        name = f"{base} {chr(ord('A') + k % 26)}." if k < 26 else f"{base} {chr(ord('A') + k % 26)}{k // 26}."
+        if name not in seen:
+            return name
+        k += 1
 
 
 def spread_seat_people(roster: list, segments: list, seed: str = '') -> None:

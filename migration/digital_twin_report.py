@@ -70,7 +70,34 @@ def _clean(text: str) -> str:
         pass
     for w in BANNED_WORDS:
         s = re.sub(re.escape(w), 'the room', s, flags=re.I) if w not in ('screen engine', 'nrg', 'marketcast', 'fishdog') else re.sub(re.escape(w), 'the market', s, flags=re.I)
-    return ' '.join(s.split())
+    return _open_cap(' '.join(s.split()))
+
+
+_OPEN_LOWER = re.compile(r"^([\"'(\[]?)([a-z])")
+
+
+def _open_cap(text: str) -> str:
+    """A line of report copy opens on a capital: a table cell built from a
+    lower-case phrase ('feature screening norm 50%'), a question typed in
+    lower case. The report sets this itself. Until 2026-11-11 the capital
+    was a side effect of the door scrub, which raised the first letter of
+    every string it was handed; that scrub now returns a string with no
+    door in it byte for byte (it had been turning '25 to 34' into '25 To
+    34' on decks), and these cells came back lower case.
+
+    Only the opening letter is raised, and only when the line opens on a
+    plain lower-case word. Left as written: a line that opens on a figure
+    ('12 of 14 seats'), an address or a handle ('gap.com', '@gap'), and a
+    name that is spelled with a lower-case first letter ('iPhone')."""
+    s = str(text or '')
+    m = _OPEN_LOWER.match(s)
+    if not m:
+        return s
+    first = s[m.start(2):].split(None, 1)[0] if s[m.start(2):].split() else ''
+    if any(c.isupper() for c in first[1:]) or re.search(r"[.@/_:]\w", first) or first.startswith(('http', 'www.')):
+        return s
+    i = m.start(2)
+    return s[:i] + s[i].upper() + s[i + 1:]
 
 
 def _head(session: dict) -> dict:

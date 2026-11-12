@@ -30248,8 +30248,11 @@ https://www.instagram.com/p/..."></textarea>
                                 <h3 style="margin: 0 0 0.35rem; font-size: 1.4rem; white-space: nowrap;">📈 Brand Lift Value</h3>
                                 <details class="bpiq-methodology">
                                     <summary class="bpiq-method-summary">How this is calculated</summary>
-                                    <div class="bpiq-method-body">
-                                        Values only the <strong>incremental consumers</strong> at a higher rate than BEV: the exposed group's gain in brand engagers minus the gain of a matched group of the same size with the same brand engagement before the partnership. These are the brand engagers who would not have engaged without the campaign.
+                                    <!-- The matched group is named only when one is part of the valuation
+                                         (2026-11-11). The note loads with the before and after wording; the
+                                         render sets the matched-group wording when control_group.enabled. -->
+                                    <div class="bpiq-method-body" id="bpiqBlvMethodBody">
+                                        Values only the <strong>new consumers</strong> at a higher rate than BEV: the people engaging with the brand in the campaign window beyond those who did in the days before it. A before and after read of the same audience.
                                     </div>
                                 </details>
                                 <div id="bpiqBlvBody" style="margin-top:auto; padding-top:0.75rem;"></div>
@@ -83512,6 +83515,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var cg = data.control_group || {};
             var gpRow = document.getElementById('bpiqGenPopKpiRow');
             if (gpRow) gpRow.style.display = cg.enabled ? 'block' : 'none';
+            // Brand Lift "How this is calculated" (2026-11-11): the note names the
+            // matched group only when one is part of the valuation. A valuation
+            // bought without a comparison group reads as a before and after.
+            var blvMethod = document.getElementById('bpiqBlvMethodBody');
+            if (blvMethod) {
+                blvMethod.innerHTML = cg.enabled
+                    ? 'Values only the <strong>incremental consumers</strong> at a higher rate than BEV: the exposed group\'s gain in brand engagers minus the gain of a matched group of the same size with the same brand engagement before the partnership. These are the brand engagers who would not have engaged without the campaign.'
+                    : 'Values only the <strong>new consumers</strong> at a higher rate than BEV: the people engaging with the brand in the campaign window beyond those who did in the days before it. A before and after read of the same audience.';
+            }
             // Matched comparison group (Jenna 2026-10-20): the two sizes and the two
             // pre-period rates side by side, in plain words. Older payloads without
             // the match block keep the note hidden.

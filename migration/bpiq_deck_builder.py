@@ -1,40 +1,62 @@
 """
-Brand Partnership IQ - Analysis Deck Builder
-============================================
+Brand Partnership IQ - Valuation Deck Builder
+=============================================
 
-Generates a high-design analysis deck (.pptx) from a single BPIQ result
-payload. Style direction:
+Generates the valuation deck (.pptx) from a single BPIQ result payload.
 
-  - Layout / typography / color: matched to the 2026 LISA Audience
-    Profile deck (16:9, dark forest + cream alternating sections, big
-    editorial typography, eyebrow + headline + stat-tile rhythm).
-  - Narrative voice / data framing: matched to the MIDG / CAA Eiza
-    Gonzalez deck - declarative dollar-impact headlines, pre vs post
-    stat comparisons, "Read As:" plain-English translations, and a
-    closing brand-by-brand wrap.
+The deck is a paid delivery, so it leaves this module ready to send
+(2026-11-11, Jenna: "these errors cannot happen. fix and ensure itll be
+correct going forward"). What that means here:
+
+  - Every page is drawn on the crosswalk-design grid with the pack's
+    chrome: the eyebrow and its dot, the real logo, a headline set as a
+    bold claim with a light close, the source line, the footer lockup
+    and the page number as a field. Corners are rounded, type comes from
+    the pack's scale, and the deck carries a pale Signal page and a pale
+    Orchid page.
+  - The short version is the second page: what we found, where the value
+    sits, what to do.
+  - Every page total is the sum of the parts printed on that page. Every
+    channel that was priced is in the earned-media table, and the table
+    sums to the earned media value. Valuation dollars print exact, with
+    cents.
+  - No test statistic (no z, no interval, no p-value, no significance
+    note), no outside name behind a rate, no word for how a figure was
+    made, no dashboard note. With a matched group bought, the lift is a
+    figure with a plain comparison. Without one, no page mentions one.
+  - A page the campaign created has no visits before it existed.
+  - The cover is the pairing in the product's own order and a plain
+    claim line. DRAFT prints only when the valuation says it is one
+    (`is_draft`).
 
 Usage:
 
     from migration.bpiq_deck_builder import build_deck
     pptx_bytes = build_deck(data, image_url=..., category=...)
 
-The single public entry point is `build_deck(...)`. All slide builders
-are private helpers and assume a fully-formed BPIQ result dict
-(matching the shape served by /api/brand-partnership-iq/results/...).
+The public entry points are `build_deck(...)` (bytes) and
+`build_deck_report(...)` (bytes and the finisher's report). The page
+builders are private helpers and take any BPIQ result dict (the shape
+served by /api/brand-partnership-iq/results/...): a missing, null or
+non-numeric field never raises.
+
+Not yet done: the pages are drawn here on the pack's grid rather than
+filled into the 27-layout template file (Crosswalk_Deck_Templates.pptx).
+The valuation's tables and calculators have row counts that change run
+to run and no template layout carries them. See the plan in the commit
+that introduced this note.
 """
 from __future__ import annotations
 
 import io
 import os
 import re
-import tempfile
-import textwrap
 import urllib.parse
 from dataclasses import dataclass
 from typing import Any, Optional
 
 import requests
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
@@ -43,25 +65,26 @@ from pptx.util import Emu, Inches, Pt
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Palette - lifted from the LISA deck.
-#
-#  We keep this list small on purpose: every slide picks one BG_* and
-#  the typography palette inherits from it. Accent colors are reserved
-#  for stat numerals and the +X% lift callouts.
+#  Palette - the ten colors of the crosswalk-design pack and nothing
+#  else (assets/tokens.json). Signal Green is the accent on dark and
+#  Signal Olive its twin on light; Orchid and Amethyst mark a value that
+#  fell. The older aliases (BG_DARK, FG_LIGHT ...) point at the same
+#  colors.
 # ─────────────────────────────────────────────────────────────────────
-BG_DARK   = RGBColor(0x0C, 0x16, 0x18)   # primary - dark forest
-BG_CREAM  = RGBColor(0xE9, 0xE8, 0xE1)   # secondary - warm cream
-BG_PINK   = RGBColor(0xE6, 0x82, 0xFF)   # accent insight slide
-BG_LAV    = RGBColor(0xB7, 0xB3, 0xD8)   # final-insight slide
-BG_WARM   = RGBColor(0xEA, 0xE8, 0xE2)   # variant cream
+GRAPHITE = RGBColor(0x0C, 0x16, 0x18)    # Graphite Teal: the dark page
+OFFWHITE = RGBColor(0xE9, 0xE8, 0xE1)    # Neutral Off-White: the light page
+SIGNAL   = RGBColor(0xC7, 0xF2, 0x3E)    # Signal Green: the accent on dark
+OLIVE    = RGBColor(0x5E, 0x7E, 0x12)    # Signal Olive: the accent on light
+ORCHID   = RGBColor(0xE6, 0x82, 0xFF)    # the second voice on dark
+AMETHYST = RGBColor(0x8E, 0x3F, 0xA8)    # and on light
 
-FG_LIGHT  = RGBColor(0xF4, 0xF1, 0xEA)   # on dark backgrounds
-FG_DARK   = RGBColor(0x0C, 0x16, 0x18)   # on cream backgrounds
-ACCENT    = RGBColor(0xC8, 0xE6, 0x00)   # Crosswalk green - hero callouts
-LIFT_UP   = RGBColor(0x10, 0xB9, 0x81)   # positive lift
-LIFT_DOWN = RGBColor(0xEF, 0x44, 0x44)   # negative lift
-MUTED_LT  = RGBColor(0x6B, 0x72, 0x80)   # muted text on cream
-MUTED_DK  = RGBColor(0x8F, 0x94, 0x8C)   # muted text on dark
+BG_DARK   = GRAPHITE
+BG_CREAM  = OFFWHITE
+FG_LIGHT  = OFFWHITE
+FG_DARK   = GRAPHITE
+ACCENT    = SIGNAL
+MUTED_LT  = RGBColor(0x5C, 0x65, 0x60)   # body text on Off-White
+MUTED_DK  = RGBColor(0x9A, 0xA0, 0x9B)   # body text on Graphite
 
 SLIDE_W = Inches(13.333)
 SLIDE_H = Inches(7.5)
@@ -96,16 +119,15 @@ FONT_NUMERIC = _house_face("Regular")
 #  Number / money formatting helpers
 # ─────────────────────────────────────────────────────────────────────
 def fmt_money(n: Any) -> str:
-    """Exact dollars, never $12K / $1.2M abbreviations (Jenna
-    2026-09-23: 'dont round on that page when making decks'). Cents
-    print only when they are real."""
+    """Exact dollars with cents, on every figure: $12,030.00, never $12K,
+    $12.0K or $1.2M (Jenna 2026-09-23: 'dont round on that page when
+    making decks'). Until 2026-11-11 cents printed only when they were
+    not zero, so one page read $604,875 beside $683,197.50."""
     try:
         n = float(n or 0)
     except (TypeError, ValueError):
-        return "$0"
-    if abs(n - round(n)) >= 0.005:
-        return f"${n:,.2f}"
-    return f"${round(n):,.0f}"
+        n = 0.0
+    return f"-${abs(n):,.2f}" if n < 0 else f"${n:,.2f}"
 
 
 def fmt_num(n: Any) -> str:
@@ -149,15 +171,6 @@ def fmt_pct(n: Any, decimals: int = 1) -> str:
     except (TypeError, ValueError):
         return "0%"
     return f"{n:.{decimals}f}%"
-
-
-def fmt_signed_pct(n: Any) -> str:
-    try:
-        n = float(n or 0)
-    except (TypeError, ValueError):
-        return "0%"
-    sign = "+" if n > 0 else ("" if n == 0 else "")
-    return f"{sign}{n:.1f}%"
 
 
 def safe_filename(s: str) -> str:
@@ -233,7 +246,7 @@ CAP_EM = 0.73             # cap height, in em (where the ink of a line starts)
 DESC_EM = 0.24            # descender depth, in em
 BODY_FLOOR = 10           # the pack: body copy is never below 10pt
 NOTE_FLOOR = 9            # footnotes and method notes run at 9pt
-CONTENT_BOTTOM = 7.05     # the page footer sits at 7.10in; content stops here
+CONTENT_BOTTOM = 6.32     # content stops 0.30in above the source line at 6.62in
 
 
 @dataclass
@@ -338,8 +351,10 @@ def _sentences(text: str) -> list:
 
 def _shorter(text: str) -> Optional[str]:
     """The text one unit shorter: without its last sentence; a one-sentence
-    list without its last clause (after a semicolon); otherwise without its
-    last words. None when the text is already down to a few words."""
+    list without its last clause (after a semicolon). None when the text
+    is down to one sentence with nothing to drop. A sentence is never cut
+    inside (until 2026-11-11 the last words came off and a period went
+    on: 'A look at the value she brought to The.')."""
     text = str(text or "").strip()
     sentences = _sentences(text)
     if len(sentences) > 1:
@@ -347,11 +362,7 @@ def _shorter(text: str) -> Optional[str]:
     if text.count(";") >= 1:
         head = text.rsplit(";", 1)[0].rstrip(" ,;")
         return head + "." if head and not head.endswith((".", "!", "?")) else head or None
-    words = text.rstrip(" .!?,;:").split()
-    if len(words) <= 4:
-        return None
-    keep = max(4, int(len(words) * 0.8))
-    return " ".join(words[:keep]).rstrip(" ,;:") + "."
+    return None
 
 
 def _fit_candidates(text: Any, size: float, *, floor: float, spacing: float, min_spacing: float):
@@ -470,84 +481,6 @@ def _break_long_token(text: Any, width_in: float, size: float, *, bold: bool = F
     return "\n".join(lines)
 
 
-def _last_line_words(text: Any, size_pt: float, width_in: float, *, bold: bool = False) -> int:
-    """Words on the last wrapped line of one paragraph, the fewest across
-    the pack's renderer scales (2 means no widow). 2 when the pack is
-    absent or the text is a single line."""
-    words = str(text or "").split()
-    if len(words) < 2:
-        return 2
-    pack = _design()
-    mod = pack.lint_module() if pack is not None else None
-    if mod is None:
-        return 2
-    try:
-        wt = mod._weight_key(FONT_DISPLAY, bold)
-        chars = [(ch, wt, float(size_pt), 0.0) for ch in str(text)]
-        counts = []
-        for k in mod.WRAP_SCALES:
-            lines = mod._wrap(chars, width_in * 72 * k)
-            counts.append(2 if len(lines) < 2 else len(lines[-1][0]))
-        return min(counts)
-    except Exception:
-        return 2
-
-
-def _fit_title(text: Any, sizes, width_in: float, max_h_in: float, *, spacing: float = 0.95) -> int:
-    """The largest size in `sizes` at which a title fits `max_h_in` and
-    ends on a line of at least two words, measured at the width
-    `_add_text` will give it. Falls back to the largest size that fits
-    the height, then to the smallest size."""
-    fits_height = None
-    for sz in sizes:
-        w = _box_width_for(text, sz, width_in, bold=True, font=FONT_DISPLAY)
-        if _measure(text, sz, w, bold=True, spacing=spacing).height_in > max_h_in:
-            continue
-        if fits_height is None:
-            fits_height = sz
-        if _last_line_words(text, sz, w, bold=True) >= 2:
-            return int(sz)
-    return int(fits_height if fits_height is not None else sizes[-1])
-
-
-def _add_headline(slide, text: Any, *, color: RGBColor, base: int = 40, floor: int = 30,
-                  top=None, width=None, max_lines: int = 2):
-    """A slide headline at the house position (0.6in, 1.0in, 11in wide):
-    the largest display size from `base` down (2pt steps) at which the
-    sentence holds `max_lines` lines, so a long figure or brand name
-    never pushes a third line into the content below."""
-    top = Inches(1.0) if top is None else top
-    width = Inches(11) if width is None else width
-    joined = " ".join(part.strip() for part in str(text or "").split("\n") if part.strip())
-    sizes = tuple(range(int(base), int(floor) - 1, -2)) or (int(floor),)
-    size = _fit_lines(joined, sizes, Emu(width).inches, bold=True, max_lines=max_lines)
-    return _add_text(slide, Inches(0.6), top, width, Inches(1.3), text,
-                     size=size, bold=True, color=color, spacing=0.95, font=FONT_DISPLAY)
-
-
-def _callout(slide, left, top, width, label: str, body: Any, *, height, max_height,
-             line: RGBColor, line_w: float, label_color: RGBColor, body_color: RGBColor,
-             body_size: float = 9, floor: float = NOTE_FLOOR, spacing: float = 1.35,
-             min_spacing: float = 1.15, pad: float = 0.2, body_top: float = 0.5):
-    """A WHY IT MATTERS card: an outlined box, a tracked label, a body.
-    The card is `height` tall when the body fits inside that, grows to
-    `max_height` when the body needs more, and the body steps down and
-    shortens when even that is not enough. Returns the card's bottom edge."""
-    width_in = Emu(width).inches
-    design_h, room_h = Emu(height).inches, Emu(max_height).inches
-    body_w = width_in - 2 * pad
-    sz, sp, t, m = _fit_body(body, body_w, max(0.1, room_h - body_top - pad), size=body_size,
-                             floor=floor, spacing=spacing, min_spacing=min_spacing)
-    body_h = m.height_in + 0.02
-    card_h = min(room_h, max(design_h, body_top + body_h + pad))
-    _add_rect(slide, left, top, width, Inches(card_h), fill=None, line=line, line_w=line_w)
-    _add_text(slide, left + Inches(pad), top + Inches(0.15), Inches(body_w), Inches(0.3),
-              label, size=9, bold=True, color=label_color, letter_spacing=0.18)
-    _add_text(slide, left + Inches(pad), top + Inches(body_top), Inches(body_w), Inches(body_h),
-              t, size=sz, color=body_color, spacing=sp)
-    return top + Inches(card_h)
-
-
 def _fit_stack(blocks: list, avail_in: float, gap_in: float, pad_in: float = 0.02) -> list:
     """Fit stacked text blocks into a shared vertical budget. Each block
     is a dict with text, width_in, size and optionally floor, spacing,
@@ -594,6 +527,36 @@ def _fit_stack(blocks: list, avail_in: float, gap_in: float, pad_in: float = 0.0
     return [(int(st[0]), st[1], st[2], measure(b, *st)) for b, st in zip(blocks, state)]
 
 
+def _para_widths(p, size: float, inner_w: float) -> Optional[list]:
+    """The wrapped line widths (inches) of a paragraph set in more than
+    one weight, each run measured at its own weight, at the renderer
+    scale that breaks the most lines. None for a single-weight paragraph
+    (the plain measure covers it) or when the pack is absent."""
+    runs = list(p.runs)
+    if len(runs) < 2:
+        return None
+    pack = _design()
+    mod = pack.lint_module() if pack is not None else None
+    if mod is None:
+        return None
+    try:
+        keys = [mod._weight_key(r.font.name, bool(r.font.bold)) for r in runs]
+        if len(set(keys)) < 2:
+            return None
+        chars = []
+        for r, wt in zip(runs, keys):
+            sz = float(r.font.size.pt) if r.font.size is not None else float(size)
+            chars.extend((ch, wt, sz, 0.0) for ch in r.text)
+        best = None
+        for k in mod.WRAP_SCALES:
+            lines = mod._wrap(chars, inner_w * 72 * k)
+            if best is None or len(lines) > len(best):
+                best = lines
+        return [w / 72.0 for _words, w in best] or None
+    except Exception:
+        return None
+
+
 def _frame_ink(shape):
     """The rendered extent of a text frame in inches, (x0, y0, x1, y1),
     with the text height and the box height. The box may be generous;
@@ -615,6 +578,12 @@ def _frame_ink(shape):
     for p in paras:
         run = p.runs[0] if p.runs else None
         size = float(run.font.size.pt) if run is not None and run.font.size is not None else 18.0
+        if run is None:
+            # a field (the page number) carries its size on the field, not on a run
+            for fld in p._p.iter("{http://schemas.openxmlformats.org/drawingml/2006/main}fld"):
+                rpr = fld.find("{http://schemas.openxmlformats.org/drawingml/2006/main}rPr")
+                if rpr is not None and rpr.get("sz"):
+                    size = int(rpr.get("sz")) / 100.0
         bold = bool(run.font.bold) if run is not None else False
         ls = p.line_spacing
         sp = float(ls) if isinstance(ls, (int, float)) else (float(ls.pt) / size if ls is not None else 1.0)
@@ -626,7 +595,7 @@ def _frame_ink(shape):
         if not p.text.strip():
             total_h += _line_h_in(size, sp)
             continue
-        widths = _wrap_widths(p.text, size, inner_w, bold=bold)
+        widths = _para_widths(p, size, inner_w) or _wrap_widths(p.text, size, inner_w, bold=bold)
         total_h += len(widths) * _line_h_in(size, sp)
         max_w = max(max_w, max(widths))
     if tf.vertical_anchor == MSO_ANCHOR.BOTTOM:
@@ -685,26 +654,31 @@ def check_layout(prs, *, tol: float = 0.03) -> list:
     return issues
 
 
-def _crop_to_fill(pic):
-    """Crop a placed picture to its slot's proportions instead of
-    stretching it (the design pack fails a stretched image)."""
-    try:
-        from PIL import Image
-        with Image.open(io.BytesIO(pic.image.blob)) as im:
-            nw, nh = im.size
-    except Exception:
-        return
-    if not (nw and nh and pic.width and pic.height):
-        return
-    native, placed = nw / nh, pic.width / pic.height
-    if abs(native - placed) / placed < 0.02:
-        return
-    if native > placed:          # too wide: trim the sides
-        keep = placed / native
-        pic.crop_left = pic.crop_right = (1 - keep) / 2
-    else:                        # too tall: trim top and bottom
-        keep = native / placed
-        pic.crop_top = pic.crop_bottom = (1 - keep) / 2
+def _weight_face(weight: Optional[str], bold: bool) -> tuple:
+    """(family name, bold flag) for a weight. Bold is a style of the
+    Regular family; every other weight is its own family (the design
+    pack: never switch bold on over a weight family)."""
+    w = str(weight or ("Bold" if bold else "Regular"))
+    if w == "Bold":
+        return _house_face("Regular"), True
+    if w == "Regular":
+        return _house_face("Regular"), False
+    return _house_face(w), False
+
+
+def _heavy(weight: Optional[str], bold: bool) -> bool:
+    """Measure this run with the bold metrics (the safe, wider read)."""
+    return bool(bold) or str(weight or "") in ("Bold", "SemiBold", "ExtraBold", "Black")
+
+
+def _set_tracking(run, pt: float) -> None:
+    """Letter spacing on a run, in points (the eyebrow runs at +2.6, the
+    footer at +2.0, a caps label at +1.0)."""
+    if pt:
+        try:
+            run._r.get_or_add_rPr().set("spc", str(int(round(float(pt) * 100))))
+        except Exception:
+            pass
 
 
 def _add_text(
@@ -716,7 +690,8 @@ def _add_text(
     bold: bool = False,
     italic: bool = False,
     color: RGBColor = FG_DARK,
-    font: str = FONT_BODY,
+    font: Optional[str] = None,
+    weight: Optional[str] = None,
     align: str = "left",
     anchor: str = "top",
     spacing: float = 1.05,
@@ -724,7 +699,12 @@ def _add_text(
 ):
     """Add a text box and return the shape. `text` may contain \\n
     for multi-paragraph blocks; each paragraph inherits the same run
-    style."""
+    style. `weight` names a face of the house family ('Light',
+    'SemiBold', 'Bold'); `letter_spacing` is tracking in points."""
+    face, is_bold = _weight_face(weight, bold)
+    if font and not weight:
+        face = font
+    heavy = _heavy(weight, bold)
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.word_wrap = True
@@ -756,10 +736,15 @@ def _add_text(
     # a sentence never ends on a lone word: the box is narrowed (never
     # widened) until the pack's own wrap model puts two words on the
     # last line. Dates and figures change per deck, so this is settled
-    # here, not in the copy.
-    safe_w = _box_width_for(text, size, Emu(width).inches, bold=bold, font=font,
+    # here, not in the copy. The edge the text is set against stays put.
+    safe_w = _box_width_for(text, size, Emu(width).inches, bold=heavy, font=face,
                             letter_spacing=letter_spacing)
     if safe_w < Emu(width).inches:
+        gap = Emu(width) - Inches(safe_w)
+        if align == "right":
+            box.left = Emu(box.left + gap)
+        elif align == "center":
+            box.left = Emu(box.left + gap // 2)
         box.width = Inches(safe_w)
     # the frame takes the height its text needs (2026-10-29): measured
     # with the pack's wrap model at the final width, the box grows (never
@@ -767,7 +752,7 @@ def _add_text(
     # so a frame never claims less room than its text and check_layout
     # can tell what the text would run into
     try:
-        need = Inches(round(_measure(text, size, Emu(box.width).inches, bold=bold,
+        need = Inches(round(_measure(text, size, Emu(box.width).inches, bold=heavy,
                                      spacing=spacing).height_in + 0.02, 3))
         if need > box.height:
             if anchor == "bottom":
@@ -786,21 +771,124 @@ def _add_text(
         p.line_spacing = spacing
         r = p.add_run()
         r.text = para_text
-        r.font.name = font
+        r.font.name = face
         r.font.size = Pt(size)
-        r.font.bold = bold
+        r.font.bold = is_bold
         # the house family ships upright faces only; italics never render
-        # as Crosswalk Inter, so an italic request sets a quiet weight instead
+        # as Crosswalk Inter, so an italic request is set upright
         r.font.italic = False
         r.font.color.rgb = color
+        _set_tracking(r, letter_spacing)
     return box
+
+
+def _runs_lines(runs, size: float, width_in: float) -> Optional[list]:
+    """How a paragraph set in more than one weight wraps at `width_in`,
+    by the pack's wrap model with each run measured at its own weight:
+    one list of lines per renderer scale. None when the pack is absent."""
+    pack = _design()
+    mod = pack.lint_module() if pack is not None else None
+    if mod is None:
+        return None
+    try:
+        chars = []
+        for text, weight, _color in runs:
+            face, is_bold = _weight_face(weight, False)
+            wt = mod._weight_key(face, is_bold)
+            chars.extend((ch, wt, float(size), 0.0) for ch in str(text))
+        return [mod._wrap(chars, width_in * 72 * k) for k in mod.WRAP_SCALES]
+    except Exception:
+        return None
+
+
+def _runs_fit(runs, size: float, width_in: float) -> tuple:
+    """(box width, line count) for a mixed-weight paragraph: the asked
+    width, narrowed in 0.05in steps (never below 70 percent) until no
+    renderer scale leaves one word alone on the last line. A headline
+    that ends on a long figure ('... is worth $421,610.00.') needs the
+    deeper step for the word before the figure to come down with it."""
+    def read(w):
+        got = _runs_lines(runs, size, w)
+        if got is None:
+            return None, False
+        lines = max(len(ls) for ls in got)
+        lone = any(len(ls) >= 2 and len(ls[-1][0]) == 1 for ls in got)
+        return lines, lone
+
+    lines, lone = read(width_in)
+    if lines is None:
+        joined = "".join(str(t) for t, _w, _c in runs)
+        w = _box_width_for(joined, size, width_in, bold=True, font=FONT_DISPLAY)
+        return w, _measure(joined, size, w, bold=True).lines
+    if not lone:
+        return width_in, lines
+    w = width_in
+    while w - 0.05 >= width_in * 0.7:
+        w = round(w - 0.05, 3)
+        n, still = read(w)
+        if not still and n <= max(lines, 2):
+            return w, n
+    return width_in, lines
+
+
+def _add_runs(slide, left, top, width, runs, *, size: float, spacing: float = 0.95,
+              anchor: str = "top", align: str = "left"):
+    """One paragraph set in more than one weight: a headline's bold claim
+    and its light context. `runs` is [(text, weight, color)]. Returns
+    (shape, line count, text height in inches)."""
+    joined = "".join(str(t) for t, _w, _c in runs)
+    try:
+        from migration.design_skill import scrub_door_metaphor
+        if scrub_door_metaphor(joined) != joined:
+            runs = [(scrub_door_metaphor(str(t)), w, c) for t, w, c in runs]
+            joined = "".join(str(t) for t, _w, _c in runs)
+    except Exception:
+        pass
+    width_in = Emu(width).inches
+    safe_w, n_lines = _runs_fit(runs, size, width_in)
+    m = TextMetrics(n_lines, safe_w, n_lines * _line_h_in(size, spacing))
+    box = slide.shapes.add_textbox(left, top, Inches(safe_w), Inches(round(m.height_in + 0.02, 3)))
+    if safe_w < width_in and align == "right":
+        box.left = Emu(box.left + (Emu(width) - Inches(safe_w)))
+    tf = box.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = Emu(0)
+    tf.margin_top = tf.margin_bottom = Emu(0)
+    tf.vertical_anchor = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE,
+                          "bottom": MSO_ANCHOR.BOTTOM}.get(anchor, MSO_ANCHOR.TOP)
+    p = tf.paragraphs[0]
+    p.alignment = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}.get(align, PP_ALIGN.LEFT)
+    p.line_spacing = spacing
+    for text, weight, color in runs:
+        if not str(text):
+            continue
+        face, is_bold = _weight_face(weight, False)
+        r = p.add_run()
+        r.text = str(text)
+        r.font.name = face
+        r.font.size = Pt(size)
+        r.font.bold = is_bold
+        r.font.italic = False
+        r.font.color.rgb = color
+    return box, m.lines, m.height_in
 
 
 def _add_rect(slide, left, top, width, height, *,
               fill: Optional[RGBColor] = None,
               line: Optional[RGBColor] = None,
-              line_w: Optional[float] = None):
-    rect = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, height)
+              line_w: Optional[float] = None,
+              radius: float = 0.14):
+    """A rounded panel (the design pack: every corner is rounded, cards at
+    0.14in). `radius=0` draws a square hairline, for rules only."""
+    w_in, h_in = Emu(width).inches, Emu(height).inches
+    rounded = radius > 0 and min(w_in, h_in) > 0.05
+    rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE if rounded else MSO_SHAPE.RECTANGLE,
+                                  left, top, width, height)
+    if rounded:
+        try:
+            rect.adjustments[0] = min(0.5, float(radius) / max(min(w_in, h_in), 0.01))
+        except Exception:
+            pass
     if fill is None:
         rect.fill.background()
     else:
@@ -813,104 +901,271 @@ def _add_rect(slide, left, top, width, height, *,
         if line_w is not None:
             rect.line.width = Pt(line_w)
     rect.shadow.inherit = False
+    _plain_shape(rect)
     return rect
 
 
-def _eyebrow(slide, left, top, text: str, *, on_dark: bool = True, width=Inches(10)):
-    """Tiny uppercase tracked eyebrow label - LISA's signature
-    'THE LISA AUDIENCE · FRAGRANCE' bar."""
-    return _add_text(
-        slide, left, top, width, Inches(0.3),
-        text.upper(),
-        size=10, bold=True,
-        color=(MUTED_DK if on_dark else MUTED_LT),
-        letter_spacing=0.18,
-    )
+def _plain_shape(shape) -> None:
+    """Take the theme style reference off a drawn shape. python-pptx adds
+    one to every autoshape (the theme's line, fill and effect), and some
+    renderers draw the theme's drop shadow from it even when the shape
+    switches its own effects off. A shape here is its fill and its line
+    and nothing else."""
+    try:
+        st = shape._element.find("{http://schemas.openxmlformats.org/presentationml/2006/main}style")
+        if st is not None:
+            shape._element.remove(st)
+    except Exception:
+        pass
 
 
-#: Small prepositions / articles / conjunctions that should NOT be
-#: capitalized inside a display name (e.g., "World of Coca-Cola",
-#: not "World Of Coca-Cola"). Fixes C12.
-_TITLE_LOWERCASE_TOKENS = {
-    "a", "an", "and", "as", "at", "but", "by", "for", "if", "in", "of",
-    "on", "or", "the", "to", "vs", "vs.", "via", "with",
-}
+# ─────────────────────────────────────────────────────────────────────
+#  The page (2026-11-11). Every page is drawn on the design pack's
+#  grid and carries its chrome in the same place: the eyebrow and its
+#  dot top left, the logo top right, the headline as a bold claim with
+#  a light close, the source line, the footer lockup and the page
+#  number as a field. The four surfaces are the pack's: Graphite,
+#  Off-White, and the pale Signal and Orchid gradients.
+# ─────────────────────────────────────────────────────────────────────
+M = 0.92                  # the content band's left edge
+RIGHT = 12.413            # and its right edge
+BAND = RIGHT - M          # 11.493in
+GUT = 0.28                # the gutter between columns
+COL2 = (BAND - GUT) / 2           # 5.607in
+COL3 = (BAND - 2 * GUT) / 3       # 3.644in
+TITLE_Y = 1.05
+SUB_Y = 1.846
+TOP_ONE = 2.33            # content top under a one-line subhead
+TOP_TWO = 2.75            # and under a two-line subhead
+TITLE_STEP = 0.53         # what a second headline line pushes down
+SRC_Y = 6.62
+FOOT_Y = 7.08
+FOOTER_LOCKUP = "CROSSWALK / BEHAVIORAL INTELLIGENCE ENGINE"
 
 
-def _touchpoint_display_name(name: str) -> str:
-    """Render a brand-property name for the touchpoint table. If the
-    source string already contains any uppercase letters, treat it as
-    author-cased and preserve it verbatim (payloads now provide
-    exact-case names). Otherwise apply a title-case that lowercases
-    small prepositions."""
-    if not name:
-        return ""
-    s = str(name).strip()
-    if any(c.isupper() for c in s):
-        return s
-    words = s.split()
-    out = []
-    for i, w in enumerate(words):
-        wl = w.lower()
-        if i > 0 and wl in _TITLE_LOWERCASE_TOKENS:
-            out.append(wl)
-        else:
-            # Capitalize each hyphen-separated segment so all-lowercase
-            # compound brand names title-case correctly
-            # ("coca-cola" -> "Coca-Cola", not "Coca-cola").
-            out.append("-".join(
-                seg[:1].upper() + seg[1:].lower() if seg else seg
-                for seg in w.split("-")))
-    return " ".join(out)
+def _rgb(hex6: str) -> RGBColor:
+    return RGBColor.from_string(str(hex6).lstrip("#").upper())
+
+
+@dataclass(frozen=True)
+class Surf:
+    """One page surface and the colors type takes on it."""
+    name: str
+    dark: bool
+    title: RGBColor
+    body: RGBColor
+    muted: RGBColor
+    footer: RGBColor
+    accent: RGBColor
+    negative: RGBColor
+    dot: RGBColor
+    card: RGBColor
+    card_title: RGBColor
+    card_body: RGBColor
+    card_label: RGBColor
+    card_accent: RGBColor
+    rule: RGBColor
+    logo: str
+
+
+S_DARK = Surf("dark", True, _rgb("E9E8E1"), _rgb("9AA09B"), _rgb("7C878A"), _rgb("7C878A"),
+              _rgb("C7F23E"), _rgb("E682FF"), _rgb("C7F23E"),
+              _rgb("15252A"), _rgb("E9E8E1"), _rgb("A8AFA9"), _rgb("9BAAAC"), _rgb("C7F23E"),
+              _rgb("27393D"), "white")
+S_LIGHT = Surf("light", False, _rgb("0C1618"), _rgb("5C6560"), _rgb("888C89"), _rgb("5C6466"),
+               _rgb("5E7E12"), _rgb("8E3FA8"), _rgb("5E7E12"),
+               _rgb("E1E0D7"), _rgb("0C1618"), _rgb("5C6560"), _rgb("5C6466"), _rgb("5E7E12"),
+               _rgb("C9C6BA"), "black")
+# the pale gradients: all type Graphite, cards Graphite with the dark card's type
+S_SIGNAL = Surf("signal", False, _rgb("0C1618"), _rgb("0C1618"), _rgb("0C1618"), _rgb("0C1618"),
+                _rgb("0C1618"), _rgb("8E3FA8"), _rgb("0C1618"),
+                _rgb("0C1618"), _rgb("E9E8E1"), _rgb("A8AFA9"), _rgb("9BAAAC"), _rgb("C7F23E"),
+                _rgb("0C1618"), "black")
+S_ORCHID = Surf("orchid", False, _rgb("0C1618"), _rgb("0C1618"), _rgb("0C1618"), _rgb("0C1618"),
+                _rgb("0C1618"), _rgb("8E3FA8"), _rgb("0C1618"),
+                _rgb("0C1618"), _rgb("E9E8E1"), _rgb("A8AFA9"), _rgb("9BAAAC"), _rgb("C7F23E"),
+                _rgb("0C1618"), "black")
 
 
 def _normalize_project_label(label: str) -> str:
-    """Normalize a project label for footer / display use. Replaces
-    em-dashes and en-dashes with commas so the footer never carries a
-    stray dash (Liz item 20)."""
+    """A project label for display: an em dash or an en dash becomes a
+    comma, so no page carries a stray dash (Liz item 20)."""
     if not label:
         return ""
     return (
         str(label)
-        .replace(" — ", ", ")
-        .replace(" – ", ", ")
-        .replace("—", ",")
-        .replace("–", ",")
+        .replace(" \u2014 ", ", ")
+        .replace(" \u2013 ", ", ")
+        .replace("\u2014", ",")
+        .replace("\u2013", ",")
     )
 
 
-def _page_footer(slide, idx: int, total: int, project_label: str, *, on_dark: bool = True):
-    """Bottom bar: project tag (left), CROSSWALK BehaviorGraph (center
-    bottom-left), and `idx / total` (right). Echoes LISA's footer."""
-    color = MUTED_DK if on_dark else MUTED_LT
-    _add_text(
-        slide, Inches(0.5), Inches(7.10), Inches(6), Inches(0.3),
-        _normalize_project_label(project_label).upper(),
-        size=8, color=color, letter_spacing=0.14, bold=True,
-    )
-    _add_text(
-        slide, Inches(11.0), Inches(7.10), Inches(1.85), Inches(0.3),
-        f"{idx:02d} / {total:02d}",
-        size=8, color=color, align="right", bold=True, letter_spacing=0.14,
-    )
+def _blank(prs):
+    """python-pptx ships several layouts; the 'blank' one (index 6) is the
+    cleanest base because there are no placeholder text boxes to fight."""
+    layout = prs.slide_layouts[6]
+    return prs.slides.add_slide(layout)
 
 
-def _crosswalk_mark(slide, left, top, *, on_dark: bool = True, size: float = 0.18):
-    """Inline 'CROSSWALK · BehaviorGraph' wordmark drawn as text. Uses
-    Pillow only when we need a bitmap stamp (cover slide); for inline
-    footers a text shape is faster and crisper at scale."""
-    color = FG_LIGHT if on_dark else FG_DARK
-    _add_text(
-        slide, left, top, Inches(4), Inches(0.3),
-        "CROSSWALK · BehaviorGraph",
-        size=size * 60,  # ~10-12pt depending on size arg
-        bold=True, color=color, letter_spacing=0.18,
-        font=FONT_DISPLAY,
-    )
+def _ground(slide, surf: Surf) -> None:
+    """The page ground, set as the slide background: a solid for Graphite
+    and Off-White, the pack's own gradient (built at full resolution) for
+    the two color pages. A gradient that cannot be built falls back to
+    the gradient's lead color, so the deck still carries its color page."""
+    if surf.name in ("signal", "orchid"):
+        pack = _design()
+        try:
+            data = pack.gradient_image_bytes(surf.name) if pack is not None else None
+            if data:
+                pack.set_slide_background_image(slide, data)
+                return
+        except Exception:
+            pass
+        _add_bg(slide, _rgb("C7F23E") if surf.name == "signal" else _rgb("E682FF"))
+        return
+    _add_bg(slide, GRAPHITE if surf.dark else OFFWHITE)
+
+
+def T(slide, x, y, w, h, text, **kw):
+    """`_add_text` in inches."""
+    return _add_text(slide, Inches(x), Inches(y), Inches(w), Inches(h), text, **kw)
+
+
+def BODY(slide, x, y, w, text, *, max_h, size, floor: float = BODY_FLOOR, **kw):
+    """`_add_body` in inches: a block that fits `max_h`. Returns
+    (shape, height in inches)."""
+    shape, h = _add_body(slide, Inches(x), Inches(y), Inches(w), text, max_height=Inches(max(0.2, max_h)),
+                         size=size, floor=floor, **kw)
+    return shape, Emu(h).inches
+
+
+def _card(slide, x, y, w, h, *, fill=None, line=None, line_w: float = 0.75, radius: float = 0.14):
+    return _add_rect(slide, Inches(x), Inches(y), Inches(w), Inches(h), fill=fill, line=line,
+                     line_w=line_w, radius=radius)
+
+
+def _rule(slide, x, y, w, color: RGBColor):
+    """A hairline."""
+    return _add_rect(slide, Inches(x), Inches(y), Inches(w), Inches(0.011), fill=color, radius=0)
+
+
+def _label(slide, x, y, w, text, color: RGBColor, *, size: float = 9.5, align: str = "left"):
+    """A caps label: SemiBold, tracked +1.0, one line."""
+    return T(slide, x, y, w, 0.2, str(text).upper(), size=size, weight="SemiBold", color=color,
+             letter_spacing=1.0, align=align)
+
+
+def _page_number(slide, x, y, w, h, color: RGBColor, *, size: float = 8, page: Optional[int] = None):
+    """The page number as a slide-number field (the design pack fails a
+    typed one): PowerPoint keeps it right when pages move."""
+    from lxml import etree
+    ns = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    box = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    tf = box.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = Emu(0)
+    para = tf.paragraphs[0]
+    para.alignment = PP_ALIGN.RIGHT
+    fld = etree.SubElement(para._p, ns + "fld")
+    fld.set("id", "{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}")
+    fld.set("type", "slidenum")
+    rpr = etree.SubElement(fld, ns + "rPr")
+    rpr.set("lang", "en-US")
+    rpr.set("sz", str(int(size * 100)))
+    rpr.set("b", "0")
+    rpr.set("spc", "200")
+    fill = etree.SubElement(rpr, ns + "solidFill")
+    etree.SubElement(fill, ns + "srgbClr").set("val", "%02X%02X%02X" % (color[0], color[1], color[2]))
+    for tag in ("latin", "ea", "cs"):
+        etree.SubElement(rpr, ns + tag).set("typeface", _house_face("Regular"))
+    etree.SubElement(fld, ns + "t").text = str(page) if page else "‹#›"
+    return box
+
+
+def _one_line(text: str, size: float, width_in: float, *, tracking: float = 0.0, bold: bool = False) -> str:
+    """A caps line held to one line: it gives up its last words until it
+    fits (the eyebrow sits on the dot's line; a second line would land
+    on the headline)."""
+    words = str(text or "").split()
+    while len(words) > 1:
+        t = " ".join(words)
+        need = _measure(t, size, 99.0, bold=bold).max_w_in + len(t) * tracking / 72.0
+        if need <= width_in:
+            break
+        words.pop()
+    return " ".join(words)
+
+
+def _chrome(slide, surf: Surf, idx: int, eyebrow: str, logo_path: Optional[str], *,
+            footer: str = FOOTER_LOCKUP, source: Optional[str] = None, page: Optional[int] = None):
+    """The parts of a page that never move: the eyebrow and its dot, the
+    logo, the source line, the footer lockup and the page number."""
+    dot = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(M), Inches(0.62), Inches(0.085), Inches(0.085))
+    dot.fill.solid()
+    dot.fill.fore_color.rgb = surf.dot
+    dot.line.fill.background()
+    dot.shadow.inherit = False
+    _plain_shape(dot)
+    label = _one_line(f"{idx:02d}  {str(eyebrow or '').upper()}", 10.5, 9.4, tracking=2.6)
+    T(slide, 1.129, 0.54, 9.6, 0.24, label, size=10.5, color=surf.body, letter_spacing=2.6, anchor="middle")
+    if logo_path:
+        try:
+            slide.shapes.add_picture(logo_path, Inches(RIGHT - 1.33), Inches(0.558), width=Inches(1.33))
+        except Exception:
+            pass
+    if source:
+        T(slide, M, SRC_Y, BAND, 0.26, _one_line(source, 9, BAND), size=9, color=surf.muted)
+    T(slide, M, FOOT_Y, 8.2, 0.22, footer, size=8, color=surf.footer, letter_spacing=2.0)
+    _page_number(slide, RIGHT - 2.2, FOOT_Y, 2.2, 0.22, surf.footer, page=page or idx)
+
+
+_TITLE_SIZES = (34, 32, 30, 28)
+
+
+def _pick_title(options) -> tuple:
+    """The first headline that holds: one sentence of twelve words or
+    fewer that fits two lines of the band at a title size. Each option is
+    (bold claim, light close). The last option is the plain fallback and
+    is taken when none of the others hold (a long partnership name)."""
+    opts = [o for o in options if o and (o[0] or o[1])]
+    for bold, light in opts:
+        text = f"{bold}{light}"
+        if len(text.split()) > 12:
+            continue
+        if _line_count(text, _TITLE_SIZES[-1], BAND, bold=True) <= 2:
+            return bold, light
+    return opts[-1] if opts else ("", "")
+
+
+def _head(slide, surf: Surf, idx: int, eyebrow: str, title, sub: Optional[str], logo_path: Optional[str], *,
+          source: Optional[str] = None, footer: str = FOOTER_LOCKUP) -> float:
+    """Chrome, headline and subhead. Returns the y the content starts at:
+    2.33in under a one-line subhead, 2.75in under two lines, and a
+    headline that wraps pushes both down by one title line."""
+    _chrome(slide, surf, idx, eyebrow, logo_path, footer=footer, source=source)
+    bold, light = title if isinstance(title, (tuple, list)) else (str(title or ""), "")
+    runs = [(bold, "Bold", surf.title), (light, "Light", surf.title)]
+    size = _TITLE_SIZES[-1]
+    for sz in _TITLE_SIZES:
+        if _runs_fit(runs, sz, BAND)[1] <= 2:
+            size = sz
+            break
+    _box, lines, _h = _add_runs(slide, Inches(M), Inches(TITLE_Y), Inches(BAND), runs, size=size)
+    shift = TITLE_STEP * (min(lines, 2) - 1) if lines > 1 else 0.0
+    if not sub:
+        return TOP_ONE + shift - 0.30
+    sub = str(sub)
+    sub_lines = _measure(sub, 16, BAND, spacing=1.15).lines
+    if sub_lines > 2:
+        _sz, _sp, sub, _m = _fit_body(sub, BAND, 2 * _line_h_in(16, 1.15) + 0.01, size=16, floor=16, spacing=1.15)
+        sub_lines = 2
+    T(slide, M, SUB_Y + shift, BAND, 0.3, sub, size=16, color=surf.body, spacing=1.15)
+    return (TOP_ONE if sub_lines <= 1 else TOP_TWO) + shift
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Image helpers - download + crop to slide-ready PNGs.
+#  Image helpers - the cover photo.
 # ─────────────────────────────────────────────────────────────────────
 _S3_BUCKET_NAME = "dashboard-inputs"
 _S3_REGION = "us-east-2"
@@ -951,7 +1206,8 @@ def _proxy_key(url: str) -> Optional[str]:
 
 
 def _image_bytes(url: str, s3_client=None) -> Optional[bytes]:
-    """The cover photo's bytes, or None (the caller then draws the plate).
+    """The cover photo's bytes, or None (the cover then takes the
+    gradient ground).
 
       1. `/api/profile-image-file/<key>` (the admin upload, the shape the
          Willow Smith, MMG, Jennifer Beals and Lainey Wilson runs carry):
@@ -1012,16 +1268,19 @@ def _open_image(data: bytes):
         return None
 
 
-def _download_image(url: str, max_dim: int = 2000,
-                    crop_aspect: Optional[float] = None,
-                    s3_client=None) -> Optional[str]:
-    """Resolve the cover photo (see `_image_bytes`) to a tmp JPEG. Pillow
-    decodes whatever the admin uploaded (webp, png, jpeg) and the save
-    is always JPEG, the format python-pptx places without a fuss.
-    Optional `crop_aspect` (w/h) center-crops the image to fit a target
-    slot - lets the cover slide place a fixed-aspect hero without
-    distortion. Returns path or None on any failure (deck-builder must
-    NEVER crash because of a bad photo URL)."""
+# Where the cover's type sits, in page fractions: the logo, the kicker,
+# the pairing and its claim on the left, and the three figures along the
+# bottom. The scrim is deepened until body type reads over each.
+_COVER_ZONES = ((0.06, 0.08, 0.70, 0.66), (0.06, 0.70, 0.94, 0.90))
+
+
+def _cover_photo_background(url: Optional[str], s3_client=None) -> Optional[bytes]:
+    """The cover photo as a page background, the house way: read from the
+    bucket or the web, decoded whatever the upload was (webp, png, AVIF),
+    cover-cropped to the page at 3840 x 2160 with the Graphite scrim
+    baked in and deepened until the type over it reads. None when there
+    is no photo, when it cannot be read, or when it is too light to
+    carry type; the cover then takes the gradient ground. Never raises."""
     if not url or not isinstance(url, str):
         return None
     try:
@@ -1037,111 +1296,28 @@ def _download_image(url: str, max_dim: int = 2000,
             ground = Image.new("RGBA", im.size, (0x0C, 0x16, 0x18, 255))
             im = Image.alpha_composite(ground, im)
         im = im.convert("RGB")
-        # Center-crop to target aspect first so any subsequent resize
-        # doesn't deform the subject.
-        if crop_aspect and crop_aspect > 0:
-            src_ar = im.width / im.height
-            if src_ar > crop_aspect:
-                # Source is wider than target → trim left/right
-                new_w = int(im.height * crop_aspect)
-                off = (im.width - new_w) // 2
-                im = im.crop((off, 0, off + new_w, im.height))
-            elif src_ar < crop_aspect:
-                # Source is taller than target → trim top/bottom
-                new_h = int(im.width / crop_aspect)
-                # Bias the crop slightly above center so faces don't
-                # lose their forehead - this is the classic editorial
-                # crop heuristic.
-                off = max(0, (im.height - new_h) // 3)
-                im = im.crop((0, off, im.width, off + new_h))
-        # Cap the long edge so we don't bloat the pptx unnecessarily.
-        if max(im.size) > max_dim:
-            ratio = max_dim / max(im.size)
-            im = im.resize((int(im.width * ratio), int(im.height * ratio)),
-                           Image.LANCZOS)
-        out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-        im.save(out.name, "JPEG", quality=88, optimize=True)
-        return out.name
-    except Exception:
+        if max(im.size) > 4200:
+            ratio = 4200 / max(im.size)
+            im = im.resize((int(im.width * ratio), int(im.height * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=92)
+        pack = _design()
+        if pack is None:
+            return None
+        zones = [z + ((0x9A, 0xA0, 0x9B),) for z in _COVER_ZONES]
+        baked, _alpha = pack.bake_photo_for_text(buf.getvalue(), zones, scrim_hex="#0C1618", alpha=0.62)
+        return baked or None
+    except Exception as exc:
+        print(f"[bpiq_deck_builder] cover photo not used: {exc}")
         return None
 
 
-def _generate_typographic_hero(text: str, palette: str = "dark") -> str:
-    """Fallback hero image - bold typographic block with the brand
-    name. Used when the partnership has no admin-uploaded photo so the
-    cover slide still has visual weight (mirrors LISA's typographic
-    insight slides)."""
-    w, h = 1600, 1000
-    if palette == "cream":
-        bg = (233, 232, 225)
-        fg = (12, 22, 24)
-    elif palette == "pink":
-        bg = (230, 130, 255)
-        fg = (12, 22, 24)
-    else:
-        bg = (12, 22, 24)
-        fg = (244, 241, 234)
-    im = Image.new("RGB", (w, h), bg)
-    d = ImageDraw.Draw(im)
-    # Try a few candidate fonts; fall back to Pillow's default if none
-    # are present (the test environment ships a couple of system fonts).
-    font_path_candidates = []
-    _ds = _design()
-    if _ds is not None:
-        try:
-            _fp = _ds.font_path("Bold")
-            if _fp:
-                font_path_candidates.append(str(_fp))
-        except Exception:
-            pass
-    font_path_candidates += [
-        "/System/Library/Fonts/HelveticaNeue.ttc",
-        "/System/Library/Fonts/Supplemental/Arial Black.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ]
-    font = None
-    for p in font_path_candidates:
-        if os.path.exists(p):
-            try:
-                font = ImageFont.truetype(p, 220)
-                break
-            except Exception:
-                pass
-    if font is None:
-        font = ImageFont.load_default()
-    txt = (text or "").upper()
-    bbox = d.textbbox((0, 0), txt, font=font)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    d.text(((w - tw) / 2, (h - th) / 2 - 40), txt, fill=fg, font=font)
-    # Soft vignette so the typographic plate doesn't read as flat.
-    overlay = Image.new("RGB", (w, h), bg)
-    mask = Image.new("L", (w, h), 0)
-    md = ImageDraw.Draw(mask)
-    md.ellipse((-200, -200, w + 200, h + 200), fill=0)
-    md.ellipse((100, 100, w - 100, h - 100), fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(120))
-    im = Image.composite(im, overlay, mask)
-    out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-    im.save(out.name, "JPEG", quality=88, optimize=True)
-    return out.name
-
-
-_BRAND_LOGO_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static"
-)
-_BRAND_LOGO_WHITE = os.path.join(_BRAND_LOGO_DIR, "crosswalk-logo-brand-white.png")
-_BRAND_LOGO_BLACK = os.path.join(_BRAND_LOGO_DIR, "crosswalk-logo-brand-black.png")
-
-
-def _render_crosswalk_logo_png(on_dark: bool = True) -> str:
-    """Return the path to the brand-provided Crosswalk wordmark PNG:
-    white variant for dark backgrounds, black variant for light. If
-    the shipped asset is missing (e.g. running outside the repo),
-    fall back to a Pillow-rendered wordmark so the deck still builds."""
-    # The real lockup from the design pack (2026-11-11): a transparent
-    # PNG. The older static file is an opaque plate, so on any ground but
-    # pure black the logo sat in a black box.
+def _render_crosswalk_logo_png(on_dark: bool = True) -> Optional[str]:
+    """The path to the Crosswalk lockup for a surface: white on dark,
+    black on light and on the pale gradients. The real file from the
+    design pack (a transparent PNG); the older static file stands in when
+    the pack is absent. None when neither is on the machine (the page
+    then carries no logo rather than a drawn one)."""
     _ds = _design()
     if _ds is not None:
         try:
@@ -1151,78 +1327,162 @@ def _render_crosswalk_logo_png(on_dark: bool = True) -> str:
         except Exception:
             pass
     target = _BRAND_LOGO_WHITE if on_dark else _BRAND_LOGO_BLACK
-    if os.path.exists(target):
-        return target
-    # Fallback: render a wordmark with Pillow. Kept as a safety net
-    # for environments that don't ship the static assets.
-    w, h = 760, 100
-    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    fg = (244, 241, 234, 255) if on_dark else (12, 22, 24, 255)
-    font_candidates = [
-        "/System/Library/Fonts/Supplemental/Arial Black.ttf",
-        "/System/Library/Fonts/HelveticaNeue.ttc",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ]
-    font = None
-    for p in font_candidates:
-        if os.path.exists(p):
-            try:
-                font = ImageFont.truetype(p, 64)
-                break
-            except Exception:
-                pass
-    if font is None:
-        font = ImageFont.load_default()
-    d.text((0, 8), "CROSSWALK", fill=fg, font=font)
-    out = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    im.save(out.name, "PNG", optimize=True)
-    return out.name
+    return target if os.path.exists(target) else None
+
+
+_BRAND_LOGO_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static"
+)
+_BRAND_LOGO_WHITE = os.path.join(_BRAND_LOGO_DIR, "crosswalk-logo-brand-white.png")
+_BRAND_LOGO_BLACK = os.path.join(_BRAND_LOGO_DIR, "crosswalk-logo-brand-black.png")
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Narrative helpers - derive headlines & "read as" sentences from the
-#  data. Pure functions, easy to extend / tune in isolation.
+#  What a reader never sees (2026-11-11, Jenna: "these errors cannot
+#  happen"). The valuation deck is a paid delivery. It carries no test
+#  statistic, no outside name behind a rate, no word for how a figure
+#  was made, and no dashboard note. Lines the valuation itself supplies
+#  (the campaign's account of the drop, a share's basis, a study note)
+#  pass through `_safe_prose`, which takes out any sentence that does.
 # ─────────────────────────────────────────────────────────────────────
+_OUTSIDE_NAMES = re.compile(
+    r"\b(hootsuite|sprout social|emarketer|iab\b|smi\b|nielsen|comscore|statista|pew\b|sensor tower|data\.ai|"
+    r"yougov|circana|bookscan|edison|luminate|similarweb|semrush|mri simmons|kantar|ipsos|gartner|forrester|"
+    r"marketing solutions|amazon ads|benchmark report|benchmarks? 20\d\d|ratecard|rate card|rate guide|"
+    r"ad rate|sources?:(?!\s*crosswalk)|according to)", re.I)
+_METHOD_WORDS = re.compile(
+    r"\b(panel|panels|panelists?|modeled|modelled|modeling|estimat(?:e|ed|es|ion)|synthetic|synth|calibrat\w+|anchored|"
+    r"z[- ]?score|p[- ]?value|confidence interval|statistical\w*|significan\w+|margin of error|holdout|"
+    r"difference[- ]in[- ]differences?|cohort weight|incidence|dashboard|editable)\b", re.I)
+_TEST_STATS = re.compile(r"(\bz\s*=|\bp\s*[<=]|95%\s*CI|\bCI\b|Δ)", re.I)
+
+
+def reader_blocked(text: Any) -> list:
+    """The words in `text` that a paid deck never carries: outside names,
+    method words, test statistics. Empty for clean copy. The regression
+    test runs this over every page of a finished deck."""
+    s = str(text or "")
+    return [m.group(0) for rx in (_OUTSIDE_NAMES, _METHOD_WORDS, _TEST_STATS) for m in rx.finditer(s)]
+
+
+def _safe_prose(text: Any, *, brand: str = "", talent: str = "") -> str:
+    """A line the valuation supplied, made safe to print: dashes out,
+    'the talent' and 'the brand' named, and any sentence that names an
+    outside source, a method or a test statistic taken out whole."""
+    s = str(text or "").replace("\u2014", ", ").replace("\u2013", " to ").replace(" - ", ", ")
+    s = " ".join(s.split())
+    if not s:
+        return ""
+    if talent:
+        s = re.sub(r"\bthe talent's\b", f"{talent}'s", s)
+        s = re.sub(r"\bthe talent\b", talent, s)
+    if brand:
+        s = re.sub(r"\bthe brand's\b", f"{brand}'s", s)
+    # a sentence past thirty words is not plain English; it goes too
+    kept = [x for x in _sentences(s) if not reader_blocked(x) and len(x.split()) <= 30]
+    return " ".join(kept).strip()
+
+
+def _basis_sentences(text: Any, *, brand: str, talent: str, has_control: bool) -> str:
+    """A share's stated basis ('68% of the exposure carried the talent;
+    those assets drew 22% more response ...') as plain sentences. The
+    clause about a comparison group goes when none was bought."""
+    t = _plain_basis(text, has_control)
+    parts = [c.strip().rstrip(".") for c in re.split(r";\s*", t) if c.strip()]
+    out = []
+    for c in parts:
+        # 'the matched group kept 95% of the lift' reads the wrong way round
+        c = re.sub(r"^the matched group kept (\d+(?:\.\d+)?)% of the lift$",
+                   r"\1% of the rise held up against the matched group", c, flags=re.I)
+        c = _safe_prose(c + ".", brand=brand, talent=talent)
+        if c:
+            out.append(c[:1].upper() + c[1:])
+    return " ".join(out)
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Narrative helpers - derive headlines and readings from the data.
+#  Pure functions, easy to extend / tune in isolation.
+# ─────────────────────────────────────────────────────────────────────
+NO_BRAND = "the brand"          # what the copy says when the valuation names no brand
+
+
 @dataclass
 class DeckCtx:
     """All the derived numbers the slide builders need, computed once
     so individual slides stay readable."""
     project:        str
     brand:          str
+    talent:         str
     category_label: str
     is_auto:        bool
-    cover_image:    Optional[str]
-    logo:           str
+    cover_bg:       Optional[bytes]
+    logo_white:     Optional[str]
+    logo_black:     Optional[str]
     total_value:    float
     emv:            float
     bev:            float
     blv:            float
     cv:             float
+    lenses:         list
+    emv_rows:       list
     incr_users:     int
-    target_size:    int
     audience_proj:  int
-    pre_users:      int
-    post_users:     int
     pre_users_proj: int
     post_users_proj:int
     pre_pen:        float
     post_pen:       float
     delta_pp:       float
     delta_rel:      float
-    incr_lift_pp:   float
-    incr_lift_rel:  float
-    campaign_window:str
-    attribution_d:  int
-    panel_size:     int
-    sample_pre:     int
-    sample_post:    int
+    c_pre_pen:      float
+    c_post_pen:     float
+    c_delta_pp:     float
+    lift_pp:        float
+    pre_days:       int
+    post_days:      int
+    pre_range:      str
+    post_range:     str
+    after_word:     str
+    before_word:    str
     has_conversions:bool
     has_yearly:     bool
+    has_control:    bool
+    draft:          bool
     sources_line:   str
     data:           dict
-    has_control:    bool = True
+
+    def logo(self, surf: Surf) -> Optional[str]:
+        return self.logo_white if surf.logo == "white" else self.logo_black
+
+    @property
+    def long_brand(self) -> bool:
+        """A name that running copy says as 'the brand': three words or
+        more, or no name at all (the placeholder)."""
+        return len(self.brand.split()) >= 3 or self.brand == NO_BRAND
+
+    @property
+    def b(self) -> str:
+        """The brand in running copy. A name of three words or more is
+        said in full on the cover and in a headline, and as 'the brand'
+        in the copy under it: a long name repeated down every page reads
+        as a stamp."""
+        return "the brand" if self.long_brand else self.brand
+
+    @property
+    def ba(self) -> str:
+        """The brand before a noun: 'Gap engagers', or 'brand engagers'
+        for a long name."""
+        return "brand" if self.long_brand else self.brand
+
+    def titles(self, options) -> tuple:
+        """`_pick_title`, without the options that carry a brand name of
+        five words or more (the name alone is then a phrase the reader
+        meets on every page)."""
+        opts = list(options)
+        if len(self.brand.split()) >= 5 or self.brand == NO_BRAND:
+            kept = [o for o in opts if self.brand not in f"{o[0]}{o[1]}"]
+            opts = kept or opts[-1:]
+        return _pick_title(opts)
 
 
 def _has_control(data: dict) -> bool:
@@ -1236,10 +1496,16 @@ def _has_control(data: dict) -> bool:
     return _count(cg.get("control_size")) > 0 or cg.get("incremental_lift_pp") is not None
 
 
-def _pre_days_phrase(data: dict) -> str:
-    """'the 51 days before the campaign' from the payload's pre window."""
-    days = _count(_dict(_dict(data).get("pre_period")).get("days"))
-    return f"the {days} days before the campaign" if days > 0 else "the days before the campaign"
+def is_draft(data: dict) -> bool:
+    """What puts DRAFT on the cover: the valuation itself says so, with
+    `"draft": true` or `"status": "draft"`. Nothing the product saves
+    today does, so a valuation a client paid for never carries the word
+    (2026-11-11: every cover was stamped DRAFT with the build date). An
+    operator preparing a read ahead of delivery sets the flag."""
+    d = _dict(data)
+    if d.get("draft") is True or str(d.get("status") or "").strip().lower() == "draft":
+        return True
+    return _dict(d.get("diagnostics")).get("draft") is True
 
 
 def _plain_basis(text: str, has_control: bool) -> str:
@@ -1253,21 +1519,196 @@ def _plain_basis(text: str, has_control: bool) -> str:
     return "; ".join(kept)
 
 
-def _adjusted_lift_rel(cg: dict) -> float:
-    """Matched lift (pp) as a share of the exposed group's pre-period
-    rate, in percent. Falls back to the payload's own relative figure
-    when the baseline is missing."""
-    cg = cg if isinstance(cg, dict) else {}
-    pp = _num(cg.get("incremental_lift_pp"))
-    pre = _num(cg.get("treat_pre_pen_pct"))
-    if pre > 0:
-        return round(pp / pre * 100.0, 1)
-    return _num(cg.get("incremental_lift_rel_pct"))
-
-
 def _dict(o: Any) -> dict:
     """A sub-document that may be missing, null, or the wrong type."""
     return o if isinstance(o, dict) else {}
+
+
+_MONTHS_SHORT = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+_MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August",
+                "September", "October", "November", "December"]
+
+
+def _ymd(iso: Any) -> Optional[tuple]:
+    try:
+        y, m, d = (int(x) for x in str(iso or "")[:10].split("-"))
+        if 1 <= m <= 12 and 1 <= d <= 31:
+            return y, m, d
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _fmt_date(iso: str, long: bool = False) -> str:
+    """YYYY-MM-DD as 'Sep 22, 2026' (or 'September 22, 2026'). The input
+    comes back unchanged when it is not a date."""
+    p = _ymd(iso)
+    if p is None:
+        return str(iso or "")
+    y, m, d = p
+    return f"{(_MONTHS_LONG if long else _MONTHS_SHORT)[m - 1]} {d}, {y}"
+
+
+def _fmt_range(start: Any, end: Any, long: bool = False) -> str:
+    """'Sep 22 to Nov 11, 2026'; the year prints twice only when the
+    range crosses one."""
+    a, b = _ymd(start), _ymd(end)
+    if a is None or b is None:
+        return " to ".join(x for x in (str(start or ""), str(end or "")) if x)
+    names = _MONTHS_LONG if long else _MONTHS_SHORT
+    if a[0] == b[0]:
+        return f"{names[a[1] - 1]} {a[2]} to {names[b[1] - 1]} {b[2]}, {b[0]}"
+    return f"{names[a[1] - 1]} {a[2]}, {a[0]} to {names[b[1] - 1]} {b[2]}, {b[0]}"
+
+
+_SHARE_WORDS = ((10.0, "one in ten"), (20.0, "one in five"), (25.0, "one in four"), (33.3, "one in three"),
+                (40.0, "four in ten"), (50.0, "half"), (60.0, "six in ten"), (66.7, "two in three"),
+                (75.0, "three in four"), (80.0, "eight in ten"), (90.0, "nine in ten"))
+
+
+def _plain_share(pct: float) -> str:
+    """A share a reader can picture: 61.5 -> 'six in ten', 34.3 -> 'one
+    in three'. Outside the plain range the figure itself comes back."""
+    p = float(pct or 0)
+    if p >= 95:
+        return "nearly all"
+    if p < 7.5:
+        return f"{p:.1f}%"
+    return min(_SHARE_WORDS, key=lambda sw: abs(sw[0] - p))[1]
+
+
+def _about_share(pct: float, *, of: str = "of") -> str:
+    """'about six in ten of', 'about half of', 'nearly all of', '4.2% of'."""
+    w = _plain_share(pct)
+    if w.endswith("%") or w == "nearly all":
+        return f"{w} {of}".strip()
+    return f"about {w} {of}".strip()
+
+
+_NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+
+
+def _n_word(n: int) -> str:
+    """A small count in words ('four parts'); a larger one in figures."""
+    return _NUMBER_WORDS[n] if 0 <= int(n) < len(_NUMBER_WORDS) else f"{int(n):,}"
+
+
+def _cap(text: str) -> str:
+    return text[:1].upper() + text[1:] if text else text
+
+
+def _times(x: float) -> str:
+    """'27 times', '2.4 times' for a ratio."""
+    x = float(x or 0)
+    return f"{x:.0f} times" if x >= 10 else f"{x:.1f} times"
+
+
+_CHANNEL_NAMES = {"x (twitter)": "X", "twitter": "X", "direct (brand site)": None}
+
+
+def _channel(name: str, brand: str) -> str:
+    """A channel as the table prints it."""
+    key = str(name or "").strip().lower()
+    if key == "direct (brand site)":
+        return f"{brand} site and app"
+    return _CHANNEL_NAMES.get(key) or str(name or "").strip()
+
+
+def _channel_in_sentence(name: str, brand: str) -> str:
+    """The same channel inside a sentence: 'press', 'the launch event'."""
+    key = str(name or "").strip().lower()
+    if key == "press":
+        return "press"
+    if key == "launch event":
+        return "the launch event"
+    if key == "direct (brand site)":
+        return f"the {brand} site and app"
+    return _channel(name, brand)
+
+
+_SMALL_LABEL_WORDS = {"and", "or", "to", "of", "than", "under", "older", "more", "not", "say", "over", "less"}
+_LABEL_MAP = {"another race/ethnicity": "Another race or ethnicity"}
+
+
+def _bucket_label(label: Any) -> str:
+    """A demographic bucket in sentence case, as it reads in a table: '17
+    and under', '65 or older', 'Prefer not to say', '$25,000 to $49,999'.
+    Names keep their capitals ('Hispanic or Latino', 'Black or African
+    American')."""
+    s = " ".join(str(label or "n/a").split())
+    if s.lower() in _LABEL_MAP:
+        return _LABEL_MAP[s.lower()]
+    s = re.sub(r"\s+-\s+", " to ", s)
+    words = s.split(" ")
+    out = []
+    for i, w in enumerate(words):
+        out.append(w.lower() if (i > 0 and w.lower() in _SMALL_LABEL_WORDS) else w)
+    return " ".join(out)
+
+
+def _matched_group_lines(cg: dict, sizes: Optional[tuple] = None) -> tuple:
+    """The reader-facing account of the comparison group (Jenna
+    2026-10-20: same size, roughly the same brand engagement before the
+    partnership). Returns (one_line, side_by_side) where side_by_side
+    is '' when the payload carries no match figures. `sizes` is
+    (exposed, matched) as projected US people, the counts every other
+    page of the deck uses; without it the match block's own sizes print."""
+    try:
+        from migration.bpiq_matched_control import READER_NOTE as _note
+    except ImportError:  # pragma: no cover - twin layout
+        _note = ("Compared against a matched group of the same size with the "
+                 "same brand engagement before the partnership.")
+    m = _dict(_dict(cg).get("match"))
+    if not m:
+        return _note, ""
+    exposed, matched = sizes if sizes else (_count(m.get("exposed_size")), _count(m.get("control_size")))
+    side = (f"Exposed group {fmt_num(exposed)} people, "
+            f"{_num(m.get('exposed_pre_rate_pct')):.2f}% engaged with the brand before; "
+            f"matched group {fmt_num(matched)} people, "
+            f"{_num(m.get('control_pre_rate_pct')):.2f}% before.")
+    return _note, side
+
+
+def _same_size(ctx) -> bool:
+    """True when the matched group holds as many people as the campaign
+    reached, the only case in which a page may say 'the same size'."""
+    cg = _dict(_dict(ctx.data).get("control_group")) if hasattr(ctx, "data") else {}
+    n = _count(cg.get("projected_control_size"))
+    return (not n) or n == ctx.audience_proj
+
+
+def _control_people(cg: dict, projected: int) -> int:
+    """The matched group's gain in brand engagers over the windows."""
+    if cg.get("control_pre_users_projected") is not None:
+        return _count(cg.get("control_post_users_projected")) - _count(cg.get("control_pre_users_projected"))
+    size = _count(cg.get("projected_control_size")) or projected
+    return int(round(size * _num(cg.get("control_delta_pp")) / 100.0))
+
+
+def _emv_rows(data: dict, brand: str) -> list:
+    """The earned-media table: every channel the valuation priced, in
+    value order. Nothing is left off, so the rows add up to the earned
+    media value the deck prints (2026-11-11: LinkedIn was priced in the
+    total and missing from the table)."""
+    rows = []
+    for r in (_dict(data.get("valuation")).get("emv_breakdown") or []):
+        if not isinstance(r, dict):
+            continue
+        value = round(_num(r.get("emv_value")), 2)
+        if value <= 0:
+            continue
+        rows.append({
+            "name": str(r.get("platform") or "").strip(),
+            "display": _channel(str(r.get("platform") or ""), brand),
+            "people": _count(r.get("incremental_users_projected")),
+            "rate": _num(r.get("emv_per_user_rate")),
+            "value": value,
+        })
+    rows.sort(key=lambda r: -r["value"])
+    return rows
 
 
 def _derive_context(data: dict, image_url: Optional[str],
@@ -1275,1939 +1716,1396 @@ def _derive_context(data: dict, image_url: Optional[str],
     data   = _dict(data)
     totals = _dict(data.get("totals"))
     val    = _dict(data.get("valuation"))
-    rates  = _dict(val.get("rates"))
     cg     = _dict(data.get("control_group"))
     is_auto = (str(category or "").strip().lower() == "automotive")
     conv = _dict(data.get("conversions"))
-    has_conv = (
-        not is_auto
-        and bool(conv.get("enabled"))
-        and not bool(conv.get("low_signal"))
-        and _num(conv.get("post_users_projected")) > 0
-    )
-    yearly = data.get("yearly_breakdown") or []
-    has_yearly = isinstance(yearly, list) and len(yearly) >= 2
+    has_control = _has_control(data)
+
+    project = _normalize_project_label(str(data.get("project_name") or "Brand Partnership Valuation"))
+    brand   = str(data.get("brand_partner") or "").strip() or NO_BRAND
+    q = data.get("qualifier_value")
+    names = [str(v).strip() for v in q if str(v).strip()] if isinstance(q, (list, tuple)) else [str(q or "").strip()]
+    talent = names[0] if names and names[0] else ""
+    cat_lbl = (category or "").strip().title() or "Brand Partnership"
 
     pre_pen  = _num(totals.get("audience_pen_pre_pct"))
     post_pen = _num(totals.get("audience_pen_post_pct"))
     delta_pp = round(post_pen - pre_pen, 2)
     delta_rel = ((post_pen - pre_pen) / pre_pen * 100) if pre_pen else 0.0
+    projected = _count(data.get("projected_audience_size"))
 
-    # Cover image is placed in a 7.6"×7.5" slot - center-crop to the
-    # matching aspect (≈1.013) so faces stay framed and the slot fills
-    # cleanly with no letterboxing.
-    cover = _download_image(image_url, crop_aspect=7.6 / 7.5, s3_client=s3_client) if image_url else None
-    if cover is None:
-        cover = _generate_typographic_hero(str(data.get("brand_partner")
-                                               or data.get("project_name") or "BPIQ"))
+    # ── the value, as the pages will show it ─────────────────────────
+    # Every page total is the sum of the parts printed on that page
+    # (2026-11-11: the total carried conversion value while the
+    # conversion tile was hidden as a thin signal, so the page did not
+    # add up). The earned media figure is the sum of its table. A lens
+    # is shown whenever it carries value; the one exception is the
+    # automotive policy (purchases there are not visible), where the
+    # lens and its dollars both stay out.
+    emv_rows = _emv_rows(data, brand)
+    emv = round(sum(r["value"] for r in emv_rows), 2) if emv_rows else round(_num(val.get("earned_media_value")), 2)
+    bev = round(_num(val.get("brand_engagement_value")), 2)
+    blv = round(_num(val.get("brand_lift_value")), 2)
+    cv_all = round(_num(val.get("conversion_value")), 2)
+    has_conv = (not is_auto) and cv_all > 0 and conv.get("enabled", True) is not False
+    cv = cv_all if has_conv else 0.0
+    lenses = [("Earned media", emv), ("Brand engagement", bev), ("Brand lift", blv)]
+    if has_conv:
+        lenses.append(("Conversion", cv))
+    total = round(sum(v for _l, v in lenses), 2)
+    stated = round(_num(val.get("total_brand_value")), 2)
+    if stated and abs(stated - total) > 0.01 and not (is_auto and abs(stated - cv_all - total) <= 0.01):
+        print(f"[bpiq_deck_builder] the deck's total {total:,.2f} is the sum of its parts; "
+              f"the valuation stated {stated:,.2f}")
 
-    logo = _render_crosswalk_logo_png(on_dark=True)
+    # ── the comparison group, when one was bought ───────────────────
+    c_pre = _num(cg.get("control_pre_pen_pct")) if has_control else 0.0
+    c_post = _num(cg.get("control_post_pen_pct")) if has_control else 0.0
+    c_delta = _num(cg.get("control_delta_pp")) if has_control else 0.0
+    if has_control and cg.get("control_delta_pp") is None:
+        c_delta = round(c_post - c_pre, 2)
+    if has_control:
+        lift_pp = _num(cg.get("incremental_lift_pp")) if cg.get("incremental_lift_pp") is not None \
+            else round(delta_pp - c_delta, 2)
+    else:
+        lift_pp = delta_pp
 
-    project = str(data.get("project_name") or "Brand Partnership Valuation")
-    brand   = str(data.get("brand_partner") or "Brand")
-    cat_lbl = (category or "").strip().title() or "Brand Partnership"
-    start   = str(data.get("start_date") or "")
-    end     = str(data.get("end_date")   or "")
-    win     = f"{start} → {end}" if start and end else ""
+    pre_p, post_p, ev_p = _dict(data.get("pre_period")), _dict(data.get("post_period")), _dict(data.get("event_period"))
+    if not post_p:
+        post_p = ev_p or {"start": data.get("start_date"), "end": data.get("end_date")}
+    pre_days = _count(pre_p.get("days")) or _count(data.get("pre_period_days"))
+    post_days = _count(post_p.get("days")) or _count(data.get("post_period_days")) or _count(data.get("attribution_window_days"))
+    pre_range = _fmt_range(pre_p.get("start"), pre_p.get("end")) if pre_p.get("start") and pre_p.get("end") else ""
+    post_range = _fmt_range(post_p.get("start"), post_p.get("end")) if post_p.get("start") and post_p.get("end") else ""
+    ev_start = str(ev_p.get("start") or data.get("start_date") or "")
+    from_launch = bool(ev_start) and str(post_p.get("start") or "") <= ev_start
+    after_word = "after launch" if from_launch else "after the campaign"
+    before_word = "before launch" if from_launch else "before the campaign"
+
+    yearly = data.get("yearly_breakdown") or []
+    has_yearly = isinstance(yearly, list) and len(yearly) >= 2
 
     # Always project up (Jenna 2026-09-23): the raw observed n never
-    # prints on a client-facing surface; the projected universe is the
-    # only sample figure a reader sees.
-    src = (
-        f"Source: Crosswalk BehaviorGraph · 30M+ opted-in U.S. consumer panel · "
-        f"projected universe n={_count(data.get('projected_audience_size')):,} · "
-        f"window {win} · "
-        f"attribution {_count(data.get('attribution_window_days'))}d"
-    )
+    # prints on a client-facing surface; the projected count is the only
+    # sample figure a reader sees.
+    src = "Source: Crosswalk. " + (f"{projected:,} projected US people" if projected else "Projected US people")
+    if pre_range and post_range:
+        src += f", {pre_range} and {post_range}."
+    elif post_range:
+        src += f", {post_range}."
+    else:
+        src += "."
 
     return DeckCtx(
         project=project,
         brand=brand,
+        talent=talent,
         category_label=cat_lbl,
         is_auto=is_auto,
-        cover_image=cover,
-        logo=logo,
-        total_value=_num(val.get("total_brand_value")),
-        emv=_num(val.get("earned_media_value")),
-        bev=_num(val.get("brand_engagement_value")),
-        blv=_num(val.get("brand_lift_value")),
-        cv=_num(val.get("conversion_value")) if has_conv else 0.0,
+        cover_bg=_cover_photo_background(image_url, s3_client=s3_client) if image_url else None,
+        logo_white=_render_crosswalk_logo_png(on_dark=True),
+        logo_black=_render_crosswalk_logo_png(on_dark=False),
+        total_value=total,
+        emv=emv,
+        bev=bev,
+        blv=blv,
+        cv=cv,
+        lenses=lenses,
+        emv_rows=emv_rows,
         incr_users=_count(val.get("incremental_users")),
-        target_size=_count(data.get("audience_size")),
-        audience_proj=_count(data.get("projected_audience_size")),
-        pre_users=_count(totals.get("pre_users")),
-        post_users=_count(totals.get("post_users")),
+        audience_proj=projected,
         pre_users_proj=_count(totals.get("pre_users_projected")),
         post_users_proj=_count(totals.get("post_users_projected")),
         pre_pen=pre_pen,
         post_pen=post_pen,
         delta_pp=delta_pp,
         delta_rel=delta_rel,
-        # with no comparison group the lift is the before and after rise
-        incr_lift_pp=(_num(cg.get("incremental_lift_pp")) if _has_control(data) else delta_pp),
-        # the adjusted lift the deck argues from is the matched lift as a
-        # share of the exposed group's own baseline (the ratio the house
-        # attributable formula uses); against the comparison group's tiny
-        # drift it read as thousands of percent (2026-10-28)
-        incr_lift_rel=(_adjusted_lift_rel(cg) if _has_control(data) else round(delta_rel, 1)),
-        campaign_window=win,
-        attribution_d=_count(data.get("attribution_window_days")),
-        panel_size=_count(data.get("audience_size")),
-        sample_pre=_count(totals.get("pre_users")),
-        sample_post=_count(totals.get("post_users")),
+        c_pre_pen=c_pre,
+        c_post_pen=c_post,
+        c_delta_pp=c_delta,
+        lift_pp=lift_pp,
+        pre_days=pre_days,
+        post_days=post_days,
+        pre_range=pre_range,
+        post_range=post_range,
+        after_word=after_word,
+        before_word=before_word,
         has_conversions=has_conv,
         has_yearly=has_yearly,
+        has_control=has_control,
+        draft=is_draft(data),
         sources_line=src,
         data=data,
-        has_control=_has_control(data),
     )
 
 
-_MONTHS_SHORT = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-]
+def _is_counterfactual(ctx: DeckCtx) -> bool:
+    return "counterfactual" in (ctx.project or "").lower()
 
 
-def _fmt_date(iso: str) -> str:
-    """YYYY-MM-DD → 'DD Mon YYYY' for slide copy. Returns the input
-    unchanged if parsing fails."""
-    if not iso or not isinstance(iso, str):
-        return ""
-    parts = iso.split("-")
-    if len(parts) != 3:
-        return iso
+def _moved(ctx: DeckCtx) -> bool:
+    """Did engagement move in the partnership's favor: against the days
+    before, or against the matched group when one was bought."""
+    return (ctx.lift_pp if ctx.has_control else ctx.delta_pp) > 0 and not _is_counterfactual(ctx)
+
+
+def _days_phrase(n: int) -> str:
+    """'51 days'; 'this window' when the valuation carries no length."""
+    return f"{n} days" if n and n != 1 else ("1 day" if n == 1 else "this window")
+
+
+def _the_days(n: int) -> str:
+    """'the 51 days'; 'this window'."""
+    return f"the {_days_phrase(n)}" if n else "this window"
+
+
+def _same_days(n: int) -> str:
+    """'the same 51 days'; 'the same window'."""
+    return f"the same {_days_phrase(n)}" if n else "the same window"
+
+
+def _lens_words(ctx: DeckCtx) -> str:
+    names = [l.lower() for l, _v in ctx.lenses]
+    return ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else (names[0] if names else "")
+
+
+def _top_lens(ctx: DeckCtx) -> tuple:
+    return max(ctx.lenses, key=lambda lv: lv[1]) if ctx.lenses else ("", 0.0)
+
+
+def _campaign_ctx(ctx: DeckCtx) -> dict:
     try:
-        yyyy, mm, dd = int(parts[0]), int(parts[1]), int(parts[2])
-        return f"{dd:02d} {_MONTHS_SHORT[mm-1]} {yyyy}"
+        from migration import bpiq_campaign_assets as _ca
+        return _ca.context_from_payload(ctx.data)
     except Exception:
-        return iso
+        return {}
 
 
-def _period_label(period: dict, fallback: str = "") -> str:
-    """Human-readable window label from a {start, end, days} block.
-    'from DD Mon YYYY to DD Mon YYYY (N days)'. Used on the
-    engagement-lift slide to avoid the C2 mislabel (calling a 15-day
-    window 'the year before campaign launch')."""
-    if not isinstance(period, dict):
-        return fallback
-    start = _fmt_date(str(period.get("start") or ""))
-    end   = _fmt_date(str(period.get("end")   or ""))
-    days  = period.get("days")
-    if start and end:
-        # the window length leads and the dates close the sentence, so the
-        # last line never ends on a lone "window)."
-        if isinstance(days, (int, float)) and days > 0:
-            return f"across the {int(days)} days from {start} to {end}"
-        return f"from {start} to {end}"
-    return fallback
+def _touchpoints(ctx: DeckCtx, limit: int = 7) -> list:
+    """The touchpoint table's rows: name, visits before, visits after,
+    and whether the page is the campaign's own. A page the campaign
+    created has no visits before the campaign went public, whatever the
+    saved valuation says (2026-11-11: 2,211 visits to a collection page
+    in the 51 days before it existed)."""
+    post = [r for r in (ctx.data.get("top_brand_properties") or []) if isinstance(r, dict)]
+    pre = [r for r in (ctx.data.get("top_brand_properties_pre") or []) if isinstance(r, dict)]
+    pre_map = {str(p.get("common_name") or "").lower(): _count(p.get("hits_projected")) for p in pre}
+    try:
+        from migration import bpiq_campaign_assets as _ca
+        kw = _ca.context_from_payload(ctx.data)
+    except Exception:
+        _ca, kw = None, {}
+    rows = []
+    for r in sorted(post, key=lambda r: -_count(r.get("hits_projected"))):
+        name = " ".join(str(r.get("common_name") or "").split())
+        if not name:
+            continue
+        before = pre_map.get(name.lower(), 0)
+        new = bool(r.get("new_in_window"))
+        if not new and _ca is not None:
+            try:
+                new = _ca.no_history_before(name, flag=r.get("new"), **kw)
+            except Exception:
+                new = False
+        if new:
+            before = 0
+        rows.append({"name": name, "before": before, "after": _count(r.get("hits_projected")), "new": new})
+    return rows[:limit] if limit else rows
 
 
-def _engagement_headline(ctx: DeckCtx) -> str:
-    """MIDG-style declarative headline that names the lift, the
-    consumer count, and the brand.
-
-    Uses adaptive precision on the pp delta (C9): sub-percent deltas
-    display with 2 decimals so a +0.15pp lift never renders as
-    "0.1pt" while the pre/post percentages show 0.2pp apart. Two-line
-    sentence with terminal punctuation on both lines."""
-    if ctx.delta_pp <= 0 and not ctx.has_control:
+def _next_step(ctx: DeckCtx) -> tuple:
+    """(the short version, the fuller version) of what to do next, read
+    off the valuation: where the value sits, whether engagement moved,
+    and whether orders have followed."""
+    days = _days_phrase(ctx.post_days)
+    top = ctx.emv_rows[0] if ctx.emv_rows else None
+    channel = _channel_in_sentence(top["name"], ctx.brand) if top else "the earned channels"
+    own = next((r["name"] for r in _touchpoints(ctx, 0) if r["new"]), "")
+    where = own or f"{ctx.b}'s product pages"
+    if not _moved(ctx):
         return (
-            f"{ctx.brand} engagement was level before and after.\n"
-            f"{fmt_num(ctx.post_users_proj)} consumers engaged with the brand "
-            f"in the campaign window."
+            f"Change the creative or the channel mix before the next flight. {_cap(ctx.ba)} engagement did not move in this window.",
+            f"Hold spend on this plan. Test new creative or a new channel mix, then read {_same_days(ctx.post_days)} again.",
         )
-    if ctx.delta_pp <= 0:
+    smallest = min(ctx.lenses, key=lambda lv: lv[1])[0] if ctx.lenses else ""
+    if ctx.has_conversions and smallest == "Conversion" and ctx.total_value and ctx.cv / ctx.total_value < 0.10:
         return (
-            f"The campaign held {ctx.brand}'s baseline.\n"
-            f"{fmt_num(ctx.post_users_proj)} consumers engaged with the brand "
-            f"in the post-window."
+            f"Keep {channel} running and point it at {where}. Attention is high and orders are still few.",
+            f"Use the next {days if ctx.post_days else 'window'} to turn this attention into orders. Lead with {channel} and send people to {where}.",
         )
-    # Adaptive precision: below 1pp shows 2 decimals; at/above 1pp
-    # shows 1 decimal. Guarantees the headline delta never contradicts
-    # the pre/post display precision (fixes C9).
-    if abs(ctx.delta_pp) < 1.0:
-        delta_str = f"{ctx.delta_pp:.2f}pt"
-    else:
-        delta_str = f"{ctx.delta_pp:.1f}pt"
-    moved = max(0, ctx.post_users_proj - ctx.pre_users_proj)
     return (
-        f"A {delta_str} lift in brand engagement,\n"
-        f"moving {fmt_num(moved)} more consumers toward {ctx.brand}."
+        f"Put the next flight behind {channel}, the largest source of earned value here.",
+        f"Lead the next flight with {channel}, then read {_same_days(ctx.post_days)} again to see if the gain holds.",
     )
 
 
-def _cover_subtitle(ctx: DeckCtx) -> str:
-    """Purpose-written cover subtitle. Two lines: category + a
-    declarative summary describing what this deck measures. Always
-    ends with terminal punctuation so it never renders as a truncated
-    fragment (fixes C7)."""
-    diag = ctx.data.get("diagnostics") or {}
-    is_counterfactual = "counterfactual" in (ctx.project or "").lower()
-    label = ctx.category_label or "Brand Partnership"
-    if is_counterfactual:
-        line1 = f"{label} · Counterfactual read."
-        line2 = (
-            f"Isolates the sponsorship signal by measuring {ctx.brand} "
-            f"against the same audience and window as the treated brand."
-        )
-    else:
-        # Standard partnership read - lead with the total value we
-        # observed so the cover has a hook, without leaning on the
-        # slide-4 headline which uses a comma-ended fragment.
-        line1 = f"{label} · Total observed value: {fmt_money(ctx.total_value)}."
-        line2 = (
-            f"An analysis of {ctx.brand}'s consumer engagement across "
-            f"the campaign window."
-        )
-    return f"{line1}\n{line2}"
-
-
-def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
-    """Two-line editorial close - mirrors LISA's 'LISA wears it, it
-    sells out.' format. We synthesize from the data so every partnership
-    gets a tuned message.
-
-    Counterfactual brands (project name contains 'counterfactual')
-    always route to the control-brand copy regardless of adjusted-
-    lift sign. Small positive drift on a control brand is category
-    noise, not a sponsorship effect (Liz's July 27 v2 inversion
-    callout: Pepsi F1 was mislabeled 'consistent with a genuine
-    but small sponsorship effect' when Pepsi was not sponsored).
-
-    Guardrail: never claim compounding lift over time on a single-
-    window run."""
+def _final_statement(ctx: DeckCtx) -> str:
+    """The one sentence the closing page states: twelve words or fewer,
+    with the names in full when they fit and in short when they do not."""
+    who = ctx.talent or "The partnership"
     if ctx.total_value <= 0:
-        return ("The partnership ran.", "The audience didn't move.")
-    if not ctx.has_control:
-        # A before and after read (2026-11-11): the rise is stated against
-        # the days before the campaign, never against a group that was
-        # not bought.
-        rise = float(ctx.delta_rel or 0.0)
-        before = _pre_days_phrase(ctx.data)
-        if rise <= 0:
-            return (f"{ctx.brand} engagement did not rise.",
-                    f"It was level with {before}.")
-        if rise >= 100:
-            return (f"{ctx.brand} engagement more than doubled",
-                    f"against {before}.")
-        if rise >= 25:
-            return (f"{ctx.brand} engagement rose {rise:.0f}%",
-                    f"against {before}.")
-        return (f"A {rise:.1f}% rise in {ctx.brand} engagement,",
-                f"against {before}.")
-    lift_rel = ctx.incr_lift_rel if ctx.incr_lift_rel is not None else ctx.delta_rel
-    sig      = (ctx.data.get("diagnostics") or {}).get("significance") or {}
-    is_sig   = bool(sig.get("significant"))
-    is_counterfactual = "counterfactual" in (ctx.project or "").lower()
-    # Counterfactual brands always read as controls, regardless of
-    # sign or significance of the tiny residual drift.
-    if is_counterfactual:
-        return (
-            "The campaign held baseline.",
-            f"{ctx.brand} was not in the show, and moved with control "
-            "drift. Any residual is category-wide noise, not "
-            "sponsorship-attributable.",
-        )
-    if lift_rel <= 0:
-        return (
-            "The campaign held baseline.",
-            f"{ctx.brand}'s adjusted lift falls at or below control "
-            "drift.",
-        )
-    if not is_sig:
-        return (
-            f"A directional {lift_rel:.1f}% adjusted lift,",
-            "not statistically distinguishable from zero at this sample "
-            "size. The signal is consistent with a small but genuine "
-            "effect from this sponsorship.",
-        )
-    # Extract the talent / qualifier name from the project title
-    # (split on the LISA-style '×' character; fall back to 'the
-    # talent' if the project isn't shaped as 'Talent × Brand').
-    talent = ctx.project.split("×")[0].strip() if "×" in ctx.project else ""
-    if lift_rel >= 200:
-        line1 = f"With {ctx.brand} in play,"
-        if talent:
-            line2 = f"the audience more than tripled around {talent}: a {lift_rel:.0f}% adjusted lift."
-        else:
-            line2 = f"the audience more than tripled: a {lift_rel:.0f}% adjusted lift."
-    elif lift_rel >= 100:
-        line1 = f"{ctx.brand} more than doubled"
-        line2 = "share of voice across the audience."
-    elif lift_rel >= 25:
-        line1 = f"{ctx.brand} won meaningful"
-        line2 = f"new ground: {lift_rel:.0f}% adjusted lift, post-campaign."
+        options = [f"{ctx.brand} engagement did not move in this window.", "Brand engagement did not move in this window."]
+    elif _is_counterfactual(ctx):
+        options = [f"{ctx.brand} was not in the partnership, and its engagement barely moved.",
+                   "This brand was not in the partnership, and its engagement barely moved."]
+    elif ctx.has_control and ctx.lift_pp > 0:
+        options = [f"{who} moved {ctx.brand} engagement past a matched group.",
+                   f"{who} moved {ctx.ba} engagement past a matched group.",
+                   "The partnership moved brand engagement past a matched group."]
+    elif ctx.has_control:
+        options = [f"{ctx.brand} engagement moved no more than the matched group.",
+                   "Brand engagement moved no more than the matched group."]
+    elif ctx.delta_pp > 0:
+        options = [f"{who} got more people engaging with {ctx.brand}.",
+                   f"{who} got more people engaging with {ctx.b}.",
+                   "The partnership got more people engaging with the brand."]
     else:
-        if ctx.has_yearly:
-            line1 = "Steady adjusted lift,"
-            line2 = "compounding reach year over year."
-        else:
-            line1 = f"A {lift_rel:.1f}% adjusted lift,"
-            line2 = "above a matched group that started where they did."
-    return (line1, line2)
+        options = [f"{ctx.brand} engagement did not rise in this window.", "Brand engagement did not rise in this window."]
+    if len(ctx.brand.split()) >= 5 or ctx.brand == NO_BRAND:
+        options = [o for o in options if ctx.brand not in o] or options[-1:]
+    for o in options:
+        if len(o.split()) <= 12:
+            return o
+    return options[-1]
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Page parts shared by more than one page.
+# ─────────────────────────────────────────────────────────────────────
+def _stat_card(slide, surf: Surf, x, y, w, h, label, value, caption, *, hero: bool = False,
+               value_size: Optional[int] = None):
+    """A card that carries one figure: a caps label, the figure, a line
+    under it. `hero` is the one dark card on a light page."""
+    if hero and not surf.dark:
+        fill, c_label, c_value, c_cap = GRAPHITE, _rgb("9BAAAC"), SIGNAL, _rgb("A8AFA9")
+    else:
+        fill, c_label, c_value, c_cap = surf.card, surf.card_label, surf.card_title, surf.card_body
+    _card(slide, x, y, w, h, fill=fill)
+    pad = 0.26
+    compact = h < 1.35          # a short card sets its three lines closer
+    _label(slide, x + pad, y + (0.14 if compact else 0.22), w - 2 * pad, label, c_label)
+    size = value_size or _fit_stat(value, w - 2 * pad, 34, floor=14)
+    vh = _line_h_in(size, 0.95)
+    vy = y + (0.36 if compact else 0.56)
+    T(slide, x + pad, vy, w - 2 * pad, vh, value, size=size, weight="Bold", color=c_value, spacing=0.95)
+    if caption:
+        cy = vy + vh + (0.03 if compact else 0.14)
+        room = y + h - (0.08 if compact else 0.2) - cy
+        if room >= 0.17:
+            BODY(slide, x + pad, cy, w - 2 * pad, caption, max_h=room, size=10.5 if compact else 11.5, floor=10,
+                 spacing=1.25, min_spacing=1.05, color=c_cap)
+
+
+def _stat_card_height(w: float, value_size: float, captions: list) -> float:
+    """The height a row of stat cards needs: label, figure, and the
+    tallest caption, with the card ending just under its last line."""
+    cap_h = max([_measure(c, 11.5, w - 0.52, spacing=1.25).height_in for c in captions if c] or [0.0])
+    return round(0.56 + _line_h_in(value_size, 0.95) + (0.14 + cap_h if cap_h else 0.0) + 0.26, 3)
+
+
+def _label_fit(text: str, sizes, width_in: float) -> tuple:
+    """(size, box width) for a row label: on one line at the largest size
+    that holds it; failing that on two lines that do not end on a lone
+    word, at the full width or a narrower one. The finisher's widow net
+    then has nothing to do."""
+    for sz in sizes:
+        if _measure(text, sz, width_in).lines <= 1:
+            return sz, width_in
+    for sz in sizes:
+        w = width_in
+        while w >= width_in * 0.6:
+            if _measure(text, sz, w).lines <= 2 and not _lone_last_word(text, sz, w):
+                return sz, round(w, 3)
+            w -= 0.05
+    return sizes[-1], width_in
+
+
+def _calc_card(slide, surf: Surf, x, y, w, rows, total_label: str, total_value: str) -> float:
+    """The arithmetic behind a value, as a card: each row a label and a
+    figure, a rule, then the total. The rows multiply (or subtract) out
+    to the total printed under them. Returns the card's bottom edge."""
+    pad = 0.3
+    row_h = 0.62 if len(rows) <= 3 else 0.52
+    h = 0.22 + len(rows) * row_h + 0.16 + 0.92
+    _card(slide, x, y, w, h, fill=surf.card)
+    lab_w = (w - 2 * pad) * 0.62
+    val_w = (w - 2 * pad) - lab_w
+    ry = y + 0.22
+    for i, (label, value) in enumerate(rows):
+        lab_size, lab_fit_w = _label_fit(label, (12, 11.5, 11, 10.5, 10), lab_w)
+        T(slide, x + pad, ry, lab_fit_w, row_h, label, size=lab_size, color=surf.card_body, anchor="middle", spacing=1.1)
+        T(slide, x + pad + lab_w, ry, val_w, row_h, value,
+          size=_fit_stat(value, val_w, 20, floor=12), weight="Bold", color=surf.card_title,
+          align="right", anchor="middle")
+        ry += row_h
+        if i < len(rows) - 1:
+            _rule(slide, x + pad, ry, w - 2 * pad, surf.rule)
+    ry += 0.08
+    _rule(slide, x + pad, ry, w - 2 * pad, surf.card_accent)
+    ry += 0.16
+    _label(slide, x + pad, ry + 0.24, lab_w * 0.75, total_label, surf.card_label)
+    tot_w = (w - 2 * pad) * 0.6
+    T(slide, x + w - pad - tot_w, ry, tot_w, 0.62, total_value,
+      size=_fit_stat(total_value, tot_w, 30, floor=18), weight="Bold", color=surf.card_accent,
+      align="right", anchor="middle")
+    return y + h
+
+
+def _note_card(slide, surf: Surf, x, y, w, h, label: str, body: str, *, size: float = 11.5,
+               hug: bool = False):
+    """A reading beside a figure: an outlined card, a caps label, the
+    plain account. The body fits the card or loses its last sentence.
+    With `hug` the card ends just under its text instead of filling
+    `h` (which is then the most it may take)."""
+    pad = 0.26
+    if hug:
+        sz, sp, t, m = _fit_body(body, w - 2 * pad, h - 0.56 - 0.2, size=size, floor=10, spacing=1.3, min_spacing=1.15)
+        h = min(h, round(0.56 + m.height_in + 0.3, 3))
+    _card(slide, x, y, w, h, fill=None, line=surf.rule, line_w=0.75)
+    _label(slide, x + pad, y + 0.22, w - 2 * pad, label, surf.accent)
+    BODY(slide, x + pad, y + 0.56, w - 2 * pad, body, max_h=h - 0.56 - 0.2, size=size, floor=10,
+         spacing=1.3, min_spacing=1.15, color=surf.title if not surf.dark else surf.card_title)
+
+
+def _reading(slide, surf: Surf, y: float, text: str, *, bottom: float = CONTENT_BOTTOM):
+    """The plain line a page ends on."""
+    if text and bottom - y > 0.2:
+        BODY(slide, M, y, BAND, text, max_h=bottom - y, size=12, floor=10, spacing=1.25, min_spacing=1.1,
+             color=surf.body)
+
+
+def _rate(ctx: DeckCtx, key: str) -> float:
+    return _num(_dict(_dict(ctx.data.get("valuation")).get("rates")).get(key))
+
+
+def _base_for(value: float, rate: float, stated: int) -> int:
+    """The count a value was priced on. The valuation's own count when it
+    multiplies out to the value; otherwise the count the value implies at
+    the rate, so the arithmetic on the page holds."""
+    if rate > 0 and abs(stated * rate - value) > 0.011:
+        return int(round(value / rate))
+    return int(stated)
 
 
 # ─────────────────────────────────────────────────────────────────────
 #  Slide builders. Each takes (prs, ctx, idx, total) and returns the
-#  new slide. Indexed manually because we need explicit `idx / total`
-#  in every footer.
+#  new slide.
 # ─────────────────────────────────────────────────────────────────────
-def _blank(prs):
-    """python-pptx ships several layouts; the 'blank' one (typically
-    index 6) is the cleanest base because there are no placeholder
-    text boxes to fight."""
-    layout = prs.slide_layouts[6]
-    return prs.slides.add_slide(layout)
+def _cover_claim(ctx: DeckCtx, width_in: float = 9.6) -> str:
+    """The claim line under the pairing: what the deck is about, in
+    plain words. The first wording that holds two lines is taken, so a
+    long pairing gets the shorter claim rather than a cut one."""
+    options = []
+    if _is_counterfactual(ctx):
+        options.append(f"A control read of {ctx.brand}, a brand outside the partnership.")
+        options.append("A control read of a brand outside the partnership.")
+    else:
+        if ctx.talent and ctx.post_days:
+            options.append(f"A look at the value {ctx.talent} brought to {ctx.brand} in {_days_phrase(ctx.post_days)}.")
+        if ctx.talent:
+            options.append(f"A look at the value {ctx.talent} brought to {ctx.brand}.")
+        if ctx.brand != NO_BRAND:
+            options.append(f"A look at what the partnership was worth to {ctx.brand}.")
+        options.append("A look at what the partnership was worth.")
+    for o in options:
+        if _measure(o, 20, width_in, spacing=1.15).lines <= 2:
+            return o
+    return options[-1]
 
 
 def _slide_cover(prs, ctx: DeckCtx, idx: int, total: int):
+    """The cover: the pairing in the product's own order, a plain claim
+    line, the window, and three figures. A photo, when the valuation has
+    one, is the page background under a baked scrim; otherwise the
+    pack's Graphite wash."""
     s = _blank(prs)
-    _add_bg(s, BG_DARK)
-    # Right-hand hero image fills a 7.6×7.5 slot (cropped to that
-    # aspect during download so the photo isn't deformed here).
-    if ctx.cover_image:
+    surf = S_DARK
+    pack = _design()
+    photo = False
+    if ctx.cover_bg and pack is not None:
         try:
-            pic = s.shapes.add_picture(
-                ctx.cover_image,
-                Inches(5.8), Inches(0),
-                width=Inches(7.6), height=Inches(7.5),
-            )
-            _crop_to_fill(pic)
+            pack.set_slide_background_image(s, ctx.cover_bg)
+            photo = True
+        except Exception:
+            photo = False
+    if not photo:
+        done = False
+        try:
+            wash = pack.gradient_image_bytes("graphiteWash") if pack is not None else None
+            if wash:
+                pack.set_slide_background_image(s, wash)
+                done = True
+        except Exception:
+            done = False
+        if not done:
+            _add_bg(s, GRAPHITE)
+    body = _rgb("C9CCC6") if photo else surf.body
+    if ctx.logo_white:
+        try:
+            s.shapes.add_picture(ctx.logo_white, Inches(M), Inches(0.72), width=Inches(2.1))
         except Exception:
             pass
-    # Left-hand title stack. Title font size is scaled to length so
-    # long partnerships (e.g. "Penélope Cruz x CHANEL Endorsement")
-    # still fit inside the available block without crashing into the
-    # subtitle below.
-    _add_text(s, Inches(0.6), Inches(0.6), Inches(5.2), Inches(0.4),
-              "A BRAND PARTNERSHIP VALUATION · 2026",
-              size=10, bold=True, color=MUTED_DK, letter_spacing=0.2)
-    title_text = _normalize_project_label(ctx.project) + "."
-    title_len  = len(title_text)
-    if   title_len <= 20: title_size = 64
-    elif title_len <= 30: title_size = 52
-    elif title_len <= 42: title_size = 42
-    else:                 title_size = 34
-    # the length tier is the ceiling; the title steps down from it until
-    # it fits its block and ends on a line of two words (a long
-    # partnership name left one word alone on its last line)
-    title_size = _fit_title(title_text, tuple(range(title_size, 25, -2)), 5.0, 3.6)
-    title = _add_text(s, Inches(0.6), Inches(1.7), Inches(5.0), Inches(3.6),
-                      title_text,
-                      size=title_size, bold=True, color=FG_LIGHT,
-                      spacing=0.95, font=FONT_DISPLAY)
-    title_bottom = Inches(1.7) + Inches(round(
-        _measure(title_text, title_size, Emu(title.width).inches, bold=True, spacing=0.95).height_in, 3))
-    # Subtitle - purpose-written, not derived from slide 4's split
-    # headline (fixes C7: previously the subtitle pulled the first
-    # line of the two-line engagement headline which ended on a
-    # comma, so the cover subtitle rendered as a truncated fragment).
-    # Two-line format: category + declarative one-line summary; the
-    # summary carries terminal punctuation so it reads as a complete
-    # thought at any font size.
-    #
-    # The block sits on the DRAFT stamp's top edge and rises from there
-    # (2026-10-29: a long category or total made it three lines, and the
-    # third landed on the stamp); it steps down to 12pt and then drops
-    # its reading before it would reach the title.
-    subtitle = _cover_subtitle(ctx)
-    stamp_top = Inches(6.5)
-    _add_body(s, Inches(0.6), title_bottom + Inches(0.15), Inches(5.0), subtitle,
-              max_height=stamp_top - Inches(0.08) - (title_bottom + Inches(0.15)),
-              bottom=stamp_top - Inches(0.08),
-              size=15, floor=12, spacing=1.25, min_spacing=1.1,
-              color=FG_LIGHT, font=FONT_BODY, anchor="bottom")
-    # DRAFT date stamp - explicitly names the analysis build date so
-    # a reader can tell whether they're holding an old draft or the
-    # July 27 v2 rebuild (C7 mentions the DRAFT date line went
-    # missing from the rerun cover; restored here).
-    created = str(ctx.data.get("created_at") or "")[:10]
-    if created:
-        _add_text(s, Inches(0.6), stamp_top, Inches(5.0), Inches(0.25),
-                  f"DRAFT · {created}",
-                  size=9, bold=True, color=MUTED_DK, letter_spacing=0.2)
-    # CONFIDENTIAL stamp top right
-    _add_text(s, Inches(11.4), Inches(0.6), Inches(1.4), Inches(0.3),
-              "CONFIDENTIAL",
-              size=9, bold=True, color=MUTED_DK, align="right",
-              letter_spacing=0.2)
-    # Bottom-left logo (rendered PNG) + brand mark
-    try:
-        s.shapes.add_picture(ctx.logo, Inches(0.6), Inches(6.7),
-                             height=Inches(0.45))
-    except Exception:
-        _add_text(s, Inches(0.6), Inches(6.95), Inches(5), Inches(0.3),
-                  "CROSSWALK · BehaviorGraph",
-                  size=11, bold=True, color=FG_LIGHT, letter_spacing=0.18)
-    return s
-
-
-def _section_label(idx: int, title: str) -> str:
-    """Consistent 'NN · Section Title' eyebrow, driven off idx so we
-    never desynchronize the section counter from the actual slide
-    position (fixes the classic 10→12 jump when an optional slide is
-    skipped)."""
-    return f"{idx:02d} · {title}"
-
-
-def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
-    """MIDG 'Direct Observational Data' slide - credibility / what
-    makes BehaviorGraph trustworthy."""
-    s = _blank(prs)
-    _add_bg(s, BG_CREAM)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "The Data Foundation"), on_dark=False)
-    _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.4),
-              "Direct observational data.\nNo surveys, no self-report.",
-              size=44, bold=True, color=FG_DARK,
-              spacing=0.95, font=FONT_DISPLAY)
-    # Dashes in the body copy get normalized to commas so they don't
-    # regress the item-20 dash cleanup (C11).
-    # Generic across every dataset (a Wheel of Fortune cohort name was
-    # hardcoded here until 2026-09-23 and leaked onto other brands'
-    # decks), and projected up: no raw panelist count in client copy.
-    body = (
-        "Crosswalk's BehaviorGraph draws on a 30M+ opted-in U.S. consumer "
-        "panel. For this partnership we measured the audience across the "
-        "pre, event, and post windows and projected every count in this "
-        f"deck to its {fmt_num(ctx.audience_proj)}-consumer U.S. audience "
-        "universe. Every observation reflects real behavior: which sites "
-        "they visited, which platforms they spent time on, and which "
-        "brand touchpoints appeared in their sessions before, during, "
-        "and after the partnership ran."
-    )
-    _body, body_h = _add_body(s, Inches(0.6), Inches(3.0), Inches(7), body,
-                              max_height=Inches(2.2), size=13, floor=11,
-                              spacing=1.32, min_spacing=1.2, color=FG_DARK)
-    # Study-context clarifier line - C3 fix. When the payload
-    # carries a diagnostics.study_context field (rerun analyses,
-    # counterfactuals, etc.), print it as an italic footnote so no
-    # reader can misread this as the first-flight deck.
-    study_ctx = ((ctx.data.get("diagnostics") or {})
-                 .get("study_context"))
-    # The campaign in plain words (2026-10-28): the collection's price
-    # band, the sell-out and what one order carried, as the payload's
-    # own read. No source is named.
-    camp_line = str(((ctx.data.get("campaign") or {}).get("read_line")) or "").strip()
-    reach_line = str(((ctx.data.get("campaign") or {}).get("reach_line")) or "").strip()
-    foot = " ".join(x for x in (reach_line, camp_line, str(study_ctx or "").strip()) if x)
-    if foot:
-        # below the body, above the footer; a long campaign read steps
-        # down to 9pt and then loses its trailing sentences
-        foot_top = max(Inches(5.35), Inches(3.0) + body_h + Inches(0.15))
-        _add_body(s, Inches(0.6), foot_top, Inches(7), foot,
-                  max_height=Inches(CONTENT_BOTTOM) - foot_top,
-                  size=10, floor=NOTE_FLOOR, spacing=1.3, min_spacing=1.15,
-                  italic=True, color=MUTED_LT)
-    # Right column - 3 stat tiles. Window tile uses the actual pre /
-    # event / post dates so slide 2 never claims a window it doesn't
-    # cover (C2 + C3 defensive coverage).
-    pre_p  = ctx.data.get("pre_period")   or {}
-    post_p = ctx.data.get("post_period")  or {}
-    window_val = (
-        f"{_fmt_date(pre_p.get('start') or '')} to "
-        f"{_fmt_date(post_p.get('end')   or '')}"
-    ) if pre_p and post_p else (ctx.campaign_window or "0")
+    T(s, M, 2.34, 9.0, 0.24, "BRAND PARTNERSHIP VALUATION", size=10.5, weight="SemiBold", color=surf.accent,
+      letter_spacing=2.6, anchor="middle")
+    title = ctx.project
+    size = 32
+    for sz in (60, 54, 48, 44, 40, 36, 32):
+        lines = _line_count(title, sz, BAND, bold=True)
+        if lines <= 1 or (sz <= 44 and lines <= 2):
+            size = sz
+            break
+    t_h = _measure(title, size, BAND, bold=True, spacing=0.95).height_in
+    T(s, M, 2.72, BAND, t_h, title, size=size, weight="Bold", color=surf.title, spacing=0.95)
+    y = 2.72 + t_h + 0.2
+    _shape, c_h = BODY(s, M, y, 9.6, _cover_claim(ctx), max_h=max(0.4, 5.1 - y - 0.4), size=20, floor=16,
+                       spacing=1.15, weight="Light", color=surf.title)
+    y += c_h + 0.12
+    window = _fmt_range(ctx.data.get("start_date"), ctx.data.get("end_date"), long=True) \
+        if ctx.data.get("start_date") and ctx.data.get("end_date") else ctx.post_range
+    if window and y < 5.0:
+        T(s, M, y, 9.6, 0.28, window + ".", size=13, color=body)
+    _rule(s, M, 5.318, BAND, surf.rule)
     stats = [
-        ("Projected sample", f"{fmt_num(ctx.audience_proj)}",
-         "U.S. audience universe"),
-        ("Window",       window_val,                    "Pre, event, post windows"),
-        ("Attribution",  f"{ctx.attribution_d}d",       "Post-event window"),
+        (fmt_money(ctx.total_value), "Total brand value"),
+        (fmt_num(ctx.audience_proj), "People reached in the US"),
+        (f"{ctx.pre_pen:.1f}% to {ctx.post_pen:.1f}%", f"{_cap(ctx.ba)} engagement, before and after"),
     ]
-    col_x = Inches(8.2)
-    col_w = Inches(4.6)
-    for i, (label, value, sub) in enumerate(stats):
-        y = Inches(3.2 + i * 1.15)
-        _add_rect(s, col_x, y, col_w, Inches(1.0),
-                  fill=None, line=FG_DARK, line_w=0.75)
-        _add_text(s, col_x + Inches(0.25), y + Inches(0.1),
-                  Inches(2.0), Inches(0.3),
-                  label.upper(), size=9, bold=True, color=MUTED_LT,
-                  letter_spacing=0.16)
-        _add_text(s, col_x + Inches(0.25), y + Inches(0.32),
-                  Inches(col_w.inches - 0.5), Inches(0.4),
-                  value, size=_fit_stat(value, col_w.inches - 0.5, 22, floor=14),
-                  bold=True, color=FG_DARK, font=FONT_NUMERIC)
-        _add_text(s, col_x + Inches(0.25), y + Inches(0.72),
-                  Inches(col_w.inches - 0.5), Inches(0.3),
-                  sub, size=9, color=MUTED_LT, italic=True)
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
+    st_size = min(_fit_stat(v, COL3 - 0.1, 26, floor=14) for v, _l in stats)
+    for i, (value, label) in enumerate(stats):
+        x = M + i * (COL3 + GUT)
+        T(s, x, 5.56, COL3, 0.46, value, size=st_size, weight="Bold", color=surf.accent if i == 0 else surf.title)
+        T(s, x, 6.08, COL3, 0.3, _one_line(label, 11.5, COL3), size=11.5, color=body)
+    foot = "CONFIDENTIAL"
+    if ctx.draft:
+        created = str(ctx.data.get("created_at") or "")[:10]
+        foot = "CONFIDENTIAL \u00b7 DRAFT" + (f" {created}" if created else "")
+    T(s, M, FOOT_Y, 8.2, 0.22, foot, size=8, color=surf.footer, letter_spacing=1.6)
+    _page_number(s, RIGHT - 2.2, FOOT_Y, 2.2, 0.22, surf.footer, page=idx)
     return s
 
 
-def _brand_in_title(brand: str) -> str:
-    """Format a brand name for use in a LISA-style slide title.
-    Skips the leading 'The' article when the brand label already
-    reads as a possessive ('Lainey Wilson's...') or a plural / group
-    noun ('Lainey's Brands', 'Portfolio', 'Endorsements') where 'The
-    Foo' would read awkwardly. Single-brand labels ('Coca-Cola',
-    'CHANEL') keep the LISA 'The X Audience' phrasing."""
-    b = str(brand or "").strip()
-    if not b:
-        return "The Audience"
-    starts_with_article = b.lower().startswith(("the ", "a ", "an "))
-    has_possessive = "'s " in b or b.endswith("'s")
-    portfolio_words = ("portfolio", "brands", "endorsements", "roster")
-    is_portfolio = any(w in b.lower() for w in portfolio_words)
-    if starts_with_article or has_possessive or is_portfolio:
-        return f"{b} Audience · Scale"
-    return f"The {b} Audience · Scale"
+def _reach_sentence(ctx: DeckCtx) -> str:
+    """Who the read follows, in one sentence."""
+    basis = str(_dict(ctx.data.get("campaign")).get("audience_basis") or "")
+    n = fmt_num(ctx.audience_proj)
+    if basis == "campaign reach":
+        return f"The campaign reached {n} people in the US in {_days_phrase(ctx.post_days)}."
+    if ctx.talent:
+        return f"The read follows {n} people in the US who engaged with {ctx.talent}."
+    return f"The read follows {n} people in the US."
+
+
+def _tldr_rows(ctx: DeckCtx) -> list:
+    """The short version: what we found, why it matters, what to do."""
+    rows = []
+    found = _reach_sentence(ctx)
+    if abs(ctx.delta_pp) < 0.05:
+        found += f" The share of them engaging with {ctx.b} held at {ctx.post_pen:.1f}%."
+    else:
+        found += (f" The share of them engaging with {ctx.b} went from "
+                  f"{ctx.pre_pen:.1f}% to {ctx.post_pen:.1f}%.")
+    if ctx.has_control:
+        found += f" A matched group moved from {ctx.c_pre_pen:.1f}% to {ctx.c_post_pen:.1f}% over the same days."
+    rows.append(("What we found", found))
+    lens, value = _top_lens(ctx)
+    if ctx.total_value > 0 and lens:
+        cents = value / ctx.total_value * 100
+        where = f"{lens} carries {fmt_money(value)} of the total, or {cents:.0f} cents of every dollar."
+        if lens == "Earned media" and ctx.emv_rows:
+            top = ctx.emv_rows[0]
+            where += f" {_cap(_channel_in_sentence(top['name'], ctx.brand))} alone accounts for {fmt_money(top['value'])}."
+        rows.append(("Where the value sits", where))
+    if ctx.blv > 0:
+        if ctx.has_control:
+            new = f"Brand lift is worth {fmt_money(ctx.blv)}. It is the gain the matched group did not make."
+        else:
+            new = (f"New engagement is worth {fmt_money(ctx.blv)}. That is the part of the total "
+                   "the partnership added.")
+        rows.append(("What is new", new))
+    if ctx.has_conversions:
+        orders = fmt_num(_base_for(ctx.cv, _rate(ctx, "conv_value_per_user"),
+                                   _count(_dict(ctx.data.get("conversions")).get("post_users_projected"))))
+        if min(ctx.lenses, key=lambda lv: lv[1])[0] == "Conversion":
+            sold = f"Sales are the smallest part so far. We count {orders} orders worth {fmt_money(ctx.cv)}."
+        else:
+            sold = f"Orders add {fmt_money(ctx.cv)}. We count {orders} of them in the window."
+        rows.append(("What sold", sold))
+    rows.append(("What to do", _next_step(ctx)[0]))
+    return rows[:5]
+
+
+def _slide_tldr(prs, ctx: DeckCtx, idx: int, total: int):
+    """The short version, up front: someone who reads only this page
+    leaves with the answer."""
+    s = _blank(prs)
+    surf = S_LIGHT
+    _ground(s, surf)
+    who = f"{ctx.talent}'s partnership" if ctx.talent else "The partnership"
+    if ctx.total_value > 0:
+        title = ctx.titles([
+            (f"{who} delivered {fmt_money(ctx.total_value)}", f" in brand value for {ctx.brand}."),
+            (f"The partnership delivered {fmt_money(ctx.total_value)}", " in brand value."),
+        ])
+    else:
+        title = ("The partnership ran", " and the value did not move.")
+    sub = f"The short version of {_days_phrase(ctx.post_days)}" + (f", {ctx.post_range}." if ctx.post_range else ".")
+    top = _head(s, surf, idx, "The short version", title, sub, ctx.logo(surf))
+    rows = _tldr_rows(ctx)
+    body_x, body_w = 3.7, RIGHT - 3.7
+    gap = 0.3
+    room = CONTENT_BOTTOM - top - 0.05
+    fitted = _fit_stack(
+        [dict(text=body, width_in=body_w, size=16, floor=11, spacing=1.25, min_spacing=1.12) for _l, body in rows],
+        room, gap)
+    # the rows share whatever room is left, so the page ends near the floor
+    spare = room - (sum(h + 0.02 for _a, _b, _c, h in fitted) + gap * (len(rows) - 1))
+    if spare > 0 and len(rows) > 1:
+        gap += min(0.34, spare / (len(rows) - 1))
+    y = top + 0.05
+    for i, ((label, _body), (sz, sp, txt, h_in)) in enumerate(zip(rows, fitted)):
+        _label(s, M, y + 0.07, 2.6, label, surf.body)
+        T(s, body_x, y, body_w, round(h_in + 0.02, 3), txt, size=sz, color=surf.title, spacing=sp)
+        y += h_in + 0.02
+        if i < len(rows) - 1:
+            _rule(s, M, y + gap / 2 - 0.005, BAND, surf.rule)
+        y += gap
+    return s
+
+
+def _campaign_account(ctx: DeckCtx) -> str:
+    """The campaign in plain words, from the valuation's own fields: who
+    it reached and how, what the pieces cost, what a typical order came
+    to. Every figure is exact; no outside name appears."""
+    camp = _dict(ctx.data.get("campaign"))
+    out = []
+    lines = [ln for ln in (_dict(camp.get("reach")).get("lines") or [])
+             if isinstance(ln, dict) and _count(ln.get("people")) > 0 and str(ln.get("line") or "") != "search"]
+    if lines:
+        how = {"collection pages": "on the collection pages", "press": "through press",
+               "the film and the launch posts": "through the film and the launch posts"}
+        parts = [f"{fmt_num(_count(ln['people']))} people {how.get(str(ln['line']), 'around ' + str(ln['line']))}"
+                 if i == 0 else f"{fmt_num(_count(ln['people']))} {how.get(str(ln['line']), 'around ' + str(ln['line']))}"
+                 for i, ln in enumerate(lines[:4])]
+        joined = ", ".join(parts[:-1]) + " and " + parts[-1] if len(parts) > 1 else parts[0]
+        out.append(f"It reached {joined}. Nobody is counted twice.")
+    # The talent's own audience, when the valuation carries it beside the
+    # reach (2026-11-11): the two counts measure different things, and
+    # naming both once keeps the deck and the read it follows from
+    # looking like two answers to one question.
+    held = _count(camp.get("talent_audience_held"))
+    if held > ctx.audience_proj > 0 and ctx.talent:
+        out.append(f"{ctx.talent}'s projected US audience is {fmt_num(held)}. The campaign reached a part of it.")
+    band = _dict(camp.get("price_band"))
+    lo, hi = _num(band.get("low_usd")), _num(band.get("high_usd"))
+
+    def price(v):
+        return f"${v:,.0f}" if abs(v - round(v)) < 0.005 else f"${v:,.2f}"
+    if lo and hi and hi > lo:
+        out.append(f"Pieces in the collection ran {price(lo)} to {price(hi)}.")
+    aov = _num(camp.get("aov_usd")) or _rate(ctx, "conv_value_per_user")
+    if aov and ctx.has_conversions:
+        out.append(f"A typical order came to {fmt_money(aov)}.")
+    if camp.get("sold_out"):
+        out.append("Most of the collection sold out inside the window." if camp.get("partial_sell_out")
+                   else "The collection sold out inside the window.")
+    study = _safe_prose(_dict(ctx.data.get("diagnostics")).get("study_context"), brand=ctx.brand, talent=ctx.talent)
+    if study:
+        out.append(study)
+    return " ".join(out)
+
+
+def _slide_measured(prs, ctx: DeckCtx, idx: int, total: int):
+    """Who the read follows and when: the people, the two windows, and
+    the matched group when one was bought."""
+    s = _blank(prs)
+    surf = S_DARK
+    _ground(s, surf)
+    launch = "the launch" if ctx.after_word == "after launch" else "the campaign"
+    if ctx.has_control:
+        title = ("We compared the people reached", " with a matched group.")
+    else:
+        title = ("We followed the same people", f" before and after {launch}.")
+    sub = (f"{fmt_num(ctx.audience_proj)} people in the US, {_days_phrase(ctx.pre_days)} before "
+           f"and {_days_phrase(ctx.post_days)} after.")
+    top = _head(s, surf, idx, "Who and when", title, sub, ctx.logo(surf), source=ctx.sources_line)
+    basis = str(_dict(ctx.data.get("campaign")).get("audience_basis") or "")
+    who = "the people the campaign reached" if basis == "campaign reach" or not ctx.talent \
+        else f"people who engaged with {ctx.talent}"
+    para1 = ("Crosswalk sees the full digital life of 30M+ opted-in US consumers. "
+             f"For this read we followed {who} through two windows. "
+             f"We counted what they did: the sites they visited, the apps they used, "
+             f"and the {ctx.ba} pages and posts in their sessions.")
+    para2 = _campaign_account(ctx)
+    blocks = [dict(text=para1, width_in=COL2, size=13, floor=11, spacing=1.3, min_spacing=1.15)]
+    if para2:
+        blocks.append(dict(text=para2, width_in=COL2, size=11.5, floor=10, spacing=1.3, min_spacing=1.15))
+    fitted = _fit_stack(blocks, CONTENT_BOTTOM - top, 0.24)
+    y = top
+    for k, (sz, sp, txt, h_in) in enumerate(fitted):
+        T(s, M, y, COL2, round(h_in + 0.02, 3), txt, size=sz, color=surf.title if k == 0 else surf.body, spacing=sp)
+        y += h_in + 0.02 + 0.24
+    cards = [("People reached", fmt_num(ctx.audience_proj), "Projected US people")]
+    if ctx.has_control:
+        cg = _dict(ctx.data.get("control_group"))
+        size = _count(cg.get("projected_control_size")) or ctx.audience_proj
+        cards.append(("Matched group", fmt_num(size), "Same size, never reached"))
+    if ctx.pre_range:
+        cards.append((ctx.before_word, ctx.pre_range, _days_phrase(ctx.pre_days)))
+    if ctx.post_range:
+        cards.append((ctx.after_word, ctx.post_range, _days_phrase(ctx.post_days)))
+    x0 = M + COL2 + GUT
+    room = CONTENT_BOTTOM - top
+    if len(cards) >= 4:
+        cw = (COL2 - 0.2) / 2
+        ch = (room - 0.2) / 2
+        for i, (label, value, cap) in enumerate(cards[:4]):
+            # the two cards of a row share a size: counts above, dates below
+            pair = cards[(i // 2) * 2:(i // 2) * 2 + 2]
+            size = min(_fit_stat(v, cw - 0.52, 24, floor=12) for _l, v, _c in pair)
+            _stat_card(s, surf, x0 + (i % 2) * (cw + 0.2), top + (i // 2) * (ch + 0.2), cw, ch, label, value, cap,
+                       value_size=size)
+    else:
+        n = max(1, len(cards))
+        ch = (room - 0.18 * (n - 1)) / n
+        size = min(_fit_stat(v, COL2 - 0.52, 22, floor=12) for _l, v, _c in cards)
+        for i, (label, value, cap) in enumerate(cards):
+            _stat_card(s, surf, x0, top + i * (ch + 0.18), COL2, ch, label, value, cap if ch >= 0.98 else "",
+                       value_size=size)
+    return s
 
 
 def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
-    """LISA-style 'THE LISA AUDIENCE · SCALE' big stat slide."""
+    """Reach and value: the people, how many engaged, what it is worth."""
     s = _blank(prs)
-    _add_bg(s, BG_DARK)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, _brand_in_title(ctx.brand)),
-             on_dark=True)
-    _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              f"Reach and resonance,\nside by side.",
-              size=44, bold=True, color=FG_LIGHT,
-              spacing=0.95, font=FONT_DISPLAY)
-    # Three giant stat tiles
-    tiles = [
-        (fmt_num(ctx.audience_proj),
-         "U.S. CONSUMER AUDIENCE",
-         "The partnership's audience universe, projected from the "
-         "30M+ Crosswalk panel."),
-        (fmt_num(ctx.post_users_proj),
-         f"POST-CAMPAIGN {ctx.brand.upper()} CONSUMERS",
-         f"{fmt_pct(ctx.post_pen)} of the observed cohort had a brand "
-         f"touchpoint in the post-window."),
-        (fmt_money(ctx.total_value),
-         "TOTAL BRAND VALUE DELIVERED",
-         f"Sum of Earned Media, Brand Engagement, "
-         f"{'Brand Lift, and Conversion' if ctx.has_conversions else 'and Brand Lift'} value."),
+    surf = S_LIGHT
+    _ground(s, surf)
+    title = ctx.titles([
+        (f"{_cap(_about_share(ctx.post_pen))} the people reached", f" engaged with {ctx.brand}."),
+        (f"{_cap(_about_share(ctx.post_pen))} the people reached", " engaged with the brand."),
+    ])
+    sub = f"Projected US counts{', ' + ctx.post_range if ctx.post_range else ''}."
+    top = _head(s, surf, idx, "Reach and value", title, sub, ctx.logo(surf), source=ctx.sources_line)
+    basis = str(_dict(ctx.data.get("campaign")).get("audience_basis") or "")
+    reach_cap = (f"Everyone in the US the campaign reached in {_days_phrase(ctx.post_days)}."
+                 if basis == "campaign reach" else "Everyone in the US this read follows.")
+    cards = [
+        ("People reached", fmt_num(ctx.audience_proj), reach_cap, False),
+        (f"Engaged with {ctx.b}", fmt_num(ctx.post_users_proj),
+         f"{ctx.post_pen:.1f}% of the people reached, counted {ctx.after_word}.", False),
+        ("Total brand value", fmt_money(ctx.total_value),
+         f"The sum of the {_n_word(len(ctx.lenses))} parts on the total value page.", True),
     ]
-    tile_w = Inches(4.0)
-    gutter = Inches(0.15)
-    base_x = Inches(0.6)
-    tile_h = Inches(3.1)
-    for i, (num, label, sub) in enumerate(tiles):
-        x = base_x + (tile_w + gutter) * i
-        y = Inches(3.4)
-        _add_rect(s, x, y, tile_w, tile_h,
-                  fill=None, line=MUTED_DK, line_w=0.5)
-        # the stat holds one line at the largest size the tile allows
-        # (2026-10-29: a 14-character total at the old length tier broke
-        # its last digit onto a second line)
-        _add_text(s, x + Inches(0.25), y + Inches(0.25),
-                  tile_w - Inches(0.5), Inches(1.4),
-                  num, size=_fit_stat(num, tile_w.inches - 0.5, 54, floor=20),
-                  bold=True, color=ACCENT, font=FONT_NUMERIC, spacing=0.95)
-        _add_text(s, x + Inches(0.25), y + Inches(1.7),
-                  tile_w - Inches(0.5), Inches(0.4),
-                  label, size=10, bold=True, color=FG_LIGHT,
-                  letter_spacing=0.14)
-        _add_body(s, x + Inches(0.25), y + Inches(2.1),
-                  tile_w - Inches(0.5), sub,
-                  max_height=tile_h - Inches(2.1 + 0.15),
-                  size=10, floor=NOTE_FLOOR, spacing=1.3, min_spacing=1.15,
-                  color=MUTED_DK)
-    _page_footer(s, idx, total, ctx.project, on_dark=True)
+    size = min(_fit_stat(v, COL3 - 0.52, 34, floor=14) for _l, v, _c, _h in cards)
+    h = min(_stat_card_height(COL3, size, [c for _l, _v, c, _h in cards]), CONTENT_BOTTOM - top - 1.5)
+    for i, (label, value, cap, hero) in enumerate(cards):
+        _stat_card(s, surf, M + i * (COL3 + GUT), top, COL3, h, _one_line(label, 9.5, COL3 - 0.52, tracking=1.0, bold=True),
+                   value, cap, hero=hero, value_size=size)
+    # the headline as a picture: of everyone reached, the share who engaged
+    y = top + h + 0.34
+    share = max(0.0, min(ctx.post_pen, 100.0))
+    if CONTENT_BOTTOM - y >= 1.1:
+        _label(s, M, y, 8.0, f"Share of people reached who engaged {ctx.after_word}", surf.card_label)
+        T(s, RIGHT - 2.0, y - 0.06, 2.0, 0.28, f"{share:.1f}%", size=14, weight="Bold", color=surf.title, align="right")
+        _card(s, M, y + 0.3, BAND, 0.24, fill=surf.rule, radius=0.12)
+        if share > 0:
+            _card(s, M, y + 0.3, max(0.24, BAND * share / 100.0), 0.24, fill=surf.accent, radius=0.12)
+        y += 0.3 + 0.24 + 0.24
+    _reading(s, surf, y,
+             f"What this means: every share in this deck is a share of these {fmt_num(ctx.audience_proj)} people.")
     return s
+
+
+def _plate(slide, surf: Surf, x, y, w, h, label, pct, count_line, window_line, *, lit: bool, fig: int = 60):
+    """One side of the before and after pair. The lit plate is the page's
+    one Signal Green tile."""
+    if lit:
+        fill, c_label, c_fig, c_line = SIGNAL, GRAPHITE, GRAPHITE, GRAPHITE
+    else:
+        fill, c_label, c_fig, c_line = surf.card, surf.card_accent, surf.card_title, surf.card_body
+    _card(slide, x, y, w, h, fill=fill)
+    pad = 0.3
+    _label(slide, x + pad, y + 0.22, w - 2 * pad, label, c_label)
+    size = fig
+    ph = _line_h_in(size, 0.95)
+    T(slide, x + pad, y + 0.5, w - 2 * pad, ph, pct, size=size, weight="Bold", color=c_fig, spacing=0.95)
+    cy = y + 0.5 + ph + 0.06
+    T(slide, x + pad, cy, w - 2 * pad, 0.28, count_line, size=14, weight="SemiBold", color=c_fig)
+    if window_line and cy + 0.3 + 0.2 <= y + h - 0.12:
+        T(slide, x + pad, cy + 0.3, w - 2 * pad, 0.22, window_line, size=11, color=c_line)
 
 
 def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
-    """MIDG centerpiece - 'A 3.2pt Lift That Moved $19M' headline +
-    Pre vs Post stat blocks + Read As callout."""
+    """Engagement before and after. With a matched group bought, its own
+    move sits under the pair and the difference is stated flat."""
     s = _blank(prs)
-    _add_bg(s, BG_CREAM)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, f"{ctx.brand} · Engagement Lift"),
-             on_dark=False)
-    headline_lines = _engagement_headline(ctx).split("\n")
-    # the claim holds one line where it can (a long brand name steps it
-    # down); its reading follows the measured claim, never a fixed row
-    size1 = _fit_lines(headline_lines[0], (42, 40, 38, 36, 34, 32), 11, bold=True, max_lines=1)
-    _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.0),
-              headline_lines[0],
-              size=size1, bold=True, color=FG_DARK,
-              spacing=0.95, font=FONT_DISPLAY)
-    h1 = _measure(headline_lines[0], size1, 11, bold=True, spacing=0.95).height_in
-    if len(headline_lines) > 1:
-        y2 = max(Inches(2.05), Inches(1.0 + h1 + 0.25))
-        _add_body(s, Inches(0.6), y2, Inches(11), headline_lines[1],
-                  max_height=Inches(3.3) - y2,
-                  size=22, floor=16, color=FG_DARK, font=FONT_DISPLAY)
-    # Pre / Post visual comparison - two big stat plates side by side
-    plate_y = Inches(3.4)
-    plate_w = Inches(5.2)
-    plate_h = Inches(2.8)
-    # Pre plate
-    _add_rect(s, Inches(0.6), plate_y, plate_w, plate_h,
-              fill=FG_DARK, line=None)
-    _add_text(s, Inches(0.9), plate_y + Inches(0.25), Inches(2), Inches(0.3),
-              "PRE-CAMPAIGN", size=10, bold=True, color=ACCENT,
-              letter_spacing=0.2)
-    _add_text(s, Inches(0.9), plate_y + Inches(0.6), plate_w - Inches(0.5),
-              Inches(1.3),
-              fmt_pct(ctx.pre_pen), size=70, bold=True, color=FG_LIGHT,
-              font=FONT_NUMERIC, spacing=0.95)
-    # Pre-plate sub-label = the actual pre-window from the payload
-    # (fixes C2: prior copy said "in the year before campaign launch"
-    # which mislabels the trailing pre-period as a 12-month window).
-    #
-    # The numerator-and-denominator disclosure line (Liz July 27 v2
-    # C1) stays, but PROJECTED UP per Jenna 2026-09-23 ("make sure it
-    # is always projecting up"): raw panelist counts never print on a
-    # client-facing slide. Both sides of the ratio are stated at the
-    # U.S. audience universe, so the percentage still audits directly.
-    pre_p  = ctx.data.get("pre_period")  or {}
-    post_p = ctx.data.get("post_period") or {}
-    pre_label = _period_label(pre_p, fallback="in the pre-window")
-    post_label = _period_label(post_p, fallback=f"in the {ctx.attribution_d}-day post-window")
-    pre_incidence  = (f"of the {fmt_num(ctx.audience_proj)}-consumer "
-                      "audience universe (incidence rate)")
-    post_incidence = (f"of the {fmt_num(ctx.audience_proj)}-consumer "
-                      "audience universe (incidence rate)")
-    _add_text(s, Inches(0.9), plate_y + Inches(1.85), plate_w - Inches(0.5),
-              Inches(0.35),
-              f"{fmt_num(ctx.pre_users_proj)} U.S. consumers projected",
-              size=13, color=FG_LIGHT)
-    _add_text(s, Inches(0.9), plate_y + Inches(2.15), plate_w - Inches(0.5),
-              Inches(0.30),
-              pre_incidence,
-              size=10, italic=True, color=MUTED_DK)
-    _add_body(s, Inches(0.9), plate_y + Inches(2.42), plate_w - Inches(0.5),
-              f"engaged with the brand {pre_label}.",
-              max_height=plate_h - Inches(2.42 + 0.02),
-              size=10, floor=NOTE_FLOOR, italic=True, color=MUTED_DK)
-    # Post plate
-    post_x = Inches(7.2)
-    _add_rect(s, post_x, plate_y, plate_w, plate_h,
-              fill=ACCENT, line=None)
-    _add_text(s, post_x + Inches(0.3), plate_y + Inches(0.25),
-              Inches(2), Inches(0.3),
-              "POST-CAMPAIGN", size=10, bold=True, color=FG_DARK,
-              letter_spacing=0.2)
-    _add_text(s, post_x + Inches(0.3), plate_y + Inches(0.6),
-              plate_w - Inches(0.5), Inches(1.3),
-              fmt_pct(ctx.post_pen), size=70, bold=True, color=FG_DARK,
-              font=FONT_NUMERIC, spacing=0.95)
-    _add_text(s, post_x + Inches(0.3), plate_y + Inches(1.85),
-              plate_w - Inches(0.5), Inches(0.35),
-              f"{fmt_num(ctx.post_users_proj)} U.S. consumers projected",
-              size=13, color=FG_DARK)
-    _add_text(s, post_x + Inches(0.3), plate_y + Inches(2.15),
-              plate_w - Inches(0.5), Inches(0.30),
-              post_incidence,
-              size=10, italic=True, color=FG_DARK)
-    _add_body(s, post_x + Inches(0.3), plate_y + Inches(2.42),
-              plate_w - Inches(0.5),
-              f"engaged with the brand {post_label}.",
-              max_height=plate_h - Inches(2.42 + 0.02),
-              size=10, floor=NOTE_FLOOR, italic=True, color=FG_DARK)
-    # Read As callout + significance line, MIDG-style.
-    moved = max(0, ctx.post_users_proj - ctx.pre_users_proj)
-    read_as = (
-        f"Read As: {fmt_num(moved)} more U.S. consumers were observed "
-        f"engaging with {ctx.brand} after the campaign, a "
-        f"+{ctx.delta_rel:.1f}% relative lift over baseline."
-    )
-    if not ctx.has_control:
-        read_as = (
-            f"Read As: {fmt_num(moved)} more U.S. consumers engaged with "
-            f"{ctx.brand} in the campaign window than in "
-            f"{_pre_days_phrase(ctx.data)}, a {ctx.delta_rel:+.1f}% change."
-        )
-    _read, read_h = _add_body(s, Inches(0.6), Inches(6.25), Inches(12.1), read_as,
-                              max_height=Inches(0.42), size=12, floor=NOTE_FLOOR,
-                              italic=True, color=MUTED_LT, align="center")
-    # Statistical significance line - pooled two-sample z on paired
-    # marginals (same-panel pre/post design). We display n, delta,
-    # z, and a 95% CI on the pp delta. See methodology slide.
-    sig = _mcnemar_summary(ctx)
-    if sig:
-        sig_top = max(Inches(6.62), Inches(6.25) + read_h + Inches(0.08))
-        _add_body(s, Inches(0.6), sig_top, Inches(12.1), sig,
-                  max_height=Inches(CONTENT_BOTTOM) - sig_top,
-                  size=10, floor=NOTE_FLOOR, italic=True, color=MUTED_LT, align="center")
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
+    surf = S_DARK
+    _ground(s, surf)
+    if ctx.delta_pp >= 0.05:
+        title = ctx.titles([(f"{ctx.brand} engagement rose", f" from {ctx.pre_pen:.1f}% to {ctx.post_pen:.1f}%."),
+                             ("Brand engagement rose", f" from {ctx.pre_pen:.1f}% to {ctx.post_pen:.1f}%.")])
+    elif ctx.delta_pp <= -0.05:
+        title = ctx.titles([(f"{ctx.brand} engagement fell", f" from {ctx.pre_pen:.1f}% to {ctx.post_pen:.1f}%."),
+                             ("Brand engagement fell", f" from {ctx.pre_pen:.1f}% to {ctx.post_pen:.1f}%.")])
+    else:
+        title = ctx.titles([(f"{ctx.brand} engagement held", f" at {ctx.post_pen:.1f}%, before and after."),
+                             ("Brand engagement held", f" at {ctx.post_pen:.1f}%, before and after.")])
+    if ctx.has_control:
+        # the two groups start close, never identical, so the line says
+        # only what the figures on the page bear out
+        sub = (f"A matched group{' of the same size' if _same_size(ctx) else ''} moved from "
+               f"{ctx.c_pre_pen:.1f}% to {ctx.c_post_pen:.1f}%.")
+    else:
+        sub = (f"The share of the {fmt_num(ctx.audience_proj)} people reached who had a "
+               f"{ctx.ba} touchpoint, window by window.")
+    top = _head(s, surf, idx, "Engagement before and after", title, sub, ctx.logo(surf), source=ctx.sources_line)
+    room = CONTENT_BOTTOM - top
+    strip_h = 0.84 if ctx.has_control else 0.0
+    plate_room = room - 0.62 - (strip_h + 0.18 if strip_h else 0.0)
+    fig = 72 if plate_room >= 2.85 else (60 if plate_room >= 2.4 else 44)
+    plate_h = min(plate_room, round(0.5 + _line_h_in(fig, 0.95) + 0.06 + 0.3 + 0.22 + 0.3, 3))
+    _plate(s, surf, M, top, COL2, plate_h, f"{_days_phrase(ctx.pre_days)} {ctx.before_word}",
+           f"{ctx.pre_pen:.1f}%", f"{fmt_num(ctx.pre_users_proj)} people", ctx.pre_range, lit=False, fig=fig)
+    _plate(s, surf, M + COL2 + GUT, top, COL2, plate_h, f"{_days_phrase(ctx.post_days)} {ctx.after_word}",
+           f"{ctx.post_pen:.1f}%", f"{fmt_num(ctx.post_users_proj)} people", ctx.post_range, lit=True, fig=fig)
+    y = top + plate_h + 0.18
+    if ctx.has_control:
+        _card(s, M, y, BAND, strip_h, fill=surf.card)
+        cells = [("People reached", f"{ctx.delta_pp:+.1f} points", surf.card_title),
+                 ("Matched group", f"{ctx.c_delta_pp:+.1f} points", surf.card_title),
+                 ("Lift over the matched group", f"{ctx.lift_pp:+.1f} points", surf.card_accent)]
+        cw = (BAND - 0.6) / 3
+        for i, (label, value, color) in enumerate(cells):
+            cx = M + 0.3 + i * cw
+            _label(s, cx, y + 0.16, cw - 0.2, label, surf.card_label)
+            T(s, cx, y + 0.4, cw - 0.2, 0.34, value, size=18, weight="Bold", color=color)
+        y += strip_h + 0.18
+        if ctx.lift_pp > 0:
+            read = (f"What this means: the people reached gained {ctx.lift_pp:.1f} points more than a group "
+                    "like them that never saw the campaign.")
+            if ctx.c_delta_pp > 0.05 and ctx.delta_pp / ctx.c_delta_pp >= 1.5:
+                read += f" Their rise was {_times(ctx.delta_pp / ctx.c_delta_pp)} the matched group's."
+        else:
+            read = ("What this means: the matched group moved as much as the people reached, "
+                    "so the rise is not the campaign's.")
+    else:
+        if ctx.delta_pp >= 0.05:
+            read = (f"What this means: {_about_share(ctx.pre_pen, of='').strip()} engaged with {ctx.b} "
+                    f"{ctx.before_word}, and {_about_share(ctx.post_pen, of='').strip()} did {ctx.after_word}.")
+        else:
+            read = (f"What this means: the same share of people engaged with {ctx.b} "
+                    f"{ctx.before_word} and {ctx.after_word}.")
+    _reading(s, surf, y, read)
     return s
-
-
-def _mcnemar_summary(ctx: DeckCtx) -> str:
-    """Compose the on-slide significance strip from the payload's
-    diagnostics.significance block.
-
-    Per July 27 QC memo (C6): at large panel n the p-value carries
-    no information (any Δ above ~0.04pp clears p=0.05), so on
-    n>=1e6 panels we drop the p-value entirely and report point
-    estimate, z, and the 95% CI. On smaller panels we keep p for
-    readers who want it.
-
-    Recomputes z and CI from panel size + observed pre/post counts
-    when possible, so a stale-denominator payload still renders the
-    right numbers on the corrected panel base."""
-    from math import erf, sqrt
-
-    diag  = (ctx.data.get("diagnostics") or {}).get("significance") or {}
-    n_pre  = ctx.sample_pre
-    n_post = ctx.sample_post
-    n_panel = ctx.panel_size
-
-    # Recompute on the panel base actually declared in the payload,
-    # rather than trusting a possibly-stale precomputed z/CI written
-    # against a different denominator.
-    z_calc, se_pp_calc, delta_pp_calc = None, None, None
-    if n_pre and n_post and n_panel:
-        p_pool = (n_pre + n_post) / (2 * n_panel)
-        se = sqrt(2 * p_pool * (1 - p_pool) / n_panel)
-        delta = (n_post - n_pre) / n_panel
-        z_calc = delta / se if se else 0
-        se_pp_calc = se * 100
-        delta_pp_calc = delta * 100
-
-    # Prefer recomputed z/CI/Δ. Fall back to payload numbers only if
-    # the recompute fails.
-    if delta_pp_calc is not None:
-        delta_pp = delta_pp_calc
-        z        = z_calc
-        ci       = [delta_pp - 1.96 * se_pp_calc, delta_pp + 1.96 * se_pp_calc]
-    else:
-        delta_pp = diag.get("delta_pp_point")
-        z        = diag.get("primary_test_z")
-        ci       = diag.get("delta_ci_95_pp") or diag.get("ci_95_pp")
-
-    # Significance flag: recomputed z if available, else the payload
-    # flag (which is only correct on the payload's declared base).
-    if z is not None:
-        sig = abs(z) >= 1.96
-    else:
-        sig = bool(diag.get("significant"))
-
-    # No raw panel n on the strip (always project up, 2026-09-23);
-    # the z/CI math still runs on the observed base internally.
-    parts = []
-    if delta_pp is not None:
-        parts.append(f"Δ={float(delta_pp):+.2f}pp")
-    if z is not None:
-        parts.append(f"z={float(z):+.2f}")
-    # Drop p when n is large enough that p becomes uninformative
-    # (item C6: detection floor at n=1e7 is ~0.04pp; p is not a
-    # useful column on a client-facing slide at this scale).
-    if n_panel < 1_000_000:
-        p = diag.get("primary_test_p_value")
-        if p is None and z is not None:
-            p = 2 * (1 - 0.5 * (1 + erf(abs(z) / sqrt(2))))
-        if p is not None:
-            # "p=0.000" reads as a bug; print the conventional floor.
-            parts.append("p<0.001" if float(p) < 0.0005
-                         else f"p={float(p):.3f}")
-    if ci:
-        try:
-            lo, hi = float(ci[0]), float(ci[1])
-            parts.append(f"95% CI on Δ: [{lo:+.2f}pp, {hi:+.2f}pp]")
-        except Exception:
-            pass
-    parts.append("SIGNIFICANT" if sig else "not distinguishable from zero")
-    return " · ".join(parts)
 
 
 def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
-    """Hero $ slide - LISA's 'ONE INSIGHT' moment, repurposed for the
-    total brand value. Solid pink so it explodes off the page after the
-    cream lift slide."""
+    """The total, and the parts that add up to it. Every lens that is in
+    the total has its tile on this page."""
     s = _blank(prs)
-    _add_bg(s, BG_PINK)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "The Headline"), on_dark=False)
-    _add_text(s, Inches(0.6), Inches(1.4), Inches(12), Inches(1.3),
-              "Total Brand Value Observed.",
-              size=44, bold=True, color=FG_DARK,
-              spacing=0.95, font=FONT_DISPLAY)
-    # The big number - exact dollars, size stepping down for long values
-    hero_txt = fmt_money(ctx.total_value)
-    _add_text(s, Inches(0.6), Inches(2.5), Inches(12), Inches(2.0),
-              hero_txt,
-              size=_fit_stat(hero_txt, 12.0, 150, floor=56), bold=True, color=FG_DARK,
-              font=FONT_NUMERIC, spacing=0.85, align="left")
-    # "Attributable to Partnership" subtotal.
-    # 2026-09-01 house standard: BLV + CV × min(1.0, max(0.0,
-    # adj_lift_pp / pre_baseline_pct)). See
-    # bg-webapp/migration/bpiq_attributable.py and
-    # .cursor/rules/bpiq-attributable-formula.mdc.
-    #
-    # Priority: read the payload's precomputed value first (keeps
-    # every shipped payload byte-stable when rebuilt); recompute via
-    # the helper when the payload carries the ingredients but not
-    # the field; fall back to BLV + full CV only for legacy payloads
-    # that pre-date the strict-attributable field entirely.
+    surf = S_SIGNAL
+    _ground(s, surf)
+    lens, value = _top_lens(ctx)
+    if ctx.total_value > 0 and value / ctx.total_value >= 0.5:
+        title = ("Most of the value", f" is {lens.lower()}.")
+    elif lens:
+        title = (f"{lens} is the largest part", " of the value.")
+    else:
+        title = ("The value", " of the partnership.")
+    top = _head(s, surf, idx, "Total value", title, None, ctx.logo(surf), source=ctx.sources_line)
+    tiles_h = 0.92
+    tiles_y = CONTENT_BOTTOM - tiles_h
+    _label(s, M, top, BAND, "Total brand value" + (f" \u00b7 {ctx.post_range}" if ctx.post_range else ""), surf.title)
+    hero = fmt_money(ctx.total_value)
+    room = tiles_y - 0.2 - (top + 0.28)
+    hero_size = _fit_stat(hero, BAND, 82 if room >= 2.9 else 60, floor=36)
+    hero_h = _line_h_in(hero_size, 0.88)
+    T(s, M, top + 0.28, BAND, hero_h, hero, size=hero_size, weight="Bold", color=surf.title, spacing=0.88)
+    y2 = top + 0.28 + hero_h + 0.16
+    # "Attributable to partnership" subtotal. 2026-09-01 house standard:
+    # BLV + CV x min(1.0, max(0.0, adj_lift_pp / pre_baseline_pct)). See
+    # migration/bpiq_attributable.py. With no comparison group it is the
+    # brand lift value: the engagement that is new.
     from .bpiq_attributable import resolve_attributable_from_payload
     attributable = float(resolve_attributable_from_payload(
-        ctx.data,
-        fallback_blv=ctx.blv,
-        fallback_cv=ctx.cv,
-        fallback_has_conversions=ctx.has_conversions,
-    ))
-    # the two figures hold one line each; their readings fit the room
-    # above the four tiles (6.05in) or lose a trailing sentence
-    tiles_top = Inches(6.05)
-    note_top = Inches(5.55)
-    attributable_txt = fmt_money(attributable)
-    _add_text(s, Inches(0.6), Inches(4.75), Inches(6.5), Inches(0.35),
-              ("OF WHICH ATTRIBUTABLE TO PARTNERSHIP" if ctx.has_control
-               else "OF WHICH NEW SINCE THE CAMPAIGN BEGAN"),
-              size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
-    _add_text(s, Inches(0.6), Inches(5.05), Inches(6.5), Inches(0.5),
-              attributable_txt,
-              size=_fit_stat(attributable_txt, 6.5, 32, floor=18), bold=True, color=FG_DARK,
-              font=FONT_NUMERIC)
-    _add_body(s, Inches(0.6), note_top, Inches(6.5),
-              ("Brand Lift plus the adjusted-lift share of Conversion "
-               "Value (strictly incremental). Brand Engagement and "
-               "Earned Media price the observed audience footprint, "
-               "which includes pre-existing brand interest."
-               if ctx.has_control else
-               "Brand Lift: the engagement that is new since the campaign "
-               "began. Brand Engagement and Earned Media price the whole "
-               "audience the campaign reached, including people who "
-               "already engaged with the brand."),
-              max_height=tiles_top - note_top - Inches(0.05),
-              size=9, floor=NOTE_FLOOR, spacing=1.3, min_spacing=1.1,
-              italic=True, color=FG_DARK)
-    # Her share (2026-10-28): the talent's share of the campaign's value
-    # from the assets that carried her and the matched group.
-    _val = ctx.data.get("valuation") or {}
-    _ts = _val.get("talent_share")
-    _tv = _val.get("attributable_to_talent")
-    if _ts is not None and _tv:
-        _who = str(((ctx.data.get("qualifier_value") or [""]) or [""])[0] or "the talent")
-        share_txt = f"{fmt_money(float(_tv))}  ({float(_ts) * 100:.0f}%)"
-        _add_text(s, Inches(7.3), Inches(4.75), Inches(5.3), Inches(0.35),
-                  f"OF WHICH {_who.upper()}'S SHARE",
-                  size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
-        _add_text(s, Inches(7.3), Inches(5.05), Inches(5.3), Inches(0.5),
-                  share_txt,
-                  size=_fit_stat(share_txt, 5.3, 32, floor=18), bold=True, color=FG_DARK,
-                  font=FONT_NUMERIC)
-        _add_body(s, Inches(7.3), note_top, Inches(5.3),
-                  _plain_basis(_val.get("talent_share_basis"), ctx.has_control).capitalize() + ".",
-                  max_height=tiles_top - note_top - Inches(0.05),
-                  size=9, floor=NOTE_FLOOR, spacing=1.3, min_spacing=1.1,
-                  italic=True, color=FG_DARK)
-    # 4-up breakdown bar across the bottom
-    parts = [
-        ("Earned Media",      ctx.emv),
-        ("Brand Engagement",  ctx.bev),
-        ("Brand Lift",        ctx.blv),
-    ]
-    if ctx.has_conversions:
-        parts.append(("Conversion", ctx.cv))
-    tile_w = Inches(12.0 / len(parts))
-    base_x = Inches(0.6)
-    base_y = tiles_top
-    for i, (label, value) in enumerate(parts):
-        x = base_x + tile_w * i + Inches(0.05 if i > 0 else 0)
-        _add_rect(s, x, base_y, tile_w - Inches(0.1), Inches(1.0),
-                  fill=FG_DARK, line=None)
-        _add_text(s, x + Inches(0.25), base_y + Inches(0.1),
-                  tile_w - Inches(0.4), Inches(0.3),
-                  label.upper(), size=9, bold=True, color=ACCENT,
-                  letter_spacing=0.16)
-        _add_text(s, x + Inches(0.25), base_y + Inches(0.4),
-                  tile_w - Inches(0.4), Inches(0.5),
-                  fmt_money(value),
-                  size=_fit_stat(fmt_money(value), tile_w.inches - 0.4, 20, floor=12),
-                  bold=True, color=FG_LIGHT, font=FONT_NUMERIC)
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
+        ctx.data, fallback_blv=ctx.blv, fallback_cv=ctx.cv, fallback_has_conversions=ctx.has_conversions))
+    if not ctx.has_control or attributable <= 0:
+        attributable = ctx.blv
+    val = _dict(ctx.data.get("valuation"))
+    share = val.get("talent_share")
+    has_share = share is not None and _num(share) > 0 and bool(ctx.talent)
+    col_w = COL2 if has_share else BAND
+    note_h = tiles_y - 0.14 - (y2 + 0.74)
+    since = "since the campaign began"
+    _label(s, M, y2, col_w, "Of which attributable to partnership" if ctx.has_control else f"Of which new {since}", surf.title)
+    a_txt = fmt_money(attributable)
+    T(s, M, y2 + 0.24, col_w, 0.44, a_txt, size=_fit_stat(a_txt, col_w, 26, floor=16), weight="Bold", color=surf.title)
+    if note_h >= 0.2:
+        if ctx.has_control:
+            note = (f"Brand lift, plus the part of conversion value the lift accounts for. The rest prices "
+                    f"people who already engaged with {ctx.b}.")
+        else:
+            note = (f"This is brand lift, the engagement that is new {since}. "
+                    "The rest prices everyone who was reached.")
+        BODY(s, M, y2 + 0.74, col_w - 0.3, note, max_h=note_h, size=11, floor=10, spacing=1.25, min_spacing=1.1,
+             color=surf.body)
+    if has_share:
+        x2 = M + COL2 + GUT
+        t_usd = round(ctx.total_value * _num(share), 2)
+        _label(s, x2, y2, COL2, f"Of which {ctx.talent}'s share", surf.title)
+        s_txt = f"{fmt_money(t_usd)} ({_num(share) * 100:.0f}%)"
+        T(s, x2, y2 + 0.24, COL2, 0.44, s_txt, size=_fit_stat(s_txt, COL2, 26, floor=16), weight="Bold", color=surf.title)
+        basis = _basis_sentences(val.get("talent_share_basis"), brand=ctx.brand, talent=ctx.talent,
+                                 has_control=ctx.has_control)
+        if basis and note_h >= 0.2:
+            BODY(s, x2, y2 + 0.74, COL2 - 0.2, basis, max_h=note_h, size=11, floor=10, spacing=1.25,
+                 min_spacing=1.1, color=surf.body)
+    n = max(1, len(ctx.lenses))
+    gap = 0.2
+    tw = (BAND - gap * (n - 1)) / n
+    size = min(_fit_stat(fmt_money(v), tw - 0.48, 20, floor=12) for _l, v in ctx.lenses) if ctx.lenses else 18
+    for i, (label, v) in enumerate(ctx.lenses):
+        x = M + i * (tw + gap)
+        _card(s, x, tiles_y, tw, tiles_h, fill=surf.card)
+        _label(s, x + 0.24, tiles_y + 0.16, tw - 0.48, label, surf.card_accent)
+        T(s, x + 0.24, tiles_y + 0.42, tw - 0.48, 0.38, fmt_money(v), size=size, weight="Bold", color=surf.card_title)
     return s
-
-
-#: Fixed platform roster used across ALL decks. Any brand run that
-#: doesn't register a given platform is shown as a zero row rather
-#: than being dropped, so two brands measured against the same panel
-#: cannot appear to have different rosters (item 15).
-#:
-#: LinkedIn is intentionally excluded from the display roster - it is
-#: a B2B platform with negligible signal in consumer brand
-#: partnerships. It stays in the underlying rate table for future
-#: B2B runs but is not shown by default.
-FIXED_PLATFORM_ROSTER = [
-    "Instagram", "TikTok", "YouTube", "Facebook", "X (Twitter)",
-    "Reddit", "Pinterest", "Snapchat", "Threads", "Twitch",
-    "Direct (Brand Site)",
-]
-
-#: Per-platform source attribution for the 2026 CPM rate card. This
-#: is printed on the EMV slide so procurement can trace every rate
-#: back to a specific, credible benchmark instead of a generic
-#: "Hootsuite / Sprout / LinkedIn" boilerplate line (item 14).
-CPM_SOURCE_ATTRIBUTION = {
-    "Instagram":  "Hootsuite Social Media Benchmark Report 2026",
-    "Facebook":   "Hootsuite Social Media Benchmark Report 2026",
-    "TikTok":     "Sprout Social 2026 Q1 Benchmarks",
-    "YouTube":    "IAB / SMI 2026 CTV+Video Benchmarks",
-    "X (Twitter)":"eMarketer 2026 X Ad Rate Guide",
-    "Reddit":     "Reddit for Business 2026 Ratecard",
-    "Pinterest":  "Hootsuite Social Media Benchmark Report 2026",
-    "Snapchat":   "Sprout Social 2026 Q1 Benchmarks",
-    "Threads":    "eMarketer 2026 Threads Ad Rate Guide",
-    "Twitch":     "Amazon Ads Streaming Benchmarks 2026",
-    "LinkedIn":   "LinkedIn Marketing Solutions 2026 Ratecard",
-    "Direct (Brand Site)":
-        "IAB Display / owned-property engagement equivalent (not paid social)",
-    "Press": "Editorial earned-media equivalent, per reader reached",
-    "Launch event": "Experiential earned-media equivalent, per person reached",
-}
 
 
 def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
-    """Per-platform earned media breakdown - LISA index-list pattern.
-    Each row: PLATFORM · incremental consumers · $/Consumer · EMV.
-
-    Column labels: we use "$/Consumer" rather than "CPM" because the
-    calculation multiplies incremental engaged consumers by a
-    per-consumer valuation rate calibrated against 2026 platform
-    CPMs at typical exposure frequency. It is a CPM-equivalent
-    open-market value per attributable consumer, not a per-mille
-    impression rate."""
+    """Earned media, channel by channel. Every channel the valuation
+    priced is in the table and the last row is their sum, which is the
+    earned media value printed everywhere else in the deck. Rates are
+    ours and carry no attribution."""
     s = _blank(prs)
-    _add_bg(s, BG_DARK)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "Earned Media Value"), on_dark=True)
-    emv_head = f"{fmt_money(ctx.emv)} of earned media, platform by platform."
-    _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              emv_head,
-              size=_fit_lines(emv_head, (40, 38, 36, 34, 32, 30), 11, bold=True, max_lines=2),
-              bold=True, color=FG_LIGHT, spacing=0.95, font=FONT_DISPLAY)
-    # Build a fixed-roster row table so both decks always show the
-    # same 8 platforms in the same order, with zeros where a
-    # platform did not register (fixes item 15's "the roster was
-    # chosen after seeing the results" read).
-    all_rows = (ctx.data.get("valuation") or {}).get("emv_breakdown") or []
-    by_platform = {(r.get("platform") or "").strip(): r for r in all_rows}
-    # Show the full fixed roster (11 platforms). Row height is
-    # tightened to keep the whole table within the slide grid.
-    # the press and the launch event join the roster when the campaign
-    # earned them (2026-10-28); other decks keep the fixed 11 rows
-    display_roster = list(FIXED_PLATFORM_ROSTER) + [
-        p for p in ("Press", "Launch event") if float((by_platform.get(p) or {}).get("emv_value") or 0) > 0]
-    rows = []
-    for plat in display_roster:
-        r = by_platform.get(plat, {})
-        rows.append({
-            "platform": plat,
-            "incremental_users_projected":
-                int(r.get("incremental_users_projected") or 0),
-            "emv_per_user_rate":
-                float(r.get("emv_per_user_rate") or 0),
-            "emv_value":
-                float(r.get("emv_value") or 0),
-        })
-    if not any(r["emv_value"] for r in rows):
-        _add_text(s, Inches(0.6), Inches(4), Inches(11), Inches(0.6),
-                  "No platform-level signal in this window.",
-                  size=14, italic=True, color=MUTED_DK)
-        _page_footer(s, idx, total, ctx.project, on_dark=True)
+    surf = S_LIGHT
+    _ground(s, surf)
+    rows = ctx.emv_rows
+    if rows:
+        title = _pick_title([(f"{rows[0]['display']} is the largest source", " of earned media."),
+                             ("One channel is the largest source", " of earned media.")])
+        sub = (f"{fmt_money(ctx.emv)} across {len(rows)} channel{'s' if len(rows) != 1 else ''}, "
+               "each priced per new person reached.")
+    else:
+        title = ("No channel earned media", " in this window.")
+        sub = "No channel showed new reach to price."
+    top = _head(s, surf, idx, "Earned media", title, sub, ctx.logo(surf), source=ctx.sources_line)
+    if not rows:
         return s
-    # Grid: PLATFORM at 0.6, INCR CONSUMERS at 3.4, $/CONSUMER at
-    # 5.6, EMV at 7.4. The rightmost 2.4in (10.0 → 12.4) hosts the
-    # WHY IT MATTERS callout. Column widths and starts are computed
-    # up front so no header can overrun another (fixes item 18).
-    table_top = Inches(2.6)
-    _row_size = 11 if len(rows) <= 11 else 10
-    # The two footnotes under the table are composed first (they grow
-    # with the roster: every platform with a rate is sourced), so the
-    # rows and the notes share the band between the table head and the
-    # page footer. The notes keep 9pt; when the band is short the rows
-    # tighten first (down to 0.21in at 10pt), then the notes tighten
-    # their leading, then the longest note loses a clause.
-    sources_txt, overlap = _emv_footnotes(ctx, display_roster)
-    rows_top = table_top + Inches(0.38)
-    rows_top_in = Emu(rows_top).inches
-    row_h_in = 0.30 if len(rows) <= 11 else 0.245
-    notes_gap = 0.06
-    note_blocks = [
-        dict(text=sources_txt, width_in=12.1, size=9, floor=NOTE_FLOOR, spacing=1.15, min_spacing=1.0),
-        dict(text=overlap, width_in=12.1, size=9, floor=NOTE_FLOOR, spacing=1.15, min_spacing=1.0),
-    ]
-
-    def _notes_need(fitted):
-        return sum(h + 0.02 for _sz, _sp, _t, h in fitted) + notes_gap * (len(fitted) - 1)
-
-    fitted_notes = _fit_stack(note_blocks, 99.0, notes_gap)   # the notes as written
-    while (rows_top_in + len(rows) * row_h_in + notes_gap + _notes_need(fitted_notes)
-           > CONTENT_BOTTOM and row_h_in > 0.21):
-        row_h_in = round(row_h_in - 0.005, 3)
-    notes_room = CONTENT_BOTTOM - (rows_top_in + len(rows) * row_h_in + notes_gap)
-    fitted_notes = _fit_stack(note_blocks, notes_room, notes_gap)
-    row_h = Inches(row_h_in)
-    C_PLAT     = (Inches(0.60), Inches(2.60))
-    C_INCR     = (Inches(3.30), Inches(2.10))
-    C_RATE     = (Inches(5.55), Inches(1.70))
-    C_EMV      = (Inches(7.40), Inches(2.30))
-    headers = [
-        ("PLATFORM",        C_PLAT, "left"),
-        ("INCR. CONSUMERS", C_INCR, "right"),
-        ("$ / CONSUMER",    C_RATE, "right"),
-        ("EMV",             C_EMV,  "right"),
-    ]
-    for label, (x, w), align in headers:
-        _add_text(s, x, table_top, w, Inches(0.3),
-                  label, size=9, bold=True, color=MUTED_DK,
-                  letter_spacing=0.16, align=align)
-    # Underline below header
-    line = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6),
-                              table_top + Inches(0.32),
-                              C_EMV[0] + C_EMV[1] - Inches(0.6),
-                              Emu(6000))
-    line.line.fill.background()
-    line.fill.solid()
-    line.fill.fore_color.rgb = MUTED_DK
-    # Rows
+    tx, tw = M, 7.85
+    c_name = (tx, 2.5)
+    c_people = (tx + 2.5, 1.85)
+    c_rate = (tx + 4.4, 1.6)
+    c_value = (tx + 6.05, 1.8)
+    for label, (x, w), align in (("Channel", c_name, "left"), ("New people reached", c_people, "right"),
+                                 ("Value per person", c_rate, "right"), ("Earned media value", c_value, "right")):
+        _label(s, x, top, w, label, surf.card_label, align=align, size=9)
+    _rule(s, tx, top + 0.3, tw, surf.title)
+    avail = CONTENT_BOTTOM - (top + 0.38) - 0.36
+    pitch = max(0.19, min(0.3, avail / len(rows)))
+    size = 11 if pitch >= 0.26 else (10.5 if pitch >= 0.215 else 10)
+    y = top + 0.38
     for i, r in enumerate(rows):
-        y = table_top + Inches(0.38) + row_h * i
-        is_zero = r["emv_value"] <= 0
-        row_color = MUTED_DK if is_zero else FG_LIGHT
-        _add_text(s, C_PLAT[0], y, C_PLAT[1], row_h,
-                  r["platform"], size=_row_size, bold=True, color=row_color)
-        # C11: use literal 0 (not em-dash) for platforms with no
-        # observed signal, matching the slide's own note that zero
-        # rows indicate absence of signal.
-        _add_text(s, C_INCR[0], y, C_INCR[1], row_h,
-                  fmt_num(r["incremental_users_projected"]) if r["incremental_users_projected"] else "0",
-                  size=_row_size, color=row_color, font=FONT_NUMERIC, align="right")
-        _add_text(s, C_RATE[0], y, C_RATE[1], row_h,
-                  f"${r['emv_per_user_rate']:.2f}",
-                  size=_row_size, color=MUTED_DK, font=FONT_NUMERIC, align="right")
-        _add_text(s, C_EMV[0], y, C_EMV[1], row_h,
-                  fmt_money(r["emv_value"]) if not is_zero else "$0",
-                  size=_row_size, bold=(not is_zero),
-                  color=(ACCENT if not is_zero else MUTED_DK),
-                  font=FONT_NUMERIC, align="right")
-    table_bottom = rows_top + row_h * len(rows)
-    # Right-side "WHY IT MATTERS" callout, LISA-style: the card runs
-    # the height of the table (it used to be a fixed 3.5in, which on a
-    # long roster crossed the notes below), and its body fits inside
-    callout_x = Inches(10.0)
-    callout_top = Inches(2.6)
-    _callout(s, callout_x, callout_top, Inches(2.85),
-             "WHY IT MATTERS",
-             f"Each incremental brand consumer on a platform is priced at "
-             f"a CPM-equivalent per-consumer rate calibrated against 2026 "
-             f"platform benchmarks (see sourcing below). This is the "
-             f"open-market dollar value of the social audience the "
-             f"partnership earned for {ctx.brand}, not a per-mille "
-             f"impression cost. Rows are the fixed roster used across "
-             f"all decks; zeros indicate no observed signal.",
-             height=table_bottom - callout_top, max_height=table_bottom - callout_top,
-             line=ACCENT, line_w=1.0, label_color=ACCENT, body_color=FG_LIGHT,
-             body_size=9, spacing=1.32, min_spacing=1.15, pad=0.2, body_top=0.5)
-    # The sourcing line and the overlap note, stacked under the table
-    # at the sizes and lengths the band allows (see the budget above).
-    y = table_bottom + Inches(notes_gap)
-    for sz, sp, txt, h_in in fitted_notes:
-        _add_text(s, Inches(0.6), y, Inches(12.1), Inches(round(h_in + 0.02, 3)),
-                  txt, size=sz, italic=True, color=MUTED_DK, spacing=sp)
-        y = y + Inches(round(h_in + 0.02, 3)) + Inches(notes_gap)
-    _page_footer(s, idx, total, ctx.project, on_dark=True)
+        lead = i == 0
+        T(s, c_name[0], y, c_name[1], pitch, _one_line(r["display"], size, c_name[1]), size=size,
+          weight="SemiBold" if lead else None, color=surf.title, anchor="middle")
+        T(s, c_people[0], y, c_people[1], pitch, fmt_num(r["people"]), size=size, color=surf.body,
+          align="right", anchor="middle")
+        T(s, c_rate[0], y, c_rate[1], pitch, f"${r['rate']:,.2f}", size=size, color=surf.body,
+          align="right", anchor="middle")
+        T(s, c_value[0], y, c_value[1], pitch, fmt_money(r["value"]), size=size,
+          weight="SemiBold" if lead else None, color=surf.accent if lead else surf.title,
+          align="right", anchor="middle")
+        y += pitch
+    _rule(s, tx, y + 0.04, tw, surf.title)
+    T(s, c_name[0], y + 0.08, 4.0, 0.28, "Total earned media", size=11, weight="Bold", color=surf.title, anchor="middle")
+    T(s, c_value[0] - 0.6, y + 0.08, c_value[1] + 0.6, 0.28, fmt_money(ctx.emv), size=11, weight="Bold",
+      color=surf.title, align="right", anchor="middle")
+    lead = rows[0]
+    note = (f"Each new person {ctx.b} reached on a channel is priced at our 2026 rate for that channel.")
+    if len(rows) >= 3 and lead["value"] > rows[1]["value"] + rows[2]["value"]:
+        note += (f" {lead['display']} leads at {fmt_money(lead['value'])}, more than "
+                 f"{rows[1]['display']} and {rows[2]['display']} put together.")
+    elif len(rows) >= 2:
+        note += (f" {lead['display']} leads at {fmt_money(lead['value'])}, ahead of "
+                 f"{rows[1]['display']} at {fmt_money(rows[1]['value'])}.")
+    if ctx.audience_proj and sum(r["people"] for r in rows) > ctx.audience_proj:
+        note += (" One person can be reached on more than one channel, so the channel counts add up "
+                 f"to more than the {fmt_num(ctx.audience_proj)} people in the read.")
+    nx = tx + tw + GUT
+    _note_card(s, surf, nx, top, RIGHT - nx, CONTENT_BOTTOM - top, "What this means", note, size=11, hug=True)
     return s
 
 
-def _emv_footnotes(ctx: DeckCtx, display_roster: list) -> tuple:
-    """The two notes under the earned-media table: the per-platform rate
-    sourcing (C13: read from the payload's rate_sources so the text can
-    change without a code push; every platform with a rate is sourced)
-    and the overlap note."""
-    _raw_srcs = ((ctx.data.get("valuation") or {})
-                 .get("rate_sources", {})
-                 .get("emv_per_user"))
-    if isinstance(_raw_srcs, str):
-        payload_srcs = {p: _raw_srcs for p in display_roster}
-    elif isinstance(_raw_srcs, dict):
-        payload_srcs = _raw_srcs
-    else:
-        payload_srcs = {}
-    rates = ((ctx.data.get("valuation") or {}).get("rates", {}) or {}).get("emv_per_user") or {}
-    unique_srcs, bits = set(), []
-    for plat in display_roster:
-        rate = _num(rates.get(plat, 0))
-        if rate:
-            src = payload_srcs.get(plat) or CPM_SOURCE_ATTRIBUTION.get(plat, "")
-            if src:
-                unique_srcs.add(src)
-                bits.append(f"{plat} ${rate:.2f}: {src}")
-    if len(unique_srcs) == 1:
-        single = unique_srcs.pop().rstrip(". ")
-        sources_txt = f"All platform rates: {single}. Editable in the live dashboard."
-    else:
-        sources_txt = "Rates and sources: " + "; ".join(bits)
-    overlap = (
-        "Note: platform-level incremental consumers can sum above "
-        "the brand-level unique-consumer total because consumers can "
-        "be counted on multiple platforms. EMV prices per-platform "
-        "earned reach; the unique-consumer total is used for Brand "
-        "Lift only."
-    )
-    return sources_txt, overlap
+def _value_page(prs, ctx: DeckCtx, idx: int, surf: Surf, eyebrow: str, title, sub: str,
+                rows: list, total_label: str, total_value: str, note: str):
+    """One lens, priced: the arithmetic on the left, the reading on the
+    right. Shared by the engagement, lift and conversion pages."""
+    s = _blank(prs)
+    _ground(s, surf)
+    top = _head(s, surf, idx, eyebrow, title, sub, ctx.logo(surf), source=ctx.sources_line)
+    calc_w = 7.0
+    bottom = _calc_card(s, surf, M, top, calc_w, rows, total_label, total_value)
+    nx = M + calc_w + GUT
+    _note_card(s, surf, nx, top, RIGHT - nx, min(bottom, CONTENT_BOTTOM) - top, "What this means", note)
+    return s
 
 
 def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
-    """BEV calculator slide. Cream bg, LISA stat-tile rhythm.
-
-    Calculator starts higher on the slide (y=3.0) than the earlier
-    build so the total bar clears the source-line row at y=6.05 and
-    the source footer at y=6.65 without collision (fixes C8)."""
-    s = _blank(prs)
-    _add_bg(s, BG_CREAM)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "Brand Engagement Value"),
-             on_dark=False)
-    _add_headline(s, f"{fmt_money(ctx.bev)} of observed\npost-campaign engagement.",
-                  color=FG_DARK)
-    # Math row - raised to y=3.0 to leave clean margin below.
-    rate = float((ctx.data.get("valuation") or {})
-                 .get("rates", {}).get("bev_per_user") or 0)
-    _math_calculator(
-        s, Inches(0.6), Inches(3.0), Inches(8.0),
-        [
-            ("Post-Campaign Engaged Consumers", fmt_num(ctx.post_users_proj)),
-            ("× $/consumer rate",               f"$ {rate:.2f}"),
-        ],
-        total_label="Brand Engagement Value",
-        total_value=fmt_money(ctx.bev),
-        on_dark=False,
-        accent=RGBColor(0x63, 0x66, 0xF1),
-    )
-    # Why-it-matters, matched to calculator's new top; the card grows
-    # with its body down to the rate line at 6.05in
-    _callout(s, Inches(9.0), Inches(3.0), Inches(3.8),
-             "WHY IT MATTERS",
-             "Every consumer who engaged with the brand in the post-window "
-             "carries open-market value. This prices the total observed "
-             f"post-campaign audience for {ctx.brand}, most of whom "
-             "carried pre-existing brand interest that the campaign did "
-             "not create. See Brand Lift Value for the net-new share.",
-             height=Inches(2.8), max_height=Inches(2.95),
-             line=FG_DARK, line_w=0.75, label_color=FG_DARK, body_color=FG_DARK,
-             body_size=10, floor=BODY_FLOOR, spacing=1.35, min_spacing=1.15,
-             pad=0.25, body_top=0.5)
-    # Rate sourcing footnote. Reads from the payload's
-    # valuation.rate_sources.bev_per_user rather than a hardcoded
-    # citation, so relabeling the source (C4) doesn't require a code
-    # push. It fits the band above the source footer (6.65in).
-    src_line = (
-        (ctx.data.get("valuation") or {})
-        .get("rate_sources", {})
-        .get("bev_per_user")
-        or "Rate: Crosswalk internal valuation convention (2026). "
-           "Editable in the live dashboard."
-    )
-    _add_body(s, Inches(0.6), Inches(6.05), Inches(12.1), src_line,
-              max_height=Inches(0.55), size=9, floor=NOTE_FLOOR, spacing=1.25,
-              min_spacing=1.05, italic=True, color=MUTED_LT)
-    _add_text(s, Inches(0.6), Inches(6.65), Inches(12), Inches(0.25),
-              ctx.sources_line, size=7, italic=True, color=MUTED_LT)
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
-    return s
-
-
-def _matched_group_lines(cg: dict) -> tuple:
-    """The reader-facing account of the comparison group (Jenna
-    2026-10-20: same size, roughly the same brand engagement before the
-    partnership). Returns (one_line, side_by_side) where side_by_side
-    is '' when the payload carries no match figures."""
-    try:
-        from migration.bpiq_matched_control import READER_NOTE as _note
-    except ImportError:  # pragma: no cover - twin layout
-        _note = ("Compared against a matched group of the same size with the "
-                 "same brand engagement before the partnership.")
-    m = (cg or {}).get("match") or {}
-    if not m:
-        return _note, ""
-    side = (f"Exposed group {fmt_num(int(m.get('exposed_size') or 0))} people, "
-            f"{float(m.get('exposed_pre_rate_pct') or 0):.2f}% engaged with the brand before; "
-            f"matched group {fmt_num(int(m.get('control_size') or 0))} people, "
-            f"{float(m.get('control_pre_rate_pct') or 0):.2f}% before.")
-    return _note, side
+    """Brand engagement value: everyone who engaged, at one rate."""
+    rate = _rate(ctx, "bev_per_user")
+    people = _base_for(ctx.bev, rate, ctx.post_users_proj)
+    title = ctx.titles([(f"Everyone who engaged with {ctx.brand}", f" adds up to {fmt_money(ctx.bev)}."),
+                         ("Everyone who engaged", f" adds up to {fmt_money(ctx.bev)}.")])
+    rows = [(f"{_cap(ctx.ba)} engagers {ctx.after_word}", fmt_num(people))]
+    if rate > 0:
+        rows.append(("x our 2026 value per engaged person", f"${rate:,.2f}"))
+    note = (f"This counts every {ctx.ba} engager in {_the_days(ctx.post_days)}, new or not. "
+            f"{fmt_num(ctx.pre_users_proj)} people were already engaging {ctx.before_word}. "
+            "The next page prices only the new ones.")
+    return _value_page(prs, ctx, idx, S_DARK, "Brand engagement", title,
+                       f"Brand engagement value{', ' + ctx.post_range if ctx.post_range else ''}.",
+                       rows, "Brand engagement value", fmt_money(ctx.bev), note)
 
 
 def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
-    """BLV slide - the net-new engagement attributable to the
-    partnership: the exposed group's change minus the matched group's
-    change over the same windows (Jenna 2026-10-20: the matched group
-    carries the exposed group's size and its brand engagement before
-    the partnership, so the lift is the partnership and not a baseline
-    difference)."""
-    s = _blank(prs)
-    _add_bg(s, BG_DARK)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "Brand Lift Value"), on_dark=True)
-    if not ctx.has_control:
-        return _slide_brand_lift_before_after(s, ctx, idx, total)
-    _add_headline(s, f"{fmt_money(ctx.blv)} of net-new engagement\nabove a matched group.",
-                  color=FG_LIGHT)
-    rate = float((ctx.data.get("valuation") or {})
-                 .get("rates", {}).get("blv_per_incr_user") or 0)
-    cg = ctx.data.get("control_group") or {}
-    treat_dp   = float(cg.get("treat_delta_pp")   or 0)
-    control_dp = float(cg.get("control_delta_pp") or 0)
-    # Honor an EXPLICIT incremental_lift_pp from the payload, including
-    # an explicit 0.0 (control-brand runs suppress the adjusted lift at
-    # zero by design). Only derive treat-minus-control when the field
-    # is genuinely absent. The old `or` fallback treated 0.0 as falsy
-    # and printed a nonzero (negative) lift on suppressed control
-    # decks, contradicting both the payload and the live dashboard
-    # (which renders `incremental_lift_pp || 0`).
-    _raw_incr = cg.get("incremental_lift_pp")
-    if _raw_incr is None:
-        incr_pp = treat_dp - control_dp
+    """Brand lift value: only the people who are new. With no matched
+    group it is a before and after count; with one, the gain among the
+    people reached less the matched group's gain over the same days. No
+    test statistic appears: the lift is a figure with a plain reading."""
+    rate = _rate(ctx, "blv_per_incr_user")
+    base = _base_for(ctx.blv, rate, ctx.incr_users)
+    gain = ctx.post_users_proj - ctx.pre_users_proj
+    cg = _dict(ctx.data.get("control_group"))
+    since = "since the campaign began"
+    if ctx.blv <= 0:
+        title = ("No new engagement", " to price in this window.")
+    elif ctx.has_control:
+        title = ("The lift over the matched group", f" is worth {fmt_money(ctx.blv)}.")
     else:
-        incr_pp = float(_raw_incr or 0)
-    # Label: the standard case shows the subtraction. When the payload
-    # suppresses the adjusted lift at zero while control drift exceeds
-    # the treated delta, the subtraction label would contradict the
-    # printed +0.00pp, so state the reason instead.
-    if incr_pp == 0.0 and (treat_dp - control_dp) < -0.005:
-        lift_label = (f"Incremental lift  "
-                      f"(matched group {control_dp:+.2f}pp exceeded "
-                      f"exposed {treat_dp:+.2f}pp)")
+        title = ctx.titles([(f"New {ctx.brand} engagers {since}", f" are worth {fmt_money(ctx.blv)}."),
+                             (f"New engagers {since}", f" are worth {fmt_money(ctx.blv)}.")])
+    rows = []
+    if ctx.has_control:
+        matched = gain - base if (base > 0 and gain - base >= 0) else max(_control_people(cg, ctx.audience_proj), 0)
+        rows.append((f"More {ctx.ba} engagers among those reached", fmt_num(max(gain, 0))))
+        rows.append(("Less the same gain in the matched group", fmt_num(matched)))
+        rows.append(("New people beyond the matched group", fmt_num(base)))
     else:
-        lift_label = (f"Incremental lift  "
-                      f"(exposed {treat_dp:+.2f}pp minus matched group "
-                      f"{control_dp:+.2f}pp)")
-    # Calculator raised to y=2.85 AND row height tightened to 0.60"
-    # so the 3-row math block + total bar clears the source line
-    # anchored at y=6.30 (fixes C8). row_h=0.65 uses the calculator's
-    # smaller label/value fonts, which still read cleanly.
-    _math_calculator(
-        s, Inches(0.6), Inches(2.85), Inches(8.0),
-        [
-            (lift_label,
-             f"{incr_pp:+.2f}pp"),
-            (f"x U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
-             fmt_num(ctx.incr_users)),
-            ("x $/incremental-consumer rate", f"$ {rate:.2f}"),
-        ],
-        total_label="Brand Lift Value",
-        total_value=fmt_money(ctx.blv),
-        on_dark=True,
-        accent=RGBColor(0xF5, 0x9E, 0x0B),
-        row_h=Inches(0.65),
-    )
-    _note_line, _side = _matched_group_lines(cg)
-    detail = (
-        "Brand Lift Value is the engagement the partnership added. "
-        + _note_line
-        + " The matched group's own movement over the same windows is "
-          "taken out of the exposed group's gain, so brand interest "
-          "that would have grown anyway is not counted."
-        + (("\n\n" + _side) if _side else "")
-    )
-    # the card grows with the matched-group account down to the rate
-    # line at 6.30in
-    _callout(s, Inches(9.0), Inches(2.85), Inches(3.85),
-             "WHY IT MATTERS", detail,
-             height=Inches(3.0), max_height=Inches(3.35),
-             line=ACCENT, line_w=1.0, label_color=ACCENT, body_color=FG_LIGHT,
-             body_size=9, floor=NOTE_FLOOR, spacing=1.35, min_spacing=1.15,
-             pad=0.2, body_top=0.5)
-    # C4: read the rate source from the payload rather than hardcoding.
-    # The line fits the band above the source footer (6.75in).
-    src_line = (
-        (ctx.data.get("valuation") or {})
-        .get("rate_sources", {})
-        .get("blv_per_incr_user")
-        or "Rate: Crosswalk internal valuation convention (2026). "
-           "Editable in the live dashboard."
-    )
-    _add_body(s, Inches(0.6), Inches(6.30), Inches(12.1), src_line,
-              max_height=Inches(0.42), size=9, floor=NOTE_FLOOR, spacing=1.25,
-              min_spacing=1.05, italic=True, color=MUTED_DK)
-    # C8: source footer was missing on slide 8 (only BLV slide). Add
-    # the Source: Crosswalk BehaviorGraph line explicitly.
-    _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
-              ctx.sources_line, size=7, italic=True, color=MUTED_DK)
-    _page_footer(s, idx, total, ctx.project, on_dark=True)
-    return s
-
-
-def _slide_brand_lift_before_after(s, ctx: DeckCtx, idx: int, total: int):
-    """The Brand Lift page of a valuation bought without a comparison
-    group (2026-11-11): a before and after read of the same audience.
-    The page states the rise in engagement and the people it adds; it
-    never speaks of a matched group or prints a zero lift against one."""
-    _add_headline(s, f"{fmt_money(ctx.blv)} of new engagement\nsince the campaign began.",
-                  color=FG_LIGHT)
-    rate = float((ctx.data.get("valuation") or {})
-                 .get("rates", {}).get("blv_per_incr_user") or 0)
-    delta = ctx.delta_pp
-    delta_txt = f"{delta:+.2f}pt" if abs(delta) < 1.0 else f"{delta:+.1f}pt"
-    _math_calculator(
-        s, Inches(0.6), Inches(2.85), Inches(8.0),
-        [
-            (f"Rise in engagement, before to after  "
-             f"({fmt_pct(ctx.pre_pen)} to {fmt_pct(ctx.post_pen)})",
-             delta_txt),
-            (f"x U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
-             fmt_num(ctx.incr_users)),
-            ("x $/new-consumer rate", f"$ {rate:.2f}"),
-        ],
-        total_label="Brand Lift Value",
-        total_value=fmt_money(ctx.blv),
-        on_dark=True,
-        accent=RGBColor(0xF5, 0x9E, 0x0B),
-        row_h=Inches(0.65),
-    )
-    detail = (
-        "Brand Lift Value is the engagement that is new since the campaign "
-        f"began: the people engaging with {ctx.brand} in the campaign window "
-        f"beyond those who did in {_pre_days_phrase(ctx.data)}. It is a "
-        "before and after read of the same audience."
-    )
-    _callout(s, Inches(9.0), Inches(2.85), Inches(3.85),
-             "WHY IT MATTERS", detail,
-             height=Inches(3.0), max_height=Inches(3.35),
-             line=ACCENT, line_w=1.0, label_color=ACCENT, body_color=FG_LIGHT,
-             body_size=9, floor=NOTE_FLOOR, spacing=1.35, min_spacing=1.15,
-             pad=0.2, body_top=0.5)
-    src_line = (
-        (ctx.data.get("valuation") or {})
-        .get("rate_sources", {})
-        .get("blv_per_incr_user")
-        or "Rate: Crosswalk internal valuation convention (2026). "
-           "Editable in the live dashboard."
-    )
-    _add_body(s, Inches(0.6), Inches(6.30), Inches(12.1), src_line,
-              max_height=Inches(0.42), size=9, floor=NOTE_FLOOR, spacing=1.25,
-              min_spacing=1.05, italic=True, color=MUTED_DK)
-    _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
-              ctx.sources_line, size=7, italic=True, color=MUTED_DK)
-    _page_footer(s, idx, total, ctx.project, on_dark=True)
-    return s
+        rows.append((f"New {ctx.ba} engagers {since}", fmt_num(base)))
+    if rate > 0:
+        rows.append(("x our 2026 value per new engaged person", f"${rate:,.2f}"))
+    if ctx.has_control:
+        note = (f"Brand lift counts the gain in {ctx.ba} engagers beyond what a matched group gained over "
+                "the same days.")
+        # the two groups side by side: the projected counts and the one
+        # decimal every other page of the deck uses
+        matched_n = _count(cg.get("projected_control_size")) or ctx.audience_proj
+        if _same_size(ctx):
+            note += f" Both groups hold {fmt_num(ctx.audience_proj)} people."
+        else:
+            note += (f" The campaign reached {fmt_num(ctx.audience_proj)} people and the matched group "
+                     f"holds {fmt_num(matched_n)}.")
+        if ctx.pre_pen > 0 and ctx.c_pre_pen > 0:
+            note += (f" {_cap(ctx.before_word)}, {ctx.pre_pen:.1f}% of the people reached engaged with "
+                     f"{ctx.b}, against {ctx.c_pre_pen:.1f}% of the matched group.")
+    else:
+        note = (f"Brand lift counts only people who engaged with {ctx.b} {ctx.after_word} and had not in "
+                f"{_the_days(ctx.pre_days)} before. It is the part of the total that is new {since}.")
+    return _value_page(prs, ctx, idx, S_LIGHT, "Brand lift", title,
+                       f"Brand lift value{', ' + ctx.post_range if ctx.post_range else ''}.",
+                       rows, "Brand lift value", fmt_money(ctx.blv), note)
 
 
 def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
-    """CV slide - only shown when conversions are enabled and signal
-    is good (skipped for automotive partnerships per .cursor/rules).
-
-    Calculator raised to y=3.0 to match BEV slide 7 and clear the
-    source line at the bottom (fixes C8)."""
-    s = _blank(prs)
-    _add_bg(s, BG_CREAM)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "Conversion Value"), on_dark=False)
-    _add_headline(s, f"{fmt_money(ctx.cv)} of observed\npost-campaign conversions.",
-                  color=FG_DARK)
-    conv = ctx.data.get("conversions") or {}
-    rate = float((ctx.data.get("valuation") or {})
-                 .get("rates", {}).get("conv_value_per_user") or 0)
-    _math_calculator(
-        s, Inches(0.6), Inches(3.0), Inches(8.0),
-        [
-            ("Post-Campaign Conversions",
-             fmt_num(conv.get("post_users_projected") or 0)),
-            ("x Average Order Value (AOV)", f"$ {rate:.2f}"),
-        ],
-        total_label="Conversion Value",
-        total_value=fmt_money(ctx.cv),
-        on_dark=False,
-        accent=RGBColor(0xEF, 0x44, 0x44),
-    )
-    conv_note = (str(conv.get("note") or "")).strip()
-    drop_line = str(((ctx.data.get("campaign") or {}).get("drop_line")) or "").strip()
-    detail = (
-        "Direct purchase-funnel signal: brand.com order confirmations "
-        "and geo-panel retail visits observed for brand-owned storefronts "
-        "and brand-tagged SKU landing pages within the attribution "
-        "window. AOV is editable in the live dashboard."
-    )
-    if conv_note or drop_line:
-        detail = " ".join(x for x in (drop_line, conv_note) if x)
-    # the card grows with the campaign's own account of the drop down
-    # to the rate line at 6.05in; a long note steps down, then shortens
-    _callout(s, Inches(9.0), Inches(3.0), Inches(3.8),
-             "WHY IT MATTERS", detail,
-             height=Inches(2.8), max_height=Inches(2.95),
-             line=FG_DARK, line_w=0.75, label_color=FG_DARK, body_color=FG_DARK,
-             body_size=10, floor=BODY_FLOOR, spacing=1.35, min_spacing=1.15,
-             pad=0.25, body_top=0.5)
-    # C4: read the AOV source from the payload so the internal-
-    # convention relabel takes effect without code changes.
-    # C8: vertical positioning aligned with slides 7 and 8 so the
-    # three value slides read as a consistent set.
-    src_line = (
-        (ctx.data.get("valuation") or {})
-        .get("rate_sources", {})
-        .get("conv_value_per_user")
-        or f"AOV: ${rate:.2f} = Crosswalk internal valuation convention "
-           "(2026). Editable in the live dashboard."
-    )
-    _add_body(s, Inches(0.6), Inches(6.05), Inches(12.1), src_line,
-              max_height=Inches(0.55), size=9, floor=NOTE_FLOOR, spacing=1.25,
-              min_spacing=1.05, italic=True, color=MUTED_LT)
-    _add_text(s, Inches(0.6), Inches(6.65), Inches(12), Inches(0.25),
-              ctx.sources_line, size=7, italic=True, color=MUTED_LT)
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
-    return s
+    """Conversion value: the orders in the window at the average order
+    value. Shown whenever conversion is part of the total (the page and
+    the total always agree); never for automotive, where purchases are
+    not visible and the lens stays out of the total too."""
+    conv = _dict(ctx.data.get("conversions"))
+    camp = _dict(ctx.data.get("campaign"))
+    rate = _rate(ctx, "conv_value_per_user")
+    orders = _base_for(ctx.cv, rate, _count(conv.get("post_users_projected")))
+    title = _pick_title([(f"{fmt_num(orders)} orders", f" brought in {fmt_money(ctx.cv)}."),
+                         ("Orders in the window", f" brought in {fmt_money(ctx.cv)}.")])
+    rows = [("Orders in the window", fmt_num(orders))]
+    if rate > 0:
+        rows.append(("x average order value", f"${rate:,.2f}"))
+    parts = []
+    units = _count(_dict(camp.get("drop")).get("units_us")) or _count(conv.get("units_us"))
+    if units and orders:
+        parts.append(f"{fmt_num(units)} pieces sold in the US across {fmt_num(orders)} orders.")
+    band = _dict(camp.get("price_band"))
+    lo, hi = _num(band.get("low_usd")), _num(band.get("high_usd"))
+    if lo and hi and hi > lo:
+        parts.append(f"Pieces ran ${lo:,.0f} to ${hi:,.0f}, and a typical order held more than one.")
+    account = _safe_prose(conv.get("note"), brand=ctx.brand, talent=ctx.talent)
+    if account:
+        parts.append(account)
+    if conv.get("low_signal"):
+        parts.append("Orders are still few, so read this as an early count.")
+    if not parts:
+        parts.append(f"Each order placed with {ctx.b} in the window is priced at the average order value.")
+    return _value_page(prs, ctx, idx, S_DARK, "Sales", title,
+                       f"Conversion value{', ' + ctx.post_range if ctx.post_range else ''}.",
+                       rows, "Conversion value", fmt_money(ctx.cv), " ".join(parts))
 
 
-def _math_calculator(slide, left, top, width, rows, *,
-                     total_label: str, total_value: str,
-                     on_dark: bool, accent: RGBColor,
-                     row_h: Optional[Any] = None):
-    """Render a calculator-style math block. Matches the dashboard's
-    in-card calculator (label · value, then a single total row).
+def _lone_last_word(text: str, size: float, width_in: float) -> bool:
+    """True when this label wraps and leaves one word on its last line at
+    any renderer scale (the pack's own widow reading)."""
+    if len(str(text).split()) < 3:
+        return False
+    pack = _design()
+    try:
+        return bool(pack.widow_lines(text, size, width_in)[0]) if pack is not None else False
+    except Exception:
+        return False
 
-    row_h is auto-tuned to fit within a 2.6" tall envelope when there
-    are more than 3 rows, so slides with a full DiD walk-through
-    (Brand Lift Value) don't overflow into the footer."""
-    body_color = FG_LIGHT if on_dark else FG_DARK
-    muted = MUTED_DK if on_dark else MUTED_LT
-    if row_h is None:
-        # Auto-tune: 3 or fewer rows → 0.85"; 4-5 rows → 0.50";
-        # anything above that gets tighter still.
-        if len(rows) <= 3:
-            row_h = Inches(0.85)
-        elif len(rows) <= 5:
-            row_h = Inches(0.50)
+
+def _under_35(rows: list) -> Optional[float]:
+    """The share under 35 from an AGE column, when its buckets end
+    cleanly at 34; None when a bucket straddles the line."""
+    total = 0.0
+    seen = False
+    for r in rows:
+        label = str(r.get("value") or "").lower()
+        nums = [int(n) for n in re.findall(r"\d+", label)]
+        if not nums:
+            continue
+        if "under" in label or "less" in label or "younger" in label:
+            lo, hi = 0, nums[0]
+        elif len(nums) >= 2:
+            lo, hi = nums[0], nums[1]
         else:
-            row_h = Inches(0.40)
-    label_size = 14 if row_h.inches >= 0.7 else 11
-    value_size = 24 if row_h.inches >= 0.7 else 18
-    for i, (label, value) in enumerate(rows):
-        y = top + row_h * i
-        # a long label holds two lines inside its row; a long figure
-        # holds one line at the size its column allows
-        lbl_size = _fit_lines(label, tuple(range(label_size, BODY_FLOOR - 1, -1)),
-                              width.inches * 0.65, max_lines=2)
-        _add_text(slide, left, y + Inches(0.08),
-                  Inches(width.inches * 0.65), Inches(row_h.inches),
-                  label, size=lbl_size, color=muted, anchor="middle")
-        _add_text(slide, left + Inches(width.inches * 0.65),
-                  y + Inches(0.02),
-                  Inches(width.inches * 0.35), Inches(row_h.inches),
-                  value, size=_fit_stat(value, width.inches * 0.35, value_size, floor=12),
-                  bold=True, color=body_color,
-                  font=FONT_NUMERIC, align="right", anchor="middle")
-        if i < len(rows) - 1:
-            sep = slide.shapes.add_shape(
-                MSO_SHAPE.RECTANGLE, left, y + row_h - Emu(3500),
-                width, Emu(3500))
-            sep.line.fill.background()
-            sep.fill.solid()
-            sep.fill.fore_color.rgb = muted
-    # Total bar
-    total_y = top + row_h * len(rows) + Inches(0.15)
-    _add_rect(slide, left, total_y, width, Inches(0.05),
-              fill=accent, line=None)
-    _add_text(slide, left, total_y + Inches(0.2),
-              Inches(width.inches * 0.65), Inches(0.5),
-              total_label.upper(), size=11, bold=True, color=muted,
-              letter_spacing=0.16)
-    _add_text(slide, left + Inches(width.inches * 0.55),
-              total_y + Inches(0.1), Inches(width.inches * 0.45),
-              Inches(0.9),
-              total_value, size=_fit_stat(total_value, width.inches * 0.45, 36, floor=20),
-              bold=True, color=accent, font=FONT_NUMERIC, align="right")
+            lo, hi = nums[0], 200
+        if hi <= 34:
+            total += _num(r.get("percentage"))
+            seen = True
+        elif lo <= 34:
+            return None
+    return total if seen else None
 
 
 def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
+    """Who engaged: age, gender, ethnicity and income, every bucket
+    shown, labels in sentence case."""
     s = _blank(prs)
-    _add_bg(s, BG_CREAM)
-    # Choose an eyebrow + headline that fit the qualifier type.
-    # 'tv' / 'movie' / 'sporting event' -> "Who Watched", others
-    # (artist / social / campaign) -> "Who Engaged with the
-    # Qualifier". The WoF-specific hardcoded copy has been generalized.
-    qualifier_type = str(ctx.data.get("qualifier_type") or "").lower()
-    qualifier_val = ctx.data.get("qualifier_value")
-    if isinstance(qualifier_val, list):
-        # Use only the first (primary) qualifier for display; the full
-        # variant list is a clickstream-slug convenience for the pipeline,
-        # not intended for reader-facing copy.
-        _clean = [str(v).strip() for v in qualifier_val if str(v).strip()]
-        qualifier_name = _clean[0] if _clean else ""
-    else:
-        qualifier_name = str(qualifier_val or "").strip()
-    if qualifier_type in ("tv", "movie", "sporting event", "event", "show"):
-        eyebrow_label = "Who Watched the Integration"
-        headline = (f"{qualifier_name} viewer profile."
-                    if qualifier_name else "Viewer profile.")
-    else:
-        eyebrow_label = f"Who Engaged with {qualifier_name}" if qualifier_name else "Who Engaged"
-        headline = (f"{qualifier_name} audience profile."
-                    if qualifier_name else "Audience profile.")
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, eyebrow_label),
-             on_dark=False)
-    head = _add_headline(s, headline, color=FG_DARK)
-    head_size = head.text_frame.paragraphs[0].runs[0].font.size.pt
-    head_h = _measure(headline, head_size, Emu(head.width).inches, bold=True, spacing=0.95).height_in
-    # Source line: prefer the payload's own source_note (which
-    # explains what cohort this profile represents). Fall back to a
-    # neutral generic if none is provided. It follows the measured
-    # headline (a one-line headline leaves the table more room).
-    demo_src = (
-        (ctx.data.get("demographics") or {}).get("source_note")
-        or "Source: Crosswalk BehaviorGraph. This is the audience "
-        "that engaged with the qualifier, not the brand's engager "
-        "base."
-    )
-    note_top = Inches(round(1.0 + head_h + 0.25, 3))
-    _note, note_h = _add_body(s, Inches(0.6), note_top, Inches(12), demo_src,
-                              max_height=Inches(0.8), size=10, floor=NOTE_FLOOR,
-                              spacing=1.35, min_spacing=1.15, italic=True, color=MUTED_LT)
-    demos = (ctx.data.get("demographics") or {}).get("post") or {}
-    cats = [
-        ("AGE",       demos.get("age")       or []),
-        ("GENDER",    demos.get("gender")    or []),
-        ("ETHNICITY", demos.get("ethnicity") or []),
-        ("INCOME",    demos.get("income")    or []),
-    ]
-    # Drop any category with no data so the slide keeps a tight grid.
+    surf = S_LIGHT
+    _ground(s, surf)
+    demo_block = _dict(ctx.data.get("demographics"))
+    demos = _dict(demo_block.get("post"))
+    cats = [("Age", demos.get("age") or []), ("Gender", demos.get("gender") or []),
+            ("Ethnicity", demos.get("ethnicity") or []), ("Income", demos.get("income") or [])]
+    cats = [(lab, [r for r in items if isinstance(r, dict)]) for lab, items in cats]
     cats = [(lab, items) for lab, items in cats if items]
-    n = max(1, len(cats))
-    base_x = Inches(0.6)
-    gap = 0.15
-    avail_w = 13.333 - 2 * base_x.inches   # 12.13"
-    col_w = Inches((avail_w - gap * (n - 1)) / n)
-    # Every bucket is shown - Liz's "we didn't have any $150K+
-    # viewers?" callout was caused by a top-5 truncation that hid the
-    # two upper income buckets ($150K-$249K and $250K+). Showing every
-    # bucket also closes the "not summing to 100%" observation.
-    #
-    # The table keeps its house position (3.05in) and row pitch
-    # (0.46in) when the tallest column fits above the source footer at
-    # 6.75in. When it does not (2026-10-29: an eight-bucket AGE column
-    # landed on the footer), the table first rises toward the source
-    # note, then the pitch tightens; a two-line bucket label needs
-    # 0.40in at 12pt, so the type steps to 11pt and then 10pt as the
-    # pitch closes.
-    footer_top = 6.75
-    max_rows = max([len(items) for _lab, items in cats] or [1])
-    flow_min = note_top + note_h + Inches(0.3)
-    base_y = max(Inches(3.05), flow_min)
-    need = 0.42 + max_rows * 0.46 + 0.05
-    if need > footer_top - Emu(base_y).inches:
-        base_y = max(flow_min, Inches(round(footer_top - need, 3)))
-    rows_top_in = Emu(base_y).inches + 0.42
-    pitch_fit = (footer_top - 0.05 - rows_top_in) / max_rows
-    # the bucket labels take the column less what the widest share
-    # needs; the type size is the largest at which the tallest label
-    # (two lines when the width wraps it) fits the pitch the room allows
-    buckets = [str(r.get("value") or "n/a") for _lab, items in cats for r in items]
+    note = _safe_prose(re.sub(r"^\s*Source:[^.]*\.\s*", "", str(demo_block.get("source_note") or "")),
+                       brand=ctx.brand, talent=ctx.talent)
+    own = f"{ctx.brand}'s" if not ctx.brand.lower().endswith("s") else f"{ctx.brand}'"
+    title = None
+    gender = dict(cats).get("Gender") or []
+    if gender and not note:
+        lead = max(gender, key=lambda r: _num(r.get("percentage")))
+        word = {"female": "women", "male": "men"}.get(str(lead.get("value") or "").strip().lower())
+        if word and _num(lead.get("percentage")) >= 55:
+            title = ctx.titles([(f"{_cap(_about_share(_num(lead.get('percentage'))))} {own} engagers", f" are {word}."),
+                                 (f"{_cap(_about_share(_num(lead.get('percentage'))))} the engagers", f" are {word}.")])
+    if title is None:
+        title = ("Who engaged,", " by age, gender, ethnicity and income.")
+    if note:
+        sub = note
+    else:
+        sub = f"{_cap(ctx.ba)} engagers {ctx.after_word}, among the {fmt_num(ctx.audience_proj)} people reached."
+        u35 = _under_35(dict(cats).get("Age") or [])
+        if u35 is not None and u35 > 0:
+            sub += f" {u35:.1f}% are under 35."
+    top = _head(s, surf, idx, f"Who engaged with {ctx.brand}" if not note else "Who engaged", title, sub,
+                ctx.logo(surf), source=ctx.sources_line)
+    if not cats:
+        return s
+    n = len(cats)
+    col_w = (BAND - GUT * (n - 1)) / n
+    max_rows = max(len(items) for _lab, items in cats)
+    rows_top = top + 0.4
+    pitch_fit = (CONTENT_BOTTOM - rows_top) / max_rows
+    buckets = [_bucket_label(r.get("value")) for _lab, items in cats for r in items]
     shares = [fmt_pct(r.get("percentage") or 0) for _lab, items in cats for r in items]
     pct_w = max([_measure(sh_, 12, 2.0, bold=True).max_w_in for sh_ in shares] or [0.6]) + 0.12
-    label_w = max(1.0, col_w.inches - pct_w - 0.1)
+    label_w = max(1.0, col_w - pct_w - 0.1)
     row_size, row_lines, trimmed = NOTE_FLOOR, 1, False
-    for size in (12, 11, 10, 9):
+    fits = []
+    # a table label may step to 9pt before it is cut (ten long buckets)
+    for size in (12, 11.5, 11, 10.5, 10, 9.5, 9):
         lines = max([_measure(b, size, label_w).lines for b in buckets] or [1])
         if lines * _line_h_in(size, 1.05) + 0.03 <= pitch_fit:
-            row_size, row_lines = size, lines
-            break
+            fits.append((size, lines))
+    if fits:
+        # one size for the whole table: the largest at which no label ends
+        # on a lone word ('Black or African / American'); the finisher
+        # would otherwise shrink that one label and leave its column uneven
+        row_size, row_lines = next(((sz, ln) for sz, ln in fits
+                                    if not any(_lone_last_word(b, sz, label_w) for b in buckets)), fits[0])
     else:
-        # even 9pt labels wrap past the pitch the room allows: every
-        # label holds the one line its row has, trimmed if it must be
-        trimmed = True
-    row_h = max(row_lines * _line_h_in(row_size, 1.05) + 0.03, min(0.46, pitch_fit))
+        trimmed = True          # every label holds the one line its row has
+    row_h = max(row_lines * _line_h_in(row_size, 1.05) + 0.03, min(0.44, pitch_fit))
     for i, (label, items) in enumerate(cats):
-        x = base_x + (col_w + Inches(gap)) * i
-        rows_full = sorted(items, key=lambda r: float(r.get("percentage") or 0),
-                           reverse=True)
-        _add_text(s, x, base_y, col_w, Inches(0.3),
-                  label, size=10, bold=True, color=MUTED_LT,
-                  letter_spacing=0.18)
-        for j, r in enumerate(rows_full):
-            y = base_y + Inches(0.42 + j * row_h)
-            bucket = str(r.get("value") or "n/a")
+        x = M + (col_w + GUT) * i
+        # age and income read in their own order; the others largest first
+        ordered = list(items) if label in ("Age", "Income") else sorted(
+            items, key=lambda r: -_num(r.get("percentage")))
+        _label(s, x, top, col_w, label, surf.card_label)
+        _rule(s, x, top + 0.28, col_w, surf.rule)
+        for j, r in enumerate(ordered):
+            y = rows_top + j * row_h
+            bucket = _bucket_label(r.get("value"))
             if trimmed:
                 bucket = _break_long_token(bucket, label_w, row_size, max_lines=1)
-            _add_text(s, x, y, Inches(label_w), Inches(row_h - 0.02),
-                      bucket,
-                      size=_fit_lines(bucket, tuple(range(row_size, NOTE_FLOOR - 1, -1)),
-                                      label_w, max_lines=row_lines),
-                      color=FG_DARK)
-            _add_text(s, x + Inches(col_w.inches - pct_w), y,
-                      Inches(pct_w), Inches(row_h - 0.02),
-                      fmt_pct(r.get("percentage") or 0),
-                      size=row_size, bold=True, color=FG_DARK,
-                      font=FONT_NUMERIC, align="right")
-    _add_text(s, Inches(0.6), Inches(footer_top), Inches(12), Inches(0.25),
-              ctx.sources_line, size=7, italic=True, color=MUTED_LT)
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
+            T(s, x, y, label_w, row_h - 0.02, bucket, size=row_size, color=surf.title, anchor="middle")
+            T(s, x + col_w - pct_w, y, pct_w, row_h - 0.02, fmt_pct(r.get("percentage") or 0),
+              size=row_size, weight="SemiBold", color=surf.title, align="right", anchor="middle")
     return s
 
 
-def _slide_top_touchpoints(prs, ctx: DeckCtx, idx: int, total: int):
-    """Top brand touchpoints, ranked by observed hits.
+def _change_cell(before: int, after: int, new: bool) -> tuple:
+    """(text, kind) for the change column: 'New' for a page with no
+    history, a multiple for a very large rise, a signed percent
+    otherwise."""
+    if new or before <= 0:
+        return "New", "new"
+    pct = (after - before) / before * 100.0
+    if pct >= 1000:
+        return f"{after / before:.0f}x", "up"
+    return f"{pct:+.1f}%", ("up" if pct >= 0 else "down")
 
-    We intentionally label the columns PRE HITS / POST HITS (not
-    REACH). A hit is an observation of a brand-property visit; a
-    single consumer can generate multiple hits at the same
-    touchpoint. This is why the sum of touchpoint hit-gains can
-    exceed the total unique incremental consumer count (Liz's item
-    3): those are different populations counted at different
-    granularities. The methodology footnote calls this out
-    directly."""
+
+def _slide_top_touchpoints(prs, ctx: DeckCtx, idx: int, total: int):
+    """Where people met the brand: its pages and accounts by visits,
+    before and after. A page the campaign created shows no visits before
+    it existed."""
     s = _blank(prs)
-    _add_bg(s, BG_DARK)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, f"Most Engaged {ctx.brand} Touchpoints"),
-             on_dark=True)
-    _add_headline(s, f"Where {ctx.brand} showed up.", color=FG_LIGHT)
-    # Column layout - grid computed up front to guarantee no
-    # overlap and consistent row heights (fixes item 18).
-    post = ctx.data.get("top_brand_properties") or []
-    pre  = ctx.data.get("top_brand_properties_pre") or []
-    pre_map = {(p.get("common_name") or "").lower():
-               int(p.get("hits_projected") or 0) for p in pre}
-    rows = sorted(post, key=lambda r: int(r.get("hits_projected") or 0),
-                  reverse=True)[:7]
-    C_NAME     = (Inches(0.60), Inches(5.20))
-    C_PRE      = (Inches(5.90), Inches(1.75))
-    C_POST     = (Inches(7.75), Inches(1.75))
-    C_LIFT     = (Inches(9.60), Inches(3.05))
-    table_top  = Inches(2.75)
-    row_h      = Inches(0.42)
-    header_style = dict(size=9, bold=True, color=MUTED_DK,
-                        letter_spacing=0.16)
-    _add_text(s, C_NAME[0], table_top, C_NAME[1], Inches(0.3),
-              "BRAND TOUCHPOINT", **header_style)
-    _add_text(s, C_PRE[0], table_top, C_PRE[1], Inches(0.3),
-              "PRE HITS", align="right", **header_style)
-    _add_text(s, C_POST[0], table_top, C_POST[1], Inches(0.3),
-              "POST HITS", align="right", **header_style)
-    _add_text(s, C_LIFT[0], table_top, C_LIFT[1], Inches(0.3),
-              "HITS LIFT", align="right", **header_style)
-    # Underline
-    line = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6),
-                              table_top + Inches(0.32),
-                              C_LIFT[0] + C_LIFT[1] - Inches(0.6),
-                              Emu(6000))
-    line.line.fill.background()
-    line.fill.solid()
-    line.fill.fore_color.rgb = MUTED_DK
-    for i, r in enumerate(rows):
-        y = table_top + Inches(0.42) + row_h * i
-        raw_name = str(r.get("common_name") or "n/a")
-        # C12: preserve source display casing rather than force
-        # title() (which capitalizes small prepositions like "Of"
-        # in "World of Coca-Cola"). Payloads now provide brand-
-        # property display names in the exact case they should
-        # render.
-        display_name = _touchpoint_display_name(raw_name)
-        post_h = int(r.get("hits_projected") or 0)
-        pre_h = pre_map.get(raw_name.lower(), 0)
-        # the name holds one line at the largest size its column allows;
-        # a URL-style name with nothing to wrap at breaks at its own
-        # separators onto two lines inside the row (2026-10-29)
-        name_size = _fit_stat(display_name, C_NAME[1].inches, 13, floor=10, bold=True)
-        display_name = _break_long_token(display_name, C_NAME[1].inches, name_size, bold=True,
-                                         max_lines=2)
-        _add_text(s, C_NAME[0], y, C_NAME[1], row_h,
-                  display_name, size=name_size, bold=True, color=FG_LIGHT)
-        _add_text(s, C_PRE[0], y, C_PRE[1], row_h,
-                  fmt_num(pre_h) if pre_h else "0",
-                  size=12, color=FG_LIGHT, font=FONT_NUMERIC,
-                  align="right")
-        _add_text(s, C_POST[0], y, C_POST[1], row_h,
-                  fmt_num(post_h),
-                  size=12, color=FG_LIGHT, font=FONT_NUMERIC,
-                  align="right")
-        if pre_h:
-            lift = (post_h - pre_h) / pre_h * 100
-            color = LIFT_UP if lift >= 0 else LIFT_DOWN
-            _add_text(s, C_LIFT[0], y, C_LIFT[1], row_h,
-                      fmt_signed_pct(lift),
-                      size=13, bold=True, color=color, font=FONT_NUMERIC,
-                      align="right")
-        else:
-            _add_text(s, C_LIFT[0], y, C_LIFT[1], row_h,
-                      "NEW",
-                      size=11, bold=True, color=ACCENT,
-                      letter_spacing=0.18, align="right")
-    # Methodology footnote - the critical clarification that
-    # touchpoint hits and unique incremental consumers are different
-    # populations at different granularities (Liz items 3, 4).
-    hits_note = (
-        "A HIT is one observation of a brand-property visit. One "
-        "consumer can generate multiple hits at the same touchpoint, "
-        "so the sum of hit gains across touchpoints can exceed the "
-        "unique incremental consumer count on the Brand Lift slide. "
-        "The two numbers measure different things (impressions of the "
-        "brand vs. unique attributable consumers) and are not "
-        "expected to reconcile."
-    )
-    _add_body(s, Inches(0.6), Inches(6.20), Inches(12.2), hits_note,
-              max_height=Inches(0.62), size=9, floor=NOTE_FLOOR, spacing=1.3,
-              min_spacing=1.1, italic=True, color=MUTED_DK)
-    _add_text(s, Inches(0.6), Inches(6.85), Inches(12), Inches(0.25),
-              ctx.sources_line, size=7, italic=True, color=MUTED_DK)
-    _page_footer(s, idx, total, ctx.project, on_dark=True)
+    surf = S_DARK
+    _ground(s, surf)
+    rows = _touchpoints(ctx, 7)
+    own = next((r for r in rows if r["new"]), None)
+    if own is not None:
+        title = _pick_title([("The campaign's own page drew",
+                              f" {fmt_num(own['after'])} visits in {_days_phrase(ctx.post_days)}."),
+                             ("The campaign's own page", " drew visits from day one.")])
+    elif rows and all(r["after"] > r["before"] for r in rows):
+        title = ctx.titles([("Visits rose on every", f" {ctx.brand} page and account listed."),
+                             ("Visits rose", " on every page and account listed.")])
+    else:
+        title = ctx.titles([("Where people met", f" {ctx.brand} {ctx.after_word}."),
+                             ("Where people met", " the brand.")])
+    sub = f"Visits to {ctx.ba} pages and accounts by the people reached, before and after."
+    top = _head(s, surf, idx, f"Where people met {ctx.brand}", title, sub, ctx.logo(surf), source=ctx.sources_line)
+    if not rows:
+        T(s, M, top + 0.2, BAND, 0.4, "No page or account showed visits in this window.", size=13, color=surf.body)
+        return s
+    c_name = (M, 5.7)
+    c_pre = (M + 5.9, 1.7)
+    c_post = (M + 7.8, 1.7)
+    c_chg = (M + 9.7, BAND - 9.7)
+    _label(s, c_name[0], top, c_name[1], _one_line(f"{ctx.ba} page or account", 9, c_name[1], tracking=1.0, bold=True),
+           surf.card_label, size=9)
+    _label(s, c_pre[0], top, c_pre[1], "Visits before", surf.card_label, align="right", size=9)
+    _label(s, c_post[0], top, c_post[1], "Visits after", surf.card_label, align="right", size=9)
+    _label(s, c_chg[0], top, c_chg[1], "Change", surf.card_label, align="right", size=9)
+    _rule(s, M, top + 0.3, BAND, surf.muted)
+    note = ("A visit is one session on a page or account. One person can visit many times, "
+            "so visits run higher than the people counts on other pages.")
+    if any(r["new"] for r in rows):
+        note += " New marks a page that launched with the campaign, so it has no visits before."
+    note_h = _measure(note, 11, BAND, spacing=1.25).height_in + 0.04
+    pitch = max(0.3, min(0.42, (CONTENT_BOTTOM - note_h - 0.16 - (top + 0.38)) / len(rows)))
+    y = top + 0.38
+    for r in rows:
+        name_size = _fit_stat(r["name"], c_name[1], 12.5, floor=10, bold=True)
+        name = _break_long_token(r["name"], c_name[1], name_size, bold=True, max_lines=1)
+        T(s, c_name[0], y, c_name[1], pitch, name, size=name_size, weight="SemiBold", color=surf.title, anchor="middle")
+        T(s, c_pre[0], y, c_pre[1], pitch, fmt_num(r["before"]), size=12,
+          color=surf.muted if r["before"] == 0 else surf.title, align="right", anchor="middle")
+        T(s, c_post[0], y, c_post[1], pitch, fmt_num(r["after"]), size=12, color=surf.title, align="right",
+          anchor="middle")
+        text, kind = _change_cell(r["before"], r["after"], r["new"])
+        T(s, c_chg[0], y, c_chg[1], pitch, text, size=12, weight="Bold",
+          color={"new": surf.accent, "down": surf.negative}.get(kind, surf.title), align="right", anchor="middle")
+        y += pitch
+    BODY(s, M, y + 0.14, BAND, note, max_h=CONTENT_BOTTOM - (y + 0.14), size=11, floor=10, spacing=1.25,
+         min_spacing=1.1, color=surf.body)
     return s
 
 
 def _slide_year_over_year(prs, ctx: DeckCtx, idx: int, total: int):
+    """Earned media by year of the partnership, as bars."""
     s = _blank(prs)
-    _add_bg(s, BG_CREAM)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "Year Over Year"), on_dark=False)
-    _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              "How the partnership compounded.",
-              size=40, bold=True, color=FG_DARK,
-              spacing=0.95, font=FONT_DISPLAY)
-    years = ctx.data.get("yearly_breakdown") or []
+    surf = S_LIGHT
+    _ground(s, surf)
+    years = [y for y in (ctx.data.get("yearly_breakdown") or []) if isinstance(y, dict)]
+    vals = [_num(y.get("earned_media_value")) for y in years]
+    if len(vals) >= 2 and abs(vals[-1] - vals[0]) >= 0.01:
+        verb = "grew" if vals[-1] > vals[0] else "fell"
+        title = (f"Earned media {verb}", f" from {fmt_money(vals[0])} to {fmt_money(vals[-1])} a year.")
+    else:
+        title = ("Earned media held", " level from year to year.")
+    top = _head(s, surf, idx, "Year by year", title, "Earned media value for each year of the partnership.",
+                ctx.logo(surf), source=ctx.sources_line)
     if not years:
-        _add_text(s, Inches(0.6), Inches(4), Inches(11), Inches(0.5),
-                  "No multi-year decomposition available.",
-                  size=14, italic=True, color=MUTED_LT)
-        _page_footer(s, idx, total, ctx.project, on_dark=False)
         return s
-    # Bar chart approximation: stat plates per year, height-proportional
-    # to EMV. We don't embed Chart.js-style charts in pptx - the visual
-    # density is in the stat plates themselves.
-    max_emv = max((float(y.get("earned_media_value") or 0) for y in years),
-                  default=1)
-    plate_count = len(years)
-    base_x = Inches(0.6)
-    base_y = Inches(3.1)
-    avail_w = Inches(12.1)
-    plate_w = Inches((avail_w.inches - 0.15 * (plate_count - 1)) / plate_count)
-    chart_h = Inches(3.0)
-    for i, y in enumerate(years):
-        emv = float(y.get("earned_media_value") or 0)
-        height_frac = emv / max_emv if max_emv else 0
-        bar_h = Inches(max(0.1, chart_h.inches * height_frac))
-        x = base_x + (plate_w + Inches(0.15)) * i
-        # Bar
-        bar_top = base_y + chart_h - bar_h
-        _add_rect(s, x, bar_top, plate_w, bar_h, fill=FG_DARK, line=None)
-        # EMV on bar
-        _add_text(s, x, bar_top - Inches(0.05), plate_w, Inches(0.4),
-                  fmt_money(emv), size=14, bold=True, color=FG_DARK,
-                  font=FONT_NUMERIC, align="center")
-        # Year label below
-        _add_text(s, x, base_y + chart_h + Inches(0.1), plate_w, Inches(0.3),
-                  str(y.get("label") or y.get("year") or ""),
-                  size=11, bold=True, color=FG_DARK, align="center",
-                  letter_spacing=0.14)
-        # Users line
-        users = int(y.get("users_projected") or 0)
-        _add_text(s, x, base_y + chart_h + Inches(0.4), plate_w, Inches(0.3),
-                  f"{fmt_num(users)} consumers",
-                  size=9, color=MUTED_LT, align="center")
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
-              ctx.sources_line, size=8, italic=True, color=MUTED_LT)
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
+    n = len(years)
+    gap = GUT
+    bw = min(2.6, (BAND - gap * (n - 1)) / n)
+    # the page ends on what the bars mean, in the reader's terms
+    first = str(years[0].get("label") or years[0].get("year") or "the first year")
+    last = str(years[-1].get("label") or years[-1].get("year") or "the latest year")
+    read = ""
+    if n >= 2 and vals[0] > 0 and abs(vals[-1] - vals[0]) >= 0.01:
+        change = (vals[-1] - vals[0]) / vals[0] * 100.0
+        if abs(change) >= 1:
+            read = f"What this means: {last} earned {abs(change):.0f}% {'more' if change > 0 else 'less'} than {first}."
+    chart_top, chart_bottom = top + 0.45, CONTENT_BOTTOM - (1.0 if read else 0.62)
+    chart_h = max(0.6, chart_bottom - chart_top)
+    peak = max(vals) or 1.0
+    best = vals.index(max(vals))
+    for i, (yr, v) in enumerate(zip(years, vals)):
+        x = M + i * (bw + gap)
+        h = max(0.12, chart_h * (v / peak))
+        _card(s, x, chart_bottom - h, bw, h, fill=surf.accent if i == best else surf.title, radius=0.06)
+        T(s, x, chart_bottom - h - 0.34, bw, 0.28, fmt_money(v), size=_fit_stat(fmt_money(v), bw, 13, floor=10),
+          weight="Bold", color=surf.title, align="center")
+        _label(s, x, chart_bottom + 0.1, bw, str(yr.get("label") or yr.get("year") or ""), surf.title, align="center")
+        people = _count(yr.get("users_projected"))
+        if people:
+            T(s, x, chart_bottom + 0.34, bw, 0.22, f"{fmt_num(people)} people", size=10, color=surf.body, align="center")
+    _reading(s, surf, CONTENT_BOTTOM - 0.3, read)
     return s
+
+
+def _final_reading(ctx: DeckCtx) -> str:
+    days = _days_phrase(ctx.post_days)
+    if not _moved(ctx):
+        return (f"The read covers {fmt_num(ctx.audience_proj)} people and {fmt_money(ctx.total_value)} in brand value. "
+                f"What it does not show is a rise in {ctx.ba} engagement.")
+    if ctx.blv > 0 and ctx.incr_users > 0:
+        out = (f"In {days} the partnership added {fmt_num(_base_for(ctx.blv, _rate(ctx, 'blv_per_incr_user'), ctx.incr_users))} "
+               f"{ctx.ba} engagers and {fmt_money(ctx.total_value)} in brand value.")
+    else:
+        out = f"In {days} the partnership carried {fmt_money(ctx.total_value)} in brand value."
+    if ctx.has_conversions and min(ctx.lenses, key=lambda lv: lv[1])[0] == "Conversion":
+        orders = _base_for(ctx.cv, _rate(ctx, "conv_value_per_user"),
+                           _count(_dict(ctx.data.get("conversions")).get("post_users_projected")))
+        out += f" It has not sold much yet: {fmt_num(orders)} orders."
+    return out
 
 
 def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
+    """The close: one statement, its reading, and the next step."""
     s = _blank(prs)
-    _add_bg(s, BG_LAV)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "The Final Insight"), on_dark=False)
-    l1, l2 = _final_insight_lines(ctx)
-    # the two lines are a claim and its reading: a short reading keeps the
-    # display size, a sentence-length one steps down so it fits the page
-    # (a 64pt sentence ran off the slide on non-significant reads)
-    size1 = _fit_lines(l1, (64, 56, 48, 44, 40, 36), 12.1, bold=True, max_lines=1)
-    h1 = max(1.0, _measure(l1, size1, 12.1, bold=True, spacing=0.95).height_in + 0.15)
-    size2 = 64 if len(l2.split()) <= 6 else 28
-    y2 = 2.2 + h1 + 0.15
-    _add_text(s, Inches(0.6), Inches(2.2), Inches(12.1), Inches(h1),
-              l1, size=size1, bold=True, color=FG_DARK,
-              font=FONT_DISPLAY, spacing=0.95)
-    # the reading stops above the closing line at 5.7in: a long one
-    # steps down from 28pt and then loses its trailing sentence
-    _add_body(s, Inches(0.6), Inches(y2), Inches(12.1), l2,
-              max_height=Inches(round(5.7 - 0.15 - y2, 3)),
-              size=size2, floor=(40 if size2 == 64 else 20), bold=(size2 == 64),
-              color=FG_DARK, font=FONT_DISPLAY,
-              spacing=(0.95 if size2 == 64 else 1.15), min_spacing=(0.95 if size2 == 64 else 1.05))
-    # C10: previously the strip showed both a relative-adjusted-lift
-    # figure (from _final_insight_lines) and a raw-relative-lift
-    # figure (delta_rel) on the same slide with no labels, so a
-    # reader saw two different % figures and couldn't tell which was
-    # which. Drop delta_rel and lead with the adjusted-lift number
-    # since that is the one the deck argues from.
-    lift_rel = (ctx.incr_lift_rel
-                if ctx.incr_lift_rel is not None
-                else ctx.delta_rel)
-    lift_label = (
-        f"+{lift_rel:.1f}% adjusted engagement lift"
-        if lift_rel > 0 else "lift at or below the matched group's own movement"
-    )
-    if not ctx.has_control:
-        lift_label = (f"{ctx.delta_rel:+.1f}% engagement, before to after"
-                      if ctx.delta_rel > 0 else "engagement level before and after")
-    closing = (
-        f"{fmt_money(ctx.total_value)} in total brand value observed, "
-        f"{fmt_num(ctx.post_users_proj)} U.S. consumers reached, "
-        f"{lift_label}"
-    )
-    _add_text(s, Inches(0.6), Inches(5.7), Inches(12.1), Inches(0.5),
-              closing, size=16, italic=True, color=FG_DARK)
-    _page_footer(s, idx, total, ctx.project, on_dark=False)
+    surf = S_ORCHID
+    _ground(s, surf)
+    _chrome(s, surf, idx, "What to do next", ctx.logo(surf), page=idx)
+    statement = _final_statement(ctx)
+    size = 32
+    for sz in (40, 36, 34, 32):
+        if _line_count(statement, sz, BAND, bold=True) <= 2:
+            size = sz
+            break
+    st_h = _measure(statement, size, BAND, bold=True, spacing=1.0).height_in
+    T(s, M, 2.0, BAND, st_h, statement, size=size, weight="Bold", color=surf.title, spacing=1.0)
+    y = 2.0 + st_h + 0.3
+    card_h = 1.3
+    card_y = CONTENT_BOTTOM - card_h
+    BODY(s, M, y, 10.2, _final_reading(ctx), max_h=card_y - 0.3 - y, size=20, floor=14, spacing=1.2,
+         min_spacing=1.1, weight="Light", color=surf.title)
+    _card(s, M, card_y, BAND, card_h, fill=surf.card)
+    _label(s, M + 0.3, card_y + 0.24, 3.0, "Next step", surf.card_accent)
+    BODY(s, M + 0.3, card_y + 0.54, BAND - 0.6, _next_step(ctx)[1], max_h=card_h - 0.54 - 0.16, size=14, floor=11,
+         spacing=1.25, min_spacing=1.1, color=surf.card_title)
     return s
-
-
-def _sig_floor_line(ctx: DeckCtx) -> str:
-    """Compose the panel-size-aware detection-floor line for slide 13.
-
-    Replaces a legacy hardcoded 'At n=10M the detection floor is roughly
-    a tenth of a percentage point' string that misread whenever a BPIQ
-    payload was scoped to a cohort smaller than the 10M panel construct
-    (e.g. Boomer / age cuts, DMA cuts). Reads panel_size + payload's own
-    detection_floor_pp so every rebuild speaks the payload's actual base.
-    """
-    n_panel = int(ctx.panel_size or 0)
-    diag_sig = ((ctx.data.get("diagnostics") or {})
-                .get("significance") or {})
-    floor = diag_sig.get("detection_floor_pp")
-    try:
-        floor_val = float(floor) if floor is not None else None
-    except (TypeError, ValueError):
-        floor_val = None
-    floor_txt = (f"approximately {floor_val:.2f}pp"
-                 if floor_val is not None else "computed per payload")
-    # Display projects up (2026-09-23): the cohort is named by its
-    # projected universe; the large/small branch still keys on the
-    # observed base because that is the statistical property.
-    proj = int(ctx.audience_proj or 0)
-    n_txt = (f"{proj:,} projected U.S. consumers" if proj
-             else "this audience universe")
-    if n_panel and n_panel >= 1_000_000:
-        # Large-panel language: p-value collapses, drop from slide.
-        return (
-            f"On the cohort behind this read ({n_txt}), the detection "
-            f"floor is {floor_txt}; p-values are omitted on client-facing "
-            "slides because they collapse to zero for anything above the "
-            "floor and add no decision-relevant information."
-        )
-    # Smaller-panel language: p-value stays on slide 4.
-    return (
-        f"On the cohort behind this read ({n_txt}), the detection "
-        f"floor is {floor_txt}; p-values are reported on slide 4 alongside "
-        "the point estimate and 95% CI because they remain decision "
-        "relevant at this cohort size."
-    )
 
 
 def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
+    """How each figure is counted, in plain words. No test statistic, no
+    outside name, no word for how a number was made."""
     s = _blank(prs)
-    _add_bg(s, BG_DARK)
-    _eyebrow(s, Inches(0.6), Inches(0.6),
-             "Source & Methodology", on_dark=True)
-    _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              "How we got here.",
-              size=40, bold=True, color=FG_LIGHT,
-              spacing=0.95, font=FONT_DISPLAY)
+    surf = S_DARK
+    _ground(s, surf)
+    top = _head(s, surf, idx, "How it is counted", ("How each figure", " in this deck is counted."), None,
+                ctx.logo(surf))
+    reach = fmt_num(ctx.audience_proj)
+    same = ctx.pre_days and ctx.pre_days == ctx.post_days
+    windows = []
+    if ctx.pre_range:
+        windows.append(f"Before: {ctx.pre_range}.")
+    if ctx.post_range:
+        windows.append(f"After: {ctx.post_range}.")
+    if same:
+        windows.append(f"Both windows run {_days_phrase(ctx.post_days)}, so before and after compare like for like.")
+    elif ctx.pre_days and ctx.post_days:
+        windows.append(f"The first runs {_days_phrase(ctx.pre_days)} and the second {_days_phrase(ctx.post_days)}.")
+    if ctx.has_control:
+        lift = ("Brand lift is the gain among the people reached minus the gain in a matched group over the same "
+                f"days. That group {'is the same size, ' if _same_size(ctx) else ''}started at about the same "
+                f"{ctx.ba} engagement{',' if _same_size(ctx) else ''} and had no exposure to the campaign.")
+    else:
+        lift = (f"Brand lift is the change in {ctx.ba} engagement inside the same group of people, "
+                f"{ctx.after_word} against before. Only people newly engaging count toward its value.")
     notes = [
-        ("DATA SOURCE",
-         "Crosswalk BehaviorGraph: a 30M+ opted-in U.S. consumer panel. "
-         "Every observation in this deck reflects real behavioral signal "
-         "(visits, engagements, brand touchpoints); no surveys, no "
-         "self-report. The read covers the partnership's audience cohort "
-         "across the pre, event, and post windows."),
-        ("INCIDENCE RATES",
-         "All pre and post penetration percentages are incidence rates: "
-         "unique brand engagers in the window divided by the audience "
-         "base, with both sides stated as projected U.S. consumers on "
-         "slide 4 so each percentage can be audited directly."),
-        ("PROJECTION",
-         f"Every count in this deck is stated at the partnership's "
-         f"{fmt_num(ctx.audience_proj)}-consumer U.S. audience universe, "
-         "scaled with a calibrated cohort weight. Numbers labeled "
-         "'projected' or 'U.S. consumers' are that universe."),
-        ("ATTRIBUTION",
-         f"Brand touchpoints are counted within {ctx.attribution_d} days "
-         "of campaign end: long enough to capture delayed brand "
-         "behavior, tight enough to keep the causal read clean."),
-        ("BRAND LIFT",
-         (_matched_group_lines(ctx.data.get("control_group") or {})[0]
-          + " The lift is the exposed group's change in brand engagement "
-            "minus the matched group's change over the same windows. A "
-            "difference that was already there before the partnership "
-            "never reads as lift."
-          + ((" " + _matched_group_lines(ctx.data.get("control_group") or {})[1])
-             if _matched_group_lines(ctx.data.get("control_group") or {})[1] else ""))
-         if ctx.has_control else
-         ("A before and after read. The lift is the change in brand "
-          "engagement inside the same audience: the campaign window "
-          f"against {_pre_days_phrase(ctx.data)}. Only people newly "
-          "engaging count toward its value.")),
-        ("SIGNIFICANCE",
-         "Same-panel pre/post design. Primary test: pooled two-sample "
-         "z on the paired marginals (conservative for a within-panel "
-         "read). We report the point estimate, the z-score, and a 95% "
-         "confidence interval derived from the same variance. "
-         + _sig_floor_line(ctx)),
+        ("The data",
+         "Crosswalk follows 30M+ opted-in US consumers across their full digital life. Everything in this deck "
+         "is behavior we observed: visits, sessions and views. Nothing comes from a survey."),
+        ("The people",
+         f"Counts are projected to the {reach} US people in the read. Each person is counted once."),
+        ("Engagement",
+         f"An engagement rate is the share of those people with at least one {ctx.ba} touchpoint in a window."),
+        ("The two windows", " ".join(windows) or "The read compares a window before the campaign with one after."),
+        ("Brand lift", lift),
+        ("The dollar values",
+         f"Total brand value adds {_n_word(len(ctx.lenses))} parts: {_lens_words(ctx)}. The value per person behind "
+         "each part is our 2026 rate, shown on its page."),
     ]
-    # The rows flow from under the headline to the logo at 6.6in, each
-    # as tall as its paragraph (2026-10-29: on a fixed 0.75in pitch a
-    # four-line BRAND LIFT account landed on SIGNIFICANCE, which in turn
-    # reached the brand line). When the six do not fit at 10pt and 1.3
-    # leading, the stack tightens its leading, then the tallest
-    # paragraphs lose a trailing sentence; the labels never move apart
-    # from their paragraphs.
-    base_y = 2.05
-    logo_top = 6.6
     gap = 0.22
+    body_x, body_w = 3.7, RIGHT - 3.7
+    room = SRC_Y - 0.05 - top
     fitted = _fit_stack(
-        [dict(text=body, width_in=9.0, size=10, floor=BODY_FLOOR, spacing=1.3, min_spacing=1.1)
-         for _label, body in notes],
-        logo_top - 0.08 - base_y, gap)
-    y = base_y
+        [dict(text=body, width_in=body_w, size=13, floor=BODY_FLOOR, spacing=1.3, min_spacing=1.12)
+         for _label_, body in notes],
+        room, gap)
+    spare = room - (sum(h + 0.02 for _a, _b, _c, h in fitted) + gap * (len(notes) - 1))
+    if spare > 0:
+        gap += min(0.2, spare / (len(notes) - 1))
+    y = top
     for (label, _body), (sz, sp, txt, h_in) in zip(notes, fitted):
-        _add_text(s, Inches(0.6), Inches(round(y, 3)), Inches(3.0), Inches(0.3),
-                  label, size=10, bold=True, color=ACCENT,
-                  letter_spacing=0.18)
-        _add_text(s, Inches(3.8), Inches(round(y, 3)), Inches(9.0), Inches(round(h_in + 0.02, 3)),
-                  txt, size=sz, color=FG_LIGHT, spacing=sp)
+        _label(s, M, y + 0.07, 2.6, label, surf.body)
+        T(s, body_x, y, body_w, round(h_in + 0.02, 3), txt, size=sz, color=surf.title, spacing=sp)
         y += h_in + 0.02 + gap
-    # Final logo + URL line
-    try:
-        s.shapes.add_picture(ctx.logo, Inches(0.6), Inches(6.6),
-                             height=Inches(0.4))
-    except Exception:
-        _add_text(s, Inches(0.6), Inches(6.75), Inches(5), Inches(0.3),
-                  "CROSSWALK · BehaviorGraph",
-                  size=11, bold=True, color=FG_LIGHT, letter_spacing=0.18)
-    _add_text(s, Inches(8), Inches(6.75), Inches(4.8), Inches(0.3),
-              "behaviorgraph.com · 2026",
-              size=9, italic=True, color=MUTED_DK, align="right",
-              letter_spacing=0.14)
     return s
+
+
+def _slide_failed(prs, ctx: DeckCtx, idx: int):
+    """A page that could not be drawn. The reader sees a plain line; the
+    reason goes to the log."""
+    s = _blank(prs)
+    surf = S_DARK
+    _ground(s, surf)
+    _chrome(s, surf, idx, "Brand partnership valuation", ctx.logo(surf), page=idx)
+    T(s, M, 3.2, BAND, 0.5, PAGE_FAILED_LINE, size=16, color=surf.body)
+    return s
+
+
+PAGE_FAILED_LINE = "This page could not be drawn."
 
 
 # ─────────────────────────────────────────────────────────────────────
 #  Public entry point
 # ─────────────────────────────────────────────────────────────────────
-def build_deck(data: dict,
-               image_url: Optional[str] = None,
-               category: Optional[str] = None,
-               s3_client=None) -> bytes:
-    """Build a full BPIQ analysis deck and return the .pptx bytes.
-
-    Parameters
-    ----------
-    data       : the BPIQ result JSON (matches /api/brand-partnership-iq/
-                 results/<key> 'data' field).
-    image_url  : admin-uploaded hero photo from the metadata sidecar
-                 (used on the cover slide). Optional - falls back to a
-                 typographic plate if missing or unfetchable. A
-                 `/api/profile-image-file/<key>` path is read from the
-                 private bucket (2026-10-29), an http(s) URL is fetched.
-    category   : admin-managed category (case-insensitive). Used to
-                 suppress conversion slides for 'automotive' runs.
-    s3_client  : optional boto3-style client for the bucket read (the
-                 app passes its own; tests pass a fake). None builds one.
-    """
-    ctx = _derive_context(data, image_url, category, s3_client=s3_client)
-
-    prs = Presentation()
-    prs.slide_width  = SLIDE_W
-    prs.slide_height = SLIDE_H
-
-    # Decide which slides participate in this deck.
+def _plan(ctx: DeckCtx) -> list:
+    """The pages of this deck, in order. The short version is second, so
+    someone who reads only that page leaves with the answer; the method
+    note closes the deck."""
     builders = [
         _slide_cover,
-        _slide_methodology,
+        _slide_tldr,
+        _slide_measured,
         _slide_audience_scale,
         _slide_engagement_lift,
         _slide_total_value_hero,
@@ -3227,20 +3125,53 @@ def build_deck(data: dict,
         _slide_final_insight,
         _slide_source,
     ])
+    return builders
 
+
+def build_presentation(data: dict, image_url: Optional[str] = None, category: Optional[str] = None,
+                       s3_client=None):
+    """The deck as a python-pptx Presentation, before it is finished
+    (fonts embedded, checks run). `build_deck` is the delivery path; this
+    is for a caller that reads the pages (the layout self-check, tests)."""
+    ctx = _derive_context(data, image_url, category, s3_client=s3_client)
+
+    prs = Presentation()
+    prs.slide_width  = SLIDE_W
+    prs.slide_height = SLIDE_H
+
+    builders = _plan(ctx)
     total = len(builders)
     for i, builder in enumerate(builders, start=1):
+        before = len(prs.slides._sldIdLst)
         try:
             builder(prs, ctx, i, total)
         except Exception as e:
-            # Never let a single slide failure kill the whole deck -
-            # render an apology slide and keep going so the user still
-            # gets a deck rather than a 500.
-            s = _blank(prs)
-            _add_bg(s, BG_DARK)
-            _add_text(s, Inches(0.6), Inches(3), Inches(12), Inches(1),
-                      f"Slide build failed ({builder.__name__}): {e}",
-                      size=14, italic=True, color=MUTED_DK)
+            # Never let a single page failure kill the whole deck: the
+            # page is replaced with a plain line and the reason is
+            # logged, so the reader still gets a deck rather than a 500.
+            print(f"[bpiq_deck_builder] page {i} ({builder.__name__}) failed: {type(e).__name__}: {e}")
+            try:
+                ids = prs.slides._sldIdLst
+                while len(ids) > before:
+                    rid = ids[-1].rId
+                    prs.part.drop_rel(rid)
+                    ids.remove(ids[-1])
+            except Exception:
+                pass
+            _slide_failed(prs, ctx, i)
+    return prs
+
+
+def build_deck_report(data: dict,
+                      image_url: Optional[str] = None,
+                      category: Optional[str] = None,
+                      s3_client=None,
+                      *, render_check: bool = False) -> tuple:
+    """Build the deck and finish it. Returns (pptx bytes, the finisher's
+    report or None when the design pack is not on the machine). The
+    report's `ready` is True only when Crosswalk Inter is embedded, the
+    brand lint found no FAIL and the plain-English check found no flag."""
+    prs = build_presentation(data, image_url=image_url, category=category, s3_client=s3_client)
 
     # 2026-10-29: the layout self-check. Every block was measured and
     # fitted as it was placed; this proves it on the finished slides
@@ -3256,28 +3187,40 @@ def build_deck(data: dict,
 
     out = io.BytesIO()
     prs.save(out)
+    data_out, report = out.getvalue(), None
     # 2026-10-21: the delivered deck carries Crosswalk Inter embedded and
     # passes the pack's checks (fixed in place; never held).
     _ds = _design()
     if _ds is not None:
         try:
-            out = io.BytesIO(_ds.finish_bytes(out.getvalue(), ".pptx"))
+            data_out, report = _ds.gate_attachment("deck.pptx", data_out, render_check=render_check)
         except Exception:
-            pass
+            data_out, report = out.getvalue(), None
+    return data_out, report
 
-    # Best-effort cleanup of any tmp files we materialized. Only
-    # delete paths that live under the system temp dir - the shipped
-    # brand logo lives inside the repo's static/ dir and must never
-    # be unlinked.
-    tmp_root = tempfile.gettempdir()
-    for p in (ctx.cover_image, ctx.logo):
-        try:
-            if p and os.path.exists(p) and os.path.abspath(p).startswith(tmp_root):
-                os.unlink(p)
-        except Exception:
-            pass
 
-    return out.getvalue()
+def build_deck(data: dict,
+               image_url: Optional[str] = None,
+               category: Optional[str] = None,
+               s3_client=None) -> bytes:
+    """Build a full BPIQ analysis deck and return the .pptx bytes.
+
+    Parameters
+    ----------
+    data       : the BPIQ result JSON (matches /api/brand-partnership-iq/
+                 results/<key> 'data' field).
+    image_url  : admin-uploaded hero photo from the metadata sidecar
+                 (the cover's background, under a baked scrim). Optional:
+                 the cover takes the pack's Graphite wash when it is
+                 missing or unfetchable. A `/api/profile-image-file/<key>`
+                 path is read from the private bucket (2026-10-29), an
+                 http(s) URL is fetched.
+    category   : admin-managed category (case-insensitive). 'automotive'
+                 keeps the conversion lens out of the deck and its total.
+    s3_client  : optional boto3-style client for the bucket read (the
+                 app passes its own; tests pass a fake). None builds one.
+    """
+    return build_deck_report(data, image_url=image_url, category=category, s3_client=s3_client)[0]
 
 
 def suggested_filename(data: dict, ext: str = "pptx") -> str:
@@ -3285,4 +3228,3 @@ def suggested_filename(data: dict, ext: str = "pptx") -> str:
     name = safe_filename(str(data.get("project_name") or "BPIQ_Deck"))
     stamp = str(data.get("created_at") or "")[:10] or "deck"
     return f"{name}_Analysis_{stamp}.{ext}"
-

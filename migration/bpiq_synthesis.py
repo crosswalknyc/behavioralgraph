@@ -1110,8 +1110,16 @@ two identical values. Return STRICT JSON only:
     "top_negative": [{...}, ...]    // 1-3 negative clusters, same shape
   },
   "top_brand_properties": [        // 8-12 brand touchpoint slugs with
-    {"common_name": str, "pre_hits": int, "post_hits": int}, ...
-  ],
+    {"common_name": str, "pre_hits": int, "post_hits": int,
+     "new": bool}, ...             // new = true for a page, post or
+  ],                               // asset the campaign itself created
+                                   // (its collection page, its landing
+                                   // page, the announcement). It did
+                                   // not exist before the campaign went
+                                   // public, so its pre_hits is 0 when
+                                   // the pre window ends before that
+                                   // day. Never give a page a history
+                                   // from before it existed.
   "gen_pop_drift_pp": float,       // background brand drift over the
                                    // event window for a MATCHED
                                    // comparison group: same size as
@@ -1419,11 +1427,13 @@ def normalize_demographics(raw: dict, *, subject: str,
 
 def normalize_sentiment_clusters(items, *, subject: str, bucket: str,
                                  pre_total: int, post_total: int,
-                                 limit: int) -> list:
+                                 limit: int, no_history=None) -> list:
     """Return sentiment clusters as dict rows in the shipped shape.
     Accepts plain strings (one sentence each) or partial dicts. Hits
     are allotted deterministically out of the phase totals so the
-    rows audit against the sentiment counts."""
+    rows audit against the sentiment counts. `no_history(name)` is True
+    for a conversation about something the campaign created: it has no
+    hits before the campaign went public (2026-11-11)."""
     rows = []
     for it in list(items or [])[:limit]:
         if isinstance(it, dict):
@@ -1462,6 +1472,11 @@ def normalize_sentiment_clusters(items, *, subject: str, bucket: str,
         if not isinstance(post_hits, int) or post_hits < 0:
             post_hits = _messy((subject, bucket, i, "post"),
                                max(post_total, 0) * frac)
+        try:
+            if no_history is not None and no_history(r["common_name"]):
+                pre_hits = 0
+        except Exception:
+            pass
         out.append({
             "common_name": r["common_name"],
             "url": r["url"],
@@ -1810,6 +1825,23 @@ def build_payload(inputs: dict, prim: dict, *,
         tot = sum(d.values()) or 1
         return round((d.get("positive", 0) - d.get("negative", 0))
                      / tot * 100, 2)
+    # what the campaign created has no history before it went public
+    # (migration/bpiq_campaign_assets.py): its own pages below, and a
+    # conversation that names the campaign here
+    try:
+        from migration import bpiq_campaign_assets as _assets
+    except ImportError:   # twin layout
+        import bpiq_campaign_assets as _assets   # type: ignore
+    _asset_ctx = {
+        "talent": [inputs.get("qualifier"), (campaign or {}).get("talent")],
+        "campaign": [inputs.get("campaign"), (campaign or {}).get("campaign_name")],
+        "pre_end": windows["pre"]["end"],
+        "drop_dates": (campaign or {}).get("drop_dates") or [],
+        "event_start": windows["event"]["start"],
+    }
+
+    def _campaign_topic(name):
+        return _assets.no_history_before(name, **dict(_asset_ctx, talent=[]))
     sentiment = {
         "enabled": True,
         "sample_size": sum(s_pre.values()) + sum(s_post.values()),
@@ -1822,24 +1854,31 @@ def build_payload(inputs: dict, prim: dict, *,
         "top_positive": normalize_sentiment_clusters(
             s.get("top_positive"), subject=salt, bucket="positive",
             pre_total=s_pre.get("positive", 0),
-            post_total=s_post.get("positive", 0), limit=5),
+            post_total=s_post.get("positive", 0), limit=5, no_history=_campaign_topic),
         "top_negative": normalize_sentiment_clusters(
             s.get("top_negative"), subject=salt, bucket="negative",
             pre_total=s_pre.get("negative", 0),
-            post_total=s_post.get("negative", 0), limit=3),
+            post_total=s_post.get("negative", 0), limit=3, no_history=_campaign_topic),
     }
 
     # ---- top brand properties --------------------------------------------
+    # A page the campaign created has no visits before the campaign went
+    # public (2026-11-11, Gap x JYT: the collection page showed 2,211
+    # visits in the 51 days before the partnership was announced). The
+    # rule lives in migration/bpiq_campaign_assets.py; the deck applies
+    # the same one to valuations saved before this date.
     tbp, tbp_pre = [], []
     for row in (prim.get("top_brand_properties") or [])[:12]:
-        ph = _messy((salt, row["common_name"], "pre"),
-                    float(row.get("pre_hits", 0)) * (hold_f or 1.0))
+        fresh = _assets.no_history_before(row["common_name"], flag=row.get("new"), **_asset_ctx)
+        ph = 0 if fresh else _messy((salt, row["common_name"], "pre"),
+                                    float(row.get("pre_hits", 0)) * (hold_f or 1.0))
         qh = _messy((salt, row["common_name"], "post"),
                     float(row.get("post_hits", 0)) * (hold_f or 1.0))
+        mark = {"new_in_window": True} if fresh else {}
         tbp.append({"common_name": row["common_name"], "hits": qh,
-                    "hits_projected": proj(qh)})
+                    "hits_projected": proj(qh), **mark})
         tbp_pre.append({"common_name": row["common_name"], "hits": ph,
-                        "hits_projected": proj(ph)})
+                        "hits_projected": proj(ph) if ph else 0, **mark})
     tbp.sort(key=lambda r: -r["hits"])
     tbp_pre.sort(key=lambda r: -r["hits"])
 

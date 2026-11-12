@@ -670,13 +670,17 @@ def test_g_no_control_deck_reads_before_and_after():
         print('     ', hits[:3])
     blob = ' '.join(texts)
     check("no '+0.00pp' anywhere", '+0.00pp' not in blob and '0.00pp' not in blob)
+    # wording as of the clean-deck rewrite later the same day (test_bpiq_valuation_deck_clean.py):
+    # the same before and after read, in the new pages' words
     check("the lift page reads as a before and after", 'since the campaign began' in blob
-          and 'Rise in engagement, before to after' in blob and 'before and after read of the same audience' in blob)
-    check("the method note says before and after", 'A before and after read. The lift is the change in brand engagement' in blob)
+          and re.search(r"counts only people who engaged with \w+ after launch and had not in the \d+ days before", blob) is not None)
+    check("the method note says before and after",
+          re.search(r"Brand lift is the change in \w+ engagement inside the same group of people, after launch against before", blob) is not None)
     check("the headline figure is labeled as new since the campaign began", 'OF WHICH NEW SINCE THE CAMPAIGN BEGAN' in blob
           and 'ATTRIBUTABLE TO PARTNERSHIP' not in blob)
-    check("the close states the rise against the days before",
-          re.search(r"against the \d+ days before the campaign", blob) is not None)
+    check("the rise is stated against the days before, and the close says what the partnership did",
+          re.search(r"\d+ DAYS BEFORE LAUNCH", blob) is not None and re.search(r"\d+ DAYS AFTER LAUNCH", blob) is not None
+          and 'got more people engaging with' in blob)
     logo = DS.logo_path('white')
     check("the design pack's logo is on disk", bool(logo) and Path(str(logo)).is_file())
     if logo:
@@ -690,15 +694,16 @@ def test_g_no_control_deck_reads_before_and_after():
     flat['totals']['audience_pen_post_pct'] = flat['totals']['audience_pen_pre_pct']
     flat['totals']['post_users_projected'] = flat['totals']['pre_users_projected']
     t2, _ = deck_texts(B.build_deck(flat, image_url=None, category='FASHION'))
-    check("a flat window reads as level before and after, never 'held baseline'",
-          not [t for t in t2 if CONTROL_WORDS.search(t)] and any('level' in t for t in t2))
+    check("a flat window reads as held before and after, never 'held baseline'",
+          not [t for t in t2 if CONTROL_WORDS.search(t)]
+          and any('engagement held at' in t and 'before and after' in t for t in t2))
     # with a control group bought, the matched-group account stays
     inc = T.inputs(control=True)
     pc = S.build_payload(inc, T.prim(), campaign=S.normalize_campaign(T.campaign(), inc))
     t3, pics3 = deck_texts(B.build_deck(dict(pc), image_url=None, category='FASHION'))
     b3 = ' '.join(t3)
     check("a valuation bought with a control group keeps its matched-group pages",
-          'above a matched group' in b3 and 'OF WHICH ATTRIBUTABLE TO PARTNERSHIP' in b3
+          'LIFT OVER THE MATCHED GROUP' in b3 and 'OF WHICH ATTRIBUTABLE TO PARTNERSHIP' in b3
           and 'matched group kept' in pc['valuation']['talent_share_basis'])
     if logo:
         check("and carries the real logo too", pics3.count(want) >= 2)
