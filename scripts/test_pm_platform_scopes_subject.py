@@ -181,23 +181,40 @@ hit = PS.for_read(ARMINE, [], base, il)
 check("with only the all-platform read on record, that subject is scoped to YouTube",
       bool(hit) and hit['subject'] == ALL_SUBJ and hit['same_scope'] is False, str(hit))
 use(FULL)
-check("a chip that chose the YouTube profile keeps it", PS.for_read(ARMINE, [], base, il, bind_subject='YouTube') is None)
+# the way it ran on production: the catalog base is dropped as a platform surface, and the quote and the read
+# are then given the platform's bare name (on an included plan the quote runs at once, bound to the profile)
+for label, kw in (("the base dropped, nothing guessed", dict(base=None)),
+                  ("the base dropped, the guess is the platform", dict(base=None, subj_hint='YouTube')),
+                  ("a quote that named the platform, approved", dict(base=base, bind_subject='YouTube')),
+                  ("the same with the base dropped", dict(base=None, bind_subject='YouTube'))):
+    h = PS.for_read(ARMINE, [], kw.get('base'), il, kw.get('bind_subject', ''), kw.get('subj_hint', ''))
+    check(f"{label}: the subject on record, scoped to YouTube", bool(h) and h['subject'] == YT_SUBJ and h['source'] == 'ledger', str(h))
+out = PS.apply_to_read(ARMINE, [], il, None, 'PROFILE ROWS', 'YouTube', None, None, 'YouTube')
+check("the read lane's one call: no base, no profile rows, the held subject bound, the platform as cohort, no switch back to the platform",
+      out == (None, '', YT_SUBJ, YT_SUBJ, 'on YouTube', None), str(out))
+same = ({'subject': 'Mad Men Viewers', 's3_key': 'x.csv', 'source': 'catalog'}, 'ROWS', 'Mad Men Viewers', None, None, 'Mad Men Viewers')
+check("and it hands everything back untouched when the base stands",
+      PS.apply_to_read('how big is the Mad Men audience on YouTube', [], il, *same) == same)
+check("a subject the lane already holds that is not the platform is kept",
+      PS.for_read(ARMINE, [], None, il, '', 'Lionsgate Originals') is None)
 for t in ('who uses YouTube', 'what do YouTube users buy most', 'the YouTube audience by age and gender'):
     b = C._pm_generation_base('', t, prefer_catalog=True)
     check(f"{t!r}: the YouTube profile is the base", bool(b) and b.get('s3_key') == YT_KEY and PS.for_read(t, [], b, il) is None)
 use(index(('youtube', 'YouTube', [E_PLAT]), ('mad_men_viewers', 'Mad Men Viewers', [E_OTHER])))
 check("nothing on record and no thread: the base stands", PS.for_read(ARMINE, [], base, il) is None)
+check("a chip that chose the YouTube profile keeps it when nothing is on record", PS.for_read(ARMINE, [], base, il, bind_subject='YouTube') is None)
 check("a base that is not a platform is never touched",
       PS.for_read(ARMINE, [], {'subject': 'Mad Men Viewers', 's3_key': 'x.csv', 'source': 'catalog'}, il) is None)
 src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
 i = src.index('def _pm_generate_metrics_response(')
 body = src[i:i + 60000]
-check("the hook sits in the read lane after the base is resolved and before the universe guard",
-      0 < body.index("base = _pm_generation_base(subj_hint, text, ctx=ctx,") < body.index("platform_scope', fromlist=['for_read'])")
-      < body.index("_qu = _question_universe.question_universe(text, _qu_page)"))
-check("a resumed job keeps the base it was started on", "_ps = None if _pinned_base else" in body)
-check("the released read runs on the held subject, with no profile rows riding the prompt",
-      "base, digest_block, subj_hint, bind_subject, bind_cohort = None, '', _ps['subject']" in body)
+check("the hook sits in the read lane after the base is resolved and dropped, before the universe guard and the quote",
+      0 < body.index("base = _pm_generation_base(subj_hint, text, ctx=ctx,") < body.index("_page_default.base_stands(")
+      < body.index("fromlist=['apply_to_read']).apply_to_read(") < body.index("_qu = _question_universe.question_universe(text, _qu_page)")
+      < body.index("_prg.offer_or_charge("))
+check("a resumed job keeps the base it was started on", "if not _pinned_base:   # a platform the question adds" in body)
+check("the read's base, rows, subject, bound subject, cohort and switch page all pass through the one call",
+      "base, digest_block, subj_hint, bind_subject, bind_cohort, switch_page = __import__('prometheus.platform_scope'" in body)
 
 print("[3] the ledger")
 use(FULL)
@@ -260,6 +277,8 @@ use(index(('youtube', 'YouTube', [E_PLAT])))
 hit = PS.for_read('and on YouTube only?', THREAD, yt_base, il)
 check("a follow-up that only adds a platform scopes the thread's subject",
       bool(hit) and hit['subject'] == 'Digital original content categories' and hit['source'] == 'thread', str(hit))
+check("the thread alone never overrides a platform the reader was quoted and approved",
+      PS.for_read('and on YouTube only?', THREAD, yt_base, il, bind_subject='YouTube') is None)
 check("a question about people at large is its own universe",
       PS.for_read('what do people watch on YouTube', THREAD, yt_base, il) is None)
 check("a thread already on the platform is not rescoped",

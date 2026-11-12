@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read']
+__all__ = ['PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read', 'apply_to_read']
 
 # canonical name -> the ways it is written
 PLATFORMS = {
@@ -301,28 +301,66 @@ def resolve(text, base_subject, *, ledger_doc=None, history=None, thread_subject
         return None
 
 
-def for_read(text, history, base, ledger, bind_subject=''):
-    """The read lane's hook: resolve() against the live ledger for the
-    base the lane picked. None when the base stands (not a platform's
-    profile, a base the reader chose on a chip, a resumed job)."""
+def for_read(text, history, base, ledger, bind_subject='', subj_hint=''):
+    """The read lane's hook: the held subject a platform scopes, or None
+    when the lane's own reading stands.
+
+    Two ways the platform's profile takes a question it only scopes:
+    the base resolves to the profile (the catalog names it), or the base
+    was dropped as a platform surface and the subject the quote and the
+    read are then given is the platform's bare name ("I can pull how
+    many people in the US watched YouTube"; on an included plan that
+    quote runs at once, bound to the YouTube profile). Both are read
+    here. A subject the quote carried back counts as ours, not the
+    reader's: it is overridden only when the ledger holds the subject
+    the words name (never on the thread alone)."""
     try:
-        if not isinstance(base, dict) or str(base.get('source') or '') not in ('catalog', 'page'):
+        cands = []
+        if isinstance(base, dict) and str(base.get('source') or '') in ('catalog', 'page'):
+            cands.append(str(base.get('subject') or '').split(' - ')[0])
+        elif not base:
+            for name in (bind_subject, subj_hint):
+                if str(name or '').strip():
+                    cands.append(str(name).split(' - ')[0])
+            if not cands:
+                cands.extend(p for p, how in named(text).items() if how == 'scope')
+        plat = next((canon(c) for c in cands if canon(c)), '')
+        if not plat:
             return None
-        subj = str(base.get('subject') or '')
-        if not canon(subj.split(' - ')[0]):
-            return None
-        if str(bind_subject or '').strip() and canon(str(bind_subject).split(' - ')[0]) == canon(subj.split(' - ')[0]):
-            return None                          # the reader picked the platform's profile
+        if any(str(n or '').strip() and not canon(str(n).split(' - ')[0]) for n in (bind_subject, subj_hint)) and not base:
+            return None                          # the lane already holds a subject that is not the platform
         doc = None
         try:
             doc = ledger._load_index() if ledger is not None else None
         except Exception:
             doc = None
         live = getattr(ledger, '_has_live_entries', None) if ledger is not None else None
-        hit = resolve(text, subj, ledger_doc=doc, history=history, live=live)
-        if hit:
-            print(f"[pm-base] {subj!r} is where, not who: the words scope {hit['subject']!r} to {hit['platform']} "
-                  f"({hit['source']}); the platform's own profile is not the base")
+        hit = resolve(text, plat, ledger_doc=doc, history=history, live=live)
+        if not hit:
+            return None
+        bound_to_platform = bool(str(bind_subject or '').strip()) and canon(str(bind_subject).split(' - ')[0]) == plat
+        if (bound_to_platform or not base) and hit.get('source') != 'ledger':
+            return None                          # a bound or guessed platform yields only to a subject on record
+        print(f"[pm-base] {plat!r} is where, not who: the words scope {hit['subject']!r} to {hit['platform']} "
+              f"({hit['source']}); the platform's own profile is not the base")
         return hit
     except Exception:
         return None
+
+
+def apply_to_read(text, history, ledger, base, digest_block, subj_hint, bind_subject, bind_cohort, switch_page):
+    """The read lane's one call: its own (base, digest_block, subj_hint,
+    bind_subject, bind_cohort, switch_page), changed only when a platform
+    the words name scopes a subject on record. Then the read has no
+    profile base and no profile rows, runs on the held subject with the
+    platform as its cohort, and the platform is never offered back as
+    the page to switch to. Never raises."""
+    same = (base, digest_block, subj_hint, bind_subject, bind_cohort, switch_page)
+    try:
+        hit = for_read(text, history, base, ledger, bind_subject, subj_hint)
+        if not hit:
+            return same
+        sw = switch_page if (switch_page and canon(str(switch_page).split(' - ')[0]) != hit['platform']) else None
+        return None, '', hit['subject'], hit['subject'], (bind_cohort or hit['cohort']), sw
+    except Exception:
+        return same

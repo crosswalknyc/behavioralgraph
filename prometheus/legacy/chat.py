@@ -13771,9 +13771,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if not _stands:   # the open profile is context, never a default subject; a name the reader said no to is no base (2026-10-06, 2026-10-24)
             print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} dropped ({_why})")
             switch_page, base = (switch_page or str(base.get('subject') or '')), None
-    _ps = None if _pinned_base else __import__('prometheus.platform_scope', fromlist=['for_read']).for_read(text, history, base, il, bind_subject)
-    if _ps:   # a platform the question adds scopes the subject on record; it never replaces it (2026-11-11, Armine: 'YouTube original content' ran on everyone who uses YouTube)
-        base, digest_block, subj_hint, bind_subject, bind_cohort = None, '', _ps['subject'], (bind_subject or _ps['subject']), (bind_cohort or _ps['cohort'])
+    if not _pinned_base:   # a platform the question adds scopes the subject on record; it never replaces it (2026-11-11, Armine: 'YouTube original content' was quoted and run on everyone who uses YouTube)
+        base, digest_block, subj_hint, bind_subject, bind_cohort, switch_page = __import__('prometheus.platform_scope', fromlist=['apply_to_read']).apply_to_read(text, history, il, base, digest_block, subj_hint, bind_subject, bind_cohort, switch_page)
     # The anchor is reasoned, not inherited (Jenna 2026-11-04): a profile
     # of a PERSON (ACTOR, MUSICIAN/BAND, creator ...) counts the people with
     # digital touchpoints to that person. A question about viewers of the
