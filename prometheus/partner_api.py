@@ -306,6 +306,10 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
     view = str(body.get('view') or '').strip().lower()[:40]
     base_key = str(body.get('base_key') or '').strip()[:300]
 
+    # a deck or an email asked for with a question: the question is answered and the answer says plainly, in
+    # one line, that the deck was not built with it and how to get it (prometheus.ride_along, 2026-11-11)
+    from . import ride_along as _ride
+    text, _ride_kinds = _ride.key_split(text)
     # the shared door: a stable thread per conversation, parameters as page facts
     req = {'text': text, 'client': 'api', 'persist': bool(cid)}
     if cid:
@@ -355,6 +359,12 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
         return _out(v1, request_id)
     billing = _billing(user, request_id, sandbox, kid)
     v1 = C.to_v1(env, raw, billing=billing, conversation_id=cid, subject=subject, window=win)
+    if _ride_kinds:
+        _ride_subject = subject or str((raw or {}).get('subject') or (raw or {}).get('profile') or '') if isinstance(raw, dict) else subject
+        if v1.get('kind') == 'job':
+            _ride.key_hold((v1.get('job') or {}).get('id'), _ride_kinds, _ride_subject)
+        else:
+            v1 = _ride.key_note(v1, _ride_kinds, _ride_subject)
     if v1.get('kind') == 'job':
         try:
             from . import webhooks as _wh
@@ -446,6 +456,13 @@ def handle_job(user: dict, job_id: str) -> tuple:
         # a read that could not run says so in plain words and is a
         # decline, never an answer with no figures (2026-11-04)
         raw_done = res.get('_raw') if isinstance(res, dict) and isinstance(res.get('_raw'), dict) else {}
+        try:   # a deck asked for with the question this job answers: the finished answer says so in one line
+            from . import ride_along as _ride
+            _rk = _ride.key_held(job_id)
+            if _rk:
+                v1 = _ride.key_note(v1, _rk.get('kinds'), _rk.get('subject') or raw_done.get('subject') or raw_done.get('profile') or '')
+        except Exception:
+            pass
         if raw_done.get('faulted') and v1.get('kind') == 'answer':
             _reason = 'no_base' if str(raw_done.get('faulted') or '') == 'no_base' else 'unsupported'
             v1 = C.declined(_reason, str((v1.get('answer') or {}).get('text') or 'That one did not land. Send the question again.'),

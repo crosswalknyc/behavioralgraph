@@ -446,7 +446,9 @@ def _analyze_body(body, text, history, decision, tid=None):
 def _deck_body(body, text, history, ctx, tid=None):
     out = {'text': text, 'history': history, 'page_context': ctx or None,
            'thread_id': tid}
-    for k in ('angle', 'confirm_open_screen'):
+    # the subject a which-subject chip carries rides with its confirm (Armine 2026-11-11: she tapped "On
+    # Mistletoe Murders Viewers" and the deck was built on the profile open on her screen; prometheus.deck_subject)
+    for k in ('angle', 'confirm_open_screen', 'bind_subject'):
         if body.get(k) is not None:
             out[k] = body[k]
     return out
@@ -2040,6 +2042,11 @@ def ask(user, body, *, via='session'):
                             part_body.pop('context', None)
                             part_body.pop('page_context', None)
                             part_body['bind_subject'] = _multi_subject['name']
+                        elif not _page_nm:
+                            # with nothing on screen the part still rides on the earlier question's subject; it
+                            # never goes looking for one of its own (2026-11-11: "how is the audience like?", asked
+                            # third with no thread, came back with a read of an audience nobody had named)
+                            part_body['bind_subject'] = _multi_subject['name']
                 except Exception as _fx:
                     _faults.note('service.multi_ask_pointer', _fx)
                 _res = ask(user, part_body, via=via)
@@ -2365,9 +2372,13 @@ def ask(user, body, *, via='session'):
                 _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _tr['reply'],
                                        'followups': _tr.get('followups') or [], 'offer_deck': False, 'deck_angle': None}, 'thread_replay'
             elif _sm.capability_ask(text) and not _reading_overrules(reading, 'capability'):
-                _cap = _sm.capability_ask(text)
-                _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _cap['reply'], 'followups': _cap['followups'],
-                                       'offer_deck': False, 'deck_angle': None}, 'capability'
+                # a product description is never the answer to a question about the reader's own read (Armine
+                # 2026-11-11, prometheus.own_read): the lane stands aside and the answer lanes take it
+                from . import own_read as _own_read0
+                _cap = None if _own_read0.about_thread(text, history, ctx) else _sm.capability_ask(text)
+                if _cap:
+                    _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _cap['reply'], 'followups': _cap['followups'],
+                                           'offer_deck': False, 'deck_angle': None}, 'capability'
             elif _sm.offer_declined(text) and _last_turn_offered(history):
                 _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _sm.DECLINE_REPLY, 'followups': [],
                                        'offer_deck': False, 'deck_angle': None}, 'offer_declined'
@@ -2668,7 +2679,8 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _armed(body) and not _is_order:
         try:
             from . import guards as _g
-            _cap = _g.capability_answer(text)
+            from . import own_read as _own_read
+            _cap = None if _own_read.about_thread(text, history, ctx) else _g.capability_answer(text)
         except Exception as e:
             _faults.note('service.capability_gate', e)
             _cap = None

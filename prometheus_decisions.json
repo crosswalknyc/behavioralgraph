@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "86fed7ee315ebd29b336bd41e12a9c537871d2697427d845cb5e89a2bc685656",
+ "content_hash": "b2314e17de4bae02272aba5f52f864e333f89c086008a831cd413c5dd997ef0a",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1212,7 +1212,29 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "a_claim_needs_a_record",
+   "decided": "2026-11-11",
+   "statement": "An answer never says that a deck, a PowerPoint, a file, an email, a build or a read was made, sent, attached, started or queued. Answer the question that was asked. When the same message also asks for a deck, a file or an email, do not mention it at all: that step runs on its own and adds its own line when it has really happened. What a finished build holds is stated only from the file itself, never from memory of the order.",
+   "match_terms": [
+    "powerpoint",
+    "pptx",
+    "in a deck",
+    "as a deck",
+    "email it",
+    "email me",
+    "send it to",
+    "inbox",
+    "attach",
+    "summarize in",
+    "was the profile run",
+    "carried into the build"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-12T02:42:06Z"
+ "generated_at": "2026-11-12T05:20:05Z"
 }

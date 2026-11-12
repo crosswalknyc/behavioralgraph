@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "933793f6bad0b1a18d3d5816c74a2af0b0a5fc17ab93c878934841efd5b3ff3d",
+ "content_hash": "9a259ad00a401167757796c73fb2b21e226cc6be16190a9b7a88f3287ada95e7",
  "examples_hash": "bef95290e38e4c1f37a57a62ad77210f35d0a54fef2e38fe36471e4278401fbf",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "bf0392aaa307bc59c4f2b7f973a538925daf658db7f146bb39e81720ab15cb1d",
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "4a94e0e7a953cf73915287b694e850851a7e6628adfa7a03a282328ed60e78e1",
   ".cursor/skills/crosswalk-design/SKILL.md": "3820d5b6a581e967d3272d7652cc9cbc9f9d7166945597965ba654114f4d75ad",
   ".cursor/skills/crosswalk-design/references/company.md": "ac29b7962918715d9b337a01f23befb4990b4af6c7afb3cf50fdb6a493b64d83"
  },
@@ -209,5 +209,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-11-12T02:57:11Z"
+ "generated_at": "2026-11-12T05:20:05Z"
 }

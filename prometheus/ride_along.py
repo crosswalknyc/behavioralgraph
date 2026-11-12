@@ -560,3 +560,86 @@ def on_read_landed(uname, job_id, payload=None, *, held=False, probe=False, deck
     except Exception as e:
         _faults.note('ride_along.landing', e)
         return 'failed'
+
+
+# ------------------------------------------------------------ the key surface
+# The key surface is the Prometheus API: POST /api/prometheus/v1/ask with a key, used by partners' own
+# systems and by our team's scripted reads. A caller there has no thread to watch and one job id to poll,
+# so a deck cannot ride behind a question the way it does in the dashboard chat. The request is honoured
+# where it can be and plainly declined where it cannot (Jenna 2026-11-11): the question is answered, and
+# the answer says in one line that the deck was not built with it and how to get it. A deck asked for on
+# its own already works there (it comes back as a job with its file). No field, no flag: the words of the
+# prompt are the only input, and the line rides in the answer's own text.
+KEY_PREFIX = PREFIX + '_key/'
+_KEY_FORMAT = {'deck': 'PowerPoint', 'pdf': 'PDF', 'email': 'email'}
+
+
+def key_line(kinds, subject=''):
+    """The one plain line a key caller reads for a deliverable asked for
+    with a question ('' when nothing needs saying: a CSV stays with the
+    question and comes back as the answer's file)."""
+    ks = [k for k in (kinds or []) if k in ('deck', 'pdf', 'email')]
+    if not ks:
+        return ''
+    subj = ' '.join(str(subject or '').split())[:120]
+    lines = []
+    if 'deck' in ks or 'pdf' in ks:
+        fmt = 'PowerPoint' if 'deck' in ks else 'PDF'
+        ask = f'Send "Build a deck on {subj}" as its own request' if subj else 'Send the deck request on its own, naming the subject,'
+        lines.append(f"The {fmt} was not built with this answer. {ask} and it comes back as a job with the file.")
+    if 'email' in ks:
+        lines.append("Nothing was emailed: the answer and any file come back in this response.")
+    return ' '.join(lines)
+
+
+def key_split(text):
+    """(question, kinds) for a key caller's prompt: the question on its
+    own and the deliverables asked for with it; (text, []) when the
+    prompt carries none or is only the deliverable ask."""
+    try:
+        sp = split(text)
+        kinds = [k for k in ((sp or {}).get('kinds') or []) if k in ('deck', 'pdf', 'email')]
+        if not sp or not kinds:
+            return str(text or ''), []
+        return str(sp['question']), kinds
+    except Exception:
+        return str(text or ''), []
+
+
+def key_hold(job_id, kinds, subject=''):
+    """Keep the line for a read still running, so the finished answer
+    carries it. Never raises."""
+    try:
+        jid = _safe(job_id)
+        if jid and kinds:
+            _put(f"{KEY_PREFIX}{jid}.json", {'kinds': list(kinds), 'subject': str(subject or '')[:160], 'at': time.time()})
+    except Exception:
+        pass
+
+
+def key_held(job_id):
+    """({'kinds', 'subject'} or None) for a job a key caller is polling."""
+    try:
+        jid = _safe(job_id)
+        doc = _get(f"{KEY_PREFIX}{jid}.json") if jid else None
+        return doc if isinstance(doc, dict) and doc.get('kinds') else None
+    except Exception:
+        return None
+
+
+def key_note(v1, kinds, subject=''):
+    """The v1 answer with the line added to its own text. A job, a
+    question back and a decline are returned as they are (the job's
+    finished answer carries the line; see key_hold)."""
+    try:
+        if not isinstance(v1, dict) or not kinds:
+            return v1
+        ans = v1.get('answer')
+        if v1.get('kind') != 'answer' or not isinstance(ans, dict) or not str(ans.get('text') or '').strip():
+            return v1
+        line = key_line(kinds, subject or v1.get('subject') or '')
+        if line and line not in ans['text']:
+            ans['text'] = ans['text'].rstrip() + '\n\n' + line
+        return v1
+    except Exception:
+        return v1

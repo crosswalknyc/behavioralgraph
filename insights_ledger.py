@@ -1392,6 +1392,8 @@ def _resolve_subject(index_doc, subject=None, question=None, live_only=False):
         s_norm = normalize_subject(v.get('subject'))
         if not s_norm or len(s_norm) < 3:
             continue
+        if not _has_identity(s_norm):
+            continue        # a bucket filed under ordinary words ('The') is named by every question and is no one's subject
         if f' {s_norm} ' in qn and len(s_norm) > best_len:
             best_key, best_len = k, len(s_norm)
     # A bucket's own aliases (2026-11-10): the ways readers name a subject
@@ -1465,17 +1467,65 @@ def other_subjects_named(index_doc, question, skey, limit=4):
     return out
 
 
+# Words that point, ask or frame and never name a subject. A question made
+# only of these ("how is the audience like?", "can we give some
+# examples?", "what do they buy") names nothing of its own.
+_NO_SUBJECT_WORDS = frozenset((
+    'a', 'an', 'the', 'this', 'that', 'these', 'those', 'it', 'its', 'they', 'them', 'their', 'theirs', 'he', 'she', 'his',
+    'her', 'we', 'us', 'our', 'you', 'your', 'i', 'me', 'my', 'one', 'ones', 'who', 'whom', 'whose', 'what', 'which',
+    'where', 'when', 'why', 'how', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'do', 'does', 'did', 'done',
+    'can', 'could', 'would', 'will', 'should', 'shall', 'may', 'might', 'must', 'have', 'has', 'had', 'having', 'get',
+    'gets', 'got', 'give', 'gives', 'gave', 'show', 'shows', 'tell', 'tells', 'list', 'lists', 'name', 'see', 'look',
+    'looks', 'looking', 'like', 'likes', 'about', 'of', 'in', 'on', 'at', 'to', 'for', 'from', 'with', 'by', 'as', 'into',
+    'and', 'or', 'but', 'so', 'also', 'too', 'then', 'than', 'not', 'no', 'yes', 'please', 'thanks', 'now', 'here',
+    'there', 'else', 'more', 'most', 'less', 'some', 'any', 'all', 'each', 'every', 'both', 'other', 'others', 'same',
+    'audience', 'audiences', 'viewer', 'viewers', 'fan', 'fans', 'people', 'person', 'users', 'user', 'customers',
+    'customer', 'buyers', 'buyer', 'shoppers', 'group', 'cohort', 'segment', 'profile', 'data', 'read', 'report',
+    'example', 'examples', 'detail', 'details', 'summary', 'overview', 'breakdown', 'top', 'best', 'biggest', 'main',
+    'kind', 'kinds', 'type', 'types', 'category', 'categories', 'thing', 'things', 'buy', 'buys', 'buying', 'watch',
+    'watches', 'watching', 'shop', 'shops', 'shopping', 'use', 'uses', 'using', 'do', 'go', 'goes', 'much', 'many',
+    'summarize', 'summarise', 'explain', 'describe', 'break', 'down', 'up', 'out', 'over', 'again', 'just', 'only'))
+
+
+def _has_identity(s_norm):
+    """True when a stored subject's name carries at least one word of its
+    own (never 'The', 'Audience', 'The Viewers')."""
+    return any(w not in _GENERIC_SUBJECT_TOKENS and w not in _NO_SUBJECT_WORDS and not w.isdigit()
+               for w in str(s_norm or '').split())
+
+
+def names_no_subject(question):
+    """True when the question names nothing of its own: every word
+    points, asks or frames ("how is the audience like?", "who are they",
+    "can we give some examples?"). Such a question is about the subject
+    it rides with; it never matches a read stored under another subject
+    on its words alone (2026-11-11: the third part of a three-part
+    question, asked with no thread, came back with a read of an
+    unrelated audience that happened to have been asked the same six
+    words). Never raises; False when unsure."""
+    try:
+        toks = re.sub(r'[^a-z0-9]+', ' ', str(question or '').lower()).split()
+        return bool(toks) and all(w in _NO_SUBJECT_WORDS for w in toks)
+    except Exception:
+        return False
+
+
 def _find_exact_anywhere(subjects, question):
     """Global exact-question scan: the most recent stored entry whose
     normalized question matches, across every subject bucket. Replay
     by exact ask must never depend on how the stored subject was
-    named (2026-08-27, toy-categories routing)."""
+    named (2026-08-27, toy-categories routing). A question that names
+    nothing of its own has no match here (its subject is the one it
+    rides with, and that bucket was already searched), and a retired
+    read is never the match."""
     qn = normalize_question(question) if question else None
-    if not qn:
+    if not qn or names_no_subject(question):
         return None, None
     best_key, best = None, None
     for k, v in subjects.items():
         for e in reversed(v.get('entries') or []):
+            if isinstance(e, dict) and e.get('retired'):
+                continue
             if e.get('qn') == qn and e.get('reply') and not is_retired_surface_reply(e.get('reply')):
                 if best is None or (e.get('ts') or '') > (best.get('ts')
                                                           or ''):

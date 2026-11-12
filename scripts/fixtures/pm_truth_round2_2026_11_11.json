@@ -1,0 +1,391 @@
+{
+ "_about": "Round two of the 2026-11-11 truth fixes. The readers' own words and the records as they stood: Armine's deck thread 91a978d7b5 through her tap at 23:23:45 UTC, her categories question in thread 246092bbbb at 21:05 UTC, Jessie's pasted order at 22:12 UTC in thread ebf520b02f, and the two shared ledger buckets behind the read that came back for 'how is the audience like?' (trimmed to the fields the lookup reads).",
+ "armine_deck": {
+  "thread_id": "91a978d7b5",
+  "thread_before": [
+   {
+    "role": "user",
+    "text": "Run a profile for Mistletoe Murders series",
+    "ts": "2026-11-11T21:59:12.523Z"
+   },
+   {
+    "role": "agent",
+    "text": "New Mistletoe Murders profile, ready to run.\n\nSubject: A Hallmark+ original cozy-mystery TV series (2024 - present), starring Sarah Drew; adapted from the Audible Original podcast by Ken Cuperus - not a film, not a book, and not to be confused with the standalone Audible audio series it is based on\nWindow: November 11, 2025 to November 11, 2026\nEstimated audience: about 5,369,716 to 7,049,369 US people (1.89% incidence)\nAvid tier: ~52,797\nCost: $300 on approval\nBuild time: ~20 min\n\nApprove to run, or send another message to adjust.\n\nMistletoe Murders can build two ways:\n\n  1. Broad audience - anyone who engaged with it anywhere: social, search, fan content, shopping. The standard profile.\n  ",
+    "ts": "2026-11-11T22:01:14.254Z",
+    "meta": {
+     "options": [
+      {
+       "label": "Broad audience",
+       "send": "broad"
+      },
+      {
+       "label": "Viewers only",
+       "send": "viewers"
+      }
+     ]
+    }
+   },
+   {
+    "role": "user",
+    "text": "viewers",
+    "ts": "2026-11-11T22:03:40.487Z"
+   },
+   {
+    "role": "agent",
+    "text": "Got it - building on viewers only. The profile is now Mistletoe Murders Viewers.",
+    "ts": "2026-11-11T22:03:55.507Z",
+    "meta": {
+     "options": [
+      {
+       "label": "All seasons",
+       "send": "all seasons"
+      },
+      {
+       "label": "Most recent season (Season 3 (2026))",
+       "send": "most recent season"
+      },
+      {
+       "label": "A specific season",
+       "send": "a specific season"
+      }
+     ]
+    }
+   },
+   {
+    "role": "user",
+    "text": "all seasons",
+    "ts": "2026-11-11T22:05:44.670Z"
+   },
+   {
+    "role": "agent",
+    "text": "Do you mean for Mistletoe Murders?",
+    "ts": "2026-11-11T22:05:58.699Z",
+    "meta": {
+     "options": [
+      {
+       "label": "Mistletoe Murders",
+       "send": "Mistletoe Murders"
+      },
+      {
+       "label": "Something else",
+       "send": "Something else"
+      }
+     ]
+    }
+   },
+   {
+    "role": "user",
+    "text": "Mistletoe Murders",
+    "ts": "2026-11-11T22:06:20.203Z"
+   },
+   {
+    "role": "agent",
+    "text": "Included with your plan. On it: reading Mistletoe Murders now. This one takes a real look at the data, so give me a moment - the read will land right here when it is ready.",
+    "ts": "2026-11-11T22:06:27.470Z"
+   },
+   {
+    "role": "agent",
+    "text": "On Mistletoe Murders Viewers (all seasons):\n\nAcross both seasons, Mistletoe Murders drew 5,612,483 US viewers in the window, with 2,016,993 of them playing episodes from season one and season two.\n\nWindow: Nov 11 2025 to Nov 11 2026.\n- Unique US viewers, all seasons: 5,612,483 (distinct US individuals with at least one play of any Mistletoe Murders episode in the window)\n- Avid viewers: 1,481,697 (distinct US individuals with 4 or more episode plays in the window)\n- Season one viewers: 4,381,562 (distinct US individuals with at least one season one episode play in the window)\n- Season two viewers: 3,247,914 (distinct US individuals with at least one season two episode play in the window)\n- V",
+    "ts": "2026-11-11T22:07:53.000Z",
+    "meta": {
+     "subject": "Mistletoe Murders Viewers (all seasons)",
+     "read_job_id": "bf26a1511274",
+     "kind": "read",
+     "landed_at": "2026-11-11T22:07:53.259Z",
+     "options": [
+      {
+       "label": "Cut the all-seasons audience by generation",
+       "send": "Cut the all-seasons audience by generation"
+      },
+      {
+       "label": "Show season two week by week since premiere",
+       "send": "Show season two week by week since premiere"
+      },
+      {
+       "label": "Which other cozy-mystery titles this audience watches",
+       "send": "Which other cozy-mystery titles this audience watches"
+      },
+      {
+       "label": "Email me this file",
+       "send": "Email me this file"
+      }
+     ]
+    }
+   },
+   {
+    "role": "user",
+    "text": "can we build profile",
+    "ts": "2026-11-11T22:08:51.535Z"
+   },
+   {
+    "role": "agent",
+    "text": "Yes. A Profile IQ profile builds the audience of any person, title, brand or behavior (people who attended a tour, bought a product, watched a title) with demographics and the brands, platforms and talent they over-index on. Tell me the subject and the window and I will line it up; it comes back as a brief to approve before anything is charged.",
+    "ts": "2026-11-11T22:09:07.458Z",
+    "meta": {
+     "options": [
+      {
+       "label": "Run a profile"
+      }
+     ]
+    }
+   },
+   {
+    "role": "user",
+    "text": "Run a profile",
+    "ts": "2026-11-11T22:09:14.358Z"
+   },
+   {
+    "role": "agent",
+    "text": "New Mistletoe Murders Viewers profile, ready to run.\n\nSubject: Mistletoe Murders, the series\nWindow: November 11, 2025 to November 11, 2026\nEstimated audience: about 4,644,134 to 6,511,764 US people (1.70% incidence)\nAvid tier: ~45,197\nCost: $300 on approval\nBuild time: ~20 min\n\nApprove to run, or send another message to adjust.\n\nMistletoe Murders has 3 seasons. Cover all seasons, the most recent season, or a specific season?",
+    "ts": "2026-11-11T22:10:38.096Z",
+    "meta": {
+     "options": [
+      {
+       "label": "All seasons",
+       "send": "all seasons"
+      },
+      {
+       "label": "Most recent season (Season 3 (2026))",
+       "send": "most recent season"
+      },
+      {
+       "label": "A specific season",
+       "send": "a specific season"
+      }
+     ]
+    }
+   },
+   {
+    "role": "user",
+    "text": "all seasons",
+    "ts": "2026-11-11T22:11:27.144Z"
+   },
+   {
+    "role": "agent",
+    "text": "The build covers the whole audience: the national total viewers universe + avid. Review the brief below and approve to start the build.",
+    "ts": "2026-11-11T22:11:27.812Z"
+   },
+   {
+    "role": "agent",
+    "text": "Profile building: Mistletoe Murders Viewers (number 1 in line). I will email you when it is complete.",
+    "ts": "2026-11-11T22:11:40.163Z",
+    "meta": {
+     "subject": "Mistletoe Murders Viewers",
+     "run_id": "koZPpmazHli62w",
+     "status": "complete"
+    }
+   },
+   {
+    "role": "agent",
+    "text": "Mistletoe Murders Viewers is building.",
+    "ts": "2026-11-11T22:11:48.876Z"
+   },
+   {
+    "role": "user",
+    "text": "Build a deck from this data",
+    "ts": "2026-11-11T22:26:25.521Z"
+   },
+   {
+    "role": "agent",
+    "text": "Which subject should the deck be on: Mistletoe Murders Viewers or Cruel Summer Viewers?",
+    "ts": "2026-11-11T22:26:26.952Z",
+    "meta": {
+     "options": [
+      {
+       "label": "On Mistletoe Murders Viewers",
+       "send": "On Mistletoe Murders Viewers"
+      },
+      {
+       "label": "Cruel Summer Viewers (open on your screen)",
+       "send": "Cruel Summer Viewers (open on your screen)"
+      },
+      {
+       "label": "Something else",
+       "send": "Something else"
+      }
+     ]
+    }
+   },
+   {
+    "role": "user",
+    "text": "Cruel Summer Viewers (open on your screen)",
+    "ts": "2026-11-11T22:26:33.154Z"
+   },
+   {
+    "role": "agent",
+    "text": "Building the Cruel Summer Viewers insights deck. The download link lands here when it is ready.",
+    "ts": "2026-11-11T22:26:34.959Z"
+   },
+   {
+    "role": "agent",
+    "text": "Deck ready: Cruel Summer holds a young female audience that buys beauty first. (19 slides). The link is good for 7 days.",
+    "ts": "2026-11-11T22:30:04.044Z",
+    "meta": {
+     "deck_job_id": "dbe671212bcc"
+    }
+   },
+   {
+    "role": "agent",
+    "text": "Mistletoe Murders Viewers: the primary profile is ready.\nIn Select Profile as: Mistletoe Murders Viewers",
+    "ts": "2026-11-11T22:44:03.212Z"
+   },
+   {
+    "role": "agent",
+    "text": "Mistletoe Murders Viewers: the avid cut is ready.\nAvid Fan cut: Mistletoe Murders Viewers - Avid Fan",
+    "ts": "2026-11-11T23:02:03.402Z"
+   },
+   {
+    "role": "agent",
+    "text": "Mistletoe Murders Viewers is finished and ready in the Select Profile dropdown.\nIn Select Profile as: Mistletoe Murders Viewers\nAvid Fan cut: Mistletoe Murders Viewers - Avid Fan",
+    "ts": "2026-11-11T23:06:04.051Z"
+   }
+  ],
+  "words": "can we build a deck for mistletoe murders",
+  "asked_back": "Which subject should the deck be on: Mistletoe Murders Viewers or Cruel Summer Viewers?",
+  "tap": "On Mistletoe Murders Viewers",
+  "confirm_that_went_out": "Building the Cruel Summer Viewers insights deck. The download link lands here when it is ready.",
+  "page": {
+   "view": "profile-iq",
+   "primary": {
+    "s3_key": "Cruel_Summer_Viewers_11_10_2026_19_40.csv",
+    "name": "Cruel Summer Viewers"
+   },
+   "view_context": {
+    "view_id": "profileIQ",
+    "view_title": "Cruel Summer Viewers",
+    "data": {}
+   }
+  },
+  "library": [
+   {
+    "display_name": "Mistletoe Murders Viewers",
+    "subject": "Mistletoe Murders Viewers",
+    "category": "SERIES - DRAMA",
+    "s3_key": "Mistletoe_Murders_Viewers_11_11_2026_22_44.csv"
+   },
+   {
+    "display_name": "Mistletoe Murders Viewers - Avid Fan",
+    "subject": "Mistletoe Murders Viewers",
+    "category": "SERIES - DRAMA",
+    "s3_key": "Mistletoe Murders Viewers - Avid Fan.csv"
+   },
+   {
+    "display_name": "Cruel Summer Viewers",
+    "subject": "Cruel Summer Viewers",
+    "category": "SERIES - DRAMA",
+    "s3_key": "Cruel_Summer_Viewers_11_10_2026_19_40.csv"
+   },
+   {
+    "display_name": "Nike",
+    "subject": "Nike",
+    "category": "APPAREL/FOOTWEAR",
+    "s3_key": "Nike_08_01_2026_10_00.csv"
+   },
+   {
+    "display_name": "Noah Wyle",
+    "subject": "Noah Wyle",
+    "category": "ACTOR",
+    "s3_key": "Noah_Wyle_07_01_2026_10_00.csv"
+   }
+  ]
+ },
+ "armine_categories": {
+  "thread_id": "246092bbbb",
+  "thread_before": [
+   {
+    "role": "user",
+    "text": "include examples for each and also include category Young Adult, Horror, and Faith",
+    "ts": "2026-11-11T20:58:55.242Z"
+   },
+   {
+    "role": "agent",
+    "text": "On it: reading Young Adult, Horror Streaming Enthusiasts, Faith and more now. This one takes a real look at the data, so give me a moment - the read will land right here when it is ready.",
+    "ts": "2026-11-11T20:59:23.961Z"
+   },
+   {
+    "role": "agent",
+    "text": "Corrected Nov 11, 2026: the counts in this read were sized against everyone who uses YouTube and do not stand. The corrected read is at the end of this conversation.",
+    "ts": "2026-11-11T21:04:03.000Z",
+    "meta": {
+     "subject": "YouTube",
+     "read_job_id": "a985296d9f0e",
+     "kind": "read",
+     "landed_at": "2026-11-11T21:04:03.069Z",
+     "options": []
+    }
+   }
+  ],
+  "words": "Can we have all these categories Comedy, lifestyle/Arts & Culture, Young Adult, Horror, Faith, Drama. Also list example sof each",
+  "reply_that_went_out": "Yes. A Profile IQ profile builds the audience of any person, title, brand or behavior (people who attended a tour, bought a product, watched a title) with demographics and the brands, platforms and talent they over-index on. Tell me the subject and the window and I will line it up; it comes back as a brief to approve before anything is charged."
+ },
+ "jessie_batch": {
+  "thread_id": "ebf520b02f",
+  "words": "run a NEW profile IQ profile on this audience: On Georgie & Mandy's First Marriage Viewers - Paramount+:\nWindow: Oct 25, 2024 to Nov 10, 2026.\n•\nParamount+ placements carried into the build: 49",
+  "drafted": [
+   "Window: Oct 25, 2024 to Nov 10, 2026",
+   "Paramount+ placements carried into the build: 49"
+  ]
+ },
+ "ledger": {
+  "question": "how is the audience like?",
+  "subjects": {
+   "the": {
+    "subject": "The",
+    "entries": [
+     {
+      "k": "the|audience|any|any",
+      "subject": "The",
+      "family": "audience",
+      "q": "delivered anchors: Vertical_Drama_OneSheets_2026_10_13_README.txt [audience]",
+      "qn": "delivered anchors vertical drama onesheets 2026 10 13 readme txt audience",
+      "ts": "2026-11-11T05:28:13Z",
+      "route": "delivered_deck",
+      "cohort": "",
+      "followups": [],
+      "reply": ""
+     },
+     {
+      "k": "the|viewership|any|any",
+      "subject": "The",
+      "family": "viewership",
+      "q": "delivered anchors: Vertical_Drama_OneSheets_2026_10_13_README.txt [viewership]",
+      "qn": "delivered anchors vertical drama onesheets 2026 10 13 readme txt viewership",
+      "ts": "2026-11-11T05:28:15Z",
+      "route": "delivered_deck",
+      "cohort": "",
+      "followups": [],
+      "reply": ""
+     }
+    ]
+   },
+   "las_culturistas_culture_awards_viewers": {
+    "subject": "Las Culturistas Culture Awards Viewers",
+    "entries": [
+     {
+      "k": "las_culturistas_culture_awards_viewers|audience|any|any",
+      "subject": "Las Culturistas Culture Awards Viewers",
+      "family": "audience",
+      "q": "how is the audience like?",
+      "qn": "how is the audience like",
+      "ts": "2026-11-11T01:35:47Z",
+      "route": "page_analysis",
+      "cohort": "",
+      "followups": [
+       "Which brand categories should we sell against this audience?",
+       "Compare the Avid Fan cut against the Total Universe",
+       "Search demand for Las Culturistas Culture Awards on Peacock",
+       "Where is the whitespace in streaming and social for this audience?"
+      ],
+      "reply": "This is a young, credentialed, coastal comedy audience of 4,194,382 US viewers whose attachment runs through the hosts, not the awards format.\n\nThe shape: 25-34 is the largest band at 32.5%, 1,361,813 people, and 25-44 together carries 2,380,031. 52.1% sits un",
+      "retired": {
+       "by": "corpus_catalog",
+       "metric": "young, credentialed, coastal comedy audience of",
+       "value": 4194382.0,
+       "dashboard_value": 581977.0
+      }
+     }
+    ]
+   }
+  }
+ }
+}

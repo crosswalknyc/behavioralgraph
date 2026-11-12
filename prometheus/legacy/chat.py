@@ -39,7 +39,7 @@ from prometheus import subiq_library as _subiq_library   # a question across the
 from prometheus import deck_sources as _deck_sources   # a deck of something already delivered or attached (2026-10-26)
 from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: intake, labs, Focus Group IQ, catalog, status, directions (2026-10-26)
 from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation wizard (2026-10-28)
-from prometheus import deck_pick as _deck_pick   # the deck is on the subject the reader picked; a deck from a read keeps its figures (2026-11-11)
+from prometheus import deck_pick as _deck_pick, deck_subject as _deck_subject   # the deck is on the subject the reader picked or named; a deck from a read keeps its figures (2026-11-11)
 from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
 from prometheus import question_universe as _question_universe   # the base is the universe the question names; the page only when pointed at (2026-11-06)
 from prometheus import ledger_gate as _ledger_gate   # a probe's ask never banks in the shared ledger, on any route (2026-11-11)
@@ -49,7 +49,7 @@ from prometheus import door_words as _door_words   # the word door never reaches
 from prometheus import promise_truth as _PT   # a progress line never outlives its job; a promise has a record (2026-11-11)
 from prometheus import api_threads as _api_threads   # a key-surface job lands in a key thread, never a dashboard chat (2026-11-10)
 from prometheus import order_truth as _order_truth   # what is said about an order follows the artifact (2026-11-10)
-from prometheus import build_ready as _build_ready   # the server posts the finished line into the launching thread (2026-11-10)
+from prometheus import build_ready as _build_ready, list_shape as _list_shape   # the server posts the finished line into the launching thread (2026-11-10); a list of subjects is a list of names (2026-11-11)
 import io
 import hashlib
 import time
@@ -6280,7 +6280,9 @@ def _pm_interpret_core(user, body, text, history):
     except Exception:
         _is_q = False
     _single_compound = _single_compound or _is_q
-    _batch_subjects = [] if _single_compound else _H._detect_batch_subjects(text)
+    _batch_subjects, _ls_ask = _list_shape.names(text, [] if _single_compound else _H._detect_batch_subjects(text))   # names only; the lines of a pasted read are details of one order (Jessie 2026-11-11)
+    if _ls_ask:
+        return jsonify(_ls_ask)
     _cart = None if _single_compound else _H._detect_cartesian_batch(text)
     _cart_wins = bool(_cart) and (
         (len(_cart) >= 4 and _cart[3] == 'B')
@@ -19171,8 +19173,10 @@ def _pm_deck_core(user, body):
         _bind_pick = str(body.get('bind_subject') or '').strip()
         if _bind_pick and body.get('confirm_open_screen'):
             _dp_pick = _bind_pick
-        else:
-            _dp_pick = ''
+        else:   # else the name the request carries ("a deck for mistletoe murders"); a name we do not hold, with another audience open, is asked once
+            _dp_pick, _dp_q = ('', None) if _ds else _deck_subject.pick_or_ask(body, text, ctx, history, _profile_catalog_for_chat, hint=_pm_ask_hint)
+            if _dp_q:
+                return jsonify(_dp_q)
         # the picked or named subject, or no deck: a library profile, else the read delivered on it in this thread,
         # never another candidate from the list (prometheus.deck_pick, Samantha Kolton 2026-11-11)
         _pvd = None if _ds else _bpiq_wiz.deck_gate(user, body, text, history, _dp_pick, globals())   # a deck of a read that put a dollar value on a partnership is the valuation order (Jenna 2026-11-11)

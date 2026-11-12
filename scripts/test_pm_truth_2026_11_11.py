@@ -823,7 +823,7 @@ class TheDoorRuleIsADeckRule(unittest.TestCase):
         self.assertEqual(ds.scrub_door_metaphor('01 The Door to New Viewers'), '01 New Viewers')
         self.assertEqual(ds.scrub_door_metaphor('01 The door to new viewers'), '01 New viewers')
         self.assertEqual(ds.scrub_door_metaphor('AD Open Door opens the door to new viewers.'), 'AD Open Door brings new viewers.')
-        self.assertEqual(ds.scrub_door_metaphor('Retail Door Mix'), 'Retail Mix')
+        self.assertEqual(ds.scrub_door_metaphor('Retail Door Mix'), 'Retail Store Mix')   # a label, not a name: the literal sense, said plainly
         self.assertEqual(ds._fallback_scrub_door('Hot Ones, AD Open Door; The Doors; opens the door to new viewers; 01 The Door to New Viewers'),
                          'Hot Ones, AD Open Door; The Doors; brings new viewers; 01 New Viewers')
         mod = ds.door_copy_module()

@@ -14,6 +14,7 @@ import importlib.util
 import io
 import os
 import subprocess
+import re
 import sys
 from pathlib import Path
 
@@ -101,6 +102,65 @@ check(not door.has_door_metaphor(kept), "the venue name is not flagged", kept)
 dash = door.scrub_door_metaphor("They order DoorDash at the desk.")
 check("DoorDash" in dash and not door.has_door_metaphor(dash),
       "DoorDash is not the metaphor", dash)
+
+print("[1b] the literal senses are said plainly (Jenna 2026-11-11: a deck read 'the widest front store')")
+# the word is banned in a deck whatever it means, so the rewrite has to be correct English for what it meant
+LITERAL = [
+    # the way in to a place
+    ("The profile's widest front door is Walmart.", "The profile's widest entrance is Walmart."),
+    ("Shoppers walk in the front door of the store and buy within the hour.",
+     "Shoppers walk in the entrance of the store and buy within the hour."),
+    ("Front-door placement drives trial.", "Entrance placement drives trial."),
+    ("Back door traffic", "Back entrance traffic"),
+    ("The line at the door was long.", "The line at the entrance was long."),
+    ("Next door neighbors", "Nearby neighbors"),
+    ("A door-to-door sales push", "A house-to-house sales push"),
+    ("door-buster deals", "limited-time deals"),
+    # the places a brand is sold
+    ("Target leads on door count.", "Target leads on store count."),
+    ("Door count rose to 1,912 doors across the Midwest.", "Store count rose to 1,912 stores across the Midwest."),
+    ("DOOR COUNT", "STORE COUNT"),
+    ("The brand is in 4,213 doors nationwide.", "The brand is in 4,213 stores nationwide."),
+    ("Sold in 312 retail doors.", "Sold in 312 retail stores."),
+    ("the brand added 37 doors in Q3", "the brand added 37 stores in Q3"),
+    ("sold in more doors than any rival", "sold in more stores than any rival"),
+    ("half of its doors are in Texas", "half of its stores are in Texas"),
+    ("per-door sales rose 12.4%", "per-store sales rose 12.4%"),
+    ("same-door sales", "same-store sales"),
+    ("a three-door audience", "a three-store audience"),
+    ("Retail Door Mix", "Retail Store Mix"),
+    ("Doors: 4,213", "Stores: 4,213"),
+    ("Doors", "Stores"),
+    ("Number of doors", "Number of stores"),
+    ("Doors grew 12.4% year over year.", "Stores grew 12.4% year over year."),
+    # the figures of speech keep their tense and their meaning
+    ("Her posts opened the door to new viewers.", "Her posts brought new viewers."),
+    ("Her post opened doors for the brand.", "Her post made room for the brand."),
+    ("It opens doors.", "It makes room."),
+    ("It gives the brand a door into the category.", "It gives the brand a way into the category."),
+    ("They get a foot in the door with Gen Z.", "They get a way in with Gen Z."),
+    ("Deals are made behind closed doors.", "Deals are made in private."),
+    ("It leaves the door open for a sequel.", "It leaves room for a sequel."),
+    ("The network closed the door on a third season.", "The network ruled out a third season."),
+]
+for src, want in LITERAL:
+    got = door.scrub_door_metaphor(src)
+    check(got == want, f"{src!r} reads {want!r}", got)
+    check(not door.has_door_metaphor(got), f"no door left in {want!r}", got)
+# never the old leftovers: a word cut out of the middle of a phrase, or "store" for an entrance
+for src in ("the widest front door", "Next door neighbors", "A door-to-door sales push", "Doors: 4,213", "Target leads on door count."):
+    got = door.scrub_door_metaphor(src)
+    check("front store" not in got and "-to-" not in got.replace("house-to-house", "") and not got.startswith(":")
+          and "  " not in got and not re.search(r"\b(?:on|next) (?:count|neighbors)\b", got.lower().replace("store count", "")),
+          f"{src!r} is whole English", got)
+# a name is still held aside, byte for byte, beside a literal sense on the same line
+for src, want in (("AD Open Door reaches 4,213 doors.", "AD Open Door reaches 4,213 stores."),
+                  ("The Doors index high at the front door.", "The Doors index high at the entrance."),
+                  ("Three Doors Down fans shop in more doors.", "Three Doors Down fans shop in more stores."),
+                  ("Door County tourism", "Door County tourism"),
+                  ("Meet at The Door NYC, by the front door.", "Meet at The Door NYC, by the entrance.")):
+    got = door.scrub_door_metaphor(src)
+    check(got == want, f"a name stays beside a literal sense: {want!r}", got)
 
 print("[2] readability and lint flag doors")
 read_py = HELPER.with_name("readability_check.py")

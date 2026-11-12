@@ -9,9 +9,16 @@ The Door NYC) and any title, brand or person's name written with a
 capital D inside a run of capitalized words (AD Open Door, The Doors,
 Three Doors Down, Door County), when it is not followed by to/for.
 
-``scrub_door_metaphor`` rewrites common frames and strips any leftover
-door token. Builders, the brand lint, and ``design_skill.finish`` all
-call it. A finish never holds the file: the rewrite lands in place.
+The word is banned in its literal senses too, so the rewrite has to say
+the plain thing the word meant (Jenna 2026-11-11: a deck read "the
+widest front store" and "Count rose to 1,912 across the Midwest"): the
+front door of a store is its entrance, a door count is a store count,
+doors a brand is sold in are stores. ``literal_senses`` carries those.
+
+``scrub_door_metaphor`` rewrites the literal senses, then the common
+metaphor frames, and strips any leftover door token. Builders, the
+brand lint, and ``design_skill.finish`` all call it. A finish never
+holds the file: the rewrite lands in place.
 """
 from __future__ import annotations
 
@@ -68,15 +75,122 @@ def proper_name_spans(text: str) -> list[tuple[int, int]]:
         out.append((m.start(), m.end()))
     return out
 
+def _keep_case(src: str, repl: str) -> str:
+    """``repl`` in the case the writer used: ALL CAPS, Capitalized or lower."""
+    if len(src) > 1 and src.isupper():
+        return repl.upper()
+    if src[:1].isupper():
+        return repl[:1].upper() + repl[1:]
+    return repl
+
+
+def _plural(word: str, token: str) -> str:
+    return word + "s" if token.lower().endswith("s") else word
+
+
+# ---- the literal senses: say the plain thing the word meant -------------------
+_COUNT = (r"(?:\d[\d,.]*\s?(?:k|m|mm|bn)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+          r"dozens\s+of|hundreds\s+of|thousands\s+of|several|many|few|fewer|more|most|some|additional)")
+_KIND = (r"(?:retail|retailer|retailers|physical|named|top|other|each|every|per|by|same|new|total|net|all|both|these|"
+         r"those|its|their|our)")
+_STORE_NOUN = (r"(?:count|counts|mix|share|shares|list|level|base|footprint|expansion|growth|total|totals|number|"
+               r"numbers|distribution|penetration|productivity|velocity)")
+_STORE_VERB = (r"(?:nationwide|nationally|carrying|carry|stocking|stock|selling|sell|opened|added|closed|across|"
+               r"in\s+(?:the\s+)?(?:us|u\.s\.|country|market|region|midwest|south|southeast|northeast|west|southwest))")
+_VERB_OPEN = {"open": "bring", "opens": "brings", "opened": "brought", "opening": "bringing"}
+
+
+def _entrance(m: re.Match) -> str:
+    return _keep_case(m.group(1), _plural("entrance", m.group(0)))
+
+
+def _side_entrance(m: re.Match) -> str:
+    return f"{m.group(1)} " + _plural("entrance", m.group(0))
+
+
+def _store_after(m: re.Match) -> str:
+    # "<count or kind> doors": the lead stays, the word becomes store(s)
+    return f"{m.group(1)}{m.group(2)}" + _keep_case(m.group(3), _plural("store", m.group(3)))
+
+
+def _store_before(m: re.Match) -> str:
+    # "door count", "doors nationwide": the word becomes store(s), the rest stays
+    return _keep_case(m.group(1), _plural("store", m.group(1))) + m.group(2) + m.group(3)
+
+
+def _open_frame(m: re.Match) -> str:
+    verb = _keep_case(m.group(1), _VERB_OPEN[m.group(1).lower()])
+    tail = (m.group(2) or "").strip().lower()
+    if tail == "to":
+        return verb + " "                 # "opened the door to new viewers": brought new viewers
+    # "opened doors for the brand", "it opens doors.": the plain claim is that it makes room
+    room = _keep_case(m.group(1), {"open": "make room", "opens": "makes room", "opened": "made room",
+                                   "opening": "making room"}[m.group(1).lower()])
+    return room + (" for " if tail == "for" else "")
+
+
+def _article_entrance(m: re.Match) -> str:
+    art, noun = m.group(1), _plural("entrance", m.group(2))
+    if art.lower() == "a":
+        art = _keep_case(art, "an")
+    return f"{art} {noun}"
+
+
+# what is left once the senses and the frames have run: a thing with an article is
+# an entrance, the bare plural is stores; a lone singular is dropped by the caller
+_LEFTOVER = [
+    (re.compile(r"\b(a|an|the|this|that|each|every|one)\s+(doors?)\b", re.I), _article_entrance),
+    (re.compile(r"\b()()(doors)\b"), _store_after),
+    (re.compile(r"\b()()(Doors)\b"), _store_after),
+]
+
+
+_LITERAL = [
+    # the way in to a place
+    (re.compile(r"\b(front)[- ]?doors?\b", re.I), _entrance),
+    (re.compile(r"\b(back|side|main|rear|store|shop)[- ]doors?\b", re.I), _side_entrance),
+    (re.compile(r"\b(at|by|near|outside|inside)\s+the\s+doors?\b", re.I),
+     lambda m: f"{m.group(1)} the " + _plural("entrance", m.group(0))),
+    (re.compile(r"\b(next)[- ]door\b", re.I), lambda m: _keep_case(m.group(1), "nearby")),
+    (re.compile(r"\b(d)oor([- ])to([- ])door\b", re.I),
+     lambda m: _keep_case(m.group(1), "house") + m.group(2) + "to" + m.group(3) + "house"),
+    (re.compile(r"\b(d)oor[- ]?busters?(\s+(?:deals?|sales?|offers?|prices?|specials?))\b", re.I),
+     lambda m: _keep_case(m.group(1), "limited-time") + m.group(2)),
+    (re.compile(r"\b(d)oor[- ]busters?\b", re.I),
+     lambda m: _keep_case(m.group(1), "limited-time ") + _plural("deal", m.group(0))),
+    (re.compile(r"\b(open)[- ]door\s+(polic(?:y|ies))\b", re.I), lambda m: f"{m.group(1)} {m.group(2)}"),
+    (re.compile(r"\b(?:a\s+)?foot\s+in\s+the\s+door\b", re.I), "a way in"),
+    (re.compile(r"\b(b)ehind\s+closed\s+doors\b", re.I), lambda m: _keep_case(m.group(1), "in private")),
+    (re.compile(r"\b(r)evolving\s+door\b", re.I), lambda m: _keep_case(m.group(1), "constant turnover")),
+    (re.compile(r"\b(d)oor[- ]openers?\b", re.I), lambda m: _keep_case(m.group(1), _plural("way in", m.group(0)))),
+    (re.compile(r"\b(leav(?:e|es|ing)|left|keep(?:s|ing)?|kept)\s+the\s+doors?\s+open\s+(?:for|to)\b", re.I),
+     lambda m: f"{m.group(1)} room for"),
+    (re.compile(r"\b(clos)(e|es|ed|ing)\s+the\s+doors?\s+on\b", re.I),
+     lambda m: _keep_case(m.group(1), "rul") + {"e": "e", "es": "es", "ed": "ed", "ing": "ing"}[m.group(2).lower()] + " out"),
+    (re.compile(r"\b(out|in)\s+the\s+door\b", re.I), lambda m: m.group(1)),
+    (re.compile(r"\b(a|the|one|another|its|their)\s+doors?\s+into\b", re.I), lambda m: f"{m.group(1)} way into"),
+    # the places a brand is sold: stores
+    (re.compile(r"\b(" + _COUNT + r"|" + _KIND + r"|per|same|multi|single|cross)(-)(doors?)\b", re.I), _store_after),
+    (re.compile(r"\b(doors?)(\s+|-)(" + _STORE_NOUN + r")\b", re.I), _store_before),
+    (re.compile(r"\b((?:number|count|share|total|mix|list|percent|majority|most|half|all|both|many|some|each|any)\s+of\s+"
+                r"(?:the\s+|its\s+|their\s+|our\s+)?)()(doors)\b", re.I), _store_after),
+    (re.compile(r"\b((?:" + _COUNT + r"|" + _KIND + r")(?:\s+(?:" + _KIND + r"))?)(\s+)(doors?)\b", re.I), _store_after),
+    (re.compile(r"\b(doors)(\s+)(" + _STORE_VERB + r")\b", re.I), _store_before),
+    (re.compile(r"^(\s*)()(doors?)(?=\s*(?:[:|]|$))", re.I), _store_after),
+]
+
+
+def literal_senses(text: str) -> str:
+    """The literal senses said plainly: an entrance, a store count, the
+    stores a brand is sold in. The metaphor frames run after this."""
+    out = text or ""
+    for pat, repl in _LITERAL:
+        out = pat.sub(repl, out)
+    return out
+
+
 _FRAMES = [
-    (re.compile(r"\bopens?\s+the\s+doors?\s+to\s+", re.I), "brings "),
-    (re.compile(r"\bopen(?:ed|ing)\s+the\s+doors?\s+to\s+", re.I), "brings "),
-    (re.compile(r"\bopens?\s+doors?\s+to\s+", re.I), "brings "),
-    (re.compile(r"\bopen(?:ed|ing)\s+doors?\s+to\s+", re.I), "brings "),
-    (re.compile(r"\bopens?\s+the\s+doors?\b", re.I), "brings"),
-    (re.compile(r"\bopen(?:ed|ing)\s+the\s+doors?\b", re.I), "brings"),
-    (re.compile(r"\bopens?\s+doors?\b", re.I), "brings"),
-    (re.compile(r"\bopen(?:ed|ing)\s+doors?\b", re.I), "brings"),
+    (re.compile(r"\b(open|opens|opened|opening)\s+(?:the\s+|a\s+)?doors?(\s+(?:to|for)\s+)?", re.I), _open_frame),
     (re.compile(r"\ba\s+doors?\s+for\s+", re.I), ""),
     (re.compile(r"\bdoors?\s+for\s+", re.I), ""),
     (re.compile(r"\bwalk(?:s|ed|ing)?\s+through\s+(?:the\s+)?doors?\b", re.I), "arrives"),
@@ -206,9 +320,11 @@ def scrub_door_metaphor(text: str, names=None) -> str:
 
 def _scrub_held(text: str) -> str:
     protected, held = _protect(text)
-    out = protected
+    out = literal_senses(protected)
     for pat, repl in _FRAMES:
         out = pat.sub(repl, out)
+    for pat, repl in _LEFTOVER:
+        out = pat.sub(lambda m, _r=repl: m.group(0) if _is_allowed_span(out, m.start(), m.end()) else _r(m), out)
     def drop(m: re.Match) -> str:
         if _is_allowed_span(out, m.start(), m.end()):
             return m.group(0)

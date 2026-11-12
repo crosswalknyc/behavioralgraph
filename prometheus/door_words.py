@@ -157,7 +157,16 @@ def scrub_read(text):
         if not has_door(text):
             return text
         out, _names = _hold_names(text)
-        # the retail sense first, where a count, a kind or a possessive sits on the token
+        # the literal senses as the house helper says them: an entrance, a store count, the stores a brand is
+        # sold in (Jenna 2026-11-11: every leftover used to become "store", so a deck read "the widest front store")
+        ds = _house()
+        try:
+            _lit = getattr(ds.door_copy_module(), 'literal_senses', None) if ds is not None else None
+        except Exception:
+            _lit = None
+        if callable(_lit):
+            out = _lit(out)
+        # the retail sense, where a count, a kind or a possessive sits on the token
         out = re.sub(r"\b([A-Za-z0-9]+)-(doors?)\b", lambda m: f"{m.group(1)}-{_store(m.group(2))}", out)
         out = re.sub(r"\b(retail|retailer|home|named|store|shop|shopping|physical|top|other|each|every|per|by|same|new|"
                      r"two|three|four|five|six|seven|eight|nine|ten|\d+|all|both|these|those|its|their|profile'?s)\s+(doors?)\b",
@@ -168,11 +177,13 @@ def scrub_read(text):
         out = re.sub(r"\b(a|the|one|another|its|their)\s+doors?\s+into\b", lambda m: f"{m.group(1)} way into", out, flags=re.I)
         for pat, repl in _frames():
             out = pat.sub(repl, out)
-        # whatever is left is said plainly
+        # whatever is left: the house helper has the last word (an entrance, stores, or the word dropped); a
+        # host without the pack says store
+        if callable(_lit) and has_door(out):
+            out = ds.scrub_door_metaphor(out)
         out = _TOKEN.sub(lambda m: m.group(0) if _allowed(out, m.start(), m.end()) else _store(m.group(0)), out)
         out = re.sub(r"[ \t]{2,}", ' ', out)
         out = re.sub(r" +([,.;:!?])", r"\1", out)
-        ds = _house()
         if ds is not None and has_door(out):
             out = ds.scrub_door_metaphor(out)       # the house scrub has the last word
         return _restore_names(out, _names)
