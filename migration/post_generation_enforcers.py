@@ -11876,7 +11876,15 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
                     subject, det['research_hint'],
                     qualifier=det['qualifier'])
                 vc.save_carriage_cache(subject, doc)
-        if not vc.doc_is_enforceable(doc):
+        # The seed service is the universe (2026-11-11, Mistletoe Murders
+        # Viewers / WICKED TUNA Viewers): when the build was seeded from
+        # watch URLs, the services those URLs sit on are the carriers this
+        # constraint reads, whatever research named. A carrier the research
+        # added keeps its reasoned level and is never lifted toward total.
+        _seed_carriers = [c for c in ((doc or {}).get('seed_carriers') or [])
+                          if isinstance(c, dict) and str(c.get('platform') or '').strip()] \
+            if isinstance(doc, dict) else []
+        if not _seed_carriers and not vc.doc_is_enforceable(doc):
             if doc is not None and verbose:
                 print(f"   📺 viewer carriage: doc for {subject!r} not "
                       f"enforceable (research failed / no carriers); "
@@ -11885,6 +11893,21 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
     except Exception as e:
         print(f"   ⚠️ viewer carriage resolution failed (non-fatal): {e}")
         return df, 0
+    _seed_mode = bool(_seed_carriers)
+    _seed_match = None
+    if _seed_mode:
+        try:
+            try:
+                from migration.carrier_pin_verify import seed_matches_row as _seed_match
+            except ImportError:
+                from carrier_pin_verify import seed_matches_row as _seed_match  # type: ignore
+        except Exception:
+            _seed_match = None
+
+    def _carrier_row(plat, value):
+        if vc.carrier_matches_row(plat, value):
+            return True
+        return bool(_seed_mode and _seed_match is not None and _seed_match(plat, value))
 
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
@@ -11909,7 +11932,7 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
     if sample is None:
         sample = 10_000_000
 
-    carriers = doc.get('carriers') or []
+    carriers = _seed_carriers if _seed_mode else (doc.get('carriers') or [])
     vmvpd_carrier = any((c.get('kind') or '') == 'vmvpd' for c in carriers)
     cats = [c for c in vc.STREAMING_ALIAS_CATS
             if (col_u == c).any()]
@@ -11946,7 +11969,7 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
             if not plat:
                 continue
             for idx in df.index[cat_mask]:
-                if vc.carrier_matches_row(plat, df.at[idx, 'Value']):
+                if _carrier_row(plat, df.at[idx, 'Value']):
                     row_map.setdefault(idx, []).append(plat)
                     break  # first (highest-sorted) matching row only
         if not row_map:
@@ -11963,11 +11986,16 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
         if len(idxs) == 1:
             i = idxs[0]
             key = rkey[i]
+            if _seed_mode and len({str(c.get('platform')) for c in carriers}) > 1 \
+                    and len(set(row_map[i])) < len({str(c.get('platform')) for c in carriers}):
+                # several seed services share the universe and only one
+                # of them sits in this column: none reads near total alone
+                continue
             if key in canonical_bp:
                 tgt = canonical_bp[key]
             else:
                 cur = vals[i]
-                if doc.get('exclusive') and len(carriers) == 1:
+                if doc.get('exclusive') and len(carriers) == 1 and not _seed_mode:
                     # E1 anchor convention (Jenna standing ruling,
                     # codified 2026-08-27 from the Liz batch review):
                     # the EXCLUSIVE verified carrier of a viewers
@@ -12104,7 +12132,7 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
             bpv = _fnum(df.at[idx, bp_col])
             if bpv is None:
                 continue
-            if any(vc.carrier_matches_row(c.get('platform', ''), val)
+            if any(_carrier_row(c.get('platform', ''), val)
                    for c in carriers):
                 continue
             if _dnorm(val) in subj_keys:

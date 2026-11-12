@@ -22,6 +22,11 @@ The rule, in one place:
     who watched on HBO Max are not all on Paramount+.
   * A platform the scan marked gone, or could not check, is not
     evidence. 'Could not look' is never 'there'.
+  * The seed placements are the universe (2026-11-11). When the build
+    is seeded from watch URLs, the pin is the service those URLs sit
+    on: one seed service pins, several share the universe, and a
+    carrier the research named reads on its own merits. Research can
+    add a carrier's level; it never moves the pin.
   * With no evidence at all, nothing in the streaming family pins.
     The row is still scored by the row-by-row reasoning, which is free
     to read it high; it is never set near-total on a belief.
@@ -131,6 +136,181 @@ def is_viewers_universe(spec, subject="") -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# The seed service is the universe (2026-11-11). A viewers universe is the
+# people seen on the watch URLs in its BRAND INPUT, so the service(s) those
+# URLs sit on are the ones everybody in the file used. Mistletoe Murders
+# Viewers was seeded from twelve Hallmark Plus placements and read Hallmark
+# Plus at 57% with Netflix near 100 (a carrier the research had named);
+# WICKED TUNA Viewers carried Amazon watch URLs and read Amazon at 56% with
+# Disney+/Hulu at 99.57. A service the title is also carried on reads on its
+# own merits; it is never the pin and never above the seed service.
+# ---------------------------------------------------------------------------
+
+# the name a service's row carries in the streaming column (naming only)
+_SEED_ROW_NAMES = {
+    "amazon": "Amazon Prime Video", "max": "HBO Max", "hbomax": "HBO Max", "paramount": "Paramount+",
+    "paramountplus": "Paramount+", "disney": "Disney+", "disneyplus": "Disney+", "appletv": "Apple TV+",
+    "appletvplus": "Apple TV+", "hallmark": "Hallmark Plus", "hallmarkplus": "Hallmark Plus", "peacock": "Peacock",
+    "netflix": "Netflix", "hulu": "Hulu", "starz": "Starz", "mgmplus": "MGM+", "britbox": "BritBox",
+    "pluto": "Pluto TV", "plutotv": "Pluto TV", "tubi": "Tubi", "discoveryplus": "Discovery+",
+}
+_SEED_GROUPS = (
+    ("amazon", "primevideo", "amazonprimevideo", "amazonprime", "amazonvideo"),
+    ("max", "hbomax"), ("paramount", "paramountplus"), ("disney", "disneyplus"), ("appletv", "appletvplus"),
+    ("hallmarkplus",), ("peacock", "peacocktv"), ("mgmplus", "mgm"), ("pluto", "plutotv"), ("tubi", "tubitv"),
+    ("rokuchannel", "therokuchannel"), ("discoveryplus",), ("amcplus",), ("youtube",), ("netflix",), ("hulu",),
+    ("starz",), ("britbox",), ("spotify",), ("applepodcasts",), ("audible",), ("freeform",), ("plex",),
+)
+_SEED_KEY = {"hallmark": "hallmarkplus"}     # a resolver key that is shorter than the service's name
+
+
+def _seed_key(name, resolver=True) -> str:
+    """One key per service for the seed rule: exact names only, never a
+    substring ('YouTube' is not 'YouTube TV' or 'YouTube Kids'). A
+    resolver's short key ('hallmark') is read as its service only on the
+    seed side; a profile row named HALLMARK is the card maker."""
+    f = _fold(str(name or "").replace("+", " plus "))
+    if resolver:
+        f = _SEED_KEY.get(f, f)
+    for grp in _SEED_GROUPS:
+        if f in grp:
+            return grp[0]
+    return f
+
+
+def seed_matches_row(seed, row_value) -> bool:
+    """Does a profile row name the seed service? Exact or by a compound
+    row's component ('Hulu' is in 'Disney+/Hulu'); never by substring."""
+    k = _seed_key(seed)
+    if not k:
+        return False
+    rv = str(row_value or "").strip()
+    if not rv:
+        return False
+    if _seed_key(rv, resolver=False) == k:
+        return True
+    return any(_seed_key(part, resolver=False) == k for part in re.split(r"\s*(?:/|&|,|\|)\s*", rv) if part.strip())
+
+
+def seed_row_name(seed) -> str:
+    """The streaming-column row a seed service pins ('' when the service
+    lives elsewhere and the engine's own resolution places it)."""
+    return _SEED_ROW_NAMES.get(_fold(str(seed or "").replace("+", " plus ")), "") \
+        or _SEED_ROW_NAMES.get(_seed_key(seed), "")
+
+
+# watch-URL shapes by service, for a file's own BRAND INPUT (the content
+# map's stored URL wins when an index is handed in; a bare id it does not
+# hold is left unread rather than guessed)
+_URL_SHAPES = (
+    (re.compile(r"^(?:amzn1\.dv\.gti\.|detail/[0-9A-Z]{10,}|(?:https?://)?(?:www\.)?(?:amazon\.com/|primevideo\.com/))", re.I), "Amazon"),
+    (re.compile(r"^(?:item/[A-Z0-9]{8,}$|(?:https?://)?(?:www\.)?hallmarkplus\.com/)", re.I), "Hallmark Plus"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?netflix\.com/", re.I), "Netflix"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?hulu\.com/", re.I), "Hulu"),
+    (re.compile(r"^(?:https?://)?(?:www\.|play\.)?(?:max|hbomax)\.com/", re.I), "HBO Max"),
+    (re.compile(r"^(?:ALVE01[0-9A-Z]{18,}$|(?:https?://)?(?:www\.)?paramountplus\.com/)", re.I), "Paramount+"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?peacocktv\.com/", re.I), "Peacock"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?disneyplus\.com/", re.I), "Disney+"),
+    (re.compile(r"^(?:https?://)?tv\.apple\.com/", re.I), "Apple TV+"),
+    (re.compile(r"^(?:https?://)?(?:www\.|m\.)?(?:youtube\.com/|youtu\.be/)", re.I), "YouTube"),
+    (re.compile(r"^(?:https?://)?therokuchannel\.roku\.com/", re.I), "The Roku Channel"),
+    (re.compile(r"^(?:https?://)?watch\.plex\.tv/", re.I), "Plex"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?tubitv\.com/", re.I), "Tubi"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?pluto\.tv/", re.I), "Pluto TV"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?freeform\.com/", re.I), "Freeform"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?discoveryplus\.com/", re.I), "Discovery+"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?starz\.com/", re.I), "Starz"),
+    (re.compile(r"^(?:https?://)?open\.spotify\.com/", re.I), "Spotify"),
+    (re.compile(r"^(?:https?://)?podcasts\.apple\.com/", re.I), "Apple Podcasts"),
+    (re.compile(r"^(?:https?://)?(?:www\.)?audible\.com/", re.I), "Audible"),
+)
+
+
+def service_of_url(token, index=None) -> str:
+    """The service one seed URL sits on: the content map's own record of
+    it when an index ({url: [platform]}) is handed in and holds it under
+    one service, else its shape; '' when neither says."""
+    t = str(token or "").strip()
+    if not t:
+        return ""
+    if isinstance(index, dict):
+        got = index.get(t.lower())
+        if got:
+            keys = {_seed_key(g) for g in got if str(g).strip()}
+            if len(keys) == 1:
+                return str(sorted(got)[0])
+            return ""                       # the map holds it under two services: unread
+    for rx, name in _URL_SHAPES:
+        if rx.search(t):
+            return name
+    return ""
+
+
+def seed_services_of_brand_input(value, index=None) -> dict:
+    """{service key: {'label', 'n'}} for a BRAND INPUT cell made of
+    watch URLs, plus '_unread' (tokens no service claims) and '_total'.
+    A cell of name variants or scrape terms reads as no services."""
+    out = {"_unread": 0, "_total": 0}
+    for tok in [x.strip() for x in str(value or "").split(",") if x.strip()]:
+        out["_total"] += 1
+        svc = service_of_url(tok, index)
+        if not svc:
+            out["_unread"] += 1
+            continue
+        k = _seed_key(svc)
+        rec = out.setdefault(k, {"label": seed_row_name(svc) or svc, "n": 0})
+        rec["n"] += 1
+    return out
+
+
+def seed_services(spec) -> list:
+    """The services the build's seed placements actually sit on, as the
+    content map labels them, most placements first: the seed step's own
+    list minus a service the live scan saw the title leave. [] when the
+    build is not seeded from watch URLs."""
+    try:
+        if not isinstance(spec, dict) or not (spec.get("content_seed_urls") or spec.get("content_seed_platforms")):
+            return []
+        placements = spec.get("content_seed_placements")
+        gone = [str(k) for k in ((placements or {}).get("gone") or [])] if isinstance(placements, dict) else []
+        out = []
+        for p in (spec.get("content_seed_platforms") or []):
+            p = str(p).strip()
+            if p and not any(_seed_key(p) == _seed_key(g) for g in gone) \
+                    and not any(_seed_key(p) == _seed_key(o) for o in out):
+                out.append(p)
+        if not out and spec.get("content_seed_urls"):
+            got = seed_services_of_brand_input(", ".join(str(u) for u in spec["content_seed_urls"]))
+            out = [v["label"] for k, v in sorted(got.items(), key=lambda kv: -(kv[1]["n"] if isinstance(kv[1], dict) else 0))
+                   if isinstance(v, dict)]
+        return out
+    except Exception:
+        return []
+
+
+def stamp_seed_carriers(spec) -> list:
+    """Put the seed services on the carriage doc the writer's carrier
+    constraint reads (creating a minimal doc when research did not run
+    or failed), so the service that reads near total is the one the
+    universe was seeded from. Returns the list stamped ([] when the
+    build has no seed services). Never raises."""
+    try:
+        seeds = seed_services(spec)
+        if not seeds:
+            return []
+        doc = spec.get("carriage_doc")
+        if not isinstance(doc, dict):
+            doc = {"consumption_scoped": True, "qualifier": "viewers", "carriers": [], "research_failed": True,
+                   "title": str(spec.get("content_show") or ""), "subject": str(spec.get("name") or "")}
+            spec["carriage_doc"] = doc
+        doc["seed_carriers"] = [{"platform": seed_row_name(s) or s, "kind": "svod"} for s in seeds]
+        spec["seed_services"] = list(seeds)
+        return doc["seed_carriers"]
+    except Exception:
+        return []
+
+
 def evidence(spec) -> dict:
     """What says the title is on a platform, by source:
     {'named': [...], 'seeds': [...], 'scan': [...], 'research': [...],
@@ -189,6 +369,7 @@ def verify_platform_pins(spec, subject, subject_rows, *, title="", log=print):
         owner = {(str(p[0]).strip().upper(), _fold(p[1])) for p in (spec.get("universe_platform_pins") or [])
                  if isinstance(p, (list, tuple)) and len(p) >= 2}
         named = list(ev["named"])
+        seeds = seed_services(spec)
         # the universe's own name can carry the platform; any streaming
         # pin it names puts the build in named mode for every other pin
         in_name_any = False
@@ -215,6 +396,14 @@ def verify_platform_pins(spec, subject, subject_rows, *, title="", log=print):
                 kept.append(pin)
                 continue
             in_name = named_in_subject(subject, name)
+            if seeds:
+                # the seed placements are the universe: a pin stands only on a service they sit on
+                if any(seed_matches_row(s, name) for s in seeds):
+                    kept.append(pin)
+                else:
+                    dropped.append((pin[0], name, f"the universe is the people seen on {', '.join(seeds)}; "
+                                                  f"another carrier reads on its own merits"))
+                continue
             if named or in_name_any:
                 # a platform the client named defines the pin
                 if in_name or any(same_platform(n, name) for n in named):
@@ -315,11 +504,22 @@ def normalize_brief(spec, subject="", log=print):
             if len(rows) != before and callable(log):
                 log(f"[brief] {subject!r}: {title!r} removed from the place-to-watch columns")
             spec["subject_rows"] = rows
-        if rows and [p for p in (spec.get("content_seed_platforms_named") or []) if str(p).strip()]:
+        seeds = seed_services(spec) if is_viewers_universe(spec, subject) else []
+        if rows and ([p for p in (spec.get("content_seed_platforms_named") or []) if str(p).strip()] or seeds):
             kept, dropped = verify_platform_pins(spec, subject, rows, title=title, log=log)
             if dropped:
-                spec["subject_rows"] = [list(r) for r in kept]
+                rows = [list(r) for r in kept]
+                spec["subject_rows"] = rows
                 spec["unverified_platform_pins"] = [[c, n] for c, n, _why in dropped]
+        # 3. The pin is the seed service (when the placements are already in
+        #    hand): one seed service pins in the streaming column; several
+        #    share the universe and none pins alone.
+        if len(seeds) == 1 and seed_row_name(seeds[0]) \
+                and not any(str(r[0]).strip().upper() in STREAM_PIN_CATS and seed_matches_row(seeds[0], r[1]) for r in rows):
+            rows = list(rows) + [["STREAMING/PLATFORM", seed_row_name(seeds[0])]]
+            spec["subject_rows"] = rows
+            if callable(log):
+                log(f"[brief] {subject!r}: seeded from {seeds[0]} placements; {seed_row_name(seeds[0])} is the pin")
     except Exception as e:
         try:
             if callable(log):
@@ -329,5 +529,6 @@ def normalize_brief(spec, subject="", log=print):
     return spec
 
 
-__all__ = ["normalize_brief", "NETWORK_PIN_CATS", "CARRIER_PIN_CATS", "verify_platform_pins", "is_viewers_universe", "evidence", "same_platform", "named_in_subject",
+__all__ = ["normalize_brief", "NETWORK_PIN_CATS", "CARRIER_PIN_CATS", "seed_services", "seed_matches_row", "seed_row_name",
+           "service_of_url", "seed_services_of_brand_input", "stamp_seed_carriers", "verify_platform_pins", "is_viewers_universe", "evidence", "same_platform", "named_in_subject",
            "STREAM_PIN_CATS"]

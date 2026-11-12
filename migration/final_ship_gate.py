@@ -848,16 +848,12 @@ def _carriage_row_match(platform, value):
     return False
 
 
-def _load_carriage_doc(subject, s3_key, s3_client, verbose=True):
-    """Cached carriage facts for this subject (stem before ' - '), or
-    None. Own S3 fetch + JSON parse; fail-open on everything. Only
-    enforceable docs (confident research with carriers) are returned."""
-    stem = str(subject or _display_name(s3_key)).split(" - ")[0].strip()
-    if not stem or not _CARRIAGE_VOCAB_RE.search(stem):
-        return None
-    n = _norm_token(stem)
-    if not n:
-        return None
+_KEY_STAMP_RE = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$")
+
+
+def _carriage_doc_for(n, s3_client):
+    """The cached record under one normalized stem, shaped for the gate,
+    or None. Own S3 fetch + JSON parse; fail-open on everything."""
     now = time.time()
     with _CACHE_LOCK:
         hit = _CARRIAGE_CACHE.get(n)
@@ -869,7 +865,21 @@ def _load_carriage_doc(subject, s3_key, s3_client, verbose=True):
         body = _s3(s3_client).get_object(
             Bucket=BUCKET, Key=f"{CARRIAGE_PREFIX}{n}.json")["Body"].read()
         raw = _json.loads(body.decode("utf-8"))
-        if (isinstance(raw, dict) and raw.get("consumption_scoped")
+        _seeds = [c for c in ((raw.get("seed_carriers") or [])
+                              if isinstance(raw, dict) else [])
+                  if isinstance(c, dict)
+                  and str(c.get("platform") or "").strip()]
+        if isinstance(raw, dict) and raw.get("consumption_scoped") and _seeds:
+            # The seed service is the universe (2026-11-11, Mistletoe
+            # Murders Viewers / WICKED TUNA Viewers): when the build was
+            # seeded from watch URLs, the services those URLs sit on are
+            # the carriers this gate holds near total. A carrier the
+            # research named reads on its own merits and is never
+            # required to cover the universe.
+            doc = dict(raw, carriers=_seeds,
+                       research_carriers=list(raw.get("carriers") or []),
+                       _seed_mode=True)
+        elif (isinstance(raw, dict) and raw.get("consumption_scoped")
                 and not raw.get("research_failed")
                 and raw.get("confident", True)
                 and isinstance(raw.get("carriers"), list)
@@ -879,9 +889,37 @@ def _load_carriage_doc(subject, s3_key, s3_client, verbose=True):
         doc = None
     with _CACHE_LOCK:
         _CARRIAGE_CACHE[n] = (doc, now)
+    return doc
+
+
+def _load_carriage_doc(subject, s3_key, s3_client, verbose=True):
+    """Cached carriage facts for this subject (stem before ' - '), or
+    None. Only enforceable docs (confident research with carriers, or a
+    record that names the seed service) are returned.
+
+    An in-place correction is often written under the SUBJECT cell's
+    value ('Mistletoe Murders'), which carries no viewers word. The
+    file's own name does ('Mistletoe_Murders_Viewers_11_11_...'), so a
+    record that names the seed service is also found through it: the
+    service a universe was seeded from stays a verified carrier however
+    the write was labeled. Records without a seed service are found by
+    the subject only, exactly as before."""
+    stem = str(subject or _display_name(s3_key)).split(" - ")[0].strip()
+    doc = None
+    used = stem
+    if stem and _CARRIAGE_VOCAB_RE.search(stem) and _norm_token(stem):
+        doc = _carriage_doc_for(_norm_token(stem), s3_client)
+    if doc is None and s3_key:
+        key_stem = _KEY_STAMP_RE.sub("", _display_name(s3_key)).replace("_", " ").split(" - ")[0].strip()
+        if (key_stem and key_stem != stem and _CARRIAGE_VOCAB_RE.search(key_stem)
+                and _norm_token(key_stem)):
+            cand = _carriage_doc_for(_norm_token(key_stem), s3_client)
+            if cand and cand.get("_seed_mode"):
+                doc, used = cand, key_stem
     if doc and verbose:
-        print(f"[ship-gate] viewer-carriage facts loaded for {stem!r}: "
-              f"{', '.join(str(c.get('platform')) for c in doc['carriers'])}")
+        print(f"[ship-gate] viewer-carriage facts loaded for {used!r}: "
+              f"{', '.join(str(c.get('platform')) for c in doc['carriers'])}"
+              + (" (the seed service)" if doc.get("_seed_mode") else ""))
     return doc
 
 
@@ -1801,6 +1839,11 @@ def _check_i13(rows, subject, s3_key, s3_client, verbose):
         if not vals:
             continue
         total = sum(bp for _, bp in vals)
+        if (len(vals) == 1 and doc.get("_seed_mode")
+                and len({_norm_token(c.get("platform")) for c in carriers}) > 1):
+            # several seed services share the universe and only one of
+            # them sits in this column: it never has to read total alone
+            continue
         if len(vals) == 1:
             r, bp = vals[0]
             if bp < 99.0:
