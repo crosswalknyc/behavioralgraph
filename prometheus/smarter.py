@@ -837,6 +837,21 @@ def thread_replay(text, history):
         return None
 
 
+def _part_of_bound(name, bound):
+    """True when `name` is already inside the subject the read is bound
+    to: one of the things it is split by ("Comedy" in "Digital original
+    content categories on YouTube (Comedy, ...)") or the platform it
+    names. Never raises."""
+    try:
+        from . import platform_scope as _ps
+        if _ps.is_cut_of(name, bound):
+            return True
+        plat = _ps.canon(str(name or ''))
+        return bool(plat) and plat.lower() in str(bound or '').lower()
+    except Exception:
+        return False
+
+
 def on_it_line(reading, base, bound=''):
     """The started-read line names what is being read (2026-10-14: 'On it'
     alone left 'who skews older, Gunna or Drake?' with no echo of either).
@@ -870,6 +885,8 @@ def on_it_line(reading, base, bound=''):
             if kind in ('metric', 'unknown', 'cohort') and not (sdoc or {}).get('catalog'):
                 continue
             nm = _sr.clean_display(str((sdoc or {}).get('catalog') or (sdoc or {}).get('as_written') or ''))
+            if names and bound and _part_of_bound(str((sdoc or {}).get('as_written') or nm), names[0]):
+                continue    # a genre the bound subject is split by, or the platform it sits on, is not a second subject
             if nm and nm.lower() not in [n.lower() for n in names]:
                 names.append(nm)
     except Exception:

@@ -323,6 +323,22 @@ def for_read(text, history, base, ledger, bind_subject='', subj_hint=''):
         if isinstance(base, dict) and str(base.get('source') or '') in ('catalog', 'page'):
             cands.append(str(base.get('subject') or '').split(' - ')[0])
         elif not base:
+            hint = str(subj_hint or '').strip()
+            if hint and not str(bind_subject or '').strip() and not canon(hint.split(' - ')[0]):
+                # the subject the lane was handed is one of the genres the words list ("Comedy", first of six
+                # categories of digital original content on YouTube): a cut of the subject on record, not a
+                # subject. The words decide, as they do when the lane was handed the platform (Armine 2026-11-11:
+                # "I can pull that read on Comedy")
+                try:
+                    _doc = ledger._load_index() if ledger is not None else None
+                except Exception:
+                    _doc = None
+                _live = getattr(ledger, '_has_live_entries', None) if ledger is not None else None
+                for _p in [p for p, how in named(text).items() if how == 'scope']:
+                    _hit = resolve(text, _p, ledger_doc=_doc, history=None, live=_live)
+                    if _hit and _hit.get('source') == 'ledger' and is_cut_of(hint, _hit['subject'], text):
+                        print(f"[pm-base] {hint!r} is a cut, not who: the words name {_hit['subject']!r} on {_p}")
+                        return _hit
             for name in (bind_subject, subj_hint):
                 if str(name or '').strip():
                     cands.append(str(name).split(' - ')[0])

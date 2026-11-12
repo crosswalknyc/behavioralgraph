@@ -335,6 +335,22 @@ class EachPartNamesItsSubject(unittest.TestCase):
         self.assertFalse(PS.is_cut_of('Comedy', HELD, 'How big is the Comedy audience on YouTube?'))
         self.assertFalse(PS.is_cut_of(HELD, HELD, PARTS[0]))
 
+    def test_the_read_step_takes_a_genre_it_was_handed_as_a_cut_too(self):
+        """After the quote was fixed the same question, asked on its own, still came back "I can pull that read on
+        Comedy": the read step is handed the first thing the words list as its subject and makes its own quote."""
+        base, digest, hint, bind, cohort, _sw = PS.apply_to_read(PARTS[0], [], IL, None, '', 'Comedy', '', '', None)
+        self.assertEqual((base, hint, bind, cohort), (None, HELD, HELD, 'on YouTube'))
+        # a subject of its own, and a genre asked about as the audience, stay what they are
+        self.assertEqual(PS.apply_to_read(PARTS[0], [], IL, None, '', 'Nike', '', '', None)[2:4], ('Nike', ''))
+        self.assertEqual(PS.apply_to_read('How big is the Comedy audience on YouTube?', [], IL, None, '', 'Comedy', '', '', None)[2:4],
+                         ('Comedy', ''))
+        # the line that says what is being read leads with the subject and does not list its cuts or its platform beside it
+        rd = {'subjects': [{'as_written': 'Horror', 'catalog': 'Horror Streaming Enthusiasts', 'kind': 'audience'},
+                           {'as_written': 'Comedy', 'catalog': '', 'kind': 'audience'}, {'as_written': 'YouTube', 'kind': 'platform'}]}
+        line = SM.on_it_line(rd, None, bound=HELD)
+        self.assertTrue(line.startswith(f'On it: reading {HELD} now.'), line[:160])
+        self.assertIn('Horror Streaming Enthusiasts', SM.on_it_line(rd, None, bound=''))     # with nothing bound the line is what it was
+
     def test_a_part_bound_to_that_subject_never_runs_on_the_platforms_own_profile(self):
         """"Can we give some examples?" rode on the first question's subject, but the earlier words named
         YouTube, the library has a YouTube profile, and the part was quoted on it."""
