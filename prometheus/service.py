@@ -2250,6 +2250,13 @@ def ask(user, body, *, via='session'):
         except Exception as e:
             _faults.note('service.reader', e)
             reading = None
+        try:
+            # the categories a question lists are cuts: they leave the reading's subjects here, before anything
+            # reads it (the executor, the lanes, the line that says what is being read); prometheus.cut_list
+            from . import cut_list as _cutl0
+            reading = _cutl0.clean_reading(reading, text)
+        except Exception as _fx:
+            _faults.note('service.cut_list', _fx)
         if reading:
             body = dict(body, reading=reading)
             try:

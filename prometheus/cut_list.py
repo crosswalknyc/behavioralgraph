@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['GENRES', 'items', 'is_item', 'via_item', 'is_cut', 'record', 'settle', 'hint', 'gate', 'quote_name',
+__all__ = ['GENRES', 'clean_reading', 'items', 'is_item', 'via_item', 'is_cut', 'record', 'settle', 'hint', 'gate', 'quote_name',
            'lists_categories']
 
 # the vocabulary a list of categories is made of (normalised: lower case, '&', '/' and '-' read as spaces)
@@ -332,6 +332,37 @@ def hint(text, name):
     except Exception:
         pass
     return n
+
+
+def clean_reading(reading, text):
+    """The Reader's reading with the listed categories taken out of its
+    subjects (kept under 'cuts'): nothing downstream of the door can
+    take one, or a library profile matched to one, as a subject. The
+    reading is returned as it came when the words list no categories or
+    none of its subjects is one."""
+    try:
+        if not isinstance(reading, dict):
+            return reading
+        its = items(text)
+        subs = reading.get('subjects')
+        if not its or not isinstance(subs, list):
+            return reading
+        keep, cut = [], []
+        for sd in subs:
+            if isinstance(sd, dict) and (is_item(sd.get('as_written'), text)
+                                         or (sd.get('catalog') and is_cut(sd.get('catalog'), text))
+                                         or (not sd.get('as_written') and is_cut(sd.get('catalog'), text))):
+                cut.append(sd)
+            else:
+                keep.append(sd)
+        if not cut:
+            return reading
+        out = dict(reading, subjects=keep, cuts=[str(i) for i in its], cut_subjects=cut)
+        if len(keep) < 2 and isinstance(out.get('flags'), list):
+            out['flags'] = [f for f in out['flags'] if f != 'multiple_subjects']
+        return out
+    except Exception:
+        return reading
 
 
 # ---------------------------------------------------------------- the door

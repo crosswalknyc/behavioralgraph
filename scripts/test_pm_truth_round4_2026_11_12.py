@@ -276,6 +276,39 @@ class TheSubjectIsDecidedByRule(_WithLedger):
         self.assertEqual(SR.bind('what do Horror viewers buy', [], '', reading=rd2).name,
                          SR._bind_words('what do Horror viewers buy', [], '', rd2).name)
 
+    def test_the_categories_leave_the_reading_before_anything_reads_it(self):
+        """Prod after the first fix, a question that names its own subject ("For Reba McEntire fans, which
+        categories do best on YouTube: Comedy, Drama, and Horror?"): "On it: reading Reba McEntire - 2024 Total
+        Universe and Horror Streaming Enthusiasts now". The profile matched to "Horror" was still in the reading,
+        and the two-audience step found it in the library by the one word."""
+        from prometheus import smarter as SM
+        q = 'For Reba McEntire fans, which categories do best on YouTube: Comedy, Drama, and Horror?'
+        rd = {'intent': 'analyze', 'flags': ['multiple_subjects'], 'text': q, 'subjects': [
+            {'as_written': 'Reba McEntire fans', 'catalog': 'Reba McEntire', 'kind': 'audience'},
+            {'as_written': 'Horror', 'catalog': 'Horror Streaming Enthusiasts', 'kind': 'audience'},
+            {'as_written': 'Comedy', 'catalog': '', 'kind': 'audience'}, {'as_written': 'Drama', 'catalog': '', 'kind': 'audience'}]}
+        clean = CL.clean_reading(rd, q)
+        self.assertEqual([x['as_written'] for x in clean['subjects']], ['Reba McEntire fans'])
+        self.assertEqual(clean['cuts'], ['Comedy', 'Drama', 'Horror'])
+        self.assertNotIn('multiple_subjects', clean['flags'])
+        self.assertEqual(len(rd['subjects']), 4)                                # the reading it was given is not changed
+        line = SM.on_it_line(clean, None)
+        self.assertTrue(line.startswith('On it: reading Reba McEntire now.'), line[:80])
+        # her words: nothing but categories in the reading, so nothing is left to take as a subject
+        for label, r in READINGS.items():
+            if r is None or label == 'a piece of the stored name':
+                continue
+            left = [x.get('catalog') or x.get('as_written') for x in CL.clean_reading(dict(r), P1)['subjects']]
+            self.assertTrue(all(CL._scope_platform(n, P1) or not CL.is_cut(n, P1) for n in left), (label, left))
+            self.assertFalse([n for n in left if 'Horror' in n or 'Comedy' in n], (label, left))
+        # a question that lists nothing keeps its reading as it came
+        rd2 = {'subjects': [{'as_written': 'Horror', 'catalog': 'Horror Streaming Enthusiasts', 'kind': 'audience'}]}
+        self.assertIs(CL.clean_reading(rd2, 'what do Horror viewers buy'), rd2)
+        svc = Path(ROOT, 'prometheus', 'service.py').read_text(encoding='utf-8')
+        self.assertLess(svc.find('reading = _cutl0.clean_reading(reading, text)'), svc.find("body = dict(body, reading=reading)"))
+        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        self.assertIn("if set(st) <= toks and not __import__('prometheus.cut_list', fromlist=['is_cut']).is_cut(subj, t):", chat)     # the two-audience step
+
     def test_the_wiring(self):
         chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
         self.assertIn("subj_hint = _cut_list.hint(text, mr.get('subject'))", chat)

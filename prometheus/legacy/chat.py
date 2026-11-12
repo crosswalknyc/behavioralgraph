@@ -12527,7 +12527,7 @@ def _pm_two_base_detect(text, ctx=None):
                   if w not in _PM_BASE_GENERIC_TOKENS]
             if not st or sum(len(w) for w in st) < 4:
                 continue
-            if set(st) <= toks:
+            if set(st) <= toks and not __import__('prometheus.cut_list', fromlist=['is_cut']).is_cut(subj, t):   # a profile reached only through a category the words list is not a second audience (2026-11-12)
                 key = _H._normalize_for_match(subj)
                 is_tu = ' - ' not in str(entry.get('display_name')
                                          or subj)
