@@ -54,10 +54,18 @@ def bpiq_intent(text, chip=''):
         return True
     if low in ('bpiq', 'run bpiq', 'pull bpiq', 'start bpiq'):
         return True
-    # 'value the Stanley x Target partnership', 'can you value Gunna x Nike' (2026-10-14)
-    if (re.search(r"\b(value|valuation|valuing|worth)\b", low) is not None
-            and any(k in low for k in (' x ', 'partnership', 'sponsorship', 'collab', 'deal', 'campaign'))):
-        return True
+    # 'value the Stanley x Target partnership', 'can you value Gunna x Nike' (2026-10-14). The words must ask
+    # what a partnership is worth (prometheus.partnership_value, 2026-11-11): a brief that only carries the
+    # words somewhere ('Value pricing ... Mr. Beast partnership ... as part of the campaign', Mark Valdez
+    # 2026-11-09) is not a valuation order and was opening one.
+    try:
+        from . import partnership_value as _pv
+        if _pv.value_ask(text):
+            return True
+    except Exception:
+        if (re.search(r"\b(value|valuation|valuing|worth)\b", low) is not None
+                and any(k in low for k in (' x ', 'partnership', 'sponsorship', 'collab', 'deal'))):
+            return True
     # the partnership case: 'why it makes sense for Mastercard to partner with Mr. Beast over potential
     # other creators', 'Mastercard is partnering with Mr. Beast, I want to understand why this is a good
     # idea' (Debi 2026-10-26, asked on the Colin and Samir read and answered from it twice)

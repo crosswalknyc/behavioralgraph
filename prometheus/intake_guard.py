@@ -294,6 +294,28 @@ def is_question_shaped(text):
                 or _INLINE_ASK_RX.search(t))
 
 
+_POLITE_LEAD_RX = re.compile(r"^\W*(?:(?:please|pls|kindly|can you|could you|would you|will you|can we|could we)[,\s]+)+", re.I)
+_REQUEST_VERB_RX = re.compile(
+    r"^(?:describe|explain|summari[sz]e|list|outline|clarify|elaborate|share|provide|write|draft|tell|show|give|walk|break|"
+    r"compare|rank|recommend|suggest|identify|analy[sz]e|review|help|look\s+(?:up|at|into)|check|pull|run|build|create|make|"
+    r"send|email|export|download)\b", re.I)
+
+
+def is_ask(text):
+    """A question, or a request typed as an instruction ('please
+    describe what you believe the task is', 'explain how this works').
+    The test an open order uses before it keeps a message for itself
+    (2026-11-11): a statement stays with the order, an ask is let
+    through."""
+    t = _norm(text)
+    if not t or is_control(t) or _FIELD_SHAPE_RX.search(t):
+        return False
+    if is_question_shaped(t):
+        return True
+    core = _POLITE_LEAD_RX.sub('', strip_lead(t)).strip()
+    return bool(core) and bool(_REQUEST_VERB_RX.match(core)) and _words(core) >= 4
+
+
 def is_new_ask_for_brief(text):
     """The question test for the legacy intakes that read a brief across
     turns (a journey, a campaign, a twin): a question mark, a figure
@@ -512,7 +534,7 @@ def attach_resume_chip(env, hit=None):
 
 
 __all__ = ['STEP_KINDS', 'RESUME_CHIPS', 'DEFAULT_RESUME_CHIP', 'is_answer_to_step', 'looks_like_new_question', 'is_question_shaped',
-           'is_dates_attempt', 'has_date_range', 'has_interrogative_opener', 'asks_a_figure', 'is_build_order', 'looks_like_title',
+           'is_dates_attempt', 'has_date_range', 'has_interrogative_opener', 'asks_a_figure', 'is_build_order', 'looks_like_title', 'is_ask',
            'is_new_ask_for_brief',
            'is_control', 'is_chip', 'strip_lead', 'chip_for', 'is_resume', 'is_resume_chip', 'resume_flow', 'reset_resume',
            'mark_resume', 'pending_resume', 'attach_resume_chip', 'last_agent_turn', 'last_agent_is_notice', 'armed_flag_applies',

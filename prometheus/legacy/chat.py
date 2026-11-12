@@ -5741,6 +5741,7 @@ def _ask_logged(surface):
                     _ao = getattr(_g, '_pm_approved_offer', None); _ao and extra.update({'approved_offer': _ao})   # a typed approval bound to a pending priced offer (2026-10-22)
                 except Exception as _fx:
                     _faults.note('chat', _fx)
+                extra = __import__('prometheus.order_stall', fromlist=['stamp']).stamp(extra, question, payload, ask_history)   # where a priced order stands after this reply (Jenna 2026-11-11)
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=_pm_ask_log_user(),
@@ -15830,6 +15831,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         from prometheus import reply_shape as _rs
         _rs.shape_finished_read(payload, held)
         __import__('prometheus.people_bounds', fromlist=['guard_payload']).guard_payload(payload)   # a people count never passes the US population or its own audience (2026-11-11)
+        __import__('prometheus.partnership_value', fromlist=['guard_read']).guard_read(payload, question=text, history=history)   # a partnership's dollar value is the valuation's to state (Jenna 2026-11-11)
         _stages = payload.pop('_stages_ms', None)
         if payload.get('success'):
             _done = {**head,
@@ -19145,6 +19147,9 @@ def _pm_deck_core(user, body):
             _dp_pick = ''
         # the picked or named subject, or no deck: a library profile, else the read delivered on it in this thread,
         # never another candidate from the list (prometheus.deck_pick, Samantha Kolton 2026-11-11)
+        _pvd = None if _ds else _bpiq_wiz.deck_gate(user, body, text, history, _dp_pick, globals())   # a deck of a read that put a dollar value on a partnership is the valuation order (Jenna 2026-11-11)
+        if _pvd is not None:
+            return jsonify(_pvd)
         if _ds:   # the material is something already delivered or attached: the words alone resolve it
             resolution, res_err = _pm_resolve_deck_subject(text, ctx)
             _dp_msg = ''

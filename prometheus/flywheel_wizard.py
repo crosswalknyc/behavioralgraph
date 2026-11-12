@@ -356,8 +356,9 @@ def apply_answer(draft, text, today=None):
     if step == STEP_ENTRY:
         e = parse_entry(t)
         if not e:
-            # anything with a title on a service, or a plain phrase, still stands as the entry point
-            if len(t.split()) >= 2 and not is_start(t):
+            # anything with a title on a service, or a plain phrase, still stands as the entry point; a yes, a no,
+            # "not sure" or "you pick" is never one (2026-11-11)
+            if len(t.split()) >= 2 and not is_start(t) and not _non_name(t):
                 e = {'entry_point': t.strip(' .'), 'subject': t.strip(' .'), 'platform': '', 'owner': ''}
             else:
                 return d, 'Tell me the entry point in one line, like: watched Gilmore Girls on Prime Video.'
@@ -373,7 +374,7 @@ def apply_answer(draft, text, today=None):
             t = str(d['ecosystem_hint'])
         eco = normalize_ecosystem(t)
         if not eco:
-            if 1 <= len(t.split()) <= 4 and re.match(r"^[A-Za-z][\w.&' +-]+$", t):
+            if 1 <= len(t.split()) <= 4 and re.match(r"^[A-Za-z][\w.&' +-]+$", t) and not _non_name(t):
                 eco = t.strip().title() if t.islower() else t.strip()
             else:
                 return d, 'Name the company whose ecosystem I should examine, like Amazon or Disney.'
@@ -391,6 +392,16 @@ def apply_answer(draft, text, today=None):
         d.update({'start_date': a, 'end_date': b, 'window_label': lab})
     d['step'] = next_step(d)
     return d, ''
+
+
+def _non_name(text):
+    """yes / no / ok / "not sure" / "you pick" / "same as before": a
+    reply that names nothing, never an entry point or a company."""
+    try:
+        from . import bpiq_slots as _sl
+        return bool(_sl.is_filler(text))
+    except Exception:
+        return bool(re.match(r"^\W*(?:yes|no|ok|okay|sure|not sure|idk|maybe)\W*$", str(text or ''), re.I))
 
 
 # ---------------------------------------------------------------- copy
@@ -522,8 +533,14 @@ def answers_step(text, draft, today=None):
             return True
     if step == STEP_DATES and (_TRAILING_RX.search(str(text or '')) or _CAL_YEAR_RX.search(str(text or ''))):
         return True
-    return _ig.is_answer_to_step(text, _STEP_KIND.get(step, 'text'), chips=list(chips) + [RUN_CHIP, REBUILD_CHIP, 'Build this window'],
-                                 answer_patterns=patterns)
+    if _ig.is_answer_to_step(text, _STEP_KIND.get(step, 'text'), chips=list(chips) + [RUN_CHIP, REBUILD_CHIP, 'Build this window'],
+                             answer_patterns=patterns):
+        return True
+    # A statement typed while the order is open stays with the order
+    # (Jenna 2026-11-11: a sentence that was not a question left a priced
+    # order for a general answer and the order never reached its quote).
+    # Only a question, or an order for something else, is let through.
+    return not _ig.is_ask(text)
 
 
 def last_agent_is_wizard(history):
@@ -738,13 +755,83 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
         return exists_reply(d, d.get('existing') or [], again=True)
     d, err = apply_answer(d, t, today=today)
     if err:
+        # A reply that did not answer the step (Jenna 2026-11-11: no step is
+        # asked in the same words twice). The first one gets the step's line;
+        # the second takes the step's default where it has one (the company
+        # the entry already points at, the trailing 12 months) and says so;
+        # a step with no default is asked again in other words.
+        step = d.get('step') or next_step(d)
+        asked_to_type = err in (ASK_ECOSYSTEM_OTHER, OTHER_DATES_REPLY)
+        n = 0 if asked_to_type else _miss_count(d, step) + 1
+        if n >= 2:
+            d3, line = _default_for(step, d, today=today)
+            if d3 is not None:
+                out = _advance(d3, store, uname, thread_id, price_label, today, existing_lookup=existing_lookup)
+                if isinstance(out, dict) and out.get('reply'):
+                    out = dict(out, reply=f"{line}\n\n{out['reply']}")
+                return out
+        if not asked_to_type:
+            d['misses'] = {'step': step, 'n': n}
         if store is not None:
             store.save(uname, thread_id, d)
         _reply, chips = step_prompt(d)
-        if err in (ASK_ECOSYSTEM_OTHER, OTHER_DATES_REPLY) or d.get('step') == STEP_CONFIRM:
+        if asked_to_type or d.get('step') == STEP_CONFIRM:
             chips = ['Cancel']   # they asked to type it; the chips they just declined do not come back
-        return _payload(err, chips, fw_collect=True)
+        return _payload(_vary(err, step, history), chips, fw_collect=True)
+    d.pop('misses', None)
     return _advance(d, store, uname, thread_id, price_label, today)
+
+
+# The other wording of each step's line: never the same words twice in a row.
+_STEP_ALT = {
+    STEP_ENTRY: ("I still need the entry point: the one thing people did that starts the flywheel. One line is enough, "
+                 "for example: bought a Ring doorbell on Amazon."),
+    STEP_ECOSYSTEM: ("Which company's services and products should I measure before and after the entry? One name, "
+                     "for example Amazon, Disney, Apple or Google."),
+    STEP_DATES: ("Which window should the entry events come from? A start and an end date work, or say trailing 12 months."),
+}
+
+
+def _miss_count(d, step):
+    m = (d or {}).get('misses')
+    if isinstance(m, dict) and m.get('step') == step:
+        try:
+            return int(m.get('n') or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _vary(reply, step, history):
+    """`reply`, or the step's other wording when `reply` is word for word
+    what the last agent turn said."""
+    try:
+        from . import intake_guard as _ig
+        prev = ' '.join(str((_ig.last_agent_turn(history) or {}).get('text') or '').split())
+    except Exception:
+        prev = ''
+    cur = ' '.join(str(reply or '').split())
+    if not prev or prev != cur:
+        return reply
+    alt = _STEP_ALT.get(step)
+    return alt if alt and ' '.join(alt.split()) != prev else reply
+
+
+def _default_for(step, d, today=None):
+    """(draft, line) with the step's default taken for the reader and the
+    one plain line that says so; (None, '') for a step with no default."""
+    d2 = dict(d or {})
+    if step == STEP_DATES:
+        a, b, lab = parse_window('trailing 12 months', today=today)
+        if a and b:
+            d2.update({'start_date': a, 'end_date': b, 'window_label': lab})
+            d2.pop('misses', None)
+            return d2, "I'll use the trailing 12 months."
+    if step == STEP_ECOSYSTEM and d2.get('ecosystem_hint'):
+        d2['ecosystem'] = str(d2['ecosystem_hint'])
+        d2.pop('misses', None)
+        return d2, f"I'll go with {d2['ecosystem']}, the company the entry point belongs to."
+    return None, ''
 
 
 def _advance(d, store, uname, thread_id, price_label, today, existing_lookup=None):

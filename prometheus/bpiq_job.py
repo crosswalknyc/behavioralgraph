@@ -47,6 +47,11 @@ def ready_note(username, job_id, payload, bare_key):
         read_line = str(((payload or {}).get('campaign') or {}).get('read_line') or '').strip()
         if read_line:
             text += ' ' + read_line
+        # the people the campaign reached and, when an earlier read gave it, the talent's own audience,
+        # each named for what it is (2026-11-11, migration.bpiq_anchors.label_people)
+        people_line = str(((payload or {}).get('campaign') or {}).get('people_line') or '').strip()
+        if people_line and people_line not in text:
+            text += ' ' + people_line
         tid = c._pm_thread_for_job(username, job_id)
         history = c._pm_load_thread_or_active(username, tid)
         if c._pm_history_has_job_turn(history, 'bpiq_job_id', job_id):

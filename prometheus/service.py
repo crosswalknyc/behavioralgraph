@@ -770,6 +770,7 @@ def ask(user, body, *, via='session'):
                         host.ask_hint(route='build_order', outcome='referent_resolved', subject=str((_rs or {}).get('subject') or '') or None)
                 except Exception as _fx:
                     _faults.note('service', _fx)
+                body = dict(body, _pm_order_words=text)   # the reader's own words, before the referent was resolved (the valuation reads them, 2026-11-11)
                 text = str(_rw)
                 body = dict(body, text=text, _pm_order_referent=True)
             body = dict(body, _pm_order=True, _pm_order_text=text)

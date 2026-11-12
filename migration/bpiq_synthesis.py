@@ -2331,6 +2331,15 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                 payload.setdefault("diagnostics", {})["held_to_delivered_read"] = hold_rec
         except Exception as e:
             print(f"[bpiq-synth] delivered-read hold skipped: {e}")
+    # Each people count says what it is (2026-11-11): the campaign's
+    # reach is the people the campaign reached; when the delivered read
+    # gave the talent's own audience, it is named once beside the reach
+    # at the read's figure. No count moves.
+    if _ba is not None:
+        try:
+            _ba.label_people(payload, banked, inputs)
+        except Exception as e:
+            print(f"[bpiq-synth] people labels skipped: {e}")
     # The matching rules hold on every published valuation regardless
     # of what the model returned: a comparison group off in size or
     # pre-period engagement is re-drawn in place, never held.

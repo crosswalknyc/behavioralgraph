@@ -101,6 +101,12 @@ ALREADY_RUNNING_REPLY = ("That valuation is already running, so I have not "
                          "started a second one. I'll email you when it is done.")
 EXISTS_REPLY = ("That valuation already exists: {name} is in the Brand "
                 "Partnership tab. Nothing was charged.")
+CHARGE_FAILED_REPLY = ("I could not take payment for that valuation just now, so nothing has started and nothing "
+                       "was charged. Say Accept to try again.")
+START_FAILED_REPLY = ("That valuation did not start, so the charge was reversed and nothing was billed. "
+                      "Say Accept to try again.")
+START_FAILED_HELD_REPLY = ("That valuation did not start. I have flagged the charge to be reversed, and nothing "
+                           "more will be billed. Say Accept to try again.")
 FUNDS_REPLY = ('That valuation needs funds on the account first. Add '
                'funds or ask your admin, and I will run it the moment '
                'you are set.')
@@ -285,11 +291,53 @@ def attribution_window(campaign_start, campaign_end, today=None):
 
 
 def price_usd(control_group):
-    return PRICE_CONTROL if control_group else PRICE_BASE
+    """The price the recap quotes: the seat's own rate for the valuation
+    (the table the charge reads, so the quote and the charge are one
+    number; `_analyze_hook` stamps it once per turn from the live seat),
+    else the published rate."""
+    base = PRICE_CONTROL if control_group else PRICE_BASE
+    try:
+        from flask import g as _g
+        tab = getattr(_g, '_pm_bpiq_prices', None)
+        if isinstance(tab, dict):
+            v = float(tab.get(bool(control_group)) or 0)
+            return (int(v) if abs(v - round(v)) < 0.009 else round(v, 2)) if v > 0 else base
+    except Exception:
+        pass
+    return base
+
+
+def _money_symbol():
+    try:
+        from flask import g as _g
+        sym = getattr(_g, '_pm_bpiq_symbol', None)
+        return sym if isinstance(sym, str) and sym.strip() and len(sym.strip()) <= 2 else '$'
+    except Exception:
+        return '$'
 
 
 def price_label(usd):
-    return f"${int(usd):,}"
+    v = float(usd)
+    return f"{_money_symbol()}{v:,.0f}" if abs(v - round(v)) < 0.009 else f"{_money_symbol()}{v:,.2f}"
+
+
+def seat_prices(uname):
+    """({False: base, True: with a control group}, symbol) from the
+    seat's own price table (a company rate rides through), or (None,
+    None) when the table cannot be read (a hermetic run, a thin host):
+    the published rate stands."""
+    try:
+        import os
+        if os.environ.get('REGRESSION_TEST_MODE') or not str(uname or '').strip():
+            return None, None
+        from prometheus.legacy.watch import _pm_usd, _pm_money_symbol
+        tab = {False: float(_pm_usd(TOOL_BASE, float(PRICE_BASE), username=uname) or 0),
+               True: float(_pm_usd(TOOL_CONTROL, float(PRICE_CONTROL), username=uname) or 0)}
+        if tab[False] <= 0 or tab[True] <= 0:
+            return None, None
+        return tab, str(_pm_money_symbol(uname) or '$')
+    except Exception:
+        return None, None
 
 
 def accept_chip(usd, included=False):
@@ -462,6 +510,41 @@ def _bpiq_intent(text):
         return is_chip(text)
 
 
+def pv_kind(text, history=None, pick='', body=None):
+    """'value' when the words ask what a partnership is worth in
+    dollars, 'deck' when they ask for a deck of a read in this thread
+    that stated one, '' otherwise (prometheus.partnership_value, Jenna
+    2026-11-11: that figure is the valuation's to state). The reader's
+    own words are read ahead of an order rewritten onto a resolved
+    subject ("turn this into a deck" becomes "Run a deck on <the open
+    page>" before any lane sees it). Never raises."""
+    try:
+        from prometheus import partnership_value as _pv
+        own = str((body or {}).get('_pm_order_words') or '').strip() if isinstance(body, dict) else ''
+        if own and own != str(text or '').strip():
+            hit = _pv.owns(own, history, pick=pick)
+            if hit:
+                return hit
+        return _pv.owns(text, history, pick=pick) or ''
+    except Exception:
+        return ''
+
+
+_ORDER_LEAD_RX = re.compile(
+    r"^\W*(?:(?:hey|hi|ok|okay|so)[,\s]+)?(?:please\s+|can you\s+|could you\s+|would you\s+|can we\s+|"
+    r"i want (?:you )?to\s+|i need (?:you )?to\s+|i'?d like (?:you )?to\s+|let'?s\s+|i want an?\s+|i need an?\s+)?"
+    r"(?:please\s+)?(?:value|valuate|price|appraise|run|pull|do|start|build|create|make|queue|set\s+up|give\s+me|get\s+me|"
+    r"(?:brand[- ]partnership\s+)?valuation\s+(?:on|of|for))\b", re.I)
+
+
+def is_valuation_order(text):
+    """An instruction to value a partnership ('value the Stanley x Target
+    partnership', 'can you value Gunna x Nike?', 'run a brand partnership
+    valuation for MMG x Lowe's'), as opposed to a question about what one
+    is worth."""
+    return bool(_ORDER_LEAD_RX.match(str(text or '').strip()))
+
+
 def answers_step(text, draft, today=None):
     """The intake guard for the wizard: True when `text` reads as the
     answer to the draft's open step (its chips, its control words, its
@@ -480,12 +563,52 @@ def answers_step(text, draft, today=None):
     # the wizard's place). A question is still a question.
     if names_slots(text, step, today=today):
         return True
+    if _shaped_answer(text, d, today=today):
+        return True
+    # A statement typed while the order is open stays with the order
+    # (Jenna 2026-11-11: a sentence that was not a question left the
+    # order for a general read, and the order never reached its quote).
+    # Only a question, or an order for something else, is let through;
+    # the step is asked again in other words, never answered elsewhere.
+    try:
+        return not _ig.is_ask(text)
+    except Exception:
+        return True
+
+
+def _shaped_answer(text, draft, today=None):
+    """True when `text` has the shape of the open step's answer: a chip,
+    a control word, the step's own phrasings, dates at a dates step, a
+    short name at a name step."""
+    try:
+        from prometheus import intake_guard as _ig
+    except Exception:
+        return True
+    d = dict(draft or empty_draft())
+    step = d.get('step') or next_step(d)
     try:
         _reply, chips = step_prompt(d, today=today)
     except Exception:
         chips = [CHIP_CANCEL]
     return _ig.is_answer_to_step(text, _STEP_KIND.get(step, 'text'), chips=chips,
                                  answer_patterns=_STEP_ANSWER_PATTERNS.get(step))
+
+
+def loose_statement(text, draft, today=None):
+    """A statement the order keeps only because it is not a question: it
+    names no slot and has no shape of an answer. It counts as a reply
+    that did not answer the step (asked again in other words, then the
+    step's default); nothing in it is stored as a name."""
+    t = str(text or '').strip()
+    if not t or extract_urls(t):
+        return False
+    d = dict(draft or empty_draft())
+    step = d.get('step') or next_step(d)
+    if names_slots(t, step, today=today) or _shaped_answer(t, d, today=today):
+        return False
+    if step in (STEP_DATES, STEP_ATTR, STEP_ATTR_CUSTOM) and parse_dates(t, today=today)[0]:
+        return False
+    return True
 
 
 def names_slots(text, step=None, today=None):
@@ -691,6 +814,11 @@ def wants(text, body=None, history=None, store=None, user=None,
     extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
     if body.get('bpiq_confirm') or extra.get('bpiq_confirm'):
         return True
+    # what a partnership is worth in dollars, asked cold or about this
+    # thread's partnership, and a deck of a read that stated it, are the
+    # valuation's (Jenna 2026-11-11)
+    if pv_kind(text, history, body=body):
+        return True
     if store is None and user:
         try:
             store = store_for(body)
@@ -890,6 +1018,8 @@ def merge_slots(draft, text, today=None):
                 return _slots.known_casing(n, table['lk'])
         return n
 
+    old_t, old_b = str(d.get('talent') or ''), str(d.get('brand_partner') or '')
+    _f = lambda x: re.sub(r'[^a-z0-9]+', '', str(x or '').lower())      # noqa: E731
     if got.get('talent'):
         d['talent'] = _case(got['talent'])
         named['talent'] = d['talent']
@@ -897,6 +1027,15 @@ def merge_slots(draft, text, today=None):
         d['brand_partner'] = _case(got['brand'])
         d['brand_named'] = True
         named['brand'] = d['brand_partner']
+    # the pairing was read the wrong way round and the reader named one
+    # side by its role ("Gunna is the talent" under Nike x Gunna): the
+    # other side takes the other role
+    if named.get('talent') and not named.get('brand') and old_t and _f(named['talent']) == _f(old_b) != _f(old_t):
+        d['brand_partner'] = old_t
+        named['brand'] = old_t
+    elif named.get('brand') and not named.get('talent') and old_b and _f(named['brand']) == _f(old_t) != _f(old_b):
+        d['talent'] = old_b
+        named['talent'] = old_b
     if got.get('campaign'):
         d['campaign'] = str(got['campaign']).strip()
         d.pop('campaign_auto', None)
@@ -1330,6 +1469,19 @@ def _clean_name(text):
     return t.strip(' .')
 
 
+def _too_long_for_name(name, budget):
+    """A name is a few words. A sentence past the budget that is not
+    typed as a title is a remark, never the talent or the campaign."""
+    words = str(name or '').split()
+    if len(words) <= budget:
+        return False
+    try:
+        from prometheus import intake_guard as _ig
+        return not _ig.looks_like_title(name)
+    except Exception:
+        return True
+
+
 def apply_answer(draft, text, today=None):
     """Advance one step from `text`. Returns (draft, err)."""
     d = dict(draft or empty_draft())
@@ -1354,7 +1506,7 @@ def apply_answer(draft, text, today=None):
         name = _clean_name(t)
         # a bare yes / no is never a talent (2026-11-11: "yes" was stored
         # as the talent and led the window line as "Yes, gap x jyt")
-        if not name or is_chip(name) or _slots.is_filler(name):
+        if not name or is_chip(name) or _slots.is_filler(name) or _too_long_for_name(name, 8):
             return d, ASK_TALENT
         d['talent'] = name
         if d.get('brand_partner') and d.get('brand_named') and not d.get('campaign'):
@@ -1362,7 +1514,7 @@ def apply_answer(draft, text, today=None):
             d['campaign_auto'] = True
     elif step == STEP_CAMPAIGN:
         name = _clean_name(t)
-        if not name or _slots.is_filler(name):
+        if not name or _slots.is_filler(name) or _too_long_for_name(name, 12):
             return d, ASK_CAMPAIGN
         d['campaign'] = name
         d.pop('campaign_auto', None)
@@ -1496,7 +1648,16 @@ def saved_valuation_block(text, window=None):
     pairing. Never raises."""
     try:
         from migration import bpiq_anchors as _ba
-        return _ba.valuation_block(text, window=window) or ''
+        hit = _ba.valuation_block(text, window=window) or ''
+    except Exception:
+        hit = ''
+    if hit:
+        return hit
+    # no valuation saved on it: the read never prices the partnership
+    # (prometheus.partnership_value, Jenna 2026-11-11)
+    try:
+        from prometheus import partnership_value as _pv
+        return _pv.prompt_block(text) or ''
     except Exception:
         return ''
 
@@ -1830,6 +1991,14 @@ def _charge_seat(user, uname, inputs, job_id, g, charge_fn):
             from .host import host as host
         except Exception:
             host = None
+    # Nothing priced starts without its charge (Jenna 2026-11-11). A
+    # seat that is not included, with no name to bill or no way to take
+    # the charge in this process, is not charged and nothing starts;
+    # the shared door answers True in both cases, which is right for a
+    # read and wrong for a $500 order.
+    if not str(uname or '').strip() or _host_cap(host, 'consume_credit') is None:
+        print(f"[bpiq-wizard] no charge door for {uname or 'unknown'!r}; the valuation was not started")
+        return None
     subj = (f"{inputs.get('qualifier')} x "
             f"{inputs.get('campaign') or inputs.get('brand_partner')}")
     pull = PULL_CONTROL if inputs.get('control_group') else PULL_BASE
@@ -1943,8 +2112,52 @@ def _run_marker(store, user, thread_id):
     return None
 
 
+def _refund_seat(user, uname, inputs, job_id, g, refund_fn=None):
+    """Reverse the charge of a valuation that did not start. True when
+    there was nothing to reverse (an included seat) or the reversal
+    landed; False when it could not be made here (ops is told). Never
+    raises."""
+    try:
+        if _seat_is_free(user, uname, g):
+            return True
+        control = bool((inputs or {}).get('control_group'))
+        subj = f"{(inputs or {}).get('qualifier')} x {(inputs or {}).get('campaign') or (inputs or {}).get('brand_partner')}"
+        desc = f'Brand Partnership Valuation: {subj}'
+        pull = PULL_CONTROL if control else PULL_BASE
+        credits = CREDITS_CONTROL if control else CREDITS_BASE
+        if refund_fn is not None:
+            return bool(refund_fn(uname or user, inputs, job_id))
+        host = (g or {}).get('_H') if g else None
+        if host is None:
+            try:
+                from .host import host as host
+            except Exception:
+                host = None
+        fn = _host_cap(host, 'refund_credit')
+        if fn is None:
+            import sys as _sys
+            fn = getattr(_sys.modules.get('app'), 'refund_credit', None)
+        ok = False
+        if callable(fn):
+            ok = bool(fn(uname, credits=credits, reason='valuation did not start', job_id=job_id,
+                         charge_description=desc, pull_type=pull))
+        if not ok:
+            try:
+                mail = _host_cap(host, 'error_email')
+                if callable(mail):
+                    mail('bpiq-wizard/charge-not-reversed',
+                         RuntimeError(f"valuation {job_id} for {uname} was charged, did not start, and the charge "
+                                      f"could not be reversed here: {desc}"))
+            except Exception:
+                traceback.print_exc()
+        return ok
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
 def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
-                      store=None, thread_id='', registry=None):
+                      store=None, thread_id='', registry=None, refund_fn=None):
     """Accept. One run per ask (Jenna 2026-10-28): the run key
     (talent, campaign, dates, control group, spelling-insensitive) is
     claimed in the shared registry BEFORE the charge. A second Accept
@@ -2007,10 +2220,29 @@ def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
                 _release(reg, inputs, job_id)
             except Exception:
                 pass
-        return _payload(FUNDS_REPLY, [], draft=draft, bpiq_collect=False)
+        # None: the charge could not be taken at all (no door); False: the
+        # seat could not cover it. Either way nothing starts.
+        return _payload(CHARGE_FAILED_REPLY if ok is None else FUNDS_REPLY, [], draft=draft, bpiq_collect=False)
     extras = dict(ppu or {})
-    _start_valuation(job_id, uname, inputs, extras, g, start_fn,
-                     thread_id=thread_id)
+    try:
+        started = _start_valuation(job_id, uname, inputs, extras, g, start_fn,
+                                   thread_id=thread_id)
+    except Exception:
+        traceback.print_exc()
+        started = False
+    if started is False:
+        # Charged and not started is never left standing (Jenna
+        # 2026-11-11): the charge is reversed, the claim is released,
+        # the draft stays on its recap and the reader is told plainly.
+        if reg is not None and _release:
+            try:
+                _release(reg, inputs, job_id)
+            except Exception:
+                pass
+        reversed_ok = _refund_seat(user, uname, inputs, job_id, g, refund_fn)
+        return _payload(START_FAILED_REPLY if reversed_ok else START_FAILED_HELD_REPLY,
+                        [accept_chip(price_usd(bool(draft.get('control_group'))), included=included_seat(draft)),
+                         CHIP_DECLINE, CHIP_CANCEL], draft=draft, bpiq_collect=False)
     # The draft leaves the store (later turns on the thread are not the
     # wizard's); a step-less marker keeps the run id it owns.
     if store is not None:
@@ -2031,9 +2263,86 @@ def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
                     bpiq_job_id=job_id)
 
 
+def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
+    """The reply to a question the valuation owns (what a partnership is
+    worth in dollars, or a deck of a read that stated it). With an order
+    already open on the thread the open step is asked again, in other
+    words when it was the last thing said. With none, the order opens
+    filled from the words and the thread, and asks its first open step."""
+    from prometheus import partnership_value as _pv
+    if draft:
+        d = sane_draft(dict(draft))
+        d['step'] = d.get('step') or next_step(d)
+        reply, chips = step_prompt(d, today=today)
+        reply = vary(reply, d['step'], history, d)
+        if store is not None:
+            store.save(user, thread_id, d)
+        return _payload(f"{_pv.lead(kind, had_draft=True)}\n\n{reply}", chips, draft=d)
+    d = empty_draft()
+    seed = ''
+    try:
+        seed = _pv.seed(text, history, kind)
+    except Exception:
+        seed = ''
+    if seed:
+        d = apply_ahead(d, seed, today=today)
+    # dates the question itself gave ("... ran June 3 to August 20"), else
+    # the window the thread's read ran on
+    for src in (text, seed):
+        if d.get('campaign_start') or not src:
+            break
+        a, b = parse_dates(src, today=today)
+        if a and b:
+            d['campaign_start'], d['campaign_end'] = a, b
+            d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
+            d.pop('start_hint', None)
+            d.pop('start_guess', None)
+    d = sane_draft(d)
+    d['step'] = next_step(d)
+    d = _price_draft(d)
+    if store is not None:
+        store.save(user, thread_id, d)
+    reply, chips = step_prompt(d, today=today)
+    bits = [_pv.lead(kind)]
+    if d.get('talent') and d.get('brand_partner') and d.get('step') not in (STEP_ATTR, STEP_CHARGE):
+        ack = ack_line({'talent': d.get('talent'), 'brand': d.get('brand_partner')})
+        if ack:
+            # the reader's own words said which is which, or the pairing
+            # was read in the order it was written and can be corrected
+            said = ' is the talent and ' in seed
+            bits.append(ack if said else ack + ' If I have those the wrong way round, say which is the talent.')
+    return _payload(' '.join(bits) + '\n\n' + reply, chips, draft=d)
+
+
+def deck_gate(user, body, text, history, pick='', g=None):
+    """The deck surface asks here first: a deck of a read that stated a
+    partnership's dollar value (the words, or the subject picked for
+    the deck) is the valuation order, never a deck built from the read
+    (Jenna 2026-11-11). Returns the order's payload, or None when the
+    deck is any other deck. Never raises."""
+    try:
+        if pv_kind(text, history, pick=pick, body=body) != 'deck':
+            return None
+        uname = _uname(user)
+        b = dict(body or {}, _pv_pick=str(pick or ''))
+        hit = analyze_hook(text, b, history, user, {}, uname, g or {})
+        if isinstance(hit, dict):
+            hit = dict(hit)
+            hit.pop('read_job_id', None)
+            hit.pop('job_id', None)
+            # The deck surface's caller draws a reply with no deck job as
+            # a guidance line with its chips; any other shape reads there
+            # as a deck that failed to start.
+            hit.update({'success': False, 'guidance': True, 'error': str(hit.get('reply') or '')})
+        return hit
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def analyze_hook(text, body, history, user, ppu, uname, g,
                  first=None, today=None, store=None, charge_fn=None,
-                 start_fn=None, registry=None):
+                 start_fn=None, registry=None, refund_fn=None):
     """One wizard turn. Returns a chat payload, or None when this is
     not a Brand Partnership Valuation ask and no draft is open (or the
     message is a question the open step does not own: the service
@@ -2042,7 +2351,7 @@ def analyze_hook(text, body, history, user, ppu, uname, g,
         hit = _analyze_hook(
             text, body, history, user, ppu, uname, g,
             first=first, today=today, store=store,
-            charge_fn=charge_fn, start_fn=start_fn, registry=registry)
+            charge_fn=charge_fn, start_fn=start_fn, registry=registry, refund_fn=refund_fn)
         # the draft the widget echoes back names its thread, so another
         # thread can tell it is not its own (2026-11-05)
         if isinstance(hit, dict) and isinstance(hit.get('bpiq_wizard'), dict):
@@ -2055,7 +2364,7 @@ def analyze_hook(text, body, history, user, ppu, uname, g,
 
 def _analyze_hook(text, body, history, user, ppu, uname, g,
                   first=None, today=None, store=None, charge_fn=None,
-                  start_fn=None, registry=None):
+                  start_fn=None, registry=None, refund_fn=None):
     t = str(text or '').strip()
     thread_id = str((body or {}).get('thread_id') or '')
     uname = uname or _uname(user)
@@ -2066,6 +2375,10 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     try:
         from flask import g as _g_inc
         _g_inc._pm_bpiq_included = bool(_seat_is_free(user, uname, g))
+        # the quote is the seat's own rate, the one the charge takes
+        _tab, _sym = seat_prices(uname)
+        _g_inc._pm_bpiq_prices = _tab
+        _g_inc._pm_bpiq_symbol = _sym
     except Exception:
         pass
     # A start phrase always opens step 1. Cancel any leftover draft
@@ -2159,20 +2472,34 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
             }))
         hit = _charge_and_start(
             draft, user, uname, ppu, g, charge_fn, start_fn,
-            store=store, thread_id=thread_id, registry=registry)
+            store=store, thread_id=thread_id, registry=registry, refund_fn=refund_fn)
         return hit
 
     if draft and draft.get('step') == STEP_CHARGE and (
             _ACCEPT_RE.match(t) or _low(t).startswith('accept')):
         hit = _charge_and_start(
             draft, user, uname, ppu, g, charge_fn, start_fn,
-            store=store, thread_id=thread_id, registry=registry)
+            store=store, thread_id=thread_id, registry=registry, refund_fn=refund_fn)
         return hit
 
     if draft and is_decline(t):
         if store is not None:
             store.clear(uname or user, thread_id)
         return _payload(DECLINE_REPLY, [], draft=None, bpiq_collect=False)
+
+    # What a partnership is worth in dollars is this order's to state
+    # (prometheus.partnership_value, Jenna 2026-11-11): asked cold, the
+    # order opens with what the words and the thread already name; asked
+    # while the order is open, the open step is asked again. A deck of a
+    # read that stated a partnership's dollar value leads here too.
+    _pvk = pv_kind(t, history, pick=str((body or {}).get('_pv_pick') or ''), body=body)
+    # An order for a valuation ("run a brand partnership valuation for MMG
+    # x Lowe's ... here are the links", "can you value Gunna x Nike?") is
+    # read whole by the one-shot reader below, as it always was; a
+    # question about what a partnership is worth, and a deck of a read
+    # that stated it, open here.
+    if _pvk == 'deck' or (_pvk == 'value' and not is_valuation_order(t)):
+        return _open_on_value(_pvk, t, history, draft, store, uname or user, thread_id, today)
 
     # Only Cancel (or Decline on the recap) leaves. A bare name or a
     # subject-shaped reply is the next answer; a question is not (the
@@ -2206,10 +2533,11 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     if collecting or (draft and not intent) or (intent and not is_chip(t)):
         # Mid-wizard answer. A full dump at the first step still fills
         # ahead after the single-field apply, so they are not punished.
-        ahead = apply_ahead(empty_draft() if draft.get('step') == STEP_TALENT
-                            and not draft.get('talent') else dict(draft),
-                            t, today=today)
-        if draft.get('step') == STEP_TALENT and not draft.get('talent'):
+        loose = bool(draft) and not intent and loose_statement(t, draft, today=today)
+        ahead = {} if loose else apply_ahead(
+            empty_draft() if draft.get('step') == STEP_TALENT and not draft.get('talent') else dict(draft),
+            t, today=today)
+        if not loose and draft.get('step') == STEP_TALENT and not draft.get('talent'):
             if ahead.get('talent') or ahead.get('campaign') or ahead.get('campaign_start'):
                 for k, v in ahead.items():
                     if v in (None, '', [], 0):
@@ -2229,7 +2557,31 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
                     if ack:
                         reply = f"{ack} {reply}"
                 return _payload(reply, chips, draft=draft)
-        d2, err = apply_answer(draft, t, today=today)
+        same = None
+        if not loose and draft.get('step') in (STEP_TALENT, STEP_CAMPAIGN) and _slots.says_same(t):
+            # "same as before": the pairing of the last valuation this
+            # thread ran, when there is one; never the words as a name
+            marker = _run_marker(store, uname or user, thread_id) or {}
+            if marker.get('talent') and marker.get('campaign'):
+                same = dict(draft, talent=str(marker['talent']), campaign=str(marker['campaign']))
+                same['brand_partner'] = _brand_from_campaign(same['campaign'], same['talent'])
+                same.pop('misses', None)
+                same = _price_draft(same)
+                same['step'] = next_step(same)
+        if same is not None:
+            if store is not None:
+                store.save(uname or user, thread_id, same)
+            reply, chips = step_prompt(same, today=today)
+            return _payload(f"Same as your last valuation here: {same['talent']}, {same['campaign']}. {reply}", chips, draft=same)
+        if loose:
+            # a remark, not an answer: nothing in it is kept, and the step
+            # is asked again the way any reply that missed it is
+            d2 = dict(draft)
+            err = step_prompt(d2, today=today)[0]
+            if d2.get('step') == STEP_ATTR:
+                err = err + ATTR_NUDGE
+        else:
+            d2, err = apply_answer(draft, t, today=today)
         if err:
             # A reply that did not answer the step. The first one gets the
             # step again in other words; the second moves on with the

@@ -92,6 +92,15 @@ _FILLER_RX = re.compile(
     r"^\W*(?:yes|yeah|yep|yup|y|ya|sure|ok|okay|k|fine|correct|right|no|nope|nah|n|none|nothing|skip|thanks?|thank\s+you|"
     r"please|go\s+ahead|do\s+it|run\s+it|continue|next|same|ditto|idk|not\s+sure|unsure|no\s+idea|i\s+(?:do\s+not|don'?t|dont)\s+know|"
     r"both|either|neither|accept|decline|approve|confirm|done|hello|hi|hey|test|\?+|\d{1,2})\W*$", re.I)
+# a reply that points somewhere else or gives nothing: never a name (2026-11-11: "same as before", "you find it",
+# "I'm not sure" typed at a name step)
+_SAME_RX = re.compile(
+    r"^\W*(?:(?:the\s+)?same(?:\s+(?:one|thing|ones))?(?:\s+as)?(?:\s+(?:before|last\s+time|earlier|above|previous(?:ly)?|"
+    r"the\s+last\s+(?:one|time)|the\s+previous\s+one))?|ditto|like\s+(?:before|last\s+time)|as\s+before)\W*$", re.I)
+_NON_NAME_RX = re.compile(
+    r"^\W*(?:you\s+(?:find|pick|choose|decide|tell\s+me)(?:\s+(?:it|one|them))?|find\s+(?:it|one|them)|up\s+to\s+you|whatever|"
+    r"n\s*/?\s*a|tbd|i\s*(?:'|\u2019)?m\s+not\s+sure|i\s+am\s+not\s+sure|not\s+sure\s+(?:yet|really)|dunno|no\s+clue|"
+    r"h+m+|u+h+|u+m+|maybe|i\s+guess|good\s+question|what\s+do\s+you\s+mean)\W*$", re.I)
 _PRONOUN_RX = re.compile(r"^(?:it|this|that|they|them|he|she|we|who|what|which|there|here|one|someone|something)$", re.I)
 
 # "find the campaign asset", "find it", "you find it", "I don't have one", "not sure" (2026-11-11)
@@ -125,7 +134,13 @@ def is_filler(name):
     """yes / no / ok / thanks / a bare number: never a talent, a brand or
     a campaign name."""
     t = _norm(name)
-    return (not t) or bool(_FILLER_RX.match(t))
+    return (not t) or bool(_FILLER_RX.match(t)) or bool(_SAME_RX.match(t)) or bool(_NON_NAME_RX.match(t))
+
+
+def says_same(text):
+    """'same as before', 'same as last time', 'ditto': the reader points
+    at what they gave last time."""
+    return bool(_SAME_RX.match(_norm(text)))
 
 
 def _clean_name(name):

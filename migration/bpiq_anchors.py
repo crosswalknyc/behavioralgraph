@@ -54,6 +54,9 @@ _VALUE_RX = re.compile(r"partnership|brand\s+value|\bvalue\b", re.I)
 _REACH_RX = re.compile(r"audience|reach|reached|engagers?|people\s+reached", re.I)
 _NEW_BUYER_RX = re.compile(r"first[- ]time|new[- ]to|\bnew\b", re.I)
 _BUYER_RX = re.compile(r"buyers?|purchasers?", re.I)
+_AUDIENCE_RX = re.compile(r"\baudience\b|\bfan\s*base\b|\bfollowing\b", re.I)
+_REACHED_RX = re.compile(r"\breached\b|\bcampaign\s+reach\b", re.I)
+REACH_LABEL = "People the campaign reached"
 HOLD_MARGIN = (0.955, 0.992)       # the held figure lands this share of its ceiling, salted
 MAX_REBUILDS = 6
 
@@ -166,6 +169,12 @@ def figures_of(entry: dict) -> dict:
         out["people"] = int(round(max(reach)))
     elif people:
         out["people"] = int(round(max(v for v, _t in people)))
+    # the talent's own audience, when the read states it as one ("JYT
+    # projected US audience"): a different measure from the people a
+    # campaign reached, kept so a valuation can name it beside its reach
+    aud = [v for v, t in people if _AUDIENCE_RX.search(t) and not _BUYER_RX.search(t) and not _REACHED_RX.search(t)]
+    if aud:
+        out["talent_audience"] = int(round(max(aud)))
     return out
 
 
@@ -332,6 +341,47 @@ def hold(payload: dict, anchor: Optional[dict], inputs: dict, windows: Optional[
     return held, record
 
 
+def label_people(payload: dict, anchor: Optional[dict], inputs: dict) -> dict:
+    """Say what each people count is, so a valuation and the read it was
+    held to never read as two answers to one question (2026-11-11: the
+    held valuation showed 311,618 people beside a read that gave JYT's
+    projected US audience as 2,184,637; they measure different things).
+
+    The campaign block gains `reach_label` ("People the campaign
+    reached") and, when the delivered read states the talent's own
+    audience and it is larger than the reach, `talent_audience_held`
+    (the read's figure, as it is) and one `people_line` naming both.
+    The line rides `reach_line` once. No count moves. Returns what was
+    set; {} when there is nothing to label. Never raises."""
+    try:
+        if not isinstance(payload, dict):
+            return {}
+        cb = payload.get("campaign")
+        if not isinstance(cb, dict):
+            return {}
+        reach = int(round(float(payload.get("projected_audience_size") or 0)))
+        if reach <= 0:
+            return {}
+        out = {"reach_label": REACH_LABEL}
+        cb["reach_label"] = REACH_LABEL
+        talent = str((inputs or {}).get("qualifier") or "").strip() or "The talent"
+        held = int((anchor or {}).get("talent_audience") or 0) if isinstance(anchor, dict) else 0
+        if held > reach:
+            line = (f"The campaign reached {reach:,} people in the window. {talent}'s projected US audience is "
+                    f"{held:,}; the campaign reached a part of it.")
+            cb["talent_audience_held"] = held
+            cb["people_line"] = line
+            out.update({"talent_audience_held": held, "people_line": line})
+            tail = f"{talent}'s projected US audience is {held:,}; the campaign reached a part of it."
+            rl = str(cb.get("reach_line") or "").strip()
+            if tail not in rl:
+                cb["reach_line"] = (rl + " " + tail).strip() if rl else line
+        return out
+    except Exception as e:
+        print(f"[bpiq-anchors] people labels skipped: {type(e).__name__}: {e}")
+        return {}
+
+
 # --------------------------------------------------------------- reverse
 _TEXT_PAIR_RX = re.compile(
     r"(?<![\w&'])([A-Z0-9][\w&'.\-]*(?:\s+[A-Z0-9][\w&'.\-]*){0,3})\s+[xX\u00d7]\s+([A-Z0-9][\w&'.\-]*(?:\s+[A-Z0-9][\w&'.\-]*){0,3})")
@@ -445,5 +495,5 @@ def valuation_block(text, window: Optional[dict] = None, anchors_for: Optional[C
             "you are on.\n" + "\n".join(lines))
 
 
-__all__ = ["enabled", "banked_read", "prompt_fields", "ceilings", "hold", "figures_of", "pair_of", "pair_key",
+__all__ = ["enabled", "banked_read", "prompt_fields", "ceilings", "hold", "label_people", "figures_of", "pair_of", "pair_key",
            "pairing_in", "saved_valuation", "valuation_block", "valuation_window", "ENV"]

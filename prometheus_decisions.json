@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "c7d080bcd67983b359cbc83a3b9ca49b9f100f658431a1a8f79ea84fd72eea82",
+ "content_hash": "86fed7ee315ebd29b336bd41e12a9c537871d2697427d845cb5e89a2bc685656",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1194,7 +1194,25 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "partnership_value_is_the_valuations",
+   "decided": "2026-11-11",
+   "statement": "What a brand or talent partnership is worth in dollars (its value, its worth, a valuation, the return on the deal, its earned media value) comes from a Brand Partnership valuation and from nowhere else. An answer about a partnership states who it reaches, the shared audience, the overlap, the fit, the buyers and what they do, as usual, and never a dollar value, a value mix or a return for the partnership. When the question asks what the partnership is worth, answer what is in scope and say in one line that the dollar value comes from a Brand Partnership valuation, which can be set up from the chat. The one exception: a valuation already delivered for the same pairing is restated at its own figures, for its own window, never a second figure.",
+   "match_terms": [
+    "partnership",
+    "sponsorship",
+    "sponsor deal",
+    "collab",
+    "endorsement",
+    "brand deal",
+    "earned media value",
+    "brand ambassador"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-11T20:46:34Z"
+ "generated_at": "2026-11-12T02:42:06Z"
 }

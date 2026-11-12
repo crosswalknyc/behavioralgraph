@@ -281,7 +281,34 @@ def _append(bundle, question, payload, now):
     if isinstance(ans, str) and ans.startswith("Here's what I'll run"):
         b['recap_q'] = str(question or '')
         b['recap_a'] = ans
+    # where the order stood on this turn (prometheus.order_stall, Jenna
+    # 2026-11-11): the flags ride the bundle so the one email the walk
+    # sends says when it stalled
+    obs = (payload or {}).get('order_stall') if isinstance(payload, dict) else None
+    if isinstance(obs, dict):
+        seen = list(b.get('stall_flags') or [])
+        for f in obs.get('flags') or []:
+            if f and f not in seen:
+                seen.append(f)
+        if seen:
+            b['stall_flags'] = seen
+        if obs.get('step'):
+            b['stall_step'] = str(obs['step'])
     return b
+
+
+def walk_stall(bundle, outcome=''):
+    """{'flags', 'flow', 'step'} for a walk that stalled, or None."""
+    try:
+        from prometheus import order_stall as _os
+        b = bundle or {}
+        flags = _os.walk_flags(b.get('turns'), outcome, b.get('flow'), b.get('stall_flags'))
+        if not flags:
+            return None
+        return {'flags': flags, 'flow': str(b.get('flow') or ''),
+                'step': str(b.get('stall_step') or '') or _os.last_step(b.get('turns'))}
+    except Exception:
+        return None
 
 
 def record_turn(store, username, record, question, payload, subject=None,
@@ -407,16 +434,18 @@ def _deliver_walk(username, record, bundle, outcome, via=None, surface=None,
                 recap_q = str((t or {}).get('q') or recap_q)
                 recap_a = a
                 break
+    stall = walk_stall(bundle, outcome)
     if send_fn is not None:
+        kw = {'stall': stall} if stall else {}
         send_fn('walk', username=username, record=record, turns=turns,
                 outcome=outcome, question=recap_q, answer=recap_a,
-                subject=(bundle or {}).get('subject'), via=via, surface=surface)
+                subject=(bundle or {}).get('subject'), via=via, surface=surface, **kw)
         return
     pwn.send_walk(username, record, turns, outcome,
                   subject=(bundle or {}).get('subject'),
                   recap_q=recap_q, recap_a=recap_a,
                   via=via or (bundle or {}).get('via'),
-                  surface=surface or (bundle or {}).get('surface'))
+                  surface=surface or (bundle or {}).get('surface'), stall=stall)
 
 
 def handle_notify(username, record, question, payload, subject=None,

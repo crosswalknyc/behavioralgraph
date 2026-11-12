@@ -118,6 +118,21 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         _pb.guard_payload(raw)
     except Exception:
         pass
+    # A partnership's dollar value is the Brand Partnership valuation's to
+    # state (Jenna 2026-11-11): an answer written in the request that
+    # still carries one loses those lines and points at the valuation.
+    if surface == 'analyze':
+        try:
+            from . import partnership_value as _pvg
+            _q = ''
+            try:
+                from flask import g as _g_pv
+                _q = str(getattr(_g_pv, '_pm_ask_text', '') or '')
+            except Exception:
+                _q = ''
+            _pvg.guard_payload(raw, decision=decision, question=_q)
+        except Exception:
+            pass
     # Reply shape (2026-10-06): chat answers read as answers, not
     # reports (no capital-letter headers, definitions out of the
     # sentence). Analyze surface only; briefs and guidance keep shape.
