@@ -371,6 +371,16 @@ def pin_to_read(draft, user, history=None):
             d['step'] = next_step(d)
         if str(w.get('end') or '') == str(d['campaign_end'])[:10]:
             d['given_read'] = note
+            # the campaign window is the held figure's own (the read's dates, seeded from the thread
+            # or named by the reader): the valuation covers the same days, so the attribution window
+            # is that window too, not thirty days past it (2026-11-11: a deck asked of the read opened
+            # the order on Sep 22 to Nov 11 with attribution "through today", a day longer every day).
+            # A window the reader already accepted, or typed, stays theirs.
+            if not d.get('attr_ok') and (str(d.get('attr_start') or '')[:10], str(d.get('attr_end') or '')[:10]) \
+                    != (str(w['start']), str(w['end'])):
+                d['attr_start'], d['attr_end'] = str(w['start']), str(w['end'])
+                d['pinned_read'] = note
+                d.pop('dates_inferred', None)
         return d
     except Exception:
         traceback.print_exc()

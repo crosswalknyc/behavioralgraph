@@ -386,6 +386,59 @@ def test_a_the_500_order():
     return o, run, body, pages
 
 
+# ------------------------------------------------------------------ A2
+HER_WORDS = 'JYT is the talent and GAP is the brand. the partnership started in September 2026'
+HER_READ = ("The Gap x JYT partnership carries $4,217,683 of value in its first 51 days, built on 2,184,637 US people reached "
+            "and 137,633 of them already confirmed Gap buyers.\n\nPartnership value, Sep 22 to Nov 11 2026: 4,217,683, "
+            "Partnership value, first 12 months: 14,839,261, JYT projected US audience: 2,184,637.\n\n- Overlap is already real "
+            "rather than aspirational: 137,633 of the people JYT reaches have a confirmed Gap order in the window at index 153.\n"
+            "- Recruitment is the smaller but more durable half: 15,147 first-time Gap buyers in 51 days.")
+
+
+def test_a2_her_own_path(first_pages):
+    print("A2. her own path: a deck asked of the read she holds opens the order, on any later day, on the read's window")
+    for day in (date(2026, 11, 12), date(2026, 11, 15), date(2026, 11, 18), date(2026, 12, 20)):
+        o = Order(record=True)
+        o.walk.today = day
+        o.walk.hist = [{'role': 'user', 'text': HER_WORDS},
+                       {'role': 'agent', 'text': HER_READ, 'meta': {'figures': [{'value': 4217683.0, 'kind': 'money'}],
+                                                                    'read_job_id': 'f21c0ed76df6'}}]
+        tag = f"[{day.isoformat()}]"
+        first = o.walk.say('Can you turn this into a deck?')
+        reply = (first or {}).get('reply') or ''
+        check(f"{tag} the deck she asks for is the valuation order, with the names and the dates already read",
+              reply.startswith('A deck on what this partnership is worth is the Brand Partnership valuation')
+              and 'I read the campaign as September 22 to November 11, 2026' in reply)
+        check(f"{tag} the window is the read's own, said plainly, and never a day longer",
+              'the same window as the partnership figure you already have' in reply
+              and 'Attribution window: September 22 to November 11, 2026.' in reply and 'through' not in reply.split('I read the campaign')[1])
+        recap = None
+        for m in ('Accept', 'no', 'find the campaign asset'):
+            recap = o.walk.say(m)
+        check(f"{tag} the quote is $500", recap is not None and 'This is $500.' in recap['reply'])
+        o.walk.say('Accept $500')
+        run = o.job.runs[0] if o.job.runs else None
+        check(f"{tag} one $500 charge and one job", o.charges() == [500.0] and run is not None)
+        if not run:
+            continue
+        inp = run['inputs']
+        check(f"{tag} the valuation runs on Sep 22 to Nov 11 in both windows",
+              (inp['event_start'], inp['event_end'], inp['post_start'], inp['post_end'])
+              == ('2026-09-22', '2026-11-11', '2026-09-22', '2026-11-11'))
+        check(f"{tag} it is the valuation of record, to the cent", run['key'] == KEY and HF.same_as_review(run['payload']))
+        deck_key = (o.s3.keys('generated_decks/') or [''])[0]
+        pages = slide_texts(o.s3.objects[deck_key]) if deck_key else []
+        # the cover's date line and the file name carry the day it was built; nothing else moves
+        check(f"{tag} the deck is the same deck, page for page", len(pages) == 14 and pages[1:] == first_pages[1:]
+              and '$4,217,683.00' in pages[0])
+        note = next((x for x in o.thread() if (x.get('meta') or {}).get('bpiq_job_id') == run['job_id']), {})
+        check(f"{tag} the thread gets the total, the deck and the one charge", str(note.get('text') or '').startswith(
+            'Your Brand Partnership valuation is ready: JYT x Gap, total brand value $4,217,683.00. The deck is below')
+            and str(note.get('text') or '').endswith('You were charged $500 once for this valuation.')
+            and ((note.get('meta') or {}).get('link') or {}).get('url', '').startswith('https://'))
+    W.UNDERPINNINGS = None
+
+
 # ------------------------------------------------------------------ B
 def test_b_a_deck_asked_for_afterwards(o, run, first_pages):
     print("B. a deck asked for in the thread afterwards is the valuation deck again")
@@ -665,6 +718,7 @@ def test_e_the_wiring():
 def main():
     o, run, body, pages = test_a_the_500_order()
     test_b_a_deck_asked_for_afterwards(o, run, pages)
+    test_a2_her_own_path(pages)
     test_c_the_tab_export(run, pages)
     test_d_the_1000_order()
     test_e_the_wiring()
