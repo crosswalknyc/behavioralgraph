@@ -304,7 +304,9 @@ def same_frame(history, frame):
 def _cross_ask(text):
     try:
         from . import cross_sizing as _cx
-        return bool(_cx.parse(text))
+        # a cross the lane found it cannot read (prometheus.cross_sizing.answerable) is read again by the lanes
+        # after it for the rest of the request, never quoted here
+        return bool(_cx.parse(text)) and not _cx.declined(text)
     except Exception:
         return False
 
@@ -1677,6 +1679,18 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
         if not xt_plan:
             _xt.decline(text)
             hit = classify(text, history, ctx)
+    if hit and hit.get('kind') == 'cross' and hit.get('frame') == 'cross':
+        # ANSWERABLE BEFORE IT IS SOLD (2026-11-12, Jonathan Wiener at Boardroom: "all 10 of these <ten companies>"
+        # was quoted $100 as a split of an audience across services, charged on Approve, and came back with no
+        # figures; he read the calm line with nothing behind it). The split is read from rows we hold, so whether
+        # it can be read is known before any quote: when it cannot, this lane steps aside with nothing quoted and
+        # nothing charged, and the read lanes after it take the words. Same on the Approve turn.
+        from . import cross_sizing as _cxa
+        if not _cxa.answerable(text, ctx, host=host):
+            _cxa.decline(text)
+            hit = classify(text, history, ctx)
+            if pc and pc_kind == 'cross':
+                return None
     if pc and pc_kind in ('sizing', 'cross') and not hit:
         hit = {'kind': pc_kind, 'via': 'service', 'usd': 100, 'same_frame': False,
                'frame': frame_of(pc_kind, text), 'subject': str(pc.get('subject') or '')}

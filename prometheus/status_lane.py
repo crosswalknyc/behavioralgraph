@@ -43,9 +43,33 @@ _STATUS_RX = re.compile(
 _FAST_SKIP_RX = re.compile(r"\b(campaign|creative|ads?|posts?|clips?|trailers?|promos?|audience|viewers|subscribers)\b", re.I)
 
 
+# "how much longer will it take", "when will it be ready", "any ETA": a person waiting on something we said was
+# in progress. It is a status ask whatever the thing was about (2026-11-12, Jonathan Wiener at Boardroom: "how much
+# longer my latest request for the index score ... across 10 companies" carried the word index and was not read as
+# one). "How long does it take to build a profile" asks about the product and is not this.
+_WAIT_RX = re.compile(
+    r"(\bhow\s+much\s+longer\b"
+    r"|\bhow\s+long\s+(?:will|is|until|till|before|should)\s+(?:it|this|that|i|my\s+[\w ]{1,40}?)\s*(?:going\s+to\s+|gonna\s+)?(?:take|taking|be|have\s+to\s+wait|wait)\b"
+    r"|\bwhen\s+(?:will|can|should)\s+(?:it|this|that|my\s+[\w ]{1,40}?)\s+(?:be\s+)?(?:ready|done|finished|complete[d]?|land|arrive|come|get\s+here)\b"
+    r"|\bwhen\s+(?:will|can|should|do)\s+i\s+(?:get|have|see|receive|expect)\b"
+    r"|\b(?:eta|e\.t\.a\.?)\b|\bstill\s+waiting\b)", re.I)
+_WAIT_HYPOTHETICAL_RX = re.compile(r"\b(?:take|takes|taking)\s+to\s+(?:build|run|make|create|pull|get|do|produce|generate)\b", re.I)
+_APPROVAL_WORDS = frozenset(('approve', 'approved', 'yes', 'ok', 'okay', 'go', 'go ahead', 'confirm', 'accept', 'run it', 'do it',
+                             'yes please', 'proceed', 'sure'))
+
+
+def is_wait_ask(text):
+    t = ' '.join(str(text or '').split())
+    return bool(t) and len(t) <= 320 and bool(_WAIT_RX.search(t)) and not _WAIT_HYPOTHETICAL_RX.search(t)
+
+
 def wants_status_fast(text):
     t = ' '.join(str(text or '').split())
-    return bool(t) and len(t.split()) <= 14 and wants_status(t) and not _FAST_SKIP_RX.search(t)
+    if not t or _FAST_SKIP_RX.search(t):
+        return False
+    if is_wait_ask(t) and len(t.split()) <= 30:
+        return True                 # a person waiting says what they are waiting for; the words run longer
+    return len(t.split()) <= 14 and wants_status(t)
 _NOT_STATUS_RX = re.compile(r"\b(fall[- ]?off|drop[- ]?off|index(?:es)?|penetration|overlap|share\s+of|what\s+share|how\s+many|percent|%)\b", re.I)
 KIND_LABEL = {'jiq': 'Digital Journey', 'bpiq': 'Brand Partnership IQ read', 'aiq': 'Attribution IQ campaign',
               'fw': 'Flywheel read', 'deck': 'deck', 'read': 'read', 'profile': 'profile', 'subiq': 'Subscriber IQ tracker',
@@ -73,6 +97,8 @@ def wants_status(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 320:
         return False
+    if is_wait_ask(t):
+        return True
     if not _STATUS_RX.search(t):
         return False
     if _FIGURE_PROVENANCE_RX.search(t):
@@ -317,6 +343,93 @@ def _read_where(it, history, thread_id, host, uname):
     return "It is in this chat as its own message, above."
 
 
+def _turn_text(t):
+    return str(t.get('text') or t.get('content') or '') if isinstance(t, dict) else ''
+
+
+def _turn_meta(t):
+    m = t.get('meta') if isinstance(t, dict) else None
+    return m if isinstance(m, dict) else {}
+
+
+def open_promise(history, *, host=None, uname=''):
+    """The promise this chat is still waiting on, or None: the last time
+    we said "Working on it ... I will email you when it completes" with
+    nothing landed after it. {'question', 'ts', 'held_ref'} where the
+    question is what the person asked for (the words before the Approve,
+    never the Approve). A held record that has since been closed is not
+    an open promise."""
+    try:
+        from . import promise_truth as _pt
+    except Exception:
+        return None
+    turns = [t for t in (history or []) if isinstance(t, dict) and not _turn_meta(t).get('withdrawn')]
+    at = -1
+    for i in range(len(turns) - 1, -1, -1):
+        t = turns[i]
+        if str(t.get('role') or '').lower() == 'user':
+            continue
+        m = _turn_meta(t)
+        txt = _turn_text(t).replace('Included with your plan. ', '', 1)
+        if _pt.is_calm(txt) or (m.get('held_ref') and not m.get('landed_at')):
+            at = i
+            break
+        if m.get('landed_at') or m.get('read_job_id') or m.get('build_outcome') or m.get('status_items') is not None \
+                or m.get('kind') in ('build_ready', 'build_outcome', 'deck'):
+            if m.get('status_items') is not None:
+                continue                # our own status line is not the answer
+            return None                 # something landed after any promise above it
+    if at < 0:
+        return None
+    ref = str(_turn_meta(turns[at]).get('held_ref') or '')
+    if ref and host is not None:
+        try:
+            s3 = getattr(host, 's3_client', None)
+            if s3 is not None:
+                doc = json.loads(s3.get_object(Bucket=getattr(host, 'bucket', 'dashboard-inputs'), Key=ref)['Body'].read().decode('utf-8'))
+                if str(doc.get('status') or 'open') != 'open':
+                    return None
+        except Exception:
+            pass                        # could not look is not closed
+    question = ''
+    for t in reversed(turns[:at]):
+        if str(t.get('role') or '').lower() != 'user':
+            continue
+        q = ' '.join(_turn_text(t).split())
+        if not q or q.lower().strip(' .!') in _APPROVAL_WORDS:
+            continue
+        question = q
+        break
+    return {'question': question, 'ts': turns[at].get('ts'), 'held_ref': ref}
+
+
+def _short_ask(q, n=110):
+    q = ' '.join(str(q or '').split())
+    if len(q) <= n:
+        return q
+    cut = q[:n].rsplit(' ', 1)[0].rstrip(' ,;:-')
+    return cut + ' ...'
+
+
+def _names_an_item(text, items):
+    """True when the ask names one of the reader's jobs by its subject."""
+    hits = _mentioned(text, items) if items else []
+    return bool(items) and hits is not items
+
+
+def promise_reply(promise, user=None):
+    """What a person waiting on an open promise is told: it is still
+    open, there is no finish time to give, and the answer comes by
+    email. Never the status of some older job."""
+    q = _short_ask(promise.get('question'))
+    email = str((user or {}).get('email') or '').strip() if isinstance(user, dict) else ''
+    head = f'Your request ("{q}") is still open and I am still working on it.' if q else \
+        'Your latest request is still open and I am still working on it.'
+    return (f"{head} It is taking longer than a read like this usually does, so I do not have a finish time to give you. "
+            f"The answer comes to you by email{(' at ' + email) if email else ''} as soon as it is done. "
+            "You do not need to ask again.")
+
+
 def answer(text, uname, *, host, user=None, history=None, thread_id=None):
     """A status answer dict for the chat, or None when the reader has no
     work on record (the ask then routes normally)."""
@@ -326,6 +439,19 @@ def answer(text, uname, *, host, user=None, history=None, thread_id=None):
     except Exception:
         traceback.print_exc()
         items, deliveries = [], []
+    # THE OPEN PROMISE FIRST (2026-11-12, Jonathan Wiener at Boardroom): he had just been told "Working on it ...
+    # I will email you when it completes", asked "how much longer will it take" twice, and was told both times that
+    # two profiles had finished a week earlier. A person waiting on a promise made in this chat is asking about
+    # that promise; older jobs are only the answer when the ask names one of them.
+    try:
+        promise = open_promise(history, host=host, uname=uname)
+    except Exception:
+        traceback.print_exc()
+        promise = None
+    if promise and not _names_an_item(text, items):
+        return {'success': True, 'action': 'answer', 'reply': promise_reply(promise, user), 'followups': [],
+                'offer_deck': False, 'deck_angle': None, 'open_promise': True,
+                'status_items': [{'kind': 'promise', 'subject': _short_ask(promise.get('question'), 80) or 'your request', 'status': 'open'}]}
     # an active bulk list (2026-11-05) reads first: done X of Y, reused, failed, next up, time left
     bulk_lines = []
     try:

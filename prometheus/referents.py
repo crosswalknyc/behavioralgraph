@@ -224,16 +224,81 @@ def is_window_text(inner):
     return bool(s) and bool(_WINDOW_INNER_RX.match(s))
 
 
+# A bracket that sits right after a name and holds a name is a note on
+# that name (its parent company, an alias, a ticker), never a thing still
+# to be named (2026-11-12, Jonathan Wiener at Boardroom: "Hennessy
+# [Moet-Hennessy] / White Claw [Mark Anthony] / High Noon [GALLO]" was a
+# list of brands with their owners; he was asked "Which three companies?"
+# and the ask never ran).
+_NOTE_JOINERS = frozenset(('and', 'of', 'the', 'de', 'la', 'le', 'du', 'del', 'di', 'da', 'van', 'von', 'y', 'e',
+                           'by', 'at', 'for', 'in', 'on', 'co', 'inc', 'llc', 'ltd', 'plc', 'corp'))
+_NOTE_STAND_INS = frozenset(('x', 'y', 'z', 'xx', 'xxx', 'xyz', 'tbd', 'tbc', 'tba', 'tk', 'na', 'insert', 'your', 'our',
+                             'their', 'client', 'competitor', 'competitors', 'example', 'placeholder', 'blank', 'fill',
+                             'name', 'here', 'other', 'another', 'some', 'any', 'new', 'one', 'two', 'three', 'four',
+                             'five', 'six', 'seven', 'eight', 'nine', 'ten', 'first', 'second', 'third', 'a', 'b', 'c'))
+_NOTE_WORD_RX = re.compile(r"[A-Za-z0-9][A-Za-z0-9'\u2019+.]*")
+_NOUN_WORD_RX = re.compile(r'^(?:' + _NOUNS + r')$', re.I)
+
+
+def _name_word(w):
+    """A word a name is written with: capitalized, all caps, or digits."""
+    return bool(w) and (w[0].isupper() or w[0].isdigit())
+
+
+def _is_name_note(text, m):
+    """True when the bracket at ``m`` is a note on the name written just
+    before it on the same line, and itself reads as a name."""
+    inner = m.group(1).strip()
+    if not inner or is_window_text(inner) or _NOT_A_PLACEHOLDER_RX.search(inner) \
+            or inner.lower().strip('.') in _NOT_A_PLACEHOLDER:
+        return False            # a date, a footnote mark, a link: already not a placeholder
+    words = _NOTE_WORD_RX.findall(inner)
+    if not words or len(words) > 6:
+        return False
+    named = 0
+    for w in words:
+        lw = w.lower().strip(".'")
+        if lw in _NOTE_STAND_INS or _NOUN_WORD_RX.match(lw):
+            return False        # '[Brand]', '[Competitor A]', '[Title TBD]' still stand for something
+        if _name_word(w):
+            named += 1
+        elif lw not in _NOTE_JOINERS:
+            return False        # '[a title WWSTA passed on]' describes, it does not name
+    if not named:
+        return False
+    line = text[text.rfind('\n', 0, m.start()) + 1:m.start()]
+    before = _NOTE_WORD_RX.findall(line)
+    if not line.strip() or not before or not line.rstrip()[-1:].isalnum() and line.rstrip()[-1:] not in ("'", '\u2019', '.', '+', ')'):
+        return False            # after a colon, a comma, a dash or nothing: the bracket is its own item
+    last = before[-1]
+    if not _name_word(last):
+        return False            # 'compare Nike against [Rival Co]': the bracket follows a plain word
+    lw = last.lower().strip(".'")
+    if len(before) == 1 and (lw in _SENTENCE_START_WORDS or lw in _COMMON_WORDS):
+        return False            # 'Compare [Nike Air]': the capital is the sentence's, not a name's
+    return True
+
+
+def name_notes(text):
+    """The bracketed notes on names in the text, as written."""
+    t = str(text or '')
+    return [m.group(0) for m in PLACEHOLDER_RX.finditer(t) if _is_name_note(t, m)]
+
+
 def placeholders(text):
     """The bracketed placeholders in the text that are not dates, in
     order, as written with their brackets ('[a title WWSTA passed on]').
-    A markdown link, '[sic]' and a bracketed date are not placeholders."""
+    A markdown link, '[sic]', a bracketed date and a note on the name
+    before it ('Hennessy [Moet-Hennessy]') are not placeholders."""
     out = []
-    for m in PLACEHOLDER_RX.finditer(str(text or '')):
+    t = str(text or '')
+    for m in PLACEHOLDER_RX.finditer(t):
         inner = m.group(1).strip()
         if not inner or is_window_text(inner):
             continue
         if _NOT_A_PLACEHOLDER_RX.search(inner) or inner.lower().strip('.') in _NOT_A_PLACEHOLDER:
+            continue
+        if _is_name_note(t, m):
             continue
         ph = m.group(0)
         if ph not in out:
@@ -243,12 +308,16 @@ def placeholders(text):
 
 def unbracket_windows(text):
     """'as of [June 2023]' -> 'as of June 2023': a bracketed date is a
-    window and reads as one; a placeholder that names no date stays in
-    its brackets."""
+    window and reads as one; a note on a name reads in parentheses; a
+    placeholder that names no date stays in its brackets."""
+    t = str(text or '')
+
     def _sub(m):
         inner = m.group(1).strip()
-        return inner if is_window_text(inner) else m.group(0)
-    return PLACEHOLDER_RX.sub(_sub, str(text or ''))
+        if is_window_text(inner):
+            return inner
+        return f"({inner})" if _is_name_note(t, m) else m.group(0)
+    return PLACEHOLDER_RX.sub(_sub, t)
 
 
 def _is_numbered_list(text):
@@ -483,14 +552,25 @@ def _split_names(t):
     return items
 
 
+_NAMES_LEAD_RX = re.compile(
+    r"^\s*(?:(?:it(?:'s| is)|they(?:'re| are)|here (?:they )?are|i mean(?:t)?|sorry,?)\s+)?"
+    r"(?:all\s+)?(?:\d{1,2}\s+|(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+)?"
+    r"(?:of\s+)?(?:these|those|them|the following)\b\s*(?:companies|brands|names|titles|shows|ones)?\s*[:,\-]*\s*", re.I)
+
+
 def _looks_like_names(t, expected=0):
     s = str(t or '').strip()
-    if not s or len(s) > 240 or '?' in s:
+    if not s or len(s) > 320 or '?' in s:
         return []
+    # "all 10 of these / Diageo / Bacardi ...": the opener points at the
+    # list under it and is not one of the names (2026-11-12)
+    lead = _NAMES_LEAD_RX.match(s)
+    if lead and lead.end() and s[lead.end():].strip():
+        s = s[lead.end():].strip()
     if _QUESTION_OPEN_RX.match(s):
         return []
     items = _split_names(s)
-    if not items or len(items) > 8:
+    if not items or len(items) > 12:
         return []
     for it in items:
         if len(it.split()) > 5 or _VERB_IN_ITEM_RX.search(it):

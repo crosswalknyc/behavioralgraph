@@ -60,6 +60,15 @@ _SKIP_COLS = frozenset(('BRAND INPUT', 'SAMPLE SIZE', 'SUBJECT', 'BRAND CATEGORY
                         'SEXUAL_ORIENTATION', 'LOCATION', 'AVID FAN', 'CASUAL FAN'))
 
 
+# "all 10 of these", "each of those", "any of them", "the first three of these": the words before "of these" count
+# or pick from a list, they do not name an audience to split (2026-11-12, Jonathan Wiener at Boardroom: "all 10 of
+# these / Diageo / Bacardi ..." was quoted and charged as a split of an audience called "10", and came back empty)
+_QUANTIFIER_BASE_RX = re.compile(
+    r"^(?:(?:all|each|any|some|both|either|every|most|many|several|few|none|half|the|top|first|last|next|rest|"
+    r"remaining|other|others|of|only|just|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"twenty|a|an|couple|handful|\d{1,4})\b[\s,]*)+$", re.I)
+
+
 # ------------------------------------------------------------------ parse
 def _fold(s):
     return re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
@@ -118,6 +127,8 @@ def parse(text, reader_subjects=None):
     base = _clean_base(left)
     if not base or len(base.split()) > 6:
         return None
+    if _QUANTIFIER_BASE_RX.match(base) or not re.search(r"[A-Za-z]{2}", base):
+        return None     # a count of a list, never an audience
     neither = bool(_NEITHER_RX.search(right))
     both = False
     targets = []
@@ -364,6 +375,55 @@ def _pct(x):
 
 def _fmt(n):
     return f"{int(n):,}"
+
+
+def answerable(text, ctx=None, *, host=None, reader_subjects=None):
+    """True when the cross these words ask for can be read from what we
+    hold: the base audience resolves and at least one target has a share
+    on it. Reads only; nothing is drawn, banked or charged. The priced
+    lane asks here BEFORE it quotes or charges, so a cross it cannot read
+    is never sold (2026-11-12). A check that could not be made (an
+    exception while looking) is not a 'no': the standing path runs."""
+    try:
+        q = parse(text, reader_subjects)
+        if not q:
+            return False
+        if host is None:
+            from .host import host as _host
+            host = _host
+        base = resolve_base(q['base'], q['base_entity'], ctx, host)
+        if not base:
+            return False
+        base['entity'] = q['base_entity']
+        return any(target_share(base, tg, ctx, host) for tg in q['targets'])
+    except Exception:
+        traceback.print_exc()
+        return True
+
+
+_DECLINED = {'text': ''}
+
+
+def decline(text):
+    """Note that this ask is not this lane's (the cross cannot be read
+    from what we hold), so the words are read again by the standing
+    lanes for the rest of the request."""
+    t = ' '.join(str(text or '').lower().split())
+    _DECLINED['text'] = t
+    try:
+        from flask import g as _g
+        _g._pm_cross_declined = t
+    except Exception:
+        pass
+
+
+def declined(text):
+    t = ' '.join(str(text or '').lower().split())
+    try:
+        from flask import g as _g
+        return bool(t) and getattr(_g, '_pm_cross_declined', None) == t
+    except Exception:
+        return bool(t) and _DECLINED.get('text') == t
 
 
 def answer(text, ctx=None, *, host=None, reader_subjects=None, lane_window='', username=''):
