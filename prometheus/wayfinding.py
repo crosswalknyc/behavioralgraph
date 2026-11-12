@@ -70,7 +70,9 @@ _DATA_RX = re.compile(
     r"\b(?:fall[- ]?offs?|drop[- ]?offs?|index(?:es|ed)?|penetration|overlaps?|share\s+of|what\s+share|percent(?:age)?|%|how\s+many|how\s+much|"
     r"viewers?|audiences?|subscribers?|fans|signups?|sign-ups?|conversions?|watch(?:ed|ing|es)?|stream(?:ed|ing|s)?|bought|buy(?:ing|s)?|"
     r"shop(?:ped|ping|s)?|came\s+from|come\s+from|coming\s+from|go\s+next|went\s+next|churn(?:ed)?|lift|spend|traffic|visit(?:s|ed|ors)?|"
-    r"clicks?|sessions?|minutes|hours|growth|ratings?|revenue|sales|demographics?\s+(?:of|for)|skew|most\s+popular|top\s+\d+|rank(?:ed|ing)?\s+(?:of|for))\b", re.I)
+    r"clicks?|sessions?|minutes|hours|growth|ratings?|revenue|sales|demographics?\s+(?:of|for)|skew|most\s+popular|top\s+\d+|rank(?:ed|ing)?\s+(?:of|for)|"
+    # a journey's own tables ("where did the first post sit", "where did they look before", 2026-11-11): the journey lane's
+    r"first\s+post|posts?\s+s[ai]t|they\s+look(?:ed)?|look(?:ed)?\s+before|first\s+episode|last\s+touch|first\s+touch)\b", re.I)
 _NAV_WORDS_RX = re.compile(r"\b(?:tab|tabs|menu|dropdown|drop\s*down|button|page|screen|section|dashboard|rail|picker|sidebar|panel|view)\b", re.I)
 # the Open chip itself, typed or sent from an older turn ("Open Digital Journey IQ", "take me to profile iq"):
 # the widget switches the page on its own; when the words reach the server they get the directions

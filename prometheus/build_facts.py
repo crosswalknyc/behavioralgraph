@@ -293,9 +293,11 @@ def answer(text, *, ctx=None, history=None, user=None, uname='', host=None):
         n = facts['n_inputs']
         label = facts.get('name') or 'this profile'
         lines = [f"I opened the file for {label} just now. This is what it records."]
-        shown = facts['inputs'][:6]
-        more = n - len(shown)
-        lines.append(f"- Inputs the file lists: {n}" + (f" ({', '.join(shown)}" + (f", and {more} more)" if more > 0 else ')') if n and n <= 60 else ''))
+        lines.append(f"- Inputs the file lists: {n}.")
+        if n and not listed:
+            shown = facts['inputs'][:6]
+            more = n - len(shown)
+            lines.append("- They begin: " + ', '.join(shown) + (f", and {more} more." if more > 0 else '.'))
         if listed:
             have = set(facts['inputs'])
             missing = [x for x in listed if x not in have]

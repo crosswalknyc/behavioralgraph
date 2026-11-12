@@ -701,8 +701,9 @@ class ABuildIsReadFromTheFile(unittest.TestCase):
         hist = _before(JW['not_a_read']) + [{'role': 'user', 'text': JW['not_a_read']}]     # her pasted list is up the thread
         raw = BF.answer(JW['was_it_run'], ctx=PAGE, history=hist, user=dict(NB.ARMINE), uname=USER, host=host)
         self.assertIn('I opened the file for', raw['reply'])
-        self.assertIn('Inputs the file lists: 49', raw['reply'])
+        self.assertIn('- Inputs the file lists: 49.\n', raw['reply'])
         self.assertIn('all 49 of the ones you sent are in the file', raw['reply'])
+        self.assertNotIn('(', raw['reply'].split('\n')[1])                              # no aside for the reply shaper to lift out
         self.assertIn('1,285,455 projected US people (38,965 people in the data), Oct 25 2024 to Nov 10 2026', raw['reply'])
         self.assertIn('File last written: Nov 11, 2026 at 3:48 PM PT', raw['reply'])
         self.assertEqual((raw['build_facts']['state'], raw['build_facts']['n_inputs'], raw['build_facts']['listed']), ('read', 49, 49))
@@ -890,6 +891,9 @@ class TwoJourneysOneName(unittest.TestCase):
         self.assertEqual(len(SF.match_journeys('Abbott Elementary', items)), 2)            # the caller asks its one question
         self.assertEqual([j['name'] for j in SF.match_journeys('Young Sheldon', items)], ['Young Sheldon on Netflix'])
         self.assertEqual([j['name'] for j in WF._match('Abbott Elementary library', items)], [self.LIB])
+        # a question about a journey's own table is the journey lane's, never directions to the dashboard
+        self.assertFalse(WF.wants('On the Abbott Elementary library journey, where did the first post sit?'))
+        self.assertTrue(WF.wants('where is the Abbott Elementary library journey?'))
         self.assertEqual([j['name'] for j in WF._match('Abbott Elementary season 6', items)], [self.S6])
 
 
