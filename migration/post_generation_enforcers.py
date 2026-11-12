@@ -11936,10 +11936,32 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
     vmvpd_carrier = any((c.get('kind') or '') == 'vmvpd' for c in carriers)
     cats = [c for c in vc.STREAMING_ALIAS_CATS
             if (col_u == c).any()]
-    if vmvpd_carrier:
+    if vmvpd_carrier or _seed_mode:
         cats += [c for c in vc.VMVPD_CATS if (col_u == c).any()]
     if not cats:
         return df, 0
+    # One universe, one union (2026-11-12, Everybody Loves Raymond
+    # Viewers read Philo at 99.97 and NCIS: New York Viewers read fuboTV
+    # at 99.95): the carriers cover the universe TOGETHER, not once per
+    # column. When a carrier sits in a streaming column, that column
+    # carries the union; a pay-TV or free-channel carrier in its own
+    # column reads on its own merits and is never lifted as if it were
+    # the title's only home. The pay-TV columns carry the union only
+    # when no carrier has a streaming row at all.
+    _stream_carrier_row = False
+    for _sc in vc.STREAMING_ALIAS_CATS:
+        _m = col_u == _sc
+        if not _m.any():
+            continue
+        for _idx in df.index[_m]:
+            if any(_carrier_row(c.get('platform') or '', df.at[_idx, 'Value'])
+                   for c in carriers if (c.get('platform') or '')):
+                _stream_carrier_row = True
+                break
+        if _stream_carrier_row:
+            break
+    if _stream_carrier_row:
+        cats = [c for c in cats if c not in vc.VMVPD_CATS]
 
     def _write(idx, new_bp):
         cur_cell = str(df.at[idx, bp_col])

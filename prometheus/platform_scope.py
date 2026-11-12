@@ -226,8 +226,14 @@ def held_bucket(index_doc, skey, question, live=None):
         plat = canon(cur.get('subject') or str(skey or '').replace('_', ' '))
         if not plat:
             return None
-        if named(question).get(plat) != 'scope':
+        how = named(question)
+        # 'the <Title> audience on Paramount+' reads as the platform's own
+        # audience; it is the title's audience there when the ledger holds
+        # that title on that platform (2026-11-12), and only then
+        if how.get(plat) not in ('scope', 'subject'):
             return None
+        own = how.get(plat) == 'subject'
+        asked = frozenset(p for p, h in how.items() if h in ('scope', 'subject'))
         pw = _platform_words(plat)
         qwords = set(_words(question)) - pw
         best, best_score = None, None
@@ -245,9 +251,15 @@ def held_bucket(index_doc, skey, question, live=None):
             # a title's bucket whose own label names the platform ('... (HBO Max viewers)', '... Viewers - Paramount+')
             # is that title on that platform: it is the scoped bucket, ahead of the title's other buckets (2026-11-11,
             # an HBO Max ask about Georgie & Mandy's First Marriage was handed the Paramount+ profile's figures)
-            on_scope = plat in scope_of(subj) or plat in named(subj) \
-                or any(plat in named(str(a)) for a in (v.get('aliases') or []))
-            score = (1 if on_scope else 0, frac, n)
+            held = set(scope_of(subj)) | set(named(subj))
+            for a in (v.get('aliases') or []):
+                held |= set(named(str(a)))
+            on_scope = plat in held
+            if own and not on_scope:
+                continue
+            # a bucket on exactly the services the words name is ahead of one that holds more or fewer
+            # (the HBO Max bucket for an HBO Max ask, the two-service bucket for an ask that names both)
+            score = (1 if on_scope else 0, 1 if (held and frozenset(held) == asked) else 0, frac, n)
             if best_score is None or score > best_score:
                 best, best_score = {'key': k, 'subject': subj, 'platform': plat, 'same_scope': on_scope}, score
         return best

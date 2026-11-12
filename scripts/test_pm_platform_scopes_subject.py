@@ -271,6 +271,41 @@ hb3 = PS.held_bucket(only_p, 'hbo_max', GM_Q)
 check("with no bucket on that service the title's own bucket is still the subject, marked off-scope",
       bool(hb3) and hb3['key'] == 'georgie_mandy_first_marriage_viewers' and not hb3['same_scope'], str(hb3))
 
+# 2026-11-12: the same title on record on three scopes (Paramount+ under the plain title with the service in an alias,
+# HBO Max, and HBO Max with Amazon Prime Video). An ask is handed the bucket on exactly the services it names.
+GM_T = {'subject': "Georgie & Mandy's First Marriage (HBO Max and Amazon Prime Video viewers)",
+        'aliases': ["Georgie & Mandy's First Marriage Viewers (HBO Max & Amazon Prime)"],
+        'entries': [{'k': 'd', 'ts': '2026-11-12T08:13:30Z', 'q': 'w'}]}
+GM_P2 = dict(GM_P, subject="Georgie & Mandy's First Marriage Viewers",
+             aliases=["GEORGIE & MANDY'S FIRST MARRIAGE Viewers (Paramount+)"])
+GM3 = {'subjects': {'hbo_max': GM_DOC['subjects']['hbo_max'],
+                    'paramount': {'subject': 'Paramount+', 'entries': [{'k': 'e', 'ts': '2026-10-08T00:00:00Z', 'q': 'v'}]},
+                    'amazon_prime_video': {'subject': 'Amazon Prime Video', 'entries': [{'k': 'f', 'ts': '2026-10-08T00:00:00Z', 'q': 'u'}]},
+                    'georgie_mandy_first_marriage_viewers': GM_P2,
+                    'georgie_mandy_first_marriage_hbo_max_viewers_all_3_seasons': GM_H,
+                    'georgie_mandy_first_marriage_hbo_max_and_amazon_prime_video_viewers': GM_T}}
+hb = PS.held_bucket(GM3, 'hbo_max', "How many people watched Georgie & Mandy's First Marriage on HBO Max?")
+check("an HBO Max ask stays on the HBO Max bucket when a two-service bucket also names HBO Max",
+      bool(hb) and hb['key'] == 'georgie_mandy_first_marriage_hbo_max_viewers_all_3_seasons', str(hb))
+TWO_Q = "How many people watched Georgie & Mandy's First Marriage on HBO Max and Amazon Prime Video?"
+for start in ('hbo_max', 'amazon_prime_video'):
+    hb = PS.held_bucket(GM3, start, TWO_Q)
+    check(f"an ask that names both services is handed the two-service bucket (from {start})",
+          bool(hb) and hb['key'] == 'georgie_mandy_first_marriage_hbo_max_and_amazon_prime_video_viewers' and hb['same_scope'], str(hb))
+hb = PS.held_bucket(GM3, 'paramount', "How many people watched Georgie & Mandy's First Marriage on Paramount+?")
+check("a Paramount+ ask is handed the bucket that carries Paramount+ in an alias",
+      bool(hb) and hb['key'] == 'georgie_mandy_first_marriage_viewers' and hb['same_scope'], str(hb))
+# 'the <Title> audience on <service>' reads as the service's own audience; it is the title's audience there
+# when the ledger holds that title on that service, and only then
+for start, q, want in (('paramount', "How big is the Georgie & Mandy's First Marriage audience on Paramount+?", 'georgie_mandy_first_marriage_viewers'),
+                       ('hbo_max', "How big is the Georgie & Mandy's First Marriage audience on HBO Max?",
+                        'georgie_mandy_first_marriage_hbo_max_viewers_all_3_seasons')):
+    hb = PS.held_bucket(GM3, start, q)
+    check(f"'the title audience on a service' is handed the title's bucket on that service ({start})", bool(hb) and hb['key'] == want, str(hb))
+check("with nothing held on that service, 'the audience on Paramount+' stays the service's own audience",
+      PS.held_bucket(only_p, 'hbo_max', "How big is the Georgie & Mandy's First Marriage audience on HBO Max?") is None)
+check("and the service's own audience is still its own bucket", PS.held_bucket(GM3, 'paramount', 'how big is the audience on Paramount+') is None)
+
 print("[4] a share on record binds a table on the same scope only")
 
 

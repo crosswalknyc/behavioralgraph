@@ -642,9 +642,12 @@ _TRAILING_QUALIFIER_RE = re.compile(
 # with the Walter Boys Viewers on Netflix'). The scope words below go
 # in front of the noun and the platform tail stays where it is
 # ('Yellowstone Season 5 Viewers on Peacock').
+# Several services ride in brackets after the noun ('Georgie & Mandys
+# First Marriage Viewers (HBO Max & Amazon Prime)'); that tail stays
+# where it is too ('... Season 2 Viewers (HBO Max & Amazon Prime)').
 _PLATFORM_TAIL_RE = re.compile(
     r"^(.*?\b(?:viewers?|watchers?|streamers?|bingers?|binge[\s-]?watchers?))"
-    r"(\s+on\s+\S.*)$", re.IGNORECASE)
+    r"(\s+on\s+\S.*|\s*\([^()]+\)\s*)$", re.IGNORECASE)
 
 
 def _split_platform_tail(subject):

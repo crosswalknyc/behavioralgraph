@@ -267,7 +267,8 @@ class PlatformScopeTests(unittest.TestCase):
         d = {'decision': 'new_build', 'subject': "Georgie & Mandy's First Marriage Viewers", 'brand_category': 'SERIES - COMEDY',
              'is_ip_content': True, 'named_platforms': ['Amazon Prime Video']}      # the model kept one
         self.assertEqual(N.bind(d, JESSIE, []), ['Amazon Prime Video', 'HBO Max'])
-        self.assertEqual(d['subject'], "Georgie & Mandy's First Marriage Viewers on Amazon Prime Video and HBO Max")
+        # several services ride in brackets, the shape the live two-service file carries (2026-11-12)
+        self.assertEqual(d['subject'], "Georgie & Mandy's First Marriage Viewers (Amazon Prime Video & HBO Max)")
         self.assertEqual([r[1] for r in d['home_platform_rows']], ['Amazon Prime Video', 'HBO Max'])
         self.assertNotIn('platform', {k: v for k, v in d.items() if k == 'platform' and v})   # no single home for two
 

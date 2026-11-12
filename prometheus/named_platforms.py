@@ -322,16 +322,26 @@ def _bare_title(name):
     Viewers on Peacock' -> 'Las Culturistas Culture Awards'."""
     s = ' '.join(str(name or '').split())
     s = re.sub(r"\s+on\s+\S.*$", '', s, flags=re.I) if _carries_noun(s) else s
+    # the services in brackets after the noun ('... Viewers (HBO Max & Amazon Prime)') are not part of the title
+    s = re.sub(r"(?i)(\b(?:" + '|'.join(_CONSUMER_NOUNS) + r"))\s*\([^()]*\)\s*$", r"\1", s)
     s = re.sub(r"\s+(?:" + '|'.join(_CONSUMER_NOUNS) + r")$", '', s, flags=re.I)
     s = re.sub(r"^(?:viewers|watchers|listeners|readers|players)\s+of\s+", '', s, flags=re.I)
     return s.strip(' -,')
 
 
+# what is left of a tail once the services it held are taken out of it:
+# '( /)', '( & )', '(and)', '[ , ]'
+_EMPTY_TAIL_RX = re.compile(
+    r"\s*[\(\[]\s*(?:(?:/|&|\+|,|-|\u2013|\band\b|\bor\b|\bplus\b|\bonly\b|\bon\b)\s*)*[\)\]]", re.I)
+
+
 def scoped_name(name, platforms, verb='viewers'):
     """The house name for a platform-scoped audience: '<Title> Viewers
-    on Peacock', '<Title> Viewers on Amazon Prime Video and HBO Max'. A
-    name that already carries every platform is left as written
-    ('Gilmore Girls Viewers ON HULU')."""
+    on Peacock' for one service, '<Title> Viewers (Amazon Prime Video &
+    HBO Max)' for several (the shape the live two-service file carries:
+    '... Viewers (HBO Max & Amazon Prime)'). A name that already carries
+    every platform is left as written ('Gilmore Girls Viewers ON HULU',
+    '... Viewers (HBO Max & Amazon Prime)')."""
     subj = ' '.join(str(name or '').split())
     ps = [p for p in (platforms or []) if p]
     if not subj or not ps:
@@ -343,10 +353,16 @@ def scoped_name(name, platforms, verb='viewers'):
     for p in ps:
         for a in sorted(_names(p), key=len, reverse=True):
             subj = re.sub(r"\s*(?:-|\u2013|,)?\s*\b(?:on\s+)?" + re.escape(a) + r"(?![A-Za-z0-9+])", '', subj, flags=re.I)
-    subj = ' '.join(subj.split()).strip(' -,')
+    # the brackets and joiners the services sat in go with them (2026-11-12:
+    # '... Viewers (Amazon / HBO Max)' came back as '... Viewers ( /) on
+    # Amazon Prime Video and HBO Max')
+    subj = _EMPTY_TAIL_RX.sub('', subj)
+    subj = re.sub(r"\s+(?:on|and|or|only)\s*$", '', ' '.join(subj.split()).strip(' -,/&+'), flags=re.I).strip(' -,/&+')
     if not _carries_noun(subj):
         v = verb if verb in _CONSUMER_NOUNS else 'viewers'
         subj = f"{subj} {v.title()}"
+    if len(ps) > 1:
+        return f"{subj} ({' & '.join(ps)})"
     return f"{subj} on {_join(ps)}"
 
 

@@ -1331,7 +1331,14 @@ for k in ('new_no_page', 'new_mad_page', 'same_thread_switch', 'pronoun'):
         jobs[k] = {'thread_id': doc.get('thread_id'), 'subject': doc.get('subject'), 'bind_subject': rr.get('bind_subject'),
                    'base_key': rr.get('base_key'), 'history': len(rr.get('history') or [])}
 out['jobs'] = jobs
-print('__OUT__' + json.dumps(out, default=str))
+_res = json.dumps(out, default=str)
+_path = os.environ.get('PM_NO_BLEED_RESULT')
+if _path:                       # the result goes to a file of this run's own; stdout is shared with every background print
+    with open(_path + '.part', 'w', encoding='utf-8') as _fh:
+        _fh.write(_res)
+    os.replace(_path + '.part', _path)
+sys.stdout.write('\n__OUT__' + _res + '\n')
+sys.stdout.flush()
 '''
 
 
@@ -1345,12 +1352,27 @@ class TheRealDoor(unittest.TestCase):
         if not os.path.exists(os.path.join(parent_scripts, '_pm_behavior.py')):
             raise unittest.SkipTest('the replay harness lives in the parent repo; not on this path')
         child = REPLAY_CHILD.replace('__WEBAPP__', repr(ROOT))
+        # Paths of this run's own (2026-11-12): the child's result is read
+        # from a file in a directory nothing else writes to, and its temp
+        # files land there too. The result used to be parsed off the
+        # child's stdout, where a background print could land on the same
+        # line when both suites ran at once ("Extra data" on the JSON).
+        cls._work = tempfile.mkdtemp(prefix='pm_no_bleed_')
+        res_path = os.path.join(cls._work, 'result.json')
         proc = subprocess.run([sys.executable, '-c', child], capture_output=True, text=True, timeout=600,
-                              env=dict(os.environ, PM_REPLAY_CHILD='1'))
+                              env=dict(os.environ, PM_REPLAY_CHILD='1', PM_NO_BLEED_RESULT=res_path, TMPDIR=cls._work))
+        if os.path.exists(res_path):
+            with open(res_path, encoding='utf-8') as fh:
+                cls.out = json.load(fh)
+            return
         line = next((ln for ln in proc.stdout.splitlines() if ln.startswith('__OUT__')), '')
         if not line:
             raise AssertionError('the replay child produced no result\n' + proc.stdout[-2000:] + '\n' + proc.stderr[-3000:])
-        cls.out = json.loads(line[len('__OUT__'):])
+        cls.out = json.JSONDecoder().raw_decode(line[len('__OUT__'):])[0]     # anything printed after it on the line is not the result
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(getattr(cls, '_work', '') or os.devnull, ignore_errors=True)
 
     def test_new_chat_is_a_new_thread_with_empty_context(self):
         self.assertTrue(self.out['ids']['distinct'], self.out['ids'])

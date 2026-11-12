@@ -182,6 +182,23 @@ def _normalize_numeric_artifacts(df: pd.DataFrame,
     """
     n_fixed = 0
     examples = []
+    # People counts are whole numbers in the file (2026-11-12): a count
+    # column read back with the default types prints '192535.0'. Every
+    # caller of this formatter writes the frame it returns.
+    try:
+        try:
+            from migration.count_cells import whole_counts as _whole_counts, float_count_cells as _float_cells
+        except ImportError:
+            from count_cells import whole_counts as _whole_counts, float_count_cells as _float_cells  # type: ignore
+        _n_float = _float_cells(df)
+        if _n_float:
+            df = _whole_counts(df)
+            n_fixed += _n_float
+            if verbose:
+                print(f"  [profile_writer] {_n_float} count cell(s) written with a decimal point; "
+                      f"written as whole numbers")
+    except Exception:
+        pass
     for col in (BP_COL, CS_COL, RAW_COL, PROJ_COL):
         if col not in df.columns:
             continue
@@ -1485,6 +1502,14 @@ def write_profile_csv(
     # never be a rebuild level correction ... fix everything and never
     # need rebuild"). The only non-ship is a genuine upstream build
     # failure, surfaced before a frame exists.
+    try:      # people counts are whole numbers in the bytes that ship (2026-11-12)
+        try:
+            from migration.count_cells import whole_counts as _whole_counts_final
+        except ImportError:
+            from count_cells import whole_counts as _whole_counts_final  # type: ignore
+        df = _whole_counts_final(df)
+    except Exception:
+        pass
     buf = io.StringIO()
     df.to_csv(buf, index=False)
     body = buf.getvalue().encode("utf-8")
