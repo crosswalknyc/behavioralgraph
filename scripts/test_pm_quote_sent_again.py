@@ -93,6 +93,28 @@ class AQuotedQuestionSentAgain(unittest.TestCase):
         self.assertNotIn('read_job_id', raw)                     # nothing was started to make it
         self.assertEqual(DQ.quote_stands(QUOTE, raw['reply']), (True, ''))
 
+    def test_the_choices_are_words_however_the_turn_kept_them(self):
+        """The server keeps a turn's choices as {'label', 'send'} records. Handed back as text they printed a raw record
+        on the chip, and the key-facing reply lost its Approve (the post-deploy check went red on 2026-11-12)."""
+        kept = [{'label': 'Approve', 'send': 'Approve'}, {'label': 'Cancel', 'send': 'Cancel'}]
+        for options in (kept, ['Approve', 'Cancel'], [], None, [{'label': 'Open the profile', 'send': 'Open the profile'}]):
+            meta = {'panel_offer': dict(OFFER)}
+            if options is not None:
+                meta['options'] = options
+            raw = DQ.stored_raw(DQ.standing(Q, [user(Q, 50), agent(QUOTE, 45, **meta)]))
+            self.assertEqual(raw['followups'], ['Approve', 'Cancel'], options)
+            for chip in raw['followups']:
+                self.assertNotIn('{', chip)
+        from prometheus import contract_v1, envelope
+        raw = DQ.stored_raw(DQ.standing(Q, [user(Q, 50), agent(QUOTE, 45, panel_offer=dict(OFFER), options=kept)]))
+        env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'offer_stands', 'client_hint': None},
+                            thread_id='t1', via='api')
+        self.assertEqual([o['label'] for o in env['options']], ['Approve', 'Cancel'])
+        doc = contract_v1.to_v1(env, raw)
+        self.assertEqual(doc['kind'], 'clarify')                             # a quote is a choice in the key-facing contract
+        self.assertEqual([o['label'] for o in doc['clarify']['options']], ['Approve', 'Cancel'])
+        self.assertIn('will cost $100', doc['clarify']['question'])
+
     def test_the_client_may_send_the_new_turn_in_the_history(self):
         self.assertIsNotNone(DQ.standing(Q, quoted() + [user(Q, 1)]))
 

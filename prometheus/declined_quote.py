@@ -264,7 +264,17 @@ def stored_raw(quote):
     words = _text(quote).strip()
     if _RUN_RX.search(words) and not words.startswith(STANDS_LEAD):
         words = STANDS_LEAD + '\n\n' + words
-    chips = [str(x) for x in (meta.get('options') or []) if x] or ['Approve', 'Cancel']
+    chips = []
+    for x in (meta.get('options') or []):            # a stored turn keeps its choices as {'label', 'send'}; a client may send plain words
+        label = str((x.get('send') or x.get('label') or '') if isinstance(x, dict) else (x or '')).strip()
+        if label and label not in chips:
+            chips.append(label)
+    try:
+        from .priced_read import APPROVE_CHIP, CANCEL_CHIP
+    except Exception:
+        APPROVE_CHIP, CANCEL_CHIP = 'Approve', 'Cancel'
+    if not any(c.lower().startswith('approve') for c in chips):
+        chips = [APPROVE_CHIP, CANCEL_CHIP]          # a quote always carries its two choices
     return {'success': True, 'action': 'answer', 'reply': words, 'followups': chips, 'offer_deck': False, 'deck_angle': None,
             'panel_offer': po, 'subject': str(po.get('subject') or meta.get('subject') or ''), 'quote_stands': True}
 
