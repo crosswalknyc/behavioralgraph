@@ -335,6 +335,26 @@ _EMPTY_TAIL_RX = re.compile(
     r"\s*[\(\[]\s*(?:(?:/|&|\+|,|-|\u2013|\band\b|\bor\b|\bplus\b|\bonly\b|\bon\b)\s*)*[\)\]]", re.I)
 
 
+def _title_without(title, platforms):
+    """The title with a named service taken off its start or end
+    ('Gilmore Girls Hulu' from the audience name 'Gilmore Girls Hulu
+    viewers' is the title 'Gilmore Girls'; 2026-11-12, a build ordered
+    from a twin seeded nothing because its title carried the service).
+    Only a name that can be nothing but the service is taken ('Hulu',
+    'HBO Max', 'Prime Video'); 'Max' and 'Amazon' can be part of a title
+    and stay. Never empties a title."""
+    t = ' '.join(str(title or '').split())
+    for p in (platforms or []):
+        for a in sorted(_names(p), key=len, reverse=True):
+            if a in _LOOSE and a != str(p).lower():
+                continue
+            for rx in (r"^\s*" + re.escape(a) + r"(?![A-Za-z0-9+])\s*[-:,]?\s+(?=\S)", r"(?<=\S)\s+(?:on\s+)?" + re.escape(a) + r"(?![A-Za-z0-9+])\s*$"):
+                cut = re.sub(rx, '', t, count=1, flags=re.I).strip(' -,')
+                if cut and cut != t:
+                    t = cut
+    return t
+
+
 def scoped_name(name, platforms, verb='viewers'):
     """The house name for a platform-scoped audience: '<Title> Viewers
     on Peacock' for one service, '<Title> Viewers (Amazon Prime Video &
@@ -395,7 +415,7 @@ def _apply(draft, platforms, how):
         verb = 'listeners' if all(p in _AUDIO for p in merged) else 'viewers'
         draft['consumer_verb'] = verb
     subj = str(draft.get('subject') or draft.get('name') or '').strip()
-    title = str(draft.get('content_show') or '').strip() or _bare_title(subj)
+    title = str(draft.get('content_show') or '').strip() or _title_without(_bare_title(subj), merged)
     draft['is_ip_content'] = True
     draft['ip_scope'] = 'consumers'
     draft.pop('ask_ip_scope', None)
@@ -431,14 +451,24 @@ def _apply(draft, platforms, how):
     return merged
 
 
-def bind(draft, text, history=None, cuts_hit=None):
+def bind(draft, text, history=None, cuts_hit=None, catalog=None):
     """Bind the platform the client named onto an interpret draft.
     Returns the platforms bound (strict), or []. Mutates in place; never
     raises. No-op for an entity build, a reuse / cut decision, and the
-    multi-service cut shape (``cuts_hit``)."""
+    multi-service cut shape (``cuts_hit``).
+
+    With the ``catalog`` in hand the decision is settled first
+    (prometheus.service_scope_match, 2026-11-12): the same title on
+    exactly the same services and window as a live profile is that
+    profile, and a profile on other services is never the match."""
     try:
         if not isinstance(draft, dict) or cuts_hit or draft.get('platform_cuts'):
             return []
+        if catalog:
+            from . import service_scope_match as _ssm
+            _acted, _note = _ssm.settle(draft, text, history, catalog)
+            if _acted:
+                print(f"[named-platforms] {_note}")
         dec = str(draft.get('decision') or 'new_build').strip().lower()
         if dec in ('existing_match', 'derive_cut'):
             return []

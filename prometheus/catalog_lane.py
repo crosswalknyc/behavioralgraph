@@ -349,6 +349,22 @@ def _summarize(anchors):
 _KEY_STAMP_RX = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$")
 
 
+def _without_window(text) -> str:
+    """The ask with the window it states taken out ('' when it states none)."""
+    try:
+        from . import inline_dates as _D
+        t = ' '.join(str(text or '').split())
+        w = _D.parse_inline_window(t)
+        if not w or not w.get('span'):
+            return ''
+        a, b = w['span']
+        out = (t[:a] + ' ' + t[b:]).strip()
+        out = re.sub(r"\s+(?:from|between|in|during|for|over|across|since)\s*([?.!]*)\s*$", r"\1", out, flags=re.I)
+        return ' '.join(out.split())
+    except Exception:
+        return ''
+
+
 def _profile_name(key):
     """A profile file's own name: 'X_Viewers_(HBO_Max)_11_11_2026_15_44.csv' -> 'X Viewers (HBO Max)'."""
     k = str(key or '').rsplit('/', 1)[-1]
@@ -364,12 +380,18 @@ def profile_on_the_services_asked(cc, anchors, text):
     newest file's figure (2026-11-12: a Paramount+ ask about Georgie &
     Mandy's First Marriage was told 957,139, the two-service profile).
 
+    Services are read through the one table (prometheus.service_scope_match):
+    'Amazon', 'Amazon Prime' and 'Prime Video' are one service, in any
+    order.
+
     Returns None when the subject holds no service-scoped profile (the
     lane answers as before); () when it does and none is on exactly the
-    services the words name (the lane steps aside); else
+    services the words name (the lane steps aside); ('whole', people,
+    window, title) when the words name no service and the title's whole
+    audience is on record for the window they state; else
     (profile anchor, that profile's own name)."""
     try:
-        from . import platform_scope as _ps
+        from . import service_scope_match as _ssm
         page = cc.load_subject_page(anchors.get('subject_key')) or {}
         by_key = {}
         for f in (page.get('facts') or []):
@@ -378,10 +400,30 @@ def profile_on_the_services_asked(cc, anchors, text):
                 key = str((f.get('source') or {}).get('key') or '')
                 if key and ' - ' not in _profile_name(key):
                     by_key.setdefault(key, []).append(f)
-        scope = {k: frozenset(_ps.named(_profile_name(k))) for k in by_key}
+        scope = {k: _ssm.services_of_name(_profile_name(k)) for k in by_key}
         if not any(scope.values()):
             return None
-        asked = frozenset(pl for pl, how in _ps.named(text).items() if how in ('scope', 'subject'))
+        known = frozenset().union(*scope.values())
+        asked = _ssm.services_in_question(text, known)
+        if not asked:
+            # every profile on record is one service's (or one set's): a question that names none is about
+            # the whole audience, answered only from the whole on record for the window it states
+            if all(scope.values()):
+                try:
+                    from . import inline_dates as _D
+                    w = _D.parse_inline_window(text)
+                except Exception:
+                    w = None
+                title = _ssm.title_of_name(_profile_name(next(iter(by_key))))
+                for name in (page.get('aliases') or []):
+                    cand = _ssm.title_of_name(str(name))               # the title as it is written, not as its file spells it
+                    if cand and ("'" in cand or '&' in cand) and not cand.isupper():
+                        title = cand
+                        break
+                whole = _ssm.whole_on_record(title, {'start': w.get('start'), 'end': w.get('end')}) if w else None
+                if whole:
+                    return ('whole', whole['people'], whole['window'], title)
+                return ()
         hits = [k for k, sc in scope.items() if sc == asked]
         if not hits:
             return ()
@@ -391,7 +433,7 @@ def profile_on_the_services_asked(cc, anchors, text):
         if not pa or not pa.get('audience_size'):
             return ()
         same = [str(a) for a in (page.get('aliases') or [])
-                if ' - ' not in str(a) and scope[key] and frozenset(_ps.named(str(a))) == scope[key]]
+                if ' - ' not in str(a) and scope[key] and _ssm.services_of_name(str(a)) == scope[key]]
         return pa, (cc.best_display(same) if same else _profile_name(key))
     except Exception:
         return None
@@ -401,8 +443,14 @@ def answer(text, ctx=None):
     """A finished reply payload for an existence or size ask the
     catalog can settle, else None."""
     parsed = parse(text)
+    _windowed = False
     if not parsed:
-        return None
+        # a size ask that states its window ('... from October 25 2024 to November 10 2026') is read without the
+        # window words, and is answered here only from a title's whole audience on record for that window
+        parsed = parse(_without_window(text))
+        _windowed = bool(parsed and parsed[0] == 'size')
+        if not _windowed:
+            return None
     kind, subj = parsed
     if kind == 'roster':
         reply, chips = roster_reply(*subj)
@@ -437,9 +485,18 @@ def answer(text, ctx=None):
         # a title held on several services answers from the profile on the
         # services the words name, never from whichever file is newest
         _on = profile_on_the_services_asked(cc, anchors, text) if facts else None
+        if _windowed and not (_on and _on[0] == 'whole'):
+            return None  # a stated window is the reasoning path's, except for the whole on record
         if _on is not None:
             if not _on:
                 return None  # nothing held on exactly what was asked: the reasoning path answers
+            if _on[0] == 'whole':
+                _, _people, _w, _title = _on
+                reply = (f"{_title}: {_fmt_people(_people)} US people across every service"
+                         f"{_window_text(_w)}. That is the whole audience on record, not one service.")
+                return {'success': True, 'action': 'answer', 'reply': reply,
+                        'followups': [f"How many watched {_title} on one service?"],
+                        'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': _title}
             pa, display = _on
         if not pa or not pa.get('audience_size'):
             return None  # the reasoning path sizes it

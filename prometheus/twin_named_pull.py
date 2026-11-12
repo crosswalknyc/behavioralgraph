@@ -237,7 +237,82 @@ refund = _TUL.refund
 
 
 # ------------------------------------------------------- the interpret
-def audience_prompt(subject, kind='audience', purpose='', window=None, platform_home='', fmt=''):
+def named_scope(subject, ask_text=''):
+    """The services the twin's own audience definition names as where its
+    people watch or listen ('Gilmore Girls Hulu viewers', 'Yellowstone
+    viewers on Peacock', 'X Viewers (HBO Max & Amazon Prime)'), as the
+    house names them; [] when it names none. The subject's words first,
+    then the words the twin was asked for in."""
+    try:
+        from . import named_platforms as _N
+        for text in (subject, ask_text):
+            hit = _N.find(text) if str(text or '').strip() else None
+            if hit and hit.get('how') == 'audience' and hit.get('platforms'):
+                return list(hit['platforms'])
+        # a name that carries its services after the audience noun in brackets
+        m = re.search(r"\b(?:viewers?|watchers?|streamers?|listeners?)\s*\(([^()]+)\)\s*$", str(subject or ''), re.I)
+        if m:
+            return _N._platforms_in(m.group(1), True)
+        # ... or in front of the title ('Hulu Gilmore Girls Viewers'): only a name that can be nothing but the service
+        m = re.match(r"^\s*(.+?)\s+(?:viewers?|watchers?|streamers?|listeners?)\s*$", str(subject or ''), re.I)
+        if m:
+            head = m.group(1).lower()
+            for alias, canon in sorted(_N.PLATFORM_ALIASES.items(), key=lambda kv: -len(kv[0])):
+                if alias not in _N._LOOSE and re.match(re.escape(alias) + r"(?![a-z0-9+])\s+\S", head):
+                    return [canon]
+    except Exception:
+        pass
+    return []
+
+
+def carry_audience_scope(draft, subject, ask_text=''):
+    """The twin's audience definition reaches the build (2026-11-12).
+
+    'Gilmore Girls Hulu viewers' was ordered from a twin on Nov 5 and
+    built as a general audience named that way: no title, no service, no
+    watch placements, and Hulu read 73.5% on a Hulu universe. The pull's
+    brief went through the model read alone; the step that binds a named
+    service on every other order never ran.
+
+    The service the definition names is bound the way the interpret step
+    binds it (prometheus.named_platforms): strict on those services, a
+    viewers universe of the title, seeded from its watch placements. The
+    twin keeps its name and its window. Mutates and returns the draft;
+    never raises; a definition that names no service is left as it is."""
+    try:
+        plats = named_scope(subject, ask_text)
+        if not plats or not isinstance(draft, dict):
+            return draft
+        from . import named_platforms as _N
+        if not _N._is_title_audience(draft):
+            return draft            # a brand, a person or a persona: the service is not a viewing scope
+        title = str(draft.get('content_show') or '').strip() or _N._title_without(_N._bare_title(subject), plats)
+        if not title or _N._canon(title)[0]:
+            return draft            # the service's own audience ('Netflix viewers') is not a title on the service
+        draft.setdefault('subject', subject)
+        _N._apply(draft, plats, 'audience')
+        verb = str(draft.get('consumer_verb') or 'viewers').lower()
+        if str(draft.get('audience_type') or 'general').strip().lower() in ('', 'general'):
+            draft['audience_type'] = verb
+        # the anchor row is the title in its own category, never the audience's name as a title
+        title = str(draft.get('content_show') or '').strip()
+        if title:
+            rows = []
+            for row in (draft.get('subject_rows') or []):
+                try:
+                    col, val = row[0], row[1]
+                except Exception:
+                    continue
+                if ' '.join(str(val).lower().split()) == ' '.join(str(subject).lower().split()):
+                    val = title
+                rows.append([col, val])
+            draft['subject_rows'] = rows or draft.get('subject_rows')
+    except Exception:
+        traceback.print_exc()
+    return draft
+
+
+def audience_prompt(subject, kind='audience', purpose='', window=None, platform_home='', fmt='', ask_text=''):
     """The brief the interpret reads: a fresh Total Universe of the
     subject on the twin's window, named by the house naming rule."""
     w = _TUL._normalize_window(window)
@@ -247,6 +322,11 @@ def audience_prompt(subject, kind='audience', purpose='', window=None, platform_
               f"new_build, never an existing_match and never a cut: emit no addon_cuts and use the window {w['start']} to {w['end']}. "
               f"{subject} is {what}. The universe is the US people who engaged with {subject} in that window; size it from researched "
               f"public anchors and describe who they are in persona_notes.")]
+    scope = named_scope(subject, ask_text)
+    if scope:
+        on = scope[0] if len(scope) == 1 else ', '.join(scope[:-1]) + ' and ' + scope[-1]
+        lines.append(f"The audience is defined by where it watches: only the people who watched or listened on {on} in that window. "
+                     f"List exactly {on} in named_platforms, and size and describe that audience, never the title's audience everywhere.")
     if str(platform_home or '').strip():
         lines.append(f"Its home platform is {str(platform_home).strip()}.")
     p = ' '.join(str(purpose or '').split()).strip(' .')
@@ -336,6 +416,7 @@ def spec_body(draft, *, subject, kind='audience', fmt='', window=None, run_id, r
     """The queue body for the audience build. ``spec_from_draft`` is the
     chat module's converter (injected in tests)."""
     d = _draft_hygiene(draft, subject, kind, fmt, window)
+    d = carry_audience_scope(d, subject, prompt)          # the service the twin's audience is defined on reaches the build
     if spec_from_draft is None:
         spec_from_draft = SPEC_FROM_DRAFT or _converter()
     spec = dict(spec_from_draft(d) or {})
@@ -475,7 +556,8 @@ def queue_profile_for_twin_job(inputs, *, job_id, username, run_id='', s3=None, 
         return {'tu_key': found, 'run_id': run_id, 'state': 'on_file', 'body': None}
     if callable(progress):
         progress(f"reading the {subject} audience")
-    prompt = audience_prompt(subject, kind, str(inputs.get('purpose') or ''), window, platform_home=str(inputs.get('platform_home') or ''), fmt=fmt)
+    prompt = audience_prompt(subject, kind, str(inputs.get('purpose') or ''), window, platform_home=str(inputs.get('platform_home') or ''), fmt=fmt,
+                             ask_text=str(inputs.get('ask_text') or ''))
     draft = interpret_draft(prompt, usage_extras=usage_extras, draft_fn=draft_fn)
     if not draft:
         log(f"[{run_id}] named pull: model read unavailable; the US-shaped draft stands in")

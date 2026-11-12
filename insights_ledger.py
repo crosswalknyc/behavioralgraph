@@ -3257,6 +3257,20 @@ def consult(subject=None, question=None, metric_family=None,
                 print(f"[insights-ledger] {(subjects.get(skey) or {}).get('subject')!r} is where, not who: "
                       f"consulting {_scoped.get('subject')!r}")
                 skey = _scoped['key']
+        # A title held on named services has a saved answer per scope
+        # (2026-11-12): the lookup goes to the bucket on exactly the
+        # services the question names ('Amazon' and 'Prime Video' are one
+        # service), whichever bucket its words first resolved to.
+        try:
+            from prometheus import service_scope_match as _ssm
+            _svc = _ssm.bucket_for(doc, skey, question, live=_has_live_entries)
+            _svc_refuse = bool(_svc and _svc.get('refuse'))
+            if _svc and _svc.get('key') in subjects and _svc['key'] != skey:
+                print(f"[insights-ledger] the question names {_svc.get('services')}: consulting {_svc.get('subject')!r}")
+                skey = _svc['key']
+                _scoped = dict(_scoped or {}, key=skey, same_scope=True)
+        except Exception:
+            _ssm, _svc_refuse = None, False
         if not skey:
             # Exact-ask replay must not depend on subject resolution:
             # scan all buckets for this normalized question.
@@ -3358,6 +3372,16 @@ def consult(subject=None, question=None, metric_family=None,
         if _scoped and not _scoped.get('same_scope') and exact is not None \
                 and exact.get('qn') != normalize_question(question):
             exact, match = None, None     # an all-platform read is context for a platform-only question, never its answer
+        if exact is not None and _svc_refuse:
+            print(f"[insights-ledger] replay refused under {bucket.get('subject')!r}: the title is on record on other services than the question names")
+            exact, match = None, None
+        if exact is not None and _ssm is not None:
+            # ... and one service's figure never answers a question about
+            # every service, or about other services (2026-11-12)
+            _sfit, _swhy = _ssm.replay_fits_services(exact, bucket, question, subject=subject or '')
+            if not _sfit:
+                print(f"[insights-ledger] replay refused under {bucket.get('subject')!r}: {_swhy}")
+                exact, match = None, None
         exact = _exact_if_fresh(exact)
         return {'subject': bucket.get('subject'), 'skey': skey,
                 'entries': entries, 'block': render_block(entries),

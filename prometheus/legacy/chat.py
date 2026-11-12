@@ -6585,7 +6585,7 @@ def _pm_interpret_core(user, body, text, history):
         # consumers-only (viewers / readers / listeners / players,
         # home platform pinned at 100). If the words already said,
         # normalize silently; otherwise stash the question.
-        _named_platforms.bind(spec_draft, text, history, cuts_hit=_platform_hit)   # a platform the client names, in the ask or a follow-up, is the universe's platform (2026-11-10)
+        _named_platforms.bind(spec_draft, text, history, cuts_hit=_platform_hit, catalog=catalog)   # a platform the client names is the universe's platform (2026-11-10); the same title, services and window as a live profile is that profile (2026-11-12)
         try:
             _H._maybe_ask_ip_scope(spec_draft, text)
         except Exception as _ip_err:
