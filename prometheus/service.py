@@ -567,7 +567,7 @@ LANE_ORDER = (
     'bpiq_wizard', 'build_fix',
     'wayfinding',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
-    'deck_conversion', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
+    'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
@@ -584,10 +584,11 @@ DETERMINISTIC_LANES = frozenset((
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
-    'us_scope', 'segment_sizing'))
+    'us_scope', 'segment_sizing', 'read_brief'))
 NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
-                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope', 'segment_sizing'))
+                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope', 'segment_sizing',
+                                'read_brief'))
 
 
 def lane_markers(source=None):
@@ -725,6 +726,18 @@ def ask(user, body, *, via='session'):
     # the interpret surface. The lanes that resolve an armed step or an
     # offer (cancel, the wizards, acceptance, referents, short replies,
     # the continuation read) keep their place ahead of it.
+    # The go-ahead for a brief that was held for it ("Run it" after "It has
+    # not started and will not start until you say so", prometheus.read_brief,
+    # 2026-11-11) is that brief, read from the thread: never an order to
+    # build whatever "it" might be on the screen.
+    try:
+        from . import read_brief as _rbf0
+        _go0 = '' if (_armed(body) or body.get('_multi_part')) else _rbf0.pending_run(text, history)
+        if _go0:
+            text = _rbf0.strip_hold(_go0)
+            body = dict(body, text=text)
+    except Exception as _fx:
+        _faults.note('service.read_brief', _fx)
     _is_order = False
     try:
         from . import orders as _orders
@@ -1229,6 +1242,70 @@ def ask(user, body, *, via='session'):
                 env = envelope.wrap(raw, surface='deck', decision=decision, thread_id=tid, via=via)
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'deck')
                 return env, status
+
+    # lane: read_brief
+    # A read brief is one read on the titles it names (Grace Yin, Amazon,
+    # 2026-11-11, prometheus.read_brief): "Please size the fan audience
+    # for two novels in one run: The Love Hypothesis by Ali Hazelwood and
+    # The Map That Leads To You by J.P. Monninger ... each calendar year
+    # from 2019 through 2026 ... split by source ... Please also tell me
+    # which of these sources your panel can't capture ... send it as a
+    # CSV" was cut in two by the splitter; one half came back as an offer
+    # to build eight year profiles of the Men 18-34 profile open on her
+    # screen and the other was read as a cross, found no figures and
+    # ended on the calm line. A brief that sizes the people around named
+    # titles is bound to those titles and goes to the read lane whole:
+    # the splitter, the keyword lanes, the sizing lanes and the reader's
+    # executor stand aside for it exactly as they do for an order. A
+    # message ABOUT the brief (cancel that offer, is it one task, what
+    # does it cost, do not start without my OK) is answered here in plain
+    # words and starts nothing; the go-ahead that follows runs the brief
+    # (read ahead of the order gate, above).
+    _is_brief = False
+    if not _armed(body) and not body.get('_multi_part') and not body.get('_meta_replay'):
+        try:
+            from . import read_brief as _rbf
+            _profile_order = False
+            if _is_order:
+                from . import orders as _ord_b
+                _profile_order = bool(_ord_b.is_profile_order(text))
+            if not _profile_order:
+                _hk = None
+                if _rbf.holds(text) and _rbf.titles(text):
+                    from . import priced_read as _prb
+                    _incl_b = bool(_prb.included_with_plan(user, uname, host))
+                    _label_b = ''
+                    if not _incl_b:
+                        _label_b = str((_prb.custom_price(uname, history, _rbf.subject_label(_rbf.titles(text))) or {}).get('label') or '')
+                    _hk = _rbf.housekeeping(text, history, included=_incl_b, price_label=_label_b)
+                if _hk:
+                    raw = _hk
+                    decision = {'surface': 'analyze', 'mode': None, 'reason': 'read_brief', 'client_hint': None}
+                    if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                        raw = _interpret_shape(raw)
+                        raw['followups'] = list(_hk.get('followups') or [])
+                    try:
+                        host.ask_hint(route='read_brief', outcome='held_for_go_ahead', subject=str(_hk.get('subject') or '') or None)
+                    except Exception as _fx:
+                        _faults.note('service', _fx)
+                    env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+                    _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+                    return env, 200
+                _bf = _rbf.read(text)
+                if _bf:
+                    _is_brief = True
+                    if not body.get('bind_subject') and not (isinstance(body.get('extra'), dict) and body['extra'].get('bind_subject')):
+                        body = dict(body, bind_subject=_bf['subject'])
+                    body = dict(body, _pm_read_brief=True)
+                    try:
+                        host.ask_hint(route='read_brief', outcome='one_read', subject=_bf['subject'])
+                    except Exception as _fx:
+                        _faults.note('service', _fx)
+        except Exception as _fx:
+            _faults.note('service.read_brief', _fx)
+            _is_brief = False
+    # the keyword lanes below stand aside for a brief exactly as they do for an order
+    _is_order = _is_order or _is_brief
 
     # lane: reconcile
     # "Your three answers give 6.2M, 8.5M and 43.2M ... Reconcile them.
@@ -2004,9 +2081,26 @@ def ask(user, body, *, via='session'):
             from . import priced_read as _pr
             _ex = body.get('extra') if isinstance(body.get('extra'), dict) else {}
             _pc = _ex.get('panel_confirm') or body.get('panel_confirm')
+            # A pass that comes back with no figures, with nothing charged for
+            # it, goes on to the read lanes in this same turn (2026-11-11,
+            # prometheus.read_brief): the reader never lands on the calm line
+            # for it and ops is not told a person needs an email. A pass the
+            # reader approved keeps the calm line and the ops note.
+            from . import read_brief as _rbr
+            _mail_hold = _rbr.MailHold(host)
             _pr_raw = _pr.service_turn(
                 text, user=user, ctx=ctx, history=history,
-                host=host, panel_confirm=_pc)
+                host=_mail_hold, panel_confirm=_pc)
+            if _rbr.should_retry(_pr_raw, _pc):
+                _mail_hold.drop()
+                try:
+                    host.ask_hint(route='priced_read', outcome='no_figures_retry', subject=str(_pr_raw.get('subject') or '') or None)
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                _pr_raw = None
+                body = dict(body, _pm_priced_retry=True)     # the reader's sizing executor does not run the same pass again
+            else:
+                _mail_hold.flush()
         except Exception as e:
             _faults.note('service.priced_read', e)
             _pr_raw = None
@@ -2081,7 +2175,8 @@ def ask(user, body, *, via='session'):
             except Exception as _fx:
                 _faults.note('service', _fx)
             try:
-                _rx = _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, persist, _client_surface)
+                # a brief is the read lane's, whole: the reader's sizing executor would size each title and drop the brief (prometheus.read_brief)
+                _rx = None if _is_brief else _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, persist, _client_surface)
             except Exception as e:
                 _faults.note('service.reader_executor', e)
                 _rx = None
@@ -2615,6 +2710,9 @@ def ask(user, body, *, via='session'):
                 body = dict(body, text=text)
     except Exception as _fx:
         _faults.note('service', _fx)
+    # A brief on named titles is a read, whatever surface the client sent or the words suggested (prometheus.read_brief)
+    if _is_brief and referent_decision is None and decision.get('surface') != 'analyze':
+        decision = dict(decision, surface='analyze', reason='read_brief')
     # A correction is never a go-ahead (Emmet Riley 2026-10-26: "okay but
     # why do you keep brining up summers eve this is an indepdent pull"
     # reached the interpret core with no page open and drafted a $275
@@ -2926,6 +3024,8 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         subs = [page] + [x for x in subs if x.lower() not in ('<page>', 'this', 'that', 'it')]
     if intent == 'size':
         from . import sizing_lane as _szl, guards as _g
+        if body.get('_pm_priced_retry'):
+            return None     # the priced pass already came back with no figures this turn: the read lanes take it (prometheus.read_brief)
         if _g.is_sample_size_ask(text) or not subs or all(_szl.is_panel_noun(s) for s in subs):
             return None     # the panel itself ("how many panelists do you have"): the sample-size answer says 10 million
         _pg.say('Sizing ' + (' and '.join(subs[:3]) if subs else 'the audience'))

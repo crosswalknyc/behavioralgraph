@@ -103,6 +103,15 @@ def parse(text, reader_subjects=None):
     m = _CROSS_RX.search(t)
     if not m:
         return None
+    try:
+        # "Which of these sources your panel can't capture, or only partly captures" and "whether any figure is
+        # modeled rather than counted" are questions about how we count, never an audience split across services
+        # (Grace Yin 2026-11-11: read as a cross, no figures, the calm line; prometheus.read_brief)
+        from . import read_brief as _rb
+        if _rb.is_method_question(t):
+            return None
+    except Exception:
+        pass
     left, right = t[:m.start()], t[m.end():]
     if not left.strip() or not right.strip():
         return None

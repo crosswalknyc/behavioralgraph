@@ -391,6 +391,15 @@ def question_universe(text, page='', history=None):
     seg = _segment_label(t)
     if seg:
         return Universe('named', seg, US_PEOPLE, (seg,), True)
+    # a brief that sizes the people around named titles and states its own population ("Population: all US
+    # people") is on US people: never the page, however much a demographic word in it ("men 18-34") resembles
+    # the page's name (prometheus.read_brief, Grace Yin 2026-11-11)
+    try:
+        from . import read_brief as _rb
+        if _rb.population(text):
+            return Universe('named', US_PEOPLE, US_PEOPLE, (US_PEOPLE,), True)
+    except Exception:
+        pass
     named = named_universe(t)
     if page and names_page(t, page):
         # the page named as the PLATFORM inside the question's own universe
@@ -622,6 +631,11 @@ def framing_block(universe, question=''):
         try:
             from . import segment_sizing as _seg
             lines.extend(_seg.framing_lines(question))      # a demographic segment: one joint group, both counts, the two-way split (2026-11-11)
+        except Exception:
+            pass
+        try:
+            from . import read_brief as _rb
+            lines.extend(_rb.framing_lines(question))       # a brief on named titles: each sized on its own, the low end, one value per fact (2026-11-11)
         except Exception:
             pass
         lines.append(f"- Answer every part of the question: {_squash(question)[:400]}")

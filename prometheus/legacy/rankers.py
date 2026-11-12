@@ -257,6 +257,15 @@ def _pm_detect_multi_year_ask(text):
     multi-year read ('4-5 year analysis', 'past 3 years', 'since
     2022', '2021-2025', 'year over year')."""
     t = str(text or '')
+    try:
+        # a brief that sizes named titles year by year is one read on those titles; the year-profile package is
+        # for a year-over-year study of a profile and never takes the page for a subject the words name
+        # (Grace Yin 2026-11-11, prometheus.read_brief)
+        from prometheus import read_brief as _rb
+        if _rb.is_brief(t) or (_rb.holds(t) and _rb.titles(t)):
+            return None
+    except Exception:
+        pass
     this_year = datetime.now().year
     n = None
     m = _PM_MY_SPAN_RE.search(t)

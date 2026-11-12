@@ -71,6 +71,15 @@ def plan(text, history, ctx, body, *, pma, ns, normalize, stop, plausible, consu
     confirm_derived = bool(pc and str(pc.get('kind') or '') == 'derived')
     if not (confirm_derived or pma.is_dimension_split_ask(text)):
         return None
+    try:
+        # a brief that sizes named titles and asks for the total "split by source" is a new read on those titles,
+        # never a split of a figure the reader holds (Grace Yin 2026-11-11: the split lane made the sources add
+        # exactly to the total and bound the read to a library file a demographic word resembled)
+        from . import read_brief as _rb
+        if not confirm_derived and _rb.is_brief(text):
+            return None
+    except Exception:
+        pass
     # every dimension the ask names, in the reader's own words ('age, gender, ethnicity, household income
     # and region'), never the first table hit alone (Jay Patel 2026-11-04 was offered 'by geography')
     dim = str((pc or {}).get('dimension') or '').strip().lower()
