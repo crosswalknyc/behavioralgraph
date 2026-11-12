@@ -1,0 +1,1950 @@
+{
+ "ledger_index": {
+  "subjects": {
+   "gap_x_jyt": {
+    "entries": [
+     {
+      "anchors": [],
+      "base": "Gap_Customers_09_01_2026_08_41.csv",
+      "breakdown": {
+       "dimension": "Partnership value component",
+       "rows": [
+        {
+         "definition": "Partnership value component for Social and short-form content, share of the partnership's value in the window, Sep 22 2026 to Nov 11 2026",
+         "label": "Social and short-form content",
+         "note": "dance clips and member-led posts carry the largest share of reach",
+         "penetration_pct": 61.4,
+         "share_pct": 38.3
+        },
+        {
+         "definition": "Partnership value component for Gap.com collection traffic and orders, share of the partnership's value in the window, Sep 22 2026 to Nov 11 2026",
+         "label": "Gap.com collection traffic and orders",
+         "note": "the co-designed capsule drives the confirmed-order side",
+         "penetration_pct": 18.7,
+         "share_pct": 27.1
+        },
+        {
+         "definition": "Partnership value component for Mall tour digital activation, share of the partnership's value in the window, Sep 22 2026 to Nov 11 2026",
+         "label": "Mall tour digital activation",
+         "note": "registration, check-in and post-event sharing around tour stops",
+         "penetration_pct": 9.2,
+         "share_pct": 14.3
+        },
+        {
+         "definition": "Partnership value component for Music platform and docuseries halo, share of the partnership's value in the window, Sep 22 2026 to Nov 11 2026",
+         "label": "Music platform and docuseries halo",
+         "note": "streaming and series viewing that carries the brand without paid support",
+         "penetration_pct": 33.6,
+         "share_pct": 11.7
+        },
+        {
+         "definition": "Partnership value component for Search lift on the partnership, share of the partnership's value in the window, Sep 22 2026 to Nov 11 2026",
+         "label": "Search lift on the partnership",
+         "note": "branded queries pairing Gap with the band and the collection",
+         "penetration_pct": 7.3,
+         "share_pct": 8.6
+        }
+       ],
+       "share_basis": "share of the partnership's value in the window"
+      },
+      "cohort": "",
+      "derivation": "base=Gap_Customers_09_01_2026_08_41.csv; neighbors=Old Navy, Banana Republic, American Eagle, Lululemon, Target, ZARA; examples=yes; subiq=no; research=web_search; playbook=standard; verify=pass(anchor=pass,ledger=skip,scrub=pass)",
+      "family": "revenue",
+      "followups": [
+       "Size the JYT audience that already buys Old Navy",
+       "Cut the Gap x JYT overlap to 18-24 only",
+       "Rank the next three talent partners for Gap on this file"
+      ],
+      "k": "gap_x_jyt|revenue|2026-09-22|2026-11-11",
+      "metrics": [
+       {
+        "definition": "reasoned value of the partnership-attributed reach and confirmed Gap orders carried in the window, not a measured row",
+        "label": "Partnership value, Sep 22 to Nov 11 2026",
+        "name": "partnership_value_window",
+        "unit": "usd",
+        "value": 4217683
+       },
+       {
+        "definition": "reasoned full-year value of the same partnership at the launch-weighted pace set by the collection drop and mall tour, not a measured row",
+        "label": "Partnership value, first 12 months",
+        "name": "partnership_value_year_one",
+        "unit": "usd",
+        "value": 14839261
+       },
+       {
+        "definition": "distinct US individuals with at least one JYT digital touchpoint (streams, social, search, video) in the window",
+        "label": "JYT projected US audience",
+        "name": "jyt_us_audience",
+        "sample_people": 66221,
+        "unit": "people",
+        "value": 2184637
+       },
+       {
+        "definition": "people in the JYT audience with at least one confirmed online order that included Gap in the window, 6.3% of that audience, index 153",
+        "label": "Gap buyers inside the JYT audience",
+        "name": "gap_buyers_in_jyt_audience",
+        "sample_people": 4172,
+        "unit": "people",
+        "value": 137633
+       },
+       {
+        "definition": "share of the open Gap customer audience with at least one confirmed online order that included Gap, 456,879 projected US people against 4.1073% in the general population, index 186",
+        "label": "Gap purchase penetration, Gap customer file",
+        "name": "gap_purchase_penetration_house",
+        "unit": "pct",
+        "value": 7.6
+       },
+       {
+        "definition": "people in the JYT audience whose first confirmed Gap order landed after the partnership launch, 0.74% of the 2,047,004 JYT people who were not Gap buyers going in",
+        "label": "First-time Gap buyers out of the JYT audience",
+        "name": "new_to_gap_buyers",
+        "sample_people": 459,
+        "unit": "people",
+        "value": 15147
+       }
+      ],
+      "prov": "operator",
+      "q": "JYT is the talent and GAP is the brand. the partnership started in September 2026",
+      "qn": "jyt is the talent and gap is the brand the partnership started in september 2026",
+      "reply": "The Gap x JYT partnership carries $4,217,683 of value in its first 51 days, built on 2,184,637 US people reached and 137,633 of them already confirmed Gap buyers.\n\nPartnership value, Sep 22 to Nov 11 2026: 4,217,683, Partnership value, first 12 months: 14,839,261, JYT projected US audience: 2,184,637.\n\nPartnership value component mix, Sep 22 2026 to Nov 11 2026 (share of the partnership's value in the window)\n- Social and short-form content: 38.3% share, 61.4% penetration. dance clips and member-led posts carry the largest share of reach\n- Gap.com collection traffic and orders: 27.1% share, 18.7% penetration. the co-designed capsule drives the confirmed-order side\n- Mall tour digital activation: 14.3% share, 9.2% penetration. registration, check-in and post-event sharing around tour stops\n- Music platform and docuseries halo: 11.7% share, 33.6% penetration. streaming and series viewing that carries the brand without paid support\n- Search lift on the partnership: 8.6% share, 7.3% penetration. branded queries pairing Gap with the band and the collection\n\nREADS\n- The partnership buys Gap an age it does not currently own: the house file leans 60.4% female with 35-44 the largest band at 25.4%, while the JYT audience skews teen and young-adult female and reads much closer to the teen-mall shape, where 18-24 runs about a third of the base. That gap is the whole point of the deal and most of the value sits there.\n- Overlap is already real rather than aspirational: 137,633 of the people JYT reaches have a confirmed Gap order in the window at index 153, so the mall tour and the co-designed drop are landing on warm buyers as much as new ones. The read is retention value first, recruitment value second.\n- Recruitment is the smaller but more durable half: 15,147 first-time Gap buyers in 51 days is a conversion pace that reads healthy for a band seven weeks into its first brand deal, and it compounds if the collection gets a second drop rather than one seasonal capsule.\n- The Avid core of the Gap file, 846,062 people, is where co-promotion pays back fastest: these buyers over-index on Old Navy at 32.6% and on Bath & Body Works, Beis and Owala, a mall-adjacent basket that lines up cleanly with in-store tour activations carried digitally. Worth testing a tour-city geo push against that tier before the next drop.\n\nWhy the full-window number sits above each period: A person is counted once for the whole window but only in the periods they were active, so each quarter or month can only equal or fall below the full-window share, and the periods do not add up to it. A brand whose audience spreads across the year reads higher for the year than for any one quarter.\n\nHow these are counted:\n- Window: Sep 22 2026 to Nov 11 2026.\n- Base: the Gap x JYT audience, measured across 10M US consumers and projected to the US.\n- What we count as an order: An order is one person with at least one checkout, confirmed by an order confirmation, that named the brand or category inside the window, counted once however many orders, devices or sessions they placed. Browsing, carting or visiting a store or a brand site without a checkout is not an order. Marketplaces and brand sites both count where the brand is attributable. Counts are US buyers (persons), not accounts or transactions, so they are not comparable to a retailer's order totals or unit sales.",
+      "route": "reasoned_metrics",
+      "subject": "Gap x JYT",
+      "ts": "2026-11-11T20:27:09Z",
+      "universe": "Gap x JYT",
+      "verify": {
+       "anchor": "pass",
+       "anchored": 2,
+       "facts": "skip",
+       "ledger": "skip",
+       "outcome": "pass",
+       "scrub": "pass",
+       "ts": "2026-11-11T20:27:09Z"
+      },
+      "we": "2026-11-11",
+      "wl": "Sep 22 2026 to Nov 11 2026",
+      "ws": "2026-09-22"
+     }
+    ],
+    "subject": "Gap x JYT"
+   }
+  }
+ },
+ "note": "The Gap x JYT valuation of 2026-11-11: the research saved for it, the valuation of record at the figure the reader holds, and the read that gave her that figure. Test fixture only.",
+ "payload_of_record": {
+  "_category_for_deck": "FASHION",
+  "attribution_window_days": 51,
+  "audience_size": 9685,
+  "brand_partner": "Gap",
+  "campaign": {
+   "aov_basis": "researched_band",
+   "aov_usd": 144.78,
+   "audience_basis": "campaign reach",
+   "collection_size": null,
+   "days_to_sell_out": null,
+   "drop": {
+    "basis": "sell-through of the run inside the window",
+    "inventory_signal": "small",
+    "orders": 525,
+    "per_order_usd": 144.78,
+    "piece_price_usd": 102.4,
+    "revenue_usd": 76009.5,
+    "sell_through": 0.542,
+    "skus": 19,
+    "units_per_sku": 126.5,
+    "units_us": 734,
+    "us_share_of_run": 0.573
+   },
+   "drop_dates": [
+    "2026-09-22"
+   ],
+   "drop_line": "About 734 pieces sold in the US, 525 orders, $76,010 at the collection's prices.",
+   "first_48h_share_of_purchases": null,
+   "inventory_signal": "small",
+   "name": "Gap x JYT",
+   "partial_sell_out": false,
+   "price_band": {
+    "high_usd": 118.0,
+    "low_usd": 88.0
+   },
+   "reach": {
+    "commercial_people": 0,
+    "event_people": 16415,
+    "events": 1,
+    "gross_people": 335921,
+    "lines": [
+     {
+      "basis": "13 pieces across national, fashion and trade titles, counted once per reader",
+      "line": "press",
+      "people": 319506
+     },
+     {
+      "basis": "1 event: the guests' posts and the night's coverage, counted once per person",
+      "line": "the launch event",
+      "people": 16415
+     }
+    ],
+    "overlap": 0.3699,
+    "press_people": 319506,
+    "press_pieces": 13,
+    "reach_us": 319506,
+    "search_people": 0,
+    "site_people": 0,
+    "social_people": 0,
+    "views_total": 0
+   },
+   "reach_line": "The campaign reached about 320K people in the window: 320K through press, 16K around the launch event, counted once each.",
+   "read_line": "The collection ran $88 to $118 a piece. A typical order carried about 1.4 pieces, $144.78 per order.",
+   "restock_announced": false,
+   "sold_at": [
+    "gap.com",
+    "Gap stores (select locations for activations)"
+   ],
+   "sold_out": false,
+   "talent_audience_in_window": 319506,
+   "talent_channels": [
+    "gap.com",
+    "Gap stores",
+    "social platforms",
+    "docuseries distribution",
+    "live mall tour"
+   ],
+   "talent_line": "JYT's share: 13% of the campaign's value, $542,816: 68% of the campaign's exposure carried the talent; those assets drew 22% more response than the brand's alone.",
+   "talent_role": "Co-designer and campaign face under Gap's Fashiontainment platform, multi-year",
+   "talent_share": {
+    "asset_share": 0.6842,
+    "basis": "68% of the campaign's exposure carried the talent; those assets drew 22% more response than the brand's alone",
+    "face_uplift": 1.216,
+    "holdout_share": 1.0,
+    "talent_share": 0.1287
+   }
+  },
+  "campaign_name": "Gap x JYT",
+  "control_group": {
+   "control_size": 0,
+   "enabled": false
+  },
+  "conversions": {
+   "basis": "the drop's orders",
+   "enabled": true,
+   "lift_pct_hits": 0.0,
+   "lift_pct_users": 166.67,
+   "low_signal": true,
+   "post_hits": 22,
+   "post_users": 16,
+   "post_users_projected": 525,
+   "pre_hits": 8,
+   "pre_users": 6,
+   "pre_users_projected": 198,
+   "revenue_usd": 76009.5,
+   "sell_out_lift_rel": 0.0,
+   "units_us": 734
+  },
+  "created_at": "2026-11-11T21:15:26.358942Z",
+  "created_by": "canary:review",
+  "delivered_read": {
+   "brand_buyers": 137633,
+   "first_time_buyers": 15147,
+   "gap_customers_female_pct": 60.4,
+   "job": "f21c0ed76df6",
+   "people": 2184637,
+   "social_share_pct": 38.3,
+   "subject": "Gap x JYT",
+   "value_usd": 4217683,
+   "value_year_usd": 14839261,
+   "window": {
+    "end": "2026-11-11",
+    "start": "2026-09-22"
+   }
+  },
+  "demographics": {
+   "post": {
+    "age": [
+     {
+      "count": 533,
+      "percentage": 8.9496,
+      "value": "17 and Under"
+     },
+     {
+      "count": 1407,
+      "percentage": 23.6221,
+      "value": "18-24"
+     },
+     {
+      "count": 1538,
+      "percentage": 25.8331,
+      "value": "25-34"
+     },
+     {
+      "count": 1101,
+      "percentage": 18.4711,
+      "value": "35-44"
+     },
+     {
+      "count": 705,
+      "percentage": 11.8393,
+      "value": "45-54"
+     },
+     {
+      "count": 426,
+      "percentage": 7.1458,
+      "value": "55-64"
+     },
+     {
+      "count": 224,
+      "percentage": 3.7588,
+      "value": "65 or Older"
+     },
+     {
+      "count": 23,
+      "percentage": 0.3802,
+      "value": "Other"
+     }
+    ],
+    "ethnicity": [
+     {
+      "count": 3154,
+      "percentage": 52.9588,
+      "value": "White"
+     },
+     {
+      "count": 1217,
+      "percentage": 20.4345,
+      "value": "Hispanic or Latino"
+     },
+     {
+      "count": 764,
+      "percentage": 12.8253,
+      "value": "Black or African American"
+     },
+     {
+      "count": 531,
+      "percentage": 8.9157,
+      "value": "Asian"
+     },
+     {
+      "count": 297,
+      "percentage": 4.8657,
+      "value": "Another Race/Ethnicity"
+     }
+    ],
+    "gender": [
+     {
+      "count": 3984,
+      "percentage": 66.8369,
+      "value": "Female"
+     },
+     {
+      "count": 1714,
+      "percentage": 28.7147,
+      "value": "Male"
+     },
+     {
+      "count": 133,
+      "percentage": 2.2391,
+      "value": "Prefer Not to Say"
+     },
+     {
+      "count": 12,
+      "percentage": 0.2064,
+      "value": "Trans Male"
+     },
+     {
+      "count": 25,
+      "percentage": 0.4203,
+      "value": "Trans Female"
+     },
+     {
+      "count": 94,
+      "percentage": 1.5826,
+      "value": "Non-Binary"
+     }
+    ],
+    "income": [
+     {
+      "count": 1115,
+      "percentage": 18.732,
+      "value": "Less than $25,000"
+     },
+     {
+      "count": 1398,
+      "percentage": 23.4839,
+      "value": "$25,000 - $49,999"
+     },
+     {
+      "count": 1201,
+      "percentage": 20.1682,
+      "value": "$50,000 - $74,999"
+     },
+     {
+      "count": 911,
+      "percentage": 15.2942,
+      "value": "$75,000 - $99,999"
+     },
+     {
+      "count": 811,
+      "percentage": 13.6258,
+      "value": "$100,000 - $149,999"
+     },
+     {
+      "count": 348,
+      "percentage": 5.8412,
+      "value": "$150,000 - $249,999"
+     },
+     {
+      "count": 173,
+      "percentage": 2.8547,
+      "value": "$250,000 or More"
+     }
+    ]
+   },
+   "pre": {
+    "age": [
+     {
+      "count": 142,
+      "percentage": 4.2713,
+      "value": "17 and Under"
+     },
+     {
+      "count": 592,
+      "percentage": 17.8345,
+      "value": "18-24"
+     },
+     {
+      "count": 879,
+      "percentage": 26.4789,
+      "value": "25-34"
+     },
+     {
+      "count": 709,
+      "percentage": 21.3621,
+      "value": "35-44"
+     },
+     {
+      "count": 489,
+      "percentage": 14.726,
+      "value": "45-54"
+     },
+     {
+      "count": 319,
+      "percentage": 9.6136,
+      "value": "55-64"
+     },
+     {
+      "count": 176,
+      "percentage": 5.2901,
+      "value": "65 or Older"
+     },
+     {
+      "count": 14,
+      "percentage": 0.4235,
+      "value": "Other"
+     }
+    ],
+    "ethnicity": [
+     {
+      "count": 1869,
+      "percentage": 56.3204,
+      "value": "White"
+     },
+     {
+      "count": 622,
+      "percentage": 18.7395,
+      "value": "Hispanic or Latino"
+     },
+     {
+      "count": 414,
+      "percentage": 12.4741,
+      "value": "Black or African American"
+     },
+     {
+      "count": 259,
+      "percentage": 7.8156,
+      "value": "Asian"
+     },
+     {
+      "count": 154,
+      "percentage": 4.6504,
+      "value": "Another Race/Ethnicity"
+     }
+    ],
+    "gender": [
+     {
+      "count": 2072,
+      "percentage": 62.4171,
+      "value": "Female"
+     },
+     {
+      "count": 1101,
+      "percentage": 33.1847,
+      "value": "Male"
+     },
+     {
+      "count": 73,
+      "percentage": 2.1851,
+      "value": "Prefer Not to Say"
+     },
+     {
+      "count": 13,
+      "percentage": 0.2897,
+      "value": "Trans Male"
+     },
+     {
+      "count": 16,
+      "percentage": 0.4909,
+      "value": "Trans Female"
+     },
+     {
+      "count": 48,
+      "percentage": 1.4325,
+      "value": "Non-Binary"
+     }
+    ],
+    "income": [
+     {
+      "count": 474,
+      "percentage": 14.2875,
+      "value": "Less than $25,000"
+     },
+     {
+      "count": 718,
+      "percentage": 21.6469,
+      "value": "$25,000 - $49,999"
+     },
+     {
+      "count": 694,
+      "percentage": 20.9169,
+      "value": "$50,000 - $74,999"
+     },
+     {
+      "count": 543,
+      "percentage": 16.3692,
+      "value": "$75,000 - $99,999"
+     },
+     {
+      "count": 525,
+      "percentage": 15.8217,
+      "value": "$100,000 - $149,999"
+     },
+     {
+      "count": 248,
+      "percentage": 7.4815,
+      "value": "$150,000 - $249,999"
+     },
+     {
+      "count": 115,
+      "percentage": 3.4763,
+      "value": "$250,000 or More"
+     }
+    ]
+   }
+  },
+  "diagnostics": {
+   "audience_filter_used": "qualifier_only",
+   "brand_search_variants": [
+    "gap"
+   ],
+   "data_provenance": "synthetic_estimate",
+   "held_to_delivered_read": {
+    "after_the_share": {
+     "collection_orders": 525,
+     "new_pages_pre_visits": 0,
+     "social_channels_usd": 1615799.5
+    },
+    "factor": 0.71892,
+    "people_after": 319506,
+    "people_before": 444425,
+    "read_job": "f21c0ed76df6",
+    "read_subject": "Gap x JYT",
+    "read_window": {
+     "end": "2026-11-11",
+     "start": "2026-09-22"
+    },
+    "set_exactly": true,
+    "total_after_usd": 4217683.0,
+    "total_before_usd": 5884866.46,
+    "value_ceiling_usd": 4217683.0
+   },
+   "post_window_clipped_to_today": false,
+   "qualifier_search_variants": [
+    "jyt"
+   ],
+   "run_key": "a34ea58576e279ba",
+   "synthesis_note": "Held to the delivered read on Gap x JYT (Sep 22 to Nov 11, 2026): total brand value $4,217,683.00. The valued group is the 319,506 projected US people the campaign itself reached, inside a JYT US audience of 2,184,637; 137,633 Gap buyers and 15,147 first-time Gap buyers sit in that wider audience and are not priced here."
+  },
+  "end_date": "2026-11-11",
+  "event_period": {
+   "days": 51,
+   "end": "2026-11-11",
+   "start": "2026-09-22"
+  },
+  "per_platform": [
+   {
+    "lift_pct_users": 161.17,
+    "platform": "TikTok",
+    "post_pen_pct": 48.18,
+    "post_users": 3027,
+    "post_users_on_platform": 6283,
+    "post_users_projected": 99848,
+    "pre_pen_pct": 19.48,
+    "pre_users": 1159,
+    "pre_users_on_platform": 5949,
+    "pre_users_projected": 38235
+   },
+   {
+    "lift_pct_users": 89.96,
+    "platform": "Instagram",
+    "post_pen_pct": 46.08,
+    "post_users": 3330,
+    "post_users_on_platform": 7226,
+    "post_users_projected": 109868,
+    "pre_pen_pct": 24.74,
+    "pre_users": 1753,
+    "pre_users_on_platform": 7087,
+    "pre_users_projected": 57831
+   },
+   {
+    "lift_pct_users": 29.47,
+    "platform": "Facebook",
+    "post_pen_pct": 27.8,
+    "post_users": 1573,
+    "post_users_on_platform": 5658,
+    "post_users_projected": 51901,
+    "pre_pen_pct": 21.36,
+    "pre_users": 1215,
+    "pre_users_on_platform": 5688,
+    "pre_users_projected": 40083
+   },
+   {
+    "lift_pct_users": 112.86,
+    "platform": "YouTube",
+    "post_pen_pct": 35.53,
+    "post_users": 2765,
+    "post_users_on_platform": 7783,
+    "post_users_projected": 91205,
+    "pre_pen_pct": 16.95,
+    "pre_users": 1299,
+    "pre_users_on_platform": 7665,
+    "pre_users_projected": 42854
+   },
+   {
+    "lift_pct_users": 73.18,
+    "platform": "X (Twitter)",
+    "post_pen_pct": 19.71,
+    "post_users": 620,
+    "post_users_on_platform": 3146,
+    "post_users_projected": 20453,
+    "pre_pen_pct": 11.82,
+    "pre_users": 358,
+    "pre_users_on_platform": 3028,
+    "pre_users_projected": 11817
+   },
+   {
+    "lift_pct_users": 135.42,
+    "platform": "Snapchat",
+    "post_pen_pct": 21.4,
+    "post_users": 791,
+    "post_users_on_platform": 3697,
+    "post_users_projected": 26080,
+    "pre_pen_pct": 9.42,
+    "pre_users": 336,
+    "pre_users_on_platform": 3568,
+    "pre_users_projected": 11085
+   },
+   {
+    "lift_pct_users": 90.73,
+    "platform": "Reddit",
+    "post_pen_pct": 13.59,
+    "post_users": 391,
+    "post_users_on_platform": 2877,
+    "post_users_projected": 12901,
+    "pre_pen_pct": 7.32,
+    "pre_users": 205,
+    "pre_users_on_platform": 2802,
+    "pre_users_projected": 6763
+   },
+   {
+    "lift_pct_users": 22.41,
+    "platform": "Pinterest",
+    "post_pen_pct": 15.48,
+    "post_users": 519,
+    "post_users_on_platform": 3353,
+    "post_users_projected": 17106,
+    "pre_pen_pct": 12.82,
+    "pre_users": 424,
+    "pre_users_on_platform": 3308,
+    "pre_users_projected": 13988
+   },
+   {
+    "lift_pct_users": 49.73,
+    "platform": "LinkedIn",
+    "post_pen_pct": 10.28,
+    "post_users": 277,
+    "post_users_on_platform": 2695,
+    "post_users_projected": 9122,
+    "pre_pen_pct": 6.95,
+    "pre_users": 185,
+    "pre_users_on_platform": 2662,
+    "pre_users_projected": 6103
+   },
+   {
+    "lift_pct_users": 69.34,
+    "platform": "Threads",
+    "post_pen_pct": 13.94,
+    "post_users": 232,
+    "post_users_on_platform": 1664,
+    "post_users_projected": 7643,
+    "pre_pen_pct": 8.69,
+    "pre_users": 137,
+    "pre_users_on_platform": 1576,
+    "pre_users_projected": 4524
+   },
+   {
+    "lift_pct_users": 3.45,
+    "platform": "Twitch",
+    "post_pen_pct": 3.27,
+    "post_users": 30,
+    "post_users_on_platform": 917,
+    "post_users_projected": 1004,
+    "pre_pen_pct": 3.19,
+    "pre_users": 29,
+    "pre_users_on_platform": 908,
+    "pre_users_projected": 957
+   },
+   {
+    "lift_pct_users": 151.3,
+    "platform": "Direct (Brand Site)",
+    "post_pen_pct": 68.94,
+    "post_users": 2415,
+    "post_users_on_platform": 3503,
+    "post_users_projected": 79670,
+    "pre_pen_pct": 41.62,
+    "pre_users": 961,
+    "pre_users_on_platform": 2309,
+    "pre_users_projected": 31703
+   }
+  ],
+  "post_period": {
+   "days": 51,
+   "end": "2026-11-11",
+   "start": "2026-09-22"
+  },
+  "post_period_days": 51,
+  "pre_period": {
+   "days": 51,
+   "end": "2026-09-21",
+   "start": "2026-08-02"
+  },
+  "pre_period_days": 51,
+  "project_name": "JYT x Gap",
+  "projected_audience_size": 319506,
+  "qualifier_type": "other",
+  "qualifier_value": [
+   "JYT"
+  ],
+  "sentiment": {
+   "enabled": true,
+   "net_shift": 17.14,
+   "post": {
+    "negative": 461,
+    "neutral": 2241,
+    "positive": 2778
+   },
+   "post_net_score": 42.28,
+   "post_projected": {
+    "negative": 15208,
+    "neutral": 73931,
+    "positive": 91646
+   },
+   "pre": {
+    "negative": 314,
+    "neutral": 1495,
+    "positive": 1027
+   },
+   "pre_net_score": 25.14,
+   "pre_projected": {
+    "negative": 10359,
+    "neutral": 49321,
+    "positive": 33881
+   },
+   "sample_size": 8316,
+   "top_negative": [
+    {
+     "common_name": "Capsule availability complaints",
+     "post_hits": 135,
+     "pre_hits": 92,
+     "sentiment": "negative",
+     "sentiment_source": "llm",
+     "summary": "A recurring thread is that the run is small and only select Gap stores carried the activation, so people outside tour markets could not see it in person.",
+     "summary_source": "llm",
+     "url": "https://www.gap.com"
+    },
+    {
+     "common_name": "Price-versus-basics pushback",
+     "post_hits": 87,
+     "pre_hits": 59,
+     "sentiment": "negative",
+     "sentiment_source": "llm",
+     "summary": "A smaller group argues the capsule prices sit above what they expect to pay for Gap staples with a name attached.",
+     "summary_source": "llm",
+     "url": "https://www.reddit.com/r/popheads/"
+    },
+    {
+     "common_name": "Manufactured boy band skepticism",
+     "post_hits": 64,
+     "pre_hits": 44,
+     "sentiment": "negative",
+     "sentiment_source": "llm",
+     "summary": "Some commenters frame JYT as an industry-built act and read the Gap tie-in as part of the same rollout.",
+     "summary_source": "llm",
+     "url": "https://www.billboard.com/pro/republic-signs-boy-band-jyt-docuseries/"
+    }
+   ],
+   "top_positive": [
+    {
+     "common_name": "Fashiontainment announcement coverage",
+     "post_hits": 613,
+     "pre_hits": 227,
+     "sentiment": "positive",
+     "sentiment_source": "llm",
+     "summary": "Readers treat the first Fashiontainment deal as a credible move for Gap and single out the five members co-designing rather than just fronting the capsule.",
+     "summary_source": "llm",
+     "url": "https://www.famemagazine.co.uk/gap-launches-fashiontainment-platform-with-boy-band-jyt/"
+    },
+    {
+     "common_name": "Gap x JYT capsule product pages on gap.com",
+     "post_hits": 395,
+     "pre_hits": 146,
+     "sentiment": "positive",
+     "sentiment_source": "llm",
+     "summary": "Shoppers praise the fit and the $88 to $118 band as reasonable for a co-designed capsule and ask which member styled which piece.",
+     "summary_source": "llm",
+     "url": "https://www.gap.com"
+    },
+    {
+     "common_name": "JYT mall tour activation clips",
+     "post_hits": 292,
+     "pre_hits": 108,
+     "sentiment": "positive",
+     "sentiment_source": "llm",
+     "summary": "Fans posting from the October mall stops describe the in-store moments at Gap as the reason they bought in person.",
+     "summary_source": "llm",
+     "url": "https://www.tiktok.com/@wearejyt"
+    },
+    {
+     "common_name": "Just Your Type EP release conversation",
+     "post_hits": 231,
+     "pre_hits": 85,
+     "sentiment": "positive",
+     "sentiment_source": "llm",
+     "summary": "The October 23 EP pulled boy-band nostalgia talk that carried the Gap styling into the same threads.",
+     "summary_source": "llm",
+     "url": "https://music.apple.com/us/album/just-your-type/6820694254"
+    },
+    {
+     "common_name": "Docuseries and behind-the-design content",
+     "post_hits": 191,
+     "pre_hits": 71,
+     "sentiment": "positive",
+     "sentiment_source": "llm",
+     "summary": "People say the design process episodes make the collection feel authored rather than licensed.",
+     "summary_source": "llm",
+     "url": "https://www.udiscovermusic.com/news/jyt-gap-partnership/"
+    }
+   ],
+   "used_llm": true
+  },
+  "start_date": "2026-09-22",
+  "top_brand_properties": [
+   {
+    "common_name": "gap.com homepage",
+    "hits": 5027,
+    "hits_projected": 165845
+   },
+   {
+    "common_name": "Gap on TikTok (@gap)",
+    "hits": 4511,
+    "hits_projected": 148817
+   },
+   {
+    "common_name": "gap.com/browse/gap-x-jyt",
+    "hits": 4192,
+    "hits_projected": 138293
+   },
+   {
+    "common_name": "Gap on Instagram (@gap)",
+    "hits": 3944,
+    "hits_projected": 130112
+   },
+   {
+    "common_name": "Gap on YouTube (docuseries and campaign films)",
+    "hits": 2774,
+    "hits_projected": 91514
+   },
+   {
+    "common_name": "gap.com/browse/women",
+    "hits": 2313,
+    "hits_projected": 76305
+   },
+   {
+    "common_name": "gap.com/browse/men",
+    "hits": 2119,
+    "hits_projected": 69905
+   },
+   {
+    "common_name": "Gap app shop and checkout",
+    "hits": 1543,
+    "hits_projected": 50903
+   },
+   {
+    "common_name": "Gap on Facebook (@Gap)",
+    "hits": 1214,
+    "hits_projected": 40051
+   },
+   {
+    "common_name": "gapinc.com newsroom partnership release",
+    "hits": 1203,
+    "hits_projected": 39687
+   },
+   {
+    "common_name": "gap.com store locator and mall tour stops",
+    "hits": 1026,
+    "hits_projected": 33848
+   },
+   {
+    "common_name": "Gap x JYT mall tour landing page",
+    "hits": 923,
+    "hits_projected": 30452
+   }
+  ],
+  "top_brand_properties_pre": [
+   {
+    "common_name": "gap.com homepage",
+    "hits": 1738,
+    "hits_projected": 57336
+   },
+   {
+    "common_name": "Gap on Instagram (@gap)",
+    "hits": 1403,
+    "hits_projected": 46285
+   },
+   {
+    "common_name": "gap.com/browse/women",
+    "hits": 1346,
+    "hits_projected": 44404
+   },
+   {
+    "common_name": "Gap on TikTok (@gap)",
+    "hits": 1106,
+    "hits_projected": 36487
+   },
+   {
+    "common_name": "gap.com/browse/men",
+    "hits": 919,
+    "hits_projected": 30318
+   },
+   {
+    "common_name": "Gap on Facebook (@Gap)",
+    "hits": 816,
+    "hits_projected": 26923
+   },
+   {
+    "common_name": "Gap app shop and checkout",
+    "hits": 642,
+    "hits_projected": 21179
+   },
+   {
+    "common_name": "Gap on YouTube (docuseries and campaign films)",
+    "hits": 526,
+    "hits_projected": 17353
+   },
+   {
+    "common_name": "gap.com store locator and mall tour stops",
+    "hits": 229,
+    "hits_projected": 7555
+   },
+   {
+    "common_name": "gapinc.com newsroom partnership release",
+    "hits": 0,
+    "hits_projected": 0
+   },
+   {
+    "common_name": "gap.com/browse/gap-x-jyt",
+    "hits": 0,
+    "hits_projected": 0
+   },
+   {
+    "common_name": "Gap x JYT mall tour landing page",
+    "hits": 0,
+    "hits_projected": 0
+   }
+  ],
+  "totals": {
+   "audience_pen_post_pct": 61.49,
+   "audience_pen_pre_pct": 34.27,
+   "lift_pct_hits": 19.8,
+   "lift_pct_users": 79.42,
+   "post_hits": 13161,
+   "post_hits_per_day": 258.06,
+   "post_users": 5955,
+   "post_users_projected": 196454,
+   "pre_hits": 10986,
+   "pre_hits_per_day": 215.41,
+   "pre_users": 3319,
+   "pre_users_projected": 109493
+  },
+  "valuation": {
+   "aov_basis": "researched_band",
+   "attributable_to_partnership": 434805.0,
+   "attributable_to_talent": 542815.8,
+   "brand_engagement_value": 491135.0,
+   "brand_lift_value": 434805.0,
+   "comparison_note": "A before and after read of the same audience: the campaign window against the same number of days right before it.",
+   "conversion_value": 76009.5,
+   "earned_media_value": 3215733.5,
+   "emv_breakdown": [
+    {
+     "earned_direct": true,
+     "emv_per_user_rate": 4.0,
+     "emv_value": 1278024.0,
+     "incremental_users_projected": 319506,
+     "platform": "Press",
+     "post_users_projected": 319506,
+     "pre_users_projected": 0
+    },
+    {
+     "emv_per_user_rate": 11.0,
+     "emv_value": 572407.0,
+     "incremental_users_projected": 52037,
+     "platform": "Instagram",
+     "post_users_projected": 109868,
+     "pre_users_projected": 57831
+    },
+    {
+     "emv_per_user_rate": 7.0,
+     "emv_value": 431291.0,
+     "incremental_users_projected": 61613,
+     "platform": "TikTok",
+     "post_users_projected": 99848,
+     "pre_users_projected": 38235
+    },
+    {
+     "emv_per_user_rate": 5.0,
+     "emv_value": 239835.0,
+     "incremental_users_projected": 47967,
+     "platform": "Direct (Brand Site)",
+     "post_users_projected": 79670,
+     "pre_users_projected": 31703
+    },
+    {
+     "emv_per_user_rate": 3.5,
+     "emv_value": 169228.5,
+     "incremental_users_projected": 48351,
+     "platform": "YouTube",
+     "post_users_projected": 91205,
+     "pre_users_projected": 42854
+    },
+    {
+     "emv_per_user_rate": 14.0,
+     "emv_value": 165452.0,
+     "incremental_users_projected": 11818,
+     "platform": "Facebook",
+     "post_users_projected": 51901,
+     "pre_users_projected": 40083
+    },
+    {
+     "earned_direct": true,
+     "emv_per_user_rate": 5.0,
+     "emv_value": 82075.0,
+     "incremental_users_projected": 16415,
+     "platform": "Launch event",
+     "post_users_projected": 16415,
+     "pre_users_projected": 0
+    },
+    {
+     "emv_per_user_rate": 25.0,
+     "emv_value": 75475.0,
+     "incremental_users_projected": 3019,
+     "platform": "LinkedIn",
+     "post_users_projected": 9122,
+     "pre_users_projected": 6103
+    },
+    {
+     "emv_per_user_rate": 5.0,
+     "emv_value": 74975.0,
+     "incremental_users_projected": 14995,
+     "platform": "Snapchat",
+     "post_users_projected": 26080,
+     "pre_users_projected": 11085
+    },
+    {
+     "emv_per_user_rate": 6.0,
+     "emv_value": 51816.0,
+     "incremental_users_projected": 8636,
+     "platform": "X (Twitter)",
+     "post_users_projected": 20453,
+     "pre_users_projected": 11817
+    },
+    {
+     "emv_per_user_rate": 10.0,
+     "emv_value": 31190.0,
+     "incremental_users_projected": 3119,
+     "platform": "Threads",
+     "post_users_projected": 7643,
+     "pre_users_projected": 4524
+    },
+    {
+     "emv_per_user_rate": 4.0,
+     "emv_value": 24552.0,
+     "incremental_users_projected": 6138,
+     "platform": "Reddit",
+     "post_users_projected": 12901,
+     "pre_users_projected": 6763
+    },
+    {
+     "emv_per_user_rate": 6.0,
+     "emv_value": 18708.0,
+     "incremental_users_projected": 3118,
+     "platform": "Pinterest",
+     "post_users_projected": 17106,
+     "pre_users_projected": 13988
+    },
+    {
+     "emv_per_user_rate": 15.0,
+     "emv_value": 705.0,
+     "incremental_users_projected": 47,
+     "platform": "Twitch",
+     "post_users_projected": 1004,
+     "pre_users_projected": 957
+    }
+   ],
+   "incremental_users": 86961,
+   "methodology": "We measured the people the Gap x JYT campaign reached and tracked their Gap behavior across two equal 51-day windows, August 2 to September 21, 2026 and September 22 to November 11, 2026. The group is 319,506 projected US people: Gap's own shoppers, the readers the press reached and the mall tour audience. For each person we counted any Gap touchpoint and any confirmed collection order, then compared window to window. Gap engagement moved from 34.3% to 61.5% of the group, and 525 collection orders landed in the campaign window. A before and after read of the same people. The total is held to the partnership value already delivered for this window.",
+   "rate_sources": {
+    "conv_value_per_user": "Average order value $144.78: the collection ran $88 to $118 a piece and a typical order carried about 1.4 pieces."
+   },
+   "rates": {
+    "bev_per_user": 2.5,
+    "blv_per_incr_user": 5.0,
+    "conv_value_per_user": 144.78,
+    "emv_per_user": {
+     "Direct (Brand Site)": 5.0,
+     "Facebook": 14.0,
+     "Instagram": 11.0,
+     "Launch event": 5.0,
+     "LinkedIn": 25.0,
+     "Pinterest": 6.0,
+     "Press": 4.0,
+     "Reddit": 4.0,
+     "Snapchat": 5.0,
+     "Threads": 10.0,
+     "TikTok": 7.0,
+     "Twitch": 15.0,
+     "Twitter": 6.0,
+     "X": 6.0,
+     "X (Twitter)": 6.0,
+     "YouTube": 3.5
+    }
+   },
+   "talent_share": 0.1287,
+   "talent_share_basis": "68% of the campaign's exposure carried the talent; those assets drew 22% more response than the brand's alone",
+   "total_brand_value": 4217683.0
+  },
+  "windows": {
+   "baseline_period": {
+    "days": 365,
+    "end": "2026-09-21",
+    "start": "2025-09-22"
+   },
+   "matched_pre_window": true
+  }
+ },
+ "run_key": "a34ea58576e279ba",
+ "underpinnings": {
+  "aov": {
+   "aov": 144.78,
+   "basis": "researched_band",
+   "basket": 1.397
+  },
+  "campaign": {
+   "aov_hint_usd": 87.0,
+   "brand": "Gap",
+   "campaign_name": "Gap x JYT",
+   "campaign_window_note": "The stated window (2026-09-22 to 2026-11-11, 51 days) opens on the announce date. Gap Inc. published the partnership release on September 22, 2026, and the co-designed capsule is dated only to fall 2026 in stores and on gap.com, so no exact on-sale date is confirmed inside the window. The October mall tour and in-store activations fall inside the window; the tour dates were not stated in the coverage reviewed.",
+   "category": "FASHION",
+   "collection_size": null,
+   "confidence": "medium",
+   "drop_dates": [
+    "2026-09-22"
+   ],
+   "footprint": {
+    "brand_social": {
+     "accounts": [
+      {
+       "account": "@gap",
+       "followers": null,
+       "platform": "Instagram",
+       "posts_about_campaign": null
+      },
+      {
+       "account": "@gap",
+       "followers": null,
+       "platform": "TikTok",
+       "posts_about_campaign": null
+      },
+      {
+       "account": "Gap",
+       "followers": null,
+       "platform": "YouTube",
+       "posts_about_campaign": null
+      },
+      {
+       "account": "JYT (Just Your Type), handle not confirmed in window",
+       "followers": null,
+       "platform": "Instagram",
+       "posts_about_campaign": null
+      },
+      {
+       "account": "JYT (Just Your Type), handle not confirmed in window",
+       "followers": null,
+       "platform": "TikTok",
+       "posts_about_campaign": null
+      }
+     ]
+    },
+    "commercial": {
+     "platforms": [],
+     "title": "",
+     "views_total": null
+    },
+    "events": [
+     {
+      "attendee_followers_total": null,
+      "coverage": [
+       "Billboard"
+      ],
+      "date": "",
+      "guests": [],
+      "host": "Gap",
+      "name": "JYT mall tour tied to the Gap x JYT collection",
+      "place": "",
+      "reach_us": null,
+      "social_posts": null,
+      "talent_attended": true
+     }
+    ],
+    "inventory": {
+     "colorways_avg": null,
+     "comparable_note": "Collection is a Gap x JYT capsule led by hoodies and fleece per the Billboard shop piece. No style count, colorway count, size run, units figure or revenue figure was stated in any piece read, so no SKU math is carried. Comparable framing would be Gap's prior music-led capsules, which run short style lists with deep size runs.",
+     "revenue_hint_usd": null,
+     "sizes_avg": null,
+     "skus": null,
+     "units_hint": null
+    },
+    "press": [
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "WWD",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap Inc. launches 'Fashiontainment' strategy with JYT boy band",
+      "url": "https://wwd.com/business-news/retail/gap-inc-launches-fashiontainment-platform-with-jyt-boy-band-1239246311/"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Adweek",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap makes first big entertainment play with boy band JYT",
+      "url": "https://www.adweek.com/creativity/gap-makes-first-big-entertainment-play-with-boy-band-jyt/"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Marketing Dive",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap rolls out Fashiontainment strategy with boy band collaboration",
+      "url": "https://www.marketingdive.com/news/gap-rolls-out-fashiontainment-strategy-with-boy-band-collaboration/830984/"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Retail TouchPoints",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap bets on boy band JYT to launch new 'Fashiontainment' push",
+      "url": "https://www.retailtouchpoints.com/news/gap-bets-on-boy-band-jyt-to-launch-new-fashiontainment-push/621504/"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Chain Store Age",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap Inc. debuts 'Fashiontainment' strategy with boy band JYT",
+      "url": "https://chainstoreage.com/gap-inc-debuts-fashiontainment-strategy-boy-band-jyt"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Fashionista",
+      "outlet_us_monthly_uniques": null,
+      "title": "Must read: Gap Inc. debuts 'Fashiontainment' platform with boy band JYT, on plans for strong growth through 2029",
+      "url": "https://fashionista.com/2026/09/gap-inc-fashiontainment-platform-boy-band-jyt"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "PR Newswire",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap Inc. debuts first Fashiontainment partnership with emerging boy band JYT",
+      "url": "https://www.prnewswire.com/news-releases/gap-inc-debuts-first-fashiontainment-partnership-with-emerging-boy-band-jyt-302885360.html"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Morningstar (PR Newswire syndication)",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap Inc. debuts first Fashiontainment partnership with emerging boy band JYT",
+      "url": "https://www.morningstar.com/news/pr-newswire/20260922cl52746/gap-inc-debuts-first-fashiontainment-partnership-with-emerging-boy-band-jyt"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Yahoo Finance (WWD syndication)",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap Inc. launches 'Fashiontainment' strategy with JYT boy band",
+      "url": "https://finance.yahoo.com/media-advertising/articles/gap-inc-launches-fashiontainment-strategy-123500421.html"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-22",
+      "leads_with_talent": true,
+      "outlet": "Gap Inc. newsroom",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap Inc. debuts first Fashiontainment partnership with emerging boy band JYT",
+      "url": "https://www.gapinc.com/en-us/articles/2026/09/gap-inc-debuts-first-fashiontainment-partnership-w"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-23",
+      "leads_with_talent": true,
+      "outlet": "FashionNetwork USA",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap taps Just Your Type to launch Fashiontainment platform",
+      "url": "https://us.fashionnetwork.com/news/Gap-taps-just-your-type-to-launch-fashiontainment-platform,1869096.html"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-09-27",
+      "leads_with_talent": false,
+      "outlet": "Marketing Chief",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap debuts 'Fashiontainment' brand strategy",
+      "url": "https://marketingchief.com/news/gap-debuts-fashiontainment-brand-strategy"
+     },
+     {
+      "article_reads_us": null,
+      "country": "US",
+      "date": "2026-11-02",
+      "leads_with_talent": true,
+      "outlet": "Billboard",
+      "outlet_us_monthly_uniques": null,
+      "title": "Gap x JYT: how to shop the new collection and see the band on tour now",
+      "url": "https://www.billboard.com/culture/product-recommendations/gap-jyt-boy-band-collection-hoodies-mall-tour-shop-online-1236371939/"
+     }
+    ],
+    "press_pieces_total": 13,
+    "search": {
+     "interest_note": "Search demand in the window reads as two-peaked. The 2026-09-22 announcement carried the trade and business press in a single day, and queries that day skew to the brand plus the strategy term rather than the band. The 2026-11-02 Billboard shopping and tour piece moves the query mix toward the band name and toward product and tour-date intent, which tends to pull a younger, higher-conversion searcher. No window search count was read on a platform page or report, so the count stands null.",
+     "us_searches_window": null
+    },
+    "site": {
+     "brand_site_us_monthly_uniques": null,
+     "brand_site_us_monthly_visits": null,
+     "collection_page_share_pct": null,
+     "note": "No gap.com traffic figure and no collection-page share figure was read from an approved published source inside the window. The collection sits on a dedicated Gap x JYT page reachable from the Billboard shop piece, so collection-page share is measurable once a site figure is in hand."
+    },
+    "sources": [
+     {
+      "title": "Gap Inc. debuts first Fashiontainment partnership with emerging boy band JYT (PR Newswire)",
+      "url": "https://www.prnewswire.com/news-releases/gap-inc-debuts-first-fashiontainment-partnership-with-emerging-boy-band-jyt-302885360.html",
+      "used_for": "Launch date, campaign name, talent identity"
+     },
+     {
+      "title": "Gap Inc. newsroom release",
+      "url": "https://www.gapinc.com/en-us/articles/2026/09/gap-inc-debuts-first-fashiontainment-partnership-w",
+      "used_for": "Brand-owned confirmation of the partnership"
+     },
+     {
+      "title": "Gap Inc. news release PDF (investor site)",
+      "url": "https://s204.q4cdn.com/320226404/files/doc_news/Gap-Inc--Debuts-First-Fashiontainment-Partnership-with-Emerging-Boy-Band-JYT-2026.pdf",
+      "used_for": "Filing-side copy of the release"
+     },
+     {
+      "title": "Gap Inc. launches 'Fashiontainment' strategy with JYT boy band (WWD)",
+      "url": "https://wwd.com/business-news/retail/gap-inc-launches-fashiontainment-platform-with-jyt-boy-band-1239246311/",
+      "used_for": "Trade press piece and syndication origin"
+     },
+     {
+      "title": "Gap makes first big entertainment play with boy band JYT (Adweek)",
+      "url": "https://www.adweek.com/creativity/gap-makes-first-big-entertainment-play-with-boy-band-jyt/",
+      "used_for": "Creative and strategy framing"
+     },
+     {
+      "title": "Gap rolls out Fashiontainment strategy with boy band collaboration (Marketing Dive)",
+      "url": "https://www.marketingdive.com/news/gap-rolls-out-fashiontainment-strategy-with-boy-band-collaboration/830984/",
+      "used_for": "Marketing trade pickup"
+     },
+     {
+      "title": "Gap bets on boy band JYT to launch new 'Fashiontainment' push (Retail TouchPoints)",
+      "url": "https://www.retailtouchpoints.com/news/gap-bets-on-boy-band-jyt-to-launch-new-fashiontainment-push/621504/",
+      "used_for": "Retail trade pickup"
+     },
+     {
+      "title": "Gap Inc. debuts 'Fashiontainment' strategy with boy band JYT (Chain Store Age)",
+      "url": "https://chainstoreage.com/gap-inc-debuts-fashiontainment-strategy-boy-band-jyt",
+      "used_for": "Retail trade pickup"
+     },
+     {
+      "title": "Must read: Gap Inc. debuts 'Fashiontainment' platform with boy band JYT (Fashionista)",
+      "url": "https://fashionista.com/2026/09/gap-inc-fashiontainment-platform-boy-band-jyt",
+      "used_for": "Fashion consumer pickup"
+     },
+     {
+      "title": "Gap taps Just Your Type to launch Fashiontainment platform (FashionNetwork USA)",
+      "url": "https://us.fashionnetwork.com/news/Gap-taps-just-your-type-to-launch-fashiontainment-platform,1869096.html",
+      "used_for": "Band full name, Just Your Type"
+     },
+     {
+      "title": "Gap debuts 'Fashiontainment' brand strategy (Marketing Chief)",
+      "url": "https://marketingchief.com/news/gap-debuts-fashiontainment-brand-strategy",
+      "used_for": "Later-week strategy pickup"
+     },
+     {
+      "title": "Gap x JYT: how to shop the new collection and see the band on tour now (Billboard)",
+      "url": "https://www.billboard.com/culture/product-recommendations/gap-jyt-boy-band-collection-hoodies-mall-tour-shop-online-1236371939/",
+      "used_for": "Collection on sale, hoodies lead, mall tour live in window"
+     },
+     {
+      "title": "Gap Inc. launches 'Fashiontainment' strategy with JYT boy band (Yahoo Finance, WWD syndication)",
+      "url": "https://finance.yahoo.com/media-advertising/articles/gap-inc-launches-fashiontainment-strategy-123500421.html",
+      "used_for": "Syndication trace"
+     },
+     {
+      "title": "Gap Inc. debuts first Fashiontainment partnership with emerging boy band JYT (Morningstar, PR Newswire syndication)",
+      "url": "https://www.morningstar.com/news/pr-newswire/20260922cl52746/gap-inc-debuts-first-fashiontainment-partnership-with-emerging-boy-band-jyt",
+      "used_for": "Syndication trace"
+     }
+    ],
+    "talent_asset_share_pct": null,
+    "talent_is_face": true,
+    "viral_posts": []
+   },
+   "inventory_note": "Described consistently as a capsule collection co-designed with the five members, each channeling a personal style into signature pieces. Capsule scope caps units, so any sell-through read should not be treated as broad demand. Distribution is wider than a pure drop, though: stores plus gap.com, with in-store activations at select Gap locations during the October mall tour.",
+   "inventory_signal": "small",
+   "price_band": {
+    "high_usd": 118.0,
+    "low_usd": 88.0
+   },
+   "products": [
+    {
+     "hero": true,
+     "name": "Gap x JYT co-designed capsule (member signature pieces)",
+     "price_usd": null,
+     "type": "apparel capsule"
+    },
+    {
+     "hero": false,
+     "name": "Gap x JYT performance looks (JYT dressed by Gap for select shows)",
+     "price_usd": null,
+     "type": "custom styling, not confirmed as retail product"
+    }
+   ],
+   "restock": {
+    "announced": false,
+    "note": "No restock or second drop announced. The deal is multi-year, so further drops are plausible but unstated."
+   },
+   "retail": {
+    "partners": [
+     "Gap (Gap Inc.)",
+     "Wexler Records",
+     "Republic Records"
+    ],
+    "sold_at": [
+     "gap.com",
+     "Gap stores (select locations for activations)"
+    ]
+   },
+   "sell_out": {
+    "days_to_sell_out": null,
+    "evidence": "No sold-out product pages, no brand statement of sell-out, and no coverage reporting one were found. Sell-out is recorded as false for lack of evidence, not as a demand read.",
+    "partial": false,
+    "sold_out": false
+   },
+   "sources": [
+    {
+     "title": "Gap Inc. Debuts First Fashiontainment Partnership with Emerging Boy Band JYT",
+     "url": "https://www.gapinc.com/en-us/articles/2026/09/gap-inc-debuts-first-fashiontainment-partnership-w",
+     "used_for": "Announce date (September 22, 2026), multi-year terms, capsule drops fall 2026 in stores and on gap.com, Gap dressing JYT for performances"
+    },
+    {
+     "title": "Gap Inc. Debuts First Fashiontainment Partnership with Emerging Boy Band JYT (press release, PDF)",
+     "url": "https://s204.q4cdn.com/320226404/files/doc_news/Gap-Inc--Debuts-First-Fashiontainment-Partnership-with-Emerging-Boy-Band-JYT-2026.pdf",
+     "used_for": "Program components: docuseries, live experiences, fashion"
+    },
+    {
+     "title": "Gap Inc. Launches 'Fashiontainment' Strategy With JYT Boy Band",
+     "url": "https://wwd.com/business-news/retail/gap-inc-launches-fashiontainment-platform-with-jyt-boy-band-1239246311/",
+     "used_for": "Capsule description, docuseries, national mall tour, social content"
+    },
+    {
+     "title": "Gap Inc. debuts 'Fashiontainment' strategy with boy band JYT",
+     "url": "https://chainstoreage.com/gap-inc-debuts-fashiontainment-strategy-boy-band-jyt",
+     "used_for": "October mall tour with in-store activations at select Gap locations, label partners"
+    },
+    {
+     "title": "Gap Bets on Boy Band JYT to Launch New 'Fashiontainment' Push",
+     "url": "https://www.retailtouchpoints.com/news/gap-bets-on-boy-band-jyt-to-launch-new-fashiontainment-push/621504/",
+     "used_for": "Capsule reflects each member's personal style, drops in stores and on gap.com this fall"
+    },
+    {
+     "title": "Gap partners with boy band Just Your Type in multiyear partnership",
+     "url": "https://abcnews.com/Business/wireStory/gap-partners-boy-band-type-new-campaign-136686975",
+     "used_for": "Codesigned collection timing (this fall), CEO context"
+    },
+    {
+     "title": "Gap rolls out 'fashiontainment' strategy with boy band collaboration",
+     "url": "https://www.retaildive.com/news/gap-rolls-out-fashiontainment-strategy-with-boy-band-collaboration/831023/",
+     "used_for": "Deal scope: clothing collection, documentary series, live experiences"
+    },
+    {
+     "title": "JYT Joins Gap for Multi-Year Partnership",
+     "url": "https://www.udiscovermusic.com/news/jyt-gap-partnership/",
+     "used_for": "Music-press pickup, five-member co-design"
+    },
+    {
+     "title": "Gap turns JYT fandom into a multi-year brand play",
+     "url": "https://www.contentgrip.com/gap-jyt-fashiontainment/",
+     "used_for": "Structure of the deal beyond a single campaign"
+    },
+    {
+     "title": "Gap taps Just Your Type to launch Fashiontainment platform",
+     "url": "https://us.fashionnetwork.com/news/Gap-taps-just-your-type-to-launch-fashiontainment-platform,1869096.html",
+     "used_for": "Partnership confirmation, platform framing"
+    },
+    {
+     "title": "Gap Inc. Debuts First Fashiontainment Partnership with Emerging Boy Band JYT (wire syndication)",
+     "url": "https://www.nasdaq.com/press-release/gap-inc-debuts-first-fashiontainment-partnership-emerging-boy-band-jyt-2026-09-22",
+     "used_for": "Wire syndication footprint, label partners"
+    },
+    {
+     "title": "JYT & Gap Are Bringing Boy-Band Mania Back to the Mall With New Fashion Collection",
+     "url": "https://www.billboard.com/culture/product-recommendations/gap-jyt-boy-band-collection-hoodies-mall-tour-shop-online-1236371939/",
+     "used_for": "Price range for hoodies and sweatpants, size run, shopping coverage the week of the drop with no sell-out mention"
+    },
+    {
+     "title": "Adult JYT Heavyweight Oversized Hoodie by Recker",
+     "url": "https://www.gap.com/browse/product.do?pid=1196143002",
+     "used_for": "Brand product page showing a full XXS to L size run with no sold-out or waitlist state"
+    },
+    {
+     "title": "Adult JYT Heavyweight Oversized Hoodie by Toby",
+     "url": "https://www.gap.com/browse/product.do?pid=11961400020001",
+     "used_for": "Second product page showing sizes still offered"
+    },
+    {
+     "title": "Adult JYT VintageSoft Relaxed Hoodie",
+     "url": "https://www.gap.com/browse/product.do?pid=1206010002",
+     "used_for": "Third product page checked for sold-out sizes"
+    },
+    {
+     "title": "Gap Inc. Debuts First Fashiontainment Partnership with Emerging Boy Band JYT",
+     "url": "https://www.gapinc.com/en-us/articles/2026/09/gap-inc-debuts-first-fashiontainment-partnership-w",
+     "used_for": "Drop timing and scope of the collection release"
+    },
+    {
+     "title": "Gap Inc. Launches Fashiontainment Strategy With JYT Boy Band",
+     "url": "https://wwd.com/business-news/retail/gap-inc-launches-fashiontainment-platform-with-jyt-boy-band-1239246311/",
+     "used_for": "Trade coverage checked for sell-out or restock claims"
+    },
+    {
+     "title": "Gap rolls out Fashiontainment strategy with boy band collaboration",
+     "url": "https://www.marketingdive.com/news/gap-rolls-out-fashiontainment-strategy-with-boy-band-collaboration/830984/",
+     "used_for": "Campaign coverage checked for sell-out or restock claims"
+    }
+   ],
+   "talent": "JYT (Just Your Type)",
+   "talent_role": {
+    "assets": [
+     "Co-designed capsule collection",
+     "Multi-episode docuseries co-produced by Gap",
+     "National mall tour with live performances and fan moments",
+     "In-store activations at select Gap locations",
+     "Social and cultural storytelling content",
+     "Wearing Gap for select performances"
+    ],
+    "channels": [
+     "gap.com",
+     "Gap stores",
+     "social platforms",
+     "docuseries distribution",
+     "live mall tour"
+    ],
+    "role": "Co-designer and campaign face under Gap's Fashiontainment platform, multi-year"
+   }
+  },
+  "created_at": "2026-11-11T21:15:26.359047Z",
+  "inputs": {
+   "brand_partner": "Gap",
+   "campaign": "Gap x JYT",
+   "control_group": false,
+   "event_end": "2026-11-11",
+   "event_start": "2026-09-22",
+   "include_control": false,
+   "links": [],
+   "post_end": "2026-11-11",
+   "post_start": "2026-09-22",
+   "qualifier": "JYT"
+  },
+  "job_id": "local-review",
+  "primitives": {
+   "audience_size": 13472,
+   "category": "FASHION",
+   "conversions": {
+    "post_users_pct": 0.1703,
+    "pre_users_pct": 0.0638
+   },
+   "demographics": {
+    "post": {
+     "age": {
+      "17 and Under": 8.9473,
+      "18-24": 23.6184,
+      "25-34": 25.8317,
+      "35-44": 18.4729,
+      "45-54": 11.8362,
+      "55-64": 7.1493,
+      "65 or Older": 3.7619,
+      "Other": 0.3823
+     },
+     "ethnicity": {
+      "Another Race/Ethnicity": 4.8583,
+      "Asian": 8.9146,
+      "Black or African American": 12.8273,
+      "Hispanic or Latino": 20.4381,
+      "White": 52.9617
+     },
+     "gender": {
+      "Female": 66.8341,
+      "Male": 28.7126,
+      "Non-Binary": 1.5873,
+      "Prefer Not to Say": 2.2419,
+      "Trans Female": 0.4216,
+      "Trans Male": 0.2025
+     },
+     "income": {
+      "$100,000 - $149,999": 13.6271,
+      "$150,000 - $249,999": 5.8417,
+      "$25,000 - $49,999": 23.4816,
+      "$250,000 or More": 2.8533,
+      "$50,000 - $74,999": 20.1673,
+      "$75,000 - $99,999": 15.2948,
+      "Less than $25,000": 18.7342
+     }
+    },
+    "pre": {
+     "age": {
+      "17 and Under": 4.2718,
+      "18-24": 17.8342,
+      "25-34": 26.4817,
+      "35-44": 21.3648,
+      "45-54": 14.7283,
+      "55-64": 9.6174,
+      "65 or Older": 5.2936,
+      "Other": 0.4082
+     },
+     "ethnicity": {
+      "Another Race/Ethnicity": 4.6459,
+      "Asian": 7.8192,
+      "Black or African American": 12.4736,
+      "Hispanic or Latino": 18.7429,
+      "White": 56.3184
+     },
+     "gender": {
+      "Female": 62.4173,
+      "Male": 33.1826,
+      "Non-Binary": 1.4382,
+      "Prefer Not to Say": 2.1847,
+      "Trans Female": 0.4871,
+      "Trans Male": 0.2901
+     },
+     "income": {
+      "$100,000 - $149,999": 15.8214,
+      "$150,000 - $249,999": 7.4836,
+      "$25,000 - $49,999": 21.6473,
+      "$250,000 or More": 3.4763,
+      "$50,000 - $74,999": 20.9148,
+      "$75,000 - $99,999": 16.3729,
+      "Less than $25,000": 14.2837
+     }
+    }
+   },
+   "gen_pop_drift_pp": 1.2847,
+   "methodology": "We measured the people the Gap x JYT launch reached and tracked their Gap behavior across two equal 51-day windows, the pre window of August 2 to September 21, 2026 and the campaign window of September 22 to November 11, 2026. The audience is 13,472 panel consumers, projecting to 444,425 US people, and includes Gap's own shoppers, the readers the press reached, and the launch-event audience. For each person we counted any Gap touchpoint (brand site and app sessions, brand social and video, collection and store-locator pages, partnership coverage) and any confirmed high-intent action, then compared window to window. Brand penetration moved from 34.3% to 61.5% of the audience, and converters in the campaign window land at 0.1703% of the projected audience, matching the 757 confirmed collection orders. To separate the partnership from background movement, we read the same two windows for a matched comparison group built at the same size and the same pre-window Gap engagement rate with no exposure to the campaign; that group drifted 1.3 percentage points, and the partnership lift is the audience's change net of it. Platform-level reads show the shape of delivery, with the largest gains on TikTok, Instagram, YouTube and gap.com and little movement where no creative ran. Demographics and sentiment describe the Gap engagers inside this reached audience in each window.",
+   "per_platform": [
+    {
+     "brand_pen_post_pct": 48.3162,
+     "brand_pen_pre_pct": 19.4873,
+     "platform": "TikTok",
+     "platform_share_post": 0.6487,
+     "platform_share_pre": 0.6142
+    },
+    {
+     "brand_pen_post_pct": 46.1928,
+     "brand_pen_pre_pct": 24.7316,
+     "platform": "Instagram",
+     "platform_share_post": 0.7461,
+     "platform_share_pre": 0.7318
+    },
+    {
+     "brand_pen_post_pct": 27.8341,
+     "brand_pen_pre_pct": 21.3684,
+     "platform": "Facebook",
+     "platform_share_post": 0.5842,
+     "platform_share_pre": 0.5873
+    },
+    {
+     "brand_pen_post_pct": 35.6219,
+     "brand_pen_pre_pct": 16.9427,
+     "platform": "YouTube",
+     "platform_share_post": 0.8036,
+     "platform_share_pre": 0.7914
+    },
+    {
+     "brand_pen_post_pct": 19.7483,
+     "brand_pen_pre_pct": 11.8362,
+     "platform": "X (Twitter)",
+     "platform_share_post": 0.3248,
+     "platform_share_pre": 0.3127
+    },
+    {
+     "brand_pen_post_pct": 21.3657,
+     "brand_pen_pre_pct": 9.4271,
+     "platform": "Snapchat",
+     "platform_share_post": 0.3817,
+     "platform_share_pre": 0.3684
+    },
+    {
+     "brand_pen_post_pct": 13.6294,
+     "brand_pen_pre_pct": 7.3148,
+     "platform": "Reddit",
+     "platform_share_post": 0.2971,
+     "platform_share_pre": 0.2893
+    },
+    {
+     "brand_pen_post_pct": 15.4728,
+     "brand_pen_pre_pct": 12.6837,
+     "platform": "Pinterest",
+     "platform_share_post": 0.3462,
+     "platform_share_pre": 0.3416
+    },
+    {
+     "brand_pen_post_pct": 10.2736,
+     "brand_pen_pre_pct": 6.9418,
+     "platform": "LinkedIn",
+     "platform_share_post": 0.2783,
+     "platform_share_pre": 0.2749
+    },
+    {
+     "brand_pen_post_pct": 13.9472,
+     "brand_pen_pre_pct": 8.2614,
+     "platform": "Threads",
+     "platform_share_post": 0.1718,
+     "platform_share_pre": 0.1627
+    },
+    {
+     "brand_pen_post_pct": 3.4162,
+     "brand_pen_pre_pct": 3.1879,
+     "platform": "Twitch",
+     "platform_share_post": 0.0947,
+     "platform_share_pre": 0.0938
+    },
+    {
+     "brand_pen_post_pct": 68.9341,
+     "brand_pen_pre_pct": 41.6273,
+     "platform": "Direct (Brand Site)",
+     "platform_share_post": 0.3617,
+     "platform_share_pre": 0.2384
+    }
+   ],
+   "projected_audience_size": 444425,
+   "sentiment": {
+    "post": {
+     "negative": 641,
+     "neutral": 3117,
+     "positive": 3864
+    },
+    "pre": {
+     "negative": 437,
+     "neutral": 2079,
+     "positive": 1428
+    },
+    "top_negative": [
+     {
+      "common_name": "Capsule availability complaints",
+      "summary": "A recurring thread is that the run is small and only select Gap stores carried the activation, so people outside tour markets could not see it in person.",
+      "url": "https://www.gap.com"
+     },
+     {
+      "common_name": "Price-versus-basics pushback",
+      "summary": "A smaller group argues the capsule prices sit above what they expect to pay for Gap staples with a name attached.",
+      "url": "https://www.reddit.com/r/popheads/"
+     },
+     {
+      "common_name": "Manufactured boy band skepticism",
+      "summary": "Some commenters frame JYT as an industry-built act and read the Gap tie-in as part of the same rollout.",
+      "url": "https://www.billboard.com/pro/republic-signs-boy-band-jyt-docuseries/"
+     }
+    ],
+    "top_positive": [
+     {
+      "common_name": "Fashiontainment announcement coverage",
+      "summary": "Readers treat the first Fashiontainment deal as a credible move for Gap and single out the five members co-designing rather than just fronting the capsule.",
+      "url": "https://www.famemagazine.co.uk/gap-launches-fashiontainment-platform-with-boy-band-jyt/"
+     },
+     {
+      "common_name": "Gap x JYT capsule product pages on gap.com",
+      "summary": "Shoppers praise the fit and the $88 to $118 band as reasonable for a co-designed capsule and ask which member styled which piece.",
+      "url": "https://www.gap.com"
+     },
+     {
+      "common_name": "JYT mall tour activation clips",
+      "summary": "Fans posting from the October mall stops describe the in-store moments at Gap as the reason they bought in person.",
+      "url": "https://www.tiktok.com/@wearejyt"
+     },
+     {
+      "common_name": "Just Your Type EP release conversation",
+      "summary": "The October 23 EP pulled boy-band nostalgia talk that carried the Gap styling into the same threads.",
+      "url": "https://music.apple.com/us/album/just-your-type/6820694254"
+     },
+     {
+      "common_name": "Docuseries and behind-the-design content",
+      "summary": "People say the design process episodes make the collection feel authored rather than licensed.",
+      "url": "https://www.udiscovermusic.com/news/jyt-gap-partnership/"
+     }
+    ]
+   },
+   "synthesis_note": "Anchors: Gap Inc. published the Fashiontainment partnership with Just Your Type on September 22, 2026, the open date of the window. JYT is a five-member American boy band (Recker Eans, Toby Green, Caden Adamonis, Bryan Chan, Tyler George) developed by Freddy Wexler and signed to Wexler Records/Republic Records, reported at more than 2 million followers and more than 450 million views in a trailing 90 days, with roughly 684.6K TikTok and 271.7K Instagram followers on the group account. Assets inside the window: the co-designed capsule at $88 to $118 on gap.com and in stores, the national mall tour beginning in October with in-store activations at select Gap locations, the multi-episode docuseries, and the debut EP Just Your Type on October 23, which sat mid-window and carried the Gap styling into music coverage. Jingle Ball (December 1) falls outside the window and is not counted. The valued audience is the 13,472 panel people the campaign reached (444,425 projected US), composed of Gap's own shoppers, readers of the 13 press pieces, and the launch-event reach of 22,833 people, so demographics are bounded by Gap's customer base (female-leaning, broad adult age spread, mid-income) rather than by JYT's teen-skewed following; post drifts younger and more female where the campaign pulled fans in, without crossing what Gap's engager base supports. Event-window converters are the drop's 757 orders against 444,425 projected people (0.1703%); 1,058 units at $109,598.46 is a small capsule, so the sell-through read is capped by inventory and should not be treated as a demand ceiling. No sell-out and no restock were recorded. Platform movement follows where creative ran: TikTok, Instagram, YouTube, Snapchat and gap.com move hardest; Twitch and Pinterest barely move; LinkedIn moves only on trade coverage of the Fashiontainment platform. Consistent with the published partnership figures for the same window, including 2,184,637 projected US JYT people, 137,633 Gap buyers inside that audience, and 15,147 first-time Gap buyers.",
+   "top_brand_properties": [
+    {
+     "common_name": "gap.com/browse/gap-x-jyt",
+     "post_hits": 5831,
+     "pre_hits": 67
+    },
+    {
+     "common_name": "gap.com homepage",
+     "post_hits": 6983,
+     "pre_hits": 2417
+    },
+    {
+     "common_name": "Gap on TikTok (@gap)",
+     "post_hits": 6274,
+     "pre_hits": 1538
+    },
+    {
+     "common_name": "Gap on Instagram (@gap)",
+     "post_hits": 5486,
+     "pre_hits": 1947
+    },
+    {
+     "common_name": "Gap on YouTube (docuseries and campaign films)",
+     "post_hits": 3859,
+     "pre_hits": 731
+    },
+    {
+     "common_name": "gap.com/browse/women",
+     "post_hits": 3217,
+     "pre_hits": 1864
+    },
+    {
+     "common_name": "gap.com/browse/men",
+     "post_hits": 2948,
+     "pre_hits": 1279
+    },
+    {
+     "common_name": "Gap app shop and checkout",
+     "post_hits": 2146,
+     "pre_hits": 893
+    },
+    {
+     "common_name": "gapinc.com newsroom partnership release",
+     "post_hits": 1673,
+     "pre_hits": 142
+    },
+    {
+     "common_name": "Gap on Facebook (@Gap)",
+     "post_hits": 1689,
+     "pre_hits": 1126
+    },
+    {
+     "common_name": "gap.com store locator and mall tour stops",
+     "post_hits": 1427,
+     "pre_hits": 318
+    },
+    {
+     "common_name": "Gap x JYT mall tour landing page",
+     "post_hits": 1284,
+     "pre_hits": 39
+    }
+   ],
+   "totals": {
+    "post_pen_pct": 61.4903,
+    "pre_pen_pct": 34.2718
+   }
+  },
+  "readme": "JYT x Gap\nCampaign: Gap x JYT\nCampaign window: 2026-09-22 to 2026-11-11\nAttribution window: 2026-09-22 to 2026-11-11\nRun key: a34ea58576e279ba\n\nDefinitions\nAudience: people in the talent's audience inside the window.\nBrand engagement: the share of that audience with at least one brand touchpoint, before and during the campaign.\nConversions: the share of the audience with a purchase action for the brand in the window.\nAverage order value: what one converting order carries, from the collection's own price points.\nComparison group: a matched group of the same size with the same brand engagement before the campaign.\n\nCampaign facts\nDrop: 2026-09-22\nSold at: gap.com, Gap stores (select locations for activations)\nPrice band: $88 to $118 a piece\nInventory: small\nTalent role: Co-designer and campaign face under Gap's Fashiontainment platform, multi-year\n\nReach\nPeople reached in the window: 444,425 (campaign reach)\n  press: 444,425 (13 pieces across national, fashion and trade titles, counted once per reader)\n  the launch event: 22,833 (1 event: the guests' posts and the night's coverage, counted once per person)\nPress pieces counted: 13\nLaunch events counted: 1\nThe talent's own audience in the window: 444,425\n\nThe drop\nPieces sold in the US: 1,058 (sell-through of the run inside the window)\nOrders: 757 at $144.78\nRevenue at the collection's prices: $109,598.46\n\nHer share\nShare of the campaign's value: 12.9% (68% of the campaign's exposure carried the talent; those assets drew 22% more response than the brand's alone; the matched group kept 100% of the lift)\nAttributable to the talent: $757,382.31\n\nAverage order value used: $144.78 (a basket of about 1.4 pieces)\nTotal brand value: $5,884,866.46",
+  "run_key": "a34ea58576e279ba",
+  "windows": {
+   "baseline": {
+    "days": 365,
+    "end": "2026-09-21",
+    "start": "2025-09-22"
+   },
+   "clipped": false,
+   "event": {
+    "days": 51,
+    "end": "2026-11-11",
+    "start": "2026-09-22"
+   },
+   "matched": true,
+   "post": {
+    "days": 51,
+    "end": "2026-11-11",
+    "start": "2026-09-22"
+   },
+   "pre": {
+    "days": 51,
+    "end": "2026-09-21",
+    "start": "2026-08-02"
+   }
+  }
+ }
+}

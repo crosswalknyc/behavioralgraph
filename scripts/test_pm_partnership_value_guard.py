@@ -52,6 +52,13 @@ from prometheus import envelope as ENV  # noqa: E402
 from prometheus import intake_guard as G  # noqa: E402
 from prometheus import intents as I  # noqa: E402
 from prometheus import partnership_value as PV  # noqa: E402
+from prometheus import partnership_roles as ROLES  # noqa: E402
+
+# what the library knows about these names, as it does live (a hermetic
+# run reads no library): which side of a pairing is the talent comes from
+# this, never from the order the names were written in
+ROLES.KIND_LOOKUP = {'gap': 'brand', 'nike': 'brand', 'gunna': 'talent', 'lowes': 'brand', 'target': 'brand',
+                     'stanley': 'brand', 'glenpowell': 'talent'}.get
 from migration import bpiq_anchors as BA  # noqa: E402
 from migration.bpiq_synthesis import MemoryRegistry  # noqa: E402
 
@@ -223,13 +230,34 @@ def test_b_cold_ask_reaches_the_quote():
     out = w.say('what is the Gap x JYT partnership worth')
     check("the order answers (no general read runs)", out is not None and out.get('bpiq_wizard'))
     check("the reply says where the figure comes from", out['reply'].startswith(PV.LEAD_VALUE))
-    check("it says what it read, and that it can be corrected",
-          'Got it: Gap is the talent and JYT is the brand.' in out['reply'] and 'wrong way round' in out['reply'])
+    check("it says what it read, the brand the library knows as the brand (never the order the names were written in)",
+          'Got it: JYT is the talent and Gap is the brand.' in out['reply'] and 'wrong way round' not in out['reply'])
+    check("the other way round reads the same", 'Got it: JYT is the talent and Gap is the brand.'
+          in Walk().say('what is the JYT x Gap partnership worth')['reply'])
     check("it carries no dollar figure for the partnership", '$' not in out['reply'])
     check("the names were not asked for again", w.draft().get('step') == W.STEP_DATES and out['reply'].endswith(W.ASK_DATES))
     out = w.say('JYT is the talent')
-    check("naming one side by its role swaps the pair", w.draft().get('talent') == 'JYT' and w.draft().get('brand_partner') == 'Gap'
-          and out['reply'].startswith('Got it: JYT is the talent and Gap is the brand.'))
+    check("naming one side by its role keeps the pair", w.draft().get('talent') == 'JYT' and w.draft().get('brand_partner') == 'Gap'
+          and out['reply'].startswith('Got it: JYT is the talent'))
+    # nothing known settles which side is the talent: one short question, never a guess
+    u = Walk()
+    out2 = u.say('what is the Quill x Zorb partnership worth')
+    check("an unknown pairing is asked about, not guessed",
+          out2['reply'].endswith('Which one is the talent or property: Quill or Zorb?')
+          and 'is the talent and' not in out2['reply'] and out2['followups'] == ['Quill', 'Zorb', 'Cancel'])
+    check("neither name was dropped", u.draft().get('pair') == ['Quill', 'Zorb'] and not u.draft().get('talent'))
+    out2 = u.say('Zorb')
+    check("the answer sets both roles", u.draft().get('talent') == 'Zorb' and u.draft().get('brand_partner') == 'Quill'
+          and not u.draft().get('pair') and u.draft().get('step') == W.STEP_DATES)
+    u = Walk()
+    u.say('what is the Quill x Zorb partnership worth')
+    out2 = u.say('Quill is the brand')
+    check("a role sentence answers it too", u.draft().get('talent') == 'Zorb' and u.draft().get('brand_partner') == 'Quill')
+    u = Walk()
+    u.say('what is the Stanley x Target partnership worth')
+    check("two brands are asked about", u.replies[-1].endswith('Which one is the talent or property: Stanley or Target?'))
+    out2 = u.say('not sure')
+    check("a miss asks again in other words", 'Is it Stanley or Target?' in u.replies[-1] and u.replies[-1] != u.replies[-2])
     for m in ('September 22 to today', 'Accept', 'no', 'find them'):
         out = w.say(m)
     check("the walk ends on the quote", w.draft().get('step') == W.STEP_CHARGE and 'This is $500.' in out['reply']

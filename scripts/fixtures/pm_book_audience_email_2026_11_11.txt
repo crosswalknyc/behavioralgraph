@@ -1,0 +1,56 @@
+Hi there,
+
+Here is the read you asked for: US people engaged with each novel, by calendar year, with the split by source, the women 18-34 and men 18-34 shares, and the count in the data behind every figure. The CSV is attached and the same answer is in your Prometheus chat.
+
+The Love Hypothesis reached 2,645,468 US people in 2022, its largest year before the film, held 1,516,352 in 2025, and stands at 7,381,875 so far in 2026, the year its film arrived. The Map That Leads To You sat between 10,755 and 13,361 people a year until its film was cast: 165,808 in 2024, 1,919,985 in 2025, the film year, and 498,050 so far in 2026.
+
+This file replaces the table sent in the chat earlier today. Please use this one.
+
+TOTAL US PEOPLE ENGAGED, EACH PERSON ONCE PER YEAR
+
+Title and year / US people / People in the data / Women 18-34 / Men 18-34
+The Love Hypothesis 2021 / 906,994 / 27,493 / 51.8% / 5.9%
+The Love Hypothesis 2022 / 2,645,468 / 80,190 / 53.4% / 6.3%
+The Love Hypothesis 2023 / 2,135,245 / 64,724 / 51.2% / 6.8%
+The Love Hypothesis 2024 / 1,577,846 / 47,828 / 48.9% / 7.1%
+The Love Hypothesis 2025 / 1,516,352 / 45,964 / 47.3% / 7.6%
+The Love Hypothesis 2026 to Nov 10 / 7,381,875 / 223,761 / 39.6% / 9.4%
+The Map That Leads To You 2019 / 12,206 / 370 / see merges / see merges
+The Map That Leads To You 2020 / 13,361 / 405 / see merges / see merges
+The Map That Leads To You 2021 / 11,579 / 351 / see merges / see merges
+The Map That Leads To You 2022 / 10,755 / 326 / see merges / see merges
+The Map That Leads To You 2023 / 11,481 / 348 / see merges / see merges
+The Map That Leads To You 2024 / 165,808 / 5,026 / 46.8% / see merges
+The Map That Leads To You 2025 / 1,919,985 / 58,199 / 41.7% / 10.6%
+The Map That Leads To You 2026 to Nov 10 / 498,050 / 15,097 / 40.9% / 9.8%
+
+2026 runs January 1 through November 10. Each US figure is its count in the data times 32.99.
+
+WHAT WAS MERGED UNDER THE 100 FLOOR
+
+- The Love Hypothesis, 2019 and 2020. The title was announced in 2020 and published September 14, 2021, so 2019 has no activity. 2020 had fewer than 100 people in the data and is counted in 2021. The story circulated earlier as fan fiction under a different name; that is a different work and is not counted.
+- The Map That Leads To You, 2019 through 2023. Each year's total stands on its own. The source split and the women 18-34 share are given for the five years together: 45,922 people (1,392 in the data), 33.2% women 18-34.
+- The Map That Leads To You, small sources. For 2019 through 2023, Wattpad and fan fiction, TikTok, YouTube and fan sites are one line. For 2024 and 2026, Wattpad and fan fiction is combined with fan sites.
+- The Map That Leads To You, men 18-34. Fewer than 100 in the data for 2019 through 2023, so the share is given for 2019 through 2024 together: 7.3% of 201,371 people (446 men 18-34 in the data).
+
+THE SPLIT BY SOURCE
+
+Each source counts a person once inside that source, so the sources add to more than the year's total, which counts each person once. Every source sits at or below its year's total. The full split for every year is in the file.
+
+- The Love Hypothesis. TikTok is the largest source in every year through 2025 (1,492,039 people in 2022, next to 795,158 online book buyers). In 2026 search (3,922,973) and YouTube (3,625,964) pass TikTok (2,853,998), and online book buyers reach 832,041.
+- The Map That Leads To You. Search is the largest source in every period. In 2025 it is 1,228,878 people, with TikTok at 861,897, YouTube at 602,925 and online book buyers at 57,963.
+
+A search or a video about a title after its film was announced is on the same title and is counted; it cannot be split between the book and the film.
+
+YOUR TWO QUESTIONS
+
+What we do and do not capture. The data is the digital activity of 10 million US consumers who opted in, measured across the devices they use, phones, computers and connected TVs included, on the same ID. TikTok and YouTube viewing on a phone is counted like everything else, once per person. What sits outside is anything with no digital trace: a copy bought in a store, borrowed or passed along is not in the books row.
+
+Whether any figure is filled in rather than counted. No. Each figure is a count of people observed doing exactly what its line says inside the window, projected to the US from the same base; nothing is filled in from another audience or carried over from a different window.
+
+THE EARLIER OFFER
+
+Nothing was started on the eight-year profile of Men 18-34 Prime Members, and nothing is charged for it or for this read. This read is included with your plan.
+
+Prometheus
+Crosswalk

@@ -7262,7 +7262,7 @@ def build_generated_csv(entry):
             note = _meth.ORDER_HEADER + ' ' + _meth.ORDER_DEFINITION
         elif fam == _meth.ENGAGEMENT:
             note = _meth.ENGAGEMENT_HEADER + ' ' + _meth.ENGAGEMENT_DEFINITION
-        elif _meth.mentions_views(probe):
+        elif _meth.figures_are_views(probe, fam) or _meth.figures_are_views(text_out):   # the file's own figures are views (2026-11-11)
             note = _meth.VIEW_HEADER + ' ' + _meth.VIEW_DEFINITION
         if note:
             w.writerow([])

@@ -10,7 +10,9 @@ modeled, pipeline, or model names.
 """
 from __future__ import annotations
 
+import os
 import re
+import threading
 import traceback
 from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
@@ -74,6 +76,9 @@ ASK_LINKS = 'Paste the campaign links. One or many is fine.'
 # question a second time, word for word). The first reply that does not
 # answer a step gets the step again in other words; the second moves on
 # with the step's default, said in one plain line, when it has one.
+ASK_WHICH_ALT = 'I need to know which side is the talent or property. Is it {a} or {b}?'
+PINNED_NOTE = (', the same window as the partnership figure you already have, so the valuation and that '
+               'figure cover the same days')
 ASK_TALENT_ALT = 'I need the name of the talent or property in the partnership. Who is it?'
 ASK_CAMPAIGN_ALT = 'Which campaign or brand is the partnership with? A name like Gap x JYT works.'
 ASK_DATES_ALT = ("When did the campaign run? Give me a start and an end date, or a start date "
@@ -279,6 +284,99 @@ def parse_dates(text, today=None):
     return None, None
 
 
+class _Turn(threading.local):
+    """Who is asking and the thread so far, for the turn in hand: what
+    the pairing lookups (which side is the talent, the figure the reader
+    already holds) read without every step carrying them."""
+    user = ''
+    history = None
+
+
+_TURN = _Turn()
+
+
+def _set_turn(user, history):
+    """Whose turn this is, set at every way into the wizard so a lookup
+    never reads another reader's thread; returns what was there before
+    (for the caller to put back)."""
+    was = (_TURN.user, _TURN.history)
+    _TURN.user = _uname(user) if not isinstance(user, str) else (user or '')
+    _TURN.history = history
+    return was
+
+
+def _restore_turn(was):
+    try:
+        _TURN.user, _TURN.history = was
+    except Exception:
+        _TURN.user, _TURN.history = '', None
+
+
+def mark_window(draft, text, inferred=False):
+    """Note whether the campaign window the reader gave is open-ended
+    ("to today", "so far", an end read as today) or ends on a date they
+    named. An open-ended order on a pairing the reader already holds a
+    figure for runs on that figure's window (2026-11-11); only an end
+    date named in words makes a longer window a new read."""
+    if not isinstance(draft, dict):
+        return draft
+    try:
+        is_open = bool(inferred) or bool(_slots.says_ongoing(str(text or '')))
+    except Exception:
+        is_open = bool(inferred)
+    draft['window_open'] = is_open
+    draft['end_named'] = not is_open
+    for k in ('pinned_read', 'given_read', 'read_checked'):
+        draft.pop(k, None)
+    return draft
+
+
+def pin_to_read(draft, user, history=None):
+    """The draft with its window pinned to the figure the reader's
+    company already holds on this pairing and start date, when the
+    window the reader gave is open-ended; and, either way, the note that
+    the reader holds a figure for this pairing and window (the valuation
+    then lands on it). One lookup per window. Never raises."""
+    d = draft
+    try:
+        if not isinstance(d, dict) or d.get('read_checked') or not (
+                d.get('talent') and d.get('brand_partner') and d.get('campaign_start') and d.get('campaign_end')):
+            return d
+        if d.get('charged') or d.get('job_id'):
+            return d
+        from migration import bpiq_anchors as _ba
+        history = history if history is not None else _TURN.history
+        user = user or _TURN.user
+        d = dict(d)
+        d['read_checked'] = True
+        anchor = _ba.read_on_pair(d['talent'], d['brand_partner'])
+        if not anchor or not anchor.get('value_usd'):
+            return d
+        w = anchor.get('window') or {}
+        if str(w.get('start') or '') != str(d['campaign_start'])[:10]:
+            return d
+        if not _ba.given_to(anchor, _uname(user), history=history):
+            return d
+        note = {'key': anchor.get('key'), 'value_usd': anchor.get('value_usd'), 'start': w.get('start'), 'end': w.get('end')}
+        if d.get('window_open') and str(w.get('end') or '') != str(d['campaign_end'])[:10]:
+            d['campaign_end'] = str(w['end'])
+            d['attr_start'], d['attr_end'] = str(w['start']), str(w['end'])
+            # a window the reader already accepted stays accepted (the
+            # recap states the dates it runs on); one not yet accepted is
+            # shown as the window step
+            d['attr_ok'] = bool(d.get('attr_ok'))
+            d['pinned_read'] = note
+            d['window_open'] = False
+            d.pop('dates_inferred', None)
+            d['step'] = next_step(d)
+        if str(w.get('end') or '') == str(d['campaign_end'])[:10]:
+            d['given_read'] = note
+        return d
+    except Exception:
+        traceback.print_exc()
+        return draft
+
+
 def attribution_window(campaign_start, campaign_end, today=None):
     """Standard window: campaign start through campaign end plus 30
     days, clipped to today when plus-30 would run past the last day
@@ -406,6 +504,8 @@ _PROMPT_TO_STEP = (
     ("Here's what I'll run", STEP_CHARGE),
     ('I read the campaign as', STEP_ATTR),
     (ASK_TALENT, STEP_TALENT),
+    ('Which one is the talent or property', STEP_TALENT),
+    ('I need to know which side is the talent or property', STEP_TALENT),
     ('Who is the property or talent', STEP_TALENT),
     ('I need the name of the talent or property', STEP_TALENT),
     (ASK_CAMPAIGN, STEP_CAMPAIGN),
@@ -810,6 +910,14 @@ def wants(text, body=None, history=None, store=None, user=None,
     answers the question carries the 'Back to the valuation' chip."""
     if is_start(text):
         return True
+    was = _set_turn(user, history)
+    try:
+        return _wants(text, body, history, store, user, thread_id)
+    finally:
+        _restore_turn(was)
+
+
+def _wants(text, body, history, store, user, thread_id):
     body = body or {}
     extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
     if body.get('bpiq_confirm') or extra.get('bpiq_confirm'):
@@ -1027,6 +1135,19 @@ def merge_slots(draft, text, today=None):
         d['brand_partner'] = _case(got['brand'])
         d['brand_named'] = True
         named['brand'] = d['brand_partner']
+    if d.get('pair') and (named.get('talent') or named.get('brand')):
+        if named.get('talent') and not named.get('brand'):
+            mine, other = _pair_pick(d, named['talent'])
+            if mine:
+                d['brand_partner'], d['brand_named'] = other, True
+                named['brand'] = other
+        elif named.get('brand') and not named.get('talent'):
+            mine, other = _pair_pick(d, named['brand'])
+            if mine and not d.get('talent'):
+                d['talent'] = other
+                named['talent'] = other
+        if d.get('talent'):
+            d.pop('pair', None)
     # the pairing was read the wrong way round and the reader named one
     # side by its role ("Gunna is the talent" under Nike x Gunna): the
     # other side takes the other role
@@ -1055,6 +1176,7 @@ def merge_slots(draft, text, today=None):
             d['attr_ok'] = False
             if not got.get('end'):
                 d['dates_inferred'] = True      # the end is read as today; the window step says so
+            mark_window(d, text, inferred=not got.get('end'))
             d.pop('start_hint', None)
             d.pop('start_guess', None)
             named['start'] = a
@@ -1116,6 +1238,7 @@ def apply_ahead(draft, text, today=None):
     start, end = parse_dates(t, today=today)
     if start and end and not d.get('campaign_start'):
         d['campaign_start'], d['campaign_end'] = start, end
+        mark_window(d, t)
         if not d.get('attr_start'):
             d['attr_start'], d['attr_end'] = attribution_window(
                 start, end, today=today)
@@ -1137,17 +1260,24 @@ def apply_ahead(draft, text, today=None):
     if names and not d.get('talent'):
         # "Jennifer Beals, Ganni x Lululemon" or a lone name
         if len(names) == 1 and re.search(r'\s+[xX\u00d7]\s+', names[0]):
-            # a campaign dump with no separate talent: "Gunna x Nike" reads
-            # partner x brand, the standing order of a one-shot ask
-            # ("value the Glen Powell x RAM Trucks partnership"), so the
-            # first side is the talent and the wizard never asks for a
-            # name the message already gave (goldens g055, g056, 2026-11-02)
+            # a campaign dump with no separate talent ("Gunna x Nike", "Gap
+            # x JYT"). Which side is the talent is never read from the
+            # order the pairing was written in (Jenna 2026-11-11: "Gap x
+            # JYT" was answered "Gap is the talent"): what is known decides
+            # (the thread, a read on the pairing, the library), and when
+            # nothing does the wizard asks which one, once. The names the
+            # message gave are kept either way (goldens g055, g056).
             if not d.get('campaign'):
                 d['campaign'] = names[0]
                 a, b = re.split(r'\s+[xX\u00d7]\s+', names[0], maxsplit=1)
                 if a.strip() and b.strip():
-                    d['talent'] = a.strip()
-                    d['brand_partner'] = b.strip()
+                    got = orient_pair(a.strip(), b.strip())
+                    if got:
+                        d['talent'], d['brand_partner'] = got[0], got[1]
+                        d['brand_named'] = True
+                        d.pop('pair', None)
+                    else:
+                        d['pair'] = [a.strip(), b.strip()]
                 else:
                     d['brand_partner'] = _brand_from_campaign(names[0], '')
         else:
@@ -1162,6 +1292,39 @@ def apply_ahead(draft, text, today=None):
     if d.get('campaign') and not d.get('brand_partner'):
         d['brand_partner'] = _brand_from_campaign(d['campaign'], d.get('talent'))
     return d
+
+
+def orient_pair(a, b, history=None):
+    """(talent, brand) for a pairing from what is known, or None when
+    nothing settles it (prometheus.partnership_roles). Never raises."""
+    try:
+        from prometheus import partnership_roles as _roles
+        read = None
+        try:
+            from migration import bpiq_anchors as _ba
+            read = _ba.read_on_pair(a, b)
+        except Exception:
+            read = None
+        got = _roles.orient(a, b, history=history if history is not None else _TURN.history, read=read)
+        return (got[0], got[1]) if got else None
+    except Exception:
+        return None
+
+
+def _pair_pick(draft, name):
+    """The side of the draft's open pairing `name` is, and the other
+    side; (None, None) when the draft holds no open pairing or the name
+    is neither."""
+    pair = (draft or {}).get('pair')
+    if not (isinstance(pair, (list, tuple)) and len(pair) == 2):
+        return None, None
+    f = re.sub(r'[^a-z0-9]+', '', str(name or '').lower())
+    a, b = str(pair[0]), str(pair[1])
+    if f and f == re.sub(r'[^a-z0-9]+', '', a.lower()):
+        return a, b
+    if f and f == re.sub(r'[^a-z0-9]+', '', b.lower()):
+        return b, a
+    return None, None
 
 
 def next_step(draft):
@@ -1227,6 +1390,15 @@ def engine_inputs(draft):
         'links': list(d.get('links') or []),
         'price': price_usd(control),
     }
+    # the window as the reader gave it: open-ended or an end date named in
+    # words, and the figure they already hold for it (2026-11-11)
+    if d.get('end_named'):
+        out['end_named'] = True
+    if d.get('window_open'):
+        out['window_open'] = True
+    for k in ('pinned_read', 'given_read'):
+        if isinstance(d.get(k), dict):
+            out[k] = dict(d[k])
     return out
 
 
@@ -1283,6 +1455,10 @@ def attr_reply(draft, today=None):
     elif talent and brand and brand.lower() != talent.lower():
         lead = f"{_cased(talent)} x {_cased(brand)}: "
     note = ATTR_INFERRED_NOTE if d.get('dates_inferred') else ''
+    if d.get('pinned_read'):
+        # the order runs on the window of the figure the reader already holds
+        return (f"{lead}I read the campaign as {camp}{PINNED_NOTE}. "
+                f"Attribution window: {attr}.")
     return (f"{lead}I read the campaign as {camp}. {why} "
             f"Attribution window: {attr}.{note}")
 
@@ -1333,8 +1509,20 @@ def hold_payload(history=None, store=None, user=None, thread_id='',
 
 
 def step_prompt(draft, today=None):
+    if isinstance(draft, dict) and not draft.get('read_checked') and draft.get('campaign_end'):
+        # the window the reader already holds a figure for (pin_to_read),
+        # settled before the step is worded so the window shown is the
+        # window the order runs on
+        _pinned = pin_to_read(draft, _TURN.user)
+        if _pinned is not draft:
+            draft.update(_pinned)
     step = (draft or {}).get('step') or next_step(draft)
     if step == STEP_TALENT:
+        pair = (draft or {}).get('pair')
+        if isinstance(pair, (list, tuple)) and len(pair) == 2 and not (draft or {}).get('talent'):
+            # the pairing is known, which side is the talent is not: one short question
+            from prometheus import partnership_roles as _roles
+            return _roles.which_question(pair[0], pair[1]), [str(pair[0]), str(pair[1]), CHIP_CANCEL]
         return ASK_TALENT, [CHIP_CANCEL]
     if step == STEP_CAMPAIGN:
         return ASK_CAMPAIGN, [CHIP_CANCEL]
@@ -1384,6 +1572,8 @@ def vary(reply, step, history, draft=None):
         return reply
     alt = _STEP_ALT.get(step)
     d = draft or {}
+    if step == STEP_TALENT and isinstance(d.get('pair'), (list, tuple)) and len(d['pair']) == 2 and not d.get('talent'):
+        alt = ASK_WHICH_ALT.format(a=d['pair'][0], b=d['pair'][1])
     if step == STEP_DATES and d.get('start_hint') and d.get('start_guess'):
         g = _d(d['start_guess'])
         alt = ASK_DATES_HINT_ALT.format(
@@ -1426,6 +1616,7 @@ def default_for(step, draft, today=None):
         d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
         d['attr_ok'] = False
         d['dates_inferred'] = True
+        mark_window(d, '', inferred=True)
         d.pop('start_hint', None)
         d.pop('start_guess', None)
         line = f"I'll run it from {pretty_date(a)} through today."
@@ -1507,7 +1698,14 @@ def apply_answer(draft, text, today=None):
         # a bare yes / no is never a talent (2026-11-11: "yes" was stored
         # as the talent and led the window line as "Yes, gap x jyt")
         if not name or is_chip(name) or _slots.is_filler(name) or _too_long_for_name(name, 8):
-            return d, ASK_TALENT
+            return d, step_prompt(d, today=today)[0]
+        mine, other = _pair_pick(d, name)
+        if mine:
+            # the reader said which side of the pairing is the talent: the other side is the brand
+            name = mine
+            d['brand_partner'] = other
+            d['brand_named'] = True
+        d.pop('pair', None)
         d['talent'] = name
         if d.get('brand_partner') and d.get('brand_named') and not d.get('campaign'):
             d['campaign'] = _pair_name(name, d['brand_partner'])
@@ -1559,6 +1757,7 @@ def apply_answer(draft, text, today=None):
             d['dates_inferred'] = True
         else:
             d.pop('dates_inferred', None)
+        mark_window(d, t, inferred=inferred)
         d.pop('start_hint', None)
         d.pop('start_guess', None)
     elif step == STEP_ATTR:
@@ -1586,9 +1785,20 @@ def apply_answer(draft, text, today=None):
                 d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
                 d['attr_ok'] = False
                 d.pop('dates_inferred', None)
+                mark_window(d, t)
                 d['step'] = STEP_ATTR
                 return _price_draft(d), None
             if start and end:
+                if d.get('pinned_read') and str(end)[:10] != str(d.get('campaign_end'))[:10] \
+                        and not _slots.says_ongoing(t):
+                    # a new end date, named in words, on an order that was
+                    # running on the window of a figure already held: a new
+                    # read on the window the reader asked for
+                    a, b = sorted([str(d['campaign_start'])[:10], str(end)[:10]])
+                    d['campaign_start'], d['campaign_end'] = a, b
+                    d.pop('pinned_read', None)
+                    d.pop('given_read', None)
+                    d['window_open'], d['end_named'], d['read_checked'] = False, True, True
                 d['attr_start'], d['attr_end'] = start, end
                 d['attr_ok'] = True
             elif not (_YES_RE.match(t) or low in ('accept', 'ok', 'okay')):
@@ -2074,6 +2284,44 @@ def _start_valuation(job_id, uname, inputs, extras, g, start_fn,
         return False
 
 
+UNDERPINNINGS = None        # tests: the saved-research store the order is matched against
+
+
+def _underpinnings(g):
+    """The saved-research store, or None (a hermetic run with no test
+    store never reaches the network)."""
+    if UNDERPINNINGS is not None:
+        return UNDERPINNINGS
+    if os.environ.get('REGRESSION_TEST_MODE'):
+        return None
+    try:
+        from migration.bpiq_synthesis import S3Underpinnings
+        from prometheus.host import host as _host
+        return S3Underpinnings(_host.s3_client, _host.S3_BUCKET)
+    except Exception:
+        return None
+
+
+def adopt_saved(inputs, g=None):
+    """The order named the way its saved research is named, when the
+    pairing already has research under the other order of the names
+    ("JYT x Gap" against "Gap x JYT"): the same key, so the run registry
+    and the engine see one partnership, not two (2026-11-11). The
+    order's dates and everything else stay its own. Never raises."""
+    try:
+        up = _underpinnings(g)
+        if up is None:
+            return inputs
+        from migration import bpiq_anchors as _ba
+        from migration.bpiq_synthesis import run_key as _rk
+        doc, key = _ba.saved_record(inputs, up, _rk)
+        if doc and key != _rk(inputs):
+            return _ba.adopt_record(inputs, doc)
+    except Exception:
+        traceback.print_exc()
+    return inputs
+
+
 def _registry(g, registry=None):
     """The shared run registry (S3 through the host), else the
     process-local one. Never raises."""
@@ -2171,7 +2419,9 @@ def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
     for k in ('funds_required', 'charge_state', 'needs_funds',
               'unpaid', 'funds_ok'):
         draft.pop(k, None)
-    inputs = engine_inputs(draft)
+    if not draft.get('read_checked'):
+        draft = pin_to_read(draft, uname or user)
+    inputs = adopt_saved(engine_inputs(draft), g)
     if draft.get('charged') or draft.get('job_id'):
         return _payload(ALREADY_RUNNING_REPLY, [], draft=None, bpiq_collect=False,
                         bpiq_job_id=draft.get('job_id'))
@@ -2295,22 +2545,25 @@ def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
         if a and b:
             d['campaign_start'], d['campaign_end'] = a, b
             d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
+            mark_window(d, src)
             d.pop('start_hint', None)
             d.pop('start_guess', None)
     d = sane_draft(d)
     d['step'] = next_step(d)
     d = _price_draft(d)
+    reply, chips = step_prompt(d, today=today)
     if store is not None:
         store.save(user, thread_id, d)
-    reply, chips = step_prompt(d, today=today)
     bits = [_pv.lead(kind)]
-    if d.get('talent') and d.get('brand_partner') and d.get('step') not in (STEP_ATTR, STEP_CHARGE):
+    if d.get('talent') and d.get('brand_partner') and not d.get('pair') \
+            and d.get('step') not in (STEP_ATTR, STEP_CHARGE):
+        # which side is the talent came from what is known (the reader's
+        # own words, a read on the pairing, the library), never from the
+        # order the names were written in; when nothing settles it the
+        # step below asks which one (Jenna 2026-11-11)
         ack = ack_line({'talent': d.get('talent'), 'brand': d.get('brand_partner')})
         if ack:
-            # the reader's own words said which is which, or the pairing
-            # was read in the order it was written and can be corrected
-            said = ' is the talent and ' in seed
-            bits.append(ack if said else ack + ' If I have those the wrong way round, say which is the talent.')
+            bits.append(ack)
     return _payload(' '.join(bits) + '\n\n' + reply, chips, draft=d)
 
 
@@ -2347,6 +2600,7 @@ def analyze_hook(text, body, history, user, ppu, uname, g,
     not a Brand Partnership Valuation ask and no draft is open (or the
     message is a question the open step does not own: the service
     routes it and the reply carries the way back)."""
+    was = _set_turn(uname or user, history)
     try:
         hit = _analyze_hook(
             text, body, history, user, ppu, uname, g,
@@ -2360,6 +2614,8 @@ def analyze_hook(text, body, history, user, ppu, uname, g,
     except Exception:
         traceback.print_exc()
         return None
+    finally:
+        _restore_turn(was)
 
 
 def _analyze_hook(text, body, history, user, ppu, uname, g,
@@ -2392,6 +2648,10 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
         store = store_for(body, g)
     draft = _load_draft(store, uname or user, thread_id, body, history,
                         today=today)
+    if draft and not draft.get('read_checked') and draft.get('campaign_end'):
+        # the window of the figure the reader already holds, settled
+        # before this turn's answer is read
+        draft = pin_to_read(draft, uname, history=history)
     intent = False
     if g and callable(g.get('_pm_bpiq_intent')):
         try:
@@ -2451,7 +2711,8 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
                 'links': list(confirm.get('links') or []),
                 'brand_partner': confirm.get('brand_partner') or '',
                 'step': STEP_CHARGE,
-            })
+            }, **{k: confirm[k] for k in ('window_open', 'end_named', 'pinned_read', 'given_read')
+                  if confirm.get(k)})
             draft = _price_draft(draft)
         elif draft:
             draft = _price_draft(dict(draft, step=STEP_CHARGE))
@@ -2537,7 +2798,9 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
         ahead = {} if loose else apply_ahead(
             empty_draft() if draft.get('step') == STEP_TALENT and not draft.get('talent') else dict(draft),
             t, today=today)
-        if not loose and draft.get('step') == STEP_TALENT and not draft.get('talent'):
+        # an open pairing ("which one is the talent") is answered by the
+        # step itself: one of the two names, or a sentence that gives a role
+        if not loose and draft.get('step') == STEP_TALENT and not draft.get('talent') and not draft.get('pair'):
             if ahead.get('talent') or ahead.get('campaign') or ahead.get('campaign_start'):
                 for k, v in ahead.items():
                     if v in (None, '', [], 0):

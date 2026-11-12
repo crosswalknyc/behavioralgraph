@@ -267,6 +267,8 @@ def chart_for_read(res, question='', force=False):
                 footer = _meth.ORDER_NOTE_SHORT
             elif fam == _meth.ENGAGEMENT:
                 footer = _meth.ENGAGEMENT_NOTE_SHORT
+            elif fam and fam != _meth.VIEWING:
+                footer = ''          # a sizing read never carries what a view is (2026-11-11)
             else:
                 footer = _meth.VIEW_NOTE_SHORT if _meth.mentions_views(
                     ' '.join([question, str(bd.get('dimension') or ''), str(bd.get('share_basis') or '')])) else ''

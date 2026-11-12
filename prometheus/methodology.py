@@ -270,11 +270,69 @@ def carries_definition(text):
     return VIEW_HEADER in t or 'Counts are US viewers (persons)' in t or VIEW_NOTE_SHORT in t
 
 
-def attach_view_definition(text, short=False):
-    """Append the view definition to a text artifact that mentions views
-    and does not already carry it. Idempotent."""
+# A figure that is itself a viewing count (2026-11-11: a book-audience
+# answer was mailed with the view paragraph because one sentence said
+# "TikTok and YouTube viewing on a phone is counted like everything
+# else"). The paragraph rides a text only when its own figures are views:
+# a count or a share standing as viewers, views, plays, streams, listeners
+# or time watched, a count of people who watched, or a table whose column
+# is one of those. A viewing word elsewhere in the text is not a figure.
+_VFIG = r"(?:\d{1,3}(?:,\d{3})+|\d{4,}|\d+(?:\.\d+)?\s*(?:billion|million|bn\b|m\b|k\b))"
+_VPCT = r"\d+(?:\.\d+)?\s?%"
+_VNOUN = (r"(?:viewers?|views|watchers|streamers|listeners|plays|streams|title\s+starts?|"
+          r"(?:hours|minutes)\s+(?:watched|viewed|streamed|listened)|viewing\s+(?:hours|minutes)|watch\s+time)")
+_VVERB = r"(?:watched|viewed|streamed|played|listened\s+to|tuned\s+in(?:\s+to)?|started\s+(?:a\s+|the\s+)?(?:title|episode|show|film|movie))"
+_VPEOPLE = r"(?:US\s+|unique\s+|projected\s+|total\s+|more\s+|new\s+|of\s+the\s+|of\s+)?(?:people|persons|adults|accounts|individuals|fans|subscribers|households)?"
+_VIEW_COUNT_RXES = (
+    # 5,432,118 viewers / 2.4 billion hours watched / 31.2% of Scream 7 viewers
+    re.compile(r"(?:" + _VFIG + r")\s+(?:US\s+|unique\s+|projected\s+|total\s+|more\s+|new\s+)?(?:people\s+|persons\s+)?" + _VNOUN + r"\b", re.I),
+    re.compile(r"(?:" + _VPCT + r")\s+(?:of\s+)?(?:the\s+|US\s+|all\s+)?[\w'&+.\-]*(?:\s+[\w'&+.\-]+){0,4}?\s*" + _VNOUN + r"\b", re.I),
+    # 5,432,118 US people watched / 5,432,118 people who streamed / 31.2% watched
+    re.compile(r"(?:" + _VFIG + r"|" + _VPCT + r")\s+" + _VPEOPLE + r"\s*(?:who\s+|that\s+|also\s+|have\s+|had\s+)?" + _VVERB + r"\b", re.I),
+    # watched by 5,432,118 people / viewers: 5,432,118 / viewership reached 5.4 million
+    re.compile(_VVERB + r"\s+by\s+(?:about\s+|roughly\s+|some\s+)?(?:" + _VFIG + r")", re.I),
+    re.compile(_VNOUN + r"\b[^.\n;]{0,24}?(?:[:=]|\bof\b|\bat\b|\bwas\b|\bwere\b|\bis\b|\bare\b|\breached\b|\btotal(?:ed|s)?\b|\bhit\b|\bcame\s+to\b)\s*"
+               r"(?:about\s+|roughly\s+)?(?:" + _VFIG + r")", re.I),
+    re.compile(r"\bviewership\b[^.\n;]{0,40}?(?:" + _VFIG + r")", re.I),
+    # they watched 2.4 billion hours / streamed 1,204,331 times
+    re.compile(_VVERB + r"\s+(?:about\s+|roughly\s+|some\s+|over\s+|more\s+than\s+|nearly\s+)?(?:" + _VFIG
+               + r")\s*(?:hours|minutes|times|episodes|titles)\b", re.I),
+)
+_VIEW_COLUMN_RX = re.compile(r"(?:^|[/|\t,])\s*(?:US\s+|unique\s+|projected\s+|total\s+)?" + _VNOUN + r"\s*(?:$|[/|\t,(])", re.I)
+
+
+def figures_are_views(text, family=None):
+    """True when the text's own figures are viewing counts. A stamped
+    counting family decides when there is one (purchase, engagement and
+    sizing reads never carry the view definition); otherwise the figures
+    themselves decide, never a viewing word elsewhere in the text."""
+    fam = canon_counting_family(family) if family else ''
+    if fam:
+        return fam == VIEWING
     t = str(text or '')
-    if not t.strip() or not mentions_views(t) or carries_definition(t):
+    if not t.strip():
+        return False
+    lines = t.split('\n')
+    for i, line in enumerate(lines):
+        if not line.strip():
+            continue
+        if any(rx.search(line) for rx in _VIEW_COUNT_RXES):
+            return True
+        # a table: a column named for a viewing count, with figures in the rows under it
+        if _VIEW_COLUMN_RX.search(line) and len(re.findall(r"[/|\t]", line)) >= 1 and not re.search(_VFIG, line):
+            for row in lines[i + 1:i + 4]:
+                if re.search(_VFIG, row) or re.search(_VPCT, row):
+                    return True
+    return False
+
+
+def attach_view_definition(text, short=False, family=None):
+    """Append the view definition to a text artifact whose own figures
+    are viewing counts and that does not already carry it. A viewing
+    word in the text is not enough (2026-11-11); `family` is the read's
+    counting family when the caller knows it. Idempotent."""
+    t = str(text or '')
+    if not t.strip() or carries_definition(t) or not figures_are_views(t, family):
         return text
     body = t.rstrip()
     if short:

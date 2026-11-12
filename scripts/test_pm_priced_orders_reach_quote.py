@@ -58,6 +58,13 @@ from prometheus import flywheel_wizard as FW  # noqa: E402
 from prometheus import intake_guard as G  # noqa: E402
 from prometheus import order_stall as OS  # noqa: E402
 from prometheus import deck_pick as DP  # noqa: E402
+from prometheus import partnership_roles as ROLES  # noqa: E402
+
+# what the library knows about these names, as it does live (a hermetic
+# run reads no library): which side of a pairing is the talent comes from
+# this, never from the order the names were written in
+ROLES.KIND_LOOKUP = {'gap': 'brand', 'nike': 'brand', 'gunna': 'talent', 'lowes': 'brand', 'target': 'brand',
+                     'stanley': 'brand', 'glenpowell': 'talent'}.get
 from migration.bpiq_synthesis import MemoryRegistry  # noqa: E402
 
 TODAY = date(2026, 11, 11)

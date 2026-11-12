@@ -1374,6 +1374,16 @@ def keyword_parse_brand_partnership(text):
             b, p = _bp_clean(m.group('brand')), _bp_clean(m.group('partner'))
             if m.group('conn') in ('x', '×'):   # "value the Glen Powell x RAM Trucks partnership": partner x brand
                 b, p = p, b
+                # what is known about the two names decides which is the
+                # brand when it can (2026-11-11: "Gap x JYT" read Gap as the
+                # talent); the written order stands only when nothing does
+                try:
+                    from . import partnership_roles as _roles
+                    _got = _roles.orient(p, b) if (p and b) else None
+                    if _got:
+                        p, b = _got[0], _got[1]
+                except Exception:
+                    pass
             if _bp_is_name(b) and _bp_is_name(p):
                 out['brand_partner'] = out['brand_partner'] or b
                 out['qualifier'] = out['qualifier'] or p

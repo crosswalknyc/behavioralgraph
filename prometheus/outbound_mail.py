@@ -108,7 +108,7 @@ def _design_gate(name, data, rec=None):
 
 def send_user_email(*, to, subject, body, instructed=False, caller='',
                     html=None, pdf=None, pdf_name='', csv=None, csv_name='',
-                    bcc_liz=True, extra_bcc=(), cc=(), dry_run=False, images=(), files=()):
+                    bcc_liz=True, extra_bcc=(), cc=(), dry_run=False, images=(), files=(), family=None):
     """Send one user-facing email through the house door. Returns a dict
     {sent, reason, message_id, destinations}. Never raises.
 
@@ -140,9 +140,10 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         return rec
     subject_c = scrub(subject).replace('\n', ' ').strip()[:200]
     body_c = scrub(body)
-    try:   # views are never left without what a view means (Jenna 2026-10-08)
+    try:   # views are never left without what a view means (Jenna 2026-10-08); only a read whose own
+        # figures are views carries it, never a text that only uses a viewing word (2026-11-11)
         from prometheus import methodology as _meth
-        body_c = _meth.attach_view_definition(body_c)
+        body_c = _meth.attach_view_definition(body_c, family=family)
         body_c = _meth.ensure_period_note(body_c)   # window total next to its quarters (item 6)
     except Exception:
         pass

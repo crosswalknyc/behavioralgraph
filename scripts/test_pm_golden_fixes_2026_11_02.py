@@ -124,6 +124,23 @@ class ProductOrders(unittest.TestCase):
 
 
 class ValuationOneShot(unittest.TestCase):
+    # Which side of a pairing is the talent comes from what is known (the
+    # library here, as it is live), never from the order the names were
+    # written in; when nothing settles it the wizard asks (2026-11-11).
+    def setUp(self):
+        from prometheus import partnership_roles as R
+        self._roles = R
+        R.KIND_LOOKUP = {'gunna': 'talent', 'nike': 'brand', 'stanley': 'brand', 'target': 'brand',
+                         'lululemon': 'brand', 'ganni': 'brand'}.get
+
+    def tearDown(self):
+        self._roles.KIND_LOOKUP = None
+
+    def test_nike_x_gunna_reads_the_same(self):
+        d = W.apply_ahead(W.empty_draft(), 'can you value Nike x Gunna? campaign ran June through August 2026')
+        self.assertEqual((d['talent'], d['brand_partner']), ('Gunna', 'Nike'))
+        self.assertEqual(W.next_step(d), W.STEP_ATTR)
+
     def test_gunna_x_nike_fills_talent_and_dates(self):
         d = W.apply_ahead(W.empty_draft(), 'can you value Gunna x Nike? campaign ran June through August 2026')
         self.assertEqual(d['talent'], 'Gunna')
@@ -133,10 +150,23 @@ class ValuationOneShot(unittest.TestCase):
         self.assertEqual(W.next_step(d), W.STEP_ATTR)
 
     def test_stanley_x_target_with_iso_window(self):
+        # two brands: nothing known says which is the talent or property, so
+        # both names and the window are kept and one question is asked
         d = W.apply_ahead(W.empty_draft(), 'Value the Stanley x Target partnership. Campaign window is 2025-01-15 to 2025-03-31.')
-        self.assertEqual(d['talent'], 'Stanley')
-        self.assertEqual(d['brand_partner'], 'Target')
+        self.assertEqual(d.get('pair'), ['Stanley', 'Target'])
+        self.assertEqual(d['talent'], '')
+        self.assertEqual(d['campaign'], 'Stanley x Target')
         self.assertEqual(d['campaign_start'], '2025-01-15')
+        self.assertEqual(W.next_step(d), W.STEP_TALENT)
+        d['step'] = W.next_step(d)
+        reply, chips = W.step_prompt(d)
+        self.assertEqual(reply, 'Which one is the talent or property: Stanley or Target?')
+        self.assertEqual(chips, ['Stanley', 'Target', 'Cancel'])
+        d2, err = W.apply_answer(d, 'Stanley')
+        self.assertIsNone(err)
+        self.assertEqual((d2['talent'], d2['brand_partner']), ('Stanley', 'Target'))
+        self.assertEqual(d2['campaign_start'], '2025-01-15')
+        self.assertEqual(W.next_step(d2), W.STEP_ATTR)
 
     def test_separate_talent_still_wins(self):
         d = W.apply_ahead(W.empty_draft(), 'Jennifer Beals, Ganni x Lululemon')

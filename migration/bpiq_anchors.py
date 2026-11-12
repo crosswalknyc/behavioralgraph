@@ -113,10 +113,31 @@ def valuation_window(inputs: dict, windows: Optional[dict] = None) -> tuple:
     return start, end
 
 
+def _entry_words(e) -> dict:
+    """The question a banked read answered and the labels of its lines
+    (which side's audience it sizes, which side's buyers it counts)."""
+    labels = [str(m.get("label") or "") for m in (e.get("metrics") or []) if isinstance(m, dict) and m.get("label")]
+    out = {}
+    if e.get("q"):
+        out["question"] = str(e.get("q"))[:300]
+    if labels:
+        out["labels"] = labels[:12]
+    return out
+
+
 # --------------------------------------------------------------- forward
+# A test (or a caller that already holds them) can supply the ledger
+# index document and who a read was given to.
+INDEX_FOR_TESTS = None
+ASKER_LOOKUP = None          # (anchor) -> the username the read was given to, or ''
+USERS_FOR_TESTS = None       # the users document ({'users': {...}}) for the company check
+
+
 def _load_ledger_index():
     """The insights ledger index, or None. Never reaches the network in
     a hermetic run."""
+    if isinstance(INDEX_FOR_TESTS, dict):
+        return INDEX_FOR_TESTS
     if os.environ.get("REGRESSION_TEST_MODE"):
         return None
     try:
@@ -217,7 +238,7 @@ def banked_read(inputs: dict, windows: Optional[dict] = None, index: Optional[di
                     best_rank = rank
                     best = {"subject": str(bucket.get("subject") or ""), "key": str(e.get("k") or ""),
                             "window": {"start": e0.isoformat(), "end": e1.isoformat()},
-                            "as_of": str(e.get("ts") or ""), **figs}
+                            "as_of": str(e.get("ts") or ""), **_entry_words(e), **figs}
         if best:
             print(f"[bpiq-anchors] banked read on {best['subject']} "
                   f"{best['window']['start']} to {best['window']['end']}: "
@@ -251,18 +272,23 @@ def prompt_fields(anchor: Optional[dict]) -> dict:
 
 
 def ceilings(anchor: Optional[dict], inputs: dict, windows: Optional[dict] = None) -> dict:
-    """{'value_usd', 'people'}: what the valuation is held at or below.
-    A valuation window that sits inside the read's (within three days
-    either side) keeps the read's figures as they are. A longer one
-    scales them: the value by days, the people by the square root of
-    days (the same window rule the catalog hold uses)."""
+    """{'value_usd', 'people'}: what the valuation is held at or below:
+    the read's own figures. Only a window whose end date the reader
+    named in words (`inputs['end_named']`) and that runs longer than the
+    read's scales them: the value by days, the people by the square
+    root of days (the same window rule the catalog hold uses)."""
     out = {}
     if not anchor:
         return out
     v0, v1 = valuation_window(inputs, windows)
     a0, a1 = _date((anchor.get("window") or {}).get("start")), _date((anchor.get("window") or {}).get("end"))
     scale_v = scale_p = 1.0
-    if v0 and v1 and a0 and a1:
+    # The ceiling never rises because the window got longer (2026-11-11:
+    # a "so far" figure given on Nov 11 was scaled to $4,548,481.67 for
+    # an order placed Nov 15 and $4,796,580.67 by Nov 18). A later,
+    # longer window is a new read only when the reader named a new end
+    # date in words; an order that runs "to today" is the same read.
+    if v0 and v1 and a0 and a1 and (inputs or {}).get("end_named"):
         vd, ad = (v1 - v0).days + 1, (a1 - a0).days + 1
         if vd > ad + 3 and ad > 0:
             scale_v = float(vd) / float(ad)
@@ -341,6 +367,274 @@ def hold(payload: dict, anchor: Optional[dict], inputs: dict, windows: Optional[
     return held, record
 
 
+# ------------------------------------------------- the same read, pinned
+def read_on_pair(a, b, index: Optional[dict] = None) -> Optional[dict]:
+    """The first read delivered on the pairing, in either order of the
+    names, whatever its window; None when there is none. Same shape as
+    `banked_read`. First-held wins: the earliest figure given on the
+    pairing is the one a later order is held to."""
+    if not enabled():
+        return None
+    try:
+        want = pair_key(a, b)
+        if len(want) != 2 or "" in want:
+            return None
+        doc = index if isinstance(index, dict) else _load_ledger_index()
+        if not isinstance(doc, dict):
+            return None
+        best = None
+        for skey, bucket in (doc.get("subjects") or {}).items():
+            if not isinstance(bucket, dict):
+                continue
+            pr = pair_of(bucket.get("subject") or str(skey).replace("_", " "))
+            if not pr or pair_key(*pr) != want:
+                continue
+            for e in (bucket.get("entries") or []):
+                if not isinstance(e, dict) or e.get("retired"):
+                    continue
+                e0, e1 = _date(e.get("ws")), _date(e.get("we"))
+                figs = figures_of(e)
+                if not (e0 and e1) or not (figs.get("value_usd") or figs.get("people")):
+                    continue
+                rec = {"subject": str(bucket.get("subject") or ""), "key": str(e.get("k") or ""),
+                       "window": {"start": e0.isoformat(), "end": e1.isoformat()},
+                       "as_of": str(e.get("ts") or ""), **_entry_words(e), **figs}
+                if best is None or (rec["as_of"] or "~") < (best["as_of"] or "~"):
+                    best = rec
+        return best
+    except Exception as e:
+        print(f"[bpiq-anchors] pair read lookup skipped: {type(e).__name__}: {e}")
+        return None
+
+
+_ASKERS: dict = {}
+ASKER_SCAN_CAP = 400      # the most ask records one lookup reads
+
+
+def _norm_q(text) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
+def asker_of(anchor: Optional[dict]) -> str:
+    """The seat a banked read was given to, from the ask log of the day
+    it landed (the ledger does not keep who asked). '' when it cannot
+    be told. Cached per process; never reaches the network in a hermetic
+    run."""
+    if not isinstance(anchor, dict):
+        return ""
+    if callable(ASKER_LOOKUP):
+        try:
+            return str(ASKER_LOOKUP(anchor) or "")
+        except Exception:
+            return ""
+    key = str(anchor.get("key") or "")
+    if key in _ASKERS:
+        return _ASKERS[key]
+    if os.environ.get("REGRESSION_TEST_MODE"):
+        return ""
+    who = ""
+    try:
+        import json
+        import insights_ledger as _il
+        want = _norm_q(anchor.get("question"))
+        d0 = _date(str(anchor.get("as_of") or "")[:10])
+        if want and d0:
+            s3, bucket = _il._client(), _il.S3_BUCKET
+            # the read landed minutes after its question: the ninety
+            # minutes before it are read, newest first, and nothing else
+            # (a chat turn waits on this once per read, then it is cached)
+            m = re.search(r"T(\d{2}):(\d{2}):(\d{2})", str(anchor.get("as_of") or ""))
+            end = (int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3)) + 120) if m else 86400
+            start = end - 5400
+
+            def _sec(k):
+                mm = re.search(r"/(\d{2})(\d{2})(\d{2})_[^/]*$", k)
+                return (int(mm.group(1)) * 3600 + int(mm.group(2)) * 60 + int(mm.group(3))) if mm else -1
+
+            spans = [(d0, max(start, 0), end)]
+            if start < 0:
+                spans.append((d0 - _dt.timedelta(days=1), 86400 + start, 86400))
+            for d, lo, hi in spans:
+                hit = None
+                try:
+                    body = s3.get_object(Bucket=bucket, Key=f"system/usage/ask_log/{d.isoformat()}.jsonl")["Body"].read().decode("utf-8")
+                    for ln in body.splitlines():
+                        if not ln.strip():
+                            continue
+                        r = json.loads(ln)
+                        if isinstance(r, dict) and _norm_q(r.get("question")) == want and r.get("user"):
+                            hit = r
+                            break
+                except Exception:
+                    hit = None
+                if hit is None:
+                    keys = []
+                    for page in s3.get_paginator("list_objects_v2").paginate(
+                            Bucket=bucket, Prefix=f"system/usage/ask_log/{d.isoformat()}/"):
+                        keys += [c["Key"] for c in page.get("Contents") or []]
+                    near = sorted([k for k in keys if lo <= _sec(k) <= hi], reverse=True)
+                    for k in near[:ASKER_SCAN_CAP]:
+                        try:
+                            r = json.loads(s3.get_object(Bucket=bucket, Key=k)["Body"].read().decode("utf-8"))
+                        except Exception:
+                            continue
+                        if isinstance(r, dict) and _norm_q(r.get("question")) == want and r.get("user"):
+                            hit = r
+                            break
+                if hit:
+                    who = str(hit["user"])
+                    break
+    except Exception as e:
+        print(f"[bpiq-anchors] asker lookup skipped: {type(e).__name__}: {e}")
+        who = ""
+    _ASKERS[key] = who
+    return who
+
+
+def _company_of(username, users=None) -> str:
+    try:
+        doc = users if isinstance(users, dict) else USERS_FOR_TESTS
+        if not isinstance(doc, dict):
+            if os.environ.get("REGRESSION_TEST_MODE"):
+                return ""
+            doc = None
+            try:
+                from prometheus.host import host as _host
+                doc = _host.load_users() if (not callable(getattr(_host, "has", None)) or _host.has("load_users")) else None
+            except Exception:
+                doc = None
+            if not isinstance(doc, dict) or not doc.get("users"):
+                # a job off the dashboard: the seat list is read as it is stored
+                import json
+                import insights_ledger as _il
+                doc = json.loads(_il._client().get_object(Bucket=_il.S3_BUCKET, Key="system/users.json")["Body"].read())
+        rec = ((doc or {}).get("users") or {}).get(str(username or "")) or {}
+        return " ".join(str(rec.get("company") or "").lower().split())
+    except Exception:
+        return ""
+
+
+def given_to(anchor: Optional[dict], username, history=None, users=None) -> bool:
+    """True when the read was given to this reader or to a seat at the
+    reader's company: it sits in this thread (its figure is on an agent
+    turn), or the ask log names who asked and the companies agree."""
+    if not isinstance(anchor, dict) or not anchor.get("value_usd"):
+        return False
+    try:
+        shown = f"{int(round(float(anchor['value_usd']))):,}"
+        for t in (history or []):
+            if isinstance(t, dict) and str(t.get("role") or "") in ("agent", "assistant") \
+                    and shown in str(t.get("text") or t.get("content") or ""):
+                return True
+        who = asker_of(anchor)
+        me = str(username or "").strip()
+        if not who or not me:
+            return False
+        if who.lower() == me.lower():
+            return True
+        ca, cb = _company_of(who, users), _company_of(me, users)
+        return bool(ca) and ca == cb
+    except Exception:
+        return False
+
+
+def pin_window(inputs: dict, anchor: Optional[dict]) -> tuple:
+    """(inputs, pinned). An order whose window is open-ended ("to
+    today", "so far", an end read as today) on a pairing and start date
+    the reader already holds a figure for runs on that read's window:
+    the same start, the read's end, the attribution window the same.
+    The order placed on a later day is the same read, not a longer one
+    (2026-11-11). Anything else is returned as given."""
+    d = dict(inputs or {})
+    try:
+        if not isinstance(anchor, dict) or not d.get("window_open"):
+            return d, False
+        w = anchor.get("window") or {}
+        a0, a1 = _date(w.get("start")), _date(w.get("end"))
+        s0 = _date(d.get("event_start"))
+        if not (a0 and a1 and s0) or s0 != a0:
+            return d, False
+        d["event_end"] = a1.isoformat()
+        d["post_start"], d["post_end"] = a0.isoformat(), a1.isoformat()
+        d["pinned_read"] = {"key": anchor.get("key"), "start": a0.isoformat(), "end": a1.isoformat(),
+                            "value_usd": anchor.get("value_usd")}
+        d.pop("window_open", None)
+        return d, True
+    except Exception:
+        return dict(inputs or {}), False
+
+
+def same_window(anchor: Optional[dict], inputs: dict, windows: Optional[dict] = None) -> bool:
+    """The valuation's campaign window is the read's own window."""
+    try:
+        w = (anchor or {}).get("window") or {}
+        a0, a1 = _date(w.get("start")), _date(w.get("end"))
+        ev = (windows or {}).get("event") or {}
+        v0 = _date(ev.get("start") or (inputs or {}).get("event_start"))
+        v1 = _date(ev.get("end") or (inputs or {}).get("event_end"))
+        return bool(a0 and a1 and v0 and v1 and a0 == v0 and a1 == v1)
+    except Exception:
+        return False
+
+
+# ------------------------------------------- the saved research, either order
+def record_keys(inputs: dict, run_key: Callable) -> list:
+    """Every key the saved research for this order could sit under: the
+    order as given, then the pairing written either way round as the
+    campaign name, then the two names in the other roles. Same window,
+    same control flag."""
+    d = dict(inputs or {})
+    t, b = str(d.get("qualifier") or "").strip(), str(d.get("brand_partner") or "").strip()
+    out, seen = [], set()
+
+    def _add(**over):
+        try:
+            k = run_key(dict(d, **over))
+        except Exception:
+            return
+        if k and k not in seen:
+            seen.add(k)
+            out.append(k)
+
+    _add()
+    if t and b:
+        for talent, brand in ((t, b), (b, t)):
+            for camp in (f"{talent} x {brand}", f"{brand} x {talent}", ""):
+                _add(qualifier=talent, brand_partner=brand, campaign=camp)
+    return out
+
+
+def saved_record(inputs: dict, underpinnings, run_key: Callable) -> tuple:
+    """(document, key) of the research already saved for this pairing
+    and window, in either order of the names; (None, '') when there is
+    none. The order's own key is tried first."""
+    if underpinnings is None:
+        return None, ""
+    for k in record_keys(inputs, run_key):
+        try:
+            doc = underpinnings.load(k)
+        except Exception:
+            doc = None
+        if isinstance(doc, dict) and isinstance(doc.get("primitives"), dict) and doc["primitives"].get("audience_size"):
+            return doc, k
+    return None, ""
+
+
+def adopt_record(inputs: dict, doc: Optional[dict]) -> dict:
+    """The order named the way its saved research is named (who is the
+    talent, who is the brand, how the campaign is spelled), so the same
+    research is read back and every draw repeats. Dates, the control
+    flag and everything else stay the order's own."""
+    d = dict(inputs or {})
+    saved = (doc or {}).get("inputs") if isinstance(doc, dict) else None
+    if not isinstance(saved, dict):
+        return d
+    for k in ("qualifier", "brand_partner", "campaign"):
+        if saved.get(k) is not None:
+            d[k] = saved.get(k)
+    return d
+
+
 def label_people(payload: dict, anchor: Optional[dict], inputs: dict) -> dict:
     """Say what each people count is, so a valuation and the read it was
     held to never read as two answers to one question (2026-11-11: the
@@ -361,6 +655,10 @@ def label_people(payload: dict, anchor: Optional[dict], inputs: dict) -> dict:
             return {}
         reach = int(round(float(payload.get("projected_audience_size") or 0)))
         if reach <= 0:
+            return {}
+        # a valuation whose audience is the talent's own audience in the
+        # window is not a campaign reach: nothing here is its label
+        if str(cb.get("audience_basis") or "").strip().lower().startswith("talent audience"):
             return {}
         out = {"reach_label": REACH_LABEL}
         cb["reach_label"] = REACH_LABEL
@@ -495,5 +793,6 @@ def valuation_block(text, window: Optional[dict] = None, anchors_for: Optional[C
             "you are on.\n" + "\n".join(lines))
 
 
-__all__ = ["enabled", "banked_read", "prompt_fields", "ceilings", "hold", "label_people", "figures_of", "pair_of", "pair_key",
+__all__ = ["enabled", "banked_read", "read_on_pair", "asker_of", "given_to", "pin_window", "same_window", "record_keys",
+           "saved_record", "adopt_record", "prompt_fields", "ceilings", "hold", "label_people", "figures_of", "pair_of", "pair_key",
            "pairing_in", "saved_valuation", "valuation_block", "valuation_window", "ENV"]

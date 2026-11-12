@@ -2196,6 +2196,42 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     footprint) and the audience primitives, then saves both with the
     README. `force_research` (an operator correction in place) ignores
     the saved document and researches again under the same key."""
+    try:
+        from migration import bpiq_anchors as _ba
+    except Exception:
+        _ba = None
+    # The saved research is found by the pairing, in either order of the
+    # two names (2026-11-11: "JYT x Gap" and "Gap x JYT" were two keys,
+    # so a paid order missed the research its review was built on). An
+    # order whose research is saved under the other spelling takes that
+    # spelling, so the same document is read back and every draw repeats.
+    if _ba is not None and underpinnings is not None and not force_research:
+        try:
+            _doc, _k = _ba.saved_record(inputs, underpinnings, run_key)
+            if _doc and _k != run_key(inputs):
+                inputs = _ba.adopt_record(inputs, _doc)
+                print(f"[bpiq-synth] order pinned to the research saved for this pairing ({_k})")
+        except Exception as e:
+            print(f"[bpiq-synth] saved-record lookup skipped: {e}")
+    # An order that runs "to today" on a pairing and start date the
+    # reader already holds a figure for is the same read on a later day:
+    # it runs on that read's window. The wizard settles this before the
+    # quote; this is the same rule for an order that reached the engine
+    # another way (2026-11-11).
+    if _ba is not None and inputs.get("window_open") and not inputs.get("pinned_read") and _ba.enabled():
+        try:
+            _anchor = _ba.read_on_pair(inputs.get("qualifier"), inputs.get("brand_partner"))
+            if _anchor and _ba.given_to(_anchor, created_by):
+                inputs, _pinned = _ba.pin_window(inputs, _anchor)
+                if _pinned:
+                    print(f"[bpiq-synth] open-ended order runs on the window of the read already given "
+                          f"({(_anchor.get('window') or {}).get('start')} to {(_anchor.get('window') or {}).get('end')})")
+                    if underpinnings is not None and not force_research:
+                        _doc, _k = _ba.saved_record(inputs, underpinnings, run_key)
+                        if _doc and _k != run_key(inputs):
+                            inputs = _ba.adopt_record(inputs, _doc)
+        except Exception as e:
+            print(f"[bpiq-synth] open-window check skipped: {e}")
     windows = _dates(inputs)
     key = run_key(inputs)
     saved = None
@@ -2204,6 +2240,35 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             saved = underpinnings.load(key)
         except Exception:
             saved = None
+    # A valuation already settled on a figure the reader holds is the
+    # record: it is read back as it was published, never re-derived
+    # (2026-11-11; first-held value wins).
+    if isinstance(saved, dict) and isinstance(saved.get("payload_of_record"), dict) \
+            and (saved["payload_of_record"].get("valuation") or {}).get("total_brand_value"):
+        import copy as _copy
+        payload = _copy.deepcopy(saved["payload_of_record"])
+        if "created_by" in payload:
+            payload["created_by"] = created_by
+        if "created_at" in payload:
+            payload["created_at"] = _dt.datetime.utcnow().isoformat() + "Z"
+        payload.setdefault("diagnostics", {})["run_key"] = key
+        # the category the deck and the saved file are filed under
+        _cat = payload.pop("_category_for_deck", None) or (saved.get("primitives") or {}).get("category") \
+            or (saved.get("campaign") or {}).get("category")
+        payload["_bpiq_category"] = str(_cat or "").strip().upper() or None
+        if _ba is not None:
+            try:
+                _ba.label_people(payload, saved.get("banked_read") if isinstance(saved.get("banked_read"), dict) else None, inputs)
+            except Exception as e:
+                print(f"[bpiq-synth] people labels skipped: {e}")
+        try:
+            from prometheus import guards as _g
+            _g.scrub_tree(payload)
+        except Exception as e:
+            print(f"[bpiq-synth] text scrub skipped: {e}")
+        print(f"[bpiq-synth] valuation of record read back for {key}: "
+              f"${float(payload['valuation']['total_brand_value']):,.2f}")
+        return payload
     campaign = None
     prim = None
     # A valuation never starts cold on a pairing Crosswalk already holds
@@ -2212,18 +2277,18 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     # below it. A run read back from its underpinnings replays the hold
     # it was saved with and looks nothing up.
     banked, saved_hold = None, None
-    try:
-        from migration import bpiq_anchors as _ba
-    except Exception:
-        _ba = None
+    saved_exact = False
     if isinstance(saved, dict) and isinstance(saved.get("primitives"), dict) \
             and saved["primitives"].get("audience_size"):
         prim = dict(saved["primitives"])
         campaign = normalize_campaign(saved.get("campaign") or {}, inputs)
         banked = saved.get("banked_read") if isinstance(saved.get("banked_read"), dict) else None
         saved_hold = (saved.get("hold") or {}).get("factor") if isinstance(saved.get("hold"), dict) else None
+        saved_exact = bool((saved.get("hold") or {}).get("set_exactly")) if isinstance(saved.get("hold"), dict) else False
         print(f"[bpiq-synth] underpinnings read back for {key}; no re-draw")
-    elif _ba is not None:
+    if banked is None and _ba is not None:
+        # research saved before any figure was given on the pairing carries
+        # no read of its own: the ledger is asked, as it is for new research
         try:
             banked = _ba.banked_read(inputs, windows)
         except Exception as e:
@@ -2360,12 +2425,58 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             campaign["category"] = str(prim.get("category") or "").strip().upper()
     payload = build_payload(inputs, prim, created_by=created_by, campaign=campaign)
     hold_rec = {}
-    if _ba is not None and (banked or saved_hold):
+    # The same pairing and the same window as a figure the reader already
+    # holds: the total lands on that figure, to the cent (2026-11-11: the
+    # hold landed $4,129,457.18 against a read of $4,217,683.00). A
+    # different window is held at or below the read, as before.
+    exact_target = None
+    # first-held wins: when more than one figure was given on this pairing
+    # and window, the earliest is the one the valuation states
+    if _ba is not None and _ba.enabled() and not saved_exact:
+        try:
+            _first = _ba.read_on_pair(inputs.get("qualifier"), inputs.get("brand_partner"))
+            if isinstance(_first, dict) and _first.get("value_usd") and _ba.same_window(_first, inputs, windows) \
+                    and (not isinstance(banked, dict) or _first.get("key") != banked.get("key")):
+                banked = _first
+        except Exception as e:
+            print(f"[bpiq-synth] first-read lookup skipped: {e}")
+    if _ba is not None and isinstance(banked, dict) and banked.get("value_usd") and _ba.enabled() \
+            and _ba.same_window(banked, inputs, windows):
+        try:
+            _gr = inputs.get("given_read") if isinstance(inputs.get("given_read"), dict) else {}
+            if saved_exact or (_gr.get("key") and (_gr.get("key") == banked.get("key")
+                                                   or abs(float(_gr.get("value_usd") or 0) - float(banked["value_usd"])) < 0.005)) \
+                    or _ba.given_to(banked, created_by):
+                exact_target = float(banked["value_usd"])
+        except Exception as e:
+            print(f"[bpiq-synth] given-read check skipped: {e}")
+    if exact_target:
+        try:
+            from migration import bpiq_exact as _bx
+            _held, _rec = _bx.land(
+                payload, exact_target,
+                rebuild=lambda _f: build_payload(inputs, prim, created_by=created_by, campaign=campaign, hold=_f),
+                salt=run_salt(inputs), people_ceiling=banked.get("people"),
+                factor=saved_hold if saved_exact else None)
+            if _rec.get("set_exactly"):
+                payload = _held
+                hold_rec = dict(_rec, read_key=banked.get("key"), read_subject=banked.get("subject"),
+                                read_window=banked.get("window"), value_ceiling_usd=round(exact_target, 2))
+                payload.setdefault("diagnostics", {})["held_to_delivered_read"] = hold_rec
+                print(f"[bpiq-synth] landed on the figure already given for {banked.get('subject')}: "
+                      f"${exact_target:,.2f} (share {hold_rec.get('factor')})")
+            else:
+                print(f"[bpiq-synth] exact landing not made ({_rec.get('reason')}); held at or below instead")
+                exact_target = None
+        except Exception as e:
+            print(f"[bpiq-synth] exact landing skipped: {e}")
+            exact_target = None
+    if _ba is not None and (banked or saved_hold) and not hold_rec:
         try:
             payload, hold_rec = _ba.hold(
                 payload, banked, inputs, windows,
                 rebuild=lambda _f: build_payload(inputs, prim, created_by=created_by, campaign=campaign, hold=_f),
-                salt=run_salt(inputs), factor=saved_hold)
+                salt=run_salt(inputs), factor=None if saved_exact else saved_hold)
             if hold_rec:
                 payload.setdefault("diagnostics", {})["held_to_delivered_read"] = hold_rec
         except Exception as e:
@@ -2388,6 +2499,21 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             payload, subject=run_salt(inputs))
         if _mc_notes:
             print(f"[bpiq-synth] comparison group corrected: {_mc_notes[:3]}")
+    # the comparison group may have been re-drawn after the landing: the
+    # total is settled on the figure again, the same way
+    if exact_target and abs(float((payload.get("valuation") or {}).get("total_brand_value") or 0) - exact_target) > 0.005:
+        try:
+            from migration import bpiq_exact as _bx
+            _again, _rec2 = _bx.settle(payload, exact_target, run_salt(inputs))
+            if _rec2.get("set_exactly"):
+                payload = _again
+            else:
+                hold_rec["set_exactly"] = False
+                hold_rec["reason"] = _rec2.get("reason")
+                exact_target = None
+        except Exception as e:
+            print(f"[bpiq-synth] exact landing after the comparison group skipped: {e}")
+            exact_target = None
     if underpinnings is not None and saved is None:
         try:
             aov_doc = {"aov": (payload.get("valuation") or {}).get("rates", {}).get("conv_value_per_user"),
@@ -2433,6 +2559,22 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         _g.scrub_tree(payload)
     except Exception as e:
         print(f"[bpiq-synth] text scrub skipped: {e}")
+    # A valuation settled on a figure the reader holds is kept as the
+    # record for its key, so a later read-back is this valuation as
+    # published (2026-11-11).
+    if exact_target and underpinnings is not None and hold_rec.get("set_exactly"):
+        try:
+            _doc = underpinnings.load(key)
+            if isinstance(_doc, dict):
+                import copy as _copy
+                _doc["payload_of_record"] = _copy.deepcopy(payload)
+                _doc["hold"] = hold_rec
+                if not isinstance(_doc.get("banked_read"), dict) and isinstance(banked, dict):
+                    _doc["banked_read"] = banked
+                underpinnings.save(key, _doc)
+                print(f"[bpiq-synth] valuation of record saved for {key}")
+        except Exception as e:
+            print(f"[bpiq-synth] record save skipped: {e}")
     return payload
 
 

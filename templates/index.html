@@ -30079,7 +30079,9 @@ https://www.instagram.com/p/..."></textarea>
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TARGET</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Consumers</div>
+                                            <!-- The label says what the count is (2026-11-11): a valuation that carries
+                                                 campaign.reach_label reads "People the campaign reached"; older ones keep Consumers. -->
+                                            <div id="bpiqKpiAudienceLabel" style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Consumers</div>
                                             <div style="margin-top: auto;">
                                                 <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
                                                 <div style="font-size: 0.95rem; visibility: hidden;">&nbsp;</div>
@@ -30098,6 +30100,9 @@ https://www.instagram.com/p/..."></textarea>
                                             <div id="bpiqKpiLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap; margin-top: auto;"></div>
                                         </div>
                                     </div>
+                                    <!-- The talent's own audience beside the campaign's reach, in one line, when the
+                                         valuation carries it (campaign.people_line). Hidden otherwise. -->
+                                    <div id="bpiqKpiPeopleLine" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.75rem; line-height: 1.5;"></div>
                                 </div>
                                 <div id="bpiqGenPopKpiRow" style="display: none; margin-bottom: 0.75rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.35rem;">CONTROL</div>
@@ -83498,6 +83503,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '<span style="color:' + color + ';">' + sign + mag.toFixed(2) + ' pp</span>';
             };
             document.getElementById('bpiqKpiAudience').textContent = _bpiqFmtNum(data.projected_audience_size);
+            // What the count is (2026-11-11): the valuation's own label for it, and the
+            // one line that names the talent's audience beside the campaign's reach.
+            var _bpiqCamp = (data.campaign && typeof data.campaign === 'object') ? data.campaign : {};
+            var _bpiqAudLabel = document.getElementById('bpiqKpiAudienceLabel');
+            if (_bpiqAudLabel) _bpiqAudLabel.textContent = _bpiqCamp.reach_label ? String(_bpiqCamp.reach_label) : 'Consumers';
+            var _bpiqPeopleLine = document.getElementById('bpiqKpiPeopleLine');
+            if (_bpiqPeopleLine) {
+                _bpiqPeopleLine.textContent = _bpiqCamp.people_line ? String(_bpiqCamp.people_line) : '';
+                _bpiqPeopleLine.style.display = _bpiqCamp.people_line ? 'block' : 'none';
+            }
             var postProj = totals.post_users_projected || 0;
             var preProj  = totals.pre_users_projected  || 0;
             var prePct   = (totals.audience_pen_pre_pct || 0);
