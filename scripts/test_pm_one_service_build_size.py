@@ -98,7 +98,29 @@ for sp in ({"name": "Nike", "brand_category": "APPAREL", "subject_raw_tu": 90211
     check(S.normalize_spec(copy.deepcopy(sp), sp["name"]) == sp, f"{sp['name']!r} untouched")
 check(S.normalize_spec(None) is None and S.normalize_spec({}) == {}, "bad input never raises")
 
-print("[4] the normalizer")
+print("[4] the interpret step quotes the rule's size")
+# the drafts as the two real orders named them
+DRAFT_HBO = {"subject": "Georgie & Mandy's First Marriage Viewers - HBO Max", "content_show": TITLE, "seed_source": "content_map",
+             "audience_type": "viewers", "named_platforms": ["HBO Max"], "date_range": {"start": "2026-08-07", "end": "2026-11-10"},
+             "subject_raw_tu": 184642, "subject_raw_avid": 52339, "universe_anchor": 6_200_000, "engaged_share": 1.0}
+DRAFT_PPLUS = dict(DRAFT_HBO, subject="GEORGIE & MANDY'S FIRST MARRIAGE Viewers", named_platforms=["Paramount+"],
+                   date_range={"start": "2024-10-25", "end": "2026-10-31"}, subject_raw_tu=190493, subject_raw_avid=58436)
+with mock.patch.object(S, "load_record", lambda title, s3=None: copy.deepcopy(REC)):
+    d1 = S.apply_to_draft(copy.deepcopy(DRAFT_HBO))
+    d2 = S.apply_to_draft(copy.deepcopy(DRAFT_PPLUS))
+check(d1["subject_raw_tu"] == 12_263, "an HBO Max order is quoted at 404,556 people, the size the build ships", str(d1["subject_raw_tu"]))
+check(d2["subject_raw_tu"] == 38_677, "a Paramount+ order on the shorter window is quoted at 1,275,954", str(d2["subject_raw_tu"]))
+check(0 < d1["subject_raw_avid"] < d1["subject_raw_tu"] and abs(d1["universe_anchor"] * d1["engaged_share"] / S.PANEL_TO_US - 12_263) <= 2,
+      "the draft's avid tier and its derivation follow the size")
+plain = {"subject": "Nike", "subject_raw_tu": 90211, "named_platforms": []}
+check(S.apply_to_draft(copy.deepcopy(plain)) == plain and S.apply_to_draft(None) is None and S.apply_to_draft({}) == {},
+      "any other draft is handed back as it came")
+chat0 = open(os.path.join(ROOT, "prometheus", "legacy", "chat.py"), encoding="utf-8").read()
+check(0 < chat0.index("fromlist=['apply_to_draft']).apply_to_draft(spec_draft).get('subject_raw_tu'))")
+      < chat0.index("spec_draft['estimated_audience_low'] = _est_rng['low']"),
+      "the interpret step sizes the draft before the brief's estimate is drawn from it")
+
+print("[5] the normalizer")
 chat = open(os.path.join(ROOT, "prometheus", "legacy", "chat.py"), encoding="utf-8").read()
 body = chat[chat.index("def _spec_from_draft(draft):"):]
 body = body[:body.index("\ndef ", 10)]

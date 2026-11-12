@@ -603,6 +603,42 @@ def settle(spec, subject, s3_key, sample, *, facts=None, s3=None) -> bool:
     return False
 
 
+def apply_to_draft(draft):
+    """The interpret step's call, before the approval brief quotes a
+    size: a draft for a title on named service(s) carries the rule's
+    size, so the estimate the reader approves is the size the build
+    ships (2026-11-11: the brief quoted 5.2M to 7.2M for an HBO Max
+    order the rule sizes at 404,556). Returns the draft, changed only
+    when it is such an order. Never raises."""
+    try:
+        if not isinstance(draft, dict):
+            return draft
+        dr = draft.get("date_range")
+        window = str(draft.get("engine_date_range") or "").strip()
+        if not window and isinstance(dr, dict) and dr.get("start") and dr.get("end"):
+            window = f"{str(dr.get('start'))[:10]} TO {str(dr.get('end'))[:10]}"
+        view = {"name": draft.get("subject") or draft.get("name") or "",
+                "content_show": draft.get("content_show") or draft.get("resolved_title") or "",
+                "seed_source": draft.get("seed_source") or "", "audience_type": draft.get("audience_type") or "",
+                "content_seed_platforms_named": list(draft.get("named_platforms")
+                                                     or draft.get("content_seed_platforms_named") or []),
+                "date_range": window, "viewer_scope": draft.get("viewer_scope"),
+                "subject_raw_tu": draft.get("subject_raw_tu"), "subject_raw_avid": draft.get("subject_raw_avid"),
+                "universe_anchor": draft.get("universe_anchor"), "engaged_share": draft.get("engaged_share")}
+        try:
+            view["subject_raw_tu"] = int(float(view["subject_raw_tu"] or 0))
+        except (TypeError, ValueError):
+            view["subject_raw_tu"] = 0
+        trail = apply_to_spec(view, view["name"], stage="interpret")
+        if trail:
+            for k in ("subject_raw_tu", "subject_raw_avid", "universe_anchor", "engaged_share", "anchor_source"):
+                if view.get(k) is not None:
+                    draft[k] = view[k]
+    except Exception as e:
+        print(f"[service-scope] draft sizing skipped (non-fatal): {e}")
+    return draft
+
+
 def normalize_spec(spec, subject=""):
     """The spec normalizer's one call. A title is never its own
     streaming service and a named-service universe pins only the named
@@ -622,4 +658,4 @@ def normalize_spec(spec, subject=""):
 
 __all__ = ["canon_service", "title_of", "services_of", "window_of", "is_scoped", "load_record", "merge_record",
            "save_record", "facts_from_rows", "facts_for_spec", "share_range", "share_point", "window_scale",
-           "size", "apply_to_spec", "settle", "normalize_spec", "STORE_KEY", "PANEL_TO_US"]
+           "size", "apply_to_spec", "apply_to_draft", "settle", "normalize_spec", "STORE_KEY", "PANEL_TO_US"]
