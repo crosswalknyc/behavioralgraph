@@ -19,6 +19,14 @@ import re
 import sys
 from pathlib import Path
 
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+try:
+    import cw_names as _names
+except Exception:  # pragma: no cover
+    _names = None
+
 DOOR_TOKEN = re.compile(r"\bdoors?\b", re.I)
 # Title-case venue name only. "the door to" stays a metaphor.
 ALLOWED_PROPER = re.compile(r"\bThe Door(?:\s+NYC)?\b")
@@ -89,11 +97,24 @@ def _is_allowed_span(text: str, start: int, end: int) -> bool:
     return any(a <= start and end <= b for a, b in proper_name_spans(text))
 
 
-def door_hits(text: str) -> list[str]:
+def _blank_names(text: str, names=None) -> str:
+    """The line with every protected name blanked (same length). A title,
+    a brand or a person's name from the read's own data is a name, not a
+    metaphor: "The Doors", "Stage Door", "Door County"."""
+    if _names is None:
+        return text
+    try:
+        return _names.mask(text, names)
+    except Exception:
+        return text
+
+
+def door_hits(text: str, names=None) -> list[str]:
     """Short snippets for each disallowed door / doors token."""
     text = text or ""
     hits = []
-    for m in DOOR_TOKEN.finditer(text):
+    seen = _blank_names(text, names)
+    for m in DOOR_TOKEN.finditer(seen):
         if _is_allowed_span(text, m.start(), m.end()):
             continue
         a = max(0, m.start() - 16)
@@ -102,8 +123,8 @@ def door_hits(text: str) -> list[str]:
     return hits
 
 
-def has_door_metaphor(text: str) -> bool:
-    return bool(door_hits(text))
+def has_door_metaphor(text: str, names=None) -> bool:
+    return bool(door_hits(text, names))
 
 
 def _protect(text: str) -> tuple[str, list[str]]:
@@ -156,9 +177,10 @@ def _tidy(text: str, orig: str) -> str:
     return (lead + body).strip() if (orig or "").strip() == (orig or "") else lead + body
 
 
-def scrub_door_metaphor(text: str) -> str:
+def scrub_door_metaphor(text: str, names=None) -> str:
     """Rewrite door metaphors. The returned string has no door / doors token
-    unless it is an allowed proper name."""
+    unless it is an allowed proper name or a name from the read's own data
+    (``names``, or the names in force)."""
     if text is None:
         return ""
     if not isinstance(text, str):
@@ -167,6 +189,22 @@ def scrub_door_metaphor(text: str) -> str:
         return text
     if not DOOR_TOKEN.search(text):
         return text          # nothing to rewrite: the string comes back byte for byte
+    if not DOOR_TOKEN.search(_blank_names(text, names)):
+        return text          # every door on the line is inside a name: byte for byte
+    orig = text
+    kept_names = []
+    if _names is not None:
+        try:
+            text, kept_names = _names.hold(text, names)
+        except Exception:
+            text, kept_names = orig, []
+    out = _scrub_held(text)
+    if kept_names:
+        out = _names.restore(out, kept_names)
+    return out
+
+
+def _scrub_held(text: str) -> str:
     protected, held = _protect(text)
     out = protected
     for pat, repl in _FRAMES:
@@ -180,12 +218,12 @@ def scrub_door_metaphor(text: str) -> str:
     return _tidy(out, text)
 
 
-def _scrub_paragraph_runs(paragraph) -> int:
+def _scrub_paragraph_runs(paragraph, names=None) -> int:
     runs = list(getattr(paragraph, "runs", []) or [])
     raw = "".join((r.text or "") for r in runs)
     if not raw and getattr(paragraph, "text", None):
         raw = paragraph.text or ""
-    new = scrub_door_metaphor(raw)
+    new = scrub_door_metaphor(raw, names)
     if new == raw:
         return 0
     if runs:
@@ -200,11 +238,11 @@ def _scrub_paragraph_runs(paragraph) -> int:
     return 1
 
 
-def _scrub_text_frame(tf) -> int:
+def _scrub_text_frame(tf, names=None) -> int:
     n = 0
     try:
         for p in tf.paragraphs:
-            n += _scrub_paragraph_runs(p)
+            n += _scrub_paragraph_runs(p, names)
     except Exception:
         pass
     return n
@@ -228,23 +266,35 @@ def _iter_shapes(shapes):
             pass
 
 
+def _file_names(path):
+    """The names that apply to this file: the ones it carries and the ones
+    in force. None (the names in force) when the helper is absent."""
+    if _names is None:
+        return None
+    try:
+        return _names.for_file(path)
+    except Exception:
+        return None
+
+
 def scrub_pptx(path) -> int:
     from pptx import Presentation  # type: ignore
 
     prs = Presentation(str(path))
+    names = _file_names(path)
     n = 0
     for slide in prs.slides:
         for sh in _iter_shapes(slide.shapes):
             if getattr(sh, "has_text_frame", False) and sh.text_frame is not None:
-                n += _scrub_text_frame(sh.text_frame)
+                n += _scrub_text_frame(sh.text_frame, names)
         try:
             if slide.has_notes_slide:
                 notes = slide.notes_slide
                 if notes.notes_text_frame is not None:
-                    n += _scrub_text_frame(notes.notes_text_frame)
+                    n += _scrub_text_frame(notes.notes_text_frame, names)
                 for sh in _iter_shapes(notes.shapes):
                     if getattr(sh, "has_text_frame", False) and sh.text_frame is not None:
-                        n += _scrub_text_frame(sh.text_frame)
+                        n += _scrub_text_frame(sh.text_frame, names)
         except Exception:
             pass
     if n:
@@ -256,27 +306,73 @@ def scrub_docx(path) -> int:
     from docx import Document  # type: ignore
 
     doc = Document(str(path))
+    names = _file_names(path)
     n = 0
     for p in doc.paragraphs:
-        n += _scrub_paragraph_runs(p)
+        n += _scrub_paragraph_runs(p, names)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    n += _scrub_paragraph_runs(p)
+                    n += _scrub_paragraph_runs(p, names)
     if n:
         doc.save(str(path))
     return n
 
 
 def scrub_text_file(path) -> int:
+    # Line by line, and only inside the text of a line that carries the word:
+    # every other line, and every tag, comes back byte for byte (the whole
+    # file used to pass through the tidy, which closed up spacing in markup
+    # and styles it had no business touching).
     p = Path(path)
-    raw = p.read_text(encoding="utf-8", errors="replace")
-    new = scrub_door_metaphor(raw)
-    if new == raw:
+    raw = p.read_bytes().decode("utf-8", errors="replace")
+    if not DOOR_TOKEN.search(raw):
         return 0
-    p.write_text(new, encoding="utf-8")
-    return 1
+    markup = Path(str(path)).suffix.lower() in (".html", ".htm")
+    out, n, skip = [], 0, None
+    for line in raw.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        end = line[len(body):]
+        if markup:
+            low = body.lower()
+            if skip is None:
+                m = re.search(r"<(script|style)\b", low)
+                if m and not re.search(r"</%s\s*>" % m.group(1), low[m.end():]):
+                    skip = m.group(1)
+            elif re.search(r"</%s\s*>" % skip, low):
+                skip = None
+                out.append(line)
+                continue
+            if skip is not None:
+                out.append(line)
+                continue
+        if not DOOR_TOKEN.search(body):
+            out.append(line)
+            continue
+        if markup:
+            pieces = re.split(r"(<[^>]*>)", body)
+            new = "".join(pc if pc.startswith("<") else _scrub_piece(pc) for pc in pieces)
+        else:
+            new = _scrub_piece(body)
+        if new != body:
+            n += 1
+        out.append(new + end)
+    if not n:
+        return 0
+    p.write_bytes("".join(out).encode("utf-8"))
+    return n
+
+
+def _scrub_piece(piece: str) -> str:
+    """One run of text inside a line: rewritten if it carries the word, with
+    the spacing at its two ends kept (it is what joins it to its neighbors)."""
+    if not DOOR_TOKEN.search(piece):
+        return piece
+    lead = re.match(r"^\s*", piece).group(0)
+    trail = re.search(r"\s*$", piece).group(0) if piece.strip() else ""
+    new = scrub_door_metaphor(piece.strip())
+    return lead + new + trail if piece.strip() else piece
 
 
 def scrub_file(path) -> int:

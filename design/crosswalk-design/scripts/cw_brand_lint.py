@@ -24,6 +24,30 @@ try:
 except Exception:  # pragma: no cover
     def _door_hits(text):
         return [m.group(0) for m in re.finditer(r"\bdoors?\b", text or "", re.I)]
+try:
+    import cw_names as _names
+except Exception:  # pragma: no cover
+    _names = None
+# The names the file under check carries (titles, brands, people from the read's own data). A name is
+# spelled the way it is spelled: no spelling, casing or word-ban rule reads inside one (2026-11-11:
+# "The Mandela Catalogue" failed as a British spelling and the title was deleted by hand to pass).
+NAMES = []
+
+
+def _mask_names(text):
+    if _names is None or not NAMES:
+        return text
+    try:
+        return _names.mask(text, NAMES)
+    except Exception:
+        return text
+
+
+def _name_shaped(text, start, end):
+    try:
+        return _names is not None and _names.in_name_like_run(text, start, end)
+    except Exception:
+        return False
 TOK = json.load(open(os.path.join(HERE, "..", "assets", "tokens.json")))
 EMU = 914400
 
@@ -106,7 +130,8 @@ def check_copy(text, where, rep, allow_eyebrow=False):
     body = re.sub(r"(^|\n)[ \t]*—([ \t]+|$)", r"\1", body)  # an em-dash used as a list marker at the start of a line is a bullet, not punctuation
     for m in re.finditer("—", body):
         rep.fail(where, f"em-dash in copy: “{snip(body, m.start())}”. Use a period, comma, colon or parentheses.")
-    for snippet in _door_hits(body):
+    words = _mask_names(body)      # the same line with every protected name blanked, same length
+    for snippet in _door_hits(words):
         rep.fail(where, f"door metaphor: “{snippet}”. Decks never use the word door. State the claim.")
     for m in re.finditer("–", body):
         if re.match(r"\d", body[m.start() + 1:m.start() + 2] or "") and re.search(r"\d$", body[:m.start()]):
@@ -116,18 +141,20 @@ def check_copy(text, where, rep, allow_eyebrow=False):
     for m in PLACEHOLDER.finditer(t):
         rep.fail(where, f"template placeholder or annotation left in: “{m.group(0)}”. Replace it with real content, or flag it to the person if they asked for placeholders.")
     # a count of households (or "households" as the unit); "household income" as an attribute is fine
-    if re.search(r"\d[\d,.]*\s*(?:[MKB]|million|thousand)?\s+(?:\w+\s+)?households?\b|\bhouseholds\b", body, re.I):
+    if re.search(r"\d[\d,.]*\s*(?:[MKB]|million|thousand)?\s+(?:\w+\s+)?households?\b|\bhouseholds\b", words, re.I):
         rep.fail(where, f"“household” as a count: Crosswalk counts accounts (or people, viewers, fans in description), never households")
-    for m in re.finditer(r"\b(modeled|modelled|estimated|synthetic|synth)\b", body, re.I):
+    for m in re.finditer(r"\b(modeled|modelled|estimated|synthetic|synth)\b", words, re.I):
         rep.warn(where, f"“{m.group(0)}” in copy: client copy never says modeled, estimated or synthetic (projected is fine)")
     for m in re.finditer(r"\w\s-\s\w", body):
         rep.warn(where, f"spaced hyphen used as a dash? “{snip(body, m.start())}”")
     for pat, us in BRITISH:
-        for m in re.finditer(pat, body, re.I):
+        for m in re.finditer(pat, words, re.I):
+            if _name_shaped(body, m.start(), m.end()):
+                continue      # a capitalized word beside another: a title or a name, spelled its own way
             rep.fail(where, f"British spelling “{m.group(0)}” (American: {us})")
-    for m in re.finditer(r"\bdo(es|ing)? (the|any) work\b", body, re.I):
+    for m in re.finditer(r"\bdo(es|ing)? (the|any) work\b", words, re.I):
         rep.warn(where, f"“{m.group(0)}” is on the avoid list; say it the way a person would")
-    if re.search(r"\bdistilled into\b", body, re.I):
+    if re.search(r"\bdistilled into\b", words, re.I):
         rep.warn(where, "“distilled into”: house preference is “transformed into”")
     for m in re.finditer(r"\bTV\b", body):
         before = body[:m.start()]
@@ -137,7 +164,7 @@ def check_copy(text, where, rep, allow_eyebrow=False):
         if prev and (prev.group(1).lower() == "connected" or prev.group(1)[:1].isupper()):
             continue  # connected TV, or a proper name like YouTube TV / Pluto TV
         rep.warn(where, f"plain “TV”: Crosswalk says “connected TV” or “CTV”: “{snip(body, m.start())}”")
-    if re.search(r"\b(behavioral|data|intelligence|signal) layer\b", body, re.I):
+    if re.search(r"\b(behavioral|data|intelligence|signal) layer\b", words, re.I):
         rep.warn(where, "“layer” was removed from Crosswalk positioning copy")
     for m in re.finditer(r"\b30\s?M\+?(?:[^.\n]{0,40}?)\b(daily|active|each day|every day|today|right now)\b", body, re.I):
         if not re.search(r"\b10\s?M\b", m.group(0)):
@@ -860,6 +887,10 @@ def main():
     for f in files:
         rep = Report(f)
         ext = os.path.splitext(f)[1].lower()
+        try:
+            NAMES[:] = _names.for_file(f) if _names is not None else []
+        except Exception:
+            NAMES[:] = []
         if ext == ".pptx":
             lint_pptx(f, rep)
         elif ext == ".docx":

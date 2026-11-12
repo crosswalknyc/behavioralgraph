@@ -18965,13 +18965,24 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         plan = plan_result.get('data') or {}
         if isinstance(plan, list):
             plan = next((d for d in plan if isinstance(d, dict)), {})
-        plan = pma.enforce_insights_plan(plan, subject)
+        # The read's own data, as text, and the names in it (2026-11-11): a
+        # title, a brand or a person's name the read carries is never
+        # flagged or rewritten by a spelling, casing or word-ban pass, and
+        # a page of web addresses carries only addresses the read holds.
+        _read_text, _read_names = '', []
+        try:
+            _read_text = pma.deck_read_text(digest, history)
+            _read_names = pma.deck_entities(_read_text, subject)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
+        plan = pma.enforce_insights_plan(plan, subject, names=_read_names)
         if not plan.get('slides'):
             raise RuntimeError('slide plan came back empty')
         plan = _deck_pick.hold_plan_to_read(   # a deck made from a read keeps the read's figures (2026-11-11)
             plan, ctx, replan=lambda _note: _pm_claude_json(
                 pma.INSIGHTS_DECK_SYSTEM_PROMPT, f"{_deck_prompt}\n\n{_note}", max_tokens=20000, temperature=0.4,
-                surface='deck', usage_extras=_ppu_extras).get('data'), post=lambda _p: pma.enforce_insights_plan(_p, subject))
+                surface='deck', usage_extras=_ppu_extras).get('data'),
+            post=lambda _p: pma.enforce_insights_plan(_p, subject, names=_read_names))
         from prometheus import category_reach as _cre   # a card that is a group of brands carries its reach and index (2026-11-11)
         plan = _cre.annotate_deck(plan, ctx, subject)
         _pm_deck_status_write(job_id, {**base, 'status': 'rendering'})
@@ -18998,7 +19009,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
             plan, local, static_dir=static_dir,
             photo_subject=str(subject or p_meta.get('name') or ''),
             photo_kind=deck_builder.photo_kind_for_category(p_meta.get('brand_category')),
-            copy_rewriter=_copy_rewriter)
+            copy_rewriter=_copy_rewriter, protected_names=_read_names, read_text=_read_text)
         base.update(image_subject=plan.get('_photo_subject') or plan.get('image_subject'),
                     photo_sources=plan.get('_photo_sources') or [],
                     # the pre-ship pass on the finished deck: ready, lint and

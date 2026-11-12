@@ -138,7 +138,10 @@ PLAN = {'title': 'x', 'filename_stem': 'photo_test',
                         'channel at three times the US average.'}]},
         ]}
 
-out = '/tmp/deck_photo_test.pptx'
+# paths of this run's own: a fixed /tmp name is shared by every suite running on the machine
+import tempfile  # noqa: E402
+_OUT_DIR = tempfile.mkdtemp(prefix='deck_photo_test_')
+out = os.path.join(_OUT_DIR, 'deck_photo_test.pptx')
 n = db.render_insights_deck(PLAN, out)
 check('all slides rendered', n == 4, f'({n})')
 
@@ -177,8 +180,8 @@ check('photo slides stay overlap-clean', clean)
 PLAN2 = {k: v for k, v in PLAN.items()}
 PLAN2['slides'] = [dict(s) for s in PLAN['slides']]
 PLAN2['slides'][0]['photo'] = False
-n = db.render_insights_deck(PLAN2, '/tmp/deck_photo_test2.pptx')
-prs2 = Presentation('/tmp/deck_photo_test2.pptx')
+n = db.render_insights_deck(PLAN2, os.path.join(_OUT_DIR, 'deck_photo_test2.pptx'))
+prs2 = Presentation(os.path.join(_OUT_DIR, 'deck_photo_test2.pptx'))
 check('photo:false keeps the cover type-only (the gradient ground, no photo)',
       len(pics(prs2.slides[0])) == 0 and not is_photo_bg(prs2.slides[0]))
 
@@ -190,8 +193,8 @@ try:
     PLAN3 = dict(PLAN)
     PLAN3 = {**PLAN, 'image_subject': 'Nobody Offline Test'}
     PLAN3['slides'] = [dict(s) for s in PLAN['slides']]
-    n = db.render_insights_deck(PLAN3, '/tmp/deck_photo_test3.pptx')
-    prs3 = Presentation('/tmp/deck_photo_test3.pptx')
+    n = db.render_insights_deck(PLAN3, os.path.join(_OUT_DIR, 'deck_photo_test3.pptx'))
+    prs3 = Presentation(os.path.join(_OUT_DIR, 'deck_photo_test3.pptx'))
     check('no photos means text-only render, never a failure',
           n == 4 and all(len(pics(s)) == 0 and not is_photo_bg(s) for s in prs3.slides))
 finally:
@@ -201,8 +204,8 @@ finally:
 db._PHOTO_CACHE['garbage subject|person'] = [b'not an image at all']
 PLANG = {**PLAN, 'image_subject': 'Garbage Subject'}
 PLANG['slides'] = [dict(s) for s in PLAN['slides']]
-n = db.render_insights_deck(PLANG, '/tmp/deck_photo_test4.pptx')
-prs4 = Presentation('/tmp/deck_photo_test4.pptx')
+n = db.render_insights_deck(PLANG, os.path.join(_OUT_DIR, 'deck_photo_test4.pptx'))
+prs4 = Presentation(os.path.join(_OUT_DIR, 'deck_photo_test4.pptx'))
 check('corrupt photo bytes never fail the deck',
       n == 4 and all(len(pics(s)) == 0 and not is_photo_bg(s) for s in prs4.slides))
 

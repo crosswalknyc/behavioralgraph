@@ -49,6 +49,36 @@ if str(_HERE) not in sys.path:
 import readability_check as rc  # noqa: E402
 
 try:
+    import cw_names as _names
+except Exception:  # pragma: no cover
+    _names = None
+
+
+def _hold(text: str, cased_only: bool = False):
+    """(text with every protected name swapped for a token, the names).
+    A title, a brand or a person's name from the read's own data is never
+    re-cased, reworded or cut by a repair."""
+    if _names is None or not text:
+        return text, []
+    try:
+        return _names.hold(text, None, cased_only)
+    except Exception:
+        return text, []
+
+
+def _restore(text: str, held) -> str:
+    return _names.restore(text, held) if (held and _names is not None) else text
+
+
+def _names_kept(old: str, new: str) -> bool:
+    if _names is None:
+        return True
+    try:
+        return _names.kept(old, new)
+    except Exception:
+        return True
+
+try:
     from cw_door_copy import scrub_door_metaphor
 except Exception:  # pragma: no cover
     def scrub_door_metaphor(text):
@@ -108,7 +138,10 @@ def _tidy(text: str) -> str:
 
 def _figures(text: str) -> list:
     """Every figure in a string, as written, sorted (a rewrite must keep them)."""
-    return sorted(re.findall(r"\$?\d[\d,]*(?:\.\d+)?%?[KMBx]?", str(text or "").replace(NBSP, " ")))
+    # a digit inside a protected name ("Local58", "Vogue 73 Questions") is part of the name, held by
+    # the name rule; a comma that only follows a figure is punctuation, not part of it
+    seen = rc._seen(str(text or "").replace(NBSP, " "))
+    return sorted(f.rstrip(",") for f in re.findall(r"\$?\d[\d,]*(?:\.\d+)?%?[KMBx]?", seen))
 
 
 def _words(text: str) -> list:
@@ -150,6 +183,9 @@ def small_word_case(text) -> str:
     s = "" if text is None else str(text)
     if not s or not re.search(r"\b(To|And|Or|Of|The|Vs|Through|Thru)\b", s):
         return s
+    s, _held = _hold(s, cased_only=True)      # a name set all in capitals at its source does not fix a casing
+    if _held and not re.search(r"\b(To|And|Or|Of|The|Vs|Through|Thru)\b", s):
+        return _restore(s, _held)      # every such word sits inside a name: as it was
     s = _RANGE_RE.sub(lambda m: m.group(1) + m.group(2).lower() + m.group(3), s)
 
     def fix_segment(seg: str) -> str:
@@ -177,7 +213,7 @@ def small_word_case(text) -> str:
 
     # sentence by sentence, so the word that opens a sentence keeps its capital
     parts = re.split(r"((?<=[.!?:])\s+|\s+[/|·]\s+|\n)", s)
-    return "".join(fix_segment(p) if i % 2 == 0 else p for i, p in enumerate(parts))
+    return _restore("".join(fix_segment(p) if i % 2 == 0 else p for i, p in enumerate(parts)), _held)
 
 
 # ----------------------------------------------------- stock filler (8)
@@ -215,15 +251,18 @@ def scrub_stock(text) -> str:
     """Replace stock filler ("does the work", "does the heavy lifting")
     with the plain verb. A string without one comes back unchanged."""
     s = "" if text is None else str(text)
-    if not s or not rc.stock_hits(s.replace(NBSP, " ")):
+    if not s:
         return s
-    out = s.replace(NBSP, " ")
+    held_text, _held = _hold(s)
+    if not rc.stock_hits(held_text.replace(NBSP, " ")):
+        return s
+    out = held_text.replace(NBSP, " ")
     for pat, repl in _STOCK_TABLE:
         def _sub(m, r=repl):
             got = re.sub(r"\s{2,}", " ", m.expand(re.sub(r"\\(\d)", lambda g: f"\\g<{g.group(1)}>", r)))
             return (got[0].upper() + got[1:]) if m.group(0)[:1].isupper() else got
         out = pat.sub(_sub, out)
-    return out
+    return _restore(out, _held)
 
 
 # ------------------------------------------------------ long sentences
@@ -851,6 +890,8 @@ def acceptable(old: str, new, *, title: bool = False, phrases=(), avoid_opener: 
         return False
     if _figures(o) != _figures(n):
         return False
+    if not _names_kept(o, n):
+        return False      # a title, a brand or a name the line carried is gone or respelled
     if len(n) > len(o) * 1.08 + 6 or len(n) < max(8, len(o) * 0.35):
         return False
     if re.search(r"[\u2014\u2013]", n) or rc.door_hits(n) or rc.stock_hits(n):
@@ -881,6 +922,8 @@ def sane(old: str, new: str) -> bool:
     status says so."""
     o, n = _norm(old), _norm(new)
     if not n:
+        return False
+    if not _names_kept(o, n):
         return False
     if _DOUBLED.search(n) and not _DOUBLED.search(o):
         return False
@@ -931,6 +974,16 @@ def _fallback(text: str, t: dict) -> str:
     return out
 
 
+def _unit_names(text: str) -> list:
+    """The protected names a unit carries, as written."""
+    if _names is None:
+        return []
+    try:
+        return [text[a:b] for a, b in _names.spans(text)]
+    except Exception:
+        return []
+
+
 def fix_file(path, rewriter=None, *, llm_passes: int = LLM_PASSES, rounds: int = FALLBACK_ROUNDS,
              guard=None) -> dict:
     """Repair a deck's flagged copy in place. ``rewriter`` is an optional
@@ -940,6 +993,11 @@ def fix_file(path, rewriter=None, *, llm_passes: int = LLM_PASSES, rounds: int =
     "after", "rewritten", "fallback", "notes", "edits"}`` (``edits`` is every
     (label, old text, new text) written, in order). Never raises."""
     res = {"before": None, "after": None, "rewritten": 0, "fallback": 0, "notes": [], "edits": []}
+    with rc._file_names(path):      # the names the file carries are in force for the whole repair
+        return _fix_file(path, rewriter, llm_passes, rounds, guard, res)
+
+
+def _fix_file(path, rewriter, llm_passes, rounds, guard, res) -> dict:
     try:
         if Path(str(path)).suffix.lower() != ".pptx":
             a = rc.analyze_path(path)
@@ -956,7 +1014,7 @@ def fix_file(path, rewriter=None, *, llm_passes: int = LLM_PASSES, rounds: int =
                 break
             keys = list(tg.keys())
             items = [{"id": f"u{i + 1}", "text": k[1], "role": "header" if tg[k]["title"] else "body",
-                      "problems": list(tg[k]["problems"]), "keep": _figures(k[1])}
+                      "problems": list(tg[k]["problems"]), "keep": _figures(k[1]) + _unit_names(k[1])}
                      for i, k in enumerate(keys)]
             try:
                 got = rewriter(items) or {}

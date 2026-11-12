@@ -49,6 +49,10 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 try:
+    import cw_names as _names
+except Exception:  # pragma: no cover
+    _names = None
+try:
     from cw_door_copy import door_hits
 except Exception:  # pragma: no cover
     def door_hits(text: str) -> list[str]:
@@ -174,9 +178,51 @@ def syllables(word: str) -> int:
     return max(1, len(groups))
 
 
+# A full stop that does not end a sentence: a title before a name, a common
+# short form, an initial ("Mr. Nightmare", "U.S. viewers", "vs. last year",
+# "Michael B. Jordan", "No. 1"). A header carrying one was read as two or
+# three sentences (2026-11-11).
+_ABBR_END = re.compile(
+    r"(?:^|[\s(\u00a0])(?:Mr|Mrs|Ms|Mx|Dr|St|Jr|Sr|Prof|Gen|Gov|Sen|Rep|Lt|Sgt|Capt|Col|vs|Inc|Co|Corp|Ltd|Bros|Mt|Ft|"
+    r"Ave|Blvd|approx|est|U\.S|U\.K|U\.N|D\.C|L\.A|a\.m|p\.m|e\.g|i\.e)\.$", re.I)
+_INITIAL_END = re.compile(r"(?:^|[\s(\u00a0])[A-Z]\.$")
+_NO_END = re.compile(r"(?:^|[\s(\u00a0])No\.$")
+
+
+def _seen(text: str) -> str:
+    """The text with every protected name blanked, same length. A title, a
+    brand or a person's name from the read's own data is never read as an
+    idiom, a banned word or the end of a sentence."""
+    if _names is None or not text:
+        return text
+    try:
+        return _names.mask(text)
+    except Exception:
+        return text
+
+
+def split_sentences(text: str) -> list[str]:
+    """Sentences of ``text``. A full stop inside a protected name, after a
+    short form or after an initial does not end one."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    seen = _seen(text)
+    cuts, start = [], 0
+    for m in re.finditer(r"(?<=[.!?])\s+", seen):
+        head = seen[start:m.start()]
+        nxt = seen[m.end():m.end() + 1]
+        if _ABBR_END.search(head) or (_INITIAL_END.search(head) and nxt[:1].isupper()) \
+                or (_NO_END.search(head) and nxt[:1].isdigit()):
+            continue
+        cuts.append((start, m.start()))
+        start = m.end()
+    cuts.append((start, len(text)))
+    return [text[a:b].strip() for a, b in cuts if text[a:b].strip()]
+
+
 def sentences_of(text: str) -> list[str]:
-    parts = re.split(r"(?<=[.!?])\s+", text.strip())
-    return [p.strip() for p in parts if p.strip()]
+    return split_sentences(text)
 
 
 def words_of(text: str) -> list[str]:
@@ -228,10 +274,10 @@ def store_metaphor_hits(text: str) -> list[str]:
 def clever_flags(header: str) -> list[str]:
     flags = []
     h = header.strip()
-    low = h.lower()
+    low = _seen(h).lower()
     if h.endswith("?"):
         flags.append("rhetorical question")
-    frags = [f for f in re.split(r"(?<=[.!?])\s+", h) if f.strip()]
+    frags = split_sentences(h)
     frags = [f for f in frags if not re.fullmatch(r"[\d$.,%]+", f.strip())]
     if len(frags) >= 2:
         if all(len(f.split()) <= 3 for f in frags):
@@ -245,7 +291,7 @@ def clever_flags(header: str) -> list[str]:
             flags.append(f"idiom or metaphor: '{idiom}'")
     if re.search(r"\bisn't\b|\bain't\b", low):
         flags.append("wordplay contraction")
-    for snippet in store_metaphor_hits(h):
+    for snippet in store_metaphor_hits(_seen(h)):
         flags.append(f"store metaphor for a group: '{snippet}' -> say categories or groups")
     return flags
 
@@ -271,6 +317,23 @@ def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page], int]:
                 return max([r.font.size.pt for p in shape.text_frame.paragraphs for r in p.runs if r.font.size] or [0])
             except Exception:
                 return 0
+
+        def lead_words(shape):
+            """Words set at the shape's largest size. A stat with a unit ("51 episodes on average",
+            "1.3 million viewers": the figure large, the unit smaller) leads with a figure, so it
+            is a stat and never the page's header."""
+            try:
+                top = biggest(shape)
+                runs = [r for p in shape.text_frame.paragraphs for r in p.runs]
+                sized = [r.text or "" for r in runs if r.font.size and r.font.size.pt >= top - 0.01]
+                if not sized or len(sized) == len([r for r in runs if (r.text or "").strip()]):
+                    return shape.text_frame.text
+                return " ".join(sized)
+            except Exception:
+                return shape.text_frame.text
+
+        def ends_sentence(shape):
+            return bool(re.search(r"[.!?][\"'\u201d\u2019)]?\s*$", shape.text_frame.text.replace("\u00a0", " ").strip()))
         # Fallback title: the largest type on the page (20pt or more, 25 words or fewer). Works for
         # 16:9 decks (34pt titles) and portrait documents (23pt headlines) alike.
         # A header is words. A figure set large ("3,593,822", "$33.4M", "39.8%") is a stat, not the
@@ -278,8 +341,18 @@ def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page], int]:
         # "7 consecutive headers open on a number").
         cands = [sh for sh in slide.shapes if sh.has_text_frame and sh.text_frame.text.strip()
                  and len(sh.text_frame.text.split()) <= 25 and biggest(sh) >= 20
-                 and len(re.findall(r"[A-Za-z]{2,}", sh.text_frame.text)) >= 2]
-        fallback = max(cands, key=biggest) if cands else None
+                 and len(re.findall(r"[A-Za-z]{2,}", lead_words(sh))) >= 2]
+        # A line that opens on a figure and is not a sentence ("238,617 forward against 96,204
+        # back", set large under a statement) is a stat line, not the header, when the page has
+        # anything else to be one. A cover's pairing ("Mara Vale x Fernhill", no full stop) opens
+        # on a name and stays the header. Among the rest the larger type wins, then the one higher
+        # on the page (decks built with cw_deck.js carry no title placeholder, so this is how
+        # their headers are found: 2026-11-11, a stat with a unit and a large figure line were
+        # read as headers).
+        def stat_line(shape):
+            return bool(re.match(r"\s*[$+\-\u2212]?\d", shape.text_frame.text)) and not ends_sentence(shape)
+        pool = [sh for sh in cands if not stat_line(sh)] or cands
+        fallback = max(pool, key=lambda sh: (biggest(sh), -int(sh.top or 0))) if pool else None
         # python-pptx builds a new shape proxy on every pass over slide.shapes, so `shape is fallback`
         # was never true and decks without title placeholders (cw_deck.js / pptxgenjs) reported no
         # headers at all (2026-11-05, Twin IQ v3). The underlying XML element is stable while a
@@ -486,6 +559,25 @@ def two_word_opener(text: str) -> str:
     return " ".join(toks) if len(toks) == 2 else ""
 
 
+def _name_marked(text: str) -> str:
+    """The unit with each protected name swapped for one token that carries
+    a digit, so no compared phrase runs through a name."""
+    if _names is None or not text:
+        return text
+    try:
+        sp = _names.spans(text)
+    except Exception:
+        return text
+    if not sp:
+        return text
+    out, last = [], 0
+    for a, b in sp:
+        out.append(text[last:a]); out.append(" n4me ")
+        last = b
+    out.append(text[last:])
+    return "".join(out)
+
+
 def phrase_tokens(text: str) -> list[str]:
     toks = [re.sub(r"[^a-z0-9']", "", t.lower()) for t in words_of(text)]
     return [t for t in toks if t]
@@ -582,7 +674,7 @@ def voice_records(headers: list[str], pages: list[Page]) -> list[dict]:
                 units.append(u)
     grams: dict[tuple[str, ...], set[int]] = {}
     for idx, u in enumerate(units):
-        toks = phrase_tokens(u)
+        toks = phrase_tokens(_name_marked(u))      # a name said three times is a name, not a reused phrase
         for i in range(len(toks) - PHRASE_N + 1):
             g = tuple(toks[i:i + PHRASE_N])
             if any(re.search(r"\d", t) for t in g):
@@ -707,9 +799,9 @@ def analyze(headers: list[str], bodies: list[str], pages: list[Page], slide_coun
         for snippet in door_hits(text):
             issues.append(f"door metaphor: '{snippet}'")
         for j in JARGON:
-            if re.search(rf"\b{re.escape(j)}\b", text.lower()):
+            if re.search(rf"\b{re.escape(j)}\b", _seen(text).lower()):
                 issues.append(f"jargon '{j}'" + (f" -> '{JARGON[j]}'" if JARGON[j] else " -> cut"))
-        for hit in stock_hits(text):
+        for hit in stock_hits(_seen(text)):
             issues.append(f"stock phrase '{hit}'")
         mark = "FLAG" if issues else " ok "
         flags += len(issues)
@@ -754,7 +846,7 @@ def analyze(headers: list[str], bodies: list[str], pages: list[Page], slide_coun
         avg = sum(len(words_of(s)) for s in prose_sents) / len(prose_sents)
         lines.append(f"  [info] {len(prose_sents)} prose sentences, average {avg:.1f} words (tables and labels skipped)")
     jargon_hits = {}
-    low_body = all_body.lower()
+    low_body = _seen(all_body).lower()
     for j, sub in JARGON.items():
         c = len(re.findall(rf"\b{re.escape(j)}\b", low_body))
         if c:
@@ -763,14 +855,14 @@ def analyze(headers: list[str], bodies: list[str], pages: list[Page], slide_coun
         flags += 1
         lines.append(f"  [FLAG] '{j}' x{c}" + (f" -> '{sub}'" if sub else " -> cut"))
         recs.append({"kind": "jargon", "word": j, "sub": sub, "count": c})
-    all_copy = (" ".join(headers) + " " + all_body).lower()
+    all_copy = _seen(" ".join(headers) + " " + all_body).lower()
     for w, limit in OVERUSE.items():
         c = len(re.findall(rf"\b{re.escape(w)}\b", all_copy))
         if c > limit:
             flags += 1
             lines.append(f"  [FLAG] '{w}' x{c} -> {limit} at most; cut the rest")
             recs.append({"kind": "overuse", "word": w, "count": c, "limit": limit})
-    for hit in stock_hits(all_body):
+    for hit in stock_hits(_seen(all_body)):
         flags += 1
         lines.append(f"  [FLAG] stock phrase '{hit}': filler; say what happened")
         recs.append({"kind": "stock_phrase", "phrase": hit})
@@ -809,9 +901,36 @@ def analyze(headers: list[str], bodies: list[str], pages: list[Page], slide_coun
 def analyze_path(path) -> dict:
     """``analyze`` on a file (.pptx, .docx, .html, .md, .txt)."""
     headers, bodies, pages, slide_count = load_path(path)
-    out = analyze(headers, bodies, pages, slide_count)
+    with _file_names(path):
+        out = analyze(headers, bodies, pages, slide_count)
     out["headers"], out["pages"] = headers, pages
     return out
+
+
+class _file_names:
+    """For the length of one check, the names in force are the ones the
+    file carries plus the ones already in force."""
+
+    def __init__(self, path):
+        self.path, self.prev = path, None
+
+    def __enter__(self):
+        if _names is None or not self.path:
+            return self
+        try:
+            self.prev = list(getattr(_names._LOCAL, "names", None) or [])
+            _names.set_names(_names.for_file(self.path))
+        except Exception:
+            self.prev = None
+        return self
+
+    def __exit__(self, *exc):
+        if _names is not None and self.prev is not None:
+            try:
+                _names._LOCAL.names = self.prev
+            except Exception:
+                pass
+        return False
 
 
 def main() -> int:
@@ -829,7 +948,8 @@ def main() -> int:
         ap.print_help()
         return 2
 
-    res = analyze(headers, bodies, pages, slide_count)
+    with _file_names(args.path if not args.text else None):
+        res = analyze(headers, bodies, pages, slide_count)
     print("\n".join(res["lines"]))
     return 0 if res["count"] == 0 else 1
 

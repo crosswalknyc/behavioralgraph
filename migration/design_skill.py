@@ -149,6 +149,7 @@ PACKAGED_SCRIPTS = (
     "cw_pptx_check.py", "cw_docx_finalize.py", "cw_brand_lint.py",
     "readability_check.py", "cw_pptx_tools.py", "cw_email_check.py",
     "render_preview.py", "cw_door_copy.py", "cw_copy_fix.py",
+    "cw_names.py",
 )
 PACKAGED_TEMPLATES = (
     "Crosswalk_Deck_Templates.pptx", "Crosswalk_SOW_Template.pptx",
@@ -575,6 +576,215 @@ def embed_fonts(path, render_check: bool = False, report: Optional[Report] = Non
     return rep
 
 
+_NAMES_MOD = None
+
+
+def names_module():
+    """The pack's name helper (``cw_names.py``), the one instance every pack
+    script in this process shares. None when the pack is absent."""
+    global _NAMES_MOD
+    if _NAMES_MOD is not None:
+        return _NAMES_MOD or None
+    sd = scripts_dir()
+    if sd is None or not (sd / "cw_names.py").is_file():
+        _NAMES_MOD = False
+        return None
+    try:
+        import importlib
+        if str(sd) not in sys.path:
+            sys.path.insert(0, str(sd))      # the pack scripts import it by name, so this is that same module
+        _NAMES_MOD = importlib.import_module("cw_names")
+    except Exception:
+        _NAMES_MOD = False
+        return None
+    return _NAMES_MOD
+
+
+def set_protected_names(names) -> None:
+    """The titles, brands and people's names from the read's own data, in
+    force for this thread until cleared: no spelling, casing or word-ban
+    pass reads inside one or rewrites one (2026-11-11: the lint failed a
+    deck on "The Mandela Catalogue" and the title was deleted by hand).
+    A builder sets them for one build; ``finish`` also writes them into
+    the file so the mail gate reads the same list."""
+    mod = names_module()
+    if mod is not None:
+        try:
+            mod.set_names(names or [])
+        except Exception:
+            pass
+
+
+def clear_protected_names() -> None:
+    set_protected_names([])
+
+
+def protected_names() -> list:
+    mod = names_module()
+    try:
+        return list(mod.active()) if mod is not None else []
+    except Exception:
+        return []
+
+
+def file_names(path) -> list:
+    """The names a finished file carries."""
+    mod = names_module()
+    try:
+        return list(mod.from_file(path)) if mod is not None else []
+    except Exception:
+        return []
+
+
+def _names_in_text(names, text: str) -> list:
+    """The names that occur in ``text`` (what a file needs to carry)."""
+    mod = names_module()
+    if mod is None or not names or not text:
+        return []
+    out = []
+    try:
+        for n in mod.clean(names):
+            if mod.spans(text, [n]):
+                out.append(n)
+    except Exception:
+        return []
+    return out
+
+
+def _deck_text(path) -> str:
+    """Every word in a deck's slides and notes, one paragraph a line."""
+    import zipfile
+    from lxml import etree
+    out = []
+    try:
+        with zipfile.ZipFile(str(path)) as z:
+            for n in z.namelist():
+                if re.match(r"ppt/(slides|notesSlides)/[^/]+\.xml$", n):
+                    root = etree.fromstring(z.read(n))
+                    for p_ in root.iter(f"{_A}p"):
+                        t = "".join(x.text or "" for x in p_.iter(f"{_A}t"))
+                        if t.strip():
+                            out.append(t)
+    except Exception:
+        pass
+    return "\n".join(out)
+
+
+def write_names_to_file(path, names) -> int:
+    """Write the protected names a deck carries into it (a document
+    property), so every later pass over the file reads the same list.
+    Only names that occur in the deck are written. Returns the count."""
+    mod = names_module()
+    if mod is None or Path(str(path)).suffix.lower() != ".pptx":
+        return 0
+    try:
+        mine = _names_in_text(names, _deck_text(path))
+        have = mod.from_file(path)
+        if not mine and not have:
+            return 0
+        both = mod.clean(list(mine) + list(have))
+        if [x.casefold() for x in both] == [x.casefold() for x in have]:
+            return len(have)
+        return int(mod.write_to_file(path, both) or 0)
+    except Exception:
+        return 0
+
+
+# ----------------------------------------------- the words a reader sees (2026-11-11)
+_DOOR_WORD = re.compile(r"\bdoors?\b", re.I)
+
+
+def _norm_words(text: str) -> str:
+    return re.sub(r"[\s\u00a0]+", " ", text or "").strip()
+
+
+def words_snapshot(path) -> dict:
+    """{slide part: [the run texts of each paragraph that carries words, in
+    page order]}. What a reader sees, before a pass that is not allowed to
+    change it."""
+    import zipfile
+    from lxml import etree
+    snap = {}
+    try:
+        with zipfile.ZipFile(str(path)) as z:
+            for n in z.namelist():
+                if not re.match(r"ppt/(slides|notesSlides)/[^/]+\.xml$", n):
+                    continue
+                root = etree.fromstring(z.read(n))
+                paras = []
+                for p_ in root.iter(f"{_A}p"):
+                    runs = [t.text or "" for t in p_.iter(f"{_A}t")]
+                    if "".join(runs).strip():
+                        paras.append(runs)
+                snap[n] = paras
+    except Exception:
+        return {}
+    return snap
+
+
+def restore_words(path, snap: dict) -> dict:
+    """Hold a finishing pass to the rule that it changes no word a reader
+    sees unless a named rule requires it. The named rules are the door
+    rewrite (only on a paragraph that carried the word outside a name)
+    and the widow fit (spacing only). Any other paragraph whose words
+    differ from ``snap`` is set back to what it was. Returns
+    {"restored": n, "unaligned": slides that could not be compared}."""
+    import zipfile
+    from lxml import etree
+    out = {"restored": 0, "unaligned": 0}
+    if not snap:
+        return out
+    mod = names_module()
+
+    def seen(text):
+        try:
+            return mod.mask(text) if mod is not None else text
+        except Exception:
+            return text
+    replace = {}
+    try:
+        z = zipfile.ZipFile(str(path))
+        have = set(z.namelist())
+        for n, before in snap.items():
+            if n not in have:
+                continue
+            root = etree.fromstring(z.read(n))
+            now = [p_ for p_ in root.iter(f"{_A}p") if "".join(t.text or "" for t in p_.iter(f"{_A}t")).strip()]
+            # a paragraph the door rule emptied has left the list: line the rest up without it
+            if len(now) != len(before):
+                kept = [runs for runs in before if not _DOOR_WORD.search(seen("".join(runs)))]
+                if len(kept) != len(now):
+                    out["unaligned"] += 1
+                    continue
+                before = kept
+            touched = False
+            for runs, p_ in zip(before, now):
+                was = "".join(runs)
+                ts = [t for t in p_.iter(f"{_A}t")]
+                is_ = "".join(t.text or "" for t in ts)
+                if _norm_words(was) == _norm_words(is_):
+                    continue
+                if _DOOR_WORD.search(seen(was)):
+                    continue      # the door rule rewrote it
+                if len(ts) == len(runs):
+                    for t, r in zip(ts, runs):
+                        t.text = r
+                else:
+                    ts[0].text = was
+                    for t in ts[1:]:
+                        t.text = ""
+                out["restored"] += 1
+                touched = True
+            if touched:
+                replace[n] = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+        z.close()
+        if replace:
+            _rewrite_zip(path, replace)
+    except Exception:
+        pass
+    return out
+
+
 _DOOR_MOD = None
 
 
@@ -877,7 +1087,7 @@ def preship_fix(path, report: Optional[Report] = None, casing: bool = False) -> 
 
 def finish(path, *, render_check: bool = False, lint: bool = True,
            copy_check: Optional[bool] = None, copy_repair: Optional[bool] = None,
-           copy_rewriter=None) -> Report:
+           copy_rewriter=None, protected_names=None) -> Report:
     """Finish one client-facing file in place: door metaphors rewritten,
     then on a deck the pre-ship fixes (backgrounds, photo contrast,
     widows), then embed and check the fonts, then the brand lint (FAILs
@@ -892,21 +1102,49 @@ def finish(path, *, render_check: bool = False, lint: bool = True,
     are lowered. Without it the copy is checked and reported, never
     rewritten (a deck whose copy is data, an attachment at the mail door).
 
+    ``protected_names`` are the titles, brands and people's names from
+    the read's own data. No spelling, casing or word-ban pass reads
+    inside one or rewrites one, and the ones the deck uses are written
+    into the file so a later pass (the mail gate) reads the same list.
+    A file that already carries names keeps them in force here.
+
+    Without ``copy_repair`` the pass changes no word a reader sees
+    unless a named rule requires it (the door rewrite, on a paragraph
+    that carried the word; the widow fit, spacing only): any other
+    paragraph that came out different is set back to what it was.
+
     ``ready`` means the file is clean at the end: the embed passed, the
     lint found no FAIL, and the plain-English check (when it ran) found
     no flag. ``copy_ok`` is that last check alone."""
     rep = Report(str(path))
+    _nm = names_module()
+    _prev_names = None
     try:
         ext = Path(str(path)).suffix.lower()
         if copy_check is None:
             copy_check = ext == ".pptx"
         copy_repair = bool(copy_repair) and bool(copy_check) and ext == ".pptx"
+        if _nm is not None:
+            try:
+                _prev_names = list(getattr(_nm._LOCAL, "names", None) or [])
+                if ext == ".pptx":
+                    n_written = write_names_to_file(path, list(protected_names or []) + _prev_names)
+                    if n_written:
+                        rep.fixes["names_protected"] = n_written
+                _nm.set_names(list(protected_names or []) + _prev_names + list(_nm.from_file(path)))
+            except Exception:
+                _prev_names = None
+        snap = words_snapshot(path) if (lint and ext == ".pptx" and not copy_repair) else {}
         if lint and ext in (".pptx", ".docx", ".html", ".htm", ".md", ".txt"):
             scrub_doors_in_file(path, report=rep)
         if copy_repair:
             copy_fix(path, report=rep, rewriter=copy_rewriter)
         if lint and ext == ".pptx":
             preship_fix(path, report=rep, casing=copy_repair)
+        if snap:
+            got = restore_words(path, snap)
+            if got.get("restored"):
+                rep.fixes["words_set_back"] = got["restored"]
         embed_fonts(path, render_check=render_check, report=rep)
         if lint and ext in (".pptx", ".docx", ".html", ".htm"):
             brand_lint(path, report=rep)      # the linter reads Office, HTML and text; a .pdf is verified above
@@ -919,6 +1157,12 @@ def finish(path, *, render_check: bool = False, lint: bool = True,
         rep.ready = embed_ok and lint_ok and (rep.copy_ok or not copy_ran)
     except Exception:
         rep.add("finish", False, traceback.format_exc()[-1500:])
+    finally:
+        if _nm is not None and _prev_names is not None:
+            try:
+                _nm._LOCAL.names = _prev_names
+            except Exception:
+                pass
     try:
         print(f"[design-skill] {rep.summary}")
     except Exception:

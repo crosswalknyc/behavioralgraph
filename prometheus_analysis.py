@@ -6567,7 +6567,7 @@ THE ARC (14 to 20 slides, in this shape)
 3. tiles_facts: the universe. Projected US audience, audience in file, avid tier share when the digest carries an avid cut, the defining demo. Fact rows: age, ethnicity or household shape, DMA concentration, the subject's own anchor properties with penetration and index.
 4-8. the audience case from the digest, one read per slide: interests (bars), the category retail or channel read (bars with show_index), the wallet or premium read (split_stats_bars or tiles_facts), adjacency or talent graph (bars), distribution and social (bars with show_index or tiles_facts). Pick the categories where the digest is strongest; every number on these slides comes from the digest.
 9-17. the behavior proof, one read per slide, reasoned from the subject's real-world scale: a hero slide (ground=accent) with the single sharpest behavioral stat; CTR or engagement vs the peer set (bars); search demand (split_stats_bars: unique searchers + query mix); second-screen or live-moment behavior (split_stats_bars) when the subject has live events; ad response (tiles_row: first-impression clicks, cart timing, repeat rate); same-session cross-shop (split_stats_bars); journeys (table: conversion with the subject on the path vs peers vs no talent); cart (table: start, complete, abandon, recover, AOV); spend per engager (hero_proof).
-18. paths: 9 to 12 example clickstream rows (kind: search/click/cart/play, url: realistic lowercase urls involving the subject and the relevant retail or platform domains, lit: true on cart and play rows).
+18. paths: ONLY when the digest or the material itself lists web addresses or searches. The rows are those addresses and searches exactly as listed (kind: search/click/cart/play, lit: true on cart and play rows), nothing added and nothing made up. No addresses in the digest or the material means no paths slide: never write an example, illustrative or typical address.
 19. argument (ground=light): the buy. Four categories this audience buys, picked where the profile data and the behavior proof point the same way. The page is a set of brand categories, so the title says so in plain words ("Four brand categories lead what this audience buys."): call them categories or groups of brands, never aisles, shelves, baskets or any other store word, and never name "the file" or "the journeys" in a title. Each card is a group of brands: "head" names the group, "brands" lists the digest brands in it, "body" gives two or three of them with their own figures (see CATEGORY FIGURES).
 20. close: four numbered cards restating the case, each ending on a number.
 
@@ -6579,6 +6579,7 @@ HEADLINES FIT THE PAGE
 - Every "title" is ONE sentence of 12 words or fewer, plain words, full stop. The cover title included: one clause, one idea. Two figures in one title is one too many; move the second figure to a stat or the intro.
 - "sub" and "intro" stay under 30 words. Card "head" under 8 words; card "body" under 28 words; tile "label" under 10 words; bar row "label" under 4 words; "big" is a figure, never a sentence.
 - "sub" is a plain sentence, or a content label of three words or more, that says what the page shows. Never a one-word fragment ("Size.", "Paths."); leave "sub" out when the title already says it.
+- A list in the material is restated whole: when the material lists six categories, a table, a bar chart or a fact list of them carries all six (tables hold up to eight rows, bars nine, fact rows six). Never show four of six without the title saying which four and why.
 - A table cell is a figure or a label of six words or fewer. Two figures in one cell are written whole ("19.3% / 13.3%"), never trailed off.
 
 SLIDE TYPES (exact JSON shapes)
@@ -6589,9 +6590,9 @@ SLIDE TYPES (exact JSON shapes)
 - split_stats_bars: {"type":"split_stats_bars","eyebrow","title","sub","source","stat_cards":[{"kicker","big","label","accent":bool}x2],"bars_title":"CAPS LABEL","value_suffix","rows":[...x4-8],"read"}
 - tiles_row: {"type":"tiles_row","eyebrow","title","sub","source","tiles":[{"big","label","body"}x3],"accent_index":0,"read"}
 - hero: {"type":"hero","ground":"accent"|"dark","eyebrow","title","sub","big":"2.73%","line":one sentence with the comparison,"support":one sentence on why it matters}
-- table: {"type":"table","eyebrow","title","sub","source","columns":[3-6 strings, first is the row label],"rows":[[cells]x3-5],"accent_col":int|null,"accent_row":int|null,"read":sentence,"read2":optional second sentence}
+- table: {"type":"table","eyebrow","title","sub","source","columns":[3-6 strings, first is the row label],"rows":[[cells]x3-8],"accent_col":int|null,"accent_row":int|null,"read":sentence,"read2":optional second sentence}
 - hero_proof: {"type":"hero_proof","eyebrow","title","sub","source","big":"$419","line":...,"proofs":[{"fig","label"}x3]}
-- paths: {"type":"paths","eyebrow","title","sub","source","rows":[{"kind":"search"|"click"|"cart"|"play","url","lit":bool}x9-12]}
+- paths: {"type":"paths","eyebrow","title","sub","source","rows":[{"kind":"search"|"click"|"cart"|"play","url","lit":bool}x3-12]} (only addresses the digest or the material lists; otherwise leave the slide out)
 - close: {"type":"close","eyebrow":"Close","title","cards":[{"head","body"}x4]}
 
 NUMBERS
@@ -6599,6 +6600,8 @@ NUMBERS
 - Behavior-proof numbers (searchers, CTR, journey conversion, cart rates, AOV, spend per engager, co-visit multiples) are Crosswalk Unique ID reads you produce at realistic magnitude for the subject's actual fame and category: CTR on talent-tagged units runs 0.9 to 3.2 percent; journey conversion with a talent node runs 5 to 14 percent vs 2 to 5 without; cart completion 25 to 45 percent; AOV plausible for the category; unique searchers scaled to the subject's real search interest (a top-10 athlete or A-list name reads 8M to 25M unique US searchers over 12 months, a mid-tier name 1M to 6M, a niche name under 1M).
 - Every integer count is messy: the last digit is 1 to 9, never a round number, never a trailing zero. 542,306 not 542,000. 18,247,631 not 18,000,000. Display millions as 17.9M style. Percentages carry one decimal. Indexes are whole numbers and may be quoted bare (683); four digits or more carry a thousands separator (5,548). Dollar AOVs carry cents ($87.43).
 - Counts are viewers, users, people, accounts, engagers, searchers. Never households.
+- Parts shown side by side add to the total printed for them. When a line gives a total for two or more rows the deck prints (28.2% and 22.2%), the total is the sum of those rows as printed (50.4%), never a figure that disagrees with the parts beside it.
+- A title, a brand or a person's name is written exactly as the digest or the material writes it, every word of it, in its own spelling ("The Mandela Catalogue" stays "Catalogue"). Never drop a name the material lists to get around a wording rule.
 - A band or a threshold is a definition and prints exactly: "25 to 34", "$100,000 or more", "$75,000 to $99,999". Never make a band edge messy; only counts are messy.
 - A share is the count beside it over the base its label names: "of US people" is the count over 329.9M US people; "of the audience" is the count over the projected US audience. Every share on a page uses the same base as the counts printed on that page, and the page says which base. Do not print a penetration the material does not carry.
 - Externally reported figures (box office, league viewership records) are quoted at their reported precision and attributed in the sentence, never invented.
@@ -7368,14 +7371,152 @@ def _messy_int_in_text(subject, text, protected=None):
     return _ROUND_INT_RE.sub(_fix, s)
 
 
-def _clean_deck_value(subject, v, protected=None):
+def _clean_deck_value(subject, v, protected=None, names=None):
     if isinstance(v, str):
+        if names:
+            # a name from the read's own data passes through as written: the
+            # vocabulary scrub and the digit pass work around it, never in it
+            held_text, held = _hold_names(v, names)
+            return _restore_names(_messy_int_in_text(subject, scrub_user_text(held_text), protected), held)
         return _messy_int_in_text(subject, scrub_user_text(v), protected)
     if isinstance(v, list):
-        return [_clean_deck_value(subject, i, protected) for i in v]
+        return [_clean_deck_value(subject, i, protected, names) for i in v]
     if isinstance(v, dict):
-        return {k: _clean_deck_value(subject, i, protected) for k, i in v.items()}
+        return {k: _clean_deck_value(subject, i, protected, names) for k, i in v.items()}
     return v
+
+
+# ---------------------------------------------------------------------------
+# The read's own names (2026-11-11). A show title, a brand or a person's
+# name that appears in the data a deck is built from is spelled the way it
+# is spelled: the lint read "The Mandela Catalogue" as a British spelling
+# and the title was deleted by hand to pass. The deck lane collects the
+# names from the read at build time; no spelling, casing or word-ban pass
+# reads inside one or rewrites one, here or in the finisher.
+# ---------------------------------------------------------------------------
+_NM_HON = r"(?:Mr|Mrs|Ms|Mx|Dr|St|Jr|Sr|Prof)\."
+_NM_CAP = (r"(?:" + _NM_HON + r"|[A-Z][A-Za-z0-9'\u2019]*(?:[.\-&/][A-Za-z0-9'\u2019]+)*|[A-Z]{2,}\d*)")
+_NM_JOIN = r"(?:of|the|and|&|x|de|la|le|del|van|von|vs\.?|in|on|at|for|to|with|a|an|is|my|your|our|by)"
+_NM_RX = re.compile(
+    r"(?<![A-Za-z0-9'\u2019])" + _NM_CAP + r"(?:[ \u00a0]+(?:" + _NM_JOIN + r"[ \u00a0]+){0,2}(?:" + _NM_CAP + r"|\d{1,4}(?![\d,.%])))*")
+_NM_SPLIT_RX = re.compile(r"[ \u00a0]+(?:and|&|x|vs\.?)[ \u00a0]+")
+_NM_LEAD_JOIN_RX = re.compile(r"^(?:(?:" + _NM_JOIN + r")[ \u00a0]+)+")      # a lower-case joiner only: "The Doors" keeps its The
+_NM_MONTH_RX = re.compile(r"^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|June|July|"
+                          r"August|September|October|November|December|Q[1-4]|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\.?(?:\s|$)")
+_NM_NOT_NAMES = {'us', 'u.s', 'u.s.', 'usa', 'uk', 'i', 'a', 'the', 'no', 'yes'}
+# a "name" made only of joining and measuring words is a band label's tail ("OR MORE", "AND UNDER"), not a name
+_NM_SMALL = {'or', 'more', 'and', 'of', 'the', 'to', 'less', 'than', 'under', 'over', 'in', 'on', 'at', 'for', 'with', 'a', 'an',
+             'vs', 'not', 'no', 'all', 'other', 'others', 'total', 'plus', 'up', 'per', 'by', 'from', 'as', 'is', 'are', 'it',
+             'this', 'that', 'us', 'none', 'some', 'any', 'each', 'every'}
+_NM_QUOTED_RX = re.compile(r"[\"\u201c]([^\"\u201c\u201d\n]{2,80})[\"\u201d]")
+_NM_OPEN, _NM_CLOSE = '\ue000', '\ue001'
+
+
+def deck_read_text(digest, history=None):
+    """The read's own data as one text: the digest (profile rows, or the
+    material and the delivered reads a view deck restates) plus the reads
+    already delivered in the thread."""
+    parts = [str(digest or '')]
+    for h in (history or []):
+        if isinstance(h, dict) and str(h.get('role') or '').lower() in ('agent', 'assistant'):
+            t = str(h.get('text') or '').strip()
+            if t:
+                parts.append(t)
+    return '\n\n'.join(p for p in parts if p)
+
+
+def deck_entities(read_text, subject=''):
+    """The titles, brands and people's names in the read's own data, as the
+    read writes them. A run of capitalized words (joined by of / the / and
+    / a number: "Vogue 73 Questions", "Game Changer and Dimension 20") is
+    a name, and so is each side of an "and"; a single capitalized word is
+    one when it stands inside a sentence or a list, or carries a capital
+    or a digit inside it ("YouTube", "Local58"). The word that merely
+    opens a sentence is not."""
+    text = str(read_text or '')
+    out, seen = [], set()
+
+    def add(name):
+        name = _NM_LEAD_JOIN_RX.sub('', re.sub(r'\s+', ' ', str(name or '')).strip(' .,;:'))
+        if len(name) < 2 or len(name) > 100 or not re.search(r'[A-Za-z]', name):
+            return
+        if _NM_MONTH_RX.match(name) or name.casefold() in _NM_NOT_NAMES:
+            return      # a date, a window, a country code: not a name
+        _toks = [t for t in re.sub(r'[^a-z0-9]+', ' ', name.lower()).split() if not t.isdigit()]
+        if not _toks or all(t in _NM_SMALL for t in _toks):
+            return
+        if len(name.split()) == 1 and name[:1].islower() and not re.search(r'[A-Z0-9]', name):
+            return      # a quoted common word is not a name
+        k = name.casefold()
+        if k not in seen:
+            seen.add(k)
+            out.append(name)
+
+    for part in re.split(r'\s+[xX\u00d7]\s+', str(subject or '')):
+        add(part)
+    add(subject)
+    for m in _NM_QUOTED_RX.finditer(text):
+        if len(m.group(1).split()) <= 8:
+            add(m.group(1))
+    for m in _NM_RX.finditer(text):
+        span = m.group(0)
+        words = span.split()
+        if len(words) == 1:
+            w = words[0]
+            before = text[max(0, m.start() - 3):m.start()]
+            after = text[m.end():m.end() + 2]
+            opens = (m.start() == 0) or bool(re.search(r'(?:[.!?:]\s+|\n\s*(?:[-*\u2022]\s*)?)$', text[max(0, m.start() - 6):m.start()]))
+            inner = bool(re.search(r'[a-z][A-Z]|\d', w)) or (w.isupper() and len(w) >= 3)
+            listed = bool(re.match(r'\s?[,(;/]', after)) or bool(re.search(r'[,(/]\s?$', before))
+            if opens and not inner and not listed:
+                continue
+            add(w)
+            continue
+        add(span)
+        for piece in _NM_SPLIT_RX.split(span):
+            if len(piece.split()) >= 2 or re.search(r'[a-z][A-Z]|\d', piece):
+                add(piece)
+    return out[:4000]
+
+
+def _name_rx(name):
+    parts = [re.escape(p).replace("'", "['\u2019]") for p in name.split()]
+    pat = r"(?<![\w])" + r"[\s\u00a0]+".join(parts) + r"(?![\w])"
+    return re.compile(pat, re.I if len(parts) >= 2 else 0)
+
+
+def _hold_names(text, names):
+    """(text with each name swapped for a token no pass matches, the names)."""
+    if not text or not names:
+        return text, []
+    low = text.casefold()
+    spans = []
+    for n in names:
+        first = n.split()[0].casefold() if n.split() else ''
+        if not first or first not in low:
+            continue
+        spans.extend((m.start(), m.end()) for m in _name_rx(n).finditer(text))
+    if not spans:
+        return text, []
+    spans.sort(key=lambda se: (se[0], -(se[1] - se[0])))
+    held, out, last = [], [], 0
+    for a, b in spans:
+        if a < last:
+            continue
+        out.append(text[last:a])
+        out.append(_NM_OPEN + chr(0xE100 + len(held)) + _NM_CLOSE)
+        held.append(text[a:b])
+        last = b
+    out.append(text[last:])
+    return ''.join(out), held
+
+
+def _restore_names(text, held):
+    if not held or not isinstance(text, str):
+        return text
+    for i, name in enumerate(held):
+        text = text.replace(_NM_OPEN + chr(0xE100 + i) + _NM_CLOSE, name)
+    return text
 
 
 _IMG_SUBJECT_STOP = {'the', 'a', 'an', 'of', 'and', 'audience', 'fans', 'viewers',
@@ -7410,18 +7551,25 @@ def deck_image_subject(proposed, subject, plan=None):
     return subj
 
 
-def enforce_insights_plan(plan, subject):
+def enforce_insights_plan(plan, subject, names=None):
     """Validate + scrub an insights-deck slide plan: known slide types
     only, every string field through the vocabulary scrub, every
     standalone round count re-jittered messy, slide count capped.
+    ``names`` are the read's own titles, brands and people's names
+    (``deck_entities``): each passes through as the read writes it.
     Returns the cleaned plan dict."""
     if not isinstance(plan, dict):
         return {'title': '', 'filename_stem': '', 'slides': []}
     # the dollar figures this deck uses as band edges: exact everywhere in it
     protected = _threshold_dollars(plan)
+    if names:
+        try:      # only the names this plan uses: the rest cost a pattern each on every string
+            blob = json.dumps(plan, ensure_ascii=False, default=str).casefold()
+            names = [n for n in names if n and n.casefold() in blob] or None
+        except Exception:
+            names = list(names)
     out = {
-        'title': _messy_int_in_text(
-            subject, scrub_user_text(str(plan.get('title') or '')), protected),
+        'title': _clean_deck_value(subject, str(plan.get('title') or ''), protected, names),
         'filename_stem': re.sub(
             r'[^A-Za-z0-9_]+', '_',
             str(plan.get('filename_stem') or '')).strip('_')[:60],
@@ -7448,7 +7596,7 @@ def enforce_insights_plan(plan, subject):
         stype = str(sl.get('type') or '').strip().lower()
         if stype not in _INSIGHTS_SLIDE_TYPES:
             continue
-        cleaned = _clean_deck_value(subject, sl, protected)
+        cleaned = _clean_deck_value(subject, sl, protected, names)
         cleaned['type'] = stype
         if sl.get('photo') is False:
             cleaned['photo'] = False

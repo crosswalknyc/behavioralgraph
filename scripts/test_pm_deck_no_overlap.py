@@ -164,7 +164,12 @@ check('measurement: PAW title wraps past two lines at 34pt',
 check('fit: chrome titles step down to two lines or fewer',
       db._fit_size(LONG_TITLE, (34, 31, 28, 26), 11.493, 2) < 34)
 
-out_path = '/tmp/deck_overlap_test.pptx'
+# A path of this run's own. The file used to be /tmp/deck_overlap_test.pptx for
+# every run on the machine, so two suites running at once wrote and finished
+# the same file and one of them read a half-written package ("BadZipFile",
+# 2026-11-11, red on main with no code at fault).
+import tempfile  # noqa: E402
+out_path = os.path.join(tempfile.mkdtemp(prefix='deck_overlap_test_'), 'deck_overlap_test.pptx')
 n = db.render_insights_deck(PLAN, out_path)
 check('all slides rendered', n == len(PLAN['slides']), f'({n})')
 

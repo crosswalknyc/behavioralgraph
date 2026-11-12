@@ -1131,58 +1131,120 @@ def _sl_argument(d, sl):
     _cards_2x2(d, s, cards, dark, read=read, floor=_content_floor(sl))
 
 
+# Tile heights and fact-row settings, roomiest first. A universe page
+# keeps every fact row its plan carries: when the title and subhead push
+# the content down, the tiles get shorter and then the rows get tighter,
+# and past that the rows run in two columns. A row is never dropped
+# (2026-11-11: a six-category page printed four of its six categories
+# and the missing two had to be asked for by hand).
+_TF_TILES = ((1.58, 30, 11.5), (1.38, 26, 11.0), (1.20, 23, 10.5), (1.06, 20, 10.0))
+_TF_ROWS = ((11.5, 0.32), (10.5, 0.29), (10.0, 0.27))
+
+
 def _sl_tiles_facts(d, sl):
     s = d.new_slide()
     d.chrome(s, sl.get("eyebrow") or "Universe", sl.get("title") or "",
              sub=sl.get("sub"), source=sl.get("source"))
     top = d.content_top
     tiles = _items(sl, "tiles", 4)
+    facts = _items(sl, "facts", 6)
     acc = sl.get("accent_index")
     n = max(len(tiles), 1)
     w = Emu(int((int(BAND) - int(GUT) * (n - 1)) / n))
-    x = M
-    for i, t in enumerate(tiles):
-        rrect(s, x, Inches(top), w, Inches(1.58), CARD)
-        color = OLIVE if (isinstance(acc, int) and i == acc) else GRAPHITE
-        txt(s, x + Inches(0.18), Inches(top + 0.15), w - Inches(0.32),
-            Inches(0.70), t.get("big") or "", size=30, bold=True,
-            color=color)
-        txt(s, x + Inches(0.18), Inches(top + 0.89), w - Inches(0.32),
-            Inches(0.52), t.get("label") or "", size=11.5,
-            color=BODY_LT)
-        x += w + GUT
-    y = top + 1.79
-    facts = _items(sl, "facts", 6)
     band_in = float(BAND) / 914400.0
     read_h = _block_h(sl["read"], 11.5, band_in) if sl.get("read") else 0.0
     # the read ends above the source line (or the footer); the facts end above the read
     read_y = (_content_floor(sl) + 0.06 - read_h) if sl.get("read") else None
+    floor_y = (min(6.20, read_y - 0.10) if sl.get("read")
+               else (_content_floor(sl) if sl.get("source") else 6.88))
+    # The middle column holds a figure, and sometimes words ("Oct 21 2025
+    # to Oct 21 2026", "People, once each"): it is as wide as its longest
+    # entry needs to sit on one line, up to 3.4 in., and the note column
+    # starts after it. A wrapped entry used to run into the row below.
+    fig_w = 1.80
+    for cand_w in (1.80, 2.40, 2.90, 3.40):
+        fig_w = cand_w
+        if all(_line_count(str(f.get("fig") or ""), 11.5, cand_w, bold=True) <= 1 for f in facts):
+            break
+    note_x = 3.50 + fig_w + 0.20
+    note_w = max(band_in - note_x, 2.2)
+
+    def row_heights(rp, pt_):
+        return [max(_block_h(str(f.get("label") or ""), rp, 3.40),
+                    _block_h(str(f.get("fig") or ""), rp, fig_w, bold=True),
+                    min(_block_h(str(f.get("note") or ""), rp, note_w), 2 * rp * 1.22 / 72.0),
+                    pt_ - 0.085) + 0.085 for f in facts]
+
+    # the roomiest setting that holds every row
+    tile_h, big_pt, lab_pt = _TF_TILES[0]
+    row_pt, pitch, cols = _TF_ROWS[0][0], _TF_ROWS[0][1], 1
     if facts:
-        floor_y = (min(6.20, read_y - 0.10) if sl.get("read")
-                   else (_content_floor(sl) if sl.get("source") else 6.88))
-        # A pushed-down top plus a full fact list cannot always fit:
-        # drop trailing facts rather than render over the footer
-        # (the renderer's contract is that list lengths clamp).
-        n_fit = max(1, int((floor_y - y) / 0.32 + 0.001))
-        facts = facts[:n_fit]
-        budget = max((floor_y - y) / len(facts), 0.32)
+        fit = None
+        for th, bp, lp in _TF_TILES:
+            for rp, pt_ in _TF_ROWS:
+                if top + th + 0.21 + sum(row_heights(rp, pt_)) <= floor_y + 0.001:
+                    fit = (th, bp, lp, rp, pt_, 1)
+                    break
+            if fit:
+                break
+        if fit is None:
+            th, bp, lp = _TF_TILES[-1]
+            rp, pt_ = _TF_ROWS[-1]
+            fit = (th, bp, lp, rp, pt_, 2)
+        tile_h, big_pt, lab_pt, row_pt, pitch, cols = fit
+    x = M
+    big_h = big_pt * 1.2 / 72.0 + 0.10
+    for i, t in enumerate(tiles):
+        rrect(s, x, Inches(top), w, Inches(tile_h), CARD)
+        color = OLIVE if (isinstance(acc, int) and i == acc) else GRAPHITE
+        pad = 0.15 if tile_h >= 1.5 else 0.11
+        txt(s, x + Inches(0.18), Inches(top + pad), w - Inches(0.32),
+            Inches(big_h), t.get("big") or "", size=big_pt, bold=True,
+            color=color)
+        ly = top + pad + big_h + (0.04 if tile_h >= 1.5 else 0.0)
+        txt(s, x + Inches(0.18), Inches(ly), w - Inches(0.32),
+            Inches(max(0.24, top + tile_h - ly - 0.06)), t.get("label") or "", size=lab_pt,
+            color=BODY_LT)
+        x += w + GUT
+    y = top + tile_h + 0.21
+    if facts and cols == 1:
+        budget = max((floor_y - y) / len(facts), pitch)
         for f in facts:
-            label_t, _ = _fit_body(f.get("label") or "", (11.5,),
+            label_t, _ = _fit_body(f.get("label") or "", (row_pt,),
                                    3.40, budget - 0.085)
-            note_t, _ = _fit_body(f.get("note") or "", (11.5,),
-                                  5.99, budget - 0.085)
-            row_h = max(_block_h(label_t, 11.5, 3.40),
-                        _block_h(note_t, 11.5, 5.99),
-                        0.235) + 0.085
+            note_t, _ = _fit_body(f.get("note") or "", (row_pt,),
+                                  note_w, max(budget - 0.085, 2 * row_pt * 1.22 / 72.0))
+            fig_t = str(f.get("fig") or "")
+            row_h = max(_block_h(label_t, row_pt, 3.40),
+                        _block_h(fig_t, row_pt, fig_w, bold=True),
+                        _block_h(note_t, row_pt, note_w),
+                        pitch - 0.085) + 0.085
             txt(s, M, Inches(y), Inches(3.40), Inches(row_h - 0.04),
-                label_t, size=11.5)
-            txt(s, M + Inches(3.50), Inches(y), Inches(1.80),
-                Inches(0.28), f.get("fig") or "", size=11.5,
+                label_t, size=row_pt)
+            txt(s, M + Inches(3.50), Inches(y), Inches(fig_w),
+                Inches(row_h - 0.04), fig_t, size=row_pt,
                 bold=True, color=OLIVE)
-            txt(s, M + Inches(5.50), Inches(y), Inches(5.99),
-                Inches(row_h - 0.04), note_t, size=11.5,
+            txt(s, M + Inches(note_x), Inches(y), Inches(note_w),
+                Inches(row_h - 0.04), note_t, size=row_pt,
                 color=BODY_LT)
             y += row_h
+    elif facts:
+        # two columns, filled down then across, every row kept
+        col_w = (band_in - float(GUT) / 914400.0) / 2.0
+        per = (len(facts) + 1) // 2
+        lw_, fw_, nw_ = 2.05, 1.25, col_w - 2.05 - 1.25 - 0.20
+        y0 = y
+        for k, f in enumerate(facts):
+            cx = (0 if k < per else 1) * (col_w + float(GUT) / 914400.0)
+            ry = y0 + (k if k < per else k - per) * pitch
+            label_t, _ = _fit_body(f.get("label") or "", (row_pt,), lw_, pitch - 0.06)
+            note_t, _ = _fit_body(f.get("note") or "", (row_pt,), nw_, pitch - 0.06)
+            txt(s, M + Inches(cx), Inches(ry), Inches(lw_), Inches(pitch - 0.03), label_t, size=row_pt)
+            txt(s, M + Inches(cx + lw_ + 0.10), Inches(ry), Inches(fw_), Inches(pitch - 0.03),
+                f.get("fig") or "", size=row_pt, bold=True, color=OLIVE)
+            txt(s, M + Inches(cx + lw_ + fw_ + 0.20), Inches(ry), Inches(nw_), Inches(pitch - 0.03),
+                note_t, size=row_pt, color=BODY_LT)
+        y = y0 + per * pitch
     if sl.get("read"):
         ry = max(min(6.30, read_y), y + 0.10)
         txt(s, M, Inches(ry), BAND, Inches(max(0.30, read_h + 0.04)), sl["read"],
@@ -1452,7 +1514,9 @@ def _sl_table(d, sl):
     d.chrome(s, sl.get("eyebrow") or "Table", sl.get("title") or "",
              sub=sl.get("sub"), source=sl.get("source"))
     cols = [str(c) for c in (sl.get("columns") or [])][:6]
-    rows = [r for r in (sl.get("rows") or []) if isinstance(r, list)][:5]
+    # every row the plan carries, up to eight: a six-item read is six rows
+    # (the cap was five, so a sixth category fell off the table unsaid)
+    rows = [r for r in (sl.get("rows") or []) if isinstance(r, list)][:8]
     if not cols:
         return
     n = len(cols)
@@ -1486,13 +1550,16 @@ def _sl_table(d, sl):
     card_end = 6.56 if sl.get("source") else 6.98
     floor_y = (card_end - card_h - 0.12) if has_read else (
         _content_floor(sl) if sl.get("source") else 6.88)
-    avail = max(floor_y - y, 0.42 * max(len(rows), 1))
+    # the row pitch closes up before a row is ever lost: 0.42 in. by
+    # default, down to 0.31 when the table is long or the page starts low
+    min_h = next((h for h in (0.42, 0.36, 0.31) if h * max(len(rows), 1) <= floor_y - y + 1e-6), 0.31)
+    avail = max(floor_y - y, min_h * max(len(rows), 1))
     grid = [[str(row[ci]) if ci < len(row) else "" for ci in range(n)]
             for row in rows]
 
     def heights(size):
-        return [max([0.42] + [_block_h(grid[ri][ci], size, box(ci)[1]) + 0.10
-                              for ci in range(n)])
+        return [max([min_h] + [_block_h(grid[ri][ci], size, box(ci)[1]) + (0.10 if min_h >= 0.40 else 0.06)
+                               for ci in range(n)])
                 for ri in range(len(grid))]
 
     # one size for the whole table: the largest on the scale at which every
@@ -1753,8 +1820,31 @@ def _ptoks(text):
     return [t for t in (re.sub(r"[^a-z0-9']", "", w.lower()) for w in _words_of(text)) if t]
 
 
+def _name_marked(text):
+    """The line with each protected name (a title, a brand or a person's
+    name from the read's own data) swapped for one token that carries a
+    digit: a name said on three pages is a name, not a reused phrase."""
+    ds = _design()
+    mod = ds.names_module() if ds is not None and hasattr(ds, "names_module") else None
+    if mod is None or not text:
+        return text
+    try:
+        sp = mod.spans(str(text))
+    except Exception:
+        return text
+    if not sp:
+        return text
+    t, out, last = str(text), [], 0
+    for a, b in sp:
+        out.append(t[last:a])
+        out.append(" n4me ")
+        last = b
+    out.append(t[last:])
+    return "".join(out)
+
+
 def _grams(text):
-    toks = _ptoks(text)
+    toks = _ptoks(_name_marked(text))
     out = set()
     for i in range(len(toks) - _PHRASE_N + 1):
         g = tuple(toks[i:i + _PHRASE_N])
@@ -2534,6 +2624,215 @@ def assert_page_bases(slides):
     return [f"slide {i + 1}: {label}: {old}% should read {new}%" for i, label, old, new in changes]
 
 
+# ---- parts and the total printed for them (2026-11-11) ------------------------
+# A deck printed 28.2% and 22.2% and said the two hold 50.5%. The read's
+# 50.5 was a rounded sum of unrounded parts; on a page that prints the
+# parts to one decimal the reader adds 50.4. The printed total is the
+# sum of the printed parts.
+_SUM_PCT_RX = re.compile(r"(?<![\d.,$])(\d{1,3}(?:\.\d+)?)%")
+_REST_RX = re.compile(r"\b(?:remaining|the rest|the other|the others|everything else|the balance|what is left)\b", re.I)
+_SERIES_STOP = {"the", "a", "an", "and", "of", "for", "us", "arts", "culture", "all", "other", "others", "total"}
+
+
+def _share_series(slides):
+    """Every set of labelled shares the deck prints side by side:
+    [{label: (percent text, decimals)}]. Percent bars, a percent column
+    of a table, fact rows whose figure is a percent."""
+    out = []
+    for sl in slides:
+        t = str(sl.get("type") or "").lower()
+        if t in ("bars", "split_stats_bars") and str(
+                sl.get("value_suffix") if sl.get("value_suffix") is not None else "%") == "%":
+            rows = [r for r in (sl.get("rows") or []) if isinstance(r, dict) and r.get("label")]
+            dec = max(_row_decimals(rows), 1)
+            ser = {}
+            for r in rows:
+                try:
+                    ser[str(r["label"])] = (_fmt_pct(float(r.get("value")), dec), dec)
+                except (TypeError, ValueError):
+                    continue
+            if len(ser) >= 2:
+                out.append(ser)
+        if t == "table":
+            rows = [r for r in (sl.get("rows") or []) if isinstance(r, list) and len(r) >= 2]
+            width = max((len(r) for r in rows), default=0)
+            for ci in range(1, width):
+                ser = {}
+                for r in rows:
+                    m = re.fullmatch(r"(\d{1,3}(?:\.(\d+))?)%", str(r[ci]).strip()) if ci < len(r) else None
+                    if m:
+                        ser[str(r[0])] = (m.group(1), len(m.group(2) or ""))
+                if len(ser) >= 2 and len(ser) == len(rows):
+                    out.append(ser)
+        ser = {}
+        for f in (sl.get("facts") or []):
+            if isinstance(f, dict) and f.get("label"):
+                m = re.fullmatch(r"(\d{1,3}(?:\.(\d+))?)%", str(f.get("fig") or "").strip())
+                if m:
+                    ser[str(f["label"])] = (m.group(1), len(m.group(2) or ""))
+        if len(ser) >= 2:
+            out.append(ser)
+    return out
+
+
+def _series_names(ser):
+    """{label: the words that name it in running text}: the whole label,
+    and its first word when no other row of the set opens on it."""
+    firsts = {}
+    for lab in ser:
+        key = [w for w in re.sub(r"[^a-z0-9]+", " ", lab.lower()).split() if w not in _SERIES_STOP]
+        if key:
+            firsts.setdefault(key[0], []).append(lab)
+    names = {}
+    for lab in ser:
+        norm = " ".join(re.sub(r"[^a-z0-9]+", " ", lab.lower()).split())
+        key = [w for w in norm.split() if w not in _SERIES_STOP]
+        forms = [norm] if norm else []
+        if key and len(key[0]) >= 4 and len(firsts.get(key[0]) or []) == 1:
+            forms.append(key[0])
+        names[lab] = forms
+    return names
+
+
+def _named_in(text, names):
+    low = " " + " ".join(re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).split()) + " "
+    return [lab for lab, forms in names.items() if any(f" {f} " in low for f in forms)]
+
+
+def _sum_fix(text, pct_txt, series):
+    """The total ``pct_txt`` should print as, given the labels ``text``
+    names: the sum of those parts as printed (or, for "the remaining",
+    the sum of the parts it does not name). None when the figure is not a
+    total of printed parts, or already agrees with them."""
+    try:
+        val = float(pct_txt)
+    except (TypeError, ValueError):
+        return None
+    dec = len(pct_txt.split(".", 1)[1]) if "." in pct_txt else 0
+    found = set()
+    for ser in series:
+        if any(d != dec for _v, d in ser.values()):
+            continue
+        named = _named_in(text, _series_names(ser))
+        if len(named) < 2 and not (named and _REST_RX.search(text)):
+            continue
+        if any(ser[lab][0] == pct_txt for lab in named):
+            continue          # the figure is one of the parts, not their total
+        from itertools import combinations
+        groups = []
+        for k in range(2, min(len(named), 6) + 1):
+            groups += [list(c) for c in combinations(named, k)]
+        if _REST_RX.search(text):
+            rest = [lab for lab in ser if lab not in named]
+            if len(rest) >= 2:
+                groups.append(rest)
+        for g in groups:
+            total = sum(float(ser[lab][0]) for lab in g)
+            tol = 0.5 * (10 ** -dec) * len(g) + 0.011 * (10 ** -dec)
+            if abs(total - val) <= tol:
+                found.add((_fmt_pct(total, dec), tuple(g), " + ".join(f"{ser[lab][0]}%" for lab in g)))
+    if not found:
+        return None
+    totals = {t for t, _g, _p in found}
+    if len(totals) != 1 or pct_txt in totals:
+        return None           # it agrees with its parts, or two readings disagree: leave it
+    new, _g, parts = sorted(found)[0]
+    return new, parts
+
+
+def reconcile_printed_sums(slides):
+    """Shares shown side by side add to the total printed for them, in
+    place: a total that names its parts is the sum of those parts as the
+    deck prints them. Returns notes, one per corrected total."""
+    series = _share_series(slides)
+    notes = []
+    if not series:
+        return notes
+
+    for i, sl in enumerate(slides):
+        def fix(text, _i=i):
+            if not isinstance(text, str) or "%" not in text:
+                return text
+            out, pos = "", 0
+            for m in _SUM_PCT_RX.finditer(text):
+                got = _sum_fix(text, m.group(1), series)
+                if not got:
+                    continue
+                new, parts = got
+                out += text[pos:m.start()] + new + "%"
+                pos = m.end()
+                notes.append(f"slide {_i + 1}: {m.group(1)}% set to {new}% ({parts} as printed)")
+            return (out + text[pos:]) if pos else text
+        _map_plan_strings([sl], fix)
+        # the page's own large figure, read against the lines that say what it is
+        for fk in ("big",):
+            m = re.fullmatch(r"(\d{1,3}(?:\.\d+)?)%", str(sl.get(fk) or "").strip())
+            if m:
+                got = _sum_fix(" ".join(str(sl.get(k) or "") for k in ("title", "sub", "line", "support")), m.group(1), series)
+                if got:
+                    sl[fk] = got[0] + "%"
+                    notes.append(f"slide {i + 1}: {m.group(1)}% set to {got[0]}% ({got[1]} as printed)")
+        # a figure set large over a label that names the parts
+        for key in ("tiles", "stat_cards", "stats", "proofs"):
+            for it in (sl.get(key) or []):
+                if not isinstance(it, dict):
+                    continue
+                fk = "big" if "big" in it else ("fig" if "fig" in it else None)
+                m = re.fullmatch(r"(\d{1,3}(?:\.\d+)?)%", str(it.get(fk) or "").strip()) if fk else None
+                if not m:
+                    continue
+                got = _sum_fix(" ".join(str(it.get(k) or "") for k in ("label", "kicker", "body")), m.group(1), series)
+                if got:
+                    it[fk] = got[0] + "%"
+                    notes.append(f"slide {i + 1}: {m.group(1)}% set to {got[0]}% ({got[1]} as printed)")
+    return notes
+
+
+def assert_printed_sums(slides):
+    """[] when every total that names its parts adds from them as printed.
+    Run on a copy; nothing changes."""
+    return reconcile_printed_sums(copy.deepcopy(slides))
+
+
+# ---- a deck carries only what the read holds (2026-11-11) ---------------------
+def _addr_key(text):
+    """An address or a search as it is compared: lower case, no scheme, no
+    www, no trailing slash, spaces and plus signs alike."""
+    t = str(text or "").strip().lower()
+    t = re.sub(r"^[a-z]+://", "", t)
+    t = re.sub(r"^www\.", "", t)
+    t = t.replace("%20", " ").replace("+", " ")
+    return re.sub(r"\s+", " ", t).strip(" /.")
+
+
+def hold_paths_to_read(slides, read_text):
+    """A page of web addresses carries only addresses the read's own data
+    holds, in place. A row whose address is not in ``read_text`` comes
+    off; a page left with fewer than three rows comes off whole (the
+    builder used to add a standard page of example addresses that were
+    in no read). Returns notes."""
+    notes = []
+    src = _addr_key(read_text)
+    src = re.sub(r"(?<=[\s(])www\.", "", src)
+    keep = []
+    for i, sl in enumerate(slides):
+        if str(sl.get("type") or "").strip().lower() != "paths":
+            keep.append(sl)
+            continue
+        rows = [r for r in (sl.get("rows") or []) if isinstance(r, dict)]
+        held = [r for r in rows if len(_addr_key(r.get("url"))) >= 6 and _addr_key(r.get("url")) in src]
+        if len(held) >= 3:
+            if len(held) != len(rows):
+                notes.append(f"slide {i + 1}: {len(rows) - len(held)} address row(s) the read does not hold came off")
+            sl["rows"] = held
+            keep.append(sl)
+        else:
+            notes.append(f"slide {i + 1}: the addresses page came off (its addresses are not in the read)")
+    if len(keep) != len(slides):
+        slides[:] = keep
+    return notes
+
+
 def _ensure_titles(slides, deck_title=""):
     """Every page carries a headline (2026-11-11: a plan came back with a
     close page that had none, and the page was laid with a blank band).
@@ -2633,9 +2932,40 @@ def _apply_copy_edits_to_plan(slides, edits):
 
 
 def render_insights_deck(plan, out_path, static_dir=None,
-                        photo_subject='', photo_kind='', copy_rewriter=None):
+                        photo_subject='', photo_kind='', copy_rewriter=None,
+                        protected_names=None, read_text=None):
     """Render a slide-plan dict to a finished PPTX at out_path.
     Returns the number of slides rendered.
+
+    ``protected_names`` are the titles, brands and people's names from
+    the read's own data: in force for the whole build, so no spelling,
+    casing or word-ban pass reads inside one or rewrites one, and written
+    into the finished file for the mail gate. ``read_text`` is the read's
+    own data as text: a page of web addresses keeps only the addresses
+    found in it (with no ``read_text`` the page is left as the plan has
+    it; the deck lane always passes it)."""
+    ds = _design()
+    prev = None
+    if ds is not None:
+        try:
+            prev = ds.protected_names()
+            ds.set_protected_names(list(protected_names or []) + list(prev or []))
+        except Exception:
+            prev = None
+    try:
+        return _render_insights_deck(plan, out_path, static_dir, photo_subject, photo_kind, copy_rewriter,
+                                     list(protected_names or []), read_text)
+    finally:
+        if ds is not None and prev is not None:
+            try:
+                ds.set_protected_names(prev)
+            except Exception:
+                pass
+
+
+def _render_insights_deck(plan, out_path, static_dir, photo_subject, photo_kind, copy_rewriter,
+                          protected_names, read_text):
+    """The build behind ``render_insights_deck``.
 
     Photography (2026-09-30): the plan's image_subject (or the
     caller's photo_subject fallback) resolves to real photos placed
@@ -2658,6 +2988,11 @@ def render_insights_deck(plan, out_path, static_dir=None,
     _slides = [copy.deepcopy(sl) for sl in (plan.get("slides") or [])
                if isinstance(sl, dict)]
     notes = []
+    if read_text is not None:
+        try:
+            notes += hold_paths_to_read(_slides, read_text)
+        except Exception:
+            pass
     try:
         notes += _clean_plan_copy(_slides)
     except Exception:
@@ -2689,6 +3024,13 @@ def render_insights_deck(plan, out_path, static_dir=None,
     try:
         base_notes, _changes = reconcile_page_bases(_slides)
         base_left = assert_page_bases(_slides)
+    except Exception:
+        pass
+    # ... and the parts printed side by side add to the total printed for them.
+    sum_notes, sum_left = [], []
+    try:
+        sum_notes = reconcile_printed_sums(_slides)
+        sum_left = assert_printed_sums(_slides)
     except Exception:
         pass
     plan['_copy_notes'] = list(notes)
@@ -2800,11 +3142,12 @@ def render_insights_deck(plan, out_path, static_dir=None,
     # record (2026-11-10).
     plan['_finish'] = {'ready': None, 'copy_notes': list(plan.get('_copy_notes') or []),
                        'base_notes': list(base_notes), 'base_check': 'ok' if not base_left else list(base_left),
+                       'sum_notes': list(sum_notes), 'sum_check': 'ok' if not sum_left else list(sum_left),
                        'photo_used': list(plan.get('_photo_used') or []),
                        'photo_rejected': list(plan.get('_photo_rejected') or [])}
     if ds is not None:
         try:
-            rep = ds.finish(out_path, copy_repair=True, copy_rewriter=_rewriter)
+            rep = ds.finish(out_path, copy_repair=True, copy_rewriter=_rewriter, protected_names=protected_names)
             plan['_finish'].update(rep.job_record())
         except Exception as e:
             plan['_finish']['error'] = f"{type(e).__name__}: {e}"[:200]

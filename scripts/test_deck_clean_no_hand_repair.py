@@ -412,7 +412,7 @@ check("deck: a close page with no title in the plan is laid with a headline",
 chat_src = open(os.path.join(ROOT, "prometheus", "legacy", "chat.py"), encoding="utf-8").read()
 check("deck lane: the deck job builds the rewriter from its own model call and passes it to the builder",
       "pma.make_deck_copy_rewriter(_pm_claude_json, usage_extras=_ppu_extras)" in chat_src
-      and "copy_rewriter=_copy_rewriter)" in chat_src)
+      and "copy_rewriter=_copy_rewriter" in chat_src)
 asked_model = []
 
 
