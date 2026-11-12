@@ -1813,6 +1813,7 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
     quoted = str((pc or {}).get('subject') or '').strip() if isinstance(pc, dict) else ''
     if bind:
         subject = GEN_POP_LABEL if is_everyone(bind) else bind
+        subject = __import__('prometheus.platform_scope', fromlist=['cut_subject']).cut_subject(words, history, subject)   # a genre the words list is a cut of the subject on record, however it was bound (2026-11-11)
     elif quoted and quoted.lower() != 'that subject':
         subject = GEN_POP_LABEL if is_everyone(quoted) else quoted
     else:

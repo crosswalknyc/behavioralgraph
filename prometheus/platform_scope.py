@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['is_cut_of', 'PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read', 'apply_to_read', 'quote_subject']
+__all__ = ['is_cut_of', 'on_record', 'cut_subject', 'PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read', 'apply_to_read', 'quote_subject']
 
 # canonical name -> the ways it is written
 PLATFORMS = {
@@ -323,8 +323,8 @@ def for_read(text, history, base, ledger, bind_subject='', subj_hint=''):
         if isinstance(base, dict) and str(base.get('source') or '') in ('catalog', 'page'):
             cands.append(str(base.get('subject') or '').split(' - ')[0])
         elif not base:
-            hint = str(subj_hint or '').strip()
-            if hint and not str(bind_subject or '').strip() and not canon(hint.split(' - ')[0]):
+            hint = str(bind_subject or '').strip() or str(subj_hint or '').strip()
+            if hint and not canon(hint.split(' - ')[0]):
                 # the subject the lane was handed is one of the genres the words list ("Comedy", first of six
                 # categories of digital original content on YouTube): a cut of the subject on record, not a
                 # subject. The words decide, as they do when the lane was handed the platform (Armine 2026-11-11:
@@ -417,6 +417,34 @@ def quote_subject(text, history, subject, ledger=None):
         return hit['subject'] if hit else subject
     except Exception:
         return subject
+
+
+def on_record(text, history=None, ledger=None):
+    """The subject on record the words name where a platform only scopes
+    it ('' when the read store holds none, or the words name no platform
+    as where). The one answer every lane asks before it takes a platform
+    or a genre as the subject."""
+    try:
+        if ledger is None:
+            import insights_ledger as ledger
+        hit = for_read(text, history, None, ledger, '', '')
+        return str(hit['subject']) if hit and hit.get('source') == 'ledger' else ''
+    except Exception:
+        return ''
+
+
+def cut_subject(text, history, name, ledger=None):
+    """`name`, unless it is one of the things the subject on record is
+    split by: then that subject. A platform is left as given (a chip
+    that chose the platform keeps it)."""
+    try:
+        s = str(name or '').strip()
+        if not s or canon(s.split(' - ')[0]):
+            return name
+        held = on_record(text, history, ledger)
+        return held if held and is_cut_of(s, held, text) else name
+    except Exception:
+        return name
 
 
 def is_cut_of(name, held_subject, text=''):

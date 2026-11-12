@@ -381,8 +381,40 @@ class EachPartNamesItsSubject(unittest.TestCase):
             S.ask(dict(NB.ARMINE), {'text': RA.split(MULTI)['question'], 'client': 'dashboard', 'surface': 'analyze',
                                     '_client_surface_sent': 'analyze', 'history': []})
         by = {c[1].strip()[:20]: c[2] for c in w.calls if c[0] == 'analyze'}
+        # the first part runs on the subject on record whatever the step would have read out of the words
+        self.assertEqual(by['Looking at YouTube. '].get('bind_subject'), HELD)
         self.assertEqual(by['Can we give some exa'].get('bind_subject'), HELD)
         self.assertEqual(by['how is the audience '].get('bind_subject'), HELD)     # never 'YouTube'
+
+    def test_whatever_the_first_part_is_read_as_the_message_keeps_the_subject_on_record(self):
+        """On the live replay the first part came back read as "Comedy" one run and as a library profile the
+        next. The subject on record is settled from her words before the part runs, so neither reading moves it."""
+        for read_as in ('Comedy', 'YouTube', 'Horror Streaming Enthusiasts'):
+            w = World()
+
+            def analyze(user, body, text, history, _as=read_as):
+                w.calls.append(('analyze', text, dict(body), {}))
+                return {'success': True, 'action': 'answer', 'reply': 'On it.', 'read_job_id': 'job-' + str(len(w.calls)), 'followups': [],
+                        'subject': _as}
+            host.bind(analyze_core=analyze)
+            with APP.test_request_context('/api/prometheus/v1/ask', method='POST'):
+                S.ask(dict(NB.ARMINE), {'text': RA.split(MULTI)['question'], 'client': 'dashboard', 'surface': 'analyze',
+                                        '_client_surface_sent': 'analyze', 'history': []})
+            binds = [c[2].get('bind_subject') for c in w.calls if c[0] == 'analyze']
+            self.assertEqual(binds, [HELD, HELD, HELD], read_as)
+
+    def test_the_one_rule_every_lane_asks(self):
+        self.assertEqual(PS.on_record(PARTS[0], []), HELD)
+        self.assertEqual(PS.on_record(PARTS[1], []), '')                    # names nothing: it inherits, it does not look
+        self.assertEqual(PS.on_record('who watches YouTube', []), '')       # the platform's own audience
+        self.assertEqual(PS.cut_subject(PARTS[0], [], 'Comedy'), HELD)
+        self.assertEqual(PS.cut_subject(PARTS[0], [], 'YouTube'), 'YouTube')   # a chip that chose the platform keeps it
+        self.assertEqual(PS.cut_subject(PARTS[0], [], 'Nike'), 'Nike')
+        # the read step, when the genre arrived as the bound subject and not only as a hint
+        self.assertEqual(PS.apply_to_read(PARTS[0], [], IL, None, '', 'Comedy', 'Comedy', '', None)[2:4], (HELD, HELD))
+        src = Path(ROOT, 'prometheus', 'priced_read.py').read_text(encoding='utf-8')
+        i = src.find('subject = GEN_POP_LABEL if is_everyone(bind) else bind')
+        self.assertIn('cut_subject(words, history, subject)', src[i:i + 400])
 
 
 # ============================================================================ 3

@@ -2053,13 +2053,28 @@ def ask(user, body, *, via='session'):
                             part_body['bind_subject'] = _multi_subject['name']
                 except Exception as _fx:
                     _faults.note('service.multi_ask_pointer', _fx)
+                # Each part's subject is the subject on record, with the platform as where and a genre as a cut
+                # (prometheus.platform_scope, the single question's own rule): a part whose words name a subject
+                # the read store holds on a platform runs on that subject, and it is what the later parts inherit
+                # (Armine 2026-11-11: her three parts were quoted on "Comedy" and "YouTube")
+                try:
+                    from . import platform_scope as _psc_m
+                    if not part_body.get('bind_subject') and not (isinstance(part_pc, dict) and part_pc):
+                        _rec = _psc_m.on_record(q, _hist)
+                        if _rec:
+                            part_body['bind_subject'] = _rec
+                            _multi_subject.update(name=_rec, on_record=True)
+                except Exception as _fx:
+                    _faults.note('service.multi_ask_subject', _fx)
                 _res = ask(user, part_body, via=via)
                 try:
                     _ms_new = _multi.subject_of(_res)
-                    # the subject the message is about never becomes a bare platform once a question named its
-                    # subject: the platform is where, and a later part inherits who (prometheus.platform_scope)
-                    from . import platform_scope as _psc_m
-                    if _ms_new and not (_multi_subject['name'] and _psc_m.canon(str(_ms_new).split(' - ')[0])):
+                    # the subject the message is about never becomes a bare platform, or one of its own cuts, once a
+                    # question named its subject: a later part inherits who, never where
+                    from . import platform_scope as _psc_m2
+                    _ms_cur = _multi_subject['name']
+                    if _ms_new and not (_ms_cur and (_multi_subject.get('on_record') or _psc_m2.canon(str(_ms_new).split(' - ')[0])
+                                                     or _psc_m2.is_cut_of(_ms_new, _ms_cur))):
                         _multi_subject['name'] = _ms_new
                 except Exception as _fx:
                     _faults.note('service.multi_ask_pointer', _fx)
