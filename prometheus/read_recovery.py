@@ -810,6 +810,17 @@ def finalize_faulted(job_id, status, cause, rr=None, reply=None):
         traceback.print_exc()
     payload = {'success': True, 'action': 'answer', 'reply': line, 'followups': [], 'offer_deck': False,
                'deck_angle': None, 'faulted': str(cause or 'no_figures')[:40]}
+    _held_ref = ''
+    try:
+        # the calm line is a promise: it lands with the held record behind it (2026-11-11, prometheus.promise_truth)
+        if uname and not status.get('probe') and not rr.get('probe'):
+            from prometheus import promise_truth as _ptruth
+            _held_ref = _ptruth.hold(uname, str(status.get('question') or rr.get('text') or ''), kind='read_failed', job_id=job_id,
+                                     reason=f"a resumed read could not run ({cause}); the answer is owed by email")
+            if _held_ref:
+                payload['held_ref'] = _held_ref
+    except Exception:
+        traceback.print_exc()
     try:
         # status 'done' with the fault marked: the widget renders the plain
         # line from the payload (an 'error' status would show its own
@@ -832,7 +843,8 @@ def finalize_faulted(job_id, status, cause, rr=None, reply=None):
             tid = c._pm_thread_for_job(uname, job_id)
             history = c._pm_load_thread_or_active(uname, tid)
             history, how = _rl.land(history, 'read_job_id', job_id, line,
-                                    {'read_job_id': job_id, 'kind': 'read', 'faulted': str(cause or '')[:40]},
+                                    {'read_job_id': job_id, 'kind': 'read', 'faulted': str(cause or '')[:40],
+                                     **({'held_ref': _held_ref} if _held_ref else {})},
                                     ts=c._pm_iso_now())
             if how != 'already':
                 c._pm_save_thread_or_active(uname, tid, history)
@@ -1188,9 +1200,14 @@ def _finalize(job_id, status, reason):
         traceback.print_exc()
     try:
         if uname and not status.get('probe'):
+            # the calm note is a promise: the held record stands behind it (2026-11-11, prometheus.promise_truth)
+            from prometheus import promise_truth as _ptruth
+            _ref = '' if uname.lower().startswith('canary') else _ptruth.hold(
+                uname, str(status.get('question') or ''), kind='read_failed', job_id=job_id,
+                reason=f"a read was orphaned and could not be recovered ({reason}); the answer is owed by email")
             c._pm_append_read_to_history(uname, job_id, {
                 'success': True, 'action': 'answer', 'reply': note,
-                'followups': []})
+                'followups': [], **({'held_ref': _ref} if _ref else {})})
     except Exception:
         traceback.print_exc()
     try:

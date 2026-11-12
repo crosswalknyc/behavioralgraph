@@ -564,7 +564,7 @@ def accept_offered_run(history, text):
 # the source order to this tuple.
 LANE_ORDER = (
     'intake_cancel',
-    'bpiq_wizard', 'build_fix',
+    'bpiq_wizard', 'build_fix', 'build_facts',
     'wayfinding',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
     'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
@@ -580,12 +580,12 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'build_fix', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
+    'build_fix', 'build_facts', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
     'us_scope', 'segment_sizing', 'read_brief'))
-NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'build_facts', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope', 'segment_sizing',
                                 'read_brief'))
@@ -777,6 +777,31 @@ def ask(user, body, *, via='session'):
     except Exception as _fx:
         _faults.note('service.orders', _fx)
         _is_order = False
+    # An order for a profile the order gate does not know, and a reader who says the lane was wrong ("NO! not a
+    # read. a full profile", "One profile of X only on Paramount+", "needs to be run on all 49": Jessie 2026-11-11,
+    # prometheus.build_lane), go to the build interpret step as the order they are. That step's decision stays the
+    # authority; nothing here picks the build. With no subject anywhere, one plain line asks for it.
+    if not _is_order and not _armed(body) and not body.get('_multi_part') and not body.get('_meta_replay'):
+        try:
+            from . import build_lane as _bl
+            _blo = _bl.rewrite(text, history, ctx)
+            if _blo and _blo.get('text'):
+                text = str(_blo['text'])
+                body = dict(body, text=text, _pm_order=True, _pm_order_text=text, _pm_build_lane=_blo.get('kind'))
+                _is_order = True
+                host.ask_hint(route='build_order', outcome='lane_' + str(_blo.get('kind') or 'order'))
+            elif _blo and _blo.get('ask'):
+                raw = {'success': True, 'action': 'answer', 'reply': _blo['ask'], 'followups': [], 'offer_deck': False,
+                       'deck_angle': None, 'build_lane': {'kind': _blo.get('kind'), 'asked_subject': True}}
+                if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                    raw = _interpret_shape(raw)
+                host.ask_hint(route='build_order', outcome='asked_subject')
+                env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'build_lane',
+                                                                       'client_hint': None}, thread_id=tid, via=via)
+                _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+                return env, 200
+        except Exception as _fx:
+            _faults.note('service.build_lane', _fx)
 
     # lane: intake_cancel
     # Cancel means gone, and a new thread starts clean (Jenna 2026-11-05:
@@ -944,6 +969,32 @@ def ask(user, body, *, via='session'):
                     return env, 200
     except Exception as e:
         _faults.note('service.build_fix', e)
+
+    # lane: build_facts
+    # What a build carries is read from the file, at answer time (Jessie 2026-11-11: "was the profile run on all 49 of
+    # these inputs or did you just add them to the BRAND field?" was answered "All of them were run" with the file
+    # unopened; prometheus.build_facts). The file's own inputs, audience and write time, a pasted list checked against
+    # it, or "still building" when the file is not there yet. No model, nothing priced, nothing started.
+    if not _is_order and not _armed(body) and not body.get('_meta_replay'):
+        try:
+            from . import build_facts as _bfa
+            _bfa_raw = _bfa.answer(text, ctx=ctx, history=history, user=user, uname=uname, host=host)
+        except Exception as _fx:
+            _faults.note('service.build_facts', _fx)
+            _bfa_raw = None
+        if _bfa_raw:
+            raw = _bfa_raw
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+            try:
+                host.ask_hint(route='build_facts', outcome=str((_bfa_raw.get('build_facts') or {}).get('state') or 'read'),
+                              subject=str(_bfa_raw.get('subject') or '') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'build_facts',
+                                                                   'client_hint': None}, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
 
     # lane: wayfinding
     # "Where is the digital journey in the dashboard?" gets directions
@@ -2823,6 +2874,13 @@ def ask(user, body, *, via='session'):
                 _faults.note('service.api_followup', _fx)
         if surface == 'analyze' and isinstance(raw, dict) and raw.get('action') == 'answer' and raw.get('reply'):
             raw = _after_answer(raw, text, uname, ctx)
+            # a written answer says a thing was sent, built or started, or what a build carries, only with the record
+            # of it on the reply (prometheus.reply_truth, 2026-11-11); the sentence that claims more comes out
+            try:
+                from . import reply_truth as _rtr
+                raw = _rtr.finish_answer(raw, question=text)
+            except Exception as _fx:
+                _faults.note('service.reply_truth', _fx)
         if body.get('_pm_included') and isinstance(raw, dict) and raw.get('success') and raw.get('reply'):
             # Included with your plan (Jenna 2026-11-08): the work gate
             # waved the read through with no offer; the reply opens with
@@ -3644,6 +3702,8 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['bpiq_wizard'] = raw['bpiq_wizard']
         if isinstance(raw, dict) and isinstance(raw.get('build_fix'), dict):
             meta['build_fix'] = raw['build_fix']   # the build-fix lane's question waits for the subject (2026-11-06)
+        if isinstance(raw, dict) and raw.get('held_ref'):
+            meta['held_ref'] = str(raw['held_ref'])[:200]   # the record behind a promise rides on its turn (2026-11-11)
         if isinstance(raw, dict) and isinstance(raw.get('segment_sizing'), dict):
             meta['segment_sizing'] = {'key': raw['segment_sizing'].get('key')}   # a follow-up that points back stays on the segment (2026-11-11)
         turns.append({'role': 'agent', 'text': env['text'],

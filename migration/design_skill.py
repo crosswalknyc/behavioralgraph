@@ -613,6 +613,14 @@ def _fallback_scrub_door(text) -> str:
         return f"\x00DOOR{len(held) - 1}\x00"
 
     out = re.sub(r"\bThe Door(?:\s+NYC)?\b", hold, s)
+    # a title, a brand or a person's name is never touched (2026-11-11, "AD Open Door" came back "AD brings"):
+    # a capital-D Door / Doors beside a capitalized word, unless to / for / into follows it
+    def hold_name(m):
+        held.append(m.group(0))
+        return f"\x00DOOR{len(held) - 1}\x00"
+
+    out = re.sub(r"(?<![A-Za-z0-9])(?:[A-Z][A-Za-z0-9'&.+-]*\s+){1,5}Doors?(?![A-Za-z0-9])(?!\s+(?:to|for|into)\b)"
+                 r"|(?<![A-Za-z0-9])Doors?(?!\s+(?:To|For|Into)\b)(?:\s+[A-Z][A-Za-z0-9'&.+-]*){1,5}", hold_name, out)
     frames = (
         (r"\bopens?\s+the\s+doors?\s+to\s+", "brings "),
         (r"\bopen(?:ed|ing)\s+the\s+doors?\s+to\s+", "brings "),

@@ -23,9 +23,10 @@ Select Profile dropdown and a chip to open it (``post_ready``).
     again under its own id. A launch with no thread (a key ask with no
     conversation that started a build) posts nothing: there is no chat
     to write into, and the build's own ready notice still goes out.
-  * A failed or cancelled run closes the launch with no line: the status
-    lane relays the engine's own client line, and the calm promise is
-    never written here.
+  * A failed, refused or cancelled run has its progress line replaced
+    by its real outcome, in the client's words, in the launching thread
+    (2026-11-11, prometheus.promise_truth.settle_launch); the launch is
+    then closed. The calm promise is never written here.
   * The artifact first. A line is posted only for a run the engine
     reports complete.
 
@@ -204,7 +205,16 @@ def sweep(*, store_list, store_get, store_put, runs_for, exists, load, save, ens
                     out.append((rid, 'retry'))
                     continue                       # the next pass tries again
             elif run and st in _DEAD:
-                outcome = 'closed_' + st
+                # the outcome replaces the progress line in the launching thread (2026-11-11, prometheus.promise_truth)
+                try:
+                    from . import promise_truth as _pt
+                    how = _pt.settle_launch(doc, run, exists=exists, load=load, save=save, ensure=ensure, relist=relist, now=now)
+                except Exception:
+                    how = 'failed'
+                if how == 'failed' and age < 6 * 3600:
+                    out.append((rid, 'retry'))
+                    continue                       # the next pass tries again
+                outcome = 'closed_' + st + ('' if how in ('no_thread', 'failed', 'alive') else '_' + how)
             elif age > MAX_AGE_S:
                 outcome = 'expired'
             if outcome:

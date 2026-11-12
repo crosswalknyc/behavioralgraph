@@ -231,7 +231,10 @@ def ask():
             resp.headers[k] = v
         return resp
     _t0 = time.monotonic()
-    env, status = service.ask(user, body, via=via)
+    # a deck, a PowerPoint or "email it to me" riding on a question is taken off the question and carried through
+    # its own path (prometheus.ride_along, 2026-11-11: "Summarize in powerpoint" at the end of a long question was dropped)
+    from . import ride_along as _ride
+    env, status = _ride.run(service.ask, user, body, via=via)
     # Over 45 seconds the widget has promised an email as well as the
     # chat (Jenna 2026-10-14); keep the promise, then close the live line.
     try:
@@ -401,7 +404,8 @@ def golden_ask():
     except Exception:
         pass
     t0 = time.monotonic()
-    env, status = service.ask(dict(GOLDEN_USER), ask_body, via='canary')
+    from . import ride_along as _ride       # the same door a session ask takes (2026-11-11)
+    env, status = _ride.run(service.ask, dict(GOLDEN_USER), ask_body, via='canary')
     out = {'success': True, 'status': status, 'env': env, 'elapsed_s': round(time.monotonic() - t0, 2)}
     try:
         out['reading'] = getattr(g, '_pm_reading', None)

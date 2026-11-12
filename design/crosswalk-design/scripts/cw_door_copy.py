@@ -3,9 +3,11 @@
 
 The defect is the metaphor: the door to new viewers, opens the door,
 a door for, walk through the door, close the door, doorway to. Compound
-brand tokens (DoorDash, Glassdoor, NextDoor) do not match. The only
-allowlist is a proper name that already contains Door (The Door, The
-Door NYC) when it is not followed by to/for.
+brand tokens (DoorDash, Glassdoor, NextDoor) do not match. A proper
+name that already contains Door is never touched: the venue (The Door,
+The Door NYC) and any title, brand or person's name written with a
+capital D inside a run of capitalized words (AD Open Door, The Doors,
+Three Doors Down, Door County), when it is not followed by to/for.
 
 ``scrub_door_metaphor`` rewrites common frames and strips any leftover
 door token. Builders, the brand lint, and ``design_skill.finish`` all
@@ -20,6 +22,43 @@ from pathlib import Path
 DOOR_TOKEN = re.compile(r"\bdoors?\b", re.I)
 # Title-case venue name only. "the door to" stays a metaphor.
 ALLOWED_PROPER = re.compile(r"\bThe Door(?:\s+NYC)?\b")
+# A title, a brand or a person's name is never touched (Jenna 2026-11-11:
+# "AD Open Door", Architectural Digest's series, came back "AD brings";
+# the same for The Doors, Three Doors Down, Door County). A deck writes
+# the common noun in lower case (headers are sentence case), so a
+# capital-D Door / Doors with a capitalized word beside it is a name.
+# Not a name: ALL CAPS chrome, a label made only of general words
+# ("Retail Door Mix", "This Door"), and the metaphor tile, where to /
+# for / into follows the word ("The Door to new viewers").
+_NAME_WORD = r"[A-Z][A-Za-z0-9'\u2019&.+-]*"
+_NAME_LINK = r"(?:of|the|and|in|on|at|de|la|&)"
+PROPER_NAME = re.compile(
+    r"(?<![A-Za-z0-9])(?P<pre>(?:" + _NAME_WORD + r"(?:\s+" + _NAME_LINK + r")?\s+){0,5})"
+    r"(?P<door>Doors?)(?![A-Za-z0-9])"
+    r"(?P<post>(?:\s+(?:" + _NAME_LINK + r"\s+)?" + _NAME_WORD + r"){0,5})")
+_GENERAL_WORDS = frozenset((
+    "a", "an", "this", "that", "these", "those", "one", "another", "each", "every", "per", "by", "all", "both",
+    "its", "their", "our", "your", "my", "his", "her", "same", "new", "other", "top", "retail", "retailer",
+    "home", "store", "shop", "shopping", "physical", "front", "back", "side", "main", "first", "second",
+    "mix", "count", "counts", "share", "shares", "list", "level", "and", "or", "but", "so", "then", "with",
+    "for", "to", "into", "from", "is", "are", "was", "were", "it", "they", "we", "you", "i", "when", "where",
+    "what", "which", "who", "why", "how", "if", "as", "at", "in", "on", "of", "no", "not", "more", "most"))
+
+
+def proper_name_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of every proper name that carries Door / Doors."""
+    out = []
+    for m in PROPER_NAME.finditer(text or ""):
+        if re.match(r"\s+(?:to|for|into)\b", (text or "")[m.end("door"):], re.I):
+            continue                      # the metaphor tile, however it is cased
+        beside = [w for w in re.findall(r"[A-Za-z0-9'\u2019&.+-]+", m.group("pre") + " " + m.group("post"))
+                  if not re.fullmatch(_NAME_LINK, w)]
+        if not beside:
+            continue                      # the word on its own is not a name
+        if all(w.lower().strip(".'\u2019") in _GENERAL_WORDS for w in beside):
+            continue                      # "Retail Door Mix", "This Door": a label, not a name
+        out.append((m.start(), m.end()))
+    return out
 
 _FRAMES = [
     (re.compile(r"\bopens?\s+the\s+doors?\s+to\s+", re.I), "brings "),
@@ -47,7 +86,7 @@ def _is_allowed_span(text: str, start: int, end: int) -> bool:
             if re.match(r"\s+(to|for)\b", (text or "")[m.end():], re.I):
                 return False
             return True
-    return False
+    return any(a <= start and end <= b for a, b in proper_name_spans(text))
 
 
 def door_hits(text: str) -> list[str]:
@@ -76,7 +115,12 @@ def _protect(text: str) -> tuple[str, list[str]]:
         held.append(m.group(0))
         return f"\x00DOOR{len(held) - 1}\x00"
 
-    return ALLOWED_PROPER.sub(hold, text or ""), held
+    out = ALLOWED_PROPER.sub(hold, text or "")
+    # a title, a brand or a person's name rides through whole, last span first so the offsets hold
+    for a, b in reversed(proper_name_spans(out)):
+        held.append(out[a:b])
+        out = out[:a] + f"\x00DOOR{len(held) - 1}\x00" + out[b:]
+    return out, held
 
 
 def _restore(text: str, held: list[str]) -> str:

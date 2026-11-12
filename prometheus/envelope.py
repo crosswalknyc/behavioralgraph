@@ -102,11 +102,20 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         _g.scrub_method_language_payload(raw)
     except Exception:
         pass
-    # ... and no door: a chat read says store, a metaphor is rewritten,
-    # a generated file's name carries neither (2026-11-10).
+    # The door rule is about decks (2026-11-11): a chat reply is never run
+    # through it, so a title, a brand or a person's name is never rewritten.
+    # A reply that IS deck copy (an outline typed into the chat) still is.
     try:
         from . import door_words as _dw
         _dw.scrub_payload(raw)
+    except Exception:
+        pass
+    # A promise has a record (2026-11-11, prometheus.promise_truth): a calm
+    # reply with no job and no run behind it gets the held record the ops
+    # watch and the daily digest read. Fail-safe; the reply always ships.
+    try:
+        from . import promise_truth as _ptr
+        _ptr.back_calm(raw, thread_id=thread_id or '')
     except Exception:
         pass
     # A people count never passes the US population or the audience it is

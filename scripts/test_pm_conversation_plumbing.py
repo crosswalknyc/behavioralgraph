@@ -11,8 +11,9 @@ after prometheus.thread_scope made every ask, job and reply per thread).
      the build, with no browser open, once.          -> TheServerPostsTheFinishedLine
   3. What is said about an order follows the artifact: no calm "in
      progress" line for an order that never started. -> AnOrderIsNotRunningUntilItIs
-  4. The word door never appears in a chat read or a generated file
-     name; compound brand names are untouched.       -> NoDoor
+  4. The word door never appears in deck copy or a deck's file name;
+     compound brand names are untouched. A chat reply is not deck copy
+     (2026-11-11) and passes as written.             -> NoDoor
   5. A banked read answers a new question only when subject, cohort and
      window match; the same question still replays.  -> TheLedgerAnswersOnlyTheSameRead
 
@@ -280,13 +281,19 @@ class TheServerPostsTheFinishedLine(unittest.TestCase):
         self.assertEqual(self.w.get(f'{THREADS}/{USER}/{T_MAD}.json'), NB.MAD_THREAD)
         self.assertIn('3df066a21c', [t['id'] for t in self.w.index()['threads']])
 
-    def test_no_thread_no_line_and_a_failed_run_says_nothing(self):
+    def test_no_thread_no_line_and_a_failed_run_says_what_happened(self):
+        """A launch with no thread posts nothing. A run that failed has its outcome put in the launching thread, in
+        the client's words (2026-11-11, prometheus.promise_truth: before this a failed run said nothing here and the
+        tab drew the calm line); the calm promise is never written."""
         self.store.clear()
         BR.note_launch(self.store.__setitem__, run_id='r2', user=USER, thread_id='', subject='X', engine_user='armine@example.com', now=1000.0)
         BR.note_launch(self.store.__setitem__, run_id='r3', user=USER, thread_id='3df066a21c', subject='Y', engine_user='armine@example.com', now=1000.0)
         self.runs = [{'run_id': 'r2', 'status': 'complete', 'subject': 'X'}, {'run_id': 'r3', 'status': 'failed', 'subject': 'Y'}]
-        self.assertEqual(sorted(self._sweep()), [('r2', 'no_thread'), ('r3', 'closed_failed')])
-        self.assertEqual(self._thread(), [])
+        self.assertEqual(sorted(self._sweep()), [('r2', 'no_thread'), ('r3', 'closed_failed_appended')])
+        said = self._thread()
+        self.assertEqual([t['text'] for t in said], ['This build could not be completed. Credits for this run have been refunded.'])
+        self.assertEqual(said[0]['meta']['build_outcome']['run_id'], 'r3')
+        self.assertNotIn('Working on it', said[0]['text'])
         self.assertEqual(self.w.get(f'{THREADS}/{USER}/{T_MAD}.json'), NB.MAD_THREAD)
         # an old launch the engine no longer lists is closed, not kept forever
         BR.note_launch(self.store.__setitem__, run_id='r4', user=USER, thread_id='3df066a21c', subject='Z', now=1000.0)
@@ -424,22 +431,28 @@ class NoDoor(unittest.TestCase):
         self.assertEqual(DW.scrub_filename('DoorDash_Users_Insights.pptx'), 'DoorDash_Users_Insights.pptx')
         self.assertEqual(DW.scrub_filename('Mad_Men_Insights.pptx'), 'Mad_Men_Insights.pptx')
 
-    def test_every_reply_and_every_read_passes_through_it(self):
+    def test_a_chat_reply_is_not_deck_copy_and_deck_copy_still_is(self):
+        """2026-11-11: the door rule is a deck rule. A chat read, its chips and a data file's name pass as written;
+        a reply that IS deck copy (an outline typed into chat) and a deck's own file name are still scrubbed."""
         import prometheus_analysis as pma
         self.assertEqual(pma.scrub_user_text('Retail door mix across the three named doors'),
-                         'Retail store mix across the three named stores')
+                         'Retail door mix across the three named doors')
         env = ENV.wrap({'success': True, 'action': 'answer', 'reply': KEITH, 'followups': ['Show the door mix by region'],
                         'file_link': {'url': 'https://x/y/Retail%20door%20mix.csv', 'name': 'Retail door mix.csv',
                                       'label': 'Download Retail door mix.csv'}},
                        surface='analyze', decision={})
-        self.assertFalse(DW.has_door(env['text']))
+        self.assertIn('a three-door audience', env['text'])
         raw = {'reply': 'the home door', 'followups': ['Show the door mix'], 'filename': 'Retail_door_mix.csv',
                'file_link': {'name': 'Retail door mix.csv', 'label': 'Download Retail door mix.csv', 'url': 'https://x/door.csv'}}
+        before = {k: (dict(v) if isinstance(v, dict) else (list(v) if isinstance(v, list) else v)) for k, v in raw.items()}
         DW.scrub_payload(raw)
-        self.assertEqual((raw['reply'], raw['followups'], raw['filename']), ('the home store', ['Show the store mix'], 'Retail_store_mix.csv'))
-        self.assertEqual(raw['file_link'], {'name': 'Retail store mix.csv', 'label': 'Download Retail store mix.csv', 'url': 'https://x/door.csv'})
+        self.assertEqual(raw, before)
+        deck = {'reply': 'SLIDE 1\nthe home door', 'followups': ['Show the door mix'], 'filename': 'Retail_door_mix.pptx'}
+        DW.scrub_payload(deck)
+        self.assertEqual((deck['reply'], deck['followups'], deck['filename']),
+                         ('SLIDE 1\nthe home store', ['Show the store mix'], 'Retail_store_mix.pptx'))
         chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
-        self.assertGreaterEqual(chat.count('_door_words.scrub_filename('), 3)      # the CSV, the read file and the deck
+        self.assertEqual(chat.count('_door_words.scrub_filename('), 1)             # the deck's own file name, nothing else
 
     def test_the_house_helper_is_the_one_scrubber(self):
         """The frames, the token and the allowlist come from the design pack's cw_door_copy; this module adds the

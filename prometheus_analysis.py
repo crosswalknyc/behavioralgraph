@@ -3823,14 +3823,9 @@ def scrub_user_text(text):
         s = _sep_idx(s)
     except Exception as _fx:
         _faults.note('analysis', _fx)
-    # the word door never reaches a reader in a chat read or a file name
-    # (2026-11-10; the deck rule of 2026-10-28). prometheus.door_words.
-    if 'door' in s.lower():
-        try:
-            from prometheus import door_words as _dw
-            s = _dw.scrub_read(s)
-        except Exception as _fx:
-            _faults.note('analysis', _fx)
+    # The door rule is about decks (2026-11-11, prometheus.door_words): a chat
+    # read is never run through it. "Architectural Digest Open Door" came back
+    # "Architectural Digest brings" in a read on 2026-11-11.
     if _held:
         try:
             s = _vd_meth.unshield_definitions(s, _held)

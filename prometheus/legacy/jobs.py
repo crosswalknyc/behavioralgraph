@@ -69,8 +69,23 @@ def api_synth_chat_status(run_id):
                 f"{str(doc.get('error') or '')[:400]}",
                 tb='(run failure reported by the engine status feed)')
             doc = dict(doc)
+            _raw_doc = dict(doc)
             doc['error'] = ''
+        else:
+            _raw_doc = doc
         payload = {'success': True, 'status': doc}
+        # A build that was refused, failed or cancelled after it started is said as what it is, in the client's
+        # words, and the thread that launched it is settled on the server (2026-11-11, prometheus.promise_truth:
+        # Jessie's refused Paramount Plus build read "is building" and then the calm line). Never the calm line.
+        try:
+            from prometheus import promise_truth as _ptruth
+            _line, _how = _ptruth.settle_from_status(
+                str(user.get('username') or user.get('email') or ''), run_id, _raw_doc)
+            if _line:
+                doc = dict(doc, client_message=_line)
+                payload = {'success': True, 'status': doc, 'outcome': {'text': _line, 'settled': _how}}
+        except Exception:
+            traceback.print_exc()
         # A finished Prometheus pull belongs to the user who pulled it.
         # Explicit-list users (self-serve Prometheus plan) get the TU
         # and Avid keys appended to allowed_runs; '*' users are a no-op.

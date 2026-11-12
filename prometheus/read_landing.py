@@ -103,6 +103,8 @@ def read_meta(job_id, payload, meta_key='read_job_id'):
         pass
     if p.get('faulted'):
         meta['faulted'] = str(p.get('faulted'))[:40]
+    if p.get('held_ref'):
+        meta['held_ref'] = str(p.get('held_ref'))[:200]   # the record behind a promise rides on its turn (2026-11-11)
     meta[LANDED_MARK] = _now_iso()
     return meta
 

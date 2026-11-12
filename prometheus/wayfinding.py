@@ -357,6 +357,15 @@ def _match(name, items):
         have = set(_tokens(i['name']))
         if all(w in have for w in want):
             hits.append(i)
+    if len(hits) != 1 and any(str(i.get('key') or '').startswith('journey-iq/') for i in (hits or items)):
+        # two journeys under one show's name are told apart by the words that differ (prometheus.journey_pick, 2026-11-11)
+        try:
+            from . import journey_pick as _jp
+            got = _jp.pick(name, hits or items)
+            if got.get('item') is not None and got.get('how') == 'told_apart':
+                return [got['item']]
+        except Exception:
+            pass
     return hits
 
 

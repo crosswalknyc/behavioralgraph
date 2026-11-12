@@ -129,6 +129,13 @@ _DECK_INTO_RX = re.compile(
     r'\b(?:into|as) (?:a |an |one )?(?:(?:simple|quick|short|small|tight|clean|single|one|full|final|'
     r'complete|consolidated|proper|real|actual|branded|powerpoint|ppt|pptx|one[- ]page) )*'
     r'(?:deck|slides?|presentation|one[- ]?pager|pptx|ppt|powerpoint)\b', re.I)
+# 2026-11-11 (Armine): "Can we summarize this in a powerpoint?" and "Summarize in powerpoint" ran as questions
+# for the read lane (no verb above covers summarize, and "in a powerpoint" is not "into / as"). A summary, a
+# recap or the results asked for in a deck format is a deck ask.
+_DECK_SUMMARIZE_RX = re.compile(
+    r'\b(?:summari[sz]e|recap|sum up|wrap (?:it|this|that) up|present|show|share|deliver|give (?:me|us)|send (?:me|us)?)\b'
+    r'[^.!?]{0,60}\b(?:in|into|as|on|via)\s+(?:a |an |one |the )?(?:(?:short|quick|simple|brief|clean|single) )*'
+    r'(?:deck|slides?|presentation|one[- ]?pager|pptx|ppt|power ?point)\b', re.I)
 _RENDER_IT_RX = re.compile(
     r'^(?:please\s+)?(?:render|build|make|export|generate|create|produce|'
     r'do|ship|send|give me|finish)\s+(?:it|that|this|them|these|the deck|'
@@ -189,7 +196,8 @@ def looks_like_deck_ask(text, deck_in_flight=False,
         pass
     if _DECK_BUILD_RX.search(t) or _DECK_NOUN_RX.search(t) \
             or _DECK_INTO_RX.search(t) or _DECK_WANT_RX.search(t) \
-            or _DECK_BUILT_RX.search(t) or _DECK_BARE_RX.match(t):
+            or _DECK_BUILT_RX.search(t) or _DECK_BARE_RX.match(t) \
+            or (len(t.split()) <= 24 and _DECK_SUMMARIZE_RX.search(t)):   # the short ask itself; one riding a long question is prometheus.ride_along's
         return True
     if prior_deck_outline and _RENDER_IT_RX.match(t):
         return True

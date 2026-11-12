@@ -46,6 +46,7 @@ from prometheus import ledger_gate as _ledger_gate   # a probe's ask never banks
 from prometheus import window_scope as _wscope   # the window is the one the reader asked for; the default is never a frozen pair (2026-11-10)
 from prometheus import named_platforms as _named_platforms   # a platform the client names is the universe's platform, strict (2026-11-10)
 from prometheus import door_words as _door_words   # the word door never reaches a chat read or a file name (2026-11-10)
+from prometheus import promise_truth as _PT   # a progress line never outlives its job; a promise has a record (2026-11-11)
 from prometheus import api_threads as _api_threads   # a key-surface job lands in a key thread, never a dashboard chat (2026-11-10)
 from prometheus import order_truth as _order_truth   # what is said about an order follows the artifact (2026-11-10)
 from prometheus import build_ready as _build_ready   # the server posts the finished line into the launching thread (2026-11-10)
@@ -9056,6 +9057,11 @@ def api_synth_chat_history():
                              'history payload is not a list',
                              tb='(request validation)')
         return jsonify(_H._chatbot_calm_payload())
+    try:   # a calm line a tab wrote on its own gets the held record behind it (2026-11-11, prometheus.promise_truth)
+        history = __import__('prometheus.promise_truth', fromlist=['back_thread']).back_thread(
+            uname, body.get('thread_id'), history, load=lambda: (_pm_s3_json(_pm_thread_key(uname, body.get('thread_id')), []) if body.get('thread_id') else None))
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     saved = _save_synth_chat_history(uname, history, body.get('thread_id'))
     if not saved:
         return jsonify({'success': False})
@@ -13125,7 +13131,7 @@ def _pm_csv_point(subject, question, family):
 
 def _pm_upload_csv(fname, csv_text):
     """Upload a CSV under generated_data/ and return (s3_key, 7-day url)."""
-    fname = _door_words.scrub_filename(fname)   # a generated file's name never carries the word (2026-11-10)
+    fname = str(fname)   # a CSV's name is not deck copy: the door rule is the deck's alone (2026-11-11)
     s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
     _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=s3_key,
                             Body=csv_text.encode('utf-8'),
@@ -15245,7 +15251,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             elif _fe.get('wl'):
                 _frng = str(_fe['wl'])
             _fcsv = _H._stamp_csv_text(_fcsv, _frng)
-            _fn = _door_words.scrub_filename(_pm_csv_task_filename(_fe) or _fn)
+            _fn = _pm_csv_task_filename(_fe) or _fn
             _fkey = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{_fn}"
             _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=_fkey,
                                  Body=_fcsv.encode('utf-8'), ContentType='text/csv')
@@ -15837,6 +15843,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         _rs.shape_finished_read(payload, held)
         __import__('prometheus.people_bounds', fromlist=['guard_payload']).guard_payload(payload)   # a people count never passes the US population or its own audience (2026-11-11)
         __import__('prometheus.partnership_value', fromlist=['guard_read']).guard_read(payload, question=text, history=history)   # a partnership's dollar value is the valuation's to state (Jenna 2026-11-11)
+        __import__('prometheus.reply_truth', fromlist=['finish_read']).finish_read(payload, question=text)   # a read claims nothing it has no record of (2026-11-11)
         _stages = payload.pop('_stages_ms', None)
         if payload.get('success'):
             _done = {**head,
@@ -15864,6 +15871,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _pm_read_status_write(job_id, _done)
             _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
                              via=__import__('prometheus.service', fromlist=['job_doc_field']).job_doc_field(job_id, 'via'))
+            __import__('prometheus.ride_along', fromlist=['on_read_landed']).on_read_landed(pm_user, job_id, payload, held=held, probe=probe)   # the deck asked for with the question (2026-11-11)
             if not held and not probe:
                 _sent = _pm_flush_notify(job_id, 'read',
                                          {**payload, 'question': text})
@@ -15879,6 +15887,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                 if panel_charge:
                     _pm_panel_refund(panel_charge)
         else:
+            probe or _PT.job_failed('read', pm_user, job_id, text, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True))
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
             _pm_notify_delete(job_id)
             _pm_settle_ask(job_id, 'faulted', '', head.get('started_at'))
@@ -15893,6 +15902,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                              user_email=pm_user,
                              payload={'job_id': job_id,
                                       'text': text[:200]})
+        probe or _PT.job_failed('read', pm_user, job_id, text, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True))
         try:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
         except Exception as _fx:
@@ -19081,6 +19091,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                                       'angle': str(angle)[:200]})
         _pm_deck_status_write(job_id, {**base, 'status': 'error',
                                        'error': str(e)[:400]})
+        _PT.job_failed('deck', username, job_id, str(angle)[:300], land=lambda _p: _PT.land_note(_pm_thread_for_job(username, job_id), username, job_id, _p))
         _pm_notify_delete(job_id)
         # 2026-09-09 Jenna: decks are session-metered, not per-pull
         # charged, so there is no per-pull refund to issue on

@@ -88616,6 +88616,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _synthChatActiveOptions = null;
             var _lastTurnIdx = synthChatHistory.length - 1;
             var rows = synthChatHistory.map(function(turn, _ti) {
+                if (turn && turn.meta && turn.meta.withdrawn) return '';   // a progress line its outcome replaced (2026-11-11)
                 var role = (turn.role || 'user').toLowerCase();
                 var _rawText = turn.text || '';
                 var isUser = role === 'user';
@@ -89621,6 +89622,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmReadIndicatorHide(jobId);
                     _pmUntrackReadJob(jobId);
                     _pmHideNotifyOffer(jobId);
+                    // the server lands the held note on this job's own line, with its record (2026-11-11); a second
+                    // calm line is added here only when that copy has not arrived
+                    try { await _pmRefreshLandedRead(jobId, 2); } catch (_) {}
+                    var _eix = _pmHistoryJobTurnIndex('read_job_id', jobId);
+                    if (_eix >= 0 && _pmTurnIsLanded(synthChatHistory[_eix])) { synthChatRerender(); return; }
                     _pmPushTurnFor(_po, 'agent', SYNTH_CHAT_CALM_MSG);
                     return;
                 }
@@ -90427,8 +90433,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         if (st.avid_key) lines.push('Avid Fan cut: ' + _synthChatFileLabel(st.avid_key));
                     }
                 }
-                if (cur === 'error' || cur === 'failed') {
-                    lines = [SYNTH_CHAT_CALM_MSG];
+                if (cur === 'error' || cur === 'failed' || cur === 'cancelled' || cur === 'canceled') {
+                    lines = [_pmBuildOutcomeText(data, st)];   // what happened, never the calm line (2026-11-11)
                 }
                 // The server posts the finished line into the launching thread itself
                 // (prometheus.build_ready, 2026-11-10); when it is already here, this
@@ -95843,6 +95849,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
         }
 
+        // The line a reader is shown for a build that ended without a file: the server's own (the engine's client
+        // line, the cancel note, or the house line), else a plain one. Never "working on it" (2026-11-11).
+        function _pmBuildOutcomeText(data, st) {
+            var o = (data && data.outcome && data.outcome.text) ? String(data.outcome.text) : '';
+            if (!o && st && st.client_message) o = String(st.client_message);
+            if (!o && st && st.cancel_note) o = String(st.cancel_note);
+            return o || 'This build did not finish. Nothing more is running for it.';
+        }
+        function _pmBuildOutcomeShow(o, runId, msg, data) {
+            var has = function () {
+                return Array.isArray(synthChatHistory) && synthChatHistory.some(function (t) {
+                    return !!(t && t.meta && t.meta.build_outcome && t.meta.build_outcome.run_id === runId);
+                });
+            };
+            if (has()) { try { synthChatRerender(); } catch (_) {} return; }
+            var how = (data && data.outcome && data.outcome.settled) ? String(data.outcome.settled) : '';
+            var add = function () {
+                if (has()) { try { synthChatRerender(); } catch (_) {} return; }
+                _pmPushMetaFor(o, 'agent', msg, { run_id: runId, status: 'failed', build_outcome: { run_id: runId, status: 'failed' } });
+            };
+            if (how === 'settled' || how === 'appended' || how === 'already') {
+                // the server wrote it into the thread: pull that copy, and only add one if it has not arrived
+                try { _pmServerTurnsPull(); } catch (_) {}
+                setTimeout(add, 3500);
+                return;
+            }
+            add();
+        }
+
         function _synthChatStartPolling(runId, subjectHint, knownStatus) {
             if (synthChatPollTimer) clearInterval(synthChatPollTimer);
             var _po = _pmOriginNow();   // the thread this was started from; its lines land there (2026-11-11)
@@ -95891,10 +95926,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 if (st.avid_key) msg += '\nAvid Fan cut: ' + _synthChatFileLabel(st.avid_key);
                             }
                         }
-                        if (cur === 'error' || cur === 'failed') {
-                            msg = SYNTH_CHAT_CALM_MSG;
+                        // A build that ended without a file says what happened, in the reader's words, never the
+                        // calm line (2026-11-11, Jessie's refused Paramount Plus build read "is building" and then
+                        // "Working on it"). The server puts the outcome on the build's own line in the thread
+                        // (prometheus.promise_truth); this tab takes that copy and adds nothing when it has it.
+                        var _pmDead = (cur === 'error' || cur === 'failed' || cur === 'cancelled' || cur === 'canceled');
+                        if (_pmDead) {
+                            msg = _pmBuildOutcomeText(data, st);
                         }
-                        if (cur === 'complete' || cur === 'error' || cur === 'failed') {
+                        if (cur === 'complete' || _pmDead) {
                             _pmBuildIndicatorHide();
                         }
                         if (cur === 'complete' && st.subiq_s3_key) {
@@ -95902,6 +95942,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 run_id: runId, status: cur,
                                 link: { url: window.location.origin + '/api/download-cached/' + encodeURIComponent(st.subiq_s3_key),
                                         label: 'Download the data' } });
+                        } else if (_pmDead) {
+                            _pmBuildOutcomeShow(_po, runId, msg, data);
                         } else {
                             _pmPushTurnFor(_po, 'agent', msg);
                         }
@@ -95923,7 +95965,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 try { synthChatChipSend(_pq); } catch (_) {}
                             }, 600);
                         }
-                        if (cur === 'complete' || cur === 'error' || cur === 'failed') {
+                        if (cur === 'complete' || _pmDead) {
                             clearInterval(synthChatPollTimer);
                             synthChatPollTimer = null;
                         }

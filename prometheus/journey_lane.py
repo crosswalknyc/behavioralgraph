@@ -140,10 +140,14 @@ def names_other_subject(text, title):
     return False
 
 
-def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None):
+def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None, ask_out=None):
     """The newest delivered journey the caller can see whose title the
     question names (every distinctive title token present, a number in
-    the title too), or the journey open on the page. None otherwise."""
+    the title too), or the journey open on the page. None otherwise.
+    Two journeys under one show's name are told apart by the words that
+    differ between them (library, season 6, current: prometheus
+    .journey_pick, 2026-11-11); when the words cannot tell, ``ask_out``
+    (a dict the caller hands in) carries the one short question."""
     try:
         from migration import journey_iq as _jiq
         runs = _jiq.list_runs(s3, limit=500)
@@ -194,6 +198,18 @@ def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None):
             continue
         if score > best_score or (score == best_score and str(run.get('created_at') or '') > str(best.get('created_at') or '')):
             best, best_score = run, score
+    if best is None or best_score < 1.0:
+        # "the Abbott Elementary library journey" with a Season 6 journey and a Library journey saved: the show's
+        # name is in both titles, so no title is named whole; the words that differ pick one, or one question asks
+        try:
+            from . import journey_pick as _jp
+            got = _jp.pick(text, visible)
+            if got.get('item') is not None and (got.get('how') == 'told_apart' or len(_jp.own_name(_jp.name_of(got['item'])).split()) >= 2):
+                return got['item']
+            if got.get('ask') and best is None and isinstance(ask_out, dict):
+                ask_out.update(ask=got['ask'], options=list(got.get('options') or []), subject=got.get('subject') or '')
+        except Exception:
+            pass
     return best
 
 
@@ -348,8 +364,18 @@ def answer(text, ctx=None, *, host=None, user=None, history=None, s3=None, bucke
     if s3 is None:
         return None
     uname = str((user or {}).get('username') or (user or {}).get('email') or '').strip()
-    run = find_journey(t, s3=s3, user=user, uname=uname, bucket=bucket, ctx=ctx)
+    _ask = {}
+    run = find_journey(t, s3=s3, user=user, uname=uname, bucket=bucket, ctx=ctx, ask_out=_ask)
     if not run:
+        if _ask.get('ask'):
+            # one short question, a chip for each journey: the question comes back whole with the journey named
+            _subj = str(_ask.get('subject') or '')
+            _chips = []
+            for _nm in _ask.get('options') or []:
+                _q = re.sub(re.escape(_subj), lambda _m: _nm, t, count=1, flags=re.I) if _subj and re.search(re.escape(_subj), t, re.I) else f"{t} ({_nm})"
+                _chips.append(_q[:300])
+            return {'success': True, 'action': 'answer', 'reply': _ask['ask'], 'followups': _chips[:4], 'offer_deck': False,
+                    'deck_angle': None, 'journey_pick': {'options': list(_ask.get('options') or [])}}
         return None
     try:
         payload = _load(s3, run['key'], bucket)

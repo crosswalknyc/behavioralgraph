@@ -194,6 +194,17 @@ def match_journeys(subject, journeys):
         have = set(_tokens(j['name']))
         if all(w in have for w in want):
             hits.append(j)
+    if len(hits) != 1:
+        # two journeys under one show's name ("the Abbott Elementary library journey", a Season 6 journey and a
+        # Library journey saved): the words that differ between them pick one (prometheus.journey_pick, 2026-11-11);
+        # "library" names the Library journey here even though it is dropped above as "in my library"
+        try:
+            from . import journey_pick as _jp
+            got = _jp.pick(subject, hits or journeys)
+            if got.get('item') is not None and got.get('how') == 'told_apart':
+                return [got['item']]
+        except Exception:
+            pass
     return hits
 
 
