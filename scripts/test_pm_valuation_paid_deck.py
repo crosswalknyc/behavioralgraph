@@ -378,6 +378,12 @@ def test_a_the_500_order():
           and any(n.endswith('.csv') for n in names))
     check("the attached deck is the stored deck", bool(sends) and any(f[0] == body for f in sends[0]['files']))
     check("the note says the deck is attached", bool(sends) and 'The valuation deck and the raw data are attached.' in sends[0].get('body', ''))
+    check("the note names the pairing once", bool(sends) and 'valuation is ready.' in sends[0].get('body', '')
+          and 'valuation with JYT' not in sends[0].get('body', '')
+          and W.email_copy({'talent': 'Jennifer Beals', 'campaign': 'Ganni x Lululemon'})[1].startswith(
+              'The Ganni x Lululemon valuation with Jennifer Beals is ready.'))
+    check("the note is clean", bool(sends) and not BANNED_RX.search(sends[0].get('body', '').replace('ready', ''))
+          and '\u2014' not in sends[0].get('body', ''))
     # a second Accept: nothing more
     o.walk.say('Accept $500')
     check("a second Accept charges nothing and builds nothing", o.charges() == [500.0] and len(o.job.runs) == 1

@@ -1898,9 +1898,13 @@ def email_copy(draft_or_inputs):
     campaign = d.get('campaign') or (
         f"{d.get('qualifier')} x {d.get('brand_partner')}".strip(' x')
         or 'the campaign')
-    subject = f"{campaign}: valuation with {talent} is ready"
+    # a campaign that already carries the talent's name says it once
+    # ("The Gap x JYT valuation with JYT is ready", 2026-11-11)
+    _f = lambda s: re.sub(r'[^a-z0-9]+', '', str(s or '').lower())   # noqa: E731
+    who = '' if (_f(talent) and _f(talent) in _f(campaign)) else f" with {talent}"
+    subject = f"{campaign}: valuation{who} is ready"
     body = (
-        f"The {campaign} valuation with {talent} is ready.\n\n"
+        f"The {campaign} valuation{who} is ready.\n\n"
         "Open it in Brand Partnership IQ.\n\n"
         "Prometheus\nCrosswalk"
     )
