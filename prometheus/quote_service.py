@@ -20,6 +20,13 @@ The rule, held at the one place a quote is made
     a check that does not cover the window), the quote is on what was
     asked: the title on the service the reader named.
 
+A count question ("How many people watched Fallout Season 2 on
+Netflix?") is not quoted at all when the dashboard already holds the
+figure on the title's home: the sentence, then the figure, worded by the
+lane that answers the same question with no service in it
+(`held_figure`). The reader is never charged for a figure we hold
+because they named the wrong service.
+
 Nothing is decided here about whether a held profile answers free, and
 nothing is priced here. The readings of services, titles and the carrier
 record are prometheus.service_scope_match's; this module only calls
@@ -29,7 +36,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['settle', 'names']
+__all__ = ['settle', 'names', 'held_figure']
 
 _NOUN_RX = re.compile(r"\b(viewers?|watchers?|streamers?|listeners?)\b", re.I)
 
@@ -104,3 +111,40 @@ def settle(text, history, subject, record=None, window=None):
         return f"{title} {_noun(subj)} on {names(asked, ssm)}", ''
     except Exception:
         return subject, ''
+
+
+_FIGURE_RX = re.compile(r"\d[\d,]{3,}\s+US people\b")
+
+
+def held_figure(text, subject, sentence, ctx=None):
+    """The whole reply for a count question about a title on a service it
+    is not on, when the figure on its home is already on the dashboard:
+    `sentence`, then the figure as the catalog lane words it for the same
+    question with no service in it. None when the words are not a count
+    question, state their own dates, or nothing is held (the quote on the
+    title's home then stands, opening with the sentence)."""
+    try:
+        if not sentence:
+            return None
+        from . import catalog_lane as cl
+        from . import service_scope_match as ssm
+        parsed = cl.parse(text)
+        if not parsed or parsed[0] != 'size':
+            return None
+        if ssm.window_of_draft({}, text) != ssm.window_of_draft({}, ''):
+            return None                              # the words state their own dates
+        title = ssm.title_of_name(' '.join(str(subject or '').split()))
+        if not title:
+            return None
+        got = cl.answer(f"How many people watched {title}?", ctx)
+        if not isinstance(got, dict) or got.get('memory_confirm') or got.get('roster_ask'):
+            return None
+        words = ' '.join(str(got.get('reply') or '').split())
+        if not _FIGURE_RX.search(words) or not ssm.services_of_name(str(got.get('subject') or '')):
+            return None
+        out = dict(got)
+        out['reply'] = f"{sentence} {words}"
+        out['service_settled'] = True
+        return out
+    except Exception:
+        return None

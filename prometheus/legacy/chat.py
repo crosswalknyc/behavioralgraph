@@ -14092,7 +14092,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 years=(_vw[2] if _vw else 1), dimension=str((metric_request or {}).get('dimension') or ''),
                 verb=_pm_viewership_verb(text), series=_pm_is_viewership_series_ask(text))
             if _state != 'charged':
-                _pm_ask_hint(outcome=('panel_offer' if _state == 'offer' else 'panel_out_of_credits'), subject=subj_name)
+                _pm_ask_hint(outcome=(('panel_offer' if _pl.get('panel_offer') else 'answered') if _state == 'offer' else 'panel_out_of_credits'), subject=subj_name)
                 return jsonify(_pl)
             base = {'subject': subj_name, 's3_key': '', 'source': 'panel'}
             if _qu.kind == 'named':
@@ -14178,7 +14178,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                     dimension=str((metric_request or {}).get('dimension') or ''),
                     frame=str((_pr_hit or {}).get('frame') or ''))
                 if _state != 'charged':
-                    _pm_ask_hint(outcome=('panel_offer' if _state == 'offer' else 'panel_out_of_credits'), subject=_ov_subj)
+                    _pm_ask_hint(outcome=(('panel_offer' if _pl.get('panel_offer') else 'answered') if _state == 'offer' else 'panel_out_of_credits'), subject=_ov_subj)
                     return jsonify(_pl)
                 panel_charge = _pl
                 print(f"[pm-panel] charged {_pl.get('credits')} credits to {_pm_user} for {_pr_kind} {_ov_subj}")

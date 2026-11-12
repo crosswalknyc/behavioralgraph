@@ -1561,6 +1561,10 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
             from . import quote_service as _qs
             subj, service_line = _qs.settle(text, history, subj)
             subj = str(subj or '').strip() or 'that subject'
+            # a count we already hold on the title's home is given, not sold: the sentence, then the figure
+            _held = _qs.held_figure(text, subj, service_line) if service_line else None
+            if _held:
+                return 'offer', _held
         except Exception:
             service_line = ''
     # Included with your plan (Jenna 2026-11-08): an unlimited seat (a

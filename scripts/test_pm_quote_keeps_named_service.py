@@ -103,6 +103,48 @@ class TheQuote(unittest.TestCase):
                                       'watched Fallout Season 2 on Prime Video across one year. Pulling this data will cost $100.')
         self.assertEqual(pl['panel_offer']['subject'], FALLOUT)             # what is priced is the read on the title's home
 
+    def test_a_count_we_hold_on_the_titles_home_is_given_not_sold(self):
+        """Asked with no service, the same question is answered from the profile on the dashboard. Naming the wrong
+        service must not turn that into a $100 quote: the sentence, then the figure."""
+        from prometheus import catalog_lane as CL
+        held = ("Fallout Season 2 Viewers on Prime Video: 13,732,978 US people (Nov 1, 2025 to Oct 31, 2026). Prime Video is the only "
+                "US home of Fallout Season 2 in this window, so this is the title's whole audience.")
+        asked = []
+        real = CL.answer
+
+        def lane(text, ctx=None):
+            asked.append(text)
+            return {'success': True, 'action': 'answer', 'reply': held, 'followups': ['Open Fallout Season 2 Viewers on Prime Video'],
+                    'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': FALLOUT}
+        try:
+            CL.answer = lane
+            pl = self._quote('How many people watched Fallout Season 2 on Netflix?')
+            self.assertEqual(pl['reply'], 'Fallout Season 2 is on Prime Video in the US, not Netflix. ' + held)
+            self.assertNotIn('panel_offer', pl)                              # nothing is quoted
+            self.assertNotIn('$', pl['reply'])
+            self.assertEqual(asked, ['How many people watched Fallout Season 2?'])   # the same question, the wrong service left out
+            # a read that is not a count is still a read: the sentence, then the quote on the title's home
+            pl = self._quote('What do Fallout Season 2 viewers on Netflix buy most often?', kind='list')
+            self.assertTrue(pl['reply'].startswith('Fallout Season 2 is on Prime Video in the US, not Netflix. '))
+            self.assertIn('will cost', pl['reply'])
+            self.assertEqual(pl['panel_offer']['subject'], FALLOUT)
+            # the words state their own dates: not the profile's year, so it is quoted
+            pl = self._quote('How many people watched Fallout Season 2 on Netflix between January 5, 2026 and February 1, 2026?')
+            self.assertIn('panel_offer', pl)
+            # the lane holds nothing, or answers without a figure: the quote stands
+            CL.answer = lambda text, ctx=None: None
+            self.assertIn('panel_offer', self._quote('How many people watched Fallout Season 2 on Netflix?'))
+            CL.answer = lambda text, ctx=None: {'success': True, 'reply': 'No profile on the dashboard yet.', 'subject': FALLOUT}
+            self.assertIn('panel_offer', self._quote('How many people watched Fallout Season 2 on Netflix?'))
+            # the record cannot settle it: nothing is said about another service, and the quote is on what was asked
+            CL.answer = lane
+            self.record = TWO_HOMES
+            pl = self._quote('How many people watched Fallout Season 2 on Netflix?')
+            self.assertIn('panel_offer', pl)
+            self.assertNotIn('is on Prime Video in the US', pl['reply'])
+        finally:
+            CL.answer = real
+
     def test_with_no_record_to_settle_it_the_quote_is_on_netflix(self):
         self.record = NO_CHECK
         pl = self._quote('How many people watched Fallout Season 2 on Netflix?')
