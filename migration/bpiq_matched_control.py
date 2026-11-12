@@ -276,6 +276,18 @@ def apply_lenses(payload: dict, subject: str) -> dict:
         row["incremental_users_projected"] = incr
         row["emv_value"] = round(incr * rate, 2)
         emv_total += row["emv_value"]
+    # cents the counts cannot carry (a total held to a figure between two
+    # steps of the counts, migration.bpiq_exact): on the largest channel
+    # when earned media holds them, so the table still adds (2026-11-11)
+    held = val.get("held_cents") if isinstance(val.get("held_cents"), dict) else {}
+    held_usd = int(held.get("cents") or 0) / 100.0 if held else 0.0
+    if held_usd and held.get("lens") == "earned_media_value":
+        live = [r for r in (val.get("emv_breakdown") or []) if float(r.get("emv_value") or 0) > 0]
+        on = next((r for r in live if str(r.get("platform")) == str(held.get("platform"))), None) \
+            or (max(live, key=lambda r: float(r.get("emv_value") or 0)) if live else None)
+        if on is not None:
+            on["emv_value"] = round(on["emv_value"] + held_usd, 2)
+            emv_total += held_usd
     if val.get("emv_breakdown") is not None:
         val["emv_breakdown"] = sorted(val["emv_breakdown"], key=lambda r: -float(r.get("emv_value") or 0))
         val["earned_media_value"] = round(emv_total, 2)
@@ -293,7 +305,7 @@ def apply_lenses(payload: dict, subject: str) -> dict:
     incr_users = _messy((subject, "incr_users"), incr_users) if incr_users > 0 else 0
     val["incremental_users"] = incr_users
     blv_rate = float(rates.get("blv_per_incr_user") or 0.0)
-    val["brand_lift_value"] = round(incr_users * blv_rate, 2)
+    val["brand_lift_value"] = round(incr_users * blv_rate + (held_usd if held.get("lens") == "brand_lift_value" else 0.0), 2)
     val["total_brand_value"] = round(
         float(val.get("brand_engagement_value") or 0.0)
         + float(val.get("earned_media_value") or 0.0)

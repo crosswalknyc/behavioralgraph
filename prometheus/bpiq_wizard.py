@@ -2222,6 +2222,18 @@ def _charge_seat(user, uname, inputs, job_id, g, charge_fn):
         return False
 
 
+def charge_stamp(draft, user, uname, g):
+    """What this Accept charged, in the words the quote used: it rides
+    the job so the line that hands the valuation over can say so
+    (2026-11-11). {} when it cannot be read; never raises."""
+    try:
+        if _seat_is_free(user, uname, g):
+            return {'included': True}
+        return {'included': False, 'label': price_label(price_usd(bool((draft or {}).get('control_group'))))}
+    except Exception:
+        return {}
+
+
 def _start_valuation(job_id, uname, inputs, extras, g, start_fn,
                      thread_id=''):
     """Enqueue the valuation the same way the other engine jobs do.
@@ -2474,6 +2486,7 @@ def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
         # seat could not cover it. Either way nothing starts.
         return _payload(CHARGE_FAILED_REPLY if ok is None else FUNDS_REPLY, [], draft=draft, bpiq_collect=False)
     extras = dict(ppu or {})
+    extras['bpiq_charge'] = charge_stamp(draft, user, uname, g)
     try:
         started = _start_valuation(job_id, uname, inputs, extras, g, start_fn,
                                    thread_id=thread_id)
@@ -2571,9 +2584,23 @@ def deck_gate(user, body, text, history, pick='', g=None):
     """The deck surface asks here first: a deck of a read that stated a
     partnership's dollar value (the words, or the subject picked for
     the deck) is the valuation order, never a deck built from the read
-    (Jenna 2026-11-11). Returns the order's payload, or None when the
-    deck is any other deck. Never raises."""
+    (Jenna 2026-11-11). A deck of a valuation this thread already holds
+    is the valuation deck again, built by the one valuation deck builder
+    from the saved file (prometheus.bpiq_deck), never a second deck laid
+    out from the chat's words. Returns the order's payload or the deck
+    job's, or None when the deck is any other deck. Never raises."""
     try:
+        try:
+            from prometheus import bpiq_deck as _bd
+            held = _bd.thread_valuation(history, text, pick)
+            if not held and isinstance(body, dict) and str(body.get('_pm_order_words') or '').strip():
+                held = _bd.thread_valuation(history, str(body.get('_pm_order_words')), pick)
+            if held:
+                again = _bd.start_reexport(user, held, g or {})
+                if again is not None:
+                    return again
+        except Exception:
+            traceback.print_exc()
         if pv_kind(text, history, pick=pick, body=body) != 'deck':
             return None
         uname = _uname(user)

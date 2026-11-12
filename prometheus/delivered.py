@@ -210,6 +210,9 @@ def _email(kind, *, username, name, who, email, shelf, files, facts, intro, read
         lead = (intro or '').strip() or (ready_message or '').strip() or f"Your {label} for {name} is ready."
         where = where_line(kind, name, shelf)
         attach = ('The raw data is attached' + (f" ({len(files)} file{'s' if len(files) != 1 else ''})." if files else '.')) if files else ''
+        _decks = [f for f in files if str(f[1]).lower().endswith('.pptx')]
+        if kind == 'bpiq' and _decks:   # a valuation hands its deck over with the note (2026-11-11)
+            attach = 'The valuation deck and the raw data are attached.' if len(files) > len(_decks) else 'The valuation deck is attached.'
         body = "\n\n".join(p for p in [f"Hi {who}," if who else 'Hi,', lead, where, attach,
                                        f"Open it: {dashboard_url(kind)}" if kind not in ('package', 'deck') else '',
                                        'Prometheus\nCrosswalk'] if p)
@@ -282,8 +285,9 @@ def on_done(kind, *, username, subject='', s3_key='', payload=None, host=None, s
                     use_files = subiq_tracker_files(s3_key, s3_client=s3_client, host=host)
                     if use_files:
                         rec['files'] = [f[1] for f in use_files]
-                if not use_files and payload:
-                    use_files = [(numeric_leaves_csv(payload, subject).encode('utf-8'), f"{_slug(subject)}_{kind}_data.csv", 'text/csv')]
+                _deck_only = kind == 'bpiq' and bool(use_files) and all(str(f[1]).lower().endswith('.pptx') for f in use_files)
+                if (not use_files or _deck_only) and payload:   # the raw data rides next to a valuation's deck
+                    use_files = use_files + [(numeric_leaves_csv(payload, subject).encode('utf-8'), f"{_slug(subject)}_{kind}_data.csv", 'text/csv')]
                     rec['files'] = [f[1] for f in use_files]
                 rec['email'] = _email(kind, username=username, name=subject or KIND_LABEL.get(kind, kind), who=who, email=addr, shelf=shelf,
                                       files=use_files, facts=facts, intro=intro, ready_message=ready_message, extra_bcc=extra_bcc,

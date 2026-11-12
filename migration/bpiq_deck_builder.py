@@ -2219,8 +2219,10 @@ def _tldr_rows(ctx: DeckCtx) -> list:
         if ctx.has_control:
             new = f"Brand lift is worth {fmt_money(ctx.blv)}. It is the gain the matched group did not make."
         else:
-            new = (f"New engagement is worth {fmt_money(ctx.blv)}. That is the part of the total "
-                   "the partnership added.")
+            # (2026-11-11: "the part of the total the partnership added" read as a second
+            # answer beside the talent's share on the total page)
+            new = (f"New engagement is worth {fmt_money(ctx.blv)}. It prices only the people who "
+                   f"began engaging with {ctx.b} {ctx.after_word}.")
         rows.append(("What is new", new))
     if ctx.has_conversions:
         orders = fmt_num(_base_for(ctx.cv, _rate(ctx, "conv_value_per_user"),
@@ -2287,7 +2289,16 @@ def _campaign_account(ctx: DeckCtx) -> str:
                  if i == 0 else f"{fmt_num(_count(ln['people']))} {how.get(str(ln['line']), 'around ' + str(ln['line']))}"
                  for i, ln in enumerate(lines[:4])]
         joined = ", ".join(parts[:-1]) + " and " + parts[-1] if len(parts) > 1 else parts[0]
-        out.append(f"It reached {joined}. Nobody is counted twice.")
+        first = _count(lines[0]["people"])
+        if len(lines) > 1 and ctx.audience_proj and first == ctx.audience_proj:
+            # one line is the whole group (2026-11-11: "319,506 through press and 16,415 around the
+            # launch event" read as two groups that add up to more than the people reached)
+            also = [f"{fmt_num(_count(ln['people']))} of them were also reached "
+                    f"{how.get(str(ln['line']), 'around ' + str(ln['line']))}" for ln in lines[1:4]]
+            out.append(f"All {fmt_num(first)} people were reached {how.get(str(lines[0]['line']), 'around ' + str(lines[0]['line']))}. "
+                       + _cap(", and ".join(also)) + ".")
+        else:
+            out.append(f"It reached {joined}. Nobody is counted twice.")
     # The talent's own audience, when the valuation carries it beside the
     # reach (2026-11-11): the two counts measure different things, and
     # naming both once keeps the deck and the read it follows from

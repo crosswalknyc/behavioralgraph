@@ -23,6 +23,16 @@ How, with nothing but the product's own arithmetic:
    sum of its rows, each row is still people times its rate, and the
    total is still the sum of the four lenses.
 
+3. Every lens is a count times a rate, so the counts can only carry
+   the total in steps of a few cents (two, with the rates on file). A
+   figure that sits between two steps (an odd cent) is met all the
+   same: the counts land on the step just under it and the cents they
+   cannot carry go on the largest component (the largest lens; inside
+   earned media, its largest channel, so the table still adds). The
+   payload names them in `valuation.held_cents` and
+   `bpiq_matched_control.apply_lenses` carries them through every
+   recompute, so the rule has no exception (2026-11-11).
+
 A valuation whose research comes in under the figure is left where it
 is: nothing is raised to meet a figure (the standing rule is to sit low).
 Fail-safe: anything that cannot be met exactly returns the payload it
@@ -44,6 +54,9 @@ MAX_GAP_SHARE = 0.03          # what settle will close; past this the share was 
 MAX_ORDER_STEPS = 120
 FINE_SPAN = 6                 # people a row may move, either way, in the last step
 FINE_ROWS = 7
+MAX_HELD_CENTS = 99           # the cents the counts cannot carry: always under a dollar
+MAX_TRIES = 8                 # steps under the figure tried before giving up
+_LENSES = ("earned_media_value", "brand_engagement_value", "brand_lift_value", "conversion_value")
 
 
 def _cents(v) -> int:
@@ -130,24 +143,89 @@ def _set_row(p, platform, post: int) -> None:
         return
 
 
+def _strip_held_cents(p) -> None:
+    """Take a payload's held cents back off, so the counts are settled
+    from what the counts themselves come to."""
+    val = p.get("valuation")
+    if not isinstance(val, dict):
+        return
+    adj = val.pop("held_cents", None)
+    if isinstance(adj, dict) and adj.get("lens") in ("brand_engagement_value", "conversion_value"):
+        try:
+            val[adj["lens"]] = round(float(val.get(adj["lens"]) or 0.0) - int(adj.get("cents") or 0) / 100.0, 2)
+        except (TypeError, ValueError):
+            pass
+
+
+def _place_cents(p, cents: int, salt) -> dict:
+    """`cents` on the largest component: the largest lens, and inside
+    earned media its largest channel. Returns what was placed."""
+    val = p["valuation"]
+    lens = max(_LENSES, key=lambda k: _cents(val.get(k)))
+    adj = {"lens": lens, "cents": int(cents)}
+    if lens == "earned_media_value":
+        rows = [r for r in (val.get("emv_breakdown") or []) if isinstance(r, dict) and _cents(r.get("emv_value")) > 0]
+        if rows:
+            adj["platform"] = str(max(rows, key=lambda r: _cents(r.get("emv_value"))).get("platform"))
+    elif lens in ("brand_engagement_value", "conversion_value"):
+        val[lens] = round(float(val.get(lens) or 0.0) + cents / 100.0, 2)     # these two are not recomputed by the lenses
+    val["held_cents"] = adj
+    _mc.apply_lenses(p, salt)
+    return adj
+
+
 def settle(payload: dict, target: float, salt: str) -> tuple:
     """(payload, record). The payload with its total on `target` to the
     cent, or the payload as given with record['set_exactly'] False when
-    the gap is too wide or the cents cannot be met. The input is never
+    the gap is too wide. The counts carry the figure when they can;
+    cents they cannot carry (a figure between two steps of the counts,
+    an odd cent) go on the largest component. The input is never
     modified."""
-    p = copy.deepcopy(payload)
-    _mc.apply_lenses(p, salt)
-    val = p.get("valuation") or {}
+    base = copy.deepcopy(payload)
+    _strip_held_cents(base)
+    _mc.apply_lenses(base, salt)
     T = _cents(target)
-    C = _cents(val.get("total_brand_value"))
+    C = _cents((base.get("valuation") or {}).get("total_brand_value"))
     rec = {"set_exactly": False, "target_usd": round(float(target), 2), "total_before_settle_usd": C / 100.0}
+    if T <= 0 or abs(T - C) > T * MAX_GAP_SHARE:
+        rec["reason"] = "gap too wide to close"
+        return payload, rec
+    tries, why = 0, ""
+    for held in range(0, MAX_HELD_CENTS + 1):
+        p, srec = _settle_counts(copy.deepcopy(base), T - held, salt)
+        if not srec.get("set_exactly"):
+            why = srec.get("reason") or why
+            if srec.get("reason") != "the cents cannot be met":
+                tries += 1                      # a full pass that missed; the parity misses cost nothing
+                if tries >= MAX_TRIES or srec.get("reason") == "no channel to settle on":
+                    break
+            continue
+        rec.update(srec)
+        if held:
+            rec["held_cents"] = _place_cents(p, held, salt)
+            val = p["valuation"]
+            if _cents(val.get("total_brand_value")) != T or sum(_cents(val.get(k)) for k in _LENSES) != T:
+                rec["set_exactly"] = False
+                why = "the recomputed total missed the figure"
+                continue
+        rec["total_after_usd"] = T / 100.0
+        return p, rec
+    rec["reason"] = why or "the cents cannot be met"
+    return payload, rec
+
+
+def _settle_counts(p: dict, T: int, salt: str) -> tuple:
+    """(payload, record) with the total on `T` cents by moving counts
+    only: the collection's orders and the people each channel added.
+    `p` is the caller's own copy, lenses already applied."""
+    val = p.get("valuation") or {}
+    C = _cents(val.get("total_brand_value"))
+    rec = {"set_exactly": False}
+    payload = p
     if C == T:
         rec["set_exactly"] = True
         rec["total_after_usd"] = T / 100.0
         return p, rec
-    if T <= 0 or abs(T - C) > T * MAX_GAP_SHARE:
-        rec["reason"] = "gap too wide to close"
-        return payload, rec
     share = _share(p)
     per = {str(r.get("platform")): r for r in (p.get("per_platform") or []) if isinstance(r, dict)}
     rows = [r for r in (val.get("emv_breakdown") or [])
@@ -262,7 +340,7 @@ def settle(payload: dict, target: float, salt: str) -> tuple:
             _set_row(p, n, post)
     _mc.apply_lenses(p, salt)
     val = p["valuation"]
-    lenses = sum(_cents(val.get(k)) for k in ("earned_media_value", "brand_engagement_value", "brand_lift_value", "conversion_value"))
+    lenses = sum(_cents(val.get(k)) for k in _LENSES)
     if _cents(val.get("total_brand_value")) != T or lenses != T:
         rec["reason"] = "the recomputed total missed the figure"
         return payload, rec

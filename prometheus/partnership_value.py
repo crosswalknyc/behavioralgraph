@@ -113,6 +113,9 @@ _DECK_STOP = {
     'figures', 'findings', 'results', 'now', 'too', 'also', 'together', 'one', 'run', 'pull', 'do', 'something', 'about',
     'quick', 'short', 'client', 'ready', 'up', 'out', 'my', 'our', 'partnership', 'value', 'valuation', 'x', 'so', 'ok', 'okay',
     'hey', 'hi', 'thanks', 'thank', 'great', 'nice', 'now', 'then', 'just', 'new', 'is', 'be', 'there', 'way', 'any', 'chance',
+    # asking for a deck again, or as a file, names no other subject (2026-11-11)
+    'send', 'resend', 'again', 'same', 'copy', 'version', 'file', 'link', 'download', 'share', 'pdf', 'editable', 'have', 'may',
+    'see', 'show', 'here', 'where', 'full', 'whole', 'final', 'finished', 'brand',
 }
 
 # a sentence that states a partnership's dollar value
@@ -378,14 +381,32 @@ def deck_on_value_read(text, history, pick=''):
 
 
 # ----------------------------------------------------------- exceptions
-def saved_valuation(text='', history=None, pair=None):
+def saved_valuation(text='', history=None, pair=None, thread_note=True):
     """The Brand Partnership valuation already saved on the pairing the
     words (or the thread) name, in either order, or None. A saved
-    valuation may be restated; nothing here asks for it again."""
+    valuation may be restated; nothing here asks for it again.
+    `thread_note` lets the note that handed a valuation over in this
+    thread count as one (so a deck asked for after it is never a second
+    order); the read guard passes False and asks the library only, since
+    a thread's turns are words and the library is the record."""
     pr = pair or pairing(text)
     if not pr and history:
         got = thread_pair(history)
         pr = (got[0], got[1]) if got else None
+    if history and not pair and thread_note:
+        # the valuation this thread itself delivered (the note that handed it over) is saved by
+        # definition: a deck asked for after it is never a second order (2026-11-11)
+        try:
+            from prometheus import bpiq_deck as _bd
+            _i, turn = _bd.valuation_turn(history)
+            if turn is not None:
+                m = _meta(turn)
+                names = pairing(str(m.get('subject') or ''))
+                if not pr or not names or {_fold(x) for x in names} == {_fold(x) for x in pr}:
+                    return {'subject': str(m.get('subject') or ''), 'source_key': str(m.get('s3_key') or ''),
+                            'job_id': str(m.get('bpiq_job_id') or ''), 'in_thread': True}
+        except Exception:
+            pass
     if not pr:
         return None
     try:
@@ -559,7 +580,7 @@ def guard_read(payload, question='', history=None, saved=None):
         if not (bad or bd_value or hits):
             return False
         if saved is None:
-            saved = saved_valuation(f"{question} {payload.get('profile') or ''} {reply[:400]}", history)
+            saved = saved_valuation(f"{question} {payload.get('profile') or ''} {reply[:400]}", history, thread_note=False)
         if saved:
             return False
         labels = [str(m.get('label') or '') for m in bad]

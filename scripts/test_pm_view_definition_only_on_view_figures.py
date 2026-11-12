@@ -145,6 +145,25 @@ def test_e_other_surfaces():
     body = src[src.index('def attach_view_definition'):]
     body = body[:body.index('\ndef ', 10)]
     check("attaching never asks whether a viewing word is in the text", 'mentions_views(' not in body and 'figures_are_views(' in body)
+    # the deck renderer's note follows the same rule (it asked whether a viewing word was anywhere in the plan)
+    import prometheus_deck as PDK
+    partnership = {'slides': [{'type': 'cover', 'title': 'JYT x Gap', 'subhead': 'what the partnership is worth'},
+                              {'type': 'stats', 'title': 'The partnership is worth $4,217,683.00.',
+                               'stats': [{'value': '$4,217,683.00', 'label': 'Total brand value'},
+                                         {'value': '319,506', 'label': 'People reached'}],
+                               'note': 'People who watched the docuseries are counted once.'},
+                              {'type': 'close', 'line': 'Thank you.'}]}
+    books = {'slides': [{'type': 'stats', 'title': 'Readers by year', 'stats': [{'value': '48,217', 'label': 'people engaged, 2025'}],
+                         'note': 'Streaming viewers are not part of this count.'}]}
+    views = {'slides': [{'type': 'stats', 'title': '47,318,264 viewers browsed and left',
+                         'stats': [{'value': '47.3M', 'label': 'viewers'}]}]}
+    check("a deck on a partnership's value that uses a viewing word carries no view note", not PDK._plan_mentions_views(partnership))
+    check("a deck on readers that mentions streaming carries no view note", not PDK._plan_mentions_views(books))
+    check("a deck whose figures are viewers carries it", PDK._plan_mentions_views(views))
+    check("a plan stamped as a purchase read never carries it, whatever its words",
+          not PDK._plan_mentions_views(dict(views, counting_family='purchase')))
+    dsrc = open(os.path.join(ROOT, 'prometheus_deck.py'), encoding='utf-8').read()
+    check("the deck asks whether its figures are views", '_meth.figures_are_views(' in dsrc and '_meth.mentions_views(' not in dsrc)
 
 
 if __name__ == '__main__':

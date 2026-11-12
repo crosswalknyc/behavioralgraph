@@ -2256,6 +2256,7 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         _cat = payload.pop("_category_for_deck", None) or (saved.get("primitives") or {}).get("category") \
             or (saved.get("campaign") or {}).get("category")
         payload["_bpiq_category"] = str(_cat or "").strip().upper() or None
+        payload.pop("delivered_read", None)      # a working note of the record's, never part of the saved file
         if _ba is not None:
             try:
                 _ba.label_people(payload, saved.get("banked_read") if isinstance(saved.get("banked_read"), dict) else None, inputs)

@@ -472,11 +472,35 @@ def _slide_close(slide, prs, plan_slide, page_num, logos, view_note=''):
             color=BODY_DARK, line_spacing=1.25)
 
 
+def _plan_lines(node, out):
+    """Every string a slide plan carries, one per line (a table row's
+    cells on one line, so a column of viewing counts reads as one)."""
+    if isinstance(node, str):
+        if node.strip():
+            out.append(' '.join(node.split()))
+    elif isinstance(node, dict):
+        for v in node.values():
+            _plan_lines(v, out)
+    elif isinstance(node, (list, tuple)):
+        if node and all(isinstance(x, (str, int, float)) for x in node):
+            out.append(' | '.join(str(x) for x in node))
+        else:
+            for v in node:
+                _plan_lines(v, out)
+    elif isinstance(node, (int, float)) and not isinstance(node, bool):
+        out.append(str(node))
+    return out
+
+
 def _plan_mentions_views(plan):
+    """True when the deck's own figures are viewing counts (2026-11-11:
+    the view paragraph rides only reads whose figures are views; a
+    viewing word on a page about buyers or a partnership is not one).
+    A plan stamped with its counting family is decided by the stamp."""
     try:
-        import json as _json
         from prometheus import methodology as _meth
-        return _meth.mentions_views(_json.dumps(plan, default=str))
+        fam = (plan or {}).get('counting_family') or (plan or {}).get('metric_family') if isinstance(plan, dict) else None
+        return bool(_meth.figures_are_views('\n'.join(_plan_lines(plan, [])), fam))
     except Exception:
         return False
 

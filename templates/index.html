@@ -89527,6 +89527,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) { st = null; }
                 if (!st) continue;
                 if (st.status === 'done') {
+                    try { if (typeof refreshBpiqList === 'function') { refreshBpiqList(); } } catch (_) {}
+                    // The server lands the same line in the thread; skip if it is already here (2026-11-11).
+                    if (_pmHistoryHasJob('bpiq_job_id', jobId)) {
+                        synthChatRerender();
+                        return;
+                    }
+                    if (st.note) {
+                        // the job's own line: the total to the cent, the valuation deck's link, the charge line
+                        var _bm = { bpiq_job_id: jobId, kind: 'bpiq', subject: st.subject || '', s3_key: st.s3_key || '' };
+                        if (st.link && st.link.url) { _bm.link = { url: st.link.url, label: st.link.label || 'Download the deck' }; }
+                        _pmPushMetaFor(_po, 'agent', String(st.note), _bm);
+                        return;
+                    }
                     _pmPushTurnFor(_po, 'agent',
                         'Your Brand Partnership Valuation is ready: ' +
                         (st.subject || 'the partnership read') +
@@ -89534,8 +89547,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         (st.total_brand_value ?
                             ' Total brand value: $' +
                             Number(st.total_brand_value).toLocaleString('en-US',
-                                { maximumFractionDigits: 0 }) + '.' : ''));
-                    try { if (typeof refreshBpiqList === 'function') { refreshBpiqList(); } } catch (_) {}
+                                { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '.' : ''));
                     return;
                 }
                 if (st.status === 'error') {

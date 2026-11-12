@@ -172,9 +172,15 @@ def adds_up(p):
     v = p['valuation']
     lenses = sum(cents(v[k]) for k in ('earned_media_value', 'brand_engagement_value', 'brand_lift_value', 'conversion_value'))
     rows = sum(cents(r['emv_value']) for r in v['emv_breakdown'])
-    per_row = all(abs(r['incremental_users_projected'] * r['emv_per_user_rate'] - r['emv_value']) < 0.005 for r in v['emv_breakdown'])
+    hc = v.get('held_cents') or {}     # cents the counts cannot carry sit on one named component (migration.bpiq_exact)
+
+    def _held(lens, platform=None):
+        return int(hc.get('cents') or 0) if hc.get('lens') == lens and (platform is None or hc.get('platform') == platform) else 0
+    per_row = all(cents(r['emv_value']) == cents(r['incremental_users_projected'] * r['emv_per_user_rate'])
+                  + _held('earned_media_value', r['platform']) for r in v['emv_breakdown'])
     share = abs(float(v['attributable_to_talent']) - round(float(v['total_brand_value']) * float(v['talent_share']), 2)) < 0.011
-    conv = cents(v['conversion_value']) == cents(p['conversions']['post_users_projected'] * float(v['rates']['conv_value_per_user']))
+    conv = cents(v['conversion_value']) == cents(p['conversions']['post_users_projected'] * float(v['rates']['conv_value_per_user'])) \
+        + _held('conversion_value')
     return lenses == cents(v['total_brand_value']) and rows == cents(v['earned_media_value']) and per_row and share and conv
 
 
@@ -458,10 +464,53 @@ def test_e_the_landing():
         o, r = BX.land(build(), target, build, salt)
         check(f"a figure of ${target:,.2f} is met to the cent and adds up",
               r.get('set_exactly') and cents(o['valuation']['total_brand_value']) == cents(target) and adds_up(o))
-    # every lens is a count times a rate in even cents, so an odd cent cannot be the sum of them: the
-    # landing says so and the valuation is left held under the figure (a read states whole dollars)
-    o, r = BX.land(build(), 4217683.37, build, salt)
-    check("a figure no sum of the lenses can equal is not forced", not r.get('set_exactly') and bool(r.get('reason')))
+    # every lens is a count times a rate in even cents, so an odd cent cannot be the sum of the counts:
+    # the counts land on the step just under it and the cent goes on the largest component (the largest
+    # channel of the largest lens), named in the payload and carried through every recompute
+    from migration import bpiq_matched_control as MC
+    for target in (4217683.37, 4217683.01, 3999999.99, 1234567.05, 987653.63):
+        o, r = BX.land(build(), target, build, salt)
+        v = o['valuation']
+        hc = v.get('held_cents') or {}
+        check(f"a figure with an odd cent (${target:,.2f}) is met to the cent and every page adds up",
+              r.get('set_exactly') and cents(v['total_brand_value']) == cents(target) and adds_up(o))
+        top_lens = max(('earned_media_value', 'brand_engagement_value', 'brand_lift_value', 'conversion_value'),
+                       key=lambda k: cents(v[k]))
+        rows = v.get('emv_breakdown') or []
+        top_row = max(rows, key=lambda x: cents(x['emv_value']))
+        off = [x for x in rows if cents(x['emv_value']) != cents(x['incremental_users_projected'] * x['emv_per_user_rate'])]
+        check(f"  the cent sits on the largest component and nowhere else (${target:,.2f})",
+              hc.get('cents') == 1 and hc.get('lens') == top_lens == 'earned_media_value'
+              and hc.get('platform') == top_row['platform'] and [x['platform'] for x in off] == [top_row['platform']]
+              and cents(top_row['emv_value']) - cents(top_row['incremental_users_projected'] * top_row['emv_per_user_rate']) == 1
+              and r.get('held_cents') == hc)
+        again = copy.deepcopy(o)
+        MC.apply_lenses(again, salt)
+        check(f"  a recompute of the lenses keeps the figure (${target:,.2f})",
+              cents(again['valuation']['total_brand_value']) == cents(target) and adds_up(again))
+        o3, r3 = BX.settle(o, target, salt)
+        check(f"  settling it again changes nothing (${target:,.2f})",
+              r3.get('set_exactly') and o3['valuation'] == o['valuation'])
+    o, r = BX.land(build(), FIGURE, build, salt)
+    check("a figure the counts can carry holds no cents aside", r.get('set_exactly') and 'held_cents' not in o['valuation']
+          and 'held_cents' not in r)
+    # the cents go where the value is: with brand engagement the largest lens they sit on it
+    big = build()
+    big['valuation']['rates']['bev_per_user'] = 40.0
+    big['valuation']['brand_engagement_value'] = round(big['totals']['post_users_projected'] * 40.0, 2)
+    MC.apply_lenses(big, salt)
+    tgt = round(float(big['valuation']['total_brand_value']) - 1234.56 - 0.01, 2)
+    if cents(tgt) % 2 == 0:
+        tgt = round(tgt - 0.01, 2)
+    o, r = BX.settle(big, tgt, salt)
+    v = o['valuation']
+    check("with another lens the largest, the cent goes on that lens",
+          r.get('set_exactly') and cents(v['total_brand_value']) == cents(tgt)
+          and (v.get('held_cents') or {}).get('lens') == 'brand_engagement_value'
+          and sum(cents(v[k]) for k in ('earned_media_value', 'brand_engagement_value', 'brand_lift_value', 'conversion_value')) == cents(tgt)
+          and all(cents(x['emv_value']) == cents(x['incremental_users_projected'] * x['emv_per_user_rate']) for x in v['emv_breakdown']))
+    o4, r4 = BX.settle(o, tgt, salt)
+    check("and settling that again changes nothing", r4.get('set_exactly') and o4['valuation'] == o['valuation'])
     over = float(base['valuation']['total_brand_value']) + 250000.0
     o, r = BX.land(build(), over, build, salt)
     check("research under the figure is left as it is (nothing is raised to meet a figure)",

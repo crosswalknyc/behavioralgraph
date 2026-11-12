@@ -17963,7 +17963,7 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             's3_key': bare_key,
             'total_brand_value': (payload.get('valuation') or {})
             .get('total_brand_value'),
-            'finished_at': time.time()})
+            'finished_at': time.time(), **_bj.hand_over(job_id, username, inputs, bare_key, payload, category, _H)})   # the valuation deck, one builder (2026-11-11)
         print(f"[bpiq-job {job_id}] done -> {out_key}")
         _bj.settle(reg, inputs, job_id, username, bare_key, payload)   # registry closes; the thread gets its note
         try:   # delivered contract (2026-10-13)
@@ -17983,7 +17983,7 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             except Exception:
                 _em_lead = ''
             _on_done('bpiq', username=username, subject=str(payload.get('project_name') or ''), s3_key=bare_key, payload=payload,
-                     host=_H, s3_client=_H.s3_client, job_id=job_id,
+                     host=_H, s3_client=_H.s3_client, job_id=job_id, files=_bj.deck_files(job_id),
                      ready_message=_em_lead, intro=_em_lead,
                      figures=([{'name': 'Total brand value', 'value': _tbv, 'unit': 'usd', 'definition': 'Brand Partnership IQ valuation'}] if _tbv else []),
                      facts=([('Total brand value', f"${float(_tbv):,.2f}")] if _tbv else []))

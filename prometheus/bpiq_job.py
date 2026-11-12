@@ -7,6 +7,9 @@ The valuation job body lives in prometheus/legacy/chat.py
     claimed in the shared registry, and a key another job already owns
     is FOLLOWED (wait for it, point this job at its file) instead of
     built a second time.
+  * hand_over(): the valuation deck (the one builder, prometheus.bpiq_deck)
+    is built, stored and signed before the job says done, so the widget
+    and the thread hand the deck over with the total (2026-11-11).
   * settle(): the registry closes on the file and the finished
     valuation's note lands in the thread that asked.
   * fail(): the claim is marked failed so the next ask can run.
@@ -29,6 +32,54 @@ def _chat():
     return _c
 
 
+# what a job in this process knows about itself between its steps: what
+# the Accept charged (it rides the job's extras) and the deck it built
+_JOBS = {}
+_JOBS_KEEP = 6
+
+
+def _job(job_id):
+    jid = str(job_id or '')
+    if jid not in _JOBS:
+        while len(_JOBS) >= _JOBS_KEEP:
+            _JOBS.pop(next(iter(_JOBS)))
+        _JOBS[jid] = {}
+    return _JOBS[jid]
+
+
+def hand_over(job_id, username, inputs, bare_key, payload, category, host):
+    """The valuation deck for a finished valuation: built by the one
+    valuation deck builder from the valuation's own file, stored under
+    the job and signed. Returns what the finished status document adds
+    (the thread line, the link, the deck record); {} when the deck could
+    not be built, and the valuation is handed over as it always was.
+    Never raises."""
+    try:
+        from prometheus import bpiq_deck as _bd
+        rec = _job(job_id)
+        deck = _bd.deliver(job_id, payload, host=host, bare_key=bare_key, category=category)
+        rec['deck'] = deck or {}
+        if not deck:
+            return {}
+        return _bd.status_fields(payload, deck, rec.get('charge'))
+    except Exception:
+        traceback.print_exc()
+        return {}
+
+
+def deck_files(job_id):
+    """[(bytes, filename, mime)] of the deck this job built, for the
+    ready email; [] when there is none."""
+    try:
+        from prometheus import bpiq_deck as _bd
+        deck = (_JOBS.get(str(job_id or '')) or {}).get('deck') or {}
+        if deck.get('bytes'):
+            return [(deck['bytes'], deck.get('filename') or 'valuation.pptx', _bd.PPTX_MIME)]
+    except Exception:
+        traceback.print_exc()
+    return []
+
+
 def ready_note(username, job_id, payload, bare_key):
     """The finished valuation's note in the thread that asked (the
     worker is another process, so the widget's own poll may be gone).
@@ -38,20 +89,23 @@ def ready_note(username, job_id, payload, bare_key):
         return False
     try:
         c = _chat()
+        from prometheus import bpiq_deck as _bd
         subject = str((payload or {}).get('project_name') or '').strip()
-        tbv = ((payload or {}).get('valuation') or {}).get('total_brand_value')
-        text = (f"Your Brand Partnership Valuation is ready: {subject} is live "
-                f"in the Brand Partnership tab now.")
-        if tbv:
-            text += f" Total brand value: ${float(tbv):,.0f}."
-        read_line = str(((payload or {}).get('campaign') or {}).get('read_line') or '').strip()
-        if read_line:
-            text += ' ' + read_line
-        # the people the campaign reached and, when an earlier read gave it, the talent's own audience,
-        # each named for what it is (2026-11-11, migration.bpiq_anchors.label_people)
-        people_line = str(((payload or {}).get('campaign') or {}).get('people_line') or '').strip()
-        if people_line and people_line not in text:
-            text += ' ' + people_line
+        rec = _JOBS.get(str(job_id or '')) or {}
+        deck = rec.get('deck') or {}
+        # one plain line: the total, to the cent, and the deck; the charge on its own line (2026-11-11)
+        text = _bd.note(payload, deck, rec.get('charge'))
+        if not deck.get('url'):
+            # no deck to hand over: the tab line, with the collection's read and the people the campaign
+            # reached, each named for what it is (migration.bpiq_anchors.label_people)
+            head, _sep, paid = text.partition('\n')
+            read_line = str(((payload or {}).get('campaign') or {}).get('read_line') or '').strip()
+            if read_line:
+                head += ' ' + read_line
+            people_line = str(((payload or {}).get('campaign') or {}).get('people_line') or '').strip()
+            if people_line and people_line not in head:
+                head += ' ' + people_line
+            text = head + (('\n' + paid) if paid else '')
         tid = c._pm_thread_for_job(username, job_id)
         history = c._pm_load_thread_or_active(username, tid)
         if c._pm_history_has_job_turn(history, 'bpiq_job_id', job_id):
@@ -59,14 +113,13 @@ def ready_note(username, job_id, payload, bare_key):
         for t in list(history or [])[-8:]:
             try:
                 if str(t.get('role') or '') == 'agent' and \
-                        'Brand Partnership Valuation is ready' in str(t.get('text') or '') and \
+                        'brand partnership valuation is ready' in str(t.get('text') or '').lower() and \
                         subject and subject.lower() in str(t.get('text') or '').lower():
                     return False
             except Exception:
                 continue
         history.append({'role': 'agent', 'text': text, 'ts': c._pm_iso_now(),
-                        'meta': {'bpiq_job_id': job_id, 'kind': 'bpiq',
-                                 'subject': subject[:120], 's3_key': bare_key}})
+                        'meta': _bd.turn_meta(job_id, payload, bare_key, deck)})
         c._pm_save_thread_or_active(username, tid, history)
         return True
     except Exception:
@@ -114,6 +167,12 @@ def prepare(job_id, username, inputs, extras, host, status_write):
     from migration.bpiq_synthesis import (registry_for, claim_run, canonical_inputs,
                                           catalog_lookup, touch_run)
     try:
+        _charge = (extras or {}).get('bpiq_charge')
+        if isinstance(_charge, dict) and _charge:
+            _job(job_id)['charge'] = dict(_charge)       # for the line that hands the valuation over
+    except Exception:
+        pass
+    try:
         inputs = canonical_inputs(inputs, catalog_lookup())
     except Exception as e:
         print(f"[bpiq-job {job_id}] casing lookup skipped: {e}")
@@ -132,6 +191,12 @@ def prepare(job_id, username, inputs, extras, host, status_write):
                 s3 = getattr(host, 's3_client')
                 bucket = getattr(host, 'S3_BUCKET', None) or getattr(host, 'bucket', None) or 'dashboard-inputs'
                 doc = json.loads(s3.get_object(Bucket=bucket, Key=f"brand-partnership-iq/{bare}")['Body'].read())
+                _more = hand_over(job_id, username, inputs, bare, doc, None, host)   # the same deck for the one that followed
+                if _more:
+                    status_write(job_id, {
+                        'job_id': job_id, 'user': username, 'status': 'done', 'subject': doc.get('project_name'),
+                        's3_key': bare, 'total_brand_value': (doc.get('valuation') or {}).get('total_brand_value'),
+                        'duplicate_of': done.get('job_id'), 'finished_at': time.time(), **_more})
                 ready_note(username, job_id, doc, bare)
             except Exception:
                 pass
@@ -266,6 +331,15 @@ def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='
                           ContentType='application/json')
     except Exception:
         pass
+    # the deck is the valuation's: built again over the same file, so the link never opens the old figure
+    try:
+        _more = hand_over(job_id, username, inputs, bare, payload, category, host)
+        if _more:
+            jd2 = _json.loads(s3.get_object(Bucket=bucket, Key=jk)['Body'].read())
+            jd2.update(_more)
+            s3.put_object(Bucket=bucket, Key=jk, Body=_json.dumps(jd2).encode('utf-8'), ContentType='application/json')
+    except Exception:
+        traceback.print_exc()
     # catalog and ledger: the new figures replace the old ones
     _update_catalog_and_ledger(key, bare, payload, username)
     # the thread note carries the corrected figure
@@ -310,24 +384,33 @@ def _update_thread_note(username, job_id, bare, payload):
     import traceback as _tb
     try:
         c = _chat()
-        new_total = float((payload.get('valuation') or {}).get('total_brand_value') or 0)
         tid = c._pm_thread_for_job(username, job_id)
         hist = c._pm_load_thread_or_active(username, tid)
-        subject = str(payload.get('project_name') or '')
-        text = (f"Your Brand Partnership Valuation is ready: {subject} is live in the Brand Partnership tab now. "
-                f"Total brand value: ${new_total:,.0f}.")
-        rl = str((payload.get('campaign') or {}).get('read_line') or '').strip()
-        if rl:
-            text += ' ' + rl
+        from prometheus import bpiq_deck as _bd
+        deck = (_JOBS.get(str(job_id or '')) or {}).get('deck') or {}    # rebuilt over the same file by the rerun
+        text = _bd.note(payload, deck)
+        if not deck.get('url'):
+            rl = str((payload.get('campaign') or {}).get('read_line') or '').strip()
+            if rl:
+                text += ' ' + rl
         hit = False
         for t in hist or []:
             if (t.get('meta') or {}).get('bpiq_job_id') == job_id:
-                t['text'] = text
-                t['meta']['corrected_at'] = payload.get('corrected_at')
+                # the charge line the first note carried stays as it was said
+                _was = str(t.get('text') or '').partition('\n')[2].strip()
+                _paid = _was if (_was.startswith('You were charged') or _was == _bd.INCLUDED_LINE) else ''
+                t['text'] = text + (('\n' + _paid) if _paid else '')
+                _m = {**(t.get('meta') or {}), **_bd.turn_meta(job_id, payload, bare, deck),
+                      'corrected_at': payload.get('corrected_at')}
+                if not deck.get('url'):
+                    # no deck was rebuilt on the corrected figure: an earlier link would open the old one
+                    for _k in ('link', 'deck_s3_key', 'files'):
+                        _m.pop(_k, None)
+                t['meta'] = _m
                 hit = True
         if not hit:
             hist.append({'role': 'agent', 'text': text, 'ts': c._pm_iso_now(),
-                         'meta': {'bpiq_job_id': job_id, 'kind': 'bpiq', 'subject': subject[:120], 's3_key': bare}})
+                         'meta': _bd.turn_meta(job_id, payload, bare, deck)})
         c._pm_save_thread_or_active(username, tid, hist)
     except Exception:
         _tb.print_exc()
