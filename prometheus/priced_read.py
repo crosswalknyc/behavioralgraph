@@ -905,6 +905,8 @@ def sizing_lead(text, ctx=None):
             if not s or _sr.is_metric_phrase(s):
                 continue
             core = _sz.strip_audience_nouns(s) or s
+            if re.match(r"The [A-Z0-9]", s) and core == s[4:]:
+                core = s             # the title's own "The" ("The Rainmaker") is part of the name, not an article
             # a name the dashboard holds is printed as the record carries it (its capitals, its ampersand, its
             # leading "The"): the words were only trimmed and lower-cased on the way here (2026-11-12)
             named = _record_spelling(core, ctx)

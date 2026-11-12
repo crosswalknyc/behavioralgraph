@@ -10,6 +10,8 @@ them with "and". The split was not only wording: the two halves were
 what would have been sized.
 
 Holds:
+  0. the lead-in of a sizing ask ("how big is the ... audience") never
+     eats the front of a name, and a title's own first word stays on it;
   1. an ampersand joins a name; it separates two subjects only when the
      dashboard holds each side and not the whole;
   2. the sizing quote prints the dashboard's own spelling of a name it
@@ -43,7 +45,7 @@ from prometheus import subject_rules as SR  # noqa: E402
 GM = "Georgie & Mandy's First Marriage"
 GM_SCOPED = "Georgie & Mandy's First Marriage Viewers (Amazon Prime Video & HBO Max)"
 NAMES = [GM, GM_SCOPED, 'NCIS: New York', 'The Rainmaker', 'Law & Order', 'Barnes & Noble', "Tom's of Maine", "Ben & Jerry's"]
-LIBRARY = {n.lower(): n for n in NAMES + ['Nike', 'Adidas', 'Babylon 5', 'Howie Mandel']}
+LIBRARY = {n.lower(): n for n in NAMES + ['Nike', 'Adidas', 'Babylon 5', 'Howie Mandel', 'Forbes', 'Onyx Collective']}
 LIBRARY['rainmaker'] = 'The Rainmaker'            # the library answers to the name with or without its article
 
 
@@ -107,6 +109,60 @@ class AnAmpersandJoinsAName(_Base):
         SZ.resolve = boom
         self.assertEqual(SZ.subjects('how big is the Law & Order audience'), ['Law & Order'])
         self.assertEqual(PR.sizing_lead('how big is the Law & Order audience'), 'I can size Law & Order.')
+
+
+class TheLeadInNeverEatsTheFrontOfAName(_Base):
+    """On prod before the fix: "How big is the Forbes audience?" was quoted "I can size bes.", The Office on
+    Peacock "I can size the fice audience on Peacock.", Onyx Collective "I can size yx Collective.", The
+    Rainmaker "I can size Rainmaker." The lead-in's optional words ("of", "for", "on", "reach", a count, "group")
+    had no word boundary, and a title's own first word was read as one of them."""
+
+    def test_the_words_of_the_lead_in_are_whole_words(self):
+        for q, want in (('How big is the Forbes audience?', ['Forbes']),
+                        ('How big is the Onyx Collective audience?', ['Onyx Collective']),
+                        ('How big is the Reacher audience?', ['Reacher']),
+                        ('How big is the Groupon audience?', ['Groupon']),
+                        ('How big is the 49ers audience?', ['49ers']),
+                        ('How big is the Sizemore audience?', ['Sizemore']),
+                        ('how big is the office audience', ['office']),
+                        ("how big is Of Montreal's audience", ['Of Montreal'])):
+            self.assertEqual(SZ.subjects(q), want, q)
+        self.assertEqual(PR.sizing_lead('How big is the Forbes audience?'), 'I can size Forbes.')
+        self.assertEqual(PR.sizing_lead('How big is the Onyx Collective audience?'), 'I can size Onyx Collective.')
+
+    def test_a_titles_own_first_word_stays_on_it(self):
+        for q, want in (('How big is The Rainmaker audience?', 'I can size The Rainmaker.'),
+                        ('What is the size of The Rainmaker audience?', 'I can size The Rainmaker.'),
+                        ('How big is The Office audience on Peacock?', 'I can size The Office audience on Peacock.'),
+                        ('How big is the audience of The Bear on Hulu?', 'I can size The Bear on Hulu.'),
+                        ('How big is the On Patrol: Live audience?', 'I can size On Patrol: Live.'),
+                        ('how big is the For All Mankind audience', 'I can size For All Mankind.'),
+                        ('how big is the Band of Brothers audience', 'I can size Band of Brothers.')):
+            self.assertEqual(PR.sizing_lead(q), want, q)
+
+    def test_speaking_to_prometheus_by_name_names_no_audience(self):
+        self.assertEqual(SZ.subjects('Hey Prometheus, how big is the Forbes audience'), ['Forbes'])
+        self.assertEqual(SZ.subjects('Prometheus, how big is the Forbes audience?'), ['Forbes'])
+        self.assertEqual(SZ.subjects('how big is the Prometheus audience'), ['Prometheus'])       # the film is still a subject
+
+    def test_the_asks_that_already_read_right_still_do(self):
+        for q, want in (('what is the size of the Nike audience', ['Nike']),
+                        ('what is the audience size for Nike and Adidas', ['Nike', 'Adidas']),
+                        ('how big are the two audiences: Nike, Adidas', ['Nike', 'Adidas']),
+                        ('give me the sample size of both datasets: Landman and Tulsa King', ['Landman', 'Tulsa King']),
+                        ("what's the reach of Forbes", ['Forbes']),
+                        ('can I get the size of the Nike audience', ['Nike']),
+                        ('Thanks. How big is the Forbes audience?', ['Forbes']),
+                        ('What is the Size of the Nike audience?', ['Nike']),
+                        ('how many people are in the Nike audience', ['Nike']),
+                        ('size of 2 audiences: Nike and Adidas', ['Nike', 'Adidas']),
+                        ('I need the size of the Landman dataset', ['Landman']),
+                        ('how many Costco shoppers are there', ['Costco shoppers']),
+                        ('sample size for FanDuel customers', ['FanDuel customers']),
+                        ('how large is the Tulsa King audience on Paramount+', ['Tulsa King audience on Paramount+']),
+                        ('what is the size of the Taylor Swift and Travis Kelce audiences', ['Taylor Swift', 'Travis Kelce']),
+                        ('How big is it?', []), ('how big is the 2024 election audience', [])):
+            self.assertEqual(SZ.subjects(q), want, q)
 
 
 class EveryOtherQuoteLeavesTheNameAlone(_Base):

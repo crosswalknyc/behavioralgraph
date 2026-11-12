@@ -60,9 +60,11 @@ _LEAD_RX = re.compile(
     r"how many (?:people|users|customers|individuals|folks|panelists|consumers|respondents) (?:would|will|do|did|could|can) (?:we|you|i) (?:have|get|see|find|expect)\s+(?:for|on|in|with|of)\s+|"
     r"do (?:we|you) (?:have|know)\s+)?"
     r"(?:the |an? )?(?:total |projected |estimated |approximate |overall )?"
-    r"(?:sizes?|sizing|sample[- ]sizes?|audience[- ]sizes?|incidence|n\b|headcount|reach|projected band|band)?\s*"
-    r"(?:of|for|on)?\s*(?:the |these |those |both |our |your )?(?:two|three|four|2|3|4)?\s*"
-    r"(?:data ?sets?|audiences?|profiles?|universes?|groups?|cohorts?|pulls?|segments?)?\s*[:,-]?\s*", re.I)
+    # each optional word is a whole word: without the boundary the lead-in ate the front of a name ("the Forbes
+    # audience" was sized as "bes", "The Office" as "fice", "Onyx Collective" as "yx Collective"; 2026-11-12)
+    r"(?:(?:sizes?|sizing|sample[- ]sizes?|audience[- ]sizes?|incidence|n|headcount|reach|projected band|band)\b)?\s*"
+    r"(?:(?:of|for|on)\b)?\s*(?:the |these |those |both |our |your )?(?:(?:two|three|four|2|3|4)\b)?\s*"
+    r"(?:(?:data ?sets?|audiences?|profiles?|universes?|groups?|cohorts?|pulls?|segments?)\b)?\s*[:,-]?\s*", re.I)
 _SPLIT_RX = re.compile(r"\s*(?:,|;|\band\b|\bvs\.?\b|\bversus\b|\bthen\b|\bplus\b|&)\s*", re.I)
 _ORDINAL_RX = re.compile(r"^(?:the\s+)?(?:first|second|third|fourth|1st|2nd|3rd|4th|one|two|three|\d\)|\d\.)\s*[:,-]?\s*(?:one |is |being )?", re.I)
 _TAIL_RX = re.compile(
@@ -326,8 +328,8 @@ def _plausible(phrase):
     toks = [t for t in re.split(r"[^a-z0-9+&']+", str(phrase or '').lower()) if t and t != '&']   # the ampersand in a name is not a word of it
     if not toks or len(toks) > 8:
         return False
-    if re.match(r"^\d", toks[0]) or not any(re.search(r"[a-z]{3,}", t) for t in toks):
-        return False   # a date or a bare number is not an audience
+    if (re.match(r"^\d", toks[0]) and not re.match(r"^\d+[a-z]{3,}$", toks[0])) or not any(re.search(r"[a-z]{3,}", t) for t in toks):
+        return False   # a date or a bare number is not an audience (a name that opens with a number is: "49ers")
     if any(t in ('would', 'will', 'could', 'should', 'does', 'did', 'do', 'can') for t in toks):
         return False   # a verb phrase, not a name
     content = [t for t in toks if t not in _STOP and not _is_noun(t)]
@@ -376,6 +378,30 @@ def _split_subjects(body, ctx=None):
     return out
 
 
+_LEAD_WORDS = frozenset(('size', 'sizes', 'sizing', 'sample', 'incidence', 'headcount', 'reach', 'total', 'projected', 'estimated',
+                         'approximate', 'overall', 'audience', 'audiences', 'the', 'these', 'those', 'both', 'our', 'your', 'two', 'three', 'four',
+                         'no', 'ok', 'okay', 'so', 'and', 'also', 'alright', 'right', 'well', 'hey', 'hi', 'um', 'what', 'how', 'can', 'could',
+                         'tell', 'give', 'show', 'do', 'we', 'you'))
+_NAME_HEAD_RX = re.compile(r"(?:^|\s)(?P<w>[A-Z][\w'&.:-]*)\s+(?:(?:of|for|on|the)\s+)*$")
+
+
+def _give_back_name(t, body):
+    """The lead-in reads "of", "for", "on", "band" as its own words. A
+    capitalised one right in front of a capitalised name is the name's
+    first word ("On Patrol: Live", "For All Mankind", "Band of Brothers"):
+    it goes back on the name."""
+    try:
+        if not body or not t.endswith(body) or not (body[:1].isupper() or body[:1].isdigit()):
+            return body
+        eaten = t[:len(t) - len(body)]
+        m = _NAME_HEAD_RX.search(eaten)
+        if not m or m.group('w').lower() in _LEAD_WORDS or m.group('w') in ('The', 'I'):
+            return body
+        return eaten[m.start('w'):] + body
+    except Exception:
+        return body
+
+
 def _held_name(phrase, ctx=None):
     """A long name the dashboard holds as written ("Georgie & Mandy's
     First Marriage Viewers (Amazon Prime Video & HBO Max)") is a name,
@@ -392,6 +418,8 @@ def subjects(text, ctx=None):
     """The audience phrases the ask names, in order; the open page when
     the ask points at it ('this audience') or names nothing."""
     t = ' '.join(str(text or '').split()).strip()
+    # the reader speaking to Prometheus by name is not naming an audience ("Hey Prometheus, how big is ...")
+    t = re.sub(r"^(?:(?:hey|hi|hello|ok|okay|so|please)[,.]?\s+)+prometheus[,:.!]?\s+|^prometheus[,:]\s+", '', t, flags=re.I)
     m = _IS_THE_BRAND_RX.match(t)
     if m:
         return [m.group('s').strip()]
@@ -404,13 +432,24 @@ def subjects(text, ctx=None):
             return [c]
     body = _LEAD_RX.sub('', t, count=1)
     if body == t:
-        body = re.sub(r"^.*?\b(?:size|sizes|sizing|incidence|how (?:big|large) (?:is|are)|how many)\b\s*(?:of|for|on|is|are)?\s*(?:the )?", '', t, count=1, flags=re.I)
+        body = re.sub(r"^.*?\b(?:size|sizes|sizing|incidence|how (?:big|large) (?:is|are)|how many)\b\s*(?:(?:of|for|on|is|are)\b)?\s*(?:the )?", '', t, count=1, flags=re.I)
+    # A capital "The" inside the sentence, in front of a capitalised name, is the title's own ("How big is The
+    # Rainmaker audience?"), and so is a capitalised "On", "For", "Band of" the lead-in read as its own words.
+    # The lead-in and the cleaner both take such a word off the front, so it is put back on the name.
+    own = 'The' if (body and bool(re.search(r"(?<![.?!:])\s+The\s+$", t[:len(t) - len(body)])) and body[:1].isupper()) else ''
+    if not own and body != t and re.match(r"(?:(?:of|for|on)\s+)?The\s+[A-Z0-9]", body):
+        own = 'The'                      # "the audience of The Bear on Hulu"
+    given = _give_back_name(t, body)
+    if given != body:
+        own, body = given[:len(given) - len(body)].strip(), given
     parts = [p for p in _split_subjects(body, ctx) if p and p.strip()]
     out = []
-    for p in parts:
+    for i, p in enumerate(parts):
         c = _clean(p)
         if not c:
             continue
+        if i == 0 and own and not c.lower().startswith(own.lower() + ' '):
+            c = own + ' ' + c
         if _DEIXIS_RX.match(c):
             out.append('__page__')
             continue
