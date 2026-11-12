@@ -637,7 +637,10 @@ class AnOrderForAProfileIsBuilt(unittest.TestCase):
                       'not a read, the full profile please'):
             r = BL.rewrite(words, read)
             self.assertEqual(r['text'], "Please queue one Profile IQ: Georgie & Mandy's First Marriage Viewers - Paramount+", words)
-        for words in ('what does the profile say about age', 'can we build profile', 'a full profile?', 'not a read of the room',
+        # asked as a question right after a read, it is a brief on that read's subject for the reader to confirm (round three)
+        self.assertEqual(BL.kind('can we build profile', read), 'thread_ask')
+        self.assertTrue(BL.rewrite('can we build profile', read)['confirm'])
+        for words in ('what does the profile say about age', 'a full profile?', 'not a read of the room',
                       "don't build a new profile, answer from the page", 'show me the full profile breakdown by age', 'I want the deck',
                       'summarize the profile', 'is this a read', 'was the profile run on all 49 of these inputs?'):
             self.assertEqual(BL.kind(words, read), '', words)

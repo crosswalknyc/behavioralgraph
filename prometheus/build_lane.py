@@ -112,6 +112,15 @@ _WANT_ONLY_RX = re.compile(
     r"(?:\s+(?:please|instead|now))?\W*$", re.I)
 _NOT_READ_ONLY_RX = re.compile(
     r"^\W*" + _LEAD + r"(?:this\s+is\s+|that\s+is\s+|that'?s\s+|it'?s\s+)?not\s+(?:just\s+)?(?:a|another)\s+read\W*$", re.I)
+# "can we build profile", "can you run a profile on this", "could we get a full profile for them": a profile asked
+# for behind a can-we frame, naming no subject of its own (Armine 2026-11-11, one turn after a read on Mistletoe
+# Murders Viewers; she was told what a Profile IQ profile is and asked for the subject)
+_THREAD_ASK_RX = re.compile(
+    r"^\W*" + _LEAD + r"(?:can|could|would|will|shall|may)\s+(?:we|you|i|u)\s+(?:please\s+|now\s+|also\s+|just\s+)*"
+    r"(?:build|run|make|create|pull|get|do|have|start|queue|order)\s+(?:me\s+|us\s+)?(?:a\s+|an\s+|the\s+|that\s+|this\s+)?"
+    r"(?:(?:full|new|whole|complete|proper)\s+)?(?:profile\s+iq\s+profile|profile\s+iq|profile)"
+    r"(?:\s+(?:on|for|of|from)\s+(?:this|that|it|them|these|those|the\s+same|this\s+(?:audience|read|one)|that\s+(?:audience|read|one)|"
+    r"the\s+(?:audience|read|above)))?(?:\s+(?:please|now|too|as\s+well))?\W*$", re.I)
 _OTHER_PRODUCT_RX = re.compile(r"\b(?:deck|one[- ]pager|journey|twin|valuation|tracker|focus group|campaign)\b", re.I)
 _PASTED_LINE_RX = re.compile(r"^\s*[A-Za-z0-9_\-]{20,}\s*$")
 _PASTED_INLINE_RX = re.compile(r"(?<![A-Za-z0-9_\-])(?=[A-Za-z0-9_\-]*\d)(?=[A-Za-z0-9_\-]*[A-Za-z])[A-Za-z0-9_\-]{24,}(?![A-Za-z0-9_\-])")
@@ -193,6 +202,8 @@ def kind(text, history=None):
             return ''                      # the order gate already has it
         if _NOUN_ORDER_RX.match(t) and not t.rstrip().endswith('?'):
             return 'noun_order'
+        if _THREAD_ASK_RX.match(t) and _last_was_read(history):
+            return 'thread_ask'            # "can we build profile" right after a read: a brief on that read's subject
         if _is_question(t):
             return ''
         try:
@@ -299,6 +310,14 @@ def rewrite(text, history=None, ctx=None):
         if k == 'noun_order':
             out = _order_from(words)
             return {'text': out, 'kind': k, 'source': 'words'} if out and _orders.is_order(out) else None
+        if k == 'thread_ask':
+            # the subject is the thread's own: the read just delivered. The brief comes back for the reader to
+            # confirm (`confirm`): it was asked as a question, so nothing starts on its own. With no subject on
+            # the thread the lane stands aside and the question is answered as it always was.
+            out, source = _from_read_or_page(history, None)
+            if out and _orders.is_order(out):
+                return {'text': out, 'kind': k, 'source': source, 'confirm': True}
+            return None
         out, source = '', ''
         # the correcting words may name the profile themselves ("... The profile of X ONLY on Paramount+ ...")
         subj = _named_profile(words) if k == 'instruction' else ''

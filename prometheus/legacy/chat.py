@@ -42,7 +42,7 @@ from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation 
 from prometheus import deck_pick as _deck_pick, deck_subject as _deck_subject   # the deck is on the subject the reader picked or named; a deck from a read keeps its figures (2026-11-11)
 from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
 from prometheus import question_universe as _question_universe   # the base is the universe the question names; the page only when pointed at (2026-11-06)
-from prometheus import ledger_gate as _ledger_gate   # a probe's ask never banks in the shared ledger, on any route (2026-11-11)
+from prometheus import ledger_gate as _ledger_gate, probe_files as _probe_files   # a probe's ask never banks in the shared ledger, on any route, and leaves no file where a reader's files live (2026-11-11)
 from prometheus import window_scope as _wscope   # the window is the one the reader asked for; the default is never a frozen pair (2026-11-10)
 from prometheus import named_platforms as _named_platforms   # a platform the client names is the universe's platform, strict (2026-11-10)
 from prometheus import door_words as _door_words   # the word door never reaches a chat read or a file name (2026-11-10)
@@ -18798,7 +18798,7 @@ def _pm_resolve_deck_subject(text, ctx):
 
     if chosen is not None:
         p_key = str(chosen.get('s3_key') or '').strip()
-        ok, err = _H._require_profile_run_access(p_key)
+        ok, err = _probe_files.run_access(_H._require_profile_run_access, p_key)   # the golden door has no session (prometheus.probe_files)
         if not ok:
             return None, err
         subject = str(chosen.get('subject')
@@ -18812,7 +18812,7 @@ def _pm_resolve_deck_subject(text, ctx):
             head, _, tail = disp.partition(' - ')
             if _norm(head) == base_norm and 'avid' in tail.lower():
                 ck = str(entry.get('s3_key') or '').strip()
-                c_ok, _c = _H._require_profile_run_access(ck)
+                c_ok, _c = _probe_files.run_access(_H._require_profile_run_access, ck)
                 if c_ok and ck and ck != p_key:
                     cuts.append({'s3_key': ck, 'name': disp[:200]})
                 break

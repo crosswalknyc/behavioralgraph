@@ -238,6 +238,16 @@ def sweep(*, store_list, store_get, store_put, runs_for, exists, load, save, ens
 
 def sweep_with_host(host, service, now=None):
     """The sweep on the bound host (the read-recovery loop calls this)."""
+    try:   # the same pass clears what a probe left more than an hour ago (prometheus.probe_files)
+        from . import probe_files as _pf
+        _pf.sweep_with_host(host, now=now)
+    except Exception:
+        pass
+    try:   # ... and builds a deck that was waiting on a quote nobody answered (prometheus.ride_along)
+        from . import ride_along as _ra
+        _ra.sweep_with_host(host, now=now)
+    except Exception:
+        pass
     try:
         if not (host.has('s3_client') and host.has('bucket') and host.bucket and host.has('user_runs')):
             return []

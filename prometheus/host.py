@@ -116,6 +116,13 @@ class _Host:
     def bind(self, **caps):
         self._b.update(caps)
         self.bound = True
+        if caps.get('s3_client') is not None:
+            # a probe's files are kept apart from readers' at the store client itself (prometheus.probe_files)
+            try:
+                from . import probe_files as _pf
+                _pf.install(caps['s3_client'])
+            except Exception:
+                pass
 
     def bind_from_app_module(self, mod):
         missing = []

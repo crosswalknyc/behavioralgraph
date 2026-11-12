@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read', 'apply_to_read', 'quote_subject']
+__all__ = ['is_cut_of', 'PLATFORMS', 'canon', 'named', 'scope_of', 'same_scope', 'held_bucket', 'resolve', 'for_read', 'apply_to_read', 'quote_subject']
 
 # canonical name -> the ways it is written
 PLATFORMS = {
@@ -327,6 +327,16 @@ def for_read(text, history, base, ledger, bind_subject='', subj_hint=''):
         plat = next((canon(c) for c in cands if canon(c)), '')
         if not plat:
             return None
+        bound = str(bind_subject or '').strip()
+        if bound and not canon(bound.split(' - ')[0]) and isinstance(base, dict) \
+                and canon(str(base.get('subject') or '').split(' - ')[0]) == plat:
+            # the question rides on a subject it was bound to (a part of a longer question, a chip) and the only
+            # thing the library offered as its base is the platform's own profile, picked up from the words around
+            # it: the platform is where, the bound subject is who (Armine 2026-11-11: "Can we give some examples?",
+            # second in a question about digital original content on YouTube, was quoted on YouTube)
+            print(f"[pm-base] {plat!r} is where, not who: the question is bound to {bound!r}; the platform's own profile is not the base")
+            return {'platform': plat, 'subject': bound, 'bucket': '', 'source': 'bound',
+                    'cohort': '' if plat.lower() in bound.lower() else f"on {plat}", 'same_scope': False}
         if any(str(n or '').strip() and not canon(str(n).split(' - ')[0]) for n in (bind_subject, subj_hint)) and not base:
             return None                          # the lane already holds a subject that is not the platform
         doc = None
@@ -373,11 +383,41 @@ def quote_subject(text, history, subject, ledger=None):
     subject; otherwise the subject it was given, unchanged. Never raises."""
     try:
         s = str(subject or '').strip()
-        if s and not canon(s.split(' - ')[0]):
-            return subject
         if ledger is None:
             import insights_ledger as ledger
+        if s and not canon(s.split(' - ')[0]):
+            # a cut of the subject on record is not the subject: one of the genres the words list ("Comedy" in a
+            # question about digital original content on YouTube across six categories) is a row of that subject's
+            # table (Armine 2026-11-11: the first part of her question was quoted on Comedy)
+            hit = for_read(text, history, None, ledger, '', '')
+            if hit and hit.get('source') == 'ledger' and is_cut_of(s, hit['subject'], text):
+                return hit['subject']
+            return subject
         hit = for_read(text, history, None, ledger, '', s)
         return hit['subject'] if hit else subject
     except Exception:
         return subject
+
+
+def is_cut_of(name, held_subject, text=''):
+    """True when `name` is one of the things the held subject is split
+    by, not a subject of its own: every word of it sits inside the held
+    subject's name, it is shorter than that name, and the question
+    lists it beside others (two or more commas or an "and")."""
+    try:
+        mine = _distinct(name)
+        held = set(_words(held_subject))
+        if not mine or not all(w in held for w in mine):
+            return False
+        if len(mine) >= len(_distinct(held_subject)):
+            return False
+        t = str(text or '')
+        if not t:
+            return True
+        m = re.search(r"(?<![\w+])" + r"\W+".join(re.escape(w) for w in _words(name)) + r"(?![\w+])", t, re.I)
+        if not m:
+            return True                  # the words never said it: it came from somewhere else, and the held subject names it
+        around = t[max(0, m.start() - 120): m.end() + 160]
+        return around.count(',') >= 2 or bool(re.search(r",\s*(?:and|or)\s", around, re.I))
+    except Exception:
+        return False

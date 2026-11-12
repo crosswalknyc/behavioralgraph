@@ -71,6 +71,11 @@ DECK_NEXT_LINE = ("Your PowerPoint is on record with this read: I build the deck
 DECK_AFTER_APPROVAL_LINE = ("Your PowerPoint is on record with this question: once the read behind it lands, I build the deck "
                             "from it, in this thread.")
 DECK_START_LINE = "Working on the PowerPoint now. The deck will land in this thread when it is ready."
+# a question in several parts, some answered now and some quoted: the deck is built once, on all of it
+DECK_ALL_PARTS_LINE = ("Your PowerPoint is on record with this question: I build it once, when every part has landed, in this "
+                       "thread. If a quoted part is left out, the deck is built on what landed and says so.")
+IN_FLIGHT_S = 45 * 60          # an "On it" line older than this is not a read still running
+SWEEP_EVERY_S = 600
 
 
 def _named(line, words):
@@ -375,12 +380,19 @@ def _carry(env, plan, user, body, via):
                 # the answer is not in hand yet (a read still running, a quote to approve, a question back): the
                 # deck waits for the read, on record against the thread
                 state = 'pending' if jobs else 'awaiting_read'
-                line = _named(DECK_NEXT_LINE if jobs else DECK_AFTER_APPROVAL_LINE, plan.get('words'))
+                quoted = _quoted_parts(raw)
+                line = _named(DECK_ALL_PARTS_LINE if (jobs and quoted) else (DECK_NEXT_LINE if jobs else DECK_AFTER_APPROVAL_LINE),
+                              plan.get('words'))
                 mark = {'kind': 'deck', 'state': state}
+                if quoted:
+                    mark['waits_on_quote'] = True
                 if probe:
                     mark['probe'] = True           # a probe reads the same line a reader would; nothing is recorded
                 elif uname and tid:
-                    _record(uname, tid, plan, state=state, job_ids=jobs, question=plan['question'])
+                    # a quoted part is part of what the deck was asked to summarize: the deck waits for the reader's
+                    # answer to the quote, and for the reads an approval starts (2026-11-11)
+                    _record(uname, tid, plan, state=state, job_ids=jobs, question=plan['question'],
+                            extra=({'waits_on_quote': True, 'quoted': quoted} if quoted else None))
                     mark['record'] = _key(uname, tid)
                 else:
                     # no thread to keep the record on: nothing is promised
@@ -441,7 +453,12 @@ def run(service_ask, user, body, *, via='session'):
         _faults.note('ride_along.plan', e)
         plan = None
     if not plan:
-        return service_ask(user, body, via=via)
+        out = service_ask(user, body, via=via)
+        try:
+            _quote_answered(user, body, out)
+        except Exception as e:
+            _faults.note('ride_along.quote', e)
+        return out
     b2 = dict(body, text=plan['question'], _pm_ride_along={'kinds': plan['kinds'], 'words': plan['words']})
     env, status = service_ask(user, b2, via=via)
     try:
@@ -480,7 +497,23 @@ def _in_flight(history, since):
     return n
 
 
-def start_deck(user, uname, tid, history, subject, *, deck_core=None, request_context=None):
+def _short(q, n=90):
+    q = _squash(q)
+    return q if len(q) <= n else q[:n - 1].rstrip() + '...'
+
+
+def missing_line(missing):
+    """The handover's plain line for the parts a deck does not cover
+    ('' when it covers everything it was asked to)."""
+    qs = [_short(m) for m in (missing or []) if _squash(m)]
+    if not qs:
+        return ''
+    if len(qs) == 1:
+        return f' It does not include the part that was not approved: "{qs[0]}".'
+    return ' It does not include the parts that were not approved: ' + '; '.join(f'"{q}"' for q in qs) + '.'
+
+
+def start_deck(user, uname, tid, history, subject, *, deck_core=None, request_context=None, missing=None):
     """The deck path, from the read that just landed. Returns the turn to
     post into the thread and the mark for the record."""
     h = _host()
@@ -498,9 +531,10 @@ def start_deck(user, uname, tid, history, subject, *, deck_core=None, request_co
     now = __import__('prometheus.service', fromlist=['_now'])._now()
     if raw.get('job_id'):
         jid = str(raw['job_id'])
-        return ({'role': 'agent', 'text': str(raw.get('confirm_line') or DECK_START_LINE), 'ts': now, 'turn_id': f"ride-deck-{jid}",
-                 'meta': {'kind': 'deck_started', 'server_note': True, 'ride_along': {'kind': 'deck', 'deck_job': jid},
-                          'subject': str(raw.get('subject') or subject)[:120]}},
+        return ({'role': 'agent', 'text': str(raw.get('confirm_line') or DECK_START_LINE) + missing_line(missing), 'ts': now,
+                 'turn_id': f"ride-deck-{jid}",
+                 'meta': {'kind': 'deck_started', 'server_note': True, 'subject': str(raw.get('subject') or subject)[:120],
+                          'ride_along': dict({'kind': 'deck', 'deck_job': jid}, **({'not_included': [_short(m) for m in missing]} if missing else {}))}},
                 {'state': 'started', 'deck_job_id': jid})
     clar = raw.get('clarify') if isinstance(raw.get('clarify'), dict) else None
     text = str((clar or {}).get('question') or raw.get('reply') or raw.get('error') or '').strip()
@@ -534,32 +568,198 @@ def on_read_landed(uname, job_id, payload=None, *, held=False, probe=False, deck
             return 'held'                # the pass that lands it starts the deck
         left = [j for j in (rec.get('job_ids') or []) if str(j) != str(job_id)]
         history = _svc.load_thread(uname, tid) or []
-        if left or (not rec.get('job_ids') and _in_flight(history, rec.get('created_at')) > 0):
-            _put(key, dict(rec, job_ids=left))
+        quote = quote_state(uname, tid, rec)
+        # every part the deck was asked to summarize: the reads named on the record, a read still running in the
+        # thread, and a quote the reader has not answered yet (2026-11-11: the deck used to start on the first
+        # read that landed, without the quoted parts)
+        if left or quote == 'open' or _in_flight_other(history, job_id) > 0 \
+                or (not rec.get('job_ids') and _in_flight(history, rec.get('created_at')) > 0):
+            _put(key, dict(rec, job_ids=left, landed=int(rec.get('landed') or 0) + 1))
             return 'waiting'
-        if 'deck' not in (rec.get('kinds') or []):
-            _put(key, dict(rec, state='done', closed_at=time.time()))
-            return 'none'
-        if user is None:
-            users = (_host().load_users() or {}).get('users') or {}
-            user = dict(users.get(uname) or {}, username=uname)
-        subject = _last_read_subject(history, job_id) or _last_read_subject(history)
-        turn, mark = start_deck(user, uname, tid, history, subject, deck_core=deck_core, request_context=request_context)
-        _put(key, dict(rec, job_ids=[], closed_at=time.time(), **mark))
-        if turn:
-            _svc.save_thread(uname, tid, list(history) + [turn])
-        if mark.get('state') == 'failed':
-            try:
-                from . import promise_truth as _pt
-                _pt.hold(uname, rec.get('question') or 'a deck of the read', kind='deck', reason='the deck asked for with a question did not start after its read landed',
-                         thread_id=tid)
-            except Exception as e:
-                _faults.note('ride_along.hold', e)
-        print(f"[pm-ride-along] read {job_id} landed for {uname}: deck {mark.get('state')} in thread {tid}")
-        return str(mark.get('state') or 'none')
+        rec = dict(rec, landed=int(rec.get('landed') or 0) + 1)
+        return _finish(uname, tid, key, rec, history, job_id=job_id, quote=quote, user=user, deck_core=deck_core,
+                       request_context=request_context)
     except Exception as e:
         _faults.note('ride_along.landing', e)
         return 'failed'
+
+
+def _finish(uname, tid, key, rec, history, *, job_id='', quote='none', user=None, deck_core=None, request_context=None):
+    """Every part is in (or will not come): start the deck once, on what
+    landed, and say which quoted part is not in it."""
+    from . import service as _svc
+    if 'deck' not in (rec.get('kinds') or []):
+        _put(key, dict(rec, state='done', closed_at=time.time()))
+        return 'none'
+    if user is None:
+        users = (_host().load_users() or {}).get('users') or {}
+        user = dict(users.get(uname) or {}, username=uname)
+    missing = list(rec.get('quoted') or []) if (rec.get('waits_on_quote') and quote in ('closed', 'none')) else []
+    subject = (_last_read_subject(history, job_id) if job_id else '') or _last_read_subject(history)
+    turn, mark = start_deck(user, uname, tid, history, subject, deck_core=deck_core, request_context=request_context, missing=missing)
+    _put(key, dict(rec, job_ids=[], closed_at=time.time(), **({'not_included': missing} if missing else {}), **mark))
+    if turn:
+        _svc.save_thread(uname, tid, list(history) + [turn])
+    if mark.get('state') == 'failed':
+        try:
+            from . import promise_truth as _pt
+            _pt.hold(uname, rec.get('question') or 'a deck of the read', kind='deck', reason='the deck asked for with a question did not start after its read landed',
+                     thread_id=tid)
+        except Exception as e:
+            _faults.note('ride_along.hold', e)
+    print(f"[pm-ride-along] every part is in for {uname}: deck {mark.get('state')} in thread {tid}"
+          + (f" ({len(missing)} quoted part(s) not in it)" if missing else ''))
+    return str(mark.get('state') or 'none')
+
+
+# ------------------------------------------------------------ the quoted parts
+def _quoted_parts(raw):
+    """The questions of a multi-part quote that are still only quoted."""
+    po = (raw or {}).get('panel_offer') if isinstance(raw, dict) else None
+    if not isinstance(po, dict):
+        return []
+    parts = [p for p in (po.get('parts') or []) if isinstance(p, dict)]
+    if not parts:
+        return [_squash(po.get('question') or '')[:300]] if _squash(po.get('question') or '') else []
+    return [_squash(p.get('text') or '')[:300] for p in parts if str(p.get('status') or 'priced') == 'priced' and _squash(p.get('text') or '')]
+
+
+def quote_state(uname, tid, rec):
+    """'none' (the record waits on no quote), 'approved', 'open', or
+    'closed' (declined, replaced or past its day)."""
+    if not isinstance(rec, dict) or not rec.get('waits_on_quote'):
+        return 'approved' if isinstance(rec, dict) and rec.get('quote') == 'approved' else 'none'
+    if rec.get('quote') in ('approved', 'closed'):
+        return str(rec['quote'])
+    try:
+        from . import pending_offers as _po
+        doc = _po._load(uname)
+        since = float(rec.get('created_at') or 0) - 300
+        mine = [o for o in (doc.get('offers') or []) if str(o.get('thread_id') or '') == str(tid or '')
+                and (_po._parse(o.get('ts')).timestamp() if _po._parse(o.get('ts')) else 0) >= since]
+        mine.sort(key=lambda o: str(o.get('ts') or ''))
+        if not mine:
+            return 'closed' if time.time() - float(rec.get('created_at') or 0) > _po.MAX_AGE_H * 3600 else 'open'
+        first = mine[0]                 # the quote made with the question
+        st = str(first.get('status') or '')
+        if st == 'approved':
+            return 'approved'
+        if st == 'open' and _po._fresh(first.get('ts')):
+            return 'open'
+        return 'closed'
+    except Exception as e:
+        _faults.note('ride_along.quote_state', e)
+        return 'open'                    # when the state cannot be read the deck keeps waiting; the sweep asks again
+
+
+def _in_flight_other(history, job_id, now=None):
+    """Reads acked in this thread in the last 45 minutes that have not
+    landed, other than `job_id`."""
+    from . import read_landing as _rl
+    now = float(now or time.time())
+    n = 0
+    for t in history or []:
+        if not isinstance(t, dict) or str(t.get('role') or '') == 'user':
+            continue
+        meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+        jid = str(meta.get('read_job_id') or '')
+        if not jid or jid == str(job_id or '') or _rl._is_landed_turn(t):
+            continue
+        try:
+            from datetime import datetime
+            ts = datetime.fromisoformat(str(t.get('ts') or '').replace('Z', '+00:00')).timestamp()
+        except Exception:
+            ts = now
+        if now - ts <= IN_FLIGHT_S:
+            n += 1
+    return n
+
+
+def _quote_answered(user, body, out):
+    """The reader approved or cancelled a quote: a deck waiting on it
+    takes the answer. An approval adds the reads it started to the
+    record; a cancel closes the quote, and when nothing is still
+    running the deck is built now on what landed."""
+    from . import pending_offers as _po
+    text = str((body or {}).get('text') or '')
+    extra = body.get('extra') if isinstance((body or {}).get('extra'), dict) else {}
+    confirm = isinstance(body.get('panel_confirm'), dict) or isinstance(extra.get('panel_confirm'), dict)
+    approve, cancel = bool(confirm or _po.is_approval(text)), bool(_po.is_cancel(text))
+    if not (approve or cancel) or _faults.is_probe():
+        return
+    env = out[0] if isinstance(out, tuple) else out
+    if not isinstance(env, dict):
+        return
+    uname = str((user or {}).get('username') or (user or {}).get('email') or '')
+    tid = str(env.get('thread_id') or (body or {}).get('thread_id') or '')
+    if not uname or not tid:
+        return
+    key = _key(uname, tid)
+    rec = _get(key)
+    if not isinstance(rec, dict) or rec.get('state') not in ('pending', 'awaiting_read') or not rec.get('waits_on_quote'):
+        return
+    if cancel and not confirm:
+        rec = dict(rec, quote='closed')
+        _put(key, rec)
+        from . import service as _svc
+        history = _svc.load_thread(uname, tid) or list((body or {}).get('history') or [])
+        if not rec.get('job_ids') and _in_flight_other(history, '') == 0 and int(rec.get('landed') or 0) > 0:
+            _finish(uname, tid, key, rec, history, quote='closed', user=user)
+        return
+    jobs = _job_ids(env)
+    if jobs:
+        _put(key, dict(rec, quote='approved', state='pending', job_ids=list(dict.fromkeys(list(rec.get('job_ids') or []) + jobs))))
+
+
+_SWEPT = {'at': 0.0}
+
+
+def sweep_with_host(host, now=None, force=False):
+    """A deck waiting on a quote nobody answered: once the quote is past
+    its day (or was replaced), the deck is built on what landed. Runs at
+    most every ten minutes. Returns the number of decks started."""
+    now = float(now or time.time())
+    if not force and now - _SWEPT['at'] < SWEEP_EVERY_S:
+        return 0
+    _SWEPT['at'] = now
+    started = 0
+    try:
+        s3, bucket = host.s3_client, host.bucket
+        from . import service as _svc
+        token = None
+        while True:
+            kw = dict(Bucket=bucket, Prefix=PREFIX)
+            if token:
+                kw['ContinuationToken'] = token
+            r = s3.list_objects_v2(**kw)
+            for o in (r.get('Contents') or []):
+                key = str(o.get('Key') or '')
+                if not key.endswith('.json') or key.startswith(KEY_PREFIX):
+                    continue
+                try:
+                    if now - o['LastModified'].timestamp() > MAX_AGE_S:
+                        continue
+                except Exception:
+                    pass
+                rec = _get(key)
+                if not isinstance(rec, dict) or rec.get('state') not in ('pending', 'awaiting_read') or not rec.get('waits_on_quote'):
+                    continue
+                uname, tid = str(rec.get('user') or ''), str(rec.get('thread_id') or '')
+                if not uname or not tid or rec.get('job_ids') or int(rec.get('landed') or 0) <= 0:
+                    continue
+                if quote_state(uname, tid, rec) != 'closed':
+                    continue
+                history = _svc.load_thread(uname, tid) or []
+                if _in_flight_other(history, '', now=now) > 0:
+                    continue
+                if _finish(uname, tid, key, dict(rec, quote='closed'), history, quote='closed') == 'started':
+                    started += 1
+            if not r.get('IsTruncated'):
+                break
+            token = r.get('NextContinuationToken')
+    except Exception as e:
+        _faults.note('ride_along.sweep', e)
+    return started
 
 
 # ------------------------------------------------------------ the key surface

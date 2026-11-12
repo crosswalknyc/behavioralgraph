@@ -66,6 +66,11 @@ C = _HostProxy()
 def bind(mod):
     """Bind the host namespace (a module or any object with attributes)."""
     H._bind(mod)
+    try:   # the legacy code reads the store client off the host module: the probe rule sits on that client too
+        from prometheus import probe_files as _pf
+        _pf.install(getattr(mod, 's3_client', None))
+    except Exception:
+        pass
 
 
 def bind_core(mod):

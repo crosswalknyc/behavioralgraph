@@ -949,6 +949,11 @@ def _record_entry_now(entry):
     # route built it (2026-11-11)
     if not may_bank(entry.get('asker') or None, where='record', subject=entry.get('subject'), question=entry.get('q')):
         return
+    if nameless_subject(entry.get('subject')):
+        # nothing is filed under a word that names nothing ('The', 'The Audience'): every question would
+        # resolve to it (2026-11-11: a deliverable's note was banked under 'The')
+        print(f"[insights-ledger] not banked: {str(entry.get('subject') or '')!r} names no subject | {str(entry.get('q') or '')[:80]}")
+        return
     batch = [entry] + _derive_list_subentries(entry)
     for e in batch:
         try:
@@ -1492,6 +1497,17 @@ def _has_identity(s_norm):
     own (never 'The', 'Audience', 'The Viewers')."""
     return any(w not in _GENERIC_SUBJECT_TOKENS and w not in _NO_SUBJECT_WORDS and not w.isdigit()
                for w in str(s_norm or '').split())
+
+
+def nameless_subject(subject):
+    """True when a subject is empty or made only of articles and audience
+    nouns ('The', 'The Audience', 'Viewers'). A title made of ordinary
+    words ('You', 'This Is Us') is a name and is not caught here."""
+    try:
+        toks = normalize_subject(subject).split()
+        return (not toks) or all(w in _GENERIC_SUBJECT_TOKENS for w in toks)
+    except Exception:
+        return False
 
 
 def names_no_subject(question):

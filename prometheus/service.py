@@ -469,6 +469,8 @@ def _interpret_body(body, text, history, tid=None):
         out['_pm_order_text'] = str(body.get('_pm_order_text') or text)
         if body.get('_pm_order_referent'):
             out['_pm_order_referent'] = True      # the subject was resolved from a referent (prometheus.order_referent)
+        if body.get('_pm_no_auto_start'):
+            out['_pm_no_auto_start'] = True       # the brief is for the reader to confirm (prometheus.build_lane, thread_ask)
     return out
 
 
@@ -790,6 +792,8 @@ def ask(user, body, *, via='session'):
             if _blo and _blo.get('text'):
                 text = str(_blo['text'])
                 body = dict(body, text=text, _pm_order=True, _pm_order_text=text, _pm_build_lane=_blo.get('kind'))
+                if _blo.get('confirm'):
+                    body['_pm_no_auto_start'] = True   # asked as a question ("can we build profile"): the brief waits for the reader's yes
                 _is_order = True
                 host.ask_hint(route='build_order', outcome='lane_' + str(_blo.get('kind') or 'order'))
             elif _blo and _blo.get('ask'):
@@ -2051,7 +2055,12 @@ def ask(user, body, *, via='session'):
                     _faults.note('service.multi_ask_pointer', _fx)
                 _res = ask(user, part_body, via=via)
                 try:
-                    _multi_subject['name'] = _multi.subject_of(_res) or _multi_subject['name']
+                    _ms_new = _multi.subject_of(_res)
+                    # the subject the message is about never becomes a bare platform once a question named its
+                    # subject: the platform is where, and a later part inherits who (prometheus.platform_scope)
+                    from . import platform_scope as _psc_m
+                    if _ms_new and not (_multi_subject['name'] and _psc_m.canon(str(_ms_new).split(' - ')[0])):
+                        _multi_subject['name'] = _ms_new
                 except Exception as _fx:
                     _faults.note('service.multi_ask_pointer', _fx)
                 return _res

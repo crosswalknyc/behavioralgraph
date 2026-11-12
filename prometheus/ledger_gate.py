@@ -214,19 +214,40 @@ def job_scope(user_arg=1, probe_kw='probe'):
     def deco(fn):
         @functools.wraps(fn)
         def inner(*a, **k):
+            val, preset = None, False
             try:
-                if _ASKER.get() is not None:
-                    return fn(*a, **k)
-                val = _JOBS.pop(str(a[0]) if a else '', None)
-                if val is None:
-                    name = a[user_arg] if len(a) > user_arg else ''
-                    val = (str(name or '').strip(), bool(k.get(probe_kw)) if probe_kw else False)
+                preset = _ASKER.get() is not None
+                if not preset:
+                    val = _JOBS.pop(str(a[0]) if a else '', None)
+                    if val is None:
+                        name = a[user_arg] if len(a) > user_arg else ''
+                        val = (str(name or '').strip(), bool(k.get(probe_kw)) if probe_kw else False)
             except Exception:
                 return fn(*a, **k)
+            if preset:
+                try:
+                    return fn(*a, **k)
+                finally:
+                    _probe_job_ended(a)
             with as_asker(val[0], probe=val[1]):
-                return fn(*a, **k)
+                try:
+                    return fn(*a, **k)
+                finally:
+                    _probe_job_ended(a)
         return inner
     return deco
+
+
+def _probe_job_ended(args):
+    """A probe's job leaves its record only until the regular pass clears
+    it (prometheus.probe_files): called inside the job's own scope, so
+    the asker is the one the job ran as. Never raises."""
+    try:
+        if args and is_probe():
+            from . import probe_files as _pf
+            _pf.job_ended(args[0])
+    except Exception:
+        pass
 
 
 __all__ = ['may_bank', 'is_probe', 'current', 'current_label', 'as_asker', 'carry', 'note_job', 'job_scope', 'refuse',
