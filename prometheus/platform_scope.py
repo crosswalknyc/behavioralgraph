@@ -242,7 +242,11 @@ def held_bucket(index_doc, skey, question, live=None):
             n, frac, chars = _coverage(subj, qwords, drop=pw)
             if n < 3 or frac < 0.6 or chars < 14:
                 continue
-            on_scope = plat in scope_of(subj)
+            # a title's bucket whose own label names the platform ('... (HBO Max viewers)', '... Viewers - Paramount+')
+            # is that title on that platform: it is the scoped bucket, ahead of the title's other buckets (2026-11-11,
+            # an HBO Max ask about Georgie & Mandy's First Marriage was handed the Paramount+ profile's figures)
+            on_scope = plat in scope_of(subj) or plat in named(subj) \
+                or any(plat in named(str(a)) for a in (v.get('aliases') or []))
             score = (1 if on_scope else 0, frac, n)
             if best_score is None or score > best_score:
                 best, best_score = {'key': k, 'subject': subj, 'platform': plat, 'same_scope': on_scope}, score

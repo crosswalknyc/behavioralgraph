@@ -252,6 +252,25 @@ check("a question about YouTube's own audience stays on the YouTube bucket", led
 led = il.consult(subject='Mad Men Viewers', question='how big is the mad men audience on YouTube')
 check("a subject that is not a platform is never moved", led.get('skey') == 'mad_men_viewers', str(led.get('skey')))
 
+# a title held on two services: the ask names one, and the bucket whose label names that service is the one consulted
+GM_P = {'subject': "GEORGIE & MANDY'S FIRST MARRIAGE Viewers", 'entries': [{'k': 'a', 'ts': '2026-11-11T23:00:01Z', 'q': 'x'}]}
+GM_H = {'subject': "Georgie & Mandy's First Marriage (HBO Max viewers, all 3 seasons)", 'entries': [{'k': 'b', 'ts': '2026-11-12T06:53:53Z', 'q': 'y'}]}
+GM_DOC = {'subjects': {'hbo_max': {'subject': 'HBO Max', 'entries': [{'k': 'c', 'ts': '2026-10-01T00:00:00Z', 'q': 'z'}]},
+                       'georgie_mandy_first_marriage_viewers': GM_P,
+                       'georgie_mandy_first_marriage_hbo_max_viewers_all_3_seasons': GM_H}}
+GM_Q = "How many people watched Georgie & Mandy's First Marriage on HBO Max from August 7, 2026 to October 31, 2026?"
+hb = PS.held_bucket(GM_DOC, 'hbo_max', GM_Q)
+check("an HBO Max ask about a title is handed the title's HBO Max bucket, not its Paramount+ one",
+      bool(hb) and hb['key'] == 'georgie_mandy_first_marriage_hbo_max_viewers_all_3_seasons' and hb['same_scope'], str(hb))
+GM_DOC2 = {'subjects': dict(GM_DOC['subjects'], georgie_mandy_first_marriage_hbo_max_viewers_all_3_seasons=dict(
+    GM_H, subject="Georgie & Mandy's First Marriage library viewers", aliases=["Georgie & Mandy's First Marriage Viewers (HBO Max)"]))}
+hb2 = PS.held_bucket(GM_DOC2, 'hbo_max', GM_Q)
+check("a bucket that names the service only in an alias is found the same way", bool(hb2) and hb2['same_scope'], str(hb2))
+only_p = {'subjects': {k: v for k, v in GM_DOC['subjects'].items() if 'hbo_max_viewers' not in k}}
+hb3 = PS.held_bucket(only_p, 'hbo_max', GM_Q)
+check("with no bucket on that service the title's own bucket is still the subject, marked off-scope",
+      bool(hb3) and hb3['key'] == 'georgie_mandy_first_marriage_viewers' and not hb3['same_scope'], str(hb3))
+
 print("[4] a share on record binds a table on the same scope only")
 
 
