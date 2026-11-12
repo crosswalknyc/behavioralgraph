@@ -14,7 +14,8 @@ manifest:
   {"batch": "2026-11-12_probe_rows",
    "retract": [{"bucket": "chime_banking_customers", "ts": "2026-11-11T21:45:31Z", "why": "..."}, ...],
    "retract_buckets": [{"bucket": "twin_list_smoke_canary", "why": "..."}],
-   "restore": [{"bucket": "perception_box_youtube_followers", "ts": "2026-10-29T22:29:40Z", "why": "..."}]}
+   "restore": [{"bucket": "perception_box_youtube_followers", "ts": "2026-10-29T22:29:40Z", "why": "..."}],
+   "reinstate": [{"bucket": "...", "entry_object": "system/insights_ledger/entries/<date>/<name>.json", "why": "..."}]}
 
 What it does, in order:
   1. copies the index to system/insights_ledger/_backups/;
@@ -30,6 +31,8 @@ What it does, in order:
 
 A row is matched by bucket and timestamp; nothing else in the bucket is
 touched. A manifest row that is not found is reported and skipped.
+`reinstate` puts a row back from its own audit object (a row a removed
+row had replaced), in timestamp order, unless the bucket already holds it.
 """
 from __future__ import annotations
 
@@ -156,7 +159,7 @@ def main():
     moved = []
     for r in remove:
         r['audit_objects'] = _audit_objects(s3, r['entry'])
-    record = {'batch': batch, 'at': stamp, 'removed': remove,
+    record = {'batch': batch, 'at': stamp, 'removed': remove, 'reinstate': manifest.get('reinstate') or [],
               'restored': [{'bucket': r['bucket'], 'ts': r['entry'].get('ts'), 'q': r['entry'].get('q'), 'why': r['why'],
                             'was': r['entry'].get('retired')} for r in restore]}
     rkey = f"{RETRACTED_PREFIX}{batch}.json"
@@ -170,6 +173,13 @@ def main():
             s3.delete_object(Bucket=il.S3_BUCKET, Key=k)
             moved.append(k)
     print(f"audit objects moved: {len(moved)}")
+    back = []
+    for item in manifest.get('reinstate') or []:
+        try:
+            e = json.loads(s3.get_object(Bucket=il.S3_BUCKET, Key=item['entry_object'])['Body'].read())
+            back.append((item['bucket'], e, item.get('why', '')))
+        except Exception as ex:
+            print("  reinstate skipped:", item.get('entry_object'), ex)
     rm = {(r['bucket'], r['entry'].get('ts'), r['entry'].get('qn'), r['entry'].get('route')) for r in remove}
     rs = {(r['bucket'], r['entry'].get('ts'), r['entry'].get('qn')) for r in restore}
     whole = {r['bucket'] for r in remove if r.get('whole_bucket')}
@@ -193,10 +203,22 @@ def main():
             b['entries'] = keep
             if bk in whole and not keep:
                 subjects.pop(bk, None)
+        done['reinstated'] = 0
+        for bk, e, _why in back:
+            b = subjects.get(bk)
+            if b is None:
+                continue
+            ents = b.get('entries') or []
+            if any(x.get('ts') == e.get('ts') and x.get('qn') == e.get('qn') for x in ents):
+                continue
+            ents.append(e)
+            ents.sort(key=lambda x: str(x.get('ts') or ''))
+            b['entries'] = ents
+            done['reinstated'] += 1
         return d
 
     il._update_index(_mut)
-    print(f"index updated: removed {done['removed']}, restored {done['restored']}")
+    print(f"index updated: removed {done['removed']}, restored {done['restored']}, reinstated {done.get('reinstated', 0)}")
     return 0
 
 
