@@ -371,22 +371,22 @@ def _carry(env, plan, user, body, via):
     waiting = kind in ('clarify', 'guidance', 'nudge') or bool(raw.get('panel_offer')) or bool(raw.get('memory_confirm'))
     if 'deck' in kinds:
         try:
-            if jobs or (waiting and tid):
+            if jobs or waiting:
+                # the answer is not in hand yet (a read still running, a quote to approve, a question back): the
+                # deck waits for the read, on record against the thread
                 state = 'pending' if jobs else 'awaiting_read'
                 line = _named(DECK_NEXT_LINE if jobs else DECK_AFTER_APPROVAL_LINE, plan.get('words'))
                 mark = {'kind': 'deck', 'state': state}
-                if not probe and uname and tid:
+                if probe:
+                    mark['probe'] = True           # a probe reads the same line a reader would; nothing is recorded
+                elif uname and tid:
                     _record(uname, tid, plan, state=state, job_ids=jobs, question=plan['question'])
                     mark['record'] = _key(uname, tid)
-                elif probe:
-                    mark['probe'] = True
                 else:
-                    line = ''          # no thread to keep the record on: nothing is promised
+                    # no thread to keep the record on: nothing is promised
+                    line = "About the deck: ask for it once this read is in and I will build it from the read."
                     mark = {'kind': 'deck', 'state': 'no_thread'}
-                if line:
-                    env = _append(env, line, mark=mark)
-                else:
-                    env = _append(env, "About the deck: ask for it once this read is in and I will build it from the read.", mark=mark)
+                env = _append(env, line, mark=mark)
             elif kind == 'answer':
                 if probe:
                     env = _append(env, _named(DECK_START_LINE, plan.get('words')), mark={'kind': 'deck', 'state': 'probe_not_started', 'probe': True})

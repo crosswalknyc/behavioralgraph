@@ -579,6 +579,19 @@ class ADeliverableRidesThrough(unittest.TestCase):
             env, _st = RA.run(S.ask, dict(NB.ARMINE), body, via='canary')
         self.assertIsNone(w.get(RA._key(USER, tid)))
         self.assertTrue((env.get('ride_along') or {}).get('probe'))
+        self.assertEqual(env['ride_along']['state'], 'pending')                # the probe reads the line a reader would
+        self.assertTrue(env['text'].rstrip().endswith(RA.DECK_NEXT_LINE))
+        # a quote to approve first: the deck waits for the read behind it, and is never built from the quote
+        def _offer(user, body, text, history):
+            w.calls.append(('analyze', text, dict(body), {}))
+            return {'success': True, 'action': 'answer', 'reply': 'I can pull that read on YouTube. Pulling this data will cost $100.',
+                    'followups': ['Approve', 'Cancel'], 'panel_offer': {'question': text, 'subject': 'YouTube', 'kind': 'custom', 'price_label': '$100'}}
+        host.bind(analyze_core=_offer)
+        tid2 = w.new_thread('c0ffee0002')
+        env2, _st2 = self._ask(w, 'Which categories do best on YouTube for digital originals? Summarize in powerpoint', tid=tid2, history=[])
+        self.assertEqual([c[0] for c in w.calls if c[0] == 'deck'], [])
+        self.assertTrue(env2['text'].rstrip().endswith(RA.DECK_AFTER_APPROVAL_LINE))
+        self.assertEqual(w.get(RA._key(USER, tid2))['state'], 'awaiting_read')
         called = []
         out = RA.run(lambda u, b, via='session': (called.append(b) or ({'text': 'x'}, 200)), {}, {'text': 'How big is the Reba audience?'})
         self.assertEqual((out, called[0]), (({'text': 'x'}, 200), {'text': 'How big is the Reba audience?'}))
