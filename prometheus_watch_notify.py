@@ -103,6 +103,18 @@ def answer_text(payload):
         return ''
     reply = payload.get('reply')
     reply = reply.strip() if isinstance(reply, str) else ''
+    # a question with choices (the deck step's did-you-mean, 2026-11-12):
+    # the copy carries the question and what was offered, the way the
+    # reader saw it
+    try:
+        from prometheus import ask_outcome as _ao
+        _cq, _cc = _ao.choice_block(payload)
+        if _cq and not reply:
+            reply = _cq
+        if _cc and reply and not reply.startswith(_PLACEHOLDER_PREFIXES):
+            reply = f"{reply}\nChoices offered: {'; '.join(_cc[:8])}"
+    except Exception:
+        pass
     if reply:
         if reply.startswith(_PLACEHOLDER_PREFIXES):
             return ''

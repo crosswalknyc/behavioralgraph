@@ -125,6 +125,40 @@ def _norm(text):
     return re.sub(r'\s+', ' ', str(text or '')).strip().lower()
 
 
+# A question with choices can ride as a block instead of a sentence
+# (2026-11-12). The deck step's did-you-mean is
+# {'clarify': {'question', 'options' | 'suggestions'}} and the page
+# draws it as a question with chips. reply_text read only strings, so
+# that reply was "nothing the user could read": classified empty, held
+# by the answer gate, logged and mailed as the calm line, and a two-hour
+# promise was opened over a question the reader could already see and
+# tap (Armine Meseldzhyan at Lionsgate, "summary deck for mistletoe
+# murders series viewers"; the same on 2026-10-31). A block that asks
+# something is a clarify, and its question is the reply.
+CHOICE_DEFAULT_QUESTION = 'Which profile should the deck cover?'
+
+
+def choice_block(payload):
+    """(question, choices) of a reply that asks the reader to pick, from
+    the block the page draws its chips from; ('', []) when there is none.
+    A block with choices and no sentence reads as the page's own default
+    question."""
+    if not isinstance(payload, dict) or not isinstance(payload.get('clarify'), dict):
+        return '', []
+    blk = payload['clarify']
+    choices = []
+    for o in list(blk.get('suggestions') or []) + list(blk.get('options') or []):
+        lab = o.get('label') if isinstance(o, dict) else o
+        lab = ' '.join(str(lab or '').split())
+        if lab and lab not in choices:
+            choices.append(lab)
+    q = blk.get('question')
+    q = ' '.join(q.split()) if isinstance(q, str) else ''
+    if not q and choices:
+        q = CHOICE_DEFAULT_QUESTION
+    return q, choices
+
+
 def reply_text(payload):
     """The text the user read, from any of the reply shapes."""
     if not isinstance(payload, dict):
@@ -133,6 +167,10 @@ def reply_text(payload):
         v = payload.get(k)
         if isinstance(v, str) and v.strip():
             return v
+    # a question with choices, read from the block that carries it
+    _cq, _cc = choice_block(payload)
+    if _cq:
+        return _cq
     # a clarify or a guidance line on the build surface rides as
     # guidance + error text (2026-10-13 audit: 75 of 77 clarified asks
     # logged no reply, so the morning review could not see what was
@@ -290,7 +328,7 @@ def classify(surface, payload, status_code=200, history=None,
             return 'proposed', detail
         if _CONFIRM_RE.search(text[:400]):
             return 'confirmed', detail
-        if has_card or is_clarify_text(text):
+        if has_card or is_clarify_text(text) or choice_block(payload)[0]:
             prev = last_agent_text(history)
             if prev and _norm(prev)[:160] == _norm(text)[:160]:
                 detail['sample'] = text.strip()[:160]

@@ -6265,6 +6265,12 @@ _DECK_SUBJ_STOPWORDS = {
     'complete', 'proper', 'real', 'actual', 'branded', 'quick', 'simple',
     'short', 'small', 'tight', 'clean', 'one', 'new', 'another',
     'single powerpoint', 'one powerpoint', 'consolidated powerpoint',
+    # the kind of deck is never the subject (2026-11-12: "make me a
+    # summary deck for Mistletoe Murders Viewers" read 'summary' as the
+    # subject and the profile as the buyer)
+    'summary', 'overview', 'executive', 'executive summary', 'exec summary',
+    'topline', 'top line', 'high level', 'high-level', 'brief', 'recap',
+    'summary insights', 'profile', 'profile summary', 'audience summary',
 }
 
 

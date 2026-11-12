@@ -90,7 +90,13 @@ def _text_of(raw):
     err = raw.get('error')
     if isinstance(err, str) and err.strip():
         return err.strip()
-    return ''
+    # a question with choices that rides as a block (the deck step's
+    # did-you-mean): its question is the text (2026-11-12)
+    try:
+        from . import ask_outcome as _ao
+        return _ao.choice_block(raw)[0]
+    except Exception:
+        return ''
 
 
 def wrap(raw, *, surface, decision, thread_id=None, via='session'):

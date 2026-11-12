@@ -30,6 +30,22 @@ audience's deck made for the brand, as it always has: a brand is a
 buyer. A title or a person is what a deck is about, and so is anything
 this thread has already been about.
 
+A title is the same title with "series", "show" or "tv" added
+(2026-11-12, the same reader: "summary deck for mistletoe murders series
+viewers" with Mistletoe Murders Viewers open and in the library). The
+name read as a new subject, "Mistletoe Murders Series Viewers", matched
+nothing, and the deck step asked "did you mean" about the profile on her
+screen. ``plain_title`` is the name with those words taken out; it is
+tried only after the name as written has matched nothing, so a library
+name that carries the word itself ("The Rainmaker TV Series") still
+wins on its own spelling.
+
+The did-you-mean is a question with choices (``choice_payload``): it
+carries its own sentence, so every reader of the reply (the page, the
+ask log, the copy the team reads) sees the question that was asked. A
+choice the reader taps is the answer (``choice_picked``): the deck
+starts, and the page is never confirmed a second time.
+
 Pure functions; the catalog and the thread are handed in. Nothing here
 raises into a request. No em dashes in anything a reader sees.
 """
@@ -37,7 +53,8 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['named', 'pick', 'for_name', 'is_recipient', 'question', 'pick_or_ask']
+__all__ = ['named', 'pick', 'for_name', 'is_recipient', 'question', 'pick_or_ask', 'plain_title', 'choice_payload',
+           'choice_picked', 'CHOICE_DEFAULT_QUESTION', 'plain_match', 'buyer']
 
 ASKED = 'asked_deck_for_whom'      # the ask log's name for the one question
 _DECK_NOUN = r"(?:insights?\s+deck|powerpoint\s+deck|pitch\s+deck|deck|slides?|presentation|one[- ]pagers?|pptx|powerpoint|ppt)"
@@ -91,6 +108,107 @@ def _fold(text):
 
 def _squash(text):
     return ' '.join(str(text or '').split())
+
+
+# the kind-of-title words a reader adds that a library name seldom carries
+_MEDIUM_RX = re.compile(r"\b(?:tv|television|series|show|movie|film)\b", re.I)
+
+
+def plain_title(name):
+    """The name with the kind-of-title words a reader adds taken out:
+    'mistletoe murders series viewers' is 'mistletoe murders viewers'.
+    '' when the name carries none of them, or is nothing without them."""
+    n = _squash(name)
+    out = _squash(_MEDIUM_RX.sub(' ', n))
+    if len(_fold(out)) < 3 or _fold(out) == _fold(n):
+        return ''
+    return out
+
+
+def plain_match(name, match):
+    """(name, candidates) for the library resolver once the name as
+    written has matched nothing: the plain title and what it matches, or
+    the name as it was and no candidates. `match(phrase)` is the
+    resolver's own matcher. Never raises."""
+    try:
+        plain = plain_title(name)
+        cands = list(match(plain) or []) if plain else []
+    except Exception:
+        cands = []
+    return (plain, cands) if cands else (name, [])
+
+
+def buyer(partner, subject):
+    """The buyer a deck is made for, or '' when the name after "for" is
+    the deck's own subject ("a summary deck for Mistletoe Murders
+    Viewers" with that profile open): a profile is never its own buyer."""
+    p = _squash(partner)
+    return '' if (p and _same(p, subject)) else p
+
+
+# ------------------------------------------------ the did-you-mean question
+from .ask_outcome import CHOICE_DEFAULT_QUESTION  # noqa: E402  (one sentence, shared with the reply classifier)
+
+
+def choice_payload(block):
+    """The reply that carries the deck step's did-you-mean. The choices
+    ride in ``clarify`` as before (the page draws them as chips); the
+    question also rides as the reply's own sentence, so a reply that asks
+    something is never read as a reply that says nothing."""
+    blk = dict(block) if isinstance(block, dict) else {}
+    q = _squash(blk.get('question') or '') or CHOICE_DEFAULT_QUESTION
+    blk['question'] = q
+    return {'success': True, 'clarify': blk, 'reply': q}
+
+
+def _is_choice_question(text):
+    t = _squash(text)
+    return bool(t) and (t == CHOICE_DEFAULT_QUESTION or t.startswith('I could not find an exact match for')
+                        or t.startswith('Here are the closest profiles in the library'))
+
+
+def choice_picked(history, ctx):
+    """True when the profile the request is bound to is the choice the
+    reader just tapped on the deck step's did-you-mean: the last thing
+    said in the thread is that question, it offered this profile, and
+    the reader's turn after it names it. The pick is the answer, so the
+    page is not confirmed again."""
+    try:
+        prim = (ctx or {}).get('primary') if isinstance(ctx, dict) else None
+        if not isinstance(prim, dict):
+            return False
+        key = str(prim.get('s3_key') or '').strip()
+        name = _squash(prim.get('name') or '').split(' - ')[0].strip()
+        turns = [t for t in (history or []) if isinstance(t, dict)]
+        idx = next((i for i in range(len(turns) - 1, -1, -1)
+                    if str(turns[i].get('role') or '').lower() in ('agent', 'assistant')), None)
+        if idx is None:
+            return False
+        asked = turns[idx]
+        after = [t for t in turns[idx + 1:] if str(t.get('role') or '').lower() in ('user', 'human')]
+        if len(after) != 1:
+            return False                     # the pick is the one turn that follows the question
+        said = _squash(after[0].get('text') or after[0].get('content') or '')
+        meta = asked.get('meta') if isinstance(asked.get('meta'), dict) else {}
+        offered = False
+        for o in (meta.get('options') or []):
+            if not isinstance(o, dict):
+                continue
+            bind = o.get('deckBind') if isinstance(o.get('deckBind'), dict) else {}
+            bkey = str(((bind.get('primary') or {}) if isinstance(bind.get('primary'), dict) else {}).get('s3_key') or '').strip()
+            lab = _squash(o.get('label') or '')
+            if key and bkey == key and said and (said == lab or said == _squash(o.get('send') or '')):
+                return True
+            if bkey:
+                offered = True
+        if offered:
+            return False                     # the question carried its choices and this was not one of them
+        if not _is_choice_question(asked.get('text') or asked.get('content') or ''):
+            return False
+        head = _squash(re.split(r"\s+\(", said, maxsplit=1)[0])
+        return bool(name) and bool(head) and _fold(head) == _fold(name)
+    except Exception:
+        return False
 
 
 def is_recipient(name):
@@ -199,17 +317,20 @@ def named(text, ctx=None, history=None, catalog=None):
         name = for_name(text)
         if not name:
             return ''
+        alt = plain_title(name)             # "mistletoe murders series viewers" is Mistletoe Murders Viewers
         page = ''
         try:
             page = _squash(((ctx or {}).get('primary') or {}).get('name') or '').split(' - ')[0].strip()
         except Exception:
             page = ''
-        if page and _same(name, page):
+        if page and (_same(name, page) or (alt and _same(alt, page))):
             return ''                       # the page is what was named: nothing to settle
         for s in _thread_names(history, page):
-            if _same(name, s) and not (page and _same(s, page)):
+            if (_same(name, s) or (alt and _same(alt, s))) and not (page and _same(s, page)):
                 return s                    # the thread's own subject, as the thread spells it
         disp, cat = _library(name, catalog)
+        if not disp and alt:
+            disp, cat = _library(alt, catalog)
         if disp:
             about = cat in _about_categories() or cat.startswith('SERIES')
             if about or not page:
@@ -253,9 +374,11 @@ def question(body, text, ctx=None, history=None, catalog=None, hint=None):
         if not name or name == name.lower():
             return None
         page = _squash(((ctx or {}).get('primary') or {}).get('name') or '').split(' - ')[0].strip()
-        if not page or _same(name, page):
+        alt = plain_title(name)
+        if not page or _same(name, page) or (alt and _same(alt, page)):
             return None
-        if any(_same(name, s) for s in _thread_names(history, page)) or _library(name, catalog)[0]:
+        if any(_same(name, s) or (alt and _same(alt, s)) for s in _thread_names(history, page)) \
+                or _library(name, catalog)[0] or (alt and _library(alt, catalog)[0]):
             return None
         opts = [{'label': f'{page}, made for {name}', 'subject': page, 'deck': True},
                 {'label': f'A deck on {name}', 'subject': name, 'deck': True}]

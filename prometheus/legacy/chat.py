@@ -18752,6 +18752,8 @@ def _pm_resolve_deck_subject(text, ctx):
     chosen, resolved_partner = None, partner
     if wanted:
         cands = _match(wanted)
+        if not cands:   # "mistletoe murders series viewers" is Mistletoe Murders Viewers: the plain title, only after the name as written matched nothing (2026-11-12)
+            wanted, cands = _deck_subject.plain_match(wanted, _match)
         if not cands and partner:
             # "deck for Noah Wyle" reads partner-shaped but names the
             # subject; if the partner matches a profile, it IS the
@@ -18857,7 +18859,7 @@ def _pm_resolve_deck_subject(text, ctx):
         name = str((ctx.get('primary') or {}).get('name') or '').strip()
         subject = name.split(' - ')[0].strip() or name or 'this audience'
         return ({'ctx': ctx, 'subject': subject,
-                 'partner': resolved_partner, 'clarify': None,
+                 'partner': _deck_subject.buyer(resolved_partner, subject), 'clarify': None,   # the open profile named after "for" is the subject, never its own buyer (2026-11-12)
                  'used_open_page': True}, None)
 
     # No named subject and nothing open: recover a profile name from the
@@ -19202,11 +19204,11 @@ def _pm_deck_core(user, body):
         return res_err
     _pm_ask_stage('deck_resolve', _t_deck0)
     if resolution.get('clarify'):
-        return jsonify({'success': True, 'clarify': resolution['clarify']})
+        return jsonify(_deck_subject.choice_payload(resolution['clarify']))   # the did-you-mean carries its own sentence: as a block alone it read as an empty reply and the calm promise was recorded over it (2026-11-12)
     _page_named = False
     try:   # "make me a deck on New Heights" with New Heights Podcast Listeners open: the words confirm the page (2026-10-30, item 13)
         _page_named = bool(_subject_rules.words_name_page(text, str(resolution.get('subject') or ''))) \
-            or bool(_subject_rules.deixis_points_at_screen(text, history))   # "make this a deck" on an empty thread: this is the screen (golden g083)
+            or bool(_subject_rules.deixis_points_at_screen(text, history)) or bool(_deck_subject.choice_picked(history, resolution.get('ctx')))   # "make this a deck" on an empty thread: this is the screen (golden g083); a did-you-mean choice just tapped is the answer, never confirmed again (2026-11-12)
     except Exception:
         _page_named = False
     if resolution.get('used_open_page') \

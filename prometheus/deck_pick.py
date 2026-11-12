@@ -309,7 +309,10 @@ def confirm_line(resolution):
             return (f"Building an insights deck from the {subject} read you already have. It restates that read's "
                     f"figures; it is not the Brand Partnership valuation." + tail)
         return f"Building an insights deck from the {subject} read you already have." + tail
-    return 'Building the ' + (subject + ' ' if subject else '') + 'insights deck.' + tail
+    # a name that opens with its own article keeps it and takes no second one ("Building The Rainmaker TV Series
+    # insights deck", never "the The Rainmaker"; 2026-11-12)
+    lead = 'Building ' if re.match(r"(?i)the\s", subject) else 'Building the '
+    return lead + (subject + ' ' if subject else '') + 'insights deck.' + tail
 
 
 # ------------------------------------------- the deck keeps the read's figures
