@@ -160,7 +160,10 @@ _SEED_GROUPS = (
     ("max", "hbomax"), ("paramount", "paramountplus"), ("disney", "disneyplus"), ("appletv", "appletvplus"),
     ("hallmarkplus",), ("peacock", "peacocktv"), ("mgmplus", "mgm"), ("pluto", "plutotv"), ("tubi", "tubitv"),
     ("rokuchannel", "therokuchannel"), ("discoveryplus",), ("amcplus",), ("youtube",), ("netflix",), ("hulu",),
-    ("starz",), ("britbox",), ("spotify",), ("applepodcasts",), ("audible",), ("freeform",), ("plex",),
+    ("starz",), ("britbox",), ("spotify",), ("applepodcasts",), ("audible",), ("freeform",),
+    # the row these free services carry in a profile is named with a word more or less than the service
+    # (2026-11-12: a universe seeded from Plex placements has its row as PLEX TV, one from Xumo Play as XUMO)
+    ("plex", "plextv"), ("xumo", "xumoplay"),
 )
 _SEED_KEY = {"hallmark": "hallmarkplus"}     # a resolver key that is shorter than the service's name
 
