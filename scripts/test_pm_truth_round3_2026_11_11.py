@@ -242,6 +242,9 @@ class AProbeLeavesNothing(unittest.TestCase):
             theirs = c.generate_presigned_url('get_object', Params={'Bucket': 'b', 'Key': 'generated_decks/readers_own.pptx'}, ExpiresIn=60)
         self.assertIn('/b/generated_decks/readers_own.pptx', theirs)
         self.assertNotIn('prometheus_probe', theirs)
+        # ... and at no extra cost: nothing is looked up to decide (a lookup per file pushed the nightly grader's
+        # three-minute deliverables case past its limit on 2026-11-12)
+        self.assertEqual([p for m, p in sent if m in ('HEAD', 'GET')], [])
 
     def test_a_probes_job_record_is_cleared_by_the_pass_and_a_readers_is_kept(self):
         w = _world()

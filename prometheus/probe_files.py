@@ -25,7 +25,8 @@ One choke point each:
     (`READER_PREFIXES`) is written, read and signed under
     `PROBE_PREFIX` instead. The caller's code is untouched: it gets a
     link, the replay can open the file to grade it, and nothing lands
-    where a reader's files live.
+    where a reader's files live. Only a file the probe wrote is read
+    from there; any other file is read where it is.
   * `job_ended(job_id)`, called by the job scope when a probe's job
     ends, leaves a small note under `PROBE_PREFIX`; `sweep` (the worker's
     regular pass, and the nightly clean-up as a backstop) removes the
@@ -45,7 +46,9 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
+from collections import OrderedDict
 
 __all__ = ['READER_PREFIXES', 'PROBE_PREFIX', 'reader_facing', 'probe_key', 'is_probe', 'install', 'job_ended',
            'sweep', 'sweep_with_host', 'run_access', 'redirected', 'clear_redirected']
@@ -92,7 +95,7 @@ def _note(op, key):
     try:
         _REDIRECTED.append({'op': str(op), 'key': str(key)[:300], 'at': time.time()})
         del _REDIRECTED[:-_REDIRECTED_MAX]
-        if op in ('PutObject', 'CopyObject', 'CreateMultipartUpload', 'put_object', 'copy_object', 'upload_fileobj', 'upload_file'):
+        if op in _WRITES:
             print(f"[probe-files] a probe's file is kept apart: {str(key)[:160]}")
     except Exception:
         pass
@@ -106,28 +109,53 @@ def clear_redirected():
     del _REDIRECTED[:]
 
 
+_WRITES = frozenset(('PutObject', 'CopyObject', 'CreateMultipartUpload', 'put_object', 'copy_object', 'upload_file',
+                     'upload_fileobj', 'copy'))
+_DELETES = frozenset(('DeleteObject', 'delete_object'))
+_WRITTEN = OrderedDict()           # reader-facing keys this process wrote for a probe (the probe copy exists)
+_WRITTEN_MAX = 4000
+_WRITTEN_LOCK = threading.Lock()
+
+
+def _remember(key):
+    with _WRITTEN_LOCK:
+        _WRITTEN[str(key)] = time.time()
+        _WRITTEN.move_to_end(str(key))
+        while len(_WRITTEN) > _WRITTEN_MAX:
+            _WRITTEN.popitem(last=False)
+
+
+def _wrote(key):
+    with _WRITTEN_LOCK:
+        return str(key) in _WRITTEN
+
+
 def _rewrite(key, op=''):
-    """The key to use: the probe's own copy when the asker is a probe and
-    the key is one a reader could be handed; else the key as given."""
+    """The key to use when the asker is a probe and the key is one a
+    reader could be handed. A write goes to the probe's own copy, always.
+    A read (and a link) goes to the probe's copy only when this process
+    wrote one: a probe that reads a file it did not write (a reader's own
+    deck, looked up by a golden case) reads the reader's file as it is,
+    at no extra cost (2026-11-12: looking for a probe copy first, one
+    request per file, pushed a three-minute deliverables lookup past the
+    nightly grader's limit). A probe never deletes a reader's file."""
     try:
         if key and reader_facing(key) and is_probe():
-            _note(op, key)
-            return probe_key(key)
+            if op in _WRITES:
+                _remember(key)
+                _note(op, key)
+                return probe_key(key)
+            if op in _DELETES or _wrote(key):
+                return probe_key(key)
     except Exception:
         pass
     return key
 
 
 # ---------------------------------------------------------------- the client
-_READS = ('GetObject', 'HeadObject')
-
-
 def _handler_for(client=None):
     """botocore 'provide-client-params' for one client: the request's own
-    parameters, returned changed when the key is a probe's. A probe that
-    reads a file it did not write (a reader's own deck or table, named
-    in a golden case) reads the reader's file as it is: the probe copy
-    is used for a read only when there is one."""
+    parameters, returned changed when the key is a probe's."""
     def handler(params, model=None, context=None, **_kw):
         try:
             if not isinstance(params, dict) or 'Key' not in params:
@@ -137,17 +165,9 @@ def _handler_for(client=None):
                     return None          # this client's own handler has already settled the key
                 if client is not None:
                     context[_MARK] = True
-            op = getattr(model, 'name', '') or ''
             key = params.get('Key')
-            new = _rewrite(key, op)
-            if new == key:
-                return None
-            if op in _READS and client is not None:
-                try:
-                    client.head_object(Bucket=params.get('Bucket'), Key=new)     # not a reader's key: no loop
-                except Exception:
-                    return None
-            return dict(params, Key=new)
+            new = _rewrite(key, getattr(model, 'name', '') or '')
+            return dict(params, Key=new) if new != key else None
         except Exception:
             return None
     return handler
@@ -180,36 +200,14 @@ def _wrap_plain(client):
             setattr(client, name, inner)
         except Exception:
             pass
-    for name in ('put_object', 'delete_object', 'copy_object'):
+    for name in ('put_object', 'get_object', 'head_object', 'delete_object', 'copy_object'):
         wrap(name, 'Key')
-
-    def wrap_read(name):
-        fn = getattr(client, name, None)
-        if not callable(fn) or getattr(fn, _MARK, False):
-            return
-
-        def inner(*a, **k):
-            key = k.get('Key')
-            new = _rewrite(key, name) if key else key
-            if new != key:
-                try:
-                    return fn(*a, **dict(k, Key=new))
-                except Exception:
-                    pass                 # no probe copy: the file as a reader holds it
-            return fn(*a, **k)
-        setattr(inner, _MARK, True)
-        try:
-            setattr(client, name, inner)
-        except Exception:
-            pass
-    for name in ('get_object', 'head_object'):
-        wrap_read(name)
     gen = getattr(client, 'generate_presigned_url', None)
     if callable(gen) and not getattr(gen, _MARK, False):
         def signed(method, Params=None, **k):
             p = dict(Params or {})
             if 'Key' in p:
-                p['Key'] = _rewrite(p['Key'], 'presign')
+                p['Key'] = _rewrite(p['Key'], 'put_object' if str(method) == 'put_object' else 'presign')
             return gen(method, Params=p, **k)
         setattr(signed, _MARK, True)
         try:
