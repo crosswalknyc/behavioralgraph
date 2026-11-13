@@ -2363,8 +2363,11 @@ def _campaign_account(ctx: DeckCtx) -> str:
 
     def price(v):
         return f"${v:,.0f}" if abs(v - round(v)) < 0.005 else f"${v:,.2f}"
-    if lo and hi and hi > lo:
+    if lo and hi and hi - lo >= 1.0:
         out.append(f"Pieces in the collection ran {price(lo)} to {price(hi)}.")
+    elif lo and hi and hi > lo:
+        # a band a few cents wide is one price (2026-11-12: "$159.95 to $160" here and "$160 to $160" on the sales page)
+        out.append(f"Pieces in the collection sold for {price(lo)}.")
     aov = _num(camp.get("aov_usd")) or _rate(ctx, "conv_value_per_user")
     if aov and ctx.has_conversions:
         out.append(f"A typical order came to {fmt_money(aov)}.")
@@ -2833,8 +2836,11 @@ def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
         parts.append(f"{fmt_num(units)} pieces sold in the US across {fmt_num(orders)} orders.")
     band = _dict(camp.get("price_band"))
     lo, hi = _num(band.get("low_usd")), _num(band.get("high_usd"))
-    if lo and hi and hi > lo:
+    if lo and hi and hi - lo >= 1.0:
         parts.append(f"Pieces ran ${lo:,.0f} to ${hi:,.0f}, and a typical order held more than one.")
+    elif lo and hi and hi > lo:
+        _one = f"${lo:,.0f}" if abs(lo - round(lo)) < 0.005 else f"${lo:,.2f}"
+        parts.append(f"Pieces sold for {_one}, and a typical order held more than one.")
     account = _safe_prose(conv.get("note"), brand=ctx.brand, talent=ctx.talent)
     if account:
         parts.append(account)
@@ -3294,7 +3300,18 @@ def build_deck_report(data: dict,
     _ds = _design()
     if _ds is not None:
         try:
-            data_out, report = _ds.gate_attachment("deck.pptx", data_out, render_check=render_check)
+            # The talent's and the brand's own names are the read's data,
+            # never a reused phrase (2026-11-12: a six-word property name,
+            # "Matchbox the Film on Apple TV", used on three pages drew the
+            # one flag that left a paid valuation deck marked not ready).
+            _own = []
+            if isinstance(data, dict):
+                _q = data.get("qualifier_value")
+                _own += [str(v).strip() for v in _q] if isinstance(_q, (list, tuple)) else [str(_q or "").strip()]
+                _own += [str(data.get(k) or "").strip() for k in ("brand_partner", "project_name", "campaign_name")]
+            _own = [n for i, n in enumerate(_own) if n and n not in _own[:i]]
+            data_out, report = _ds.gate_attachment("deck.pptx", data_out, render_check=render_check,
+                                                   protected_names=_own)
         except Exception:
             data_out, report = out.getvalue(), None
     return data_out, report

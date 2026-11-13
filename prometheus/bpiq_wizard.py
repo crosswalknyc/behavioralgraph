@@ -89,6 +89,25 @@ ASK_DATES_HINT_ALT = ('What day in {hint} did it start? A date like {example} wo
                       'not sure, I can run it from {first} through today.')
 ASK_DATES_UNREAD = 'I could not read those dates. Try something like October 7 - 28.'
 ASK_CONTROL_ALT = 'Should I include a control group? Yes or No.'
+# A reply at the control step that is neither yes nor no ("the national
+# average", 2026-11-12, Samantha Kolton at CAA) is told what a control
+# group is and what each choice costs before it is asked again; she was
+# asked "Yes or No" with neither, said Yes, and the order doubled.
+CONTROL_WHAT = ('A control group is a matched group of people who never saw the campaign, so the lift can be read '
+                'against them. Every valuation already compares the people reached with the average American and '
+                'with their own activity before launch.')
+CONTROL_PRICES = ' With a control group this valuation is {yes}; without one it is {no}.'
+# More than one partnership in one ask (2026-11-12): a valuation covers
+# one, each is quoted on its own, and none is dropped without a word.
+MANY_LINE = ('You named {n} partnerships. A valuation covers one partnership and each is quoted on its own, so I will '
+             'take them one at a time: {first} first, then {rest}.')
+MANY_LINE_OPEN = ('You named {n} partnerships ({names}). A valuation covers one partnership and each is quoted on its '
+                  'own, so I will take them one at a time.')
+NEXT_CHIP = 'Value the next partnership'
+NEXT_LINE = 'Next is {name}. It is its own valuation, quoted on its own. Say "{chip}" when you want it.'
+NEXT_OPEN = 'Next: {name}.'
+LINK_KEPT_LINE = 'I have kept that link for the campaign assets. '
+DAYS_AFTER_NOTE = 'You asked for the {n} days after launch, so I read the window as {camp}.'
 ASK_ASSETS_ALT = ("If you have campaign links, paste them. If not, say 'find them' and I will "
                   "look for every campaign asset myself.")
 ASK_LINKS_ALT = ("I did not catch a link. Paste one or more, or say 'find them' and I will "
@@ -160,6 +179,16 @@ _CANCEL_RE = re.compile(
     r'^\s*(never ?mind|not now|cancel( (that|it))?)\s*[.!?]?\s*$', re.I)
 _DECLINE_RE = re.compile(r'^\s*decline\s*[.!?]?\s*$', re.I)
 _YES_RE = re.compile(r'^\s*(yes|yeah|yep|y|sure|ok|okay)\s*[.!?]?\s*$', re.I)
+# the window read back and answered in a word that means yes ("correct",
+# "that's right", "looks good"): the window is accepted, never read back
+# a second time (2026-11-12). Only the window step reads these; the
+# charge still needs its own Accept.
+_AFFIRM_RE = re.compile(
+    r"^\W*(?:yes\W+)?(?:correct|right|that(?:'|\u2019)?s\s+(?:right|correct|it|fine|good|great|perfect)|that\s+is\s+(?:right|correct|fine)|"
+    r"that\s+works|works(?:\s+for\s+me)?|looks\s+(?:good|right|correct|great)|sounds\s+(?:good|right|great)|perfect|great|good|"
+    r"fine|confirm(?:ed)?|go\s+ahead|use\s+(?:that|it)|keep\s+(?:that|it)|yup|yes\s+(?:please|that\s+works|correct))\W*$", re.I)
+_NEXT_RE = re.compile(
+    r"^\W*(?:(?:please\s+)?(?:value|run|do|start|quote)\s+)?(?:the\s+)?(?:next|second|other)\s+(?:one|partnership|valuation)\W*$", re.I)
 _NO_RE = re.compile(r'^\s*(no|nope|nah|n)\s*[.!?]?\s*$', re.I)
 # the control question answered in a few more words ("yes please",
 # "no thanks", "without one", "include it")
@@ -719,6 +748,10 @@ def loose_statement(text, draft, today=None):
         return False
     if step in (STEP_DATES, STEP_ATTR, STEP_ATTR_CUSTOM) and parse_dates(t, today=today)[0]:
         return False
+    if step == STEP_ATTR and _AFFIRM_RE.match(t):
+        return False      # "correct": the window is accepted (2026-11-12)
+    if step == STEP_TALENT and not d.get('talent') and _slots.pair_answer(t):
+        return False      # both sides of the partnership in one answer (2026-11-12)
     return True
 
 
@@ -946,6 +979,8 @@ def _wants(text, body, history, store, user, thread_id):
     # a deck asked of the valuation still running on this thread is answered here, in one line
     if running_deck_answer(text, history, '', store, user, thread_id, None, body=body, chat=True)[0]:
         return True
+    if is_next(text) and _open_next(_run_marker(store, user, thread_id)) is not None:
+        return True     # the next partnership an earlier ask on this thread named
     draft = open_draft(body, history, store, user, thread_id)
     if draft is None:
         return False
@@ -1145,6 +1180,8 @@ def merge_slots(draft, text, today=None):
     if got.get('talent'):
         d['talent'] = _case(got['talent'])
         named['talent'] = d['talent']
+        if _talent_word(text):
+            named['talent_word'] = _talent_word(text)
     if got.get('brand'):
         d['brand_partner'] = _case(got['brand'])
         d['brand_named'] = True
@@ -1202,12 +1239,21 @@ def merge_slots(draft, text, today=None):
     return d, named
 
 
+def _talent_word(text):
+    """'property' when the reader called that side the property and not
+    the talent; '' otherwise (the read-back then says talent)."""
+    t = str(text or '')
+    return 'property' if (re.search(r"\bproperty\b", t, re.I) and not re.search(r"\btalent\b", t, re.I)) else ''
+
+
 def ack_line(named):
     """One plain line saying what a sentence was read as: "Got it: JYT
     is the talent and Gap is the brand." Empty when nothing was named."""
     bits = []
     if (named or {}).get('talent'):
-        bits.append(f"{named['talent']} is the talent")
+        # the reader's own word for that side ("X is the property", 2026-11-12)
+        word = 'property' if str((named or {}).get('talent_word') or '') == 'property' else 'talent'
+        bits.append(f"{named['talent']} is the {word}")
     if (named or {}).get('brand'):
         bits.append(f"{named['brand']} is the brand")
     if (named or {}).get('campaign'):
@@ -1245,6 +1291,12 @@ def apply_ahead(draft, text, today=None):
             # names from the rest of the words as usual
             d = merged
             t = _slots.strip_dates(t) or t
+    if not d.get('talent') and not d.get('pair'):
+        # both sides in one short answer, joined by "and" (2026-11-12)
+        both = _take_pair(d, t)
+        if both is not None:
+            both.pop('_named', None)
+            return both
     urls = extract_urls(t)
     if urls and not d.get('links'):
         d['links'] = urls
@@ -1323,6 +1375,48 @@ def orient_pair(a, b, history=None):
         return (got[0], got[1]) if got else None
     except Exception:
         return None
+
+
+def _take_pair(draft, text):
+    """The draft with both sides of a partnership taken from one short
+    answer ("Your Friends & Neighbors (Apple TV show) and Pure
+    Insurance", 2026-11-12), or None when the words are not two names.
+    A note in brackets says which side is the property; with none, what
+    is known decides (orient_pair), and when nothing does the pairing is
+    kept open and the talent step asks which one, once."""
+    try:
+        got = _slots.pair_answer(text)
+    except Exception:
+        got = None
+    if not got:
+        return None
+    a, b, side, kind = got
+    a, b = _slots.tidy_caps(a), _slots.tidy_caps(b)
+    d = dict(draft or empty_draft())
+    talent = brand = ''
+    if side == 'a':
+        talent, brand = a, b
+    elif side == 'b':
+        talent, brand = b, a
+    else:
+        o = orient_pair(a, b)
+        if o:
+            talent, brand = o[0], o[1]
+    if talent:
+        d['talent'], d['brand_partner'], d['brand_named'] = talent, brand, True
+        d.pop('pair', None)
+        if not d.get('campaign') or d.get('campaign_auto'):
+            d['campaign'] = _pair_name(talent, brand)
+            d['campaign_auto'] = True
+        d['_named'] = {'talent': talent, 'brand': brand}
+        if kind:
+            d['_named']['talent_word'] = kind
+    else:
+        d['pair'] = [a, b]
+        if not d.get('campaign') or d.get('campaign_auto'):
+            d['campaign'] = _pair_name(a, b)
+            d['campaign_auto'] = True
+    return d
 
 
 def _pair_pick(draft, name):
@@ -1469,6 +1563,11 @@ def attr_reply(draft, today=None):
     elif talent and brand and brand.lower() != talent.lower():
         lead = f"{_cased(talent)} x {_cased(brand)}: "
     note = ATTR_INFERRED_NOTE if d.get('dates_inferred') else ''
+    if d.get('launch_window') and (str(d.get('attr_start'))[:10], str(d.get('attr_end'))[:10]) == (
+            str(d.get('campaign_start'))[:10], str(d.get('campaign_end'))[:10]):
+        # "in the 30 days after the launch": the window is the one asked for
+        return (f"{lead}{DAYS_AFTER_NOTE.format(n=int(d.get('days_after') or 0), camp=camp)} "
+                f"Attribution window: {attr}.")
     if d.get('pinned_read'):
         # the order runs on the window of the figure the reader already holds
         return (f"{lead}I read the campaign as {camp}{PINNED_NOTE}. "
@@ -1560,6 +1659,20 @@ def step_prompt(draft, today=None):
         return ASK_LINKS, [CHIP_CANCEL]
     usd = price_usd(bool((draft or {}).get('control_group')))
     return recap_reply(draft), [accept_chip(usd, included=included_seat(draft)), CHIP_DECLINE, CHIP_CANCEL]
+
+
+def control_explainer(draft=None):
+    """What a control group is, what the valuation costs with one and
+    without (no prices for a seat whose plan includes it), and the
+    question again. For a reply at the control step that is neither yes
+    nor no (2026-11-12)."""
+    line = CONTROL_WHAT
+    try:
+        if not included_seat(draft):
+            line += CONTROL_PRICES.format(yes=price_label(price_usd(True)), no=price_label(price_usd(False)))
+    except Exception:
+        pass
+    return line + ' Include one? Yes or No.'
 
 
 def open_range_chip(start):
@@ -1707,6 +1820,26 @@ def apply_answer(draft, text, today=None):
             merged['_named'] = named
             return merged, None
 
+    if step in (STEP_TALENT, STEP_CAMPAIGN, STEP_DATES):
+        # a link is never a name (2026-11-12: on current code a YouTube
+        # link pasted at the talent step became the talent; on Nov 5 one
+        # pasted at the campaign step became the campaign). It is kept
+        # for the assets and the step is asked again.
+        _urls = extract_urls(t)
+        if _urls and not re.sub(r'[\W_]+', '', _URL_RE.sub(' ', t)):
+            d['links'] = list(dict.fromkeys(list(d.get('links') or []) + _urls))
+            d['asset_mode'] = 'links'
+            return d, LINK_KEPT_LINE + step_prompt(d, today=today)[0]
+    if step == STEP_TALENT and not d.get('pair'):
+        # both sides of the partnership in one answer ("Your Friends &
+        # Neighbors (Apple TV show) and Pure Insurance", 2026-11-12)
+        _both = _take_pair(d, t)
+        if _both is not None:
+            _both.pop('misses', None)
+            _both = _price_draft(_both)
+            _both['step'] = next_step(_both)
+            return _both, None
+
     if step == STEP_TALENT:
         name = _clean_name(t)
         # a bare yes / no is never a talent (2026-11-11: "yes" was stored
@@ -1780,7 +1913,7 @@ def apply_answer(draft, text, today=None):
             d['step'] = STEP_ATTR_CUSTOM
             d['attr_ok'] = False
             return _price_draft(d), None
-        if low == _low(CHIP_ACCEPT) or _ACCEPT_RE.match(t) or _YES_RE.match(t):
+        if low == _low(CHIP_ACCEPT) or _ACCEPT_RE.match(t) or _YES_RE.match(t) or _AFFIRM_RE.match(t):
             d['attr_ok'] = True
         else:
             start, end = parse_dates(t, today=today)
@@ -1831,7 +1964,9 @@ def apply_answer(draft, text, today=None):
         elif _NO_RE.match(t) or _low(t) == 'no' or _CONTROL_NO_RE.match(t):
             d['control_group'] = False
         else:
-            return d, ASK_CONTROL
+            # neither yes nor no ("the national average"): what a control
+            # group is and what each choice costs, then the question
+            return d, control_explainer(d)
     elif step == STEP_ASSETS:
         urls = extract_urls(t)
         if urls:
@@ -2231,13 +2366,26 @@ def _charge_seat(user, uname, inputs, job_id, g, charge_fn):
             f"{inputs.get('campaign') or inputs.get('brand_partner')}")
     pull = PULL_CONTROL if inputs.get('control_group') else PULL_BASE
     credits = CREDITS_CONTROL if inputs.get('control_group') else CREDITS_BASE
-    desc = f'Brand Partnership Valuation: {subj}'
+    desc = f'Brand Partnership Valuation: {charge_subject(inputs)}'
     try:
         from prometheus.priced_read import charge as pr_charge
         return bool(pr_charge(host, uname, subj, pull, credits, desc))
     except Exception:
         traceback.print_exc()
         return False
+
+
+def charge_subject(inputs):
+    """The pairing as the wallet line names it, once: a campaign that
+    already carries the talent ("Matchbox x Leatherman") is the whole
+    name, never "Matchbox x Matchbox x Leatherman" (2026-11-12)."""
+    i = inputs or {}
+    talent = str(i.get('qualifier') or '').strip()
+    camp = str(i.get('campaign') or i.get('brand_partner') or '').strip()
+    _f = lambda x: re.sub(r'[^a-z0-9]+', '', str(x or '').lower())      # noqa: E731
+    if talent and camp and _f(talent) in _f(camp):
+        return camp
+    return f"{talent} x {camp}".strip(' x') if (talent or camp) else 'partnership'
 
 
 def charge_stamp(draft, user, uname, g):
@@ -2526,6 +2674,7 @@ def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
                          CHIP_DECLINE, CHIP_CANCEL], draft=draft, bpiq_collect=False)
     # The draft leaves the store (later turns on the thread are not the
     # wizard's); a step-less marker keeps the run id it owns.
+    _queue = [dict(q) for q in (draft.get('queue') or []) if isinstance(q, dict) and q.get('brand')]
     if store is not None:
         try:
             store.clear(uname or user, thread_id)
@@ -2534,14 +2683,123 @@ def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
         saver = getattr(store, 'save_marker', None)
         if callable(saver):
             try:
-                saver(uname or user, thread_id, {
+                _mk = {
                     'job_id': job_id, 'run_key': key, 'charged': True,
                     'talent': inputs.get('qualifier'), 'campaign': inputs.get('campaign'),
-                    'started_at': datetime.utcnow().isoformat() + 'Z'})
+                    'started_at': datetime.utcnow().isoformat() + 'Z'}
+                if _queue:
+                    _mk['next_up'] = _queue
+                    if draft.get('days_after'):
+                        _mk['days_after'] = int(draft['days_after'])
+                saver(uname or user, thread_id, _mk)
             except Exception:
                 pass
+    if _queue:
+        # the ask named more than one partnership: the next one is said, never dropped (2026-11-12)
+        _nx = _pair_name(_queue[0].get('talent') or inputs.get('qualifier'), _queue[0].get('brand'))
+        return _payload(RUNNING_REPLY + '\n\n' + NEXT_LINE.format(name=_nx, chip=NEXT_CHIP), [NEXT_CHIP], draft=None,
+                        bpiq_collect=False, bpiq_job_id=job_id)
     return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False,
                     bpiq_job_id=job_id)
+
+
+def _window_from_launch(draft, start, days, today=None):
+    """Set the draft's window from a launch day: the days asked for after
+    it ("the 30 days after the launch"), never past today; with no length
+    given, launch through today. A launch day after today sets nothing."""
+    today = _today(today)
+    try:
+        a = _d(start)
+    except Exception:
+        return draft
+    if a > today:
+        return draft
+    if days:
+        b = min(a + timedelta(days=int(days)), today)
+        draft['campaign_start'], draft['campaign_end'] = a.isoformat(), b.isoformat()
+        draft['attr_start'], draft['attr_end'] = a.isoformat(), b.isoformat()
+        draft['launch_window'] = True
+        draft['window_open'], draft['end_named'] = False, True
+    else:
+        draft['campaign_start'], draft['campaign_end'] = a.isoformat(), today.isoformat()
+        draft['attr_start'], draft['attr_end'] = attribution_window(a, today, today=today)
+        draft['dates_inferred'] = True
+        mark_window(draft, '', inferred=True)
+    draft['attr_ok'] = False
+    for k in ('pinned_read', 'given_read', 'read_checked', 'start_hint', 'start_guess'):
+        draft.pop(k, None)
+    return draft
+
+
+def _open_many(draft, many, today=None):
+    """(draft, line) for an ask that names more than one partnership
+    (2026-11-12, Samantha Kolton at CAA: a film, two brands, two launch
+    days and "the 30 days after the launch"; the order opened empty and
+    the second brand was never mentioned again). The first partnership
+    fills the order, the others wait in the draft's queue, and the line
+    says so in plain words."""
+    d = dict(draft or empty_draft())
+    lk = _casing_lookup()
+
+    def _nm(x):
+        x = ' '.join(str(x or '').split())
+        if x and lk and (x.isupper() or x.islower()):
+            k = _slots.known_casing(x, lk)
+            if k and k != x:
+                return k
+        return _slots.tidy_caps(x)
+
+    _f = lambda x: re.sub(r'[^a-z0-9]+', '', str(x or '').lower())      # noqa: E731
+    raw = list(many.get('brands') or [])
+    brands = [_nm(b) for b in raw]
+    prop = _nm(many.get('property') or '')
+    starts = many.get('starts') or {}
+    days = many.get('days_after')
+    if days:
+        d['days_after'] = int(days)
+    if not prop:
+        d['more_brands'] = brands
+        return d, MANY_LINE_OPEN.format(n=len(brands), names=', '.join(brands))
+    d['talent'], d['brand_partner'], d['brand_named'] = prop, brands[0], True
+    d['campaign'], d['campaign_auto'] = _pair_name(prop, brands[0]), True
+    d['queue'] = [{'talent': prop, 'brand': b, 'start': str(starts.get(_f(r)) or '')} for b, r in zip(brands[1:], raw[1:])]
+    s0 = starts.get(_f(raw[0]))
+    if s0:
+        _window_from_launch(d, s0, days, today)
+    names = [_pair_name(prop, q['brand']) for q in d['queue']]
+    rest = names[0] if len(names) == 1 else (', '.join(names[:-1]) + ' and ' + names[-1])
+    return d, MANY_LINE.format(n=len(brands), first=d['campaign'], rest=rest)
+
+
+def is_next(text):
+    """The chip (or the words) that open the next partnership an earlier
+    ask on this thread named."""
+    t = str(text or '').strip()
+    return _low(t) == _low(NEXT_CHIP) or bool(_NEXT_RE.match(t))
+
+
+def _open_next(marker, today=None):
+    """The draft for the next partnership the thread's last order left
+    waiting (the run marker's `next_up`), or None."""
+    nxt = (marker or {}).get('next_up') if isinstance(marker, dict) else None
+    if not (isinstance(nxt, list) and nxt and isinstance(nxt[0], dict)):
+        return None
+    head = nxt[0]
+    if not (head.get('talent') and head.get('brand')):
+        return None
+    d = empty_draft()
+    d['talent'], d['brand_partner'], d['brand_named'] = str(head['talent']), str(head['brand']), True
+    d['campaign'], d['campaign_auto'] = _pair_name(d['talent'], d['brand_partner']), True
+    days = (marker or {}).get('days_after')
+    if days:
+        d['days_after'] = int(days)
+    if head.get('start'):
+        _window_from_launch(d, head['start'], days, today)
+    if len(nxt) > 1:
+        d['queue'] = [dict(x) for x in nxt[1:] if isinstance(x, dict)]
+    d = _price_draft(d)
+    d['step'] = next_step(d)
+    return d
 
 
 def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
@@ -2561,8 +2819,16 @@ def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
         return _payload(f"{_pv.lead(kind, had_draft=True)}\n\n{reply}", chips, draft=d)
     d = empty_draft()
     seed = ''
+    many_line = ''
+    if kind == 'value':
+        try:
+            many = _slots.many_partnerships(text, today=_today(today))
+        except Exception:
+            many = None
+        if many:
+            d, many_line = _open_many(d, many, today=today)
     try:
-        seed = _pv.seed(text, history, kind)
+        seed = '' if d.get('talent') else _pv.seed(text, history, kind)
     except Exception:
         seed = ''
     if seed:
@@ -2586,7 +2852,9 @@ def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
     if store is not None:
         store.save(user, thread_id, d)
     bits = [_pv.lead(kind)]
-    if d.get('talent') and d.get('brand_partner') and not d.get('pair') \
+    if many_line:
+        bits.append(many_line)
+    elif d.get('talent') and d.get('brand_partner') and not d.get('pair') \
             and d.get('step') not in (STEP_ATTR, STEP_CHARGE):
         # which side is the talent came from what is known (the reader's
         # own words, a read on the pairing, the library), never from the
@@ -2757,6 +3025,18 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
         return _start_fresh(store, uname or user, thread_id, today)
     if store is None:
         store = store_for(body, g)
+    if is_next(t):
+        # the next partnership an earlier ask on this thread named
+        _nd = _open_next(_run_marker(store, uname or user, thread_id), today=today)
+        if _nd is not None:
+            try:
+                store.save(uname or user, thread_id, _nd)
+            except Exception:
+                pass
+            _nr, _nc = step_prompt(_nd, today=today)
+            return _payload(f"{NEXT_OPEN.format(name=_nd['campaign'])}\n\n{_nr}", _nc, draft=_nd)
+        # nothing is waiting: the words open a new order, and "next" is never read as a name
+        return _start_fresh(store, uname or user, thread_id, today)
     draft = _load_draft(store, uname or user, thread_id, body, history,
                         today=today)
     if draft and not draft.get('read_checked') and draft.get('campaign_end'):
@@ -2933,9 +3213,11 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
                 if store is not None:
                     store.save(uname or user, thread_id, draft)
                 reply, chips = step_prompt(draft, today=today)
-                if names_slots(t, STEP_TALENT, today=today) and draft.get('step') not in (STEP_ATTR, STEP_CHARGE):
+                _pa = _slots.pair_answer(t) if draft.get('talent') else None
+                if (names_slots(t, STEP_TALENT, today=today) or _pa) and draft.get('step') not in (STEP_ATTR, STEP_CHARGE):
                     ack = ack_line({'talent': draft.get('talent'),
-                                    'brand': draft.get('brand_partner') if draft.get('brand_named') else ''})
+                                    'brand': draft.get('brand_partner') if draft.get('brand_named') else '',
+                                    'talent_word': (_pa[3] if _pa else _talent_word(t))})
                     if ack:
                         reply = f"{ack} {reply}"
                 return _payload(reply, chips, draft=draft)

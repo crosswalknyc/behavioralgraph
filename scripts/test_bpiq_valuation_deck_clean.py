@@ -596,7 +596,11 @@ def test_ready_is_the_truth():
         check(f"{label}: brand lint: 0 FAIL, 0 WARN", rep.counts.get("lint_fail") == 0 and rep.counts.get("lint_warn") == 0,
               [o for n, _ok, o in rep.steps if n == "brand_lint"][-1][-600:])
         check(f"{label}: plain-English check: 0 flags", rep.counts.get("readability_flags") == 0, rep.counts)
-        check(f"{label}: nothing for the finisher to repair", not rep.fixes, rep.fixes)
+        # the names written into the file for the mail gate are a stamp, never a repair (2026-11-12)
+        _repairs = {k: v for k, v in (rep.fixes or {}).items() if k != 'names_protected'}
+        check(f"{label}: nothing for the finisher to repair", not _repairs, rep.fixes)
+        check(f"{label}: the talent's and the brand's names are protected in the file",
+              int((rep.fixes or {}).get('names_protected') or 0) >= 2, rep.fixes)
         out = os.path.join(tmp, f"{'control' if doc['control_group'].get('enabled') else 'plain'}.pptx")
         Path(out).write_bytes(data)
         texts = _texts_of(out)

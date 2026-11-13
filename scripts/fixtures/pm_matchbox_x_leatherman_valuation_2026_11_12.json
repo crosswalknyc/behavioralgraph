@@ -1,0 +1,1007 @@
+{
+ "project_name": "Matchbox the Film on Apple TV x Leatherman",
+ "qualifier_type": "other",
+ "qualifier_value": [
+  "Matchbox the Film on Apple TV"
+ ],
+ "brand_partner": "Leatherman",
+ "start_date": "2026-09-29",
+ "end_date": "2026-11-13",
+ "attribution_window_days": 46,
+ "pre_period": {
+  "start": "2026-08-14",
+  "end": "2026-09-28",
+  "days": 46
+ },
+ "event_period": {
+  "start": "2026-09-29",
+  "end": "2026-11-13",
+  "days": 46
+ },
+ "post_period": {
+  "start": "2026-09-29",
+  "end": "2026-11-13",
+  "days": 46
+ },
+ "audience_size": 5253,
+ "projected_audience_size": 173284,
+ "pre_period_days": 46,
+ "post_period_days": 46,
+ "totals": {
+  "pre_hits": 3161,
+  "post_hits": 4627,
+  "pre_users": 1137,
+  "post_users": 1966,
+  "pre_users_projected": 37507,
+  "post_users_projected": 64854,
+  "lift_pct_hits": 46.38,
+  "lift_pct_users": 72.91,
+  "pre_hits_per_day": 68.72,
+  "post_hits_per_day": 100.59,
+  "audience_pen_pre_pct": 21.64,
+  "audience_pen_post_pct": 37.43
+ },
+ "per_platform": [
+  {
+   "platform": "YouTube",
+   "pre_users_on_platform": 3802,
+   "post_users_on_platform": 3935,
+   "pre_users": 544,
+   "post_users": 1096,
+   "lift_pct_users": 101.47,
+   "pre_users_projected": 17945,
+   "post_users_projected": 36154,
+   "pre_pen_pct": 14.31,
+   "post_pen_pct": 27.85
+  },
+  {
+   "platform": "Facebook",
+   "pre_users_on_platform": 3243,
+   "post_users_on_platform": 3267,
+   "pre_users": 417,
+   "post_users": 705,
+   "lift_pct_users": 69.06,
+   "pre_users_projected": 13756,
+   "post_users_projected": 23256,
+   "pre_pen_pct": 12.86,
+   "post_pen_pct": 21.58
+  },
+  {
+   "platform": "Instagram",
+   "pre_users_on_platform": 2887,
+   "post_users_on_platform": 2979,
+   "pre_users": 301,
+   "post_users": 588,
+   "lift_pct_users": 95.35,
+   "pre_users_projected": 9929,
+   "post_users_projected": 19397,
+   "pre_pen_pct": 10.43,
+   "post_pen_pct": 19.74
+  },
+  {
+   "platform": "Direct (Brand Site)",
+   "pre_users_on_platform": 2005,
+   "post_users_on_platform": 2325,
+   "pre_users": 636,
+   "post_users": 1223,
+   "lift_pct_users": 92.3,
+   "pre_users_projected": 20986,
+   "post_users_projected": 40344,
+   "pre_pen_pct": 31.72,
+   "post_pen_pct": 52.6
+  },
+  {
+   "platform": "TikTok",
+   "pre_users_on_platform": 1959,
+   "post_users_on_platform": 2056,
+   "pre_users": 122,
+   "post_users": 277,
+   "lift_pct_users": 127.05,
+   "pre_users_projected": 4024,
+   "post_users_projected": 9138,
+   "pre_pen_pct": 6.23,
+   "post_pen_pct": 13.47
+  },
+  {
+   "platform": "X (Twitter)",
+   "pre_users_on_platform": 1653,
+   "post_users_on_platform": 1724,
+   "pre_users": 132,
+   "post_users": 245,
+   "lift_pct_users": 85.61,
+   "pre_users_projected": 4354,
+   "post_users_projected": 8082,
+   "pre_pen_pct": 7.99,
+   "post_pen_pct": 14.21
+  },
+  {
+   "platform": "Reddit",
+   "pre_users_on_platform": 1509,
+   "post_users_on_platform": 1598,
+   "pre_users": 138,
+   "post_users": 282,
+   "lift_pct_users": 104.35,
+   "pre_users_projected": 4552,
+   "post_users_projected": 9303,
+   "pre_pen_pct": 9.15,
+   "post_pen_pct": 17.65
+  },
+  {
+   "platform": "LinkedIn",
+   "pre_users_on_platform": 1373,
+   "post_users_on_platform": 1386,
+   "pre_users": 47,
+   "post_users": 53,
+   "lift_pct_users": 12.77,
+   "pre_users_projected": 1558,
+   "post_users_projected": 1748,
+   "pre_pen_pct": 3.42,
+   "post_pen_pct": 3.82
+  },
+  {
+   "platform": "Pinterest",
+   "pre_users_on_platform": 1123,
+   "post_users_on_platform": 1137,
+   "pre_users": 46,
+   "post_users": 53,
+   "lift_pct_users": 15.22,
+   "pre_users_projected": 1517,
+   "post_users_projected": 1748,
+   "pre_pen_pct": 4.1,
+   "post_pen_pct": 4.66
+  },
+  {
+   "platform": "Snapchat",
+   "pre_users_on_platform": 968,
+   "post_users_on_platform": 987,
+   "pre_users": 26,
+   "post_users": 31,
+   "lift_pct_users": 19.23,
+   "pre_users_projected": 858,
+   "post_users_projected": 1023,
+   "pre_pen_pct": 2.69,
+   "post_pen_pct": 3.14
+  },
+  {
+   "platform": "Threads",
+   "pre_users_on_platform": 663,
+   "post_users_on_platform": 708,
+   "pre_users": 26,
+   "post_users": 37,
+   "lift_pct_users": 42.31,
+   "pre_users_projected": 858,
+   "post_users_projected": 1221,
+   "pre_pen_pct": 3.92,
+   "post_pen_pct": 5.23
+  },
+  {
+   "platform": "Twitch",
+   "pre_users_on_platform": 481,
+   "post_users_on_platform": 505,
+   "pre_users": 16,
+   "post_users": 15,
+   "lift_pct_users": -6.25,
+   "pre_users_projected": 528,
+   "post_users_projected": 495,
+   "pre_pen_pct": 3.33,
+   "post_pen_pct": 2.97
+  }
+ ],
+ "conversions": {
+  "pre_hits": 81,
+  "post_hits": 332,
+  "pre_users": 62,
+  "post_users": 237,
+  "pre_users_projected": 2045,
+  "post_users_projected": 7826,
+  "low_signal": false,
+  "lift_pct_hits": 0.0,
+  "lift_pct_users": 282.26,
+  "enabled": true,
+  "sell_out_lift_rel": 0.0,
+  "basis": "the drop's orders",
+  "units_us": 11207,
+  "revenue_usd": 1793014.86
+ },
+ "control_group": {
+  "enabled": true,
+  "control_size": 5253,
+  "projected_control_size": 173284,
+  "control_pre_users": 1103,
+  "control_post_users": 1135,
+  "control_pre_users_projected": 36385,
+  "control_post_users_projected": 37441,
+  "control_pre_hits": 2316,
+  "control_post_hits": 2497,
+  "treat_pre_pen_pct": 21.64,
+  "treat_post_pen_pct": 37.43,
+  "control_pre_pen_pct": 21.0,
+  "control_post_pen_pct": 21.61,
+  "treat_delta_pp": 15.79,
+  "control_delta_pp": 0.61,
+  "incremental_lift_pp": 15.18,
+  "incremental_lift_rel_pct": 2488.52,
+  "control_lift_pct_users": 2.9,
+  "background_drift_pp": 0.6137,
+  "match": {
+   "method": "difference_in_differences",
+   "exposed_size": 5253,
+   "control_size": 5253,
+   "exposed_pre_rate_pct": 21.6448,
+   "control_pre_rate_pct": 20.9975,
+   "pre_rate_rel_diff_pct": 2.99,
+   "band_rel_pct": 5.0,
+   "size_matched": true,
+   "pre_rate_matched": true,
+   "note": "Compared against a matched group of the same size with the same brand engagement before the partnership."
+  }
+ },
+ "demographics": {
+  "pre": {
+   "gender": [
+    {
+     "value": "Female",
+     "count": 226,
+     "percentage": 19.8404
+    },
+    {
+     "value": "Male",
+     "count": 868,
+     "percentage": 76.312
+    },
+    {
+     "value": "Prefer Not to Say",
+     "count": 24,
+     "percentage": 2.1159
+    },
+    {
+     "value": "Trans Male",
+     "count": 5,
+     "percentage": 0.4145
+    },
+    {
+     "value": "Trans Female",
+     "count": 4,
+     "percentage": 0.3391
+    },
+    {
+     "value": "Non-Binary",
+     "count": 11,
+     "percentage": 0.9781
+    }
+   ],
+   "age": [
+    {
+     "value": "17 and Under",
+     "count": 14,
+     "percentage": 1.2124
+    },
+    {
+     "value": "18-24",
+     "count": 89,
+     "percentage": 7.8348
+    },
+    {
+     "value": "25-34",
+     "count": 244,
+     "percentage": 21.4853
+    },
+    {
+     "value": "35-44",
+     "count": 306,
+     "percentage": 26.9291
+    },
+    {
+     "value": "45-54",
+     "count": 229,
+     "percentage": 20.1467
+    },
+    {
+     "value": "55-64",
+     "count": 155,
+     "percentage": 13.6231
+    },
+    {
+     "value": "65 or Older",
+     "count": 95,
+     "percentage": 8.3221
+    },
+    {
+     "value": "Other",
+     "count": 5,
+     "percentage": 0.4465
+    }
+   ],
+   "ethnicity": [
+    {
+     "value": "White",
+     "count": 813,
+     "percentage": 71.284
+    },
+    {
+     "value": "Hispanic or Latino",
+     "count": 132,
+     "percentage": 11.6463
+    },
+    {
+     "value": "Black or African American",
+     "count": 89,
+     "percentage": 7.8228
+    },
+    {
+     "value": "Asian",
+     "count": 61,
+     "percentage": 5.3704
+    },
+    {
+     "value": "Another Race/Ethnicity",
+     "count": 44,
+     "percentage": 3.8765
+    }
+   ],
+   "income": [
+    {
+     "value": "Less than $25,000",
+     "count": 73,
+     "percentage": 6.4281
+    },
+    {
+     "value": "$25,000 - $49,999",
+     "count": 179,
+     "percentage": 15.7219
+    },
+    {
+     "value": "$50,000 - $74,999",
+     "count": 243,
+     "percentage": 21.3826
+    },
+    {
+     "value": "$75,000 - $99,999",
+     "count": 225,
+     "percentage": 19.8143
+    },
+    {
+     "value": "$100,000 - $149,999",
+     "count": 239,
+     "percentage": 21.0473
+    },
+    {
+     "value": "$150,000 - $249,999",
+     "count": 137,
+     "percentage": 11.436
+    },
+    {
+     "value": "$250,000 or More",
+     "count": 47,
+     "percentage": 4.1698
+    }
+   ]
+  },
+  "post": {
+   "gender": [
+    {
+     "value": "Female",
+     "count": 462,
+     "percentage": 23.4139
+    },
+    {
+     "value": "Male",
+     "count": 1424,
+     "percentage": 72.4327
+    },
+    {
+     "value": "Prefer Not to Say",
+     "count": 43,
+     "percentage": 2.0412
+    },
+    {
+     "value": "Trans Male",
+     "count": 15,
+     "percentage": 0.4834
+    },
+    {
+     "value": "Trans Female",
+     "count": 8,
+     "percentage": 0.4076
+    },
+    {
+     "value": "Non-Binary",
+     "count": 24,
+     "percentage": 1.2212
+    }
+   ],
+   "age": [
+    {
+     "value": "17 and Under",
+     "count": 32,
+     "percentage": 1.6344
+    },
+    {
+     "value": "18-24",
+     "count": 205,
+     "percentage": 10.4156
+    },
+    {
+     "value": "25-34",
+     "count": 479,
+     "percentage": 24.3731
+    },
+    {
+     "value": "35-44",
+     "count": 514,
+     "percentage": 26.1523
+    },
+    {
+     "value": "45-54",
+     "count": 359,
+     "percentage": 18.2353
+    },
+    {
+     "value": "55-64",
+     "count": 234,
+     "percentage": 11.7091
+    },
+    {
+     "value": "65 or Older",
+     "count": 139,
+     "percentage": 7.0717
+    },
+    {
+     "value": "Other",
+     "count": 8,
+     "percentage": 0.4085
+    }
+   ],
+   "ethnicity": [
+    {
+     "value": "White",
+     "count": 1336,
+     "percentage": 67.9444
+    },
+    {
+     "value": "Hispanic or Latino",
+     "count": 264,
+     "percentage": 13.4135
+    },
+    {
+     "value": "Black or African American",
+     "count": 178,
+     "percentage": 9.0356
+    },
+    {
+     "value": "Asian",
+     "count": 112,
+     "percentage": 5.6803
+    },
+    {
+     "value": "Another Race/Ethnicity",
+     "count": 77,
+     "percentage": 3.9262
+    }
+   ],
+   "income": [
+    {
+     "value": "Less than $25,000",
+     "count": 142,
+     "percentage": 7.2158
+    },
+    {
+     "value": "$25,000 - $49,999",
+     "count": 324,
+     "percentage": 16.4842
+    },
+    {
+     "value": "$50,000 - $74,999",
+     "count": 427,
+     "percentage": 21.7285
+    },
+    {
+     "value": "$75,000 - $99,999",
+     "count": 384,
+     "percentage": 19.343
+    },
+    {
+     "value": "$100,000 - $149,999",
+     "count": 396,
+     "percentage": 20.1251
+    },
+    {
+     "value": "$150,000 - $249,999",
+     "count": 217,
+     "percentage": 11.0331
+    },
+    {
+     "value": "$250,000 or More",
+     "count": 85,
+     "percentage": 4.0703
+    }
+   ]
+  }
+ },
+ "sentiment": {
+  "enabled": true,
+  "sample_size": 14818,
+  "used_llm": true,
+  "pre": {
+   "positive": 1483,
+   "neutral": 2174,
+   "negative": 327
+  },
+  "post": {
+   "positive": 4218,
+   "neutral": 5144,
+   "negative": 1472
+  },
+  "pre_projected": {
+   "positive": 48921,
+   "neutral": 71715,
+   "negative": 10787
+  },
+  "post_projected": {
+   "positive": 139142,
+   "neutral": 169688,
+   "negative": 48558
+  },
+  "pre_net_score": 29.02,
+  "post_net_score": 25.35,
+  "net_shift": -3.67,
+  "top_positive": [
+   {
+    "common_name": "Tool cameos page on leatherman.com",
+    "url": "https://www.leatherman.com/pages/matchbox-the-movie",
+    "pre_hits": 327,
+    "post_hits": 935,
+    "sentiment": "positive",
+    "summary": "People say the cameo stills of Crosby holding the black Surge are the clearest product moment in the film and they went looking for the tool afterward.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   },
+   {
+    "common_name": "Free one-month Apple TV offer",
+    "url": "https://www.leatherman.com/pages/matchbox-the-movie",
+    "pre_hits": 211,
+    "post_hits": 608,
+    "sentiment": "positive",
+    "summary": "Shoppers treat the free month of Apple TV as an easy add-on to a purchase they were already considering.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   },
+   {
+    "common_name": "Surge product page",
+    "url": "https://www.leatherman.com/products/surge",
+    "pre_hits": 156,
+    "post_hits": 443,
+    "sentiment": "positive",
+    "summary": "Buyers praise the Surge as a warranty-backed workhorse and point to the film as the reason they finally bought one.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   },
+   {
+    "common_name": "T3 coverage of the Surge on screen",
+    "url": "https://www.t3.com/active/outdoors/leatherman-surge-matchbox-the-movie-1026",
+    "pre_hits": 123,
+    "post_hits": 351,
+    "sentiment": "positive",
+    "summary": "Gear readers enjoy the framing of a multi-tool as a screen accessory and share it as proof the Surge is an everyday carry staple.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   },
+   {
+    "common_name": "EDC and multi-tool community threads",
+    "url": "https://www.reddit.com/r/EDC/",
+    "pre_hits": 102,
+    "post_hits": 291,
+    "sentiment": "positive",
+    "summary": "Everyday carry regulars trade screenshots of the in-film scenes and argue the Surge was the right tool for the role.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   }
+  ],
+  "top_negative": [
+   {
+    "common_name": "Review coverage calling the placement a gimmick",
+    "url": "https://www.joblo.com/matchbox-the-movie-review-john-cena/",
+    "pre_hits": 96,
+    "post_hits": 432,
+    "sentiment": "negative",
+    "summary": "Critics and commenters read the brand moment as an ad inside a toy movie that already drew weak reviews.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   },
+   {
+    "common_name": "Price complaints on the Surge listing",
+    "url": "https://www.leatherman.com/products/surge",
+    "pre_hits": 62,
+    "post_hits": 278,
+    "sentiment": "negative",
+    "summary": "A smaller group pushes back on the $159.95 price and points to cheaper multi-tools.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   },
+   {
+    "common_name": "Backordered black finish on the international store",
+    "url": "https://int.leatherman.com/",
+    "pre_hits": 46,
+    "post_hits": 205,
+    "sentiment": "negative",
+    "summary": "Non-US shoppers report the black Surge unavailable at the moment the film drove them to the page.",
+    "sentiment_source": "analysis",
+    "summary_source": "analysis"
+   }
+  ]
+ },
+ "top_brand_properties": [
+  {
+   "common_name": "leatherman.com/pages/matchbox-the-movie",
+   "hits": 24187,
+   "hits_projected": 797872
+  },
+  {
+   "common_name": "leatherman.com/products/surge",
+   "hits": 11236,
+   "hits_projected": 370649
+  },
+  {
+   "common_name": "leatherman.com/pages/apple-tv-offer",
+   "hits": 8714,
+   "hits_projected": 287454
+  },
+  {
+   "common_name": "leatherman.com US storefront home",
+   "hits": 5168,
+   "hits_projected": 170487
+  },
+  {
+   "common_name": "leatherman.com/collections/multi-tools",
+   "hits": 3126,
+   "hits_projected": 103119
+  },
+  {
+   "common_name": "Leatherman newsroom: Surge in Matchbox The Movie",
+   "hits": 2841,
+   "hits_projected": 93718
+  },
+  {
+   "common_name": "cabelas.com Leatherman Surge listing",
+   "hits": 2317,
+   "hits_projected": 76432
+  },
+  {
+   "common_name": "sportsmans.com Leatherman Surge listing",
+   "hits": 1689,
+   "hits_projected": 55716
+  },
+  {
+   "common_name": "leatherman.com/pages/warranty-and-repair",
+   "hits": 1413,
+   "hits_projected": 46612
+  },
+  {
+   "common_name": "shop.gohunt.com Leatherman Surge listing",
+   "hits": 1072,
+   "hits_projected": 35363
+  },
+  {
+   "common_name": "int.leatherman.com Surge - Black",
+   "hits": 947,
+   "hits_projected": 31239
+  },
+  {
+   "common_name": "landmsupply.com Leatherman Surge listing",
+   "hits": 614,
+   "hits_projected": 20254
+  }
+ ],
+ "top_brand_properties_pre": [
+  {
+   "common_name": "leatherman.com/products/surge",
+   "hits": 3412,
+   "hits_projected": 112554
+  },
+  {
+   "common_name": "leatherman.com US storefront home",
+   "hits": 2873,
+   "hits_projected": 94773
+  },
+  {
+   "common_name": "leatherman.com/collections/multi-tools",
+   "hits": 1947,
+   "hits_projected": 64227
+  },
+  {
+   "common_name": "leatherman.com/pages/warranty-and-repair",
+   "hits": 1136,
+   "hits_projected": 37474
+  },
+  {
+   "common_name": "cabelas.com Leatherman Surge listing",
+   "hits": 874,
+   "hits_projected": 28831
+  },
+  {
+   "common_name": "sportsmans.com Leatherman Surge listing",
+   "hits": 713,
+   "hits_projected": 23521
+  },
+  {
+   "common_name": "shop.gohunt.com Leatherman Surge listing",
+   "hits": 431,
+   "hits_projected": 14218
+  },
+  {
+   "common_name": "int.leatherman.com Surge - Black",
+   "hits": 286,
+   "hits_projected": 9434
+  },
+  {
+   "common_name": "landmsupply.com Leatherman Surge listing",
+   "hits": 197,
+   "hits_projected": 6499
+  },
+  {
+   "common_name": "leatherman.com/pages/matchbox-the-movie",
+   "hits": 0,
+   "hits_projected": 0
+  },
+  {
+   "common_name": "leatherman.com/pages/apple-tv-offer",
+   "hits": 0,
+   "hits_projected": 0
+  },
+  {
+   "common_name": "Leatherman newsroom: Surge in Matchbox The Movie",
+   "hits": 0,
+   "hits_projected": 0
+  }
+ ],
+ "campaign": {
+  "name": "Matchbox The Movie ft. Leatherman",
+  "drop_dates": [
+   "2026-07-25",
+   "2026-10-05",
+   "2026-10-09"
+  ],
+  "sold_at": [
+   "leatherman.com US storefront (Surge product page carrying the Matchbox banner)",
+   "leatherman.com/pages/matchbox-the-movie landing page",
+   "int.leatherman.com (UK, EU, AU storefronts)",
+   "cabelas.com",
+   "sportsmans.com",
+   "shop.gohunt.com"
+  ],
+  "price_band": {
+   "low_usd": 159.95,
+   "high_usd": 160.0
+  },
+  "collection_size": null,
+  "sold_out": false,
+  "days_to_sell_out": null,
+  "partial_sell_out": false,
+  "restock_announced": false,
+  "inventory_signal": "large",
+  "talent_role": "Earned on-screen placement converted into a brand-owned campaign. The Surge is a named prop rather than a background object: the character Crosby produces it in dialogue and uses it across multiple scenes, and Leatherman built a landing page around those cameos rather than around a new product.",
+  "talent_channels": [
+   "leatherman.com landing page and PDP",
+   "Apple TV",
+   "Apple TV press newsroom",
+   "Mattel investor newsroom",
+   "coupon and offer aggregators",
+   "outdoor and gear trade press"
+  ],
+  "first_48h_share_of_purchases": null,
+  "aov_usd": 229.11,
+  "aov_basis": "researched_prices",
+  "read_line": "The collection ran $160 to $160 a piece. A typical order carried about 1.4 pieces, $229.11 per order.",
+  "audience_basis": "campaign reach",
+  "talent_audience_in_window": 173284,
+  "reach": {
+   "reach_us": 173284,
+   "gross_people": 173284,
+   "overlap": 0.3932,
+   "lines": [
+    {
+     "line": "press",
+     "people": 173284,
+     "basis": "5 pieces across national, fashion and trade titles, counted once per reader"
+    }
+   ],
+   "site_people": 0,
+   "press_people": 173284,
+   "social_people": 0,
+   "commercial_people": 0,
+   "event_people": 0,
+   "search_people": 0,
+   "views_total": 0,
+   "press_pieces": 5,
+   "events": 0
+  },
+  "reach_line": "The campaign reached about 173K people in the window: 173K through press, counted once each.",
+  "drop": {
+   "skus": 33,
+   "units_per_sku": 973.7,
+   "us_share_of_run": 0.641,
+   "units_us": 11207,
+   "orders": 7826,
+   "piece_price_usd": 159.99,
+   "per_order_usd": 229.11,
+   "revenue_usd": 1793014.86,
+   "sell_through": 0.608,
+   "inventory_signal": "large",
+   "basis": "sell-through of the run inside the window"
+  },
+  "drop_line": "About 11,207 pieces sold in the US, 7,826 orders, $1,793,015 at the collection's prices.",
+  "talent_share": {
+   "talent_share": 0.1031,
+   "asset_share": 0.5579,
+   "face_uplift": 1.211,
+   "holdout_share": 0.9614,
+   "basis": "56% of the campaign's exposure carried the talent; those assets drew 21% more response than the brand's alone; the matched group kept 96% of the lift"
+  },
+  "talent_line": "Matchbox the Film on Apple TV's share: 10% of the campaign's value, $334,710: 56% of the campaign's exposure carried the talent; those assets drew 21% more response than the brand's alone; the matched group kept 96% of the lift.",
+  "reach_label": "People the campaign reached"
+ },
+ "diagnostics": {
+  "audience_filter_used": "qualifier_only",
+  "brand_search_variants": [
+   "leatherman"
+  ],
+  "qualifier_search_variants": [
+   "matchbox the film on apple tv",
+   "matchboxthefilmonappletv",
+   "matchbox-the-film-on-apple-tv",
+   "matchbox_the_film_on_apple_tv"
+  ],
+  "post_window_clipped_to_today": false,
+  "run_key": "ba59a356bd05f64b"
+ },
+ "created_at": "2026-11-13T00:54:58.294279Z",
+ "valuation": {
+  "total_brand_value": 3246461.86,
+  "brand_engagement_value": 162135.0,
+  "earned_media_value": 1159857.0,
+  "brand_lift_value": 131455.0,
+  "conversion_value": 1793014.86,
+  "incremental_users": 26291,
+  "rates": {
+   "bev_per_user": 2.5,
+   "blv_per_incr_user": 5.0,
+   "conv_value_per_user": 229.11,
+   "emv_per_user": {
+    "TikTok": 7.0,
+    "Instagram": 11.0,
+    "YouTube": 3.5,
+    "Facebook": 14.0,
+    "X": 6.0,
+    "Twitter": 6.0,
+    "X (Twitter)": 6.0,
+    "Reddit": 4.0,
+    "Pinterest": 6.0,
+    "Snapchat": 5.0,
+    "LinkedIn": 25.0,
+    "Direct (Brand Site)": 5.0,
+    "Threads": 10.0,
+    "Twitch": 15.0,
+    "Press": 4.0,
+    "Launch event": 5.0
+   }
+  },
+  "rate_sources": {
+   "conv_value_per_user": "Average order value $229.11: the collection ran $160 to $160 a piece and a typical order carried about 1.4 pieces."
+  },
+  "aov_basis": "researched_prices",
+  "emv_breakdown": [
+   {
+    "platform": "Press",
+    "post_users_projected": 173284,
+    "pre_users_projected": 0,
+    "incremental_users_projected": 173284,
+    "emv_per_user_rate": 4.0,
+    "emv_value": 693136.0,
+    "earned_direct": true
+   },
+   {
+    "platform": "Facebook",
+    "post_users_projected": 23256,
+    "pre_users_projected": 13756,
+    "incremental_users_projected": 9133,
+    "emv_per_user_rate": 14.0,
+    "emv_value": 127862.0
+   },
+   {
+    "platform": "Instagram",
+    "post_users_projected": 19397,
+    "pre_users_projected": 9929,
+    "incremental_users_projected": 9102,
+    "emv_per_user_rate": 11.0,
+    "emv_value": 100122.0
+   },
+   {
+    "platform": "Direct (Brand Site)",
+    "post_users_projected": 40344,
+    "pre_users_projected": 20986,
+    "incremental_users_projected": 18618,
+    "emv_per_user_rate": 5.0,
+    "emv_value": 93090.0
+   },
+   {
+    "platform": "YouTube",
+    "post_users_projected": 36154,
+    "pre_users_projected": 17945,
+    "incremental_users_projected": 17506,
+    "emv_per_user_rate": 3.5,
+    "emv_value": 61271.0
+   },
+   {
+    "platform": "TikTok",
+    "post_users_projected": 9138,
+    "pre_users_projected": 4024,
+    "incremental_users_projected": 4916,
+    "emv_per_user_rate": 7.0,
+    "emv_value": 34412.0
+   },
+   {
+    "platform": "X (Twitter)",
+    "post_users_projected": 8082,
+    "pre_users_projected": 4354,
+    "incremental_users_projected": 3584,
+    "emv_per_user_rate": 6.0,
+    "emv_value": 21504.0
+   },
+   {
+    "platform": "Reddit",
+    "post_users_projected": 9303,
+    "pre_users_projected": 4552,
+    "incremental_users_projected": 4567,
+    "emv_per_user_rate": 4.0,
+    "emv_value": 18268.0
+   },
+   {
+    "platform": "LinkedIn",
+    "post_users_projected": 1748,
+    "pre_users_projected": 1558,
+    "incremental_users_projected": 183,
+    "emv_per_user_rate": 25.0,
+    "emv_value": 4575.0
+   },
+   {
+    "platform": "Threads",
+    "post_users_projected": 1221,
+    "pre_users_projected": 858,
+    "incremental_users_projected": 349,
+    "emv_per_user_rate": 10.0,
+    "emv_value": 3490.0
+   },
+   {
+    "platform": "Pinterest",
+    "post_users_projected": 1748,
+    "pre_users_projected": 1517,
+    "incremental_users_projected": 222,
+    "emv_per_user_rate": 6.0,
+    "emv_value": 1332.0
+   },
+   {
+    "platform": "Snapchat",
+    "post_users_projected": 1023,
+    "pre_users_projected": 858,
+    "incremental_users_projected": 159,
+    "emv_per_user_rate": 5.0,
+    "emv_value": 795.0
+   }
+  ],
+  "methodology": "We sized the people the partnership reached in the US, 173,284 individuals, observed in the audience as 5,253 consumers, and measured them in two matched 46-day windows: 2026-08-14 to 2026-09-28 before the campaign and 2026-09-29 to 2026-11-13 around the premiere and the Apple TV streaming start. Within that same audience we read any Leatherman touchpoint, brand site pages, retail listings and social contact, which moved from 21.6 percent of the audience to 37.4 percent, and we read high-intent actions, order confirmations and checkout events, which moved from 1.1 percent to 4.5 percent, carrying 7,826 orders and $1,793,014.86 in the event window. Platform-level penetration separates the surfaces that carried creative from the ones that did not. A matched comparison group of the same size with the same pre-window brand engagement rate and no exposure to the partnership drifted 0.6 percentage points over the same dates, and the lift is the audience's change net of that drift. Demographics and sentiment describe the brand engagers inside the reached audience in each window.",
+  "talent_share": 0.1031,
+  "talent_share_basis": "56% of the campaign's exposure carried the talent; those assets drew 21% more response than the brand's alone; the matched group kept 96% of the lift",
+  "attributable_to_talent": 334710.22,
+  "attributable_to_partnership": 1389216.81,
+  "comparison_note": "Compared against a matched group of the same size with the same brand engagement before the partnership."
+ },
+ "campaign_name": "Matchbox the Film on Apple TV x Leatherman",
+ "windows": {
+  "matched_pre_window": true,
+  "baseline_period": {
+   "start": "2025-09-29",
+   "end": "2026-09-28",
+   "days": 365
+  }
+ }
+}

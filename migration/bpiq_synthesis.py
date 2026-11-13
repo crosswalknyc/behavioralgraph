@@ -964,8 +964,11 @@ def campaign_block(campaign: Optional[dict], aov: dict, salt: str) -> dict:
     days_txt = _plain_days(so.get("days_to_sell_out")) if sold_out else ""
     inv = str(c.get("inventory_signal") or "unknown")
     lines = []
-    if lo and hi and hi > lo:
+    if lo and hi and hi - lo >= 1.0:
         lines.append(f"The collection ran ${lo:,.0f} to ${hi:,.0f} a piece.")
+    elif lo and hi and hi > lo:
+        # a band a few cents wide is one price, never "$160 to $160" (2026-11-12)
+        lines.append("Each piece ran " + (f"${lo:,.0f}" if abs(lo - round(lo)) < 0.005 else f"${lo:,.2f}") + ".")
     elif hi:
         lines.append(f"Pieces ran up to ${hi:,.0f}.")
     if sold_out:

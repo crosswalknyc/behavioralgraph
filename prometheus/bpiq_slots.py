@@ -371,5 +371,179 @@ def known_casing(name, lookup=None):
     return head if _fold(head) == _fold(s) else s
 
 
+# ---------------------------------------------------------------------------
+# Two names in one answer, and more than one partnership in one ask
+# (2026-11-12, Samantha Kolton at CAA). "Your Friends & Neighbors (Apple
+# TV show) and Pure Insurance" answered "Who is the property or talent?"
+# with both sides of the partnership; "MATCHBOX THE FILM ON APPLE TV ...
+# DID TWO PARTNERSHIPS WITH LEATHERMAN AND JIFFYLUBE, THE LEATHERMAN
+# PARTNERSHIP LAUNCHED SEPT 29 AND THE JIFFY LUBE ONE LAUNCHED OCT 9, CAN
+# YOU VALUE THESE PARTNERSHIPS IN THE 30 DAYS AFTER THE LAUNCH?" named a
+# property, two brands, two launch days and the window. Neither was read.
+_TALENT_HINT_RX = re.compile(
+    r"\b(?:show|series|film|movie|title|property|talent|artist|athlete|creator|podcast|game|franchise|team|band|"
+    r"league|tour|festival|book|documentary|actor|actress|singer|musician|comedian|host)\b", re.I)
+_BRAND_HINT_RX = re.compile(r"\b(?:brand|sponsor|advertiser|retailer|company|insurer|bank|client)\b", re.I)
+_PROPERTY_HINT_RX = re.compile(
+    r"\b(?:show|series|film|movie|title|property|podcast|game|franchise|team|league|tour|festival|book|documentary)\b", re.I)
+_PAREN_RX = re.compile(r"\s*\(([^()]{1,60})\)")
+_SENTENCE_WORD_RX = re.compile(
+    r"\b(?:is|are|was|were|did|does|do|has|have|had|will|can|could|should|would|want|need|value|worth|please|"
+    r"partnership|partnerships|campaign|launched|started|ran)\b", re.I)
+_PAIR_TAIL_LEAD_RX = re.compile(r"^(?:the|a|an|his|her|their|its|other|others|where|how|why|what|more|me|you|us|them|so|then)\b", re.I)
+_SMALL_WORDS = frozenset(('a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in', 'of', 'on', 'or', 'the', 'to',
+                          'with', 'x', 'vs'))
+
+
+def tidy_caps(name):
+    """A name typed in all capitals inside a sentence ("MATCHBOX THE FILM
+    ON APPLE TV") in title case: small words lower, a short token that
+    could be initials (TV, UFC, JYT) left as typed. A name that already
+    carries lower case is returned as typed."""
+    s = _norm(name)
+    if not s or not s.isupper() or len(s) <= 4:
+        return s
+    out = []
+    for i, w in enumerate(s.split()):
+        core = re.sub(r"[^A-Za-z]", '', w)
+        if i and w.lower() in _SMALL_WORDS:
+            out.append(w.lower())
+        elif 0 < len(core) <= 3 and len(s.split()) > 1:
+            out.append(w)
+        else:
+            out.append(w[:1] + w[1:].lower())
+    return ' '.join(out)
+
+
+def pair_answer(text):
+    """(a, b, talent_side, kind) when one short answer names both sides of a
+    partnership joined by "and" ("Your Friends & Neighbors (Apple TV
+    show) and Pure Insurance", "Kevin Hart and Chase Bank"); None for
+    anything else. talent_side is 'a' or 'b' when a note in brackets
+    says which side is the property ("(Apple TV show)", "(the brand)"),
+    else ''; kind is 'property' when that note names a title, a team or
+    a show rather than a person. A single name that carries "and" is never split: with no
+    note, both sides must run two words or more and the second must not
+    open like the rest of a title ("... and the Goblet of Fire")."""
+    t = _norm(text)
+    if not t or '?' in t or len(t) > 160 or re.search(r"https?://", t, re.I):
+        return None
+    cut = None
+    depth = 0
+    for i, ch in enumerate(t):
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth = max(0, depth - 1)
+        elif depth == 0 and t[i:i + 5].lower() == ' and ':
+            cut = i
+    if cut is None:
+        return None
+    raw_a, raw_b = t[:cut], t[cut + 5:]
+    note_a = ' '.join(_PAREN_RX.findall(raw_a))
+    note_b = ' '.join(_PAREN_RX.findall(raw_b))
+    a = _clean_name(_PAREN_RX.sub(' ', raw_a))
+    b = _clean_name(_PAREN_RX.sub(' ', raw_b))
+    if not a or not b or _fold(a) == _fold(b):
+        return None
+    if _SENTENCE_WORD_RX.search(a) or _SENTENCE_WORD_RX.search(b) or ',' in a or ',' in b:
+        return None
+    side = ''
+    if (note_a and _TALENT_HINT_RX.search(note_a)) or (note_b and _BRAND_HINT_RX.search(note_b)):
+        side = 'a'
+    elif (note_b and _TALENT_HINT_RX.search(note_b)) or (note_a and _BRAND_HINT_RX.search(note_a)):
+        side = 'b'
+    kind = 'property' if _PROPERTY_HINT_RX.search(note_a if side == 'a' else (note_b if side == 'b' else '')) else ''
+    if not side:
+        if len(a.split()) < 2 or len(b.split()) < 2 or _PAIR_TAIL_LEAD_RX.match(b):
+            return None
+    return a, b, side, kind
+
+
+_MANY_RX = re.compile(
+    r"\b(?:(?:two|three|four|five|2|3|4|5|both|several|multiple|a\s+couple\s+of|a\s+few)\s+)?(?:brand\s+)?"
+    r"(?:partnerships|deals|collabs|collaborations|sponsorships|campaigns|tie[- ]ins)\s+with\s+(?P<list>[^.;:?!\n]{3,400})", re.I)
+_OWNER_VERB_TAIL_RX = re.compile(
+    r"\s+(?:did|does|has|had|have|ran|runs|signed|launched|announced|made|struck|inked|is\s+doing|is\s+running|"
+    r"has\s+done|had\s+done|did\s+do|has\s+signed|has\s+launched)\s*$", re.I)
+_OWNER_CUT_RX = re.compile(
+    r"\s+(?:that|which|who)\s+(?:was|is|were|are|got|came|will|just|recently)\b|\s+(?:released|premiered|debuted|out)\s+(?:in|on)\b|\s*\(|,", re.I)
+_DAYS_AFTER_RX = re.compile(
+    r"\b(?:the\s+)?(?:first\s+)?(?P<n>\d{1,3})\s+days?\s+(?:after|following|from|post|since|of)\s+(?:the\s+|each\s+|its\s+|their\s+|every\s+)?"
+    r"(?:launch(?:es)?|release|start|premiere|debut|drop|kick[- ]?off)\b", re.I)
+
+
+def days_after_launch(text):
+    """30 for "in the 30 days after the launch"; None when the words give
+    no such window (or one outside 1 to 366 days)."""
+    m = _DAYS_AFTER_RX.search(_norm(text))
+    if not m:
+        return None
+    n = int(m.group('n'))
+    return n if 1 <= n <= 366 else None
+
+
+def many_partnerships(text, today=None):
+    """What one ask names when it names more than one partnership:
+    {'property', 'brands' (two or more, as typed), 'starts' (folded brand
+    -> ISO launch day, where the words give one) and 'days_after' (30 for
+    "the 30 days after the launch")}. None when the words name fewer than
+    two partners. The property is '' when it cannot be read as a short
+    name."""
+    today = today or date.today()
+    t = _norm(text)
+    if not t or len(t) > 900:
+        return None
+    m = _MANY_RX.search(t)
+    if not m:
+        return None
+    brands = []
+    for piece in re.split(r"\s*,\s*|\s+and\s+|\s*&\s*", m.group('list'), flags=re.I):
+        p = re.sub(r"\s+(?:that|which|who|for|in|on|from|this|last|over|during|since)\b.*$", '', piece, flags=re.I).strip(" '\"")
+        if not p or len(p.split()) > 4 or _SENTENCE_WORD_RX.search(p) or re.match(r"(?i)^(?:the|a|an|then|also|can|could|would)\b", p):
+            break
+        name = _clean_name(p)
+        if not name:
+            break
+        if _fold(name) not in {_fold(x) for x in brands}:
+            brands.append(name)
+    if len(brands) < 2:
+        return None
+    # a partner written two ways in one ask ("JIFFYLUBE ... THE JIFFY LUBE ONE") takes the spaced spelling
+    toks = re.findall(r"[A-Za-z0-9'&.\-]+", t)
+    for i, b in enumerate(brands):
+        if ' ' in b:
+            continue
+        for n in (2, 3):
+            hit = next((' '.join(toks[j:j + n]) for j in range(len(toks) - n + 1)
+                        if _fold(' '.join(toks[j:j + n])) == _fold(b)), '')
+            if hit:
+                brands[i] = hit
+                break
+    owner = t[:m.start()]
+    owner = re.sub(r"\s+(?:two|three|four|five|2|3|4|5|both|several|multiple|a\s+couple\s+of|a\s+few)\s*$", '', owner, flags=re.I)
+    owner = _OWNER_VERB_TAIL_RX.sub('', ' ' + owner).strip()
+    cut = _OWNER_CUT_RX.search(owner)
+    if cut:
+        owner = owner[:cut.start()]
+    owner = re.sub(r"^\W*(?:(?:hey|hi|ok|okay|so)[,\s]+)?(?:please\s+|can you\s+|could you\s+|would you\s+)?(?:value\s+)?", '', owner, flags=re.I)
+    prop = _clean_name(re.sub(r"^(?:the|our|my|their|a|an|these|those|all|some)\b\s*", '', owner.strip(), flags=re.I))
+    if prop and (_SENTENCE_WORD_RX.search(prop) or len(prop.split()) > 7):
+        prop = ''
+    starts = {}
+    clauses = [c for c in re.split(r"[,;]|\band\s+the\b|\.\s", t, flags=re.I) if c.strip()]
+    for b in brands:
+        fb = _fold(b)
+        for c in clauses:
+            if fb and fb in _fold(c):
+                sm = _START_RX.search(c)
+                if sm:
+                    d, precise, _label = _date_from_match(sm, today)
+                    if d is not None and precise:
+                        starts[fb] = d.isoformat()
+                        break
+    return {'property': prop, 'brands': brands, 'starts': starts, 'days_after': days_after_launch(t)}
+
+
 __all__ = ['parse', 'names_slots', 'strip_dates', 'single_date', 'says_ongoing', 'is_filler', 'finds_assets', 'has_no_links',
-           'known_casing']
+           'known_casing', 'pair_answer', 'many_partnerships', 'days_after_launch', 'tidy_caps']
