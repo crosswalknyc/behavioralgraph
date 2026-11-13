@@ -3192,6 +3192,56 @@ _CARD_CONFIG: dict[str, dict] = {
         },
         "paths_conversion_noun": "Anthem site visit",
     },
+    # Outlander: Blood of My Blood x Starz finale campaign (Sony Pictures
+    # Television, 2026-11-16 to 11-27). Exposure is a Vizio or Samsung
+    # connected TV placement or a Meta placement; the mid step is looking
+    # the show up; the conversion is a play of the show on the Starz app or
+    # starz.com within 14d, with a new Starz subscription read as a sub-step.
+    "starz_blood_of_my_blood_finale_campaign": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["Starz app", "starz.com",
+                                          "Starz channel on another service",
+                                          "Starz show page"],
+        "infoseek_overlap_surfaces":   ["Google search for the show", "Search inside Starz",
+                                          "Instagram, TikTok or Facebook search",
+                                          "Trailer or clip on YouTube", "Reddit threads and reviews"],
+        "assist_touchpoints":          ["Connected TV placement seen", "Meta placement seen",
+                                          "Show search", "Second placement on another screen"],
+        "leak_competing_label":        "Played a different series instead",
+        "leak_competing_note":         ("Looked the show up within 14d and played a different "
+                                          "series on Starz or another service instead"),
+        "nest_labels": {
+            "2_infoseek": "Mid funnel: Looked the show up within 14d",
+            "3_ticketer": "Lower funnel: Reached a Starz show page within 14d",
+            "4_paid":     "Played the show on the Starz app or site within 14d",
+        },
+        "fork_questions": {
+            "1_exposed":  "Saw the placement through",
+            "2_infoseek": "Looked the show up on more than one surface",
+            "3_ticketer": "Reached the show page on more than one screen",
+        },
+        "archetypes": [
+            {"archetype": "Straight-through",
+             "description": "Placement to a play on the Starz app the same evening, no research step"},
+            {"archetype": "Researched",
+             "description": "Placement to a Google or social search for the show to a play on Starz"},
+            {"archetype": "Re-exposed",
+             "description": "Saw a connected TV placement, then a Meta placement, then played the show"},
+            {"archetype": "New to Starz",
+             "description": "Placement to a new Starz subscription to a first play of the show"},
+        ],
+        "leak_labels": {
+            "infoseek_no_conv": (
+                "Looked the show up, no Starz play",
+                "Searched for the show within 14d but never reached the Starz app or site",
+            ),
+            "conv_visit_no_pay": (
+                "Starz show page, no play",
+                "Reached the show page on the Starz app or site within 14d but did not press play",
+            ),
+        },
+        "paths_conversion_noun": "Starz play",
+    },
 }
 
 
