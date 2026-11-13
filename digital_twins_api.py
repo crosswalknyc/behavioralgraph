@@ -690,6 +690,11 @@ def dt_build():
     body = request.get_json(silent=True) or {}
     subject = ' '.join(str(body.get('subject') or '').split())[:140]
     source = str(body.get('source') or '').lower()
+    if source == 'demographics':
+        # a share typed beside a pick (2026-11-13): one group's shares total at most 100; refused here, before anything is queued or charged
+        share_err = SYN.demographic_shares_error(body.get('demographics'))
+        if share_err:
+            return jsonify({'success': False, 'error': share_err}), 400
     demo_spec = SYN.demographic_spec(body.get('demographics'))
     if source == 'demographics' and not demo_spec:
         return jsonify({'success': False, 'error': 'Pick at least one thing about the group (gender, age, income, ethnicity, parents or a market).'}), 400

@@ -51728,6 +51728,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-bw-group .k { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); margin: 0 0 0.35rem; display: flex; justify-content: space-between; gap: 8px; }
         #digitalTwinsIQView .dtw-bw-group .k em { font-style: normal; font-weight: 400; letter-spacing: 0; text-transform: none; }
         #digitalTwinsIQView .dtw-bw-group .dtw-chips { margin: 0; }
+        #digitalTwinsIQView .dtw-bw-shares { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0.5rem 0 0; }
+        #digitalTwinsIQView .dtw-bw-share { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-bw-share input.dtw-in { width: 58px; margin: 0; padding: 0.24rem 0.4rem; text-align: right; font-size: 0.76rem; }
+        #digitalTwinsIQView .dtw-bw-share i { font-style: normal; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-bw-shareline { font-size: 0.7rem; line-height: 1.4; color: var(--dtw-mute); margin-top: 0.35rem; }
+        #digitalTwinsIQView .dtw-bw-shareline.err { color: var(--dtw-second); }
         #digitalTwinsIQView .dtw-bw-list { margin-top: 8px; max-height: 300px; overflow: auto; border: 1px solid var(--dtw-rule); border-radius: 10px; scrollbar-width: thin; }
         #digitalTwinsIQView .dtw-bw-list:empty { display: none; }
         #digitalTwinsIQView .dtw-bw-row { appearance: none; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--dtw-hair); padding: 9px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--dtw-ink); font-family: inherit; font-size: 0.82rem; }
@@ -52656,9 +52662,69 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ['ethnicity', 'Ethnicity', ['White', 'Hispanic or Latino', 'Black or African American', 'Asian', 'Another race/ethnicity']],
                 ['parental', 'Parents', ['Has children', 'No children']]
             ];
+            // ---- A share beside each pick (Jenna 2026-11-13: 'it should allow you to list the percentage you want of each demographic
+            // tab. so if I select men I would then type in 50% or 30%'). A pick with a share is that part of the group; picks with no
+            // share take what is left in their natural mix; with no shares anywhere a pick is the filter it always was. One group's
+            // shares total at most 100. The server checks the same rules again.
+            var BW_SHARE_LABEL = { gender: 'Gender', age: 'Age', income: 'Household income', ethnicity: 'Ethnicity', parental: 'Parents', education: 'Education' };
+            var BW_SHARE_HINT = 'Want a set mix? Type a share beside a pick, like 30. Blank keeps the natural mix.';
+            function bwShareNum(raw) {
+                var s = String(raw == null ? '' : raw).replace(/%/g, '').trim();
+                if (!s) return null;
+                if (!/^\d{0,3}(\.\d*)?$/.test(s) || s === '.') return NaN;
+                var x = parseFloat(s);
+                return isFinite(x) ? Math.round(x * 10) / 10 : NaN;
+            }
+            function bwPctWords(x) { x = Math.round(Number(x || 0) * 10) / 10; return (Math.round(x) === x ? String(x) : x.toFixed(1)) + '%'; }
+            function bwShareSet(cat) {
+                var b = S.bw || {}, sh = (b.shares || {})[cat] || {}, out = {};
+                ((b.demo || {})[cat] || []).forEach(function(v) { var x = bwShareNum(sh[v]); if (x != null && isFinite(x) && x > 0 && x <= 100) out[v] = x; });
+                return out;
+            }
+            function bwShareState(cat) {
+                var b = S.bw, g = BW_DEMO.filter(function(x) { return x[0] === cat; })[0], picks = b.demo[cat] || [], sh = (b.shares || {})[cat] || {};
+                var name = BW_SHARE_LABEL[cat] || cat, set = [], open = [], bad = false, tot = 0;
+                picks.forEach(function(v) {
+                    var x = bwShareNum(sh[v]);
+                    if (x == null || x === 0) { open.push(v); return; }
+                    if (!isFinite(x) || x < 0 || x > 100) { bad = true; return; }
+                    set.push([v, x]); tot += x;
+                });
+                tot = Math.round(tot * 10) / 10;
+                if (bad) return { err: 'A share is a number from 0 to 100.', line: '' };
+                if (!set.length) return { err: '', line: '' };
+                var said = set.map(function(p) { return p[0] + ' ' + bwPctWords(p[1]); }).join(', ') + '. ';
+                if (tot > 100) return { err: name + ' adds to ' + bwPctWords(tot) + '. The shares in one group can total at most 100%.', line: '' };
+                var left = Math.round((100 - tot) * 10) / 10;
+                if (left <= 0) return open.length ? { err: name + ' already adds to 100%. Lower a share, or clear ' + open.join(' and ') + '.', line: '' } : { err: '', line: said + 'That is the whole group.' };
+                if (open.length) return { err: '', line: said + 'The other ' + bwPctWords(left) + ' goes to ' + (open.length === 1 ? open[0] : open.slice(0, -1).join(', ') + ' and ' + open[open.length - 1] + ', in their natural mix') + '.' };
+                if (g && picks.length >= g[2].length) return { err: 'Every option in ' + name + ' has a share, so they need to add to 100%. They add to ' + bwPctWords(tot) + '.', line: '' };
+                return { err: '', line: said + 'The other ' + bwPctWords(left) + ' follows the audience\'s natural mix.' };
+            }
+            function bwSharesOk() { return BW_DEMO.every(function(g) { return !bwShareState(g[0]).err; }); }
+            function bwSharesErr() { var e = ''; BW_DEMO.forEach(function(g) { if (!e) e = bwShareState(g[0]).err; }); return e; }
+            function bwSharesBody() { var out = {}; BW_DEMO.forEach(function(g) { var set = bwShareSet(g[0]); if (Object.keys(set).length) out[g[0]] = set; }); return out; }
+            function bwSharesWords(shares) {
+                shares = shares || bwSharesBody();
+                return Object.keys(shares).map(function(c) { var blk = shares[c] || {}; return (BW_SHARE_LABEL[c] || c) + ': ' + Object.keys(blk).map(function(v) { return v + ' ' + bwPctWords(blk[v]); }).join(', ') + '.'; }).join(' ');
+            }
+            function bwShareRow(cat) {
+                var b = S.bw, picks = b.demo[cat] || [], sh = (b.shares || {})[cat] || {};
+                if (!picks.length) return '';
+                var st = bwShareState(cat);
+                return '<div class="dtw-bw-shares">' + picks.map(function(v) {
+                    return '<label class="dtw-bw-share"><span>' + esc(v) + '</span><input class="dtw-in" inputmode="decimal" maxlength="5" autocomplete="off" value="' + esc(sh[v] == null ? '' : sh[v]) + '" placeholder="any" aria-label="Share of the group that is ' + esc(v) + ', in percent" data-cat="' + cat + '" data-v="' + esc(v) + '" oninput="dtwBwShare(this)"><i>%</i></label>';
+                }).join('') + '</div><div class="dtw-bw-shareline' + (st.err ? ' err' : '') + '" id="dtwBwShareLine-' + cat + '">' + esc(st.err || st.line || BW_SHARE_HINT) + '</div>';
+            }
+            function bwShareSeats(n) {
+                // whole seats: what each share comes to at this room size
+                var bits = [], shares = bwSharesBody();
+                Object.keys(shares).forEach(function(c) { Object.keys(shares[c]).forEach(function(v) { var k = Math.round(n * shares[c][v] / 100); bits.push(v + ' ' + bwPctWords(shares[c][v]) + ' is ' + (k < 1 ? 'under 1 seat' : 'about ' + k + (k === 1 ? ' seat' : ' seats'))); }); });
+                return bits.length ? '<div class="dtw-bw-line">A room seats whole people, so at ' + n + ' panelists ' + esc(bits.join(', ')) + '. A bigger room lands closer to the share.</div>' : '';
+            }
             var BW_PURPOSES = ['A new season or sequel', 'A product launch', 'Pricing', 'A partnership', 'Casting or talent', 'An ad plan', 'To ask it questions'];
             var BW_INCLUDED = 12, BW_MAX = 40;
-            function bwFresh() { return { step: 0, source: '', subject: '', profile_key: '', profile_name: '', profile_cat: '', q: '', results: null, loading: false, demo: {}, markets: '', interests: '', purpose: '', chip: '', panelists: BW_INCLUDED, busy: false, job: null, err: '' }; }
+            function bwFresh() { return { step: 0, source: '', subject: '', profile_key: '', profile_name: '', profile_cat: '', q: '', results: null, loading: false, demo: {}, shares: {}, markets: '', interests: '', purpose: '', chip: '', panelists: BW_INCLUDED, busy: false, job: null, err: '' }; }
             function bwPrice(which) {
                 // the twin is included (2026-11-05); a group is priced at the plan rate (S.card); the audience build keeps its line
                 if (which === 'twin' || which === 'panelist') return 0;
@@ -52712,13 +52778,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function bwAudienceLabel() {
                 var b = S.bw;
                 if (b.source !== 'demographics') return b.profile_name || b.subject || '';
-                var d = b.demo, parts = [];
-                if ((d.gender || []).length) parts.push(d.gender.join(' and '));
-                if ((d.age || []).length) parts.push(bwAgeWords(d.age));
-                var head = parts.join(' ') || 'US adults', tail = [];
-                if ((d.income || []).length) tail.push(bwIncomeWords(d.income));
-                if ((d.ethnicity || []).length) tail.push(d.ethnicity.join(', '));
-                if ((d.parental || []).length) tail.push(d.parental.join(', '));
+                var d = b.demo, parts = [], mix = [];
+                // a group with shares reads share first ('30% Men and 70% Women'); a pick with no share keeps its plain name
+                var mixed = function(cat, vals, sep) { var set = bwShareSet(cat); return vals.map(function(v) { return set[v] != null ? bwPctWords(set[v]) + ' ' + v : v; }).join(sep); };
+                var has = function(cat) { return Object.keys(bwShareSet(cat)).length > 0; };
+                if ((d.gender || []).length) { if (has('gender')) mix.push(mixed('gender', d.gender, ' and ')); else parts.push(d.gender.join(' and ')); }
+                if ((d.age || []).length) { if (has('age')) mix.push(mixed('age', d.age, ', ')); else parts.push(bwAgeWords(d.age)); }
+                var head = parts.join(' ') || 'US adults', tail = mix.slice();
+                if ((d.income || []).length) tail.push(has('income') ? mixed('income', d.income, ', ') : bwIncomeWords(d.income));
+                if ((d.ethnicity || []).length) tail.push(has('ethnicity') ? mixed('ethnicity', d.ethnicity, ', ') : d.ethnicity.join(', '));
+                if ((d.parental || []).length) tail.push(has('parental') ? mixed('parental', d.parental, ', ') : d.parental.join(', '));
                 var mk = bwMarkets();
                 if (mk.length) tail.push('in ' + (mk.length <= 4 ? mk.join(', ').replace(/, ([^,]*)$/, ' and $1') : mk.length + ' markets'));
                 if (String(b.interests || '').trim()) tail.push('who ' + b.interests.trim().replace(/\.$/, ''));
@@ -52728,7 +52797,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function bwCanNext() {
                 var b = S.bw;
                 if (b.step === 0) return !!b.source;
-                if (b.step === 1) return b.source === 'demographics' ? bwDemoPicked() : !!(b.profile_key || b.subject);
+                if (b.step === 1) return b.source === 'demographics' ? (bwDemoPicked() && bwSharesOk()) : !!(b.profile_key || b.subject);
                 return true;
             }
             function bwStepSource() {
@@ -52757,14 +52826,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var out = '<div class="dtw-bw-q">Who is in the group?</div><div class="dtw-bw-sub">Pick as much or as little as you like. Anything you leave open stays the US mix.</div>';
                     BW_DEMO.forEach(function(g) {
                         var picks = b.demo[g[0]] || [];
-                        out += '<div class="dtw-bw-group"><div class="k"><span>' + esc(g[1]) + '</span><em>pick any</em></div><div class="dtw-chips">' + g[2].map(function(o) {
+                        out += '<div class="dtw-bw-group"><div class="k"><span>' + esc(g[1]) + '</span><em>pick any, then set a share if you want one</em></div><div class="dtw-chips">' + g[2].map(function(o) {
                             return '<button type="button" class="dtw-chip' + (picks.indexOf(o) >= 0 ? ' on' : '') + '" onclick="dtwBwPick(\'' + g[0] + '\', this)" data-v="' + esc(o) + '">' + esc(o) + '</button>';
-                        }).join('') + '</div></div>';
+                        }).join('') + '</div>' + bwShareRow(g[0]) + '</div>';
                     });
                     out += '<div class="dtw-bw-group"><div class="k"><span>Markets</span><em>optional, by name</em></div><input class="dtw-in" value="' + esc(b.markets) + '" placeholder="Dallas, Los Angeles (blank is national)" oninput="dtwBwField(\'markets\', this.value)"></div>';
                     out += '<div class="dtw-bw-group"><div class="k"><span>They also</span><em>optional</em></div><input class="dtw-in" value="' + esc(b.interests) + '" placeholder="shop at Target, follow NASCAR, subscribe to Hulu" oninput="dtwBwField(\'interests\', this.value)"></div>';
                     out += '<div class="dtw-bw-line" id="dtwBwLine">The twin: <b>' + esc(bwAudienceLabel()) + '</b></div>';
-                    return out + bwNav(bwDemoPicked());
+                    return out + bwNav(bwDemoPicked() && bwSharesOk());
                 }
                 var pick = '';
                 if (b.profile_key) pick = '<div class="dtw-bw-pick"><span>Picked: <b>' + esc(b.profile_name) + '</b>. The twin uses this audience as pulled.</span><button type="button" class="dtw-link" onclick="dtwBwClearPick()">Change</button></div>';
@@ -52786,7 +52855,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var line = '<b>' + n + ' panelists</b> in every room on this twin, seated from its audience. The seats are part of each group\'s price; nothing more is charged for them.';
                 return '<div class="dtw-bw-q">How many panelists?</div><div class="dtw-bw-sub">The panelists are the people in every focus group room on this twin, seated from its audience. Twelve is a full table; more gives a wider spread of voices.</div>'
                     + '<div class="dtw-bw-stepper"><button type="button" onclick="dtwBwSeats(-1)"' + (n <= 2 ? ' disabled' : '') + ' aria-label="One fewer">&minus;</button><input id="dtwBwSeatsIn" value="' + n + '" inputmode="numeric" onchange="dtwBwSeatsSet(this.value)" aria-label="Panelists"><button type="button" onclick="dtwBwSeats(1)"' + (n >= BW_MAX ? ' disabled' : '') + ' aria-label="One more">+</button></div>'
-                    + '<div class="dtw-bw-seats">' + dots + '</div><div class="dtw-bw-line">' + line + '</div>' + bwNav(true, 'Next');
+                    + '<div class="dtw-bw-seats">' + dots + '</div><div class="dtw-bw-line">' + line + '</div>' + (b.source === 'demographics' ? bwShareSeats(n) : '') + bwNav(true, 'Next');
             }
             function bwStepReview() {
                 var b = S.bw, extra = Math.max(0, b.panelists - BW_INCLUDED), pt = bwPrice('twin'), ps = bwPrice('session'), pp = bwPrice('panelist');
@@ -52795,6 +52864,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var rows = [['Source', b.source === 'demographics' ? 'A group shaped by demographics' : (b.profile_key ? 'A defined group, from the profile you picked' : 'A defined group; no audience on file yet, so Prometheus pulls it first'), 0],
                             ['Audience', bwAudienceLabel(), 1], ['Purpose', (b.chip ? b.chip : '') + (b.purpose.trim() ? (b.chip ? '. ' : '') + b.purpose.trim() : '') || 'Open', 2],
                             ['Panelists', b.panelists + ' in every room (the seats are part of each group)', 3]];
+                var shw = b.source === 'demographics' ? bwSharesWords() : '';
+                if (shw) rows.splice(2, 0, ['Shares', shw, 1]);
                 var sum = '<div class="dtw-bw-sum">' + rows.map(function(r) { return '<div class="r"><span class="k">' + r[0] + '</span><span class="v">' + esc(r[1]) + '<button type="button" class="dtw-link" onclick="dtwBwGo(' + r[2] + ')">Change</button></span></div>'; }).join('') + '</div>';
                 var gc = groupCard(), gl = (gc && gc.labels) || {}, glab = (gl['20'] && gl['40']) ? (gl['20'] + ' (1-20 questions) or ' + gl['40'] + ' (1-40)') : (gl['40'] ? gl['40'] + ' (1-40 questions)' : usd(ps));
                 var price = '<div class="dtw-bw-price">'
@@ -52805,7 +52876,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="r total"><span>Charged now</span><b>' + usd(pa) + '</b></div>'
                     + '<div class="m">' + (pull ? 'If this audience is already on file, nothing is charged now. ' : '') + 'Each group is charged to your company when it opens; the seats are part of it. Prometheus usage is billed at the published rate on top.</div></div>';
                 var when = pull ? 'The audience is pulled first (usually under an hour), then the twin is built from it; both land on the Twins tab and Prometheus confirms in the chat and by email.' : 'The twin lands on the Twins tab in a few minutes.';
-                return '<div class="dtw-bw-q">Ready to build.</div><div class="dtw-bw-sub">Check the four lines, then build. ' + when + '</div>' + sum + price
+                return '<div class="dtw-bw-q">Ready to build.</div><div class="dtw-bw-sub">Check the ' + (rows.length > 4 ? 'five' : 'four') + ' lines, then build. ' + when + '</div>' + sum + price
                     + (b.err ? '<div class="dtw-bw-err">' + esc(b.err) + '</div>' : '') + bwNav(!b.busy, b.busy ? 'Starting the build' : 'Build the twin');
             }
             function bwProgress() {
@@ -52835,7 +52906,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var cur = b.demo[cat] || [], i = cur.indexOf(v);
                 if (i >= 0) cur.splice(i, 1); else cur.push(v);
                 b.demo[cat] = cur;
+                if (i >= 0 && b.shares && b.shares[cat]) delete b.shares[cat][v];
                 renderBuild();
+            };
+            window.dtwBwShare = function(inp) {
+                var b = S.bw, cat = inp.getAttribute('data-cat'), v = inp.getAttribute('data-v');
+                b.shares = b.shares || {}; b.shares[cat] = b.shares[cat] || {};
+                b.shares[cat][v] = String(inp.value || '');
+                var st = bwShareState(cat), ln = el('dtwBwShareLine-' + cat);
+                if (ln) { ln.textContent = st.err || st.line || BW_SHARE_HINT; ln.classList.toggle('err', !!st.err); }
+                var line = el('dtwBwLine'); if (line) line.innerHTML = 'The twin: <b>' + esc(bwAudienceLabel()) + '</b>';
+                var nb = document.querySelector('#dtwBuildBody .dtw-bw-nav .dtw-btn-primary'); if (nb) nb.disabled = !bwCanNext();
             };
             window.dtwBwField = function(k, v) { S.bw[k] = String(v || ''); var line = el('dtwBwLine'); if (line) line.innerHTML = 'The twin: <b>' + esc(bwAudienceLabel()) + '</b>'; if (S.bw.step === 1) { var nb = document.querySelector('#dtwBuildBody .dtw-bw-nav .dtw-btn-primary'); if (nb) nb.disabled = !bwCanNext(); } };
             window.dtwBwChip = function(btn) { var v = btn.getAttribute('data-v'); S.bw.chip = S.bw.chip === v ? '' : v; document.querySelectorAll('#dtwBuildBody .dtw-chips .dtw-chip').forEach(function(c) { c.classList.toggle('on', c.getAttribute('data-v') === S.bw.chip); }); };
@@ -52861,9 +52942,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwBwEnter = function() { var b = S.bw; if (b.profile_key || b.subject) { dtwBwNext(); return; } var q = String(b.q || '').trim(); var exact = (b.results || []).filter(function(r) { return String(r.display_name || '').toLowerCase() === q.toLowerCase(); })[0]; if (exact) { b.profile_key = exact.s3_key; b.profile_name = exact.display_name; b.profile_cat = exact.category || ''; renderBuild(); } else if (q.length >= 2) dtwBwNewSubject(); };
             window.dtwBwSubmit = async function() {
                 var b = S.bw; if (b.busy) return;
+                if (b.source === 'demographics' && !bwSharesOk()) { b.err = bwSharesErr(); b.step = 1; renderBuild(); return; }
                 b.busy = true; b.err = ''; renderBuild();
                 var body = { source: b.source, panelists: b.panelists, purpose: ((b.chip ? b.chip + '. ' : '') + b.purpose.trim()).trim() };
-                if (b.source === 'demographics') { body.demographics = { markets: bwMarkets(), interests: b.interests.trim() }; Object.keys(b.demo).forEach(function(k) { if ((b.demo[k] || []).length) body.demographics[k] = b.demo[k]; }); }
+                if (b.source === 'demographics') { body.demographics = { markets: bwMarkets(), interests: b.interests.trim() }; Object.keys(b.demo).forEach(function(k) { if ((b.demo[k] || []).length) body.demographics[k] = b.demo[k]; }); var bsh = bwSharesBody(); if (Object.keys(bsh).length) body.demographics.shares = bsh; }
                 else { body.subject = b.profile_key ? b.profile_name : b.subject; if (b.profile_key) body.profile_key = b.profile_key; }
                 try { var d = await api('/build', { method: 'POST', body: JSON.stringify(body) }); }
                 catch (e) { b.busy = false; b.err = e.message; renderBuild(); return; }
@@ -53234,7 +53316,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var kn = esc(jsq(key)), nm = m.name || m.subject || 'this twin';
                 var out = '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTwinDeleteAsk(\'' + kn + '\', null, \'dtwTwinDelP-\')">Delete</button>' + assignControl(key) + twinPageConfirm(key, nm) + '</div>';
                 // Identity
-                var idb = '<div class="dtw-two"><div>';
+                var dsh = m.demographics_shares || null, shb = '';
+                if (dsh && dsh.asked && Object.keys(dsh.asked).length) shb = '<div class="dtw-muted" style="margin-bottom:0.6rem;"><b style="color:var(--dtw-ink);font-weight:600;">Shares set for this twin.</b> ' + esc(bwSharesWords(dsh.asked)) + ((dsh.notes || []).length ? ' ' + esc(dsh.notes.join(' ')) : '') + '</div>';
+                var idb = shb + '<div class="dtw-two"><div>';
                 [['gender', 'Gender'], ['age', 'Age'], ['sexual_orientation', 'Orientation'], ['education', 'Education'], ['occupation', 'Occupation'], ['income', 'Income'], ['ethnicity', 'Ethnicity'], ['relationship', 'Relationship']].forEach(function(c) { var rows = demoRows(c[0]); if (rows.length) { idb += '<h4>' + c[1] + '</h4>' + rows.slice(0, 8).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1)); }).join(''); } });
                 if ((ident.geography || []).length) { idb += '<h4>Top markets</h4>' + ident.geography.slice(0, 8).map(function(r) { return bar(r.label, r.pct, Math.max.apply(null, ident.geography.map(function(x) { return x.pct; })), true, pct(r.pct, 1)); }).join(''); }
                 idb += '</div><div>';

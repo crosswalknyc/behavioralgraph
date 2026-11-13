@@ -644,6 +644,242 @@ def demographic_spec(raw) -> dict:
     interests = ' '.join(str(raw.get('interests') or '').split())[:200]
     if interests:
         out['interests'] = interests
+    shares = _clean_shares(raw.get('shares'), out)
+    if shares:
+        out['shares'] = shares
+    return out
+
+
+# ---- a share for each pick (Jenna 2026-11-13: 'it should allow you to list
+# the percentage you want of each demographic tab. so if I select men I would
+# then type in 50% or 30%'). A pick with a share is that part of the group; a
+# pick with none takes what is left; with no shares anywhere a pick is the
+# filter it always was. One group's shares total at most 100.
+_SHARE_CAT_LABEL = {'gender': 'Gender', 'age': 'Age', 'income': 'Household income', 'ethnicity': 'Ethnicity', 'parental': 'Parents', 'education': 'Education'}
+_SHARE_SLIVER = 0.05      # values nobody picked that hold under this part of a group never soak up the rest of it
+
+
+def _share_num(v):
+    try:
+        x = float(str(v).replace('%', '').strip())
+    except (TypeError, ValueError):
+        return None
+    return x if x == x and abs(x) != float('inf') else None
+
+
+def _clean_shares(raw, spec: dict) -> dict:
+    """{cat: {pick: pct}} from what the page (or a stored job) sent:
+    only the pick categories, a number above 0 and at most 100 at one
+    decimal, the pick added to the category when it was not there. A
+    group over 100 is scaled down here; the route refuses it before a
+    build is ever queued (``demographic_shares_error``)."""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for cat in DEMO_PICK_CATS:
+        block = raw.get(cat)
+        if not isinstance(block, dict):
+            continue
+        picks = spec.setdefault(cat, []) if block else spec.get(cat, [])
+        clean = {}
+        for k, v in block.items():
+            name = ' '.join(str(k or '').split())[:60]
+            x = _share_num(v)
+            if not name or x is None or x <= 0:
+                continue
+            have = next((p for p in picks if p.lower() == name.lower()), None)
+            if have is None:
+                if len(picks) >= 12:
+                    continue
+                picks.append(name)
+                have = name
+            clean[have] = round(min(x, 100.0), 1)
+        if not picks:
+            spec.pop(cat, None)
+        tot = sum(clean.values())
+        if tot > 100.0 + 1e-9:
+            clean = {k: round(v * 100.0 / tot, 1) for k, v in clean.items()}
+        if clean:
+            out[cat] = clean
+    return out
+
+
+def demographic_shares_error(raw) -> str:
+    """The plain line the build route answers with when the shares sent
+    cannot be used as typed: a share that is not a number from 0 to 100,
+    or one group whose shares pass 100. '' when they are fine."""
+    shares = raw.get('shares') if isinstance(raw, dict) else None
+    if shares in (None, '', {}, []):
+        return ''
+    if not isinstance(shares, dict):
+        return 'The shares could not be read. Type a number from 0 to 100 beside each pick.'
+    for cat, block in shares.items():
+        label = _SHARE_CAT_LABEL.get(str(cat).lower())
+        if label is None or block in (None, {}, ''):
+            continue
+        if not isinstance(block, dict):
+            return f"The shares for {label} could not be read. Type a number from 0 to 100 beside each pick."
+        tot = 0.0
+        for k, v in block.items():
+            if v in (None, ''):
+                continue
+            x = _share_num(v)
+            if x is None or x < 0 or x > 100:
+                return f"{label}: the share for {' '.join(str(k).split())[:60]} needs to be a number from 0 to 100."
+            tot += x
+        if tot > 100.0 + 0.049:
+            return f"{label} adds to {_pct_words(tot)}. The shares in one group can total at most 100%."
+    return ''
+
+
+def _pct_words(x) -> str:
+    x = round(float(x), 1)
+    return f"{int(x)}%" if abs(x - round(x)) < 1e-9 else f"{x:.1f}%"
+
+
+def _share_label(cat: str, label: str) -> str:
+    if cat == 'gender':
+        return {'female': 'Women', 'male': 'Men'}.get(_norm_key(label), _demo_pretty(label))
+    return '65+' if _norm_key(label) == '65orolder' else _demo_pretty(label)
+
+
+def _shared_rows(cat: str, rows_c: list, picks: list, asked: dict, seed: str):
+    """One category with shares typed on its picks. ``rows_c`` is Gen
+    Pop's rows for it (the adult rows for age). Returns (rows, part of
+    the US that can make this mix, record) or None when no pick matches
+    a row (the caller then reads the picks the old way).
+
+    The mix: a pick with a share is that part of the group. What is left
+    goes to the picks with no share, in their own proportions; with none
+    of those, to the values nobody picked. When nothing can take what is
+    left the shares are scaled to 100 and the record says so."""
+    nat = [r for r in rows_c if r['pct'] > 0 and _norm_key(r['label']) not in ('prefernottosay', 'other')] or [r for r in rows_c if r['pct'] > 0]
+    if not nat:
+        return None
+    by_label = {r['label']: float(r['pct']) for r in nat}
+    cat_word = _SHARE_CAT_LABEL.get(cat, cat.title())
+    notes, target, typed = [], {}, {}
+    open_picks, missing, hits = [], [], {}
+    for p in picks:
+        hit = [r['label'] for r in nat if _pick_matches(cat, p, r['label'])]
+        x = asked.get(p)
+        if not hit:
+            if x:
+                missing.append(p)
+            continue
+        hits[p] = hit
+        if x:
+            w = sum(by_label[l] for l in hit) or 1.0
+            for l in hit:
+                target[l] = target.get(l, 0.0) + x * by_label[l] / w
+                typed[l] = typed.get(l, 0.0) + x * by_label[l] / w
+        else:
+            open_picks.extend(l for l in hit if l not in open_picks)
+    open_picks = [l for l in open_picks if l not in target]
+    if not target:
+        return None
+    for p in missing:
+        notes.append(f"{cat_word}: {p} is not a group on file, so its share went to the rest.")
+
+    def mix_words(d):
+        return ', '.join(f"{_share_label(cat, l)} {_pct_words(v)}" for l, v in d.items())
+
+    tot = sum(target.values())
+    if tot > 100.0 + 1e-6:
+        target = {l: v * 100.0 / tot for l, v in target.items()}
+        notes.append(f"{cat_word}: the shares added to {_pct_words(tot)}, so they were scaled to 100%: {mix_words(target)}.")
+        tot = 100.0
+    left = 100.0 - tot
+    if left > 0.049:
+        pool = open_picks or [l for l in by_label if l not in target]
+        pool_w = sum(by_label[l] for l in pool)
+        sliver = not open_picks and pool_w / (sum(by_label.values()) or 1.0) < _SHARE_SLIVER
+        if not pool or pool_w <= 0 or sliver:
+            was = tot
+            target = {l: v * 100.0 / tot for l, v in target.items()}
+            why = 'every option had a share' if not pool else 'too few people sit outside those picks to fill the rest'
+            notes.append(f"{cat_word}: the shares added to {_pct_words(was)} and {why}, so they were scaled to 100%: {mix_words(target)}.")
+        else:
+            for l in pool:
+                target[l] = left * by_label[l] / pool_w
+    else:
+        if open_picks:
+            names = ' and '.join(_share_label(cat, l) for l in open_picks)
+            notes.append(f"{cat_word}: {names} had no share and the others already added to 100%, so {names} {'was' if len(open_picks) == 1 else 'were'} left out.")
+        if abs(left) > 1e-9:
+            target = {l: v * 100.0 / tot for l, v in target.items()}
+    # the part of the US that can make this mix: the scarcest value sets it. With no shares this is the picked rows' own share.
+    denom = 100.0 if cat == 'age' else (sum(r['pct'] for r in rows_c) or 100.0)
+    part = min((by_label[l] / denom) / (v / 100.0) for l, v in target.items() if v > 0)
+    part = max(0.001, min(part, (sum(r['pct'] for r in rows_c) or 100.0) / denom))
+    # the rows: a set share stays within a few thousandths of what was asked (it prints as asked), never on a 2dp boundary;
+    # the values that took what was left keep their own proportions and absorb the rounding
+    order = [r['label'] for r in nat if target.get(r['label'], 0) > 0]
+    setl = [l for l in order if l in typed]
+    rest = [l for l in order if l not in typed]
+    final = {}
+    for i, l in enumerate(setl):
+        d = 0.0011 + 0.0038 * unit('share', cat, l, seed)
+        final[l] = pct4(target[l] + (d if i % 2 == 0 else -d))
+    if rest:
+        room = 100.0 - sum(final.values())
+        spread = normalize_100([{'label': l, 'pct': target[l]} for l in rest], 'share', cat, seed)
+        for r in spread:
+            final[r['label']] = E.off_boundary(r['pct'] * room / 100.0, 'share', cat, r['label'], seed)
+        k = max(rest, key=lambda l: final[l])
+    else:
+        k = max(setl, key=lambda l: final[l])
+    final[k] = pct4(final[k] + round(100.0 - sum(final.values()), 4))
+    if len(final) > 1 and abs(final[k] - round(final[k], 2)) < 0.00005:
+        j = next(l for l in sorted(final, key=lambda l: -final[l]) if l != k)
+        if final[j] > 0.01:
+            final[k] = pct4(final[k] + 0.0013)
+            final[j] = pct4(final[j] - 0.0013)
+    rows = [{'label': l, 'pct': final[l]} for l in order]
+    record = {'rows': [{'label': _share_label(cat, l), 'pct': round(final[l], 1), 'set': l in typed} for l in order], 'notes': notes}
+    if notes:
+        # a share moved: the picks as built (a pick that fell out is gone, a set share reads what it came to), so the twin's name says the mix it holds
+        kept = [p for p in picks if any(l in final for l in hits.get(p, []))]
+        record['built'] = {'picks': kept, 'shares': {p: round(sum(final[l] for l in hits[p] if l in final), 1) for p in kept if asked.get(p)}}
+    return rows, part, record
+
+
+def shares_words(spec: dict) -> str:
+    """The shares as typed, in words: 'Gender: Men 30%. Age: 18-24 40%,
+    25-34 20%.' '' when none were set."""
+    shares = (spec or {}).get('shares') if isinstance(spec, dict) else None
+    if not isinstance(shares, dict):
+        return ''
+    bits = []
+    for cat in DEMO_PICK_CATS:
+        block = shares.get(cat)
+        if isinstance(block, dict) and block:
+            bits.append(f"{_SHARE_CAT_LABEL.get(cat, cat.title())}: " + ', '.join(f"{k} {_pct_words(v)}" for k, v in block.items()) + '.')
+    return ' '.join(bits)
+
+
+def spec_as_built(spec: dict, shares_record: dict) -> dict:
+    """The picks and shares a twin ended up with when a share had to
+    move (``shares_record`` is the identity's 'shares'). The spec itself
+    when nothing moved."""
+    built = (shares_record or {}).get('built') if isinstance(shares_record, dict) else None
+    if not isinstance(built, dict) or not built:
+        return spec
+    out = {k: (dict(v) if isinstance(v, dict) else list(v) if isinstance(v, list) else v) for k, v in (spec or {}).items()}
+    shares = {c: dict(v) for c, v in (out.get('shares') or {}).items()}
+    for cat, b in built.items():
+        if b.get('picks'):
+            out[cat] = list(b['picks'])
+        else:
+            out.pop(cat, None)
+        if b.get('shares'):
+            shares[cat] = dict(b['shares'])
+        else:
+            shares.pop(cat, None)
+    if shares:
+        out['shares'] = shares
+    else:
+        out.pop('shares', None)
     return out
 
 
@@ -707,19 +943,33 @@ def demographic_name(spec: dict) -> str:
     Short enough for a tile; the later clauses leave before a word is
     ever cut."""
     spec = spec or {}
-    bits = []
+    shares = spec.get('shares') if isinstance(spec.get('shares'), dict) else {}
+
+    def mixed(cat, vals, sep=', '):
+        # a group with shares reads share first: '30% Men and 70% Women'; a pick with no share keeps its plain name
+        block = shares.get(cat) or {}
+        return sep.join((f"{_pct_words(block[v])} {v[:1].upper() + v[1:]}" if v in block else v[:1].upper() + v[1:]) for v in vals)
+    bits, mix = [], []
     g = [str(x) for x in spec.get('gender') or []]
-    if g:
+    if g and shares.get('gender'):
+        mix.append(mixed('gender', g[:4], ' and '))
+    elif g:
         bits.append(' and '.join(x[:1].upper() + x[1:] for x in g[:2]))
-    if spec.get('age'):
+    if spec.get('age') and shares.get('age'):
+        mix.append(mixed('age', [str(x) for x in spec['age']]))
+    elif spec.get('age'):
         bits.append(_age_words([str(x) for x in spec['age']]))
     head = ' '.join(bits) if bits else 'US adults'
-    tail = []
-    if spec.get('income'):
+    tail = list(mix)
+    if spec.get('income') and shares.get('income'):
+        tail.append(mixed('income', [str(x) for x in spec['income']]))
+    elif spec.get('income'):
         tail.append(_income_words([str(x) for x in spec['income']]))
     for cat in ('ethnicity', 'parental', 'education'):
         vals = [str(x) for x in spec.get(cat) or []]
-        if vals:
+        if vals and shares.get(cat):
+            tail.append(mixed(cat, vals[:4]) + (' and more' if len(vals) > 4 else ''))
+        elif vals:
             tail.append(', '.join(vals[:3]) + (' and more' if len(vals) > 3 else ''))
     if spec.get('markets'):
         mk = [str(x) for x in spec['markets']]
@@ -792,6 +1042,8 @@ def demographic_identity(s3, spec: dict, seed: str) -> dict:
     for k, v in _demo_prior('none', seed).items():       # Gen Pop missing a category falls back to the prior shape
         base_demo.setdefault(k, v)
     spec = spec or {}
+    spec_shares = spec.get('shares') if isinstance(spec.get('shares'), dict) else {}
+    share_record = {}
     demo, share = {}, 1.0
     for cat, base_rows in base_demo.items():
         picks = [str(x) for x in spec.get(cat) or []]
@@ -801,6 +1053,15 @@ def demographic_identity(s3, spec: dict, seed: str) -> dict:
             tot = sum(r['pct'] for r in rows_c) or 100.0
             if not picks:
                 share *= tot / 100.0
+        if picks and isinstance(spec_shares.get(cat), dict) and spec_shares[cat]:
+            # shares typed on the picks: the category is the mix asked for, not a filter (2026-11-13)
+            mixed = _shared_rows(cat, rows_c, picks, spec_shares[cat], seed)
+            if mixed:
+                rows_m, part, record = mixed
+                share *= part
+                demo[cat] = [{'label': _share_label(cat, r['label']), 'pct': r['pct']} for r in rows_m]
+                share_record[cat] = record
+                continue
         if picks:
             kept = [r for r in rows_c if any(_pick_matches(cat, p, r['label']) for p in picks)]
             if kept:
@@ -857,7 +1118,10 @@ def demographic_identity(s3, spec: dict, seed: str) -> dict:
         return sorted(out, key=lambda x: -float(x.get(key) or 0))
     return {'demographics': demo, 'geography': geo, 'platforms': tilt(gp.get('platforms') or [], 'reach_pct')[:14], 'purchase': tilt(gp.get('purchase') or [], 'pct')[:14],
             'media_diet': tilt(gp.get('media_diet') or [], 'pct')[:10], 'talent': (gp.get('talent') or [])[:6], 'size_us': size, 'sample': 0,
-            'avid_share_pct': pct1(9 + 9 * unit('avid', seed)), 'brand_category': '', 'window': None, 'subject_row': '', 'share_of_us': round(share, 6)}
+            'avid_share_pct': pct1(9 + 9 * unit('avid', seed)), 'brand_category': '', 'window': None, 'subject_row': '', 'share_of_us': round(share, 6),
+            **({'shares': {'asked': {c: dict(v) for c, v in spec_shares.items() if c in share_record}, 'applied': {c: r['rows'] for c, r in share_record.items()},
+                           'notes': [n for r in share_record.values() for n in r['notes']],
+                           **({'built': {c: r['built'] for c, r in share_record.items() if r.get('built')}} if any(r.get('built') for r in share_record.values()) else {})}} if share_record else {})}
 
 
 def research_demographics(research: dict, seed: str) -> dict:
@@ -1399,6 +1663,17 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     # the meta so the room's seating honors it too
     if prof.get('adults_only'):
         meta['adults_only'] = True
+    # the shares typed on the picks (2026-11-13): what was asked, the mix that was built, and any share that had to move
+    set_cats = set()
+    if by_demo and isinstance(prof.get('shares'), dict) and prof['shares'].get('applied'):
+        meta['demographics_shares'] = prof['shares']
+        set_cats = set(prof['shares']['applied'])
+        if prof['shares'].get('built') and subject == demographic_name(demo_spec):
+            # a share had to move: a twin named from its picks is named for the mix it holds, never the one that could not be built
+            held = demographic_name(spec_as_built(demo_spec, prof['shares']))
+            meta['subject'] = held
+            if not str(inputs.get('name') or '').strip():
+                meta['name'] = held[:120]
     # identity
     demo = prof.get('demographics') or {}
     if not demo:
@@ -1407,7 +1682,7 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
         for k, v in _demo_prior(fmt, seed).items():
             demo.setdefault(k, v)
     else:
-        demo = {k: normalize_100(v, 'demo', k, seed) for k, v in demo.items() if v}
+        demo = {k: (v if k in set_cats else normalize_100(v, 'demo', k, seed)) for k, v in demo.items() if v}
         for k, v in _demo_prior(fmt, seed).items():
             demo.setdefault(k, v)
     plats = list(prof.get('platforms') or [])
@@ -1659,6 +1934,6 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
 __all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'remove_from_index', 'index_entry', 'strip_ip_lifetime_value', 'corpus_anchors',
            'research_anchors', 'profile_identity', 'find_profile_key', 'hydrate_identity_from_profile', 'queue_profile_for_twin',
            'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
-           'demographic_spec', 'demographic_name', 'demographic_identity', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',
+           'demographic_spec', 'demographic_name', 'demographic_identity', 'demographic_shares_error', 'shares_words', 'spec_as_built', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',
            'standing_questions', 'track_record', 'write_read', 'default_window', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'RESEARCH_PREFIX',
            'RESEARCH_SYSTEM_PROMPT', 'READ_SYSTEM_PROMPT', 'BANNED_WORDS', 'PRODUCT']
