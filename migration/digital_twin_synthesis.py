@@ -835,6 +835,7 @@ def _shared_rows(cat: str, rows_c: list, picks: list, asked: dict, seed: str):
         if final[j] > 0.01:
             final[k] = pct4(final[k] + 0.0013)
             final[j] = pct4(final[j] - 0.0013)
+    order.sort(key=lambda l: -final[l])     # largest first, the way every other group on a twin reads (the sort is stable, so ties keep the US order)
     rows = [{'label': l, 'pct': final[l]} for l in order]
     record = {'rows': [{'label': _share_label(cat, l), 'pct': round(final[l], 1), 'set': l in typed} for l in order], 'notes': notes}
     if notes:
@@ -856,6 +857,34 @@ def shares_words(spec: dict) -> str:
         if isinstance(block, dict) and block:
             bits.append(f"{_SHARE_CAT_LABEL.get(cat, cat.title())}: " + ', '.join(f"{k} {_pct_words(v)}" for k, v in block.items()) + '.')
     return ' '.join(bits)
+
+
+def shares_summary(meta: dict) -> dict:
+    """What a twin's own pages, exports and notices say about its
+    shares, from the twin's meta: ``words`` (the shares as set, 'Gender:
+    Men 30%.'), ``notes`` (one plain line per share that had to move)
+    and ``set`` ({group: {label as the twin shows it}} for the rows a
+    share was set on). Empty for a twin with no shares, which is every
+    twin stored before shares existed."""
+    rec = (meta or {}).get('demographics_shares') if isinstance(meta, dict) else None
+    if not isinstance(rec, dict) or not isinstance(rec.get('asked'), dict) or not rec['asked']:
+        return {'words': '', 'notes': [], 'set': {}}
+    notes = [' '.join(str(n).split()) for n in rec.get('notes') or [] if str(n or '').strip()]
+    marked = {}
+    for cat, rows in (rec.get('applied') or {}).items():
+        labels = {str(r.get('label')) for r in rows or [] if isinstance(r, dict) and r.get('set')}
+        if labels:
+            marked[cat] = labels
+    return {'words': shares_words({'shares': rec['asked']}), 'notes': notes, 'set': marked}
+
+
+def shares_notice(meta: dict) -> str:
+    """The line a reader gets when a share could not be built as typed:
+    which share moved and what it came to. '' when every share held."""
+    notes = shares_summary(meta)['notes']
+    if not notes:
+        return ''
+    return ('One share was adjusted. ' if len(notes) == 1 else 'Some shares were adjusted. ') + ' '.join(notes)
 
 
 def spec_as_built(spec: dict, shares_record: dict) -> dict:
@@ -947,7 +976,13 @@ def demographic_name(spec: dict) -> str:
 
     def mixed(cat, vals, sep=', '):
         # a group with shares reads share first: '30% Men and 70% Women'; a pick with no share keeps its plain name
-        block = shares.get(cat) or {}
+        # ('30% Men and Women' would read as one share for both). One pick with no share takes all that is left, so it says so.
+        block = dict(shares.get(cat) or {})
+        every = [str(x) for x in spec.get(cat) or []]
+        blank = [v for v in every if v not in block]
+        left = round(100.0 - sum(float(block[v]) for v in every if v in block), 1)
+        if len(blank) == 1 and left > 0:
+            block[blank[0]] = left
         return sep.join((f"{_pct_words(block[v])} {v[:1].upper() + v[1:]}" if v in block else v[:1].upper() + v[1:]) for v in vals)
     bits, mix = [], []
     g = [str(x) for x in spec.get('gender') or []]
@@ -1934,6 +1969,6 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
 __all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'remove_from_index', 'index_entry', 'strip_ip_lifetime_value', 'corpus_anchors',
            'research_anchors', 'profile_identity', 'find_profile_key', 'hydrate_identity_from_profile', 'queue_profile_for_twin',
            'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
-           'demographic_spec', 'demographic_name', 'demographic_identity', 'demographic_shares_error', 'shares_words', 'spec_as_built', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',
+           'demographic_spec', 'demographic_name', 'demographic_identity', 'demographic_shares_error', 'shares_words', 'shares_summary', 'shares_notice', 'spec_as_built', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',
            'standing_questions', 'track_record', 'write_read', 'default_window', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'RESEARCH_PREFIX',
            'RESEARCH_SYSTEM_PROMPT', 'READ_SYSTEM_PROMPT', 'BANNED_WORDS', 'PRODUCT']

@@ -52667,7 +52667,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // share take what is left in their natural mix; with no shares anywhere a pick is the filter it always was. One group's
             // shares total at most 100. The server checks the same rules again.
             var BW_SHARE_LABEL = { gender: 'Gender', age: 'Age', income: 'Household income', ethnicity: 'Ethnicity', parental: 'Parents', education: 'Education' };
-            var BW_SHARE_HINT = 'Want a set mix? Type a share beside a pick, like 30. Blank keeps the natural mix.';
+            var BW_SHARE_HINT = 'Want a set mix? Type a share beside a pick, like 30. With no shares, the group is only the picks you chose.';
             function bwShareNum(raw) {
                 var s = String(raw == null ? '' : raw).replace(/%/g, '').trim();
                 if (!s) return null;
@@ -52713,7 +52713,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!picks.length) return '';
                 var st = bwShareState(cat);
                 return '<div class="dtw-bw-shares">' + picks.map(function(v) {
-                    return '<label class="dtw-bw-share"><span>' + esc(v) + '</span><input class="dtw-in" inputmode="decimal" maxlength="5" autocomplete="off" value="' + esc(sh[v] == null ? '' : sh[v]) + '" placeholder="any" aria-label="Share of the group that is ' + esc(v) + ', in percent" data-cat="' + cat + '" data-v="' + esc(v) + '" oninput="dtwBwShare(this)"><i>%</i></label>';
+                    return '<label class="dtw-bw-share"><span>' + esc(v) + '</span><input class="dtw-in" inputmode="decimal" maxlength="5" autocomplete="off" value="' + esc(sh[v] == null ? '' : sh[v]) + '" placeholder="share" aria-label="Share of the group that is ' + esc(v) + ', in percent" data-cat="' + cat + '" data-v="' + esc(v) + '" oninput="dtwBwShare(this)"><i>%</i></label>';
                 }).join('') + '</div><div class="dtw-bw-shareline' + (st.err ? ' err' : '') + '" id="dtwBwShareLine-' + cat + '">' + esc(st.err || st.line || BW_SHARE_HINT) + '</div>';
             }
             function bwShareSeats(n) {
@@ -52780,7 +52780,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (b.source !== 'demographics') return b.profile_name || b.subject || '';
                 var d = b.demo, parts = [], mix = [];
                 // a group with shares reads share first ('30% Men and 70% Women'); a pick with no share keeps its plain name
-                var mixed = function(cat, vals, sep) { var set = bwShareSet(cat); return vals.map(function(v) { return set[v] != null ? bwPctWords(set[v]) + ' ' + v : v; }).join(sep); };
+                var mixed = function(cat, vals, sep) {
+                    // one pick with no share takes all that is left, so the name says its share too ('30% Men and 70% Women')
+                    var set = bwShareSet(cat), blank = vals.filter(function(v) { return set[v] == null; }), tot = 0;
+                    Object.keys(set).forEach(function(v) { tot += set[v]; });
+                    var left = Math.round((100 - tot) * 10) / 10;
+                    if (blank.length === 1 && left > 0) set[blank[0]] = left;
+                    return vals.map(function(v) { return set[v] != null ? bwPctWords(set[v]) + ' ' + v : v; }).join(sep);
+                };
                 var has = function(cat) { return Object.keys(bwShareSet(cat)).length > 0; };
                 if ((d.gender || []).length) { if (has('gender')) mix.push(mixed('gender', d.gender, ' and ')); else parts.push(d.gender.join(' and ')); }
                 if ((d.age || []).length) { if (has('age')) mix.push(mixed('age', d.age, ', ')); else parts.push(bwAgeWords(d.age)); }

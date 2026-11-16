@@ -527,9 +527,20 @@ def csv_rows(payload: dict) -> list:
     rows.append(['Twin', 'name', name, m.get('size_us'), 'US people', f"{m.get('window_start')} to {m.get('window_end')}"])
     rows.append(['Twin', 'platform home', m.get('platform_home'), m.get('avid_share_pct'), 'avid share %', m.get('format')])
     ident = payload.get('identity') or {}
+    # a share set on a demographic pick (2026-11-13): the shares as set and any that had to move ride the Twin section,
+    # and the row a share was set on says so; a twin with no shares writes the rows it always did
+    try:
+        from migration.digital_twin_synthesis import shares_summary
+        sh = shares_summary(m)
+    except Exception:
+        sh = {'words': '', 'notes': [], 'set': {}}
+    if sh.get('words'):
+        rows.append(['Twin', 'shares set', sh['words'], '', '', ''])
+        for note in sh.get('notes') or []:
+            rows.append(['Twin', 'share adjusted', note, '', '', ''])
     for cat, items in (ident.get('demographics') or {}).items():
         for it in items:
-            rows.append(['Identity', cat, it.get('label'), it.get('pct'), '%', ''])
+            rows.append(['Identity', cat, it.get('label'), it.get('pct'), '%', 'share set' if it.get('label') in (sh.get('set') or {}).get(cat, ()) else ''])
     for it in ident.get('geography') or []:
         rows.append(['Identity', 'geography', it.get('label'), it.get('pct'), '%', ''])
     for it in ident.get('platforms') or []:

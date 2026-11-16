@@ -454,10 +454,21 @@ def _pages(payload: dict) -> list:
     pages = [{'kind': 'cover', 'header': f"{name} x Digital Twins IQ", 'sub': f"What the {name} audience does next, run forward on its twin.", 'dark': True}]
     pages.append({'kind': 'bullets', 'header': 'What we found, and what to do.', 'sub': '', 'body': list(rd.get('tldr') or [])[:5], 'dark': True})
     demo = ident.get('demographics') or {}
+    # a share set on a demographic pick (2026-11-13) is marked on its row, and a group outside gender and age whose
+    # shares were set shows those rows too; a twin with no shares prints the page it always did
+    try:
+        from migration.digital_twin_synthesis import shares_summary
+        share_set = shares_summary(m)['set']
+    except Exception:
+        share_set = {}
     rows = []
     for cat in ('gender', 'age'):
         for r in (demo.get(cat) or [])[:6]:
-            rows.append((f"{cat.title()}: {r['label']}", f"{float(r['pct']):.1f}%", ''))
+            rows.append((f"{cat.title()}: {r['label']}", f"{float(r['pct']):.1f}%", 'share set' if r['label'] in share_set.get(cat, ()) else ''))
+    for cat, word in (('income', 'Income'), ('ethnicity', 'Ethnicity'), ('parental', 'Parents'), ('education', 'Education')):
+        for r in demo.get(cat) or []:
+            if r['label'] in share_set.get(cat, ()):
+                rows.append((f"{word}: {r['label']}", f"{float(r['pct']):.1f}%", 'share set'))
     for p in (ident.get('platforms') or [])[:5]:
         rows.append((f"On {p['label']}", f"{float(p['reach_pct']):.1f}%", 'in a year'))
     pages.append({'kind': 'table', 'header': _words(f"{human_people(m.get('size_us'))} people, and here is who they are"), 'sub': ident.get('read') or '', 'rows': rows[:14], 'head': ('', 'Share', ''), 'dark': False})

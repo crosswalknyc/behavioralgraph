@@ -64,7 +64,7 @@ assert.strictEqual(bwAudienceLabel(), 'US adults');
 S.bw.demo = { gender: ['Women'], age: ['25-34', '35-44'] };
 assert.strictEqual(bwAudienceLabel(), 'Women 25 to 44'); assert.strictEqual(st('gender').line, ''); assert.strictEqual(bwCanNext(), true);
 var html = bwStepAudience(); 
-assert.ok(html.indexOf('dtw-bw-share') > 0 && html.indexOf('Want a set mix?') > 0);
+assert.ok(html.indexOf('dtw-bw-share') > 0 && html.indexOf('Want a set mix?') > 0 && html.indexOf('With no shares, the group is only the picks you chose.') > 0);
 assert.strictEqual((html.match(/class="dtw-bw-share"/g) || []).length, 3);   // one input per pick
 // Men 30
 S.bw.demo = { gender: ['Men'] }; S.bw.shares = { gender: { Men: '30' } };
@@ -73,6 +73,7 @@ assert.deepStrictEqual(bwSharesBody(), { gender: { Men: 30 } }); assert.strictEq
 // Men 30, Women picked with no number
 S.bw.demo = { gender: ['Men', 'Women'] };
 assert.strictEqual(st('gender').line, 'Men 30%. The other 70% goes to Women.');
+assert.strictEqual(bwAudienceLabel(), 'US adults, 30% Men and 70% Women');   // the one pick with no share says what it takes
 // both typed under 100
 S.bw.shares = { gender: { Men: '30', Women: '30%' } };
 assert.ok(/need to add to 100%\\. They add to 60%/.test(st('gender').err)); assert.strictEqual(bwCanNext(), false);
@@ -95,6 +96,8 @@ S.bw.shares = { gender: { Men: '', Women: '0' } }; assert.strictEqual(st('gender
 S.bw.demo = { age: ['18-24', '25-34', '35-44'] }; S.bw.shares = { age: { '18-24': '33.3', '25-34': '20' } };
 assert.strictEqual(st('age').line, '18-24 33.3%, 25-34 20%. The other 46.7% goes to 35-44.');
 assert.strictEqual(bwSharesWords(), 'Age: 18-24 33.3%, 25-34 20%.');
+assert.strictEqual(bwAudienceLabel(), 'US adults, 33.3% 18-24, 20% 25-34, 46.7% 35-44');
+S.bw.shares = { age: { '18-24': '33.3' } }; assert.strictEqual(bwAudienceLabel(), 'US adults, 33.3% 18-24, 25-34, 35-44'); S.bw.shares = { age: { '18-24': '33.3', '25-34': '20' } };
 assert.ok(/18-24 33.3% is about 4 seats, 25-34 20% is about 2 seats/.test(bwShareSeats(12)));
 // clearing a pick clears its share
 window.dtwBwPick('age', { getAttribute: function() { return '18-24'; } });
@@ -188,6 +191,11 @@ class OneShare(unittest.TestCase):
         self.assertEqual(SYN.shares_words(SYN.demographic_spec({'gender': ['Men'], 'age': ['18-24'], 'shares': {'gender': {'Men': 30}, 'age': {'18-24': 33.3}}})),
                          'Gender: Men 30%. Age: 18-24 33.3%.')
         self.assertEqual(SYN.shares_words({'gender': ['Men']}), '')
+        # one pick with no share takes all that is left, so the name gives its share too (never '30% Men and Women', which reads as one share for both)
+        self.assertEqual(SYN.demographic_name(SYN.demographic_spec({'gender': ['Men', 'Women'], 'shares': {'gender': {'Men': 30}}})), 'US adults, 30% Men and 70% Women')
+        self.assertEqual(SYN.demographic_name(SYN.demographic_spec({'age': ['18-24', '25-34', '35-44'], 'shares': {'age': {'18-24': 40, '25-34': 20}}})), 'US adults, 40% 18-24, 20% 25-34, 40% 35-44')
+        # two picks with no share split what is left in their own proportions, so they keep their plain names
+        self.assertEqual(SYN.demographic_name(SYN.demographic_spec({'age': ['18-24', '25-34', '35-44'], 'shares': {'age': {'18-24': 40}}})), 'US adults, 40% 18-24, 25-34, 35-44')
 
 
 class SeveralTabs(unittest.TestCase):
@@ -349,7 +357,7 @@ class StoredAndSeated(unittest.TestCase):
     def test_the_twin_keeps_the_shares_as_set(self):
         _s3_, twin = self._twin()
         m = twin['meta']
-        self.assertEqual(m['name'], 'US adults, 30% Men, 25% 18-24, 25-34')
+        self.assertEqual(m['name'], 'US adults, 30% Men, 25% 18-24, 75% 25-34')       # the one pick with no share took the other 75, and the name says so
         self.assertEqual(m['demographics_spec']['shares'], {'gender': {'Men': 30.0}, 'age': {'18-24': 25.0}})
         self.assertEqual(m['demographics_shares']['asked'], {'gender': {'Men': 30.0}, 'age': {'18-24': 25.0}})
         g = {r['label']: r['pct'] for r in twin['identity']['demographics']['gender']}
@@ -400,6 +408,98 @@ class StoredAndSeated(unittest.TestCase):
         shown = {r[0]: r[1] for r in rows}
         self.assertEqual(shown['Gender: Men'], '30.0%')
         self.assertEqual(shown['Age: 18-24'], '25.0%')
+        # the rows a share was set on say so; the rows that took what was left do not
+        noted = {r[0]: r[2] for r in rows}
+        self.assertEqual((noted['Gender: Men'], noted['Age: 18-24'], noted['Gender: Women'], noted['Age: 25-34']), ('share set', 'share set', '', ''))
+
+
+class WhereTheSharesShow(unittest.TestCase):
+    """Everything that shows a twin's make-up shows the shares that were
+    set, and says so when one had to move: the summary, the CSV, the
+    deck and PDF pages, the line that says the twin is ready and the
+    team notice. A twin with no shares reads the way it always did."""
+
+    RAW = {'gender': ['Men'], 'income': ['$250,000 or more'], 'shares': {'gender': {'Men': 30}, 'income': {'$250,000 or more': 12.5}}}
+    MOVED = {'gender': ['Men', 'Women'], 'shares': {'gender': {'Men': 30, 'Women': 30}}}
+
+    def _twin(self, raw, **extra):
+        return SYN.build_twin(dict({'source': 'demographics', 'demographics': raw, 'panelists': 12}, **extra), None, s3=_s3(), with_research=False)
+
+    def test_rows_read_largest_first(self):
+        ident = _ident({'age': ['18-24'], 'shares': {'age': {'18-24': 40}}})
+        pcts = [r['pct'] for r in ident['demographics']['age']]
+        self.assertEqual(pcts, sorted(pcts, reverse=True))
+        self.assertEqual(ident['demographics']['age'][0]['label'], '18-24')
+        self.assertEqual([r['label'] for r in ident['shares']['applied']['age']], [r['label'] for r in ident['demographics']['age']])
+
+    def test_the_summary(self):
+        s = SYN.shares_summary(self._twin(self.RAW)['meta'])
+        self.assertEqual(s['words'], 'Gender: Men 30%. Household income: $250,000 or more 12.5%.')
+        self.assertEqual(s['notes'], [])
+        self.assertEqual(s['set'], {'gender': {'Men'}, 'income': {'$250,000 or More'}})
+        self.assertEqual(SYN.shares_notice(self._twin(self.RAW)['meta']), '')
+        # a share that moved: one plain line, which share and what it came to
+        moved = self._twin(self.MOVED, subject='US adults, 30% Men and 30% Women')['meta']
+        self.assertEqual(SYN.shares_notice(moved), 'One share was adjusted. Gender: the shares added to 60% and too few people sit outside those picks to fill the rest, '
+                                                   'so they were scaled to 100%: Men 50%, Women 50%.')
+        # a twin with no shares, and one stored before shares existed
+        for meta in (self._twin({'gender': ['Men']})['meta'], {'source': 'demographics', 'demographics_spec': {'gender': ['Women']}}, {}, None):
+            self.assertEqual(SYN.shares_summary(meta), {'words': '', 'notes': [], 'set': {}})
+            self.assertEqual(SYN.shares_notice(meta), '')
+
+    def test_the_csv(self):
+        from migration import digital_twins as DT
+        rows = DT.csv_rows(self._twin(self.RAW))
+        self.assertIn(['Twin', 'shares set', 'Gender: Men 30%. Household income: $250,000 or more 12.5%.', '', '', ''], rows)
+        men = next(r for r in rows if r[:3] == ['Identity', 'gender', 'Men'])
+        self.assertEqual((f"{men[3]:.1f}", men[5]), ('30.0', 'share set'))
+        rich = next(r for r in rows if r[:3] == ['Identity', 'income', '$250,000 or More'])
+        self.assertEqual((f"{rich[3]:.1f}", rich[5]), ('12.5', 'share set'))
+        self.assertEqual(next(r for r in rows if r[:3] == ['Identity', 'gender', 'Women'])[5], '')
+        self.assertFalse([r for r in rows if r[1] == 'share adjusted'])
+        moved = DT.csv_rows(self._twin(self.MOVED, subject='US adults, 30% Men and 30% Women'))
+        self.assertEqual([r[2] for r in moved if r[1] == 'share adjusted'],
+                         ['Gender: the shares added to 60% and too few people sit outside those picks to fill the rest, so they were scaled to 100%: Men 50%, Women 50%.'])
+        # no shares: the rows it always wrote (nothing in the Twin section about shares, every identity note blank)
+        plain = DT.csv_rows(self._twin({'gender': ['Men'], 'age': ['25-34']}))
+        self.assertFalse([r for r in plain if 'share' in str(r[1])])
+        self.assertTrue(all(r[5] == '' for r in plain if r[0] == 'Identity' and r[1] in SYN.DEMO_PICK_CATS))
+
+    def test_the_pages(self):
+        twin = self._twin(self.RAW)
+        twin['meta']['key'] = 'k_shares'
+        rows = next(p['rows'] for p in EXP._pages(twin) if p.get('kind') == 'table' and any(str(r[0]).startswith('Gender:') for r in p.get('rows') or []))
+        self.assertIn(('Income: $250,000 or More', '12.5%', 'share set'), rows)             # a group outside gender and age shows the rows a share was set on
+        self.assertIn(('Gender: Men', '30.0%', 'share set'), rows)
+        plain = self._twin({'gender': ['Men'], 'age': ['25-34']})
+        plain['meta']['key'] = 'k_plain'
+        rows = next(p['rows'] for p in EXP._pages(plain) if p.get('kind') == 'table' and any(str(r[0]).startswith('Gender:') for r in p.get('rows') or []))
+        self.assertFalse([r for r in rows if r[2] == 'share set' or str(r[0]).startswith('Income:')])
+
+    def test_the_team_notice(self):
+        from prometheus import twin_notify as TN
+        from migration.digital_twin_copy import strip_calibration_language
+        st = {'username': 'canary:shares', 'name': 'Canary', 'email': '', 'company': ''}
+        body = TN._twin_body(self._twin(self.RAW), 'k_shares', st, {'via': 'dashboard'}, 'dashboard')
+        self.assertIn('Shares set: Gender: Men 30%. Household income: $250,000 or more 12.5%.', body)
+        self.assertNotIn('Share adjusted', body)
+        moved = TN._twin_body(self._twin(self.MOVED, subject='US adults, 30% Men and 30% Women'), 'k_moved', st, {'via': 'dashboard'}, 'dashboard')
+        self.assertIn('Twin: US adults, 50% Men and 50% Women', moved)
+        self.assertIn('Shares set: Gender: Men 30%, Women 30%.', moved)
+        self.assertIn('Share adjusted: Gender: the shares added to 60%', moved)
+        for text in (body, moved):
+            self.assertEqual(TN.banned_tokens(text), [])
+            self.assertEqual(strip_calibration_language(text), text)                         # the house guards leave every line standing
+            self.assertNotIn('\u2014', text)
+        self.assertNotIn('Shares set', TN._twin_body(self._twin({'gender': ['Men']}), 'k_plain', st, {'via': 'dashboard'}, 'dashboard'))
+
+    def test_the_ready_line_carries_the_notice(self):
+        # the job appends the notice to the line that says the twin is ready (the walkthrough's last screen and the chat print that line)
+        with open(os.path.join(ROOT, 'prometheus', 'digital_twin_job.py'), encoding='utf-8') as fh:
+            src = fh.read()
+        self.assertIn('moved = SYN.shares_notice(m)', src)
+        self.assertIn('ready = f"{ready} {moved}"', src)
+        self.assertLess(src.index('moved = SYN.shares_notice(m)'), src.index("'ready_message': ready})"))
 
 
 class ThePage(unittest.TestCase):

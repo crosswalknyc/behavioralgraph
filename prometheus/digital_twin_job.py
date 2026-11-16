@@ -218,6 +218,14 @@ def run_job(job_id, username, inputs, extras=None):
             elif named_pull and str(m.get('profile_key') or ''):
                 from . import twin_named_pull as _TNP
                 ready = _TNP.ready_message(m.get('name'), human_people(m.get('size_us')), str(inputs.get('subject') or m.get('subject') or m.get('name')))
+            # a share typed on a pick that could not be built as typed (2026-11-13): the twin holds the closest mix, and the line that says
+            # the twin is ready says which share moved and what it came to (the walkthrough's last screen and the chat both print it)
+            try:
+                moved = SYN.shares_notice(m)
+            except Exception:
+                moved = ''
+            if moved:
+                ready = f"{ready} {moved}"
             rec.update({'status': 'done', 'success': True, 'stage': 'done', 'finished_at': time.time(), 's3_key': key, 'subject': m.get('name'),
                         'size_us': m.get('size_us'), 'ready_message': ready})
             status_write(job_id, rec)

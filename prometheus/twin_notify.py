@@ -495,6 +495,16 @@ def _twin_body(payload: dict, key: str, st: dict, inputs: dict, via: str, s3=Non
     lines = [f"{_who_line(st)} built a digital twin.", '',
              f"Twin: {m.get('name') or m.get('subject')}",
              f"Built from: {_twin_source_line(m, inputs, s3)}"]
+    # a share typed beside a demographic pick (2026-11-13): the shares as set, and any that had to move
+    try:
+        from migration.digital_twin_synthesis import shares_summary
+        sh = shares_summary(m)
+    except Exception:
+        sh = {'words': '', 'notes': []}
+    if sh.get('words'):
+        lines.append(f"Shares set: {sh['words']}")
+        for note in sh.get('notes') or []:
+            lines.append(f"Share adjusted: {note}")
     if size > 0:
         lines.append(f"Audience: {size:,} people in the US")
     if m.get('window_start') or m.get('window_end'):
