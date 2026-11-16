@@ -50195,6 +50195,13 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
         _dn = str(spec_draft.get('decision') or _dn or '').strip() or _dn
         _guard_future_window(spec_draft, decision=_dn,
                              allow_ask=False)
+        try:   # a window the matched file already holds is a reuse, never a rebuild (Grace Yin 2026-11-16)
+            from prometheus import held_window as _held_window
+            _dn = _held_window.settle_on_host(
+                spec_draft, prompt_text, sys.modules[__name__],
+                catalog=catalog) or _dn
+        except Exception:
+            pass
         spec_draft['estimated_credits'] = int(
             _V1_CREDITS.get(_dn, CREDITS_PROFILE_ANALYSIS))
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(

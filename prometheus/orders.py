@@ -191,13 +191,27 @@ _CAPABILITY_RX = re.compile(
 _NOTE_OPEN_RX = re.compile(
     r"^\W*(?:please\s+|and\s+|also\s+|then\s+)?(?:include|including|includes|deliver|delivered|delivery|provide|providing|"
     r"list|listing|show|showing|split|break(?:ing)? (?:it |them |the results )?(?:down|out)|report|output|export|attach|"
-    r"add|give (?:me|us)|send (?:me|us|it)|return|with |as a |format|cut (?:it|them|the results) by)\b", re.I)
+    r"add|give (?:me|us)|send (?:me|us|it|them|these|those|both|each)|return|with |as a |format|cut (?:it|them|the results) by)\b", re.I)
 _NOTE_ANY_RX = re.compile(
-    r"\b(?:as a (?:csv|downloadable|download|file|spreadsheet|xlsx|table|deck|one[- ]pager)|"
+    r"\b(?:as (?:a |an |separate |two |individual )?(?:csvs?|downloadable|download|files?|spreadsheets?|xlsx|tables?|deck|one[- ]pager)|"
     r"downloadable|deliver(?:ed|able)?s? (?:as|in|with)|un-?projected|raw (?:count|number|figure)s?|"
     r"panelist counts?|(?:people|persons|count) (?:in|behind) (?:the|our|your) data|index(?:ed)? (?:vs|against)|"
     r"per row|each row|for each (?:figure|row|line|service|title)|penetration|people reached)\b", re.I)
 _SENT_SPLIT_RX = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(\[])|\n+")
+# A requirements list under an order (2026-11-16, Grace Yin: "Please run two individual talent profiles: Zac Efron
+# and Dakota Johnson, US, calendar 2025. For each, I need: - Age x gender breakdown, with Women 18-34 as its own
+# line - Index vs. the US population for each group. Please send them as CSVs"). The line that opens the list and
+# every bullet under it describe the file; "Women 18-34 as its own line" was read as a cut and built as one.
+_PASTE_MARK_RX = re.compile("[\u258e\u258f\u2590\u2502\u2503]")       # the bar a pasted block quote leaves behind
+_BULLET_RX = re.compile(r"^\s*(?:[-*\u2022\u25aa\u25cf\u2013\u2014]|\d{1,2}[.)])\s+")
+_NEED_LEAD_RX = re.compile(
+    r"^\W*(?:for each(?: [a-z ]{1,40})?,?\s+)?(?:please\s+)?(?:(?:i|we)(?:'d|\u2019d| would)? (?:need|want|like)"
+    r"(?: to (?:see|get|have|receive))?|provide|include|deliver|report)\b[^.!?\n]{0,60}:\s*$", re.I)
+_LIST_SUBJECT_RX = re.compile(r"\b(?:profiles?|twins?|journeys?|flywheels?|valuations?|focus groups?)\b", re.I)   # a bullet that names a thing to build
+_NOTE_BULLET_RX = re.compile(
+    r"\b(?:breakdown|break ?out|split|age\s*(?:x|\u00d7|by|and)\s*gender|gender\s*(?:x|\u00d7|by|and)\s*age|by age|"
+    r"by gender|index|overlap|tiers?|count behind|panelists?|total us|reach|share of|as (?:its|their) own line|"
+    r"as a single line|ranked|top \d+)\b", re.I)
 # a trailing deliverable clause glued to the order sentence by a comma
 _TRAIL_NOTE_RX = re.compile(
     r",\s*(?:and\s+)?(?:(?:please\s+)?(?:include|including|with|listing|list|showing|show|split|broken (?:down|out)|"
@@ -375,7 +389,7 @@ def with_subject(text, subject, *, platform='', window=''):
 
 def _sentences(text):
     out = []
-    for s in _SENT_SPLIT_RX.split(str(text or '')):
+    for s in _SENT_SPLIT_RX.split(_PASTE_MARK_RX.sub('\n', str(text or ''))):
         s = s.strip()
         if s:
             out.append(s)
@@ -407,7 +421,30 @@ def split(text):
             order_sent = s
             break
     notes, keep = [], []
-    for s in sents:
+    seen_order = in_list = False
+
+    def _file_bullet(b, listed):
+        # a bullet that describes the file: never one that names a product or gives its own order
+        if not _BULLET_RX.match(b) or _ORDER_RX.search(b) or _LIST_SUBJECT_RX.search(b):
+            return False
+        return bool(listed or _NOTE_BULLET_RX.search(b))
+
+    for i, s in enumerate(sents):
+        if s == order_sent:
+            seen_order, in_list = True, False
+            keep.append(s)
+            continue
+        nxt = sents[i + 1] if i + 1 < len(sents) else ''
+        if seen_order and _NEED_LEAD_RX.match(s) and not _ORDER_RX.search(s) and _file_bullet(nxt, False):
+            in_list = True                       # "For each, I need:" opens the list of what the file carries
+            notes.append(s)
+            continue
+        if _BULLET_RX.match(s):
+            if seen_order and _file_bullet(s, in_list):
+                notes.append(s)
+                continue
+        else:
+            in_list = False
         if s and order_sent and _is_note(s, order_sent):
             notes.append(s)
         else:

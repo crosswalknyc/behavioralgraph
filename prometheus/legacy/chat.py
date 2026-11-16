@@ -2504,6 +2504,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
                 spec_draft, per_prompt, candidates, catalog=catalog)
         except Exception as _fx:
             _faults.note('chat', _fx)
+        __import__('prometheus.held_window', fromlist=['settle_on_host']).settle_on_host(spec_draft, per_prompt, _H, catalog=catalog, est_minutes=_estimate_run_minutes)   # a window the file already holds is a reuse, never a rebuild (Grace Yin 2026-11-16)
 
         decision_str = str(spec_draft.get('decision') or '').strip().lower()
         user_optout = _H._user_optout_of_avid(per_prompt, chat_history=history)
@@ -6867,8 +6868,9 @@ def _pm_interpret_core(user, body, text, history):
                 'guidance': True,
                 'error': _fw_ask['question'],
             })
+        _dec_norm = __import__('prometheus.held_window', fromlist=['settle_on_host']).settle_on_host(spec_draft, text, _H, catalog=catalog, user=user, username=(session.get('username') or ''), est_minutes=_estimate_run_minutes) or _dec_norm   # a held window is a reuse (2026-11-16)
         estimated_credits = int(spec_draft.get('estimated_credits')
-                                or estimated_credits)
+                                if spec_draft.get('estimated_credits') is not None else estimated_credits)
         # 2026-10-02 audit: model reasoning leaked into the subject
         # ("Starz+ ... The prior turn asked for Starz; this turn asks
         # for Starz+") and a question fragment became a build ("Appeal
@@ -8915,7 +8917,7 @@ def _pm_approve_core(user, body):
         from prometheus import thread_scope as _tsc_bl
         _build_ready.note_launch(
             _pm_s3_put_json, run_id=_session_run_id, user=_approve_username,
-            thread_id=str(body.get('thread_id') or '') or _tsc_bl.current_thread_id(),
+            thread_id=(str(body.get('thread_id') or '') or _tsc_bl.current_thread_id() or _build_ready.active_thread(lambda: _load_threads_index(_approve_username), api=_api_threads.is_api_request())),
             subject=spec.get('name'), decision=decision, engine_user=payload.get('user_email') or '',
             via=('api' if _api_threads.is_api_request() else 'dashboard'))
     except Exception as _fx:

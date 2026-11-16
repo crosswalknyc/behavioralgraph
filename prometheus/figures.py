@@ -311,7 +311,10 @@ class Registry:
         out = _TOKEN_RX.sub(_tok, out)
         out = _CALC_RX.sub(_calc, out)
         # a token the model malformed ([f99], [calc: ...] on a missing figure) must never reach a reader
-        out = re.sub(r"\[\s*f\d+\s*\]", 'that figure', out)
+        # ... nor one with a tail the registry never issued ("sits at [f3_na] 22,361,678", Grace Yin 2026-11-16):
+        # beside the figure it stood for the token goes, alone it reads as 'that figure'
+        out = re.sub(r"\[\s*f\d+[A-Za-z_]\w*\s*\]\s*(?=[$\u00a3]?\d)", '', out)
+        out = re.sub(r"\[\s*f\d+\w*\s*\]", 'that figure', out)
         out = re.sub(r"\[\s*calc\s*:[^\]\n]*\]", 'that figure', out)
         # a token the model left open at the end of a line ("99.4% of the
         # [calc:", Keith's Claire's read 2026-11-10) never reaches a reader

@@ -19543,6 +19543,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     // every price and balance in pounds. Numbers are 1:1; only the
     // symbol changes. Every price/balance formatter below reads this.
     window.PM_CURRENCY_SYMBOL = {{ (currency_symbol|default('$'))|tojson }};
+    window.PM_SEAT_INCLUDED = {{ (seat_included|default(false))|tojson }};   // an included seat reads no price on a brief (2026-11-16)
     window.PM_VIEW_DEFINITION = {{ (view_definition|default(''))|tojson }};
     window.PM_VIEW_NOTE_SHORT = {{ (view_note_short|default(''))|tojson }};
     window.PM_PERIOD_NOTE = {{ (period_note|default(''))|tojson }};
@@ -90030,6 +90031,75 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return t;
         }
 
+        // The list a batch shows (2026-11-16, Grace Yin: three years of one
+        // actor read "Zac Efron, Zac Efron, Zac Efron"). A name listed more
+        // than once carries what tells its lines apart: the window, else the cut.
+        function _pmBatchName(d) {
+            return String((d && (d.display_name || d.subject || d.name)) || 'untitled').trim();
+        }
+        function _pmBatchWindow(d) {
+            var w = String((d && (d.date_window || d.date_window_label || d.cut_window_label)) || '').trim();
+            if (!w && d && d.date_range && typeof _synthChatFormatRange === 'function') {
+                try { w = _synthChatFormatRange(d.date_range) || ''; } catch (_) { w = ''; }
+            }
+            return w.split(' (')[0].trim();
+        }
+        function _pmBatchNamesRepeat(drafts) {
+            var seen = {}, list = drafts || [];
+            for (var i = 0; i < list.length; i++) {
+                var k = _pmBatchName(list[i]).toLowerCase();
+                if (seen[k]) return true;
+                seen[k] = 1;
+            }
+            return false;
+        }
+        function _pmBatchListLines(drafts) {
+            var list = drafts || [], count = {};
+            list.forEach(function (d) { var k = _pmBatchName(d).toLowerCase(); count[k] = (count[k] || 0) + 1; });
+            return list.map(function (d) {
+                var n = _pmBatchName(d);
+                if (count[n.toLowerCase()] < 2) return n;
+                var tail = _pmBatchWindow(d) || String((d && d.cut_label) || '').trim();
+                return tail ? (n + ', ' + tail) : n;
+            });
+        }
+        // The ask already chose one profile each ("two individual talent
+        // profiles", "a separate profile for each", "run them separately").
+        function _pmBatchSaysSeparate(text) {
+            var t = String(text || '').toLowerCase();
+            if (/\b(?:combined|together|merged?|as one|single (?:profile|audience)|one profile)\b/.test(t)) return false;
+            return /\b(?:individual|separate|separately|one each|a profile (?:for|on) each|profile for each|each (?:of them )?(?:separately|individually))\b/.test(t);
+        }
+        // A question about the list itself, not an answer and not a new ask.
+        function _pmAsksAboutBatchList(text) {
+            var t = String(text || '').toLowerCase();
+            if (t.indexOf('?') === -1 && !/^\s*(?:why|how come|what)\b/.test(t)) return false;
+            return /\b(?:why|how come)\b/.test(t) && /\b(?:names?|subjects?|profiles?|times|twice|three|list(?:ed)?|\d+|same|different|duplicat\w*|repeat\w*)\b/.test(t);
+        }
+        function _pmBatchExplain(drafts) {
+            var list = drafts || [], groups = {}, order = [];
+            list.forEach(function (d) {
+                var n = _pmBatchName(d), k = n.toLowerCase();
+                if (!groups[k]) { groups[k] = { name: n, wins: [] }; order.push(k); }
+                groups[k].wins.push(_pmBatchWindow(d) || String((d && d.cut_label) || '').trim());
+            });
+            var out = ['Each line is one profile I would build, ' + list.length + ' in all:', ''];
+            order.forEach(function (k) {
+                var g = groups[k], w = g.wins.filter(Boolean);
+                if (g.wins.length > 1) {
+                    out.push('- ' + g.name + ' is listed ' + g.wins.length + ' times because your request reads as '
+                        + g.wins.length + ' separate files for that name'
+                        + (w.length === g.wins.length ? ': ' + w.join('; ') + '.' : '.'));
+                } else {
+                    out.push('- ' + g.name + (w.length ? ', ' + w[0] : '') + ', once.');
+                }
+            });
+            out.push('');
+            out.push('If a line should not be there, tell me which and I will take it off. Otherwise: '
+                + list.length + ' individual profiles, or one combined profile covering all of them?');
+            return out.join('\n');
+        }
+
         // Individual was chosen, so render the batch we already have.
         // Mirrors the two inline batch renderers in the interpret
         // handler: an unanswered window question is still asked first.
@@ -93628,6 +93698,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // Falls through to the interpret call below.
             } else if (_pmAwaitingCombineChoice) {
                 var _cbWant = _pmWantsCombined(text);
+                if (_cbWant === null && _pmAsksAboutBatchList(text)) {
+                    // "why do we have ... 7 different names?" is about the list on
+                    // screen: say what each line is, keep the choice open (2026-11-16)
+                    var _cbQs = _pmCombineStash || {};
+                    var _cbQn = ((_cbQs.data && _cbQs.data.spec_drafts) || []).length;
+                    _synthChatPushTurnWithMeta('agent',
+                        _pmBatchExplain((_cbQs.data && _cbQs.data.spec_drafts) || []),
+                        { options: [
+                            { label: _cbQn + ' individual profiles', send: _cbQn + ' individual profiles' },
+                            { label: 'One combined profile', send: 'one combined profile' }
+                        ]});
+                    return;
+                }
                 if (_cbWant === null &&
                     (text.indexOf('?') !== -1 || text.split(/\s+/).length >= 8 ||
                      _pmLooksTopicSwitch(text))) {
@@ -93943,11 +94026,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         // Already asked this round. Render the batch
                         // rather than loop on the question.
                         _pmCombineSuppress = false;
+                    } else if (_pmBatchSaysSeparate(text) || _pmBatchNamesRepeat(data.spec_drafts)) {
+                        // The ask already says one profile each, or one subject is
+                        // listed on several windows (2026-11-16, Grace Yin: "two
+                        // individual talent profiles" was asked "individual or
+                        // combined?", and three years of one actor were offered
+                        // as one combined profile). Nothing to ask: show the list.
+                        _pmCombineStash = { data: data, text: text };
+                        _pmReleaseStashedBatch();
+                        return;
                     } else {
                         var _cgN = data.spec_drafts.length;
-                        var _cgList = data.spec_drafts.map(function (d) {
-                            return '- ' + ((d && (d.display_name
-                                || d.subject)) || 'untitled');
+                        var _cgList = _pmBatchListLines(data.spec_drafts).map(function (l) {
+                            return '- ' + l;
                         }).join('\n');
                         _pmCombineStash = { data: data, text: text };
                         _pmAwaitingCombineChoice = true;
@@ -94197,6 +94288,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _bUsd = _bPt ? _synthChatPriceUsd(_bPt, decision, _bCuts) : null;
                 if (_bUsd === null) { _usdKnown = false; } else { _usdTotal += _bUsd; }
                 var cred = (_bUsd !== null) ? _synthChatUsd(_bUsd) : '';
+                if (typeof window !== 'undefined' && window.PM_SEAT_INCLUDED) cred = '';   // included with the plan: no price on the line (2026-11-16)
                 var mins = d.estimated_run_minutes;
                 var eta = mins ? ' (~' + mins + ' min)' : '';
                 var action = 'new build';
@@ -94218,7 +94310,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 lines.push('');
                 lines.push('Window: ' + _winFirst + '.');
             }
-            if (_usdKnown && drafts.length) {
+            if (typeof window !== 'undefined' && window.PM_SEAT_INCLUDED && drafts.length) {
+                lines.push('');
+                lines.push('Included with your plan.');
+            } else if (_usdKnown && drafts.length) {
                 lines.push('');
                 lines.push('Total cost: ' + _synthChatUsd(_usdTotal) + ' on approval.');
             }
@@ -95520,7 +95615,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // line is left off rather than printing credits.
             var _pt = s.price_table || null;
             var _nCuts = (s.addon_cuts && s.addon_cuts.length) || 0;
-            if (_pt && typeof credits === 'number') {
+            if (typeof window !== 'undefined' && window.PM_SEAT_INCLUDED) {
+                facts.push('Cost: Included with your plan');
+            } else if (_pt && typeof credits === 'number') {
                 var _dk = String(s.decision || 'new_build').toLowerCase();
                 if (_dk === 'existing_match') {
                     facts.push('Cost: $0 to reuse the existing file, or '
@@ -95745,6 +95842,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         spec_draft: synthChatCurrentDraft,
                         run_avid: runAvid,
                         email_to: emailTo,
+                        // the thread the order was approved in, so the finished line lands there (2026-11-16)
+                        thread_id: (typeof _pmThreadsIdx !== 'undefined' && _pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '',
                         // 2026-09-04 Jenna existing_match chip UX.
                         // Session-only flag; the backend flips the
                         // draft from existing_match to new_build
@@ -95853,6 +95952,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             spec_draft: d,
                             run_avid: d && d.run_avid !== false,
                             email_to: emailTo,
+                            thread_id: (typeof _pmThreadsIdx !== 'undefined' && _pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '',
                         }),
                     }).then(function(r) { return r.json().catch(function(){ return {success:false, error:'bad json'};}); })
                       .catch(function(e){ return {success:false, error:String(e && e.message || e)}; });

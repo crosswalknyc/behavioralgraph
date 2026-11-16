@@ -41,7 +41,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-__all__ = ['PREFIX', 'MAX_AGE_S', 'note_launch', 'ready_text', 'ready_turn', 'post_ready', 'sweep', 'pending']
+__all__ = ['PREFIX', 'MAX_AGE_S', 'note_launch', 'active_thread', 'ready_text', 'ready_turn', 'post_ready', 'sweep', 'pending']
 
 PREFIX = 'system/pm_build_launches/'
 CLOSED_PREFIX = 'system/pm_build_launches_closed/'    # a closed launch leaves the open prefix, so a pass reads only what is open
@@ -78,6 +78,22 @@ def note_launch(store_put, *, run_id, user, thread_id='', subject='', decision='
         return doc
     except Exception:
         return None
+
+
+def active_thread(load_index, *, api=False):
+    """The thread a dashboard Approve came from when the request did not
+    name one (2026-11-16, Grace Yin: every Approve from the widget since
+    2026-11-11 recorded its launch with no thread, so no finished line
+    was ever posted). At the moment of the click the reader is in their
+    active thread, so the launch is recorded on it. A key-surface ask
+    never falls back: it names its conversation or has none."""
+    if api:
+        return ''
+    try:
+        idx = load_index() or {}
+        return str((idx if isinstance(idx, dict) else {}).get('active') or '')[:96]
+    except Exception:
+        return ''
 
 
 def ready_text(name, run_doc=None):

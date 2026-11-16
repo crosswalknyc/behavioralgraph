@@ -410,7 +410,7 @@ class Wiring(unittest.TestCase):
         self.assertIn("seat_included=_seat_included,", app_src)
         html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
         self.assertIn('{% if _pm_incl %}Included with your plan{% else %}$300{% endif %}', html)
-        self.assertEqual(html.count('Included with your plan'), 11)
+        self.assertEqual(html.count('Included with your plan'), 13)   # + the batch card and the brief card (2026-11-16)
         api = open(os.path.join(ROOT, 'digital_twins_api.py'), encoding='utf-8').read()
         self.assertIn("'labels': {str(t): PR.INCLUDED_LABEL for t in PR.tiers_for(plan)}", api)
         for path in ('prometheus/priced_read.py', 'prometheus/unprojected.py', 'prometheus/rate_card.py', 'prometheus/product_facts.py'):
