@@ -383,5 +383,49 @@ console.log(JSON.stringify({
             self.assertNotIn(bad, ex)
 
 
+class TheFinishedLineIsSaidOnce(unittest.TestCase):
+    """Her thread, 2:40 PM: the server said 'Dakota Johnson is ready.' and
+    the tab she had left open said it again two minutes later."""
+
+    SERVER = {'role': 'agent', 'ts': '2026-11-16T22:40:22.855Z', 'turn_id': 'ready-MbzHk_VWxW_T5g',
+              'text': 'Dakota Johnson is ready. It is in the Select Profile dropdown under Dakota Johnson.',
+              'meta': {'kind': 'build_ready', 'build_run_id': 'MbzHk_VWxW_T5g', 'server': True,
+                       'landed_at': '2026-11-16T22:40:22.855Z', 'subject': 'Dakota Johnson'}}
+    TAB = {'role': 'agent', 'ts': '2026-11-16T22:42:34.083Z', 'turn_id': 'tmwjumsir2a01hz',
+           'text': 'Dakota Johnson is finished and ready in the Select Profile dropdown.\n'
+                   'In Select Profile as: Dakota Johnson\nAvid Fan cut: Dakota Johnson - Avid Fan'}
+    STAGE = {'role': 'agent', 'ts': '2026-11-16T22:11:37.785Z', 'turn_id': 'tmwjtj06xte2kby',
+             'text': 'Dakota Johnson: building the add-on cuts.'}
+
+    def setUp(self):
+        from prometheus import thread_merge as TM
+        self.TM = TM
+
+    def test_the_tab_line_after_the_server_line_is_not_stored(self):
+        out = self.TM.merge_turns([self.STAGE, self.SERVER], [self.STAGE, self.TAB])
+        self.assertEqual([t['turn_id'] for t in out], ['tmwjtj06xte2kby', 'ready-MbzHk_VWxW_T5g'])
+        self.assertTrue(self.TM.differs([self.STAGE, self.TAB], out))
+
+    def test_the_tab_line_alone_is_kept(self):
+        out = self.TM.merge_turns([self.STAGE], [self.STAGE, self.TAB])
+        self.assertEqual(out[-1]['turn_id'], 'tmwjumsir2a01hz')
+
+    def test_another_subject_is_not_dropped(self):
+        other = dict(self.TAB, turn_id='zac1', text='Zac Efron is finished and ready in the Select Profile dropdown.')
+        out = self.TM.merge_turns([self.SERVER], [other])
+        self.assertIn('zac1', [t.get('turn_id') for t in out])
+
+    def test_a_stage_line_and_a_later_build_are_kept(self):
+        late = dict(self.TAB, turn_id='late1', ts='2026-11-18T22:42:34.083Z')
+        out = self.TM.merge_turns([self.SERVER], [self.STAGE, late])
+        ids = [t.get('turn_id') for t in out]
+        self.assertIn('tmwjtj06xte2kby', ids)
+        self.assertIn('late1', ids)
+
+    def test_nothing_already_stored_is_removed(self):
+        out = self.TM.merge_turns([self.SERVER, self.TAB], [self.TAB])
+        self.assertEqual(len(out), 2)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

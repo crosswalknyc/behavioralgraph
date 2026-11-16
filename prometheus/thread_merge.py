@@ -269,6 +269,39 @@ def _ordered(turns):
     return [t for _e, _n, t in keyed]
 
 
+_TAB_READY_RX = re.compile(r"\bis finished and ready in the Select Profile dropdown\b|"
+                           r"\bis finished\. Your Subscriber IQ read is live\b", re.I)
+_TAB_READY_WINDOW_S = 6 * 3600
+
+
+def _server_already_said(out, c):
+    """True when ``c`` is the finished line an open tab draws for a build
+    the server has already announced in this thread (Grace Yin,
+    2026-11-16: 'Dakota Johnson is ready.' from the server, then the
+    tab's own 'Dakota Johnson is finished and ready' two minutes later).
+    Only a later line, for the same name, within a few hours."""
+    try:
+        if str(c.get('role') or '') == 'user' or is_server_turn(c):
+            return False
+        text = ' '.join(str(c.get('text') or '').split())
+        if not _TAB_READY_RX.search(text):
+            return False
+        when = turn_epoch(c)
+        for t in out:
+            m = _meta(t)
+            if m.get('kind') != 'build_ready' or not m.get('build_run_id'):
+                continue
+            name = ' '.join(str(m.get('subject') or '').lower().split())
+            if not name or not text.lower().startswith(name + ' is finished'):
+                continue
+            said = turn_epoch(t)
+            if when and said and 0 <= (when - said) <= _TAB_READY_WINDOW_S:
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def merge_turns(stored, incoming):
     """The stored thread with the incoming turns merged in. Every stored
     turn survives; incoming turns are added or patch the copy already
@@ -282,6 +315,8 @@ def merge_turns(stored, incoming):
         for c in inc:
             j = _find(out, c)
             if j is None:
+                if _server_already_said(out, c):
+                    continue
                 out.append(c)
             else:
                 out[j] = _resolve(out[j], c)
