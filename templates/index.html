@@ -175290,12 +175290,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!card && c.getAttribute('data-module') === category) card = c;
             });
             if (!card || card.classList.contains('piq-no-data') || !_piqCsvShown(card)) return '';
+            var med = '';
+            var medEl = card.querySelector('.median-display');
+            if (medEl && _piqCsvShown(medEl)) {
+                Array.prototype.forEach.call(medEl.children, function (line) {
+                    if (!_piqCsvShown(line)) return;
+                    var txt = _piqCsvText(line);
+                    var cut = txt.indexOf(': ');
+                    if (cut > 0) med += _piqCsvQ(txt.slice(0, cut)) + ',' + _piqCsvQ(txt.slice(cut + 2)) + '\n';
+                });
+            }
             var tc = card.querySelector('.demo-table-container');
             var t = (tc && _piqCsvShown(tc)) ? tc.querySelector('.behavioral-table') : null;
-            if (t) return _piqCsvScrape(t.querySelector('.behavioral-header-row'), t.querySelectorAll('.behavioral-item'));
+            if (t) return med + _piqCsvScrape(t.querySelector('.behavioral-header-row'), t.querySelectorAll('.behavioral-item'));
             var list = card.querySelector('.piq-bar-list');
-            if (!list || !_piqCsvShown(list)) return '';
-            return _piqCsvScrape(list.querySelector('.piq-demo-row.head'), list.querySelectorAll('.piq-demo-row:not(.head)'));
+            if (!list || !_piqCsvShown(list)) return med;
+            return med + _piqCsvScrape(list.querySelector('.piq-demo-row.head'), list.querySelectorAll('.piq-demo-row:not(.head)'));
         }
 
         function _piqInterestsCsvTable() {
