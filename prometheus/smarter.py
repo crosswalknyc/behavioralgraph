@@ -410,7 +410,9 @@ def capability_ask(text):
     'Can you see the full url now?' is about the material on the thread,
     not about what the product does (Alexia 2026-10-16 got a Profile IQ
     pitch); the document lane answers that. An ask for work behind the
-    frame (advisory_order) is not this lane either (2026-10-22 audit)."""
+    frame (advisory_order) is not this lane either (2026-10-22 audit).
+    A question that names no product gets no product description
+    (2026-11-13): None, and the lanes that answer questions keep it."""
     t = ' '.join(str(text or '').split())
     if not t or not _CAPABILITY_RX.match(t) or polite_order(t) or _MATERIAL_RX.search(t) or advisory_order(t):
         return None
@@ -418,7 +420,15 @@ def capability_ask(text):
         return None     # "are you able to make a slide presentation ...": a deck order, the deck lane's (Mark Valdez 2026-10-20)
     hits = [(name, what, chip) for rx, name, what, chip in _PRODUCT_WORDS if rx.search(t)]
     if not hits:
-        hits = [_PRODUCT_WORDS[-1][1:]]
+        # A can-you question that names no product is not a question about
+        # a product: no description is the answer to it. Until 2026-11-13
+        # this defaulted to the Profile IQ description (David Carter at
+        # Sony, "Can you differentiate between audio podcasts and video
+        # podcasts?"; Samantha Kolton, "can you explan the pinterst more?";
+        # Armine, "Can we have all these categories ..."). prometheus.can_do
+        # and prometheus.data_capability answer what we can see or tell
+        # apart; anything else goes to the answer lanes.
+        return None
     name, what, chip = hits[0]
     # the remainder of the question is the subject only when it reads as a
     # name; a clause ("look at the colin and samir campaign and tell me

@@ -388,7 +388,9 @@ class AQuestionAboutTheRead(unittest.TestCase):
         words, hist = AC['words'], AC['thread_before']
         self.assertTrue(AC['reply_that_went_out'].startswith('Yes. A Profile IQ profile builds the audience'))
         cap = SM.capability_ask(words)
-        self.assertTrue(cap and cap['reply'] == AC['reply_that_went_out'])                  # the cause: can-we with no product named
+        # the cause was a can-we with no product named defaulting to the Profile IQ description; since 2026-11-13
+        # (David Carter at Sony) a question that names no product gets no product description at all
+        self.assertIsNone(cap)
         self.assertFalse(OR.names_a_product(words))
         self.assertTrue(OR.points_at_thread(words))
         self.assertTrue(OR.about_thread(words, hist))

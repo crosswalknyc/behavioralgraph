@@ -591,8 +591,16 @@ _PRODUCT_FOR = {
 }
 
 
-def capability_reply(reading):
+def capability_reply(reading, text=None):
     """A can-we answer shaped by what the Reader saw the person wanting.
+
+    Given the question's own words (``text``), a product description is
+    returned only when those words name a product or the thing one does
+    (prometheus.own_read.names_a_product). The Reader's note alone never
+    picks one (2026-11-13: "Is there any podcast audience measurement
+    available in Crosswalk?" drew the Profile IQ description because the
+    note held the word "audience"); None then, and the answer lanes keep
+    the question.
 
     The reading's `wants` is the Reader's own third-person note ("They
     want to know whether Crosswalk can measure ..."). It picks the
@@ -603,6 +611,14 @@ def capability_reply(reading):
     prometheus.data_capability before this is reached."""
     wants = str((reading or {}).get('wants') or '').strip()
     low = wants.lower()
+    if text is not None:
+        try:
+            from . import own_read as _own
+            from . import can_do as _cd
+            if not _own.names_a_product(text) or _cd.reads_as_data_ability(text):
+                return None
+        except Exception:
+            return None
     key = 'analyze'
     for k, words in (('twin', ('twin', 'greenlight', 'launch lab', 'spend engine', 'panel lab', 'focus group', 'odds')),
                      ('campaign', ('creator', 'campaign', 'asset', 'attribut')), ('journey', ('journey', 'path', 'clip', 'post')),

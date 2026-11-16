@@ -60,13 +60,13 @@ _FOR_YOU = r"(?:for (?:you|crosswalk|prometheus) )?"
 
 # knowledge and visibility verbs: the ask is whether the data can show it
 _KNOW = (r"(?:know|see|tell|measure|track|quantify|find out|figure out|determine|identify|understand|learn|"
-         r"say|show|answer|gauge|calculate|count|capture|detect|distinguish|estimate|assess|confirm|verify|check|"
-         r"speak to|reveal|indicate|isolate|look at)")
+         r"say|show|answer|gauge|calculate|count|capture|detect|distinguish|differentiate|separate|estimate|assess|"
+         r"confirm|verify|check|speak to|reveal|indicate|isolate|single out|pick out|look at)")
 # the narrower set behind "can you" / "are you able to": an opinion
 # ("would you say") or a check on something ("can you confirm") is not a
 # question about what the data can show
 _KNOW_YOU = (r"(?:know|see|tell|measure|track|quantify|find out|figure out|determine|identify|count|capture|"
-             r"detect|distinguish|isolate|gauge|calculate)")
+             r"detect|distinguish|differentiate|separate|isolate|single out|pick out|gauge|calculate)")
 
 _OPENERS = tuple(re.compile(_LEAD + p, re.I) for p in (
     # is it possible (from your data) to know X
@@ -164,6 +164,14 @@ def _owned_elsewhere(t):
     try:
         import prometheus_analysis as _pma
         if _pma.classify_quantifiability(t):
+            return True
+    except Exception:
+        pass
+    try:
+        # the same boundary read a little wider ("heard it on the radio"):
+        # never the one-word yes (prometheus.can_do answers it no)
+        from . import can_do as _cdo
+        if _cdo.is_offline(t):
             return True
     except Exception:
         pass

@@ -3100,6 +3100,23 @@ def _standing_answer(text, user=None, uname=''):
     except Exception as _fx:
         _faults.note('service', _fx)
     try:
+        # A question about what we can see or tell apart ("Can you
+        # differentiate between audio podcasts and video podcasts?", David
+        # Carter at Sony 2026-11-13) is answered yes, no or partly first,
+        # then how, then one next step; never a product description and
+        # never a brief (prometheus.can_do). The no side with no digital
+        # trace was decided above.
+        from . import can_do as _cdo
+        _cd_raw = _cdo.answer(text)
+        if _cd_raw:
+            try:
+                host.ask_hint(route='capability', outcome='answered')
+            except Exception:
+                pass
+            return _cd_raw
+    except Exception as _fx:
+        _faults.note('service.can_do', _fx)
+    try:
         # "is it possible from your data to know how much of connected TV
         # watchtime is spent on youtube?" is answered "Yes." with the
         # person's own question as the chip (Jenna 2026-10-26). The no
@@ -3112,6 +3129,19 @@ def _standing_answer(text, user=None, uname=''):
                 host.ask_hint(route='capability', outcome='answered')
             except Exception:
                 pass
+            if not _dc_raw.get('followups'):
+                # no data question of its own to hand back as the chip
+                # ("are you able to distinguish new viewers from returning
+                # viewers?"): yes, no or partly, then how, then one next
+                # step (prometheus.can_do.explain, 2026-11-16). The
+                # one-word yes stands when nothing clean comes back.
+                try:
+                    from . import can_do as _cdo_x
+                    _ex_raw = _cdo_x.explain(text)
+                    if _ex_raw:
+                        return _ex_raw
+                except Exception as _fx:
+                    _faults.note('service.can_do', _fx)
             return _dc_raw
     except Exception as _fx:
         _faults.note('service.data_capability', _fx)
@@ -3205,14 +3235,32 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         from . import smarter as _sm
         from . import data_capability as _dc
         from . import guards as _gc
-        cap = _dc.answer(text) or _sm.capability_ask(text)
+        from . import can_do as _cdo
+        cap = _cdo.answer(text) or _dc.answer(text) or _sm.capability_ask(text)
         if not cap:
             try:
                 cap = _gc.capability_answer(text)
             except Exception:
                 cap = None
         if not cap:
-            cap = _rd.capability_reply(reading)
+            # a product description only for a question that names a product; the Reader's note alone never picks
+            # one (David Carter 2026-11-13: "Is there any podcast audience measurement available in Crosswalk?")
+            cap = _rd.capability_reply(reading, text)
+        if not cap:
+            # a question about what we can see or tell apart that no lane holds a line on is the one-word yes
+            # (Jenna 2026-10-26, and 2026-11-13: "the answer here would have been yes"); behavior with no digital
+            # trace was declined before the Reader ran
+            try:
+                import prometheus_analysis as _pma_c
+                if _cdo.reads_as_data_ability(text) and not _pma_c.classify_quantifiability(text) and not _cdo.is_offline(text):
+                    _chip_c = _dc.question(text)
+                    # the written answer first (yes, no or partly; how; one next step), the one-word yes when
+                    # there is a question of its own to chip or nothing clean came back (2026-11-16)
+                    _ex_c = None if _chip_c else _cdo.explain(text)
+                    cap = ({'reply': _ex_c['reply'], 'followups': []} if _ex_c else
+                           {'reply': _dc.REPLY, 'followups': [_chip_c] if _chip_c else [], 'capability_yes': True})
+            except Exception as _fx:
+                _faults.note('service.can_do', _fx)
         if cap:
             raw = {'success': True, 'action': 'answer', 'reply': cap['reply'], 'followups': cap.get('followups') or [],
                    'offer_deck': False, 'deck_angle': None}
