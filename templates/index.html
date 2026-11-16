@@ -25566,7 +25566,6 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics .chart-card-controls-row,
         #dashboardView.piq-v4 #tab-demographics .chart-container,
         #dashboardView.piq-v4 #tab-demographics .demo-table-container,
-        #dashboardView.piq-v4 #tab-demographics .median-display,
         #dashboardView.piq-v4 #tab-demographics #occupationGpActualsTable {
             display: none !important;
         }
@@ -25583,7 +25582,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .piq-bar-list {
             display: none !important;
         }
-        #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .median-display {
+        #dashboardView.piq-v4 #tab-demographics .median-display {
             display: block !important;
             color: #E9E8E1 !important;
             background: #15252A !important;
@@ -25592,7 +25591,10 @@ https://www.instagram.com/p/..."></textarea>
             margin: 0 0 10px !important;
             padding: 12px 14px !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .median-display {
+        #dashboardView.piq-v4 #tab-demographics .median-display:empty {
+            display: none !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .median-display {
             background: #FFFFFF !important;
             border-color: #C9C6BA !important;
             color: #0C1618 !important;
