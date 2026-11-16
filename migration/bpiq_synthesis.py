@@ -1519,8 +1519,15 @@ def _dates(inputs: dict) -> dict:
     against a year of baseline washed out its lift (27% of a year's
     any-touch share against 32% in two weeks read as a small move). A
     caller may still name an explicit pre window. The year before the
-    campaign rides along as `baseline` for context."""
-    today = _dt.date.today()
+    campaign rides along as `baseline` for context. Today is the
+    order's today, the US Eastern date the window was read back on
+    (prometheus.bpiq_slots.order_today, 2026-11-13), so the day shown is
+    the day used."""
+    try:
+        from prometheus.bpiq_slots import order_today as _order_today
+        today = _order_today()
+    except Exception:
+        today = _dt.date.today()
     ev_s = _dt.date.fromisoformat(inputs["event_start"])
     ev_e = _dt.date.fromisoformat(inputs["event_end"])
     ev_days = (ev_e - ev_s).days + 1

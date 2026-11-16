@@ -218,11 +218,16 @@ def _low(t):
 
 
 def _today(today=None):
+    """The order's today: the US Eastern date (Jenna 2026-11-13), the same
+    day in every line the order reads back and in the window it runs on
+    (prometheus.bpiq_slots.order_today). A caller's own ``today`` wins."""
+    if isinstance(today, datetime):
+        return today.date()
     if isinstance(today, date):
         return today
     if today:
         return date.fromisoformat(str(today)[:10])
-    return date.today()
+    return _slots.order_today()
 
 
 def _d(v):

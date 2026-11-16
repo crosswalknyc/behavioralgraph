@@ -27,7 +27,7 @@ Pure: no network, no store. User-facing copy lives in the wizard.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 _MONTHS = {
     'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
@@ -257,6 +257,30 @@ def single_date(text, today, hint=None):
     return d.isoformat()
 
 
+ORDER_TZ = 'America/New_York'
+
+
+def order_today(now=None):
+    """Today for a valuation order: the US Eastern calendar date (Jenna
+    2026-11-13). Samantha Kolton typed "sept 29th - current" at 7:40 PM
+    Eastern on November 12 and was read back a window ending November 13,
+    because the day was taken off the UTC clock. The order's window is the
+    one place today is the reader's business day: the date read back is
+    the date the valuation runs on (the wizard hands the same day to the
+    job, and the job clips to the same day). Every other window in the
+    house keeps the UTC day (migration.event_window.default_window).
+    ``now`` is an aware or UTC-naive datetime, for tests."""
+    n = now if isinstance(now, datetime) else datetime.now(timezone.utc)
+    if n.tzinfo is None:
+        n = n.replace(tzinfo=timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        return n.astimezone(ZoneInfo(ORDER_TZ)).date()
+    except Exception:
+        # no zone data on the machine: Eastern standard time, never ahead of the Eastern day
+        return (n.astimezone(timezone.utc) - timedelta(hours=5)).date()
+
+
 def parse(text, today=None):
     """The slots a sentence names. Returns a dict with any of:
     talent, brand, campaign, start (ISO), start_precise (bool),
@@ -264,7 +288,7 @@ def parse(text, today=None):
     (ISO), ongoing (bool), and `roles` (the role words that were read,
     so a caller can tell an explicit "X is the talent" from a guess).
     Empty dict when the sentence names nothing."""
-    today = today or date.today()
+    today = today or order_today()
     t = _norm(text)
     out = {}
     if not t or len(t) > 600:
@@ -490,7 +514,7 @@ def many_partnerships(text, today=None):
     "the 30 days after the launch")}. None when the words name fewer than
     two partners. The property is '' when it cannot be read as a short
     name."""
-    today = today or date.today()
+    today = today or order_today()
     t = _norm(text)
     if not t or len(t) > 900:
         return None
