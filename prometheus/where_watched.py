@@ -74,6 +74,13 @@ _GENERIC_OBJECT_RX = re.compile(
     r"file|files|export|download|report|deck|pdf|csv)(?:\s+(?:of|for|to|from)\b.*)?\s*$", re.I)
 _AUDIENCE_TAIL_RX = re.compile(
     r"\b(?:audience|audiences|viewers|watchers|fans|fanbase|fan\s+base|users|subscribers|readers|listeners|buyers|shoppers|customers|members|followers|people|cohort|profile)\s*$", re.I)
+# a figure or a dataset asked for, in title position: "subscriber estimates for each streaming service", "the churn numbers
+# for peacock", "viewing data on hulu"; a real title with one of these words ("The Numbers Station") carries no "for / of /
+# per / by / on" after it
+_DATA_PHRASE_RX = re.compile(
+    r"\b(?:estimates?|forecasts?|projections?|counts?|figures?|statistics|stats|metrics|benchmarks?|data|numbers|totals?|rates?|"
+    r"subscribers?|subs|subscriptions?|penetration|reach|share|churn|retention)\b.{0,40}\b(?:for|of|per|by|on|across|in)\b"
+    r"|^(?:the\s+)?(?:subscriber|subscription|viewer|viewing|audience|churn|retention|usage|penetration)\s+(?:estimates?|counts?|numbers?|figures?|data|bases?|totals?|rates?)\b", re.I)
 _WHERE_TO_WATCH_RX = re.compile(
     r"\bwhere\s+(?:to|can\s+(?:i|you|we|people|they)|do\s+(?:i|you|we)|should\s+(?:i|we))\s+(?:" + _WATCH_VERBS + r")\s+"
     r"(?P<title>(?:the\s+)?[\"\u201c\u201d'\u2018\u2019]?[A-Za-z0-9][^?]{1,70}?)\s*\??$", re.I)
@@ -137,6 +144,8 @@ def _clean_title(raw):
         return ''
     if len(s.split()) > 8 or _AUDIENCE_TAIL_RX.search(s):
         return ''      # "the Babylon 5 audience" is an audience, not a title
+    if _DATA_PHRASE_RX.search(s):
+        return ''      # "subscriber estimates for each streaming service" is a figure asked for, not a title (Cara Dorfman 2026-11-16)
     return _ns._title(s.split()) if s == s.lower() else s
 
 

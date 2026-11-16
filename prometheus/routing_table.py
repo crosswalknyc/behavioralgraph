@@ -370,6 +370,19 @@ ROWS = [
                     ('re-run in the time frame 9/16 - 9/30', True)],
     },
     {
+        'id': 'service_subscribers', 'surface': 'analyze',
+        'reason': 'service_subscribers', 'client_action': 'analyze',
+        'note': 'The US subscriber base of a streaming service, or of each '
+                'of the major services, from the house registry '
+                '(prometheus.service_subscribers): one wording, the same '
+                'figures on every ask, never priced, never a title lookup '
+                '(Cara Dorfman 2026-11-16).',
+        'examples': [('where to find subscriber estimates for each streaming service', False),
+                     ('how many subscribers does Peacock have in the US', False)],
+        'counter': [('how do you estimate churn for paramount+', False),
+                    ('paramount+ viewers in the trailing 12 months', False)],
+    },
+    {
         'id': 'where_watched', 'surface': 'analyze',
         'reason': 'where_watched', 'client_action': 'analyze',
         'note': 'Where a named title is watched ("where people watched '

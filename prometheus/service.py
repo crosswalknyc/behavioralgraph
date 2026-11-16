@@ -575,7 +575,7 @@ LANE_ORDER = (
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
-    'talent_list_acceptance', 'meta_check', 'standing', 'multi_ask', 'catalog_exists', 'where_watched',
+    'talent_list_acceptance', 'meta_check', 'standing', 'multi_ask', 'catalog_exists', 'where_watched', 'service_subscribers',
     'sizing_quote', 'status_fast',
     'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'subiq_library', 'catalog',
     'sizing_fallback', 'status', 'deliverable_lookup', 'email_file', 'brand_coverage',
@@ -585,7 +585,7 @@ LANE_ORDER = (
 )
 DETERMINISTIC_LANES = frozenset((
     'build_fix', 'build_facts', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
-    'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
+    'meta_check', 'standing', 'catalog_exists', 'where_watched', 'service_subscribers', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
     'us_scope', 'segment_sizing', 'read_brief'))
@@ -2130,6 +2130,24 @@ def ask(user, body, *, via='session'):
                 _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+    # lane: service_subscribers
+    # The US subscriber base of a streaming service, or of each of them
+    # (Cara Dorfman 2026-11-16: "where to find subscriber estimates for
+    # each streaming service" was read as a title by the where-watched
+    # lane). One registry, one wording, answered on the spot; never priced.
+    if referent_decision is None and not _armed(body) and not _exists_ask:
+        try:
+            from . import service_subscribers as _ssub
+            _ss_raw = _ssub.answer(text, ctx, host=host, user=user, history=history)
+        except Exception as _fx:
+            _faults.note('service.service_subscribers', _fx)
+            _ss_raw = None
+        if _ss_raw is not None:
+            _decision = {'surface': 'analyze', 'mode': None, 'reason': 'service_subscribers', 'client_hint': None}
+            _out = _interpret_shape(_ss_raw) if _client_surface == 'interpret' else _ss_raw
+            env = envelope.wrap(_out, surface='analyze', decision=_decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
             return env, 200
     # lane: where_watched
     # Where a named title is watched (Jay Patel 2026-10-20: "where people
