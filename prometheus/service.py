@@ -2927,6 +2927,27 @@ def ask(user, body, *, via='session'):
             _faults.note('service', _fx)
         return envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via), 200
 
+    # A build that follows a question is started from that question (Jenna 2026-10-06 and 2026-11-13,
+    # prometheus.question_first): the reader was quoted the read and ordered the profile on the same subject in
+    # this thread. The question is noted on the request (a covered seat's order starts in this same turn) and
+    # rides the brief below; when the build is started it is kept, and it is asked again when the profile lands.
+    _origin_q = None
+    if surface == 'interpret' and not _armed(body) and uname and not _faults.is_probe():
+        try:
+            from . import question_first as _qf
+            from . import pending_offers as _pend_q
+            _open_q = None
+            try:
+                _open_q = _pend_q.find(uname, history, tid)
+            except Exception:
+                _open_q = None
+            _origin_q = _qf.origin_for_build(text, history, _open_q)
+            if _origin_q:
+                from flask import g as _g_oq
+                _g_oq._pm_origin_question = dict(_origin_q, thread_id=str(tid or ''))
+        except Exception as _fx:
+            _faults.note('service.question_first', _fx)
+            _origin_q = None
     try:
         if surface == 'analyze':
             resp = host.analyze_core(
@@ -2974,6 +2995,22 @@ def ask(user, body, *, via='session'):
                 raw = dict(raw, reply=_pri.with_included_line(raw['reply']), included_with_plan=True)
             except Exception as _fx:
                 _faults.note('service.included', _fx)
+        if surface == 'interpret' and _origin_q and isinstance(raw, dict):
+            # the brief carries the question it was started from, on the same subject only
+            try:
+                from . import question_first as _qf
+                if _qf.attach_origin(raw, _origin_q, tid):
+                    host.ask_hint(route='question_first', outcome='question_rides_brief')
+            except Exception as _fx:
+                _faults.note('service.question_first', _fx)
+        if surface == 'analyze' and _client_surface == 'interpret' and isinstance(raw, dict) and raw.get('panel_offer'):
+            # A question typed where profiles are built is quoted like any other, and the build stays one tap
+            # away: one more chip beside Approve and Cancel (prometheus.question_first, Jenna 2026-11-13)
+            try:
+                from . import question_first as _qf
+                raw = _qf.with_build_chip(raw, text, _client_surface)
+            except Exception as _fx:
+                _faults.note('service.question_first', _fx)
         if (surface == 'analyze' and _client_surface == 'interpret'
                 and isinstance(raw, dict)):
             # The widget is sitting in its build flow (an armed step, or a

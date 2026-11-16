@@ -57,8 +57,14 @@ _BUILD_VERB_RX = re.compile(
     r'(?:people|those|anyone|everyone|users|fans|folks|consumers|'
     r'viewers|buyers|shoppers|americans|us\b)', re.I)
 _CUT_BY_RX = re.compile(r'\b(cut|slice)\b[^.]{0,40}\bby\b', re.I)
+# "credit card", "credit union", "credit score" are not about the reader's
+# credits (2026-11-13, Samantha Kolton: "What type of credit card does Paige
+# Spiranac's have?" was kept on the build surface by the bare word and drew a
+# $300 brief; prometheus.question_first)
 _OPS_WORDS_RX = re.compile(
-    r'\brefresh\b|\bsample size\b|\bincidence\b|\bstatus\b|\bcredits?\b',
+    r'\brefresh\b|\bsample size\b|\bincidence\b|\bstatus\b|'
+    r'\bcredits?\b(?!\s+(?:cards?|unions?|scores?|providers?|bureaus?|reports?|karma|lines?|limits?|history|ratings?|'
+    r'checks?|builders?|repair|monitoring|products?|issuers?|companies|company)\b)',
     re.I)
 _QUESTION_MARK_RX = re.compile(r'\?\s*$')
 _QUESTION_OPEN_RX = re.compile(

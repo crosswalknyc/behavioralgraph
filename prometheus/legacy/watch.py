@@ -25,7 +25,8 @@ from flask import session
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
 __all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_page_confirm_mark', '_pm_page_confirmed_recently', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_is_consumption_count_ask', '_pm_is_viewership_ask', '_pm_viewership_verb', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label', '_pm_consumption_subject',
-    '_pm_page_clarify_subject', '_pm_pending_q_tokens', '_pm_stash_pending_question']
+    '_pm_page_clarify_subject', '_pm_pending_q_tokens', '_pm_stash_pending_question',
+    '_pm_pop_pending_question']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -844,3 +845,43 @@ def _pm_stash_pending_question(username, subject, question,
                             log_name='pm_pending_questions')
     except Exception:
         traceback.print_exc()
+
+
+def _pm_pop_pending_question(username, completed_subject):
+    """The stashed question whose subject matches the completed build
+    (distinctive-token overlap), removed from the stash (one-shot).
+    Returns '' when nothing matches."""
+    uname = str(username or '').strip().lower()
+    if not uname or not completed_subject:
+        return ''
+    done_t = _pm_pending_q_tokens(completed_subject)
+    if not done_t:
+        return ''
+    popped = {'q': ''}
+
+    def _mut(doc):
+        doc = doc if isinstance(doc, dict) else {}
+        lst = [e for e in (doc.get(uname) or []) if isinstance(e, dict)]
+        keep = []
+        for e in lst:
+            if popped['q']:
+                keep.append(e)
+                continue
+            et = _pm_pending_q_tokens(e.get('subject'))
+            ov = len(et & done_t)
+            if et and (ov >= 2 or ov * 2 >= len(et)):
+                popped['q'] = str(e.get('question') or '')
+                continue
+            keep.append(e)
+        if keep:
+            doc[uname] = keep
+        else:
+            doc.pop(uname, None)
+        return doc
+    try:
+        _H._s3_json_cas_update(_H.S3_BUCKET, _C._PM_PENDING_Q_S3_KEY, _mut,
+                            default=dict,
+                            log_name='pm_pending_questions')
+    except Exception:
+        traceback.print_exc()
+    return popped['q']

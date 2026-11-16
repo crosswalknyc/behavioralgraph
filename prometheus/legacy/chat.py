@@ -49,6 +49,7 @@ from prometheus import door_words as _door_words   # the word door never reaches
 from prometheus import promise_truth as _PT   # a progress line never outlives its job; a promise has a record (2026-11-11)
 from prometheus import api_threads as _api_threads   # a key-surface job lands in a key thread, never a dashboard chat (2026-11-10)
 from prometheus import order_truth as _order_truth   # what is said about an order follows the artifact (2026-11-10)
+from prometheus import question_first as _question_first   # a question where profiles are built is offered first and answered when a build lands (2026-11-16)
 from prometheus import build_ready as _build_ready, list_shape as _list_shape   # the server posts the finished line into the launching thread (2026-11-10); a list of subjects is a list of names (2026-11-11)
 import io
 import hashlib
@@ -3690,6 +3691,11 @@ def api_synth_chat_clarify():
     import re as _re
     subject = str(draft.get('subject') or draft.get('name')
                   or 'this profile')
+    # a question or a "not building" typed at a brief's open question is not an answer to it (prometheus.question_first)
+    _side = _question_first.at_open_step(answer, step, subject)
+    if _side:
+        return jsonify({'success': True, 'draft': draft, 'discard': bool(_side.get('discard')), 'message': _side['message'],
+                        'next_step': '' if _side.get('discard') else step})
     base_credits = int(draft.get('base_credits')
                        or draft.get('estimated_credits') or 5)
     draft.setdefault('base_credits', base_credits)
@@ -8594,6 +8600,8 @@ def _pm_approve_core(user, body):
                 'error': _uv['ask'], 'followups': []})
 
     _t_spec = time.monotonic()
+    # the question this build was started from rides the brief; read here and taken off, never to the engine
+    _origin_keep = _question_first.take_origin(draft)
     spec = _spec_from_draft(draft)
     _pm_ask_stage('approve_spec', t0=_t_spec)
     run_avid = bool(body.get('run_avid', True))
@@ -8922,6 +8930,9 @@ def _pm_approve_core(user, body):
             via=('api' if _api_threads.is_api_request() else 'dashboard'))
     except Exception as _fx:
         _faults.note('chat', _fx)
+    # A build started from a question answers it when it lands: the launch keeps the question (prometheus.question_first)
+    if _origin_keep and not (_pm_probe_caller() or _faults.is_probe() or _pm_is_probe_user(_approve_username)):
+        _question_first.keep(_pm_stash_pending_question, _approve_username, spec.get('name'), _origin_keep, str(body.get('thread_id') or ''))
 
     # Charge AFTER the queue accepted the run so the usage-history entry
     # carries the real run_id (same check -> queue -> charge order the
@@ -12384,46 +12395,6 @@ def _pm_plausible_subject(subj):
         return bool(_refs.plausible_subject(subj))
     except Exception:
         return bool(str(subj or '').strip())
-
-
-def _pm_pop_pending_question(username, completed_subject):
-    """The stashed question whose subject matches the completed build
-    (distinctive-token overlap), removed from the stash (one-shot).
-    Returns '' when nothing matches."""
-    uname = str(username or '').strip().lower()
-    if not uname or not completed_subject:
-        return ''
-    done_t = _pm_pending_q_tokens(completed_subject)
-    if not done_t:
-        return ''
-    popped = {'q': ''}
-
-    def _mut(doc):
-        doc = doc if isinstance(doc, dict) else {}
-        lst = [e for e in (doc.get(uname) or []) if isinstance(e, dict)]
-        keep = []
-        for e in lst:
-            if popped['q']:
-                keep.append(e)
-                continue
-            et = _pm_pending_q_tokens(e.get('subject'))
-            ov = len(et & done_t)
-            if et and (ov >= 2 or ov * 2 >= len(et)):
-                popped['q'] = str(e.get('question') or '')
-                continue
-            keep.append(e)
-        if keep:
-            doc[uname] = keep
-        else:
-            doc.pop(uname, None)
-        return doc
-    try:
-        _H._s3_json_cas_update(_H.S3_BUCKET, _PM_PENDING_Q_S3_KEY, _mut,
-                            default=dict,
-                            log_name='pm_pending_questions')
-    except Exception:
-        traceback.print_exc()
-    return popped['q']
 
 
 # Fuzzy catalog tier (2026-09-28, Phase 1 of the improvement plan):
@@ -19867,7 +19838,7 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_page_clarify_subject,
     _pm_panel_price_label,
     _pm_pending_q_tokens,
-    _pm_stash_pending_question,
+    _pm_stash_pending_question, _pm_pop_pending_question,
     _pm_safe_user,
     _pm_s3_json,
     _pm_s3_put_json,
