@@ -14096,6 +14096,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             if _state != 'charged':
                 _pm_ask_hint(outcome=(('panel_offer' if _pl.get('panel_offer') else 'answered') if _state == 'offer' else 'panel_out_of_credits'), subject=subj_name)
                 return jsonify(_pl)
+            subj_name = str(_pl.get('subject') or subj_name)   # the read runs on the subject the gate settled on (prometheus.quote_subject)
             base = {'subject': subj_name, 's3_key': '', 'source': 'panel'}
             if _qu.kind == 'named':
                 base['universe'] = _qu.base   # the figures describe US people (or the named audience), never a page
@@ -14125,6 +14126,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 return jsonify(_pl)
             # no offer step (included with the plan, Jenna 2026-11-08, or a
             # metered follow-up): the read runs now on the named subject
+            subj_name = str(_pl.get('subject') or subj_name)   # as the gate settled it (prometheus.quote_subject)
             base = {'subject': subj_name, 's3_key': '', 'source': 'panel'}
             panel_charge = _pl
         if not base and not isinstance(panel_confirm, dict):   # nothing named: which audience? the page is a chip, never the answer (2026-10-24)

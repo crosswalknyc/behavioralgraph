@@ -1554,6 +1554,20 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                         '(one line is enough) and I will take it from there.')
             return 'offer', {'success': True, 'action': 'answer', 'reply': line, 'followups': [],
                              'offer_deck': False, 'deck_angle': None, 'subject': '', 'subject_unclear': True}
+        # A quote names the subject it will read (Jenna 2026-11-13: "ram's fans" was quoted as typed, approved, and
+        # read as Ram Trucks when she meant the Los Angeles Rams). A name that is two different things is asked
+        # about first, with each named, and nothing is priced, charged or started until it is answered; a name
+        # that places cleanly is quoted under its plain name; a settled subject is left alone
+        # (prometheus.quote_subject). A breakdown of a delivered figure is on that figure's subject.
+        if kind != 'derived':
+            try:
+                from . import quote_subject as _qsub
+                subj, _which = _qsub.settle(text, subj, history, page=page_name())
+                if _which:
+                    return 'offer', _which
+                subj = str(subj or '').strip() or 'that subject'
+            except Exception:
+                pass
     # A quote never swaps a named service silently (2026-11-12: a question about Fallout Season 2 on Netflix was
     # quoted "on Prime Video"). The record settles it and the quote says so in one sentence, or the quote is on
     # what was asked (prometheus.quote_service). Nothing is priced on a service the title is not on.
@@ -1983,6 +1997,8 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
     # The read runs on exactly what was quoted and approved: the subject
     # rides the body as the bound subject so the generation pass never
     # resolves a base of its own (the open page) behind the quote.
+    # (the subject the gate settled on: a name it placed is the one that was quoted, prometheus.quote_subject)
+    subject = str((payload or {}).get('subject') or subject) if isinstance(payload, dict) else subject
     if subject and not bind and not str(body.get('bind_subject') or '').strip():
         body['bind_subject'] = subject
     return None

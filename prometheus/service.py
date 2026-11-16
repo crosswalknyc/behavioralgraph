@@ -3478,7 +3478,7 @@ def _confirm_options(turn):
     for o in (mc.get('options') or []):
         if isinstance(o, dict) and o.get('label'):
             out.append({'label': str(o['label']), 'subject': str(o.get('subject') or o['label']),
-                        'cohort': str(o.get('cohort') or '') or None})
+                        'cohort': str(o.get('cohort') or '') or None, 'what': str(o.get('what') or '')})
     if not out:
         for o in (meta.get('options') or []):
             lbl = str((o.get('label') if isinstance(o, dict) else o) or '').strip()
@@ -3528,6 +3528,14 @@ def _confirm_answer(text, history):
                             or key in o['label'].lower()):
                     pick = o
                     break
+    if pick is None and not _CONFIRM_ANY_RX.match(low) and any(o.get('what') for o in options):
+        # a which-one question about a name that is two things (prometheus.quote_subject): "the football team",
+        # "LA rams (the football team)", "the trucks" pick the option the words describe; a tie picks nothing
+        try:
+            from . import quote_subject as _qsub_c
+            pick = _qsub_c.pick_by_words(low, options)
+        except Exception:
+            pick = None
     if pick is None and _CONFIRM_ANY_RX.match(low):
         if re.match(r'^(?:the )?second', low) and len(options) > 1:
             pick = options[1]
