@@ -81,4 +81,7 @@ def main(argv=None) -> int:
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    code = main()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(int(code or 0))      # the ledger's S3 client can pull the dashboard app in through the usage log; its threads must not hold the exit

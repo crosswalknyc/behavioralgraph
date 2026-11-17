@@ -82,4 +82,9 @@ def main(argv=None) -> int:
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    code = main()
+    # the usage log's pricing lookup imports the dashboard app (wallet.load_pricing -> app), whose background threads and
+    # pools would hold this process open after the kinds are written; everything is on S3 by now, so leave hard
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(int(code or 0))
