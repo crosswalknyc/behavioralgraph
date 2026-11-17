@@ -51721,7 +51721,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-bw-rail .sep { width: 14px; height: 1px; background: var(--dtw-rule); }
         #digitalTwinsIQView .dtw-bw-q { font-size: 1.3rem; font-weight: 300; letter-spacing: -0.015em; line-height: 1.25; margin: 0 0 0.3rem; }
         #digitalTwinsIQView .dtw-bw-sub { font-size: 0.8rem; color: var(--dtw-body); line-height: 1.45; margin: 0 0 0.9rem; }
-        #digitalTwinsIQView .dtw-bw-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        #digitalTwinsIQView .dtw-bw-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
         #digitalTwinsIQView .dtw-bw-opt { appearance: none; text-align: left; background: var(--dtw-input); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 14px 15px 13px; cursor: pointer; color: var(--dtw-ink); font-family: inherit; transition: border-color .12s; min-height: 136px; display: flex; flex-direction: column; gap: 6px; }
         #digitalTwinsIQView .dtw-bw-opt:hover, #digitalTwinsIQView .dtw-bw-opt.on { border-color: var(--dtw-accent); }
         #digitalTwinsIQView .dtw-bw-opt .k { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); }
@@ -52170,7 +52170,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <select id="dtwTwinSwitch" class="dtw-in dtw-switch" aria-label="Switch twin" onchange="dtwSwitchTwin(this.value)"><option value="">No twins yet</option></select>
                         <button type="button" class="dtw-btn" onclick="dtwHowtoOpen(true)">How to</button>
                         <button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build a twin</button>
-                        <button type="button" class="dtw-btn" onclick="dtwListOpen(true)" title="Upload a list of content URLs; the twin is the people who watched, read or visited that content">Build a twin from a list</button>
                     </div>
                 </div>
                 <div class="dtw-spine-foot">
@@ -52816,9 +52815,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="dtw-bw-opts">'
                     + '<button type="button" class="dtw-bw-opt' + (b.source === 'profile' ? ' on' : '') + '" onclick="dtwBwSource(\'profile\')"><span class="k">A defined group</span><b>From a profile</b><span>The audience of a title, a talent, a brand or a product. Prometheus pulls the audience and seats the panelists the same way Profile IQ does.</span></button>'
                     + '<button type="button" class="dtw-bw-opt' + (b.source === 'demographics' ? ' on' : '') + '" onclick="dtwBwSource(\'demographics\')"><span class="k">A group you shape</span><b>By demographics</b><span>Pick gender, age, income, ethnicity, parents and markets. Prometheus builds the audience to that shape and seats the panelists from it.</span></button>'
+                    + '<button type="button" class="dtw-bw-opt" onclick="dtwBwSource(\'list\')"><span class="k">A list of content</span><b>From a list</b><span>Upload or paste the URLs of the content. The twin is the people who watched, read or visited it.</span></button>'
                     + '</div>'
                     + '<div class="dtw-bw-sub" style="margin-top:0.9rem;">Or just tell Prometheus in the chat: <button type="button" class="dtw-link" onclick="dtwBuildOpen(false); dtwChatFill(\'Build a twin of \')">Build a twin of ...</button></div>'
-                    + '<div class="dtw-bw-sub" style="margin-top:0.5rem;">Have a list of content URLs? <button type="button" class="dtw-link" onclick="dtwBuildOpen(false); dtwListOpen(true)">Build a twin from a list</button>: the twin is the people who watched, read or visited that content.</div>'
                     + bwNav(!!b.source);
             }
             function bwRows() {
@@ -52910,7 +52909,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             window.dtwBwGo = function(i) { if (S.bw.job) return; S.bw.step = Math.max(0, Math.min(BW_STEPS.length - 1, i)); S.bw.err = ''; renderBuild(); };
             window.dtwBwNext = function() { if (!bwCanNext()) return; if (S.bw.step >= 4) { dtwBwSubmit(); return; } dtwBwGo(S.bw.step + 1); };
-            window.dtwBwSource = function(src) { var b = S.bw; if (b.source !== src) { b.source = src; b.profile_key = ''; b.profile_name = ''; b.subject = ''; b.results = null; } dtwBwGo(1); };
+            window.dtwBwSource = function(src) {
+                if (src === 'list') { dtwBuildOpen(false); dtwListOpen(true); return; }   // the list flow lives inside Build a twin (Jenna 2026-11-17); the toolbar button is gone
+                var b = S.bw; if (b.source !== src) { b.source = src; b.profile_key = ''; b.profile_name = ''; b.subject = ''; b.results = null; } dtwBwGo(1); };
             window.dtwBwPick = function(cat, btn) {
                 var b = S.bw, v = btn.getAttribute('data-v');
                 var cur = b.demo[cat] || [], i = cur.indexOf(v);

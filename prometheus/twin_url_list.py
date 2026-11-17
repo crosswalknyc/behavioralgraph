@@ -6,10 +6,11 @@ The list DEFINES the audience: the twin's people are the US people who
 watched, read or visited that content in the window. Two doors, one
 build:
 
-  Twins tab   'Build a twin from a list' beside 'Build a twin': a CSV /
-              TXT / XLSX of URLs (or pasted URLs), a plain audience
-              name, the window, the parsed list read back with the
-              price, confirm.
+  Twins tab   'Build a twin', then the 'From a list' card on its first
+              step (Jenna 2026-11-17: the separate toolbar button is
+              gone): a CSV / TXT / XLSX of URLs (or pasted URLs), a
+              plain audience name, the window, the parsed list read
+              back with the price, confirm.
   Prometheus  a sheet or text file with URL rows on the thread (or URLs
               pasted in the message) plus twin words: 'build a twin from
               these URLs', 'make a digital twin of the people who watched
