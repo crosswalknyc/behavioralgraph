@@ -100,6 +100,25 @@ def job_key(t):
     return None
 
 
+def payload_key(t):
+    """(family, text) for an agent turn that carries a job's finished
+    payload (a job mark, a long text that is not the promise), else None.
+
+    A read that outlives a deploy is resumed under a new job id and the
+    old id follows it (prometheus.read_recovery). The server lands the
+    payload under the new id; a tab still polling the old id fills its own
+    turn with the same payload. Two ids, one read: the two turns are one
+    (Cara Dorfman 2026-11-16, one question, the same read stored twice six
+    seconds apart)."""
+    jk = job_key(t)
+    if jk is None:
+        return None
+    txt = text_key((t or {}).get('text'))
+    if len(txt) < 200 or is_promise(t):
+        return None
+    return (jk[0], txt)
+
+
 def landed_at(t):
     return str(_meta(t).get(LANDED_MARK) or '')
 
@@ -164,7 +183,10 @@ def same_turn(a, b):
         # its landing (or two landings) are two readings of one turn
         return 2 if text_key(a.get('text')) == text_key(b.get('text')) else 1
     if ja is not None and jb is not None and ja != jb:
-        return 0          # two jobs, two turns, whatever their moment and words
+        # two jobs, two turns, whatever their moment and words; except one
+        # finished payload under two ids (a read resumed after a deploy)
+        pa = payload_key(a)
+        return 2 if (pa is not None and pa == payload_key(b)) else 0
     if stamp(a) != stamp(b):
         return 0
     if text_key(a.get('text')) == text_key(b.get('text')):
@@ -253,6 +275,9 @@ def _collapse(turns):
         keys = [('j',) + jk] if jk is not None else [('k',) + stamp(t) + (text_key(t.get('text')),)]
         if t.get('turn_id'):
             keys.append(('i', str(t['turn_id'])))
+        pk = payload_key(t)
+        if pk is not None:
+            keys.append(('p',) + pk)       # one finished payload is one turn, under whichever id it landed
         hit = next((seen[k] for k in keys if k in seen), None)
         if hit is None:
             out.append(t)

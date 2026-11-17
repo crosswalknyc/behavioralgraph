@@ -32,6 +32,7 @@ clock are injected, so every surface resolves the same way and the
 tests run with no network.
 """
 from __future__ import annotations
+from . import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
 
 import csv
 import io
@@ -509,7 +510,7 @@ def fresh_url(file, s3, *, bucket='dashboard-inputs', expires=7 * 24 * 3600):
         return s3.generate_presigned_url(
             'get_object',
             Params={'Bucket': file.get('bucket') or bucket, 'Key': file['s3_key'],
-                    'ResponseContentDisposition': f'attachment; filename="{file.get("filename") or "file"}"'},
+                    'ResponseContentDisposition': _file_names.disposition(file.get("filename") or "file")},
             ExpiresIn=expires)
     except Exception:
         return str(file.get('url') or '')

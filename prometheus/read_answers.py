@@ -26,7 +26,12 @@ _IF_SO_RX = re.compile(r"\bif\s+so\b|\bthen\s+i\s+(?:should|would|assume|expect)
 _CAP_RX = re.compile(r"\b[A-Z][A-Za-z0-9'&+.-]*(?:(?:,\s*|\s+)(?:of\s+|the\s+|and\s+|&\s+)?[A-Z][A-Za-z0-9'&+.-]*)*")
 _SKIP = frozenset(('i', 'if', 'so', 'is', 'the', 'a', 'an', 'yes', 'no', 'ok', 'okay', 'prometheus', 'crosswalk', 'us', 'usa', 'tv',
                    'and', 'or', 'but', 'then', 'that', 'this', 'it', 'what', 'which', 'how', 'when', 'where', 'who', 'why',
-                   'does', 'do', 'did', 'was', 'were', 'are', 'should', 'can', 'could', 'will', 'would', 'has', 'have'))
+                   'does', 'do', 'did', 'was', 'were', 'are', 'should', 'can', 'could', 'will', 'would', 'has', 'have',
+                   # the words an instruction opens with are never a name to look up ("Answer with one of those two
+                   # words" came back as "Answer is not in that read", Cara Dorfman 2026-11-16)
+                   'answer', 'explain', 'give', 'list', 'type', 'tell', 'show', 'confirm', 'please', 'not', 'in', 'for',
+                   'of', 'with', 'when', 'each', 'one', 'two', 'three', 'text', 'table', 'note', 'also', 'again'))
+_NOT_A_QUESTION_RX = re.compile(r"^\W*(?:(?:do|does|did)\s+not|don'?t|dont|doesn'?t|didn'?t)\b", re.I)
 
 
 def _norm(s):
@@ -112,6 +117,17 @@ def _lines_with(read, name):
 def answer(text, history):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 400:
+        return None
+    # "Do not build anything. ..." opens with an instruction, not a yes/no question about the read; a
+    # question about a published study is the study lane's (prometheus.study_record)
+    try:
+        from . import no_build as _nb, study_record as _srec
+        t = ' '.join(_nb.strip(t).split())
+        if _srec.names_study(t):
+            return None
+    except Exception:
+        pass
+    if _NOT_A_QUESTION_RX.match(t):
         return None
     if not (_YES_NO_RX.match(t) or _IF_SO_RX.search(t)) or '?' not in t and not _IF_SO_RX.search(t):
         return None

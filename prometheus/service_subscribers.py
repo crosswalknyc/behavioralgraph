@@ -75,6 +75,19 @@ def _named(text):
     return out
 
 
+# The count is asked for (how many, the number, the base, an estimate), or the message is little more than
+# the service and the word. "Which QSR brands do Paramount+ subscribers over-index on" names an audience: its
+# subscribers are who the question is about, not a number being asked for (Liz's QSR ask came back as the
+# Paramount+ subscriber base, 2026-11-16).
+_COUNT_RX = re.compile(
+    r"\bhow\s+many\b|\bhow\s+big\b|\bnumber\s+of\b|\bnumbers?\b|\bcounts?\b|\bestimat\w+\b|\bbases?\b|\bsize\b|\btotals?\b|"
+    r"\bfigures?\b|\bhow\s+large\b", re.I)
+_AUDIENCE_USE_RX = re.compile(
+    r"\b(?:subscribers?|subs)\s+(?:who|that|which|whom|over-?index\w*|under-?index\w*|index\w*|buy\w*|bought|shop\w*|watch\w*|like|love|"
+    r"use[ds]?|using|prefer\w*|skew\w*|spend\w*|eat\w*|driv\w*|listen\w*|also|tend\w*|lean\w*|visit\w*|play\w*|read|own\w*|follow\w*)\b|"
+    r"\b(?:which|what|where|why)\b[^?.]{0,80}\b(?:do|does|did)\s+[^?.]{0,40}\b(?:subscribers|subs)\b", re.I)
+
+
 def is_ask(text):
     """True when the words ask for the subscriber base of a streaming
     service or of each streaming service."""
@@ -82,6 +95,10 @@ def is_ask(text):
     if not t or _NOT_THIS_RX.search(t) or _WATCH_TITLE_RX.search(t):
         return False
     if not _SUBS_RX.search(t):
+        return False
+    if _AUDIENCE_USE_RX.search(t):
+        return False
+    if not _COUNT_RX.search(t) and len(t.split()) > 8:
         return False
     # "subscriber counts for netflix, hulu and disney+" names the services and the figure; that is the ask
     return bool(_SERVICE_RX.search(t) or _named(t))
@@ -114,7 +131,7 @@ def compose(parsed):
                 "service in a window, and runs higher than the account count. Ask me for the viewers of any of these, for a "
                 "title on one of them, or for any of these in a window.")
         reply = lead + "\n" + "\n".join(lines) + "\n\n" + tail
-        followups = ['Paramount+ viewers in the trailing 12 months', 'Netflix viewers in the trailing 12 months', 'Churn for one of these']
+        followups = ['Paramount+ viewers in the trailing 12 months', 'Netflix viewers in the trailing 12 months', 'How is churn worked out for a service?']
     else:
         parts = [f"{s['name']} reads {_fmt(s['us_subscribers'])} US subscribers as of {AS_OF} ({s['basis']})." for s in svcs]
         reply = ' '.join(parts)
@@ -124,7 +141,7 @@ def compose(parsed):
                       f"{s['name']} in a window and runs higher. Ask me for {s['name']} viewers in a window, or for every service side by side.")
             followups = [f"{s['name']} viewers in the trailing 12 months", 'US subscriber bases for every streaming service', f"Churn for {s['name']}"]
         else:
-            followups = ['US subscriber bases for every streaming service', f"{svcs[0]['name']} viewers in the trailing 12 months", 'Churn for one of these']
+            followups = ['US subscriber bases for every streaming service', f"{svcs[0]['name']} viewers in the trailing 12 months", 'How is churn worked out for a service?']
     return reply, followups[:3]
 
 

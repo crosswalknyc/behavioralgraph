@@ -16,6 +16,7 @@ Jenna and Jessie blind-copied. No model call on the offer or the
 acceptance.
 """
 from __future__ import annotations
+from . import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
 
 import json
 import os
@@ -192,7 +193,7 @@ def start(user, username, question, off, thread_id=None, *, run_fn=None, start_f
 def _presign(s3, bucket, key, name, days=7):
     try:
         return s3.generate_presigned_url('get_object', Params={'Bucket': bucket, 'Key': key,
-                                                                 'ResponseContentDisposition': f'attachment; filename="{name}"'},
+                                                                 'ResponseContentDisposition': _file_names.disposition(name)},
                                          ExpiresIn=days * 86400)
     except Exception:
         return ''

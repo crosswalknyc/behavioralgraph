@@ -20,6 +20,7 @@ live in S3 under ``system/desktop/`` and are handed out through a short
 presigned redirect, so nothing in the bucket is public.
 """
 from __future__ import annotations
+from . import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
 
 import json
 import os
@@ -89,7 +90,7 @@ def presigned_download(which, expires=3600):
         return s3.generate_presigned_url(
             'get_object',
             Params={'Bucket': bucket, 'Key': key,
-                    'ResponseContentDisposition': f'attachment; filename="{name}"'},
+                    'ResponseContentDisposition': _file_names.disposition(name)},
             ExpiresIn=int(expires))
     except Exception:
         return None

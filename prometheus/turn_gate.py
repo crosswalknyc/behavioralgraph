@@ -371,8 +371,23 @@ def _suggested_path(text, subj, page, cont):
     return "the one-question clarify, then the reasoned read on the subject the user names"
 
 
+def _said_already(reply, history):
+    """True when this thread already carries the same reply (the first 160
+    characters, folded): the reader pushed back on it once and does not get
+    it a second time."""
+    def _k(s):
+        return re.sub(r"[^a-z0-9]+", ' ', str(s or '').lower()).strip()[:160]
+    k = _k(reply)
+    if len(k) < 40:
+        return False
+    for t in (history or []):
+        if isinstance(t, dict) and str(t.get('role') or '') != 'user' and _k(t.get('text') or t.get('content')) == k:
+            return True
+    return False
+
+
 def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_surface, host, envelope,
-         interpret_shape, persist_turn):
+         interpret_shape, persist_turn, direct=None):
     page = _sr._page_name(ctx)
     cont = _cont.classify(text, history, None, page)
     try:
@@ -674,6 +689,31 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             mark_failed_by_user(uname, text, prev_text, reason='correction',
                                 record=user if isinstance(user, dict) else None)
             _watch(host, uname, text, 'correction', 'failed_by_user')
+        # A no and the ask said again (Cara Dorfman 2026-11-16: "NO. NOT
+        # TITLES. SUBSCRIBER COUNTS. LIKE HOW MANY CUSTOMERS SUBSCRIBE TO A
+        # SERVICE, THIER CHURN AND SURVIVAL CURVE." drew a $100 quote on
+        # "thier churn"). The ask as it was said again is what gets
+        # answered: when it is a question about us (where something sits,
+        # how a figure is worked out, what we hold), the answer comes
+        # straight back, ahead of every bind, quote and read. The no is
+        # never routed. A reply this thread already carries is not given a
+        # second time; the turn goes on to the hold below.
+        try:
+            from . import restated as _rst
+            _rej, _again = _rst.split(text)
+        except Exception as e:
+            _faults.note('turn_gate.restated', e)
+            _rej, _again = [], ''
+        if _again and callable(direct) and not body.get('panel_confirm'):
+            try:
+                _d = direct(_again)
+            except Exception as e:
+                _faults.note('turn_gate.restated_direct', e)
+                _d = None
+            _d_raw, _d_route = (_d if isinstance(_d, tuple) else (_d, 'restated')) if _d else (None, '')
+            if isinstance(_d_raw, dict) and _d_raw.get('reply') and not _said_already(_d_raw.get('reply'), history):
+                _d_raw = dict(_d_raw, restated_from=str(text)[:200])
+                return _answer(_d_raw, 'restated', route=str(_d_route or 'restated'), outcome='answered_restated', **common)
         # The same correction a second time, or a second push-back on the
         # same reply, means Prometheus said the same wrong thing again. That
         # escalates exactly like a repeated question: the calm promise and
@@ -778,6 +818,8 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             host.ask_hint(route='correction', outcome='rebound_thread_subject' if subj else 'continued', subject=subj or None)
         except Exception as _fx:
             _faults.note('turn_gate', _fx)
+        if _again:
+            body['_pm_restated'] = _again   # the ask as it was said again; the lanes that take names from the words read this, never the no
         return {'text': text, 'body': body}
     return None
 

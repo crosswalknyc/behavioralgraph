@@ -589,6 +589,29 @@ def same_subject(a, b):
     return bool(na) and bool(nb) and (na == nb or na in nb or nb in na)
 
 
+_NAME_STOP = frozenset(('the', 'a', 'an', 'of', 'and', 'on', 'in', 'for', 'viewers', 'viewer', 'fans', 'fan', 'audience',
+                        'subscribers', 'customers', 'users', 'shoppers', 'buyers', 'total', 'universe'))
+
+
+def names_in(subject, part):
+    """True when the part's own words carry the subject's name: a content
+    word of the name (its head, before ' - ' and any bracket) is a word of
+    the part, or opens one (a plural, a slip of spelling at the end). A
+    name with no content word of its own passes."""
+    try:
+        head = re.sub(r"\([^)]*\)", ' ', str(subject or '').split(' - ')[0])
+        want = [w for w in re.findall(r"[a-z0-9+]+", head.lower()) if w not in _NAME_STOP]
+        have = set(re.findall(r"[a-z0-9+]+", str(part or '').lower()))
+        if not want:
+            return True
+        for w in want:
+            if w in have or (len(w) >= 4 and any(h[:4] == w[:4] for h in have if len(h) >= 4)):
+                return True
+        return False
+    except Exception:
+        return True
+
+
 def subject_of(result):
     """The subject a part's answer was about, as the part's payload names
     it ('' when it named none)."""

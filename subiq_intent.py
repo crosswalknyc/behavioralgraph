@@ -335,7 +335,31 @@ def ambiguous_churn_subject(text):
         canon = _fuzzy_canon_token(re.sub(r"[^a-z0-9+]", '', tok.lower()))
         if canon and canon not in _CHURN_SUBJECT_DROP:
             keep.append(tok)
+    # What is left of a sentence is not a subject (2026-11-16, Cara Dorfman:
+    # "the churn and cancellation read for so math behind calculate curve
+    # paramount+ say past 12 months"). A short run is the platform or title
+    # as typed; a longer one names the streaming service it carries, or
+    # nothing, and the pick asks for the subject.
+    if len(keep) > 4:
+        return (True, _named_service(raw))
     return (True, ' '.join(keep)[:60].strip())
+
+
+_SERVICE_NAMES = (
+    ('Paramount+', r"paramount\s*(?:\+|plus)"), ('Netflix', r"netflix"), ('Disney+', r"disney\s*(?:\+|plus)"),
+    ('Hulu', r"hulu"), ('HBO Max', r"hbo\s*max|\bmax\b(?=\s+(?:churn|subscribers?|retention))"), ('Peacock', r"peacock"),
+    ('Prime Video', r"prime\s+video|amazon\s+prime"), ('Apple TV+', r"apple\s*tv\s*(?:\+|plus)?"),
+    ('AMC+', r"amc\s*(?:\+|plus)"), ('MGM+', r"mgm\s*(?:\+|plus)"), ('Starz', r"starz"), ('ESPN+', r"espn\s*(?:\+|plus)"),
+    ('Discovery+', r"discovery\s*(?:\+|plus)"), ('YouTube TV', r"youtube\s+tv"), ('Spotify', r"spotify"),
+)
+
+
+def _named_service(text):
+    """The one streaming service a sentence names, as we write it; '' for
+    none or more than one."""
+    t = str(text or '')
+    hits = [name for name, rx in _SERVICE_NAMES if re.search(r"(?<![a-z0-9])(?:" + rx + r")(?![a-z0-9])", t, re.I)]
+    return hits[0] if len(hits) == 1 else ''
 
 
 # Literals the client-side mirror (_pmLooksSubscriberIq in

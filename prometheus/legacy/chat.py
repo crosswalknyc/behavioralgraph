@@ -14,6 +14,7 @@ Do not add new code here. New Prometheus work goes in the typed package
 modules (service, understand, envelope, blueprint). Code leaves this
 file when it is rewritten against the host registry.
 """
+from prometheus import file_names as _file_names, no_build as _no_build, study_record as _study_record   # a download's name is one a link can carry; do-not-build is honored; a published study answers from its record (2026-11-16)
 import os
 import sys
 import uuid
@@ -12942,7 +12943,7 @@ def _pm_answer_file_payload(entry, auto_save=False, username='',
             'get_object',
             Params={'Bucket': _H.S3_BUCKET, 'Key': s3_key,
                     'ResponseContentDisposition':
-                        f'attachment; filename="{fname}"'},
+                        _file_names.disposition(fname)},
             ExpiresIn=7 * 24 * 3600)
     except Exception:
         traceback.print_exc()
@@ -13113,6 +13114,7 @@ def _pm_csv_point(subject, question, family):
 def _pm_upload_csv(fname, csv_text):
     """Upload a CSV under generated_data/ and return (s3_key, 7-day url)."""
     fname = str(fname)   # a CSV's name is not deck copy: the door rule is the deck's alone (2026-11-11)
+    fname = _file_names.safe_name(fname, 'read.csv')   # and it is one the link can carry (an emoji in it broke the link, 2026-11-16)
     s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
     _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=s3_key,
                             Body=csv_text.encode('utf-8'),
@@ -13121,7 +13123,7 @@ def _pm_upload_csv(fname, csv_text):
         'get_object',
         Params={'Bucket': _H.S3_BUCKET, 'Key': s3_key,
                 'ResponseContentDisposition':
-                    f'attachment; filename="{fname}"'},
+                    _file_names.disposition(fname)},
         ExpiresIn=7 * 24 * 3600)
     return s3_key, url
 
@@ -14236,6 +14238,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     if exact and _pm_replay_repeat_block(_pm_user, text):
         print(f"[pm-replay] {str(exact.get('k') or '')!r} was already served for this question minutes ago; running fresh")
         exact = None
+    # a decision of record answers part by part from the record; its stored summary replays only for a general ask (prometheus.study_record)
+    _sr_hit = _study_record.respond(text, history) if (exact and exact.get('reply') and il.is_record_entry(exact)) else None
+    if _sr_hit:
+        _pm_ask_hint(route='study_record', outcome='answered', subject=led.get('subject') or subj_hint)
+        return jsonify(_sr_hit)
     if exact and exact.get('reply'):
         _pm_ask_hint(outcome='answered',
                      subject=led.get('subject') or subj_hint)
@@ -14271,6 +14278,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             traceback.print_exc()
         if _pf_resp is not None:
             return _pf_resp
+    # "Do not build anything" (prometheus.no_build, 2026-11-16): answered from what is held above, or one plain line; never a fresh read
+    if panel_charge is None and inline_job_id is None and _no_build.active():
+        _pm_ask_hint(route='no_build', outcome='held', subject=base.get('subject'))
+        return jsonify(_no_build.hold())
     # No stored read to replay: this is a FRESH generation, which
     # runs the full operating loop (corpus retrieval, live research,
     # examples-as-foundation) and can take tens of seconds. By
@@ -15240,7 +15251,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                  Body=_fcsv.encode('utf-8'), ContentType='text/csv')
             _furl = _H.s3_client.generate_presigned_url(
                 'get_object', Params={'Bucket': _H.S3_BUCKET, 'Key': _fkey,
-                                      'ResponseContentDisposition': f'attachment; filename="{_fn}"'},
+                                      'ResponseContentDisposition': _file_names.disposition(_fn)},
                 ExpiresIn=7 * 24 * 3600)
             _file_payload = {'file_link': {
                 'url': _furl, 'label': f"Download {_fn}", 'name': _fn, 'key': _fkey}}
@@ -19031,7 +19042,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                             'pdf_url': _H.s3_client.generate_presigned_url(
                                 'get_object',
                                 Params={'Bucket': _H.S3_BUCKET, 'Key': _pdf_key,
-                                        'ResponseContentDisposition': f'attachment; filename="{_pdf_name}"'},
+                                        'ResponseContentDisposition': _file_names.disposition(_pdf_name)},
                                 ExpiresIn=7 * 24 * 3600)}
                         try:
                             os.remove(_pdf_local)
@@ -19047,7 +19058,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
             'get_object',
             Params={'Bucket': _H.S3_BUCKET, 'Key': s3_key,
                     'ResponseContentDisposition':
-                        f'attachment; filename="{fname}"'},
+                        _file_names.disposition(fname)},
             ExpiresIn=7 * 24 * 3600)
         _pm_deck_status_write(job_id, {
             **base, 'status': 'done', 'url': url, 'filename': fname,

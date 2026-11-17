@@ -533,6 +533,52 @@ def profile_on_the_services_asked(cc, anchors, text):
         return None
 
 
+_OPEN_CHIP_RX = re.compile(r"^\W*open\s+(?:the\s+)?(?P<name>[^\n?]{2,80}?)(?:\s+profile)?[.!\s]*$", re.I)
+
+
+def open_chip_name(text, history=None):
+    """The profile an 'Open <name>' chip of this lane names, else ''.
+
+    The lane's reply to "do you have Paramount+" carries the chip "Open
+    Paramount+". Pressed, it arrived as a message and ran a read on the
+    profile (Cara Dorfman 2026-11-16: "Open Paramount+" came back as "On
+    it: reading BET - Paramount+ Viewers now"). The words are the chip
+    only when the turn before offered exactly them; a typed "open ..."
+    keeps its own lanes."""
+    try:
+        t = ' '.join(str(text or '').split())
+        m = _OPEN_CHIP_RX.match(t)
+        if not m:
+            return ''
+        for turn in reversed([x for x in (history or []) if isinstance(x, dict)]):
+            if str(turn.get('role') or '') == 'user':
+                continue
+            meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+            sends = []
+            for o in (meta.get('options') or []):
+                send = str((o or {}).get('send') or (o or {}).get('label') or '') if isinstance(o, dict) else str(o or '')
+                sends.append(' '.join(send.split()).lower())
+            name = m.group('name').strip()
+            # this lane's pair of chips: "Open <name>" beside "Who is the <name> audience?"
+            if t.lower() in sends and f"who is the {name.lower()} audience?" in sends:
+                return name
+            return ''
+        return ''
+    except Exception:
+        return ''
+
+
+def open_reply(name, on_screen=False):
+    """Where the profile opens: directions, never a read."""
+    if on_screen:
+        reply = f"{name} is the profile open on your screen now. Ask me anything about it here."
+    else:
+        reply = (f"{name} opens in Profile IQ. Choose Profile IQ in the SELECT PRODUCT dropdown, then pick {name} "
+                 f"under Select Profile. Or ask me about it here.")
+    return {'success': True, 'action': 'answer', 'reply': reply, 'followups': [f"Who is the {name} audience?"],
+            'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': name, 'open_chip': True}
+
+
 def answer(text, ctx=None):
     """A finished reply payload for an existence or size ask the
     catalog can settle, else None."""
@@ -613,8 +659,11 @@ def answer(text, ctx=None):
                 'subject': display}
     if facts:
         lines = _summarize(anchors)
-        body = '; '.join(lines) if lines else 'it is on the dashboard'
-        reply = f"Yes. On {display} we have {body}. Open it from the dashboard, or ask me about it here."
+        body = '; '.join(lines)
+        # nothing to list is said plainly (2026-11-16, Cara Dorfman read "Yes. On Paramount+ we have it is on
+        # the dashboard.")
+        reply = (f"Yes. On {display} we have {body}. Open it from the dashboard, or ask me about it here." if body
+                 else f"Yes. {display} is on the dashboard. Open it there, or ask me about it here.")
         chips = [f"Open {display}", f"Who is the {display} audience?"]
         return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips,
                 'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True,

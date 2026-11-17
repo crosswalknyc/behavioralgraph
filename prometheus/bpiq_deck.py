@@ -32,6 +32,7 @@ User-facing copy is Prometheus first person. No em dashes. Never raises
 into a job or a request.
 """
 from __future__ import annotations
+from . import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
 
 import copy
 import io
@@ -103,7 +104,7 @@ def sidecar(host, bare_key):
 def sign(s3, bucket, key, filename):
     return s3.generate_presigned_url(
         'get_object', Params={'Bucket': bucket, 'Key': key,
-                              'ResponseContentDisposition': f'attachment; filename="{filename}"'},
+                              'ResponseContentDisposition': _file_names.disposition(filename)},
         ExpiresIn=LINK_SECONDS)
 
 

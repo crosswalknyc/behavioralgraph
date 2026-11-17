@@ -335,7 +335,23 @@ def _plausible(phrase):
     content = [t for t in toks if t not in _STOP and not _is_noun(t)]
     if not content:
         return False
+    # a metric ("thier churn", "survival curve", "subscriber counts") or a
+    # kind of thing ("a service", "each platform") is not an audience to
+    # size (Cara Dorfman 2026-11-16 was quoted $100 to "size the to a
+    # service audience, thier churn and survival curve")
+    if all(t in _NOT_AN_AUDIENCE for t in content):
+        return False
     return len(content) >= 2 or len(content[0]) >= 3
+
+
+_NOT_AN_AUDIENCE = frozenset("""
+their thier its his her our your my the
+churn churns churned retention retentions retained survival curve curves rate rates count counts counted number numbers
+cancellation cancellations cancel cancels attrition tenure lifetime ltv arpu metric metrics figure figures estimate estimates
+math formula calculation calculations methodology definition definitions
+service services platform platforms streamer streamers title titles content show shows subscribe subscribes subscribed
+customer customers subscriber subscribers overall total totals each every any single specific
+""".split())
 
 
 # phrases that mean the panel itself, never an audience to size

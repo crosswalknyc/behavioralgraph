@@ -101,6 +101,21 @@ def _text_of(raw):
 
 def wrap(raw, *, surface, decision, thread_id=None, via='session'):
     raw = raw if isinstance(raw, dict) else {}
+    # "Do not build anything" is honored for the whole ask (prometheus.no_build,
+    # Cara Dorfman 2026-11-16): a draft, a quote, a promise of a read or a
+    # question that leads to a build never leaves on such an ask. The lanes
+    # that start work step aside first, so nothing is running behind the
+    # line that goes out instead. In place, so the caller stores what was said.
+    try:
+        from . import no_build as _nb
+        if _nb.active() and _nb.refuses(raw):
+            _held = _nb.hold()
+            raw.clear()
+            raw.update(_held)
+            surface = 'analyze'
+            decision = dict(decision or {}, surface='analyze', reason='no_build')
+    except Exception:
+        pass
     # The one exit every reply passes (2026-10-05, Jenna): no method
     # language reaches a reader. Fail-safe.
     try:

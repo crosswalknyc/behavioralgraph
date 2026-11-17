@@ -210,7 +210,7 @@ _TRAILING_NOISE_RX = re.compile(
 # a correction or a question about the previous turn, never an order
 _CORRECTION_RX = re.compile(
     r"^\W*(?:no+|nope|nah|not that|not quite|wrong|incorrect|negative|that'?s (?:not|wrong)|that is (?:not|wrong)|"
-    r"i did ?n[o']?t (?:want|ask|say|mean)|i do ?n[o']?t (?:want|need|mean)|i never (?:asked|said|wanted)|"
+    r"i did ?n[o']?t (?:want|ask|say|mean)|i do ?n[o']?t (?:want|need|mean|care (?:about|for))|i never (?:asked|said|wanted)|"
     r"i (?:am|'m) not (?:interested|asking|talking) in?|i wasn'?t (?:asking|talking)|"
     r"this (?:was|is) not (?:correct|right|what i)|that'?s not what i|not what i (?:asked|meant|wanted|said)|"
     r"you (?:misunderstood|misread|got (?:it|that) wrong))\b", re.I)

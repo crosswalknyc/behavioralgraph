@@ -9,6 +9,7 @@ imported, so nothing here imports chat.py and chat.py imports this
 module last. Behavior is byte-for-byte the code that lived in chat.py;
 only the indirection changed.
 """
+from prometheus import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
 import csv
 import io
 import re
@@ -515,7 +516,7 @@ def _pm_trajectory_reply(username, subject, years, text):
             'get_object',
             Params={'Bucket': _H.S3_BUCKET, 'Key': s3_key,
                     'ResponseContentDisposition':
-                        f'attachment; filename="{fname}"'},
+                        _file_names.disposition(fname)},
             ExpiresIn=7 * 24 * 3600)
         _C._pm_file_stash_write(username, url, fname, s3_key,
                              subject=subject, question=text)

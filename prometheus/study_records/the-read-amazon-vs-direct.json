@@ -1,0 +1,731 @@
+{
+ "aliases": [
+  "amazon channels direct",
+  "prime video channels direct",
+  "channels vs direct",
+  "channels versus direct",
+  "amazon vs direct",
+  "amazon versus direct",
+  "through amazon direct",
+  "billing path",
+  "signup path",
+  "channels subscriber",
+  "amazon channels",
+  "prime video channels",
+  "via amazon direct",
+  "starts through amazon",
+  "sign up through amazon",
+  "signed up through amazon"
+ ],
+ "all_label": "All ten services",
+ "columns": [
+  {
+   "key": "starts",
+   "label": "Starts",
+   "unit": "count"
+  },
+  {
+   "key": "share",
+   "label": "Share of path",
+   "unit": "pct"
+  },
+  {
+   "key": "churn",
+   "label": "Monthly churn",
+   "unit": "pct"
+  },
+  {
+   "key": "d30",
+   "label": "Day 30",
+   "unit": "pct"
+  },
+  {
+   "key": "d60",
+   "label": "Day 60",
+   "unit": "pct"
+  },
+  {
+   "key": "d90",
+   "label": "Day 90",
+   "unit": "pct"
+  },
+  {
+   "key": "samplers",
+   "label": "One title, gone in 35 days",
+   "unit": "pct"
+  },
+  {
+   "key": "m2m",
+   "label": "Month to month",
+   "unit": "pct"
+  },
+  {
+   "key": "annual",
+   "label": "Annual plans and bundles",
+   "unit": "pct"
+  },
+  {
+   "key": "months",
+   "label": "Months kept in first 12",
+   "unit": "months"
+  },
+  {
+   "key": "price",
+   "label": "Monthly list price",
+   "unit": "usd"
+  },
+  {
+   "key": "value",
+   "label": "First-year value at list",
+   "unit": "usd"
+  },
+  {
+   "key": "switch",
+   "label": "Cancellers starting another service in 30 days",
+   "unit": "pct"
+  },
+  {
+   "key": "winback",
+   "label": "Cancellers back within 90 days",
+   "unit": "pct"
+  }
+ ],
+ "family": "subscribers",
+ "followups": [
+  "Per service day 90 survival, Amazon Channels vs direct",
+  "Where the Amazon cancellers go next, service by service",
+  "Email me this file"
+ ],
+ "id": "the-read-amazon-vs-direct",
+ "metrics": [
+  {
+   "definition": "new paid US subscriptions to ten premium streaming services sold both through Amazon Prime Video Channels and on the services' own sites and apps, Nov 1 2025 to Oct 31 2026; every subscription followed for twelve months from its own start",
+   "label": "Subscriptions followed, ten services, both paths",
+   "name": "subscriptions_followed",
+   "unit": "subscriptions",
+   "value": 6214387
+  },
+  {
+   "definition": "of the 6,214,387 subscriptions followed, the ones whose signup and billing opened inside Amazon's store (Prime Video Channels)",
+   "label": "Subscriptions started through Amazon Prime Video Channels",
+   "name": "started_via_amazon",
+   "unit": "subscriptions",
+   "value": 2075611
+  },
+  {
+   "definition": "of the 6,214,387 subscriptions followed, the ones that signed up and pay on the service's own site or app",
+   "label": "Subscriptions started direct on the service's own site or app",
+   "name": "started_direct",
+   "unit": "subscriptions",
+   "value": 4138776
+  },
+  {
+   "definition": "2,075,611 Amazon starts over 6,214,387 subscriptions followed; direct is the other 66.6%",
+   "label": "Share of new subscriptions that started through Amazon",
+   "name": "amazon_share_of_starts",
+   "unit": "pct",
+   "value": 33.4
+  },
+  {
+   "definition": "subscriptions cancelled in a month over subscriptions active at the start of that month, averaged across the twelve months, cancel dated to the cancel request",
+   "label": "Monthly churn, subscriptions billed through Amazon",
+   "name": "monthly_churn_amazon",
+   "unit": "pct",
+   "value": 7.4
+  },
+  {
+   "definition": "the same monthly churn calculation for subscriptions billed on the service's own site or app",
+   "label": "Monthly churn, subscriptions billed direct",
+   "name": "monthly_churn_direct",
+   "unit": "pct",
+   "value": 4.3
+  },
+  {
+   "definition": "7.4% monthly churn through Amazon over 4.3% direct: Amazon signups cancel 1.7x as often",
+   "label": "Churn through Amazon relative to direct",
+   "name": "churn_ratio_amazon_to_direct",
+   "unit": "x",
+   "value": 1.7
+  },
+  {
+   "definition": "share of Amazon starts with the subscription still active 30 days after its own day 0, cancel dated to the cancel request",
+   "label": "New Amazon signups still active at day 30",
+   "name": "active_day30_amazon",
+   "unit": "pct",
+   "value": 71.8
+  },
+  {
+   "definition": "share of direct starts still active 30 days after their own day 0, same basis",
+   "label": "New direct signups still active at day 30",
+   "name": "active_day30_direct",
+   "unit": "pct",
+   "value": 82.3
+  },
+  {
+   "definition": "share of Amazon starts still active 60 days after their own day 0",
+   "label": "New Amazon signups still active at day 60",
+   "name": "active_day60_amazon",
+   "unit": "pct",
+   "value": 55.2
+  },
+  {
+   "definition": "share of direct starts still active 60 days after their own day 0",
+   "label": "New direct signups still active at day 60",
+   "name": "active_day60_direct",
+   "unit": "pct",
+   "value": 70.1
+  },
+  {
+   "definition": "share of Amazon starts still active 90 days after their own day 0; survival at day 90",
+   "label": "New Amazon signups still active at day 90",
+   "name": "active_day90_amazon",
+   "unit": "pct",
+   "value": 44.7
+  },
+  {
+   "definition": "share of direct starts still active 90 days after their own day 0; survival at day 90",
+   "label": "New direct signups still active at day 90",
+   "name": "active_day90_direct",
+   "unit": "pct",
+   "value": 61.4
+  },
+  {
+   "definition": "61.4% of direct signups still active at day 90 against 44.7% of Amazon signups",
+   "label": "Day 90 survival gap, direct over Amazon",
+   "name": "day90_gap_points",
+   "unit": "pct_pts",
+   "value": 16.7
+  },
+  {
+   "definition": "share of Amazon starts that played a single title and cancelled within 35 days of their own day 0, measured to the cancel request",
+   "label": "Amazon signups that watched one title and were gone within 35 days",
+   "name": "samplers_gone_35d_amazon",
+   "unit": "pct",
+   "value": 38.2
+  },
+  {
+   "definition": "share of direct starts that played a single title and cancelled within 35 days, same basis",
+   "label": "Direct signups that watched one title and were gone within 35 days",
+   "name": "samplers_gone_35d_direct",
+   "unit": "pct",
+   "value": 24.6
+  },
+  {
+   "definition": "share of Amazon-billed subscriptions whose plan renews monthly; the other 7.7% sit on an annual plan or a bundle",
+   "label": "Amazon signups on month-to-month pricing",
+   "name": "month_to_month_amazon",
+   "unit": "pct",
+   "value": 92.3
+  },
+  {
+   "definition": "share of direct subscriptions whose plan renews monthly",
+   "label": "Direct signups on month-to-month pricing",
+   "name": "month_to_month_direct",
+   "unit": "pct",
+   "value": 68.3
+  },
+  {
+   "definition": "share of direct subscriptions on an annual plan or a bundle rather than month-to-month pricing",
+   "label": "Direct base moved onto annual plans and bundles",
+   "name": "annual_or_bundle_direct",
+   "unit": "pct",
+   "value": 31.7
+  },
+  {
+   "definition": "average paid months held in the first twelve months after signup, direct path",
+   "label": "Months kept in the first 12, direct",
+   "name": "months_kept_first_year_direct",
+   "unit": "months",
+   "value": 7.9
+  },
+  {
+   "definition": "average paid months held in the first twelve months after signup, Amazon path",
+   "label": "Months kept in the first 12, through Amazon",
+   "name": "months_kept_first_year_amazon",
+   "unit": "months",
+   "value": 5.6
+  },
+  {
+   "definition": "7.9 months kept at each service's own monthly list price, weighted by the direct starts of each service",
+   "label": "First-year value of a direct subscriber at list price",
+   "name": "first_year_value_direct_list",
+   "unit": "usd",
+   "value": 101.23
+  },
+  {
+   "definition": "5.6 months kept at each service's own monthly list price, weighted by the Amazon starts of each service, before Amazon's share of the fee",
+   "label": "First-year value of an Amazon subscriber at list price",
+   "name": "first_year_value_amazon_list",
+   "unit": "usd",
+   "value": 70.81
+  },
+  {
+   "definition": "the $70.81 at list after Amazon's share of the subscription fee",
+   "label": "First-year value of an Amazon subscriber after Amazon's share",
+   "name": "first_year_value_amazon_after_share",
+   "unit": "usd",
+   "value": 49.56
+  },
+  {
+   "definition": "$101.23 direct less $70.81 through Amazon, both at list price",
+   "label": "First-year value gap at list price",
+   "name": "first_year_gap_list",
+   "unit": "usd",
+   "value": 30.43
+  },
+  {
+   "definition": "$101.23 direct less $49.56 through Amazon after Amazon's share of the fee",
+   "label": "First-year value gap after Amazon's share",
+   "name": "first_year_gap_after_share",
+   "unit": "usd",
+   "value": 51.67
+  },
+  {
+   "definition": "the ten services' monthly list prices weighted by Amazon starts; each service costs the same on Amazon as direct, ten for ten",
+   "label": "Blended monthly list price, Amazon path",
+   "name": "monthly_list_price_blended_amazon",
+   "unit": "usd",
+   "value": 12.4
+  },
+  {
+   "definition": "the ten services' monthly list prices weighted by direct starts",
+   "label": "Blended monthly list price, direct path",
+   "name": "monthly_list_price_blended_direct",
+   "unit": "usd",
+   "value": 12.64
+  },
+  {
+   "definition": "share of Amazon-billed cancellers who started a paid subscription to a different streaming service within 30 days of cancelling; where the cancels go",
+   "label": "Amazon cancellers who started another streaming service within 30 days",
+   "name": "cancellers_new_service_30d_amazon",
+   "unit": "pct",
+   "value": 41.8
+  },
+  {
+   "definition": "share of direct cancellers who started a paid subscription to a different streaming service within 30 days of cancelling",
+   "label": "Direct cancellers who started another streaming service within 30 days",
+   "name": "cancellers_new_service_30d_direct",
+   "unit": "pct",
+   "value": 29.0
+  },
+  {
+   "definition": "share of direct cancellers who came back to the same service within 90 days; the winback belongs to whoever owns the email",
+   "label": "Direct cancellers back at the same service within 90 days",
+   "name": "winback_90d_direct",
+   "unit": "pct",
+   "value": 18.9
+  },
+  {
+   "definition": "share of Amazon-billed cancellers who came back to the same service within 90 days",
+   "label": "Amazon cancellers back at the same service within 90 days",
+   "name": "winback_90d_amazon",
+   "unit": "pct",
+   "value": 11.3
+  }
+ ],
+ "paths": [
+  {
+   "key": "amazon",
+   "label": "Amazon"
+  },
+  {
+   "key": "direct",
+   "label": "Direct"
+  }
+ ],
+ "questions": [
+  "churn through Amazon Channels vs direct",
+  "what is the churn rate for subscribers who sign up through Amazon versus direct",
+  "what share of starts come through Amazon",
+  "what share of new streaming subscriptions start through Amazon Prime Video Channels",
+  "day-90 survival by billing path",
+  "share of new subscribers still active at day 30, day 60 and day 90, Amazon Channels versus direct",
+  "what is a Channels subscriber worth",
+  "first-year value of a subscriber who signs up through Amazon versus direct",
+  "how many Amazon cancellers start another service within 30 days",
+  "winback within 90 days, Amazon versus direct",
+  "month-to-month versus annual plans by billing path",
+  "per service churn and survival, Amazon Prime Video Channels versus direct"
+ ],
+ "reply": "On Amazon Prime Video Channels vs direct, premium streaming subscriptions:\n\nPeople who sign up for a premium streaming service through Amazon cancel 1.7x as often as people who sign up direct: 7.4% monthly churn through Amazon Prime Video Channels against 4.3% direct, same services, same shows, same price in both stores.\n\nWe followed 6,214,387 subscriptions to ten premium services sold both ways (HBO Max, Peacock, Paramount+, STARZ, Apple TV+, BET+, MGM+, AMC+, BritBox, Acorn TV) from Nov 1 2025 to Oct 31 2026. 33.4% started in Amazon's store (2,075,611 Amazon starts; 4,138,776 direct).\n\n- Monthly churn: 7.4% through Amazon, 4.3% direct (cancelled in a month over active at the start of the month, averaged across the twelve months, cancel dated to the cancel request).\n- Share of new signups still active, from each signup's own day 0: day 30 71.8% Amazon vs 82.3% direct; day 60 55.2% vs 70.1%; day 90 44.7% vs 61.4% (a 16.7 point survival gap at day 90).\n- Watched one title and gone within 35 days: 38.2% of Amazon signups vs 24.6% of direct signups.\n- Plan mix: 92.3% of Amazon signups sit on month-to-month pricing; direct services move 31.7% of their base onto annual plans and bundles (68.3% month to month).\n- Months kept in the first 12: direct 7.9, through Amazon 5.6.\n- What a first-year subscriber is worth: direct $101.23 at each service's own list price; through Amazon $70.81 at list, about $49.56 after Amazon's share of the fee. The gap is $30.43 at list, $51.67 after the share.\n- Where the cancels go: 41.8% of Amazon cancellers start another streaming service within 30 days, against 29.0% of direct cancellers.\n- Winback within 90 days: 18.9% of direct cancellers are back at the same service, against 11.3% through Amazon.\n- Price parity: every one of the ten services costs the same on Amazon as direct, ten for ten.\n\nPer service, both paths, the same figures split by service, are in the table under this read; each path's rows sum back to its total.",
+ "rows": {
+  "amazon": {
+   "AMC+": {
+    "annual": 5.8,
+    "churn": 8.6,
+    "d30": 66.3,
+    "d60": 49.1,
+    "d90": 38.9,
+    "m2m": 94.2,
+    "months": 5.1,
+    "price": 7.99,
+    "samplers": 42.8,
+    "share": 7.2,
+    "starts": 148529,
+    "switch": 45.3,
+    "value": 40.75,
+    "winback": 10.1
+   },
+   "Acorn TV": {
+    "annual": 6.7,
+    "churn": 7.9,
+    "d30": 69.4,
+    "d60": 52.7,
+    "d90": 42.4,
+    "m2m": 93.3,
+    "months": 5.4,
+    "price": 9.99,
+    "samplers": 39.7,
+    "share": 3.0,
+    "starts": 61286,
+    "switch": 43.4,
+    "value": 53.95,
+    "winback": 10.8
+   },
+   "All ten services": {
+    "annual": 7.7,
+    "churn": 7.4,
+    "d30": 71.8,
+    "d60": 55.2,
+    "d90": 44.7,
+    "m2m": 92.3,
+    "months": 5.6,
+    "price": 12.4,
+    "samplers": 38.2,
+    "share": 100.0,
+    "starts": 2075611,
+    "switch": 41.8,
+    "value": 70.81,
+    "winback": 11.3
+   },
+   "Apple TV+": {
+    "annual": 9.1,
+    "churn": 6.4,
+    "d30": 75.6,
+    "d60": 60.1,
+    "d90": 50.4,
+    "m2m": 90.9,
+    "months": 6.1,
+    "price": 14.99,
+    "samplers": 34.1,
+    "share": 11.7,
+    "starts": 241872,
+    "switch": 39.1,
+    "value": 91.44,
+    "winback": 12.5
+   },
+   "BET+": {
+    "annual": 5.3,
+    "churn": 8.9,
+    "d30": 65.1,
+    "d60": 47.6,
+    "d90": 37.4,
+    "m2m": 94.7,
+    "months": 4.9,
+    "price": 10.99,
+    "samplers": 43.9,
+    "share": 5.7,
+    "starts": 118652,
+    "switch": 45.9,
+    "value": 53.85,
+    "winback": 9.9
+   },
+   "BritBox": {
+    "annual": 8.1,
+    "churn": 7.1,
+    "d30": 72.6,
+    "d60": 56.3,
+    "d90": 46.8,
+    "m2m": 91.9,
+    "months": 5.8,
+    "price": 10.99,
+    "samplers": 36.9,
+    "share": 3.8,
+    "starts": 78931,
+    "switch": 40.9,
+    "value": 63.74,
+    "winback": 11.7
+   },
+   "HBO Max": {
+    "annual": 8.5,
+    "churn": 7.2,
+    "d30": 74.1,
+    "d60": 56.6,
+    "d90": 43.7,
+    "m2m": 91.5,
+    "months": 5.7,
+    "price": 10.99,
+    "samplers": 38.8,
+    "share": 20.2,
+    "starts": 418236,
+    "switch": 41.6,
+    "value": 62.64,
+    "winback": 11.2
+   },
+   "MGM+": {
+    "annual": 4.9,
+    "churn": 9.3,
+    "d30": 63.1,
+    "d60": 45.8,
+    "d90": 36.2,
+    "m2m": 95.1,
+    "months": 4.8,
+    "price": 7.99,
+    "samplers": 45.3,
+    "share": 4.9,
+    "starts": 102418,
+    "switch": 46.8,
+    "value": 38.35,
+    "winback": 9.6
+   },
+   "Paramount+": {
+    "annual": 8.3,
+    "churn": 6.8,
+    "d30": 73.4,
+    "d60": 57.2,
+    "d90": 47.9,
+    "m2m": 91.7,
+    "months": 5.9,
+    "price": 8.99,
+    "samplers": 35.6,
+    "share": 15.8,
+    "starts": 327948,
+    "switch": 40.2,
+    "value": 53.04,
+    "winback": 11.9
+   },
+   "Peacock": {
+    "annual": 8.8,
+    "churn": 6.6,
+    "d30": 74.8,
+    "d60": 58.9,
+    "d90": 49.2,
+    "m2m": 91.2,
+    "months": 6.0,
+    "price": 19.99,
+    "samplers": 34.8,
+    "share": 17.2,
+    "starts": 356423,
+    "switch": 39.4,
+    "value": 119.94,
+    "winback": 12.3
+   },
+   "STARZ": {
+    "annual": 6.4,
+    "churn": 8.2,
+    "d30": 68.2,
+    "d60": 51.4,
+    "d90": 40.3,
+    "m2m": 93.6,
+    "months": 5.2,
+    "price": 11.99,
+    "samplers": 41.2,
+    "share": 10.7,
+    "starts": 221316,
+    "switch": 44.1,
+    "value": 62.35,
+    "winback": 10.4
+   }
+  },
+  "direct": {
+   "AMC+": {
+    "annual": 27.1,
+    "churn": 5.0,
+    "d30": 78.2,
+    "d60": 64.7,
+    "d90": 55.4,
+    "m2m": 72.9,
+    "months": 7.2,
+    "price": 7.99,
+    "samplers": 28.4,
+    "share": 6.5,
+    "starts": 268342,
+    "switch": 31.4,
+    "value": 57.53,
+    "winback": 16.9
+   },
+   "Acorn TV": {
+    "annual": 29.8,
+    "churn": 4.5,
+    "d30": 80.1,
+    "d60": 67.2,
+    "d90": 60.2,
+    "m2m": 70.2,
+    "months": 7.6,
+    "price": 9.99,
+    "samplers": 26.2,
+    "share": 2.6,
+    "starts": 106217,
+    "switch": 29.9,
+    "value": 75.92,
+    "winback": 17.9
+   },
+   "All ten services": {
+    "annual": 31.7,
+    "churn": 4.3,
+    "d30": 82.3,
+    "d60": 70.1,
+    "d90": 61.4,
+    "m2m": 68.3,
+    "months": 7.9,
+    "price": 12.64,
+    "samplers": 24.6,
+    "share": 100.0,
+    "starts": 4138776,
+    "switch": 29.0,
+    "value": 101.23,
+    "winback": 18.9
+   },
+   "Apple TV+": {
+    "annual": 34.9,
+    "churn": 3.7,
+    "d30": 84.7,
+    "d60": 73.4,
+    "d90": 66.2,
+    "m2m": 65.1,
+    "months": 8.3,
+    "price": 14.99,
+    "samplers": 21.9,
+    "share": 12.8,
+    "starts": 531269,
+    "switch": 26.8,
+    "value": 124.42,
+    "winback": 20.4
+   },
+   "BET+": {
+    "annual": 26.2,
+    "churn": 5.3,
+    "d30": 77.1,
+    "d60": 63.2,
+    "d90": 53.9,
+    "m2m": 73.8,
+    "months": 7.0,
+    "price": 10.99,
+    "samplers": 29.3,
+    "share": 4.8,
+    "starts": 196827,
+    "switch": 32.1,
+    "value": 76.93,
+    "winback": 16.3
+   },
+   "BritBox": {
+    "annual": 32.7,
+    "churn": 4.2,
+    "d30": 82.4,
+    "d60": 70.4,
+    "d90": 64.1,
+    "m2m": 67.3,
+    "months": 7.9,
+    "price": 10.99,
+    "samplers": 23.8,
+    "share": 3.2,
+    "starts": 132906,
+    "switch": 28.2,
+    "value": 86.82,
+    "winback": 19.1
+   },
+   "HBO Max": {
+    "annual": 32.0,
+    "churn": 4.4,
+    "d30": 83.8,
+    "d60": 72.0,
+    "d90": 61.0,
+    "m2m": 68.0,
+    "months": 8.3,
+    "price": 10.99,
+    "samplers": 24.6,
+    "share": 21.8,
+    "starts": 902147,
+    "switch": 29.8,
+    "value": 91.22,
+    "winback": 19.1
+   },
+   "MGM+": {
+    "annual": 25.4,
+    "churn": 5.7,
+    "d30": 75.8,
+    "d60": 61.2,
+    "d90": 52.3,
+    "m2m": 74.6,
+    "months": 6.9,
+    "price": 7.99,
+    "samplers": 30.3,
+    "share": 4.1,
+    "starts": 171253,
+    "switch": 32.8,
+    "value": 55.13,
+    "winback": 15.8
+   },
+   "Paramount+": {
+    "annual": 33.2,
+    "churn": 3.9,
+    "d30": 83.1,
+    "d60": 71.3,
+    "d90": 63.2,
+    "m2m": 66.8,
+    "months": 8.1,
+    "price": 8.99,
+    "samplers": 23.1,
+    "share": 15.8,
+    "starts": 652834,
+    "switch": 27.8,
+    "value": 72.82,
+    "winback": 19.6
+   },
+   "Peacock": {
+    "annual": 34.1,
+    "churn": 3.8,
+    "d30": 84.2,
+    "d60": 72.6,
+    "d90": 65.1,
+    "m2m": 65.9,
+    "months": 8.2,
+    "price": 19.99,
+    "samplers": 22.4,
+    "share": 19.0,
+    "starts": 784563,
+    "switch": 27.1,
+    "value": 163.92,
+    "winback": 20.1
+   },
+   "STARZ": {
+    "annual": 28.6,
+    "churn": 4.6,
+    "d30": 79.6,
+    "d60": 66.4,
+    "d90": 57.1,
+    "m2m": 71.4,
+    "months": 7.4,
+    "price": 11.99,
+    "samplers": 27.2,
+    "share": 9.5,
+    "starts": 392418,
+    "switch": 30.6,
+    "value": 88.73,
+    "winback": 17.4
+   }
+  }
+ },
+ "services": [
+  "HBO Max",
+  "Peacock",
+  "Paramount+",
+  "STARZ",
+  "Apple TV+",
+  "BET+",
+  "MGM+",
+  "AMC+",
+  "BritBox",
+  "Acorn TV"
+ ],
+ "short_name": "the Amazon vs direct issue of The Read",
+ "source": "newsletter the-read-amazon-vs-direct",
+ "subject": "Amazon Prime Video Channels vs direct, premium streaming subscriptions",
+ "title": "People who sign up for a streamer through Amazon vs direct cancel 1.7x as often",
+ "universe": "subscriptions to ten premium streaming services sold both through Amazon Prime Video Channels and on the services' own sites and apps",
+ "window": {
+  "end": "2026-10-31",
+  "label": "Nov 1 2025 to Oct 31 2026",
+  "start": "2025-11-01"
+ }
+}

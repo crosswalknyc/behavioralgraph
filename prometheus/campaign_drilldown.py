@@ -42,6 +42,7 @@ Everything here is fail-safe: any error returns None and the ask
 continues down its normal path.
 """
 from __future__ import annotations
+from . import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
 
 import csv
 import io
@@ -770,7 +771,7 @@ def publish_csv(s3, bucket, fname, text):
         key = f"{DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
         s3.put_object(Bucket=bucket, Key=key, Body=text.encode('utf-8'), ContentType='text/csv')
         url = s3.generate_presigned_url('get_object', Params={'Bucket': bucket, 'Key': key,
-                                                               'ResponseContentDisposition': f'attachment; filename="{fname}"'},
+                                                               'ResponseContentDisposition': _file_names.disposition(fname)},
                                         ExpiresIn=7 * 24 * 3600)
         return {'url': url, 'label': f"Download {fname}", 'key': key}
     except Exception:

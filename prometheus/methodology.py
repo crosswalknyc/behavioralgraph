@@ -710,7 +710,9 @@ def block(window_start=None, window_end=None, window_label='',
         lines.append(f"- {ORDER_HEADER} {ORDER_DEFINITION}")
     elif fam == ENGAGEMENT:
         lines.append(f"- {ENGAGEMENT_HEADER} {ENGAGEMENT_DEFINITION}")
-    else:
+    elif noun != 'subscribers':
+        # a read that counts subscriptions counts accounts on a service: the People line ("they are not
+        # accounts") says the opposite of what the figures are (Cara Dorfman, 2026-11-16)
         lines.append(f"- People: {PEOPLE}")
     if counts_sessions(text):
         lines.append(f"- Sessions: {SESSION}")
@@ -785,12 +787,28 @@ _PERIOD_CUT_NAME_RX = re.compile(r"\s-\s(?:Q[1-4]\s+20\d\d|H[12]\s+20\d\d|20\d\d
                                  r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+20\d\d)\s*$", re.I)
 
 
+# Words that carry "month" or "annual" without naming a period of the window (Cara Dorfman at Amazon,
+# 2026-11-16): a churn definition ("monthly churn ... averaged across the twelve months"), a plan term
+# ("month to month", "annual plans and bundles", "monthly plans only"), a price, a tenure ("5.6 months
+# kept", "month 5 of a subscription"). An answer about a subscription study drew the period note on
+# these. They come off before the words are read for periods.
+_NOT_A_PERIOD_RX = re.compile(
+    r"\bmonthly[- ](?:churn|plans?|only|pricing|prices?|list\s+price|rates?|fees?|subscriptions?|billing|cancel\w*|payments?|term)\b|"
+    r"\bmonth[- ]to[- ]month\b|"
+    r"\bannual(?:\s+(?:or|and)\s+prepaid)?\s+(?:plans?(?:\s+and\s+bundles)?|terms?|pricing|prices?|subscriptions?|billing|fees?)\b|"
+    r"\bannual\s+(?:or|and)\s+(?:prepaid|bundles?)\b|\b(?:prepaid|annual)\s+or\s+annual\b|"
+    r"\b(?:averaged\s+)?across\s+the\s+twelve\s+months\b|\bfirst\s+(?:12|twelve)\s+months\b|\b(?:12|twelve)\s+months\s+(?:after|from|of)\s+(?:signup|sign-up|its|their|each)\b|"
+    r"\b(?:paid|billing|tenure)\s+months?\b|\bmonths?\s+(?:kept|held|paid)\b|\bfirst-?year\s+months\b|"
+    r"\bmonths?\s+\d{1,2}\b(?!\s*,?\s*20\d\d)|(?<!trailing )(?<!last )(?<!past )(?<!full )(?<!prior )\b\d+(?:\.\d+)?\s+months\b|\ba\s+month\b|\bper\s+month\b(?=[^.]*\b(?:price|fee|\$))", re.I)
+
+
 def is_period_comparison(*texts):
     """True when the words put a full-window figure next to sub-period
     figures (quarters, months, halves, YTD). One named month that is the
     window itself ("October 2026"), with no run of periods beside it, is
     not a comparison whatever else the prose says."""
     joined = ' '.join(str(t or '') for t in texts)
+    joined = _NOT_A_PERIOD_RX.sub(' ', joined)
     if not PERIOD_RX.search(joined):
         return False
     run = bool(_PERIOD_RUN_RX.search(joined))
@@ -903,6 +921,8 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
             if fam == VIEWING:
                 reply = ensure_others(reply, context=ctx)
             return ensure_purchase_note(reply)
+        if fam == SIZING and HEADER in text and pool_noun_for(res, question) == 'subscribers':
+            return ensure_purchase_note(reply)     # a subscription read's block has no People line to wait for
         lines = block(window_start=res.get('window_start'),
                       window_end=res.get('window_end'),
                       window_label=res.get('window_label') or '',

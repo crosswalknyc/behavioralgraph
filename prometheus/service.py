@@ -569,13 +569,13 @@ def accept_offered_run(history, text):
 LANE_ORDER = (
     'intake_cancel',
     'bpiq_wizard', 'build_fix', 'build_facts',
-    'wayfinding',
+    'wayfinding', 'study_record',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
     'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
-    'talent_list_acceptance', 'meta_check', 'standing', 'multi_ask', 'catalog_exists', 'where_watched', 'service_subscribers',
+    'talent_list_acceptance', 'meta_check', 'standing', 'multi_ask', 'catalog_exists', 'service_subscribers', 'where_watched',
     'sizing_quote', 'status_fast',
     'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'subiq_library', 'catalog',
     'sizing_fallback', 'status', 'deliverable_lookup', 'email_file', 'brand_coverage',
@@ -584,12 +584,12 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'build_fix', 'build_facts', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
+    'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'service_subscribers', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
     'us_scope', 'segment_sizing', 'read_brief'))
-NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'build_facts', 'wayfinding', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope', 'segment_sizing',
                                 'read_brief'))
@@ -629,9 +629,34 @@ def ask(user, body, *, via='session'):
     client = str(body.get('client') or '').strip().lower()
     persist = bool(body.get('persist', client != 'dashboard'))
 
+    # A message typed in capitals is read as the same words in sentence
+    # case (prometheus.restated.fold_shout, Cara Dorfman 2026-11-16: the
+    # lanes that take a capitalised run as a name took "THE TITLE. I WANT"
+    # as one). The ask log and the stored turn keep what was typed.
+    _typed = text
+    try:
+        from . import restated as _rst0
+        _folded = _rst0.fold_shout(text)
+        if _folded and _folded != text:
+            text = _folded
+            body = dict(body, text=text, _pm_typed=_typed)
+    except Exception as _fx:
+        _faults.note('service.fold_shout', _fx)
+    # "Do not build anything" is honored for the whole ask (prometheus.no_build,
+    # Cara Dorfman 2026-11-16): no order, no draft, no quote, no clarify that
+    # leads to a build and no read job. The mark rides the request, so every
+    # part of a split message and a replayed question keep it.
+    _no_build = False
+    try:
+        from . import no_build as _nb0
+        _no_build = bool(_nb0.mark(text, nested=bool(body.get('_multi_part') or body.get('_meta_replay'))))
+    except Exception as _fx:
+        _faults.note('service.no_build', _fx)
     try:
         from flask import g as _g_ask
-        _g_ask._pm_ask_text = text
+        _g_ask._pm_ask_text = _typed
+        if text != _typed:
+            _g_ask._pm_typed = (text, _typed)
         # A probe (the golden set, the canary, a regression replay)
         # leaves no state behind on the reader it runs as: no stashed
         # brief, no memory, no wizard draft. Before this, one probe's
@@ -745,7 +770,7 @@ def ask(user, body, *, via='session'):
     _is_order = False
     try:
         from . import orders as _orders
-        _is_order = bool(_orders.is_order(text)) and not _armed(body)
+        _is_order = bool(_orders.is_order(text)) and not _armed(body) and not _no_build
         if _is_order:
             # A referent in the order's subject slot ("I want to add them as a
             # profile", "profile this audience", "add it to Digital Journey IQ")
@@ -785,7 +810,7 @@ def ask(user, body, *, via='session'):
     # read. a full profile", "One profile of X only on Paramount+", "needs to be run on all 49": Jessie 2026-11-11,
     # prometheus.build_lane), go to the build interpret step as the order they are. That step's decision stays the
     # authority; nothing here picks the build. With no subject anywhere, one plain line asks for it.
-    if not _is_order and not _armed(body) and not body.get('_multi_part') and not body.get('_meta_replay'):
+    if not _is_order and not _no_build and not _armed(body) and not body.get('_multi_part') and not body.get('_meta_replay'):
         try:
             from . import build_lane as _bl
             _blo = _bl.rewrite(text, history, ctx)
@@ -1050,6 +1075,62 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='wayfinding', outcome='answered',
                               subject=(str((_wf_raw.get('wayfinding') or {}).get('product') or '') or None))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
+    # The catalog lane's own "Open <profile>" chip, pressed (Cara Dorfman 2026-11-16: it arrived as a message
+    # and ran a read on the profile). It is answered with where the profile opens; nothing is started.
+    if not _armed(body) and not _is_order:
+        try:
+            from . import catalog_lane as _cl_open
+            _open_nm = _cl_open.open_chip_name(text, history)
+            if _open_nm:
+                from . import subject_rules as _sr_open
+                _pg = str(_sr_open._page_name(ctx) or '')
+                raw = _cl_open.open_reply(_open_nm, on_screen=bool(_pg) and _pg.strip().lower() == _open_nm.strip().lower())
+                decision = {'surface': 'analyze', 'mode': None, 'reason': 'catalog_lookup', 'client_hint': None}
+                _out = _interpret_shape(raw) if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret' else raw
+                host.ask_hint(route='catalog_lookup', outcome='open_chip', subject=_open_nm)
+                env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
+                _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+                return env, 200
+        except Exception as _fx:
+            _faults.note('service.open_chip', _fx)
+
+    # lane: study_record
+    # A question about a published study is answered from the study
+    # (prometheus.study_record, Cara Dorfman at Amazon 2026-11-16): its
+    # banked figures, their definitions and the per-service rows, each
+    # numbered part on its own, in the fixed words of
+    # prometheus.study_statements. Where the study does not hold what was
+    # asked the answer says so. Never a read, a draft, a quote or a split
+    # into parts that each go looking for a subject: her questions about
+    # the Amazon vs direct issue ran as fresh reads on "Fire TV" and a
+    # Disney journey, and the reads drew account counts, a monthly-only
+    # curve and later-month survival the issue never carried. Ahead of
+    # every lane that can draft, price, clarify toward a build or start a
+    # read. An order to build something keeps the build flow; a general
+    # ask the stored summary answers keeps the ledger's replay.
+    if not _is_order and not _in_a_step(body):
+        try:
+            from . import study_record as _srec
+            _sr_raw = _srec.respond(text, history, no_build=(_no_build or None))
+        except Exception as _fx:
+            _faults.note('service.study_record', _fx)
+            _sr_raw = None
+        if _sr_raw:
+            raw = _sr_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'study_record', 'client_hint': None}
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_sr_raw.get('followups') or [])
+                raw['study_record'] = _sr_raw.get('study_record')
+            try:
+                host.ask_hint(route='study_record', outcome='answered',
+                              subject=(str((_sr_raw.get('study_record') or {}).get('subject') or '') or None))
             except Exception as _fx:
                 _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
@@ -1675,7 +1756,8 @@ def ask(user, body, *, via='session'):
             from . import turn_gate as _tg
             _tg_out = _tg.gate(text, body, history, ctx, user, uname, tid, via, persist,
                                client_surface=_client_surface, host=host, envelope=envelope,
-                               interpret_shape=_interpret_shape, persist_turn=_persist_turn)
+                               interpret_shape=_interpret_shape, persist_turn=_persist_turn,
+                               direct=lambda _again: _direct_answer(_again, user=user, uname=uname, ctx=ctx, history=history))
         except Exception as e:
             _faults.note('service.turn_gate', e)
             _tg_out = None
@@ -1987,7 +2069,7 @@ def ask(user, body, *, via='session'):
         return env, 200
     # lane: standing
     if referent_decision is None and not _armed(body) and not _is_order:
-        _standing = _standing_answer(text, user=user, uname=uname)
+        _standing = _standing_answer(text, user=user, uname=uname, ctx=ctx, correction=bool(body.get('_pm_correction')))
         if _standing is None:
             # A journey-figure question reads from the delivered journey
             # first (Jenna 2026-10-14: two different numbers for one
@@ -2038,8 +2120,17 @@ def ask(user, body, *, via='session'):
                 # (2026-11-11, multi_ask.points_back): when the message is about
                 # something other than the page, the page is set aside for that
                 # part and it runs on the earlier question's subject
+                # a part about "that study" is about the study, never about whatever an earlier part's answer
+                # happened to bind (Cara Dorfman 2026-11-16: "such as Fire TV, Roku, and smart TVs" in part five
+                # made Fire TV the subject of parts six to ten, each "in that study"); it inherits nothing
+                _study_part = False
                 try:
-                    if prior and _multi_subject['name'] and _multi.points_back(q):
+                    from . import study_record as _srec_m
+                    _study_part = bool(_srec_m.names_study(q))
+                except Exception as _fx:
+                    _faults.note('service.multi_ask_study', _fx)
+                try:
+                    if prior and _multi_subject['name'] and not _study_part and _multi.points_back(q):
                         from . import subject_rules as _sr_mp
                         _page_nm = _sr_mp._page_name(ctx)
                         if _page_nm and not _multi.same_subject(_multi_subject['name'], _page_nm):
@@ -2073,6 +2164,11 @@ def ask(user, body, *, via='session'):
                     # question named its subject: a later part inherits who, never where
                     from . import platform_scope as _psc_m2
                     _ms_cur = _multi_subject['name']
+                    # the message's subject is one a question named: a subject a part's answer landed on that
+                    # the part's own words do not carry (the page, a library match) is never what the later
+                    # parts inherit
+                    if _ms_new and not _multi_subject.get('on_record') and not _multi.names_in(_ms_new, q):
+                        _ms_new = ''
                     if _ms_new and not (_ms_cur and (_multi_subject.get('on_record') or _psc_m2.canon(str(_ms_new).split(' - ')[0])
                                                      or _psc_m2.is_cut_of(_ms_new, _ms_cur))):
                         _multi_subject['name'] = _ms_new
@@ -2177,7 +2273,7 @@ def ask(user, body, *, via='session'):
     # fall through to a compiled read. Where-watched is never here: it is
     # the free lane above. A library question that missed ("do we have
     # anything on Polymarket?") is not sized either.
-    if referent_decision is None and not _is_order and not (_exists_ask and not _armed(body)):
+    if referent_decision is None and not _is_order and not _no_build and not (_exists_ask and not _armed(body)):
         try:
             from . import priced_read as _pr
             _ex = body.get('extra') if isinstance(body.get('extra'), dict) else {}
@@ -2568,7 +2664,7 @@ def ask(user, body, *, via='session'):
     # X customers: quoted in priced_read.service_turn above. This
     # standing call is the fail-safe when classify missed (panel-self
     # still answers free). Never the panel line when an audience is named.
-    if referent_decision is None and not _armed(body) and not _is_order:
+    if referent_decision is None and not _armed(body) and not _is_order and not _no_build:
         try:
             from . import sizing_lane as _szl, guards as _gs
             _sz = _szl.answer(text, ctx, host=host, history=history, staff=_gs.is_staff(user))
@@ -2862,6 +2958,10 @@ def ask(user, body, *, via='session'):
                 body = dict(body, text=text)
     except Exception as _fx:
         _faults.note('service', _fx)
+    # "Do not build anything" is answer mode for every surface and every lane (prometheus.no_build): the build
+    # intake never runs on it. The read core holds the line too, so nothing is started to get the answer.
+    if _no_build and decision.get('surface') != 'analyze':
+        decision = dict(decision, surface='analyze', reason='no_build')
     # A brief on named titles is a read, whatever surface the client sent or the words suggested (prometheus.read_brief)
     if _is_brief and referent_decision is None and decision.get('surface') != 'analyze':
         decision = dict(decision, surface='analyze', reason='read_brief')
@@ -2896,7 +2996,7 @@ def ask(user, body, *, via='session'):
     # file is a custom ask on every analyze lane. The offer first; on
     # Accept the charge lands here once and rides the confirm so no
     # lane charges again.
-    if surface == 'analyze' and referent_decision is None:
+    if surface == 'analyze' and referent_decision is None and not _no_build:
         try:
             from . import priced_read as _prw
             _wg = _prw.work_gate(text, history, ctx, user, body, username=uname,
@@ -3089,7 +3189,47 @@ def last_user_question(history):
     return ''
 
 
-def _standing_answer(text, user=None, uname=''):
+def _direct_answer(text, *, user=None, uname='', ctx=None, history=None):
+    """(raw, route) for an ask that is a question about us and is answered
+    on the spot: where something sits on the dashboard, how a figure is
+    worked out, what we hold for a service. None when the words are a
+    question about the data, an order, or anything a lane has to work on.
+    Used for the ask a reader says again after a no (prometheus.restated,
+    Cara Dorfman 2026-11-16): never a build, a quote or a read."""
+    t = str(text or '').strip()
+    if not t:
+        return None
+    try:
+        from . import orders as _ord
+        if _ord.is_order(t):
+            return None
+    except Exception as _fx:
+        _faults.note('service.direct_answer', _fx)
+    try:
+        from . import wayfinding as _wf
+        if _wf.wants(t):
+            _w = _wf.answer(user, t, ctx, host=host, uname=uname, history=history)
+            if _w and _w.get('reply') and not _w.get('rewrite_text'):
+                return _w, 'wayfinding'
+    except Exception as _fx:
+        _faults.note('service.direct_answer', _fx)
+    try:
+        _s = _standing_answer(t, user=user, uname=uname, ctx=ctx, correction=True)
+        if _s and _s.get('reply'):
+            return _s, ('how_computed' if _s.get('how_computed') else 'standing')
+    except Exception as _fx:
+        _faults.note('service.direct_answer', _fx)
+    try:
+        from . import service_subscribers as _ssub
+        _ss = _ssub.answer(t, ctx, host=host, user=user, history=history)
+        if _ss and _ss.get('reply'):
+            return _ss, 'service_subscribers'
+    except Exception as _fx:
+        _faults.note('service.direct_answer', _fx)
+    return None
+
+
+def _standing_answer(text, user=None, uname='', ctx=None, correction=False):
     """Three answers that come before any executor or lane (2026-10-14):
     behavior with no digital trace (linear TV, in-store, foot traffic,
     radio) is declined with the nearest measurable read instead of being
@@ -3144,6 +3284,25 @@ def _standing_answer(text, user=None, uname=''):
             return _ma_raw
     except Exception as _fx:
         _faults.note('service.methodology_answers', _fx)
+    try:
+        # How a figure is worked out, and what we hold for a service as a
+        # whole (Cara Dorfman 2026-11-16: "give me the math behind how you
+        # would calculate a retention curve" drew a $300 build; "subscriber
+        # counts ... thier churn and survival curve" drew a $100 quote).
+        # The definition and how it is computed, from the house glossary;
+        # never a build, a quote, a read or a which-audience question
+        # (prometheus.how_computed).
+        from . import how_computed as _hc
+        _hc_raw = _hc.answer(text, ctx, correction=correction)
+        if _hc_raw:
+            try:
+                host.ask_hint(route='how_computed', outcome='answered',
+                              subject=', '.join((_hc_raw.get('how_computed') or {}).get('topics') or []) or None)
+            except Exception:
+                pass
+            return _hc_raw
+    except Exception as _fx:
+        _faults.note('service.how_computed', _fx)
     try:
         from . import guards as _g
         if _g.is_provenance_question(text):
@@ -3429,6 +3588,15 @@ _ORD_WORDS = {'one': 1, 'first': 1, 'the first': 1, 'the first one': 1,
               'two': 2, 'second': 2, 'the second': 2, 'the second one': 2,
               'three': 3, 'third': 3, 'the third': 3, 'the third one': 3,
               'four': 4, 'five': 5}
+
+
+def _in_a_step(body):
+    """True when the body answers a step the client is in the middle of (a
+    confirm, a wizard, a draft, an angle pick). A bound subject alone is
+    not a step: a part of a split message carries one."""
+    extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+    keys = tuple(k for k in _ANALYZE_PASSTHROUGH if k not in ('bind_subject', 'bind_cohort', 'overall_ranks')) + _ARMED_BODY_KEYS
+    return any(extra.get(k) or body.get(k) for k in keys)
 
 
 def _armed(body):
@@ -3829,6 +3997,14 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
     """Append the user turn and the agent turn to the thread. The
     which-ones question keeps its referent on the agent turn's meta so
     the names that come back merge into the question that asked."""
+    try:
+        # the stored turn is what the reader typed, capitals and all
+        from flask import g as _g_ty
+        _ty = getattr(_g_ty, '_pm_typed', None)
+        if isinstance(_ty, tuple) and len(_ty) == 2 and text == _ty[0]:
+            text = _ty[1]
+    except Exception:
+        pass
     # Every priced offer a lane produced is a pending item on the server,
     # whoever persists the thread (the dashboard client writes its own
     # turns, so this is the only record of the offer the server holds).
@@ -3887,6 +4063,8 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['rerun_confirm'] = raw['rerun_confirm']   # the re-run card (I2, 2026-10-20)
         if isinstance(raw, dict) and raw.get('subject'):
             meta.setdefault('subject', str(raw.get('subject'))[:120])
+        if isinstance(raw, dict) and isinstance(raw.get('study_record'), dict):
+            meta['study_record'] = {'record': raw['study_record'].get('record')}   # the thread is about this study (prometheus.study_record)
         if isinstance(raw, dict) and isinstance(raw.get('panel_offer'), dict):
             meta['panel_offer'] = raw['panel_offer']
         if isinstance(raw, dict) and isinstance(raw.get('priced_paid'), dict):

@@ -93,8 +93,20 @@ def _negated_names(text):
     bringing up Salish matter' -> {'salish matter'}). Trailing filler
     words ('specifically', 'again') drop."""
     out = set()
+    try:
+        from . import restated as _rst
+    except Exception:
+        _rst = None
     for m in _NEGATED_RX.finditer(str(text or '')):
-        words = m.group('name').split()
+        # a pushed-away name ends where its sentence ends, and a kind of
+        # thing ("the title", "content") is not a name: "I DONT WANT THE
+        # TITLE. I WANT TO KNOW ABOUT THE SURVIVAL CURVE" drops nothing
+        # (Cara Dorfman 2026-11-16 drew "Understood. THE TITLE. I WANT is
+        # out of this thread for good.")
+        _name = _rst.clip_name(m.group('name')) if _rst else m.group('name')
+        if _rst and _rst.is_generic(_name):
+            continue
+        words = _name.split()
         while words and words[-1].lower().strip('.,;:!?') in ('specifically', 'again', 'anymore', 'please', 'here', 'now', 'though'):
             words.pop()
         for n in range(len(words), 0, -1):
@@ -108,6 +120,8 @@ def _negated_names(text):
     try:
         from . import thread_subject as _ts
         for k in _ts.dropped_names(text):
+            if _rst and _rst.is_generic(k):
+                continue
             out.add(_sr._norm(k))
     except Exception:
         pass

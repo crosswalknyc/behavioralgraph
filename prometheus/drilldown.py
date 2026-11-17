@@ -157,7 +157,10 @@ def _label_match(cands, label):
             continue
         if cn == ln:
             return 3
-        if len(cn) >= 5 and (cn in ln or ln in cn):
+        # whole words only, and a label inside the ask's phrase is at least a word of three letters: the
+        # row "X" matched the quoted study title "... cancel 1.7x as often" on the x of 1.7x and a question
+        # about a published study came back as a journey row (Cara Dorfman, 2026-11-16)
+        if len(cn) >= 5 and ((' ' + cn + ' ') in (' ' + ln + ' ') or (len(ln) >= 3 and (' ' + ln + ' ') in (' ' + cn + ' '))):
             return 2
         ctoks = {w for w in cn.split() if w not in _LABEL_STOP}
         if ctoks and len(ctoks) <= 4 and ctoks <= ltoks:
