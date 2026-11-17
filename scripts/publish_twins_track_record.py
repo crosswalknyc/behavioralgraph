@@ -13,7 +13,7 @@ also written to the site bucket key given.
     python3 scripts/publish_twins_track_record.py --s3 s3://crosswalk-site/assets/data/twins-track-record.json
 
 The JSON carries no method words and no source names beyond the class
-of each outcome (certified result, published, people study, panel).
+of each outcome (certified result, published, panel).
 """
 from __future__ import annotations
 

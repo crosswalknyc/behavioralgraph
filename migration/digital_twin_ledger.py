@@ -5,8 +5,8 @@ house can score: the question or scenario, the audience, the prediction
 (point and range, or a distribution), the method version, a timestamp
 and a hash of the record so the prediction is provably prior to the
 outcome. When the outcome lands (the panel's own count, a certified
-result, a published figure, a client's actuals, a study on real people)
-it is written next to the prediction and scored: absolute and relative
+result, a published figure, a client's actuals) it is written next to
+the prediction and scored: absolute and relative
 error, total variation distance for a distribution, whether the outcome
 fell inside the range (coverage), Brier for a yes or no call. The
 summaries feed the firmness layer (``digital_twin_confidence``) and the

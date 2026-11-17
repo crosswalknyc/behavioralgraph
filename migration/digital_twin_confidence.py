@@ -217,7 +217,7 @@ def _settles_line(status: str, nov: dict, ag: dict) -> str:
         return ''
     parts = []
     if status in ('unresearched', 'unanchored', '', 'prior') or nov.get('signal', 0) <= 0.4:
-        parts.append('a counted read on this audience, or a check with real people')
+        parts.append('a counted read on this audience')      # our own count; the twins never need a survey (Jenna 2026-11-17)
     if ag.get('agreeable'):
         parts.append('a wider room')
     return ('What would settle it: ' + ' and '.join(parts) + '.') if parts else ''

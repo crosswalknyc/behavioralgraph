@@ -64,7 +64,7 @@ MARKER_PREFIX = 'system/digital_twins/notified/'
 NOTIFY_SINCE = '2026-11-05T00:00:00Z'             # nothing created before this day is mailed about (no backfill)
 DASHBOARD = 'https://dashboard.crosswalknyc.com'
 ATTACH_LIMIT = 7_500_000                          # SES takes 10 MB raw; the deck rides only while the whole message stays under this
-EVENTS = ('twin_built', 'pilot_created', 'pilot_results', 'room_opened', 'check_requested')
+EVENTS = ('twin_built', 'pilot_created', 'pilot_results', 'room_opened')
 VIA_WORDS = {'dashboard': 'the dashboard', 'chat': 'Prometheus chat', 'api': 'the API'}
 # words that name our machinery; the templates never use them, and the audit in the tests holds the whole body to it
 BANNED_RX = re.compile(r"\b(synth\w*|model\w*|panel\w*|sample\w*|pipeline\w*|queue\w*|worker\w*|claude|anthropic|hostmap|persona\w*|s3)\b", re.I)
@@ -960,32 +960,5 @@ def notify_room_opened(payload: dict, sess: dict, *, username: str = '', via: st
                    s3=s3, send=send)
 
 
-def notify_check_requested(payload: dict, sess: dict, doc: dict, *, username: str = '', s3=None, send=None) -> dict:
-    """A client asked for a check with real people on a room or a test
-    (2026-11-17): the questions, the twins' split on each, the audience
-    and its cuts, the quote. The team recruits and runs the study by
-    hand and ingests the answers when they land."""
-    uname = str(username or (doc or {}).get('requested_by') or '').strip()
-    st = seat(uname, s3)
-
-    def body():
-        m = _meta(payload)
-        lines = [f"{_who_line(st)} asked for a check with real people.", '',
-                 f"Twin: {m.get('name') or m.get('subject')}",
-                 f"Room: {_room_title(sess)}",
-                 f"Audience: {_int((doc.get('audience') or {}).get('people')):,} people" + (f", {len((doc.get('audience') or {}).get('segments') or [])} groups" if (doc.get('audience') or {}).get('segments') else ''),
-                 f"Quote: ${float(doc.get('quote_usd') or 0):,.2f}", '']
-        for i, q in enumerate(doc.get('questions') or [], 1):
-            lines.append(f"{i}. {q.get('q')}")
-            for r in (q.get('twins') or [])[:6]:
-                lines.append(f"   {r.get('label')}: {r.get('pct')}%")
-        if doc.get('note'):
-            lines += ['', f"Note from the client: {doc['note']}"]
-        lines += ['', f"Request id: {doc.get('id')}", twin_link(str(m.get('key') or ''), 'panel')]
-        return '\n'.join(lines)
-    return _notify('check_requested', str((doc or {}).get('id') or ''), username=uname, created_at=(doc or {}).get('requested_at'),
-                   build=lambda: {'subject': f"Check with real people requested: {_room_title(sess)} {_who_tag(st)}", 'body': body()}, s3=s3, send=send)
-
-
 __all__ = ['RECIPIENTS', 'FROM', 'MARKER_PREFIX', 'NOTIFY_SINCE', 'EVENTS', 'set_sender', 'banned_tokens', 'via_for', 'seat', 'marker_key', 'twin_link',
-           'notify_twin_built', 'notify_pilot_created', 'notify_pilot_results', 'notify_pilot_results_later', 'notify_room_opened', 'notify_check_requested']
+           'notify_twin_built', 'notify_pilot_created', 'notify_pilot_results', 'notify_pilot_results_later', 'notify_room_opened']

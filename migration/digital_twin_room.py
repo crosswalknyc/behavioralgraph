@@ -4278,11 +4278,6 @@ def chat_lines(session: dict, rec: dict) -> list:
     fb = rec.get('firmness') if isinstance(rec.get('firmness'), dict) else None
     if fb and fb.get('line'):
         out.append(str(fb['line']))
-    try:   # the People column, when a check with real people has landed (2026-11-17)
-        from migration.digital_twin_validation import check_lines
-        out.extend(check_lines(rec))
-    except Exception:
-        pass
     for v in (rec.get('voices') or [])[:VOICES_N]:
         out.append(f"{v['name']}, {v['age']}, {v['city']}: {v['line']}")
     return out

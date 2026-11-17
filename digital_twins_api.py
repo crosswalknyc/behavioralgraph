@@ -64,9 +64,6 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/panel/<sid>/duplicate  a new room with the same twins, cohorts and seats ('<name> copy'); no questions, nothing paid
   GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
   GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
-  POST /api/digital-twins/<key>/check/<sid>           a check with real people on a room or a test (2026-11-17): the request, the quote, the team mailed
-  GET  /api/digital-twins/<key>/check/<sid>/<vid>     the check's status and, once in, the people's answers
-  POST /api/digital-twins/<key>/check/<sid>/<vid>/results  admin: the study's answers per question; the People column and the ledger outcome land
   GET  /api/digital-twins/track-record                every scored call the twins made before its outcome, next to what happened (2026-11-17)
   GET  /api/digital-twins/ledger/summary              admin: the outcome ledger's summary by kind and unit, with the index rows
   POST /api/digital-twins/ledger/<rid>/outcome        admin: what happened on a ledger row (value, distribution, winner, yes or no); the row is scored
@@ -3100,77 +3097,6 @@ def dt_pilot_brief(key, sid):
     brief = CMP.activation_brief(sess, payload)
     DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'brief': brief, 'session_id': sid}))
-
-
-def _session_for_check(payload: dict, sid: str):
-    for coll in ('panel_sessions', 'pilot_sessions'):
-        for sess in payload.get(coll) or []:
-            if isinstance(sess, dict) and str(sess.get('id')) == str(sid):
-                return sess
-    return None
-
-
-@bp.route(f'{PREFIX}/<path:key>/check/<sid>', methods=['POST'])
-def dt_check_request(key, sid):
-    """A check with real people on a room or a test (2026-11-17): the
-    request is recorded with the questions and the twins' answers, the
-    team is mailed, and the quote comes back. Nothing is charged here."""
-    user, err = _gate()
-    if err:
-        return err
-    payload, perr = _twin_or_404(user, key)
-    if perr:
-        return perr
-    sess = _session_for_check(payload, sid)
-    if sess is None:
-        return jsonify({'success': False, 'error': 'no such room or test'}), 404
-    from migration import digital_twin_validation as V
-    body = request.get_json(silent=True) or {}
-    doc = V.request_check(_s3(), payload, sess, username=_uname(user), question_ids=body.get('question_ids') if isinstance(body.get('question_ids'), list) else None,
-                          note=str(body.get('note') or ''))
-    DT.save_twin(_s3(), key, payload)
-    return _nocache(jsonify({'success': True, 'check': V.public_request(doc),
-                             'message': f"Requested. The same questions go to real people recruited to this audience; the answers land beside the twins' as a People column. Quote ${doc['quote_usd']:,.2f}, billed when the study is delivered."}))
-
-
-@bp.route(f'{PREFIX}/<path:key>/check/<sid>/<vid>', methods=['GET'])
-def dt_check_read(key, sid, vid):
-    user, err = _gate()
-    if err:
-        return err
-    payload, perr = _twin_or_404(user, key)
-    if perr:
-        return perr
-    from migration import digital_twin_validation as V
-    doc = V.load(_s3(), vid)
-    if not doc or str(doc.get('session_id')) != str(sid):
-        return jsonify({'success': False, 'error': 'no such check'}), 404
-    return _nocache(jsonify({'success': True, 'check': V.public_request(doc)}))
-
-
-@bp.route(f'{PREFIX}/<path:key>/check/<sid>/<vid>/results', methods=['POST'])
-def dt_check_results(key, sid, vid):
-    """The study's answers (admin): {results: {question id: [{label, pct}]}, n_people, note}.
-    They land beside each question as the People column and on the
-    outcome ledger."""
-    user, err = _gate()
-    if err:
-        return err
-    if not DT.is_admin(user):
-        return jsonify({'success': False, 'error': 'admin only'}), 403
-    payload, perr = _twin_or_404(user, key)
-    if perr:
-        return perr
-    sess = _session_for_check(payload, sid)
-    if sess is None:
-        return jsonify({'success': False, 'error': 'no such room or test'}), 404
-    from migration import digital_twin_validation as V
-    body = request.get_json(silent=True) or {}
-    doc = V.ingest_results(_s3(), payload, sess, vid, body.get('results') if isinstance(body.get('results'), dict) else {}, n_people=int(body.get('n_people') or 0), note=str(body.get('note') or ''))
-    if not doc:
-        return jsonify({'success': False, 'error': 'no such check'}), 404
-    DT.save_twin(_s3(), key, payload)
-    return _nocache(jsonify({'success': True, 'check': V.public_request(doc)}))
 
 
 @bp.route(f'{PREFIX}/track-record', methods=['GET'])

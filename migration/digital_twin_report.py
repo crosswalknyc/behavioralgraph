@@ -444,11 +444,6 @@ def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None
         pass
     fb = rec.get('firmness') if isinstance(rec.get('firmness'), dict) else {}
     firm_line = _clean(str(fb.get('line') or '')) if fb else ''     # how firm the count is (2026-11-17), under the read
-    try:
-        from migration.digital_twin_validation import check_lines
-        extra = list(extra) + [_clean(x) for x in check_lines(rec)]   # the People column, when a check has landed
-    except Exception:
-        pass
     return {'kind': 'question', 'eyebrow': eyebrow, 'header': _clean(header),
             'sub': _clean(f"{_q_when(rec, session)}." + (f" {lead_line}" if lead_line else '')),
             'framing': _clean(str(rec.get('framing') or '')), 'head': ('Answer', 'Share', 'People and seats'), 'rows': split,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The outcome ledger, the firmness layer and the check with real people
-(Digital Twins IQ, 2026-11-17).
+"""The outcome ledger and the firmness layer (Digital Twins IQ,
+2026-11-17).
 
 Held here:
   * the ledger: a prediction is recorded with a hash that dates it; a
@@ -18,12 +18,11 @@ Held here:
   * the room: a question lands with a firmness block and a ledger row;
     the chat and the CSV carry the range; a scorecard carries a range per
     money measure;
-  * the check: a request is recorded with the questions and the quote and
-    noted on the session; the study's answers land as the People column
-    and as the ledger's outcome; the chat and the CSV show them.
+  * nothing anywhere offers a survey or a check with people: the twins
+    stand on their own (Jenna 2026-11-17); what settles an early read is
+    our own counted read on the audience.
 
-Hermetic: REGRESSION_TEST_MODE, an in-memory ledger, a fake S3 for the
-request, no model.
+Hermetic: REGRESSION_TEST_MODE, an in-memory ledger, no model.
     python3 scripts/test_digital_twin_ledger_firmness.py
 """
 from __future__ import annotations
@@ -45,7 +44,6 @@ from migration import digital_twin_confidence as CONF  # noqa: E402
 from migration import digital_twin_ledger as LG  # noqa: E402
 from migration import digital_twin_panel as P  # noqa: E402
 from migration import digital_twin_room as ROOM  # noqa: E402
-from migration import digital_twin_validation as V  # noqa: E402
 
 sys.path.insert(0, HERE)
 from test_digital_twin_room_seats_mirror_count import _pvalley, fake_model  # noqa: E402
@@ -98,7 +96,7 @@ class Ledger(unittest.TestCase):
     def test_distributions_calls_and_post_hoc_rows(self):
         r = LG.record_prediction(None, 'room_count', 'P-Valley viewers', {'distribution': [{'label': 'Yes', 'pct': 41.3}, {'label': 'No', 'pct': 58.7}], 'point': 58.7, 'unit': 'pct', 'probability': 0.413},
                                  measure='share:No', session_id='s2', question_id='q1', question='Would you pay?', question_kind='yes_no', audience_class='title')
-        out = LG.record_outcome(None, r['id'], distribution=[{'label': 'yes', 'pct': 37.0}, {'label': 'no', 'pct': 63.0}], happened=False, source_class='people study')
+        out = LG.record_outcome(None, r['id'], distribution=[{'label': 'yes', 'pct': 37.0}, {'label': 'no', 'pct': 63.0}], happened=False, source_class='panel')
         self.assertEqual(out['score']['tvd'], 4.3)
         self.assertTrue(out['score']['lead_right'])
         self.assertAlmostEqual(out['score']['brier'], 0.1706, places=3)
@@ -162,6 +160,9 @@ class Firmness(unittest.TestCase):
         self.assertTrue(fb3['decline'])
         self.assertTrue(fb3['line'].startswith('Not enough to call it yet'))
         self.assertIn('What would settle it', fb3['line'])
+        self.assertIn('a counted read on this audience', fb3['line'])
+        for bad in ('real people', 'survey', 'study', 'People'):
+            self.assertNotIn(bad, fb3['line'])
         for r in fb3['ranges']:
             self.assertTrue(0.0 <= r['low_pct'] <= r['pct'] <= r['high_pct'] <= 100.0)
         self.assertEqual(fb3['lead']['label'], 'Yes')
@@ -243,48 +244,6 @@ class InTheRoom(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertFalse(rows[0]['post_hoc'])
         self.assertTrue(rows[0]['public'])
-
-
-class Check(unittest.TestCase):
-    def setUp(self):
-        ROOM.clear_room_caches()
-        LG.reset_memory()
-
-    def test_a_check_is_requested_then_its_answers_land_as_the_people_column(self):
-        twin = _pvalley()
-        payload = {'meta': dict(twin['meta']), 'identity': twin['identity'], 'traits': twin['traits'], 'lifecycle': twin['lifecycle']}
-        sess = P.open_session([twin], title='P-Valley', session_id='check-1')
-        rec = ROOM.ask_room(sess, {'pv': twin}, 'would you buy a Pynk hoodie for $45?', s3=None, twin_key='pv', run_async=False)
-        s3 = FakeS3()
-        doc = V.request_check(s3, payload, sess, username='carolyn', note='Before the holiday drop.', notify=False)
-        self.assertEqual(doc['status'], 'requested')
-        self.assertEqual(doc['quote_usd'], V.QUOTE_USD)
-        self.assertEqual(len(doc['questions']), 1)
-        self.assertEqual(doc['questions'][0]['id'], rec['id'])
-        self.assertTrue(doc['questions'][0]['twins'])
-        self.assertEqual(sess['checks'][0]['id'], doc['id'])
-        self.assertIn(V._key(doc['id']), s3.objects)
-        pub = V.public_request(doc)
-        self.assertNotIn('requested_by', pub)
-        # the study's answers
-        labels = [o['label'] for o in rec['options']]
-        rows = [{'label': labels[0], 'pct': 70.0}] + [{'label': l, 'pct': round(30.0 / max(1, len(labels) - 1), 1)} for l in labels[1:]]
-        # the room's row sits on the in-memory ledger (the room ran with no S3), so the answers are ingested against it with the request in hand
-        done = V.ingest_results(None, payload, sess, doc['id'], {rec['id']: rows}, n_people=412, note='Fielded over four days.', doc=doc)
-        self.assertEqual(done['status'], 'complete')
-        pc = sess['questions'][0]['people_check']
-        self.assertEqual(pc['n'], 412)
-        self.assertIsNotNone(pc['gap_pp'])
-        lines = V.check_lines(sess['questions'][0])
-        self.assertTrue(lines and lines[0].startswith('People:'))
-        self.assertIn('n = 412', lines[0])
-        self.assertTrue(any(l.startswith('People:') for l in ROOM.chat_lines(sess, sess['questions'][0])))
-        # the ledger's row for the question carries the outcome from the people
-        rows_l = LG.load_index(None)['records']
-        self.assertEqual(len(rows_l), 1)
-        self.assertTrue(rows_l[0]['has_outcome'])
-        self.assertIsNotNone(rows_l[0]['tvd'])
-        self.assertEqual(LG.summary(None)['n_scored'], 1)
 
 
 if __name__ == '__main__':
