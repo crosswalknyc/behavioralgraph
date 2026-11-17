@@ -91428,6 +91428,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var d = st && st.data;
                 if (!d || typeof d !== 'object') return null;
                 var out = {};
+                // which valuation these figures belong to (2026-11-16)
+                var _bpNm = d.project_name || d.campaign_name || '';
+                if (_bpNm) out.partnership = String(_bpNm).slice(0, 160);
+                if (d.brand_partner) {
+                    out.brand_partner = String(d.brand_partner).slice(0, 120);
+                }
+                if (d.start_date || d.end_date) {
+                    out.window = [d.start_date, d.end_date].filter(Boolean)
+                        .join(' to ');
+                }
                 if (d.subject || d.talent || d.brand) {
                     out.subject = d.subject || d.talent || d.brand;
                 }

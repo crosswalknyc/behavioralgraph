@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 
 _CTRL = r"(?:control|comparison|matched(?:\s+comparison)?)\s+groups?"
-_NAMES_RX = re.compile(r"\b(?:valuations?|brand\s+partnership|bpiq|" + _CTRL + r")\b", re.I)
+_NAMES_RX = re.compile(r"\b(?:valuations?|brand\s+partnership|partnership\s+analys[ie]s|bpiq|" + _CTRL + r")\b", re.I)
 _PRICE_WORD_RX = re.compile(
     r"\b(?:cost|costs|costing|price|prices|priced|pricing|cheap|cheaper|cheapest|expensive|pricey|discount\w*|budget|"
     r"afford\w*|fee|fees|charge|charges|spend|spending)\b", re.I)
@@ -50,7 +50,7 @@ _LOWER_RX = re.compile(
     r"can(?:'|\u2019)?t\s+(?:do|pay|spend))\b", re.I)
 _HOW_MUCH_RX = re.compile(
     r"\bhow\s+much\s+(?:is|are|does|do|would|will|for)\s+(?:it|this|that|one|the\s+run|"
-    r"(?:a|an|the|one|your)?\s*(?:brand\s+)?(?:partnership\s+)?valuations?)\b", re.I)
+    r"(?:a|an|the|one|your)?\s*(?:brand\s+)?(?:partnership\s+)?(?:valuations?|analys[ie]s))\b", re.I)
 _WORTH_RX = re.compile(r"\bworth\b|\bvalued?\b|\bgenerat\w+|\bdr[io]ve\w*|\bearn\w*|\bma[dk]e\b|\bbring\w*\s+in\b", re.I)
 _WITHOUT_RX = re.compile(
     r"\b(?:without|no|drop|dropping|skip|skipping|remove|removing|exclude|excluding|minus|take\s+out|leave\s+out|"

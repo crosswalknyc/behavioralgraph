@@ -34,6 +34,24 @@ pairing (bought by this seat, or held in the library) may be restated,
 and a seat whose plan includes the valuation walks the same order with
 no price on it (the order's own "Included with your plan").
 
+An analysis of a partnership is the valuation's too (Jenna 2026-11-16,
+the same reader: "we should never do reads. you only get it if you buy
+the valuation"). She asked for "a brand partnership analysis for Charli
+XCX and Vinted" with the campaign's dates; no lane took it as an order,
+and a general read answered from the valuation of another partnership
+that was open on her screen, under the name she had typed. So:
+
+- `owns` also returns 'analysis' when the words ask for an analysis of
+  a partnership (how it performed, its results, a recap, a brand
+  partnership analysis), or name a partnership on the Brand Partnership
+  page that is not the one open there. The order opens filled from the
+  words. A partnership whose valuation is saved is never taken: a read
+  may restate what was bought.
+- the guards treat a value written with no currency sign ("1,149,665
+  in earned media value") and a value mix by platform the same as a
+  dollar figure, and a read whose own table is a partnership's value
+  mix is replaced whole by the line that points at the valuation.
+
 Pure text and the saved-valuation lookup. User-facing copy is
 Prometheus first person. No em dashes. Nothing here says how a number
 was produced.
@@ -45,12 +63,19 @@ import re
 CHIP = 'Value a brand partnership'
 KIND_VALUE = 'value'
 KIND_DECK = 'deck'
+KIND_ANALYSIS = 'analysis'
 
 LEAD_VALUE = ("What a partnership is worth in dollars comes from a Brand Partnership valuation. "
               "I'll set that up.")
 LEAD_VALUE_OPEN = "That figure is what this valuation produces."
 LEAD_DECK = ("A deck on what this partnership is worth is the Brand Partnership valuation: it measures "
              "the campaign and comes with its own deck.")
+LEAD_ANALYSIS = ("A brand partnership analysis comes from a Brand Partnership valuation. "
+                 "I'll set that up.")
+LEAD_ANALYSIS_OPEN = "That analysis is what this valuation produces."
+POINTER_ANALYSIS = ("An analysis of this partnership comes from a Brand Partnership valuation. "
+                    "Say 'Value a brand partnership' and I will set it up.")
+BPIQ_VIEW = 'brandPartnershipIQ'
 POINTER_LINE = ("What this partnership is worth in dollars comes from a Brand Partnership valuation. "
                 "Say 'Value a brand partnership' and I will set it up.")
 
@@ -69,6 +94,52 @@ _AND_PAIR_RX = re.compile(
 _POSSESSIVE_PAIR_RX = re.compile(
     r"([A-Z0-9][\w&.\-]*(?:\s+[A-Z0-9][\w&.\-]*){0,3})'s\s+" + _PARTNER_NOUN + r"\s+with\s+"
     r"([A-Z0-9][\w&'.\-]*(?:\s+[A-Z0-9][\w&'.\-]*){0,3})")
+
+# 'a brand partnership analysis for Charli XCX and Vinted': the noun comes first, the names after
+_NAME_TOK = r"[A-Z0-9][\w&'.\-]*"
+_NAME_CS = _NAME_TOK + r"(?:\s+" + _NAME_TOK + r"){0,3}"
+_AFTER_NOUN = (r"(?:\s+iq)?(?:\s+(?:analysis|analyses|valuation|read|report|study|review|recap|evaluation|assessment|"
+               r"measurement|performance|results))?\s+(?:for|between|of|on|with)\s+(?:the\s+)?")
+_NOUN_FIRST_PAIR_RX = re.compile(
+    r"(?i:\b" + _PARTNER_NOUN + _AFTER_NOUN + r")(" + _NAME_CS + r")\s+(?:(?i:and|with|x)|&|\u00d7)\s+(" + _NAME_CS + r")")
+_NOUN_FIRST_PAIR_LOWER_RX = re.compile(
+    r"\b" + _PARTNER_NOUN + _AFTER_NOUN + r"([\w&'.\-]+(?:\s+[\w&'.\-]+){0,3}?)\s+(?:and|with|x|&|\u00d7)\s+"
+    r"([\w&'.\-]+(?:\s+[\w&'.\-]+){0,2})\s*(?=$|[?!,;:]|\.(?:\s|$))", re.I)
+_NAME_TAIL_STOP = {'here', 'the', 'from', 'campaign', 'dates', 'date', 'it', 'we', 'they', 'this', 'that', 'ran', 'running',
+                   'launched', 'in', 'on', 'for', 'over', 'during', 'between', 'starting', 'started', 'please', 'thanks',
+                   'and', 'with', 'i', 'can', 'could'}
+_NOT_A_NAME = {'what', 'how', 'the', 'a', 'an', 'its', 'their', 'why', 'tell', 'show', 'give', 'i', 'we', 'you', 'whether',
+               'if', 'then', 'also', 'see', 'let', 'send', 'include', 'it', 'this', 'that', 'them', 'they', 'who', 'which',
+               'when', 'where', 'me', 'us', 'our', 'my', 'your', 'other', 'others', 'more', 'all', 'any', 'some'}
+
+# an analysis of a partnership, asked for (2026-11-16)
+_STRICT_PARTNER = (r"(?:(?:brand\s+)?partnerships?|sponsorships?|collabs?|collaborations?|endorsements?|brand\s+deals?|"
+                   r"ambassadorships?|co[- ]?brand(?:ed|ing)?)")
+_ANALYSIS_NOUN = (r"(?:analysis|analyses|analytics|read|report|study|assessment|evaluation|measurement|recap|review|"
+                  r"breakdown|deep\s+dive|audit|post[- ]?mortem|wrap[- ]?up|results|performance|impact)")
+_ANALYSIS_PHRASE_RX = re.compile(
+    r"\b" + _STRICT_PARTNER + r"\s+(?:iq\s+)?" + _ANALYSIS_NOUN + r"\b|"
+    r"\b" + _ANALYSIS_NOUN + r"\s+(?:of|on|for)\s+[^.?!]{0,70}?\b" + _STRICT_PARTNER + r"\b", re.I)
+_ANALYSIS_VERB_RX = re.compile(
+    r"\b(?:analy[sz]e|analy[sz]ing|measure|measuring|evaluate|evaluating|assess|assessing|break\s+down|recap|review|"
+    r"dig\s+into|look\s+into|report\s+on)\b|"
+    r"\bhow\s+(?:did|has|have|is|was|are|were)\b[^.?!]{0,90}\b(?:do|doing|done|perform\w*|go|going|gone|land\w*|"
+    r"work(?:ed|ing)?|deliver\w*|fare[ds]?|faring|pan(?:ned)?\s+out)\b|"
+    r"\bwhat\s+did\b[^.?!]{0,90}\b(?:do|drive|deliver|achieve|generate|accomplish)\b|"
+    r"\b(?:results|performance|impact|lift)\s+(?:of|from|for)\b", re.I)
+_STRICT_REFERENT_RX = re.compile(r"\b(?:this|that|the|our|my|their|his|her)\s+" + _STRICT_PARTNER + r"\b", re.I)
+_AUDIENCE_ASK_RX = re.compile(
+    r"\b(?:audiences?|overlap\w*|demo(?:s|graphics?)?|who\s+(?:are|is|watch\w*|follow\w*|buys?|shops?|engag\w*)|"
+    r"fans?\s+of|(?:good|right|strong|natural|best|better)\s+fit|fit\s+(?:for|with|between)|suit(?:s|ed|able)?|"
+    r"(?:which|what)\s+(?:brands?|talent|creators?|partners?|influencers?)|should\s+\w+(?:\s+\w+)?\s+partner|"
+    r"potential\s+partners?|find\s+(?:me\s+)?(?:a\s+|some\s+)?partners?|makes?\s+sense)\b", re.I)
+_WHAT_IS_ANALYSIS_RX = re.compile(
+    r"^\W*(?:so\s+|ok\s+|and\s+)?(?:what(?:'s|\s+is|\s+are)|explain|describe|tell\s+me\s+about)\s+(?:a\s+|an\s+|the\s+|your\s+)?"
+    r"(?:brand\s+)?partnership\s+(?:iq\s+)?" + _ANALYSIS_NOUN + r"\s*[?.!]*$|"
+    r"\b(?:do|can|could)\s+you\s+(?:do|run|offer|have|make)\s+(?:brand\s+)?partnership\s+analys[ie]s\s*[?.!]*$", re.I)
+_NEW_ORDER_RX = re.compile(
+    r"\b(?:run|pull|start|build|create|make|order|queue|set\s+up|do)\s+(?:me\s+)?(?:a|an|another|one|the|new)\b|"
+    r"\b(?:new|another)\s+(?:one|" + _STRICT_PARTNER + r"|valuation|analysis)\b", re.I)
 
 # the dollar value of something, asked for
 _WORTH_RX = re.compile(r"\bworth\b(?!\s+(?:it\b|\w+ing\b|a\s+(?:look|shot|try|test|watch)\b|the\s+(?:effort|time|hype|wait)\b))", re.I)
@@ -99,7 +170,8 @@ _WHAT_IS_PRODUCT_RX = re.compile(
     r"^\W*(?:so\s+|ok\s+|and\s+)?(?:what(?:'s|\s+is|\s+are)|explain|describe|tell\s+me\s+about)\s+(?:a\s+|an\s+|the\s+|your\s+)?"
     r"(?:brand\s+partnership(?:\s+(?:valuations?|iq))?|bpiq|partnership\s+valuations?|control\s+groups?|valuations?)\s*[?.!]*$", re.I)
 _HOW_MUCH_PRODUCT_RX = re.compile(
-    r"\bhow\s+much\s+(?:is|are|does|do|for|would)\s+(?:a|an|the|one|your)?\s*(?:brand\s+)?(?:partnership\s+)?valuations?\b", re.I)
+    r"\bhow\s+much\s+(?:is|are|does|do|for|would)\s+(?:a|an|the|one|your)?\s*(?:brand\s+)?(?:partnership\s+)?"
+    r"(?:valuations?|analys[ie]s)\b", re.I)
 _REFERENT_RX = re.compile(
     r"\b(?:it|this|that|they|these|those|the\s+(?:partnership|deal|collab(?:oration)?|sponsorship|campaign|pairing|two))\b", re.I)
 
@@ -126,6 +198,18 @@ _STATED_VALUE_RX = re.compile(
     r"\b(?:partnership|sponsorship|brand|media|earned\s+media|deal|collab|total)\s+value\b|\bvalue\s+(?:of|to\s+date|so\s+far|is|was|"
     r"comes\s+to|came\s+to|reads\s+as|stands\s+at)\b|\bcarr(?:y|ies|ied)\b[^.]{0,40}\bvalue\b|\broi\b|\breturn\s+on\b|\bearned\s+media\b|"
     r"\bemv\b", re.I)
+# a value written with no currency sign: "1,149,665 in earned media value" (2026-11-16)
+_BARE_AMOUNT_RX = re.compile(r"(?<![\w.,$])(?:\d{1,3}(?:,\d{3})+|\d{4,})(?:\.\d+)?(?![\w%])(?!\s*(?:%|percent|people|viewers|"
+                             r"users|accounts|fans|followers|subscribers|visits|views|sessions|clicks|impressions|posts|"
+                             r"mentions|searches|orders|buyers|shoppers|households|individuals)\b)")
+_STRONG_VALUE_RX = re.compile(
+    r"\bearned\s+media(?:\s+value)?\b|\bemv\b|\bmedia\s+value\b|\b(?:total\s+)?brand\s+value\b|\b(?:partnership|"
+    r"sponsorship|deal|collab(?:oration)?|campaign)\s+value\b|\bbrand\s+(?:engagement|lift)\s+value\b|"
+    r"\bconversion\s+value\b|\b(?:in|of)\s+(?:total\s+)?value\b", re.I)
+_VALUE_SHARE_RX = re.compile(
+    r"\bshare\s+of\s+(?:the\s+)?(?:total\s+)?(?:campaign\s+|partnership\s+)?(?:earned\s+media\s+value|earned\s+media|"
+    r"media\s+value|brand\s+value|partnership\s+value|value|emv)\b|\bvalue\s+(?:component\s+)?mix\b|"
+    r"\bmix\b[^\n.]{0,60}\b(?:earned\s+media|media\s+value|brand\s+value|emv)\b", re.I)
 _PRICE_TALK_RX = re.compile(
     r"\bthis\s+is\s+[$\u00a3\u20ac]|\baccept\b|\bcosts?\b|\bpriced?\b|\bpricing\b|\bcharged?\b|\bfee\b|\brate\s+card\b|\bper\s+(?:valuation|"
     r"pull|read)\b|\bincluded\s+with\s+your\s+plan\b|\bwallet\b|\bbalance\b|\badd\s+funds\b|\brefund|\bcontrol\s+group\b|"
@@ -164,6 +248,29 @@ def pairing(text):
         m = rx.search(t)
         if m and _fold(m.group(1)) and _fold(m.group(2)):
             return _trim_pair((m.group(1), m.group(2)))
+    return _noun_first_pair(t)
+
+
+def _drop_tail(name):
+    words = str(name or '').split()
+    while len(words) > 1 and words[-1].lower().strip(".,'") in _NAME_TAIL_STOP:
+        words.pop()
+    return ' '.join(words)
+
+
+def _noun_first_pair(t):
+    """'a brand partnership analysis for Charli XCX and Vinted', 'the
+    sponsorship between nike and gunna.': the names after the noun."""
+    for rx in (_NOUN_FIRST_PAIR_RX, _NOUN_FIRST_PAIR_LOWER_RX):
+        m = rx.search(t)
+        if not m:
+            continue
+        a, b = _drop_tail(m.group(1)).strip(" .,:;?!'\""), _drop_tail(m.group(2)).strip(" .,:;?!'\"")
+        if not _fold(a) or not _fold(b) or _fold(a) == _fold(b):
+            continue
+        if a.split()[0].lower() in _NOT_A_NAME or b.split()[0].lower() in _NOT_A_NAME:
+            continue
+        return a, b
     return None
 
 
@@ -173,7 +280,16 @@ _PAIR_LEAD_RX = re.compile(
 _PAIR_TAIL_RX = re.compile(r"\s+(?:" + _PARTNER_NOUN + r"|campaign|worth|value|valuation|roi)\b.*$", re.I)
 
 
+# 'run a brand partnership analysis on Gap' -> 'Gap': what follows the last "<analysis word> on / for / of"
+_PAIR_ORDER_LEAD_RX = re.compile(
+    r"^.*\b(?:" + _ANALYSIS_NOUN + r"|valuation|" + _PARTNER_NOUN + r")\s+(?:on|for|of|between|about)\s+(?:the\s+)?(?=\S)|"
+    r"^(?:(?:hey|hi|ok|okay|so|please|can|could|would|will|you|we|i|want|need|to|like|'d|let's|lets|help|me|us)\s+)*"
+    r"(?:analy[sz]e|measure|evaluate|assess|recap|review|break\s+down|dig\s+into|look\s+into|report\s+on)\s+(?:the\s+)?(?=\S)", re.I)
+
+
 def _trim_pair(pr):
+    a0 = _PAIR_ORDER_LEAD_RX.sub('', _norm(pr[0]), count=1)
+    pr = ((a0 if _fold(a0) else pr[0]), pr[1])
     a = _PAIR_LEAD_RX.sub('', _norm(pr[0])).strip(" .,:;?!'\"")
     b = _PAIR_TAIL_RX.sub('', _norm(pr[1])).strip(" .,:;?!'\"")
     return (a or _norm(pr[0])), (b or _norm(pr[1]))
@@ -212,6 +328,67 @@ def value_ask(text):
     if re.search(r"\bin\s+dollars\b|\bdollar\s+(?:value|figure|amount|worth)\b|\bearned\s+media\b|\bemv\b|\broi\b|\bbrand\s+value\b", t, re.I):
         return True
     return len(t.split()) <= 16
+
+
+def analysis_ask(text):
+    """The words ask for an analysis of a partnership: 'a brand
+    partnership analysis for Charli XCX and Vinted', 'how did the Gap x
+    JYT collab perform', 'recap the Nike sponsorship'. Who the shared
+    audience is, the overlap, the fit and which brands suit a talent
+    are not one, and neither is a question about the product itself."""
+    t = _norm(text)
+    if not t:
+        return False
+    if _ABOUT_PRODUCT_RX.search(t) or _HOW_MUCH_PRODUCT_RX.search(t) or _WHAT_IS_PRODUCT_RX.search(t) \
+            or _WHAT_IS_ANALYSIS_RX.search(t):
+        return False
+    if _AUDIENCE_ASK_RX.search(t):
+        return False
+    if _ANALYSIS_PHRASE_RX.search(t):
+        return True
+    if not _ANALYSIS_VERB_RX.search(t):
+        return False
+    return bool(_PAIR_RX.search(t) or _STRICT_REFERENT_RX.search(t) or (_STRICT_PARTNER_RX.search(t) and pairing(t)))
+
+
+_STRICT_PARTNER_RX = re.compile(r"\b" + _STRICT_PARTNER + r"\b", re.I)
+
+
+def page_entry(page):
+    """What the open page says about itself when it is the Brand
+    Partnership page with a valuation on it: {'name': the valuation's
+    own name or ''}. None for any other page (or none)."""
+    vc = page if isinstance(page, dict) else None
+    if isinstance(vc, dict) and isinstance(vc.get('view_context'), dict):
+        vc = vc.get('view_context')
+    if not isinstance(vc, dict) or str(vc.get('view_id') or '') != BPIQ_VIEW:
+        return None
+    data = vc.get('data') if isinstance(vc.get('data'), dict) else {}
+    if not data:
+        return None
+    name = ''
+    for k in ('partnership', 'project_name', 'campaign_name', 'subject'):
+        if str(data.get(k) or '').strip():
+            name = _norm(data.get(k))
+            break
+    return {'name': name}
+
+
+def _same_pair(pr, name):
+    """The pairing `pr` is the one `name` ('A x B') is on, in either order."""
+    if not pr or not name:
+        return False
+    m = re.match(r"^(.{2,80}?)\s+[xX\u00d7]\s+(.{2,80})$", _norm(name))      # a valuation's own name is 'A x B'
+    other = (m.group(1), m.group(2)) if m else pairing(name)
+    if not other:
+        return False
+    a, b = {_fold(x) for x in pr}, {_fold(x) for x in other}
+    if a == b:
+        return True
+    # one side written shorter ('Matchbox' for 'Matchbox the Film on Apple TV')
+    def _near(x, ys):
+        return any(x == y or (len(x) >= 4 and len(y) >= 4 and (x in y or y in x)) for y in ys)
+    return all(_near(x, b) for x in a)
 
 
 # ---------------------------------------------------------------- thread
@@ -253,18 +430,29 @@ def stated_value_sentences(text):
     the same sentence. Price talk (a quote, a charge) is never one."""
     out = []
     body = str(text or '')
-    if not body or not _MONEY_RX.search(body):
+    if not body or not (_MONEY_RX.search(body) or (_BARE_AMOUNT_RX.search(body) and _STRONG_VALUE_RX.search(body))):
         return out
     about = bool(_PARTNER_RX.search(body) or _PAIR_RX.search(body))
     for piece in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9$\"'(\[-])|\n+", body):
         s = piece.strip()
-        if not s or not _MONEY_RX.search(s) or _PRICE_TALK_RX.search(s):
+        if not s or _PRICE_TALK_RX.search(s):
             continue
-        if not _STATED_VALUE_RX.search(s):
+        money = bool(_MONEY_RX.search(s))
+        # a value written with no currency sign: the amount and the value's own name in one sentence
+        bare = (not money) and bool(_BARE_AMOUNT_RX.search(s)) and bool(_STRONG_VALUE_RX.search(s))
+        if not money and not bare:
             continue
-        if _PARTNER_RX.search(s) or _PAIR_RX.search(s) or (about and _VALUE_LABEL_RX.search(s)):
+        if not _STATED_VALUE_RX.search(s) and not bare:
+            continue
+        if _PARTNER_RX.search(s) or _PAIR_RX.search(s) or (about and _VALUE_LABEL_RX.search(s)) or (bare and about):
             out.append(s)
     return out
+
+
+def value_share_lines(text):
+    """The lines of `text` that state a partnership's value as a mix or
+    a share ('share of total campaign earned media value')."""
+    return [ln.strip() for ln in str(text or '').split('\n') if ln.strip() and _VALUE_SHARE_RX.search(ln)]
 
 
 def turn_states_value(turn):
@@ -427,8 +615,10 @@ def _is_start(text):
 
 
 # ------------------------------------------------------------------ owns
-def owns(text, history=None, pick=''):
-    """'value', 'deck' or ''. See the module docstring."""
+def owns(text, history=None, pick='', page=None):
+    """'value', 'deck', 'analysis' or ''. See the module docstring.
+    `page` is the open page's view context (or the page context that
+    carries it)."""
     try:
         t = _norm(text)
         if not t and not pick:
@@ -443,9 +633,37 @@ def owns(text, history=None, pick=''):
             return '' if saved_valuation(t, None) else KIND_VALUE
         if asks_dollar_value(t) and _REFERENT_RX.search(t) and len(t.split()) <= 24 and _thread_partnership(history):
             return '' if saved_valuation('', history) else KIND_VALUE
-        return ''
+        return _owns_analysis(t, history, page)
     except Exception:
         return ''
+
+
+def _owns_analysis(t, history, page):
+    """'analysis' when the words ask for an analysis of a partnership
+    with no saved valuation behind it (2026-11-16), or name one on the
+    Brand Partnership page that is not the valuation open there."""
+    entry = page_entry(page)
+    pr = pairing(t)
+    asked = analysis_ask(t)
+    if pr:
+        if entry and entry.get('name') and _same_pair(pr, entry['name']):
+            return ''                                  # the valuation open on the page: a read may restate it
+        if saved_valuation('', None, pair=pr):
+            return ''
+        if asked:
+            return KIND_ANALYSIS
+        # on the Brand Partnership page, a partnership that is not the one open there
+        if entry and (_PAIR_RX.search(t) or _STRICT_PARTNER_RX.search(t)) and not _AUDIENCE_ASK_RX.search(t) \
+                and not _ABOUT_PRODUCT_RX.search(t):
+            return KIND_ANALYSIS
+        return ''
+    if not asked:
+        return ''
+    if entry and not _NEW_ORDER_RX.search(t):
+        return ''                                      # about the valuation open on the page
+    if _STRICT_REFERENT_RX.search(t) and not _NEW_ORDER_RX.search(t) and saved_valuation('', history):
+        return ''                                      # about the valuation this thread already holds
+    return KIND_ANALYSIS
 
 
 def _window_in(text):
@@ -467,7 +685,7 @@ def seed(text, history=None, kind=KIND_VALUE):
     words and the thread name nothing to fill."""
     pr = None
     oriented = False
-    if kind == KIND_VALUE:
+    if kind in (KIND_VALUE, KIND_ANALYSIS):
         got = pairing(text)
         if got:
             pr = got
@@ -491,6 +709,8 @@ def seed(text, history=None, kind=KIND_VALUE):
 def lead(kind, had_draft=False):
     if kind == KIND_DECK:
         return LEAD_DECK
+    if kind == KIND_ANALYSIS:
+        return LEAD_ANALYSIS_OPEN if had_draft else LEAD_ANALYSIS
     return LEAD_VALUE_OPEN if had_draft else LEAD_VALUE
 
 
@@ -505,10 +725,13 @@ def prompt_block(text):
     except Exception:
         return ''
     return ("PARTNERSHIP DOLLAR VALUE (binding). This read never states what the partnership is worth: no dollar value, "
-            "no valuation, no return in dollars, no earned media value, no value mix, for any window. Who the partnership "
+            "no valuation, no return in dollars, no earned media value (with or without a currency sign), no value mix "
+            "or share of value by platform, for any window. It is not an analysis of how the partnership performed. "
+            "Figures on an open Brand Partnership page belong to the valuation named on that page and are never restated "
+            "under another partnership's name. Who the partnership "
             "reaches, the shared audience, the overlap, the fit, buyers and behavior are in scope and are stated as usual. "
-            "If the question asks what the partnership is worth, answer what is in scope and say in one line that the "
-            "dollar value comes from a Brand Partnership valuation.")
+            "If the question asks what the partnership is worth or how it performed, answer what is in scope and say in "
+            "one line that it comes from a Brand Partnership valuation.")
 
 
 def _usd_metric(m):
@@ -540,24 +763,125 @@ def _clean_reply(reply, labels):
     state a partnership's dollar value."""
     removed = 0
     lines_out = []
+    in_mix = False
+    # read whole, so a sentence is judged with the partnership the reply is on in view
+    whole_hits = stated_value_sentences(reply)
     for line in str(reply or '').split('\n'):
         raw = line
+        # a value mix ("Platform mix ... (share of total campaign earned media value)") and the rows under it
+        if _VALUE_SHARE_RX.search(line):
+            in_mix = True
+            removed += 1
+            continue
+        if in_mix:
+            if re.match(r"^\s*(?:[-\u2022*]|\d+[.)])\s+\S", line):
+                removed += 1
+                continue
+            in_mix = False
         if labels:
             line = _strip_metric_segments(line, labels)
         if line != raw:
             removed += 1
-        hits = stated_value_sentences(line)
+        hits = [h for h in whole_hits if h in line] or stated_value_sentences(line)
+        if hits and re.match(r"^\s*(?:[-\u2022*]|\d+[.)])\s+\S", raw):
+            removed += 1
+            continue                  # a bullet is one claim: the value was it
         for h in hits:
             if h in line:
                 line = line.replace(h, ' ')
                 removed += 1
         line = re.sub(r"[ \t]{2,}", ' ', line).rstrip()
+        if hits and raw[:1].strip():
+            line = line.lstrip()
         if raw.strip() and not line.strip(" -\u2022*:;,."):
             continue                  # the whole line was the value
         lines_out.append(line)
     text = '\n'.join(lines_out)
     text = re.sub(r"\n{3,}", '\n\n', text).strip()
     return text, removed
+
+
+_VALUE_FIG_RX = re.compile(r"emv|earned[_\s]media|media[_\s]value|brand[_\s]value|partnership[_\s]value|\bvalue\b|_value\b", re.I)
+_PLATFORM_WORD_RX = re.compile(
+    r"\b(?:value|earned|press|facebook|instagram|youtube|tiktok|reddit|twitter|snapchat|pinterest|linkedin|twitch|"
+    r"platforms?|social|direct|brand\s+site)\b", re.I)
+_PEOPLE_WORD_RX = re.compile(
+    r"\b(?:people|persons?|viewers?|users?|accounts?|fans?|followers?|subscribers?|buyers?|shoppers?|customers?|audiences?|"
+    r"orders?|visits?|sessions?|views?|clicks?|searches|individuals)\b", re.I)
+
+
+def _mlabel(m):
+    return ' '.join(str(m.get(k) or '') for k in ('name', 'label')).replace('_', ' ')
+
+
+def _value_amounts(payload, bd):
+    out = set()
+    for r in ((bd or {}).get('rows') or []):
+        if isinstance(r, dict):
+            for k in ('pool', 'value', 'amount'):
+                try:
+                    v = float(r.get(k))
+                    if v >= 1000:
+                        out.add(int(round(v)))
+                except (TypeError, ValueError):
+                    pass
+    for f in (payload.get('figures') or []) if isinstance(payload.get('figures'), list) else []:
+        if not isinstance(f, dict) or str(f.get('source') or '') != 'view_data':
+            continue
+        if not _VALUE_FIG_RX.search(str(f.get('label') or '').replace('"', '')):
+            continue
+        try:
+            v = float(f.get('value'))
+            if v >= 1000:
+                out.add(int(round(v)))
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def _drop_amount_lines(text, nums, loose=False):
+    """`text` without the sentences that carry one of `nums` (a value
+    written bare). With `loose` (the reply printed a value mix), a
+    sentence with a bare amount beside a platform or value word and no
+    people word goes too."""
+    if not text or not (nums or loose):
+        return text
+    forms = set()
+    for n in nums:
+        forms.add(f"{n:,}")
+        forms.add(str(n))
+
+    def _bad(sentence):
+        if any(re.search(r"(?<![\d,.])" + re.escape(f) + r"(?![\d,]|\.\d)", sentence) for f in forms):
+            return True
+        return bool(loose and _BARE_AMOUNT_RX.search(sentence) and _PLATFORM_WORD_RX.search(sentence)
+                    and not _PEOPLE_WORD_RX.search(sentence) and not _PRICE_TALK_RX.search(sentence))
+
+    keep = []
+    for line in text.split('\n'):
+        if not line.strip():
+            keep.append(line)
+            continue
+        m = re.match(r"^(\s*(?:[-\u2022*]|\d+[.)])\s+)(.*)$", line)
+        head, body = (m.group(1), m.group(2)) if m else ('', line)
+        parts = [x for x in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9$\"'(\[])", body) if x.strip()]
+        left = [x for x in parts if not _bad(x)]
+        if not left or (m and len(left) < len(parts)):
+            continue                      # a bullet is one claim: the value was it
+        keep.append(head + ' '.join(left))
+    return re.sub(r"\n{3,}", '\n\n', '\n'.join(keep)).strip()
+
+
+def _substance(text):
+    """True when `text` still says something: a line of six words or
+    more that is not a heading ('On Charli XCX x Vinted:')."""
+    for line in str(text or '').split('\n'):
+        ln = line.strip(" -\u2022*")
+        if not ln or ln.endswith(':'):
+            continue
+        if len(ln.split()) >= 6:
+            return True
+    return False
 
 
 def guard_read(payload, question='', history=None, saved=None):
@@ -574,17 +898,61 @@ def guard_read(payload, question='', history=None, saved=None):
         metrics = payload.get('metrics') if isinstance(payload.get('metrics'), list) else []
         bad = [m for m in metrics if _value_metric(m)]
         bd = payload.get('breakdown') if isinstance(payload.get('breakdown'), dict) else None
-        bd_value = bool(bd) and bool(re.search(r"\bvalue\b", ' '.join(str(bd.get(k) or '') for k in ('dimension', 'share_basis')), re.I)) \
-            and bool(_PARTNER_RX.search(' '.join(str(bd.get(k) or '') for k in ('dimension', 'share_basis')) + ' ' + reply[:400]))
+        bd_text = ' '.join(str(bd.get(k) or '') for k in ('dimension', 'share_basis')) if bd else ''
+        profile = str(payload.get('profile') or '')
+        about = bool(names_partnership(question) or _PAIR_RX.search(profile) or names_partnership(reply[:400]))
+        bd_named = bool(bd) and bool(_VALUE_SHARE_RX.search(bd_text) or _STRONG_VALUE_RX.search(bd_text))
+        bd_value = bd_named or (bool(bd) and bool(re.search(r"\bvalue\b", bd_text, re.I))
+                                and bool(_PARTNER_RX.search(bd_text + ' ' + reply[:400])))
         hits = stated_value_sentences(reply)
-        if not (bad or bd_value or hits):
+        share = value_share_lines(reply) if about else []
+        if not (bad or bd_value or hits or share):
             return False
         if saved is None:
-            saved = saved_valuation(f"{question} {payload.get('profile') or ''} {reply[:400]}", history, thread_note=False)
+            # each place a pairing can be named is asked on its own: run together, a one-word
+            # answer ("Vinted") and the read's own heading make a pairing nobody typed (2026-11-16)
+            for src in (profile, question, reply[:400]):
+                pr = pairing(src) if src else None
+                if pr:
+                    saved = saved_valuation(pair=pr, thread_note=False)
+                    if saved:
+                        break
+            if saved is None:
+                saved = saved_valuation(f"{question} {profile} {reply[:400]}", history, thread_note=False)
         if saved:
             return False
         labels = [str(m.get('label') or '') for m in bad]
         text, _n = _clean_reply(reply, labels)
+        # the amounts that are the value itself, written bare: a value mix's own rows, and what the
+        # open page handed over as value ("emv_value"). A sentence that carries one goes (2026-11-16).
+        nums = _value_amounts(payload, bd if bd_value else None)
+        text = _drop_amount_lines(text, nums, loose=bool(share))
+        if not _substance(text) and (bd_named or share or nums):
+            # nothing but the partnership's value was in the read: it was an analysis of the
+            # partnership, and that comes from the valuation alone. Its figures and its file go too.
+            payload['reply'] = POINTER_ANALYSIS
+            for k in ('breakdown', 'file_link', 'files', 'deck_angle'):
+                payload.pop(k, None)
+            for k in ('metrics', 'figures'):
+                if isinstance(payload.get(k), list):
+                    payload[k] = []
+            payload['followups'] = [CHIP]
+            payload['offer_deck'] = False
+            payload['partnership_value_withheld'] = True
+            payload['partnership_read_withheld'] = True
+            return True
+        if bd_value or nums:
+            payload.pop('file_link', None)        # the file is the value table
+            payload.pop('files', None)
+            if isinstance(payload.get('metrics'), list):
+                metrics = [m for m in metrics if not (isinstance(m, dict) and (_VALUE_SHARE_RX.search(_mlabel(m))
+                                                                               or _STRONG_VALUE_RX.search(_mlabel(m))
+                                                                               or re.search(r"\bshare\s+of\s+(?:total\s+)?value\b", _mlabel(m), re.I)))]
+                payload['metrics'] = metrics
+            if isinstance(payload.get('followups'), list):
+                payload['followups'] = [f for f in payload['followups']
+                                        if not re.search(r"\bearned\s+(?:media\s+)?value\b|\bemv\b|\bmedia\s+value\b|\bbrand\s+value\b|"
+                                                         r"\bpartnership\s+value\b|\bemail\s+me\s+this\s+file\b", str(f), re.I)]
         if bd_value:
             # the mix table's own lines ("Partnership value component mix, ..." and its rows) go with it
             rows = [str(r.get('label') or '') for r in (bd.get('rows') or []) if isinstance(r, dict)]
@@ -656,7 +1024,9 @@ def guard_payload(raw, decision=None, question='', history=None):
         return False
 
 
-__all__ = ['CHIP', 'KIND_VALUE', 'KIND_DECK', 'POINTER_LINE', 'LEAD_VALUE', 'LEAD_VALUE_OPEN', 'LEAD_DECK', 'owns', 'seed',
+__all__ = ['CHIP', 'KIND_VALUE', 'KIND_DECK', 'KIND_ANALYSIS', 'POINTER_LINE', 'POINTER_ANALYSIS', 'LEAD_VALUE',
+           'LEAD_VALUE_OPEN', 'LEAD_DECK', 'LEAD_ANALYSIS', 'LEAD_ANALYSIS_OPEN', 'owns', 'seed', 'analysis_ask',
+           'page_entry', 'value_share_lines',
            'lead', 'value_ask', 'asks_dollar_value', 'names_partnership', 'pairing', 'thread_pair', 'thread_value_read',
            'turn_states_value', 'stated_value_sentences', 'deck_on_value_read', 'saved_valuation', 'prompt_block',
            'guard_read', 'guard_payload']

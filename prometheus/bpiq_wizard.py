@@ -262,6 +262,35 @@ def pretty_range(start, end):
     return f"{pretty_date(a)} to {pretty_date(b)}"
 
 
+_MILESTONE_RX = re.compile(r"(?:^|[\n:;,]\s*|\s)(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\s*[-:\u2013]\s*(?=[A-Za-z])")
+
+
+def milestone_dates(text, today=None):
+    """(first, last) as ISO dates when the words list a campaign's beats
+    by date ("10/22 - Teaser Video / 10/26 - First Announce / 11/13 -
+    Closet goes live"): the campaign ran from the first beat to the
+    last. (None, None) for anything else; the recap shows the dates
+    before anything is charged (2026-11-16)."""
+    today = _today(today)
+    days = []
+    for m in _MILESTONE_RX.finditer(str(text or '')):
+        try:
+            y = _year(m.group(3), today.year)
+            days.append(date(y, int(m.group(1)), int(m.group(2))))
+        except (ValueError, TypeError):
+            continue
+    if len(days) < 2:
+        return None, None
+    if not any(m.group(3) for m in _MILESTONE_RX.finditer(str(text or ''))):
+        # no year written: a list that starts well past today is last year's
+        if (min(days) - today).days > 60:
+            days = [d.replace(year=d.year - 1) for d in days]
+    a, b = min(days), max(days)
+    if a == b or (b - a).days > 400:
+        return None, None
+    return a.isoformat(), b.isoformat()
+
+
 def parse_dates(text, today=None):
     """(start, end) as ISO dates, or (None, None). Year defaults to
     today's year when omitted."""
@@ -658,7 +687,9 @@ def _bpiq_intent(text):
 def pv_kind(text, history=None, pick='', body=None):
     """'value' when the words ask what a partnership is worth in
     dollars, 'deck' when they ask for a deck of a read in this thread
-    that stated one, '' otherwise (prometheus.partnership_value, Jenna
+    that stated one, 'analysis' when they ask for an analysis of a
+    partnership (Jenna 2026-11-16: that comes from the valuation, never
+    from a read), '' otherwise (prometheus.partnership_value, Jenna
     2026-11-11: that figure is the valuation's to state). The reader's
     own words are read ahead of an order rewritten onto a resolved
     subject ("turn this into a deck" becomes "Run a deck on <the open
@@ -666,11 +697,15 @@ def pv_kind(text, history=None, pick='', body=None):
     try:
         from prometheus import partnership_value as _pv
         own = str((body or {}).get('_pm_order_words') or '').strip() if isinstance(body, dict) else ''
+        page = None
+        if isinstance(body, dict):
+            pc = body.get('page_context') if isinstance(body.get('page_context'), dict) else {}
+            page = body.get('view_context') or pc.get('view_context')
         if own and own != str(text or '').strip():
-            hit = _pv.owns(own, history, pick=pick)
+            hit = _pv.owns(own, history, pick=pick, page=page)
             if hit:
                 return hit
-        return _pv.owns(text, history, pick=pick) or ''
+        return _pv.owns(text, history, pick=pick, page=page) or ''
     except Exception:
         return ''
 
@@ -3028,7 +3063,7 @@ def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
     d = empty_draft()
     seed = ''
     many_line = ''
-    if kind == 'value':
+    if kind in ('value', 'analysis'):
         try:
             many = _slots.many_partnerships(text, today=_today(today))
         except Exception:
@@ -3047,6 +3082,8 @@ def _open_on_value(kind, text, history, draft, store, user, thread_id, today):
         if d.get('campaign_start') or not src:
             break
         a, b = parse_dates(src, today=today)
+        if not (a and b):
+            a, b = milestone_dates(src, today=today)       # a dated list of the campaign's beats
         if a and b:
             d['campaign_start'], d['campaign_end'] = a, b
             d['attr_start'], d['attr_end'] = attribution_window(a, b, today=today)
@@ -3373,7 +3410,8 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     # read whole by the one-shot reader below, as it always was; a
     # question about what a partnership is worth, and a deck of a read
     # that stated it, open here.
-    if _pvk == 'deck' or (_pvk == 'value' and not is_valuation_order(t)):
+    # An analysis of a partnership is the valuation's too (Jenna 2026-11-16).
+    if _pvk in ('deck', 'analysis') or (_pvk == 'value' and not is_valuation_order(t)):
         return _open_on_value(_pvk, t, history, draft, store, uname or user, thread_id, today)
 
     # Only Cancel (or Decline on the recap) leaves. A bare name or a
