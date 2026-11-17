@@ -459,7 +459,7 @@ def run_inline(job_id, status):
     headers = {'X-Prometheus-Caller': 'resume:read-worker'} if rr.get('probe') else {}
     panel_confirm = None
     if isinstance(rr.get('panel_charge'), dict):
-        panel_confirm = {'subject': rr.get('bind_subject') or '', 'resume_charge': rr['panel_charge']}
+        panel_confirm = {'subject': resumed_bind(rr) or '', 'resume_charge': rr['panel_charge']}
     ctx = resumed_ctx(rr)
     body_json = {'text': rr['text']}
     if ctx:
@@ -478,7 +478,7 @@ def run_inline(job_id, status):
             pass
         resp = c._pm_generate_metrics_response(
             user, rr['text'], list(rr.get('history') or []), prefer_catalog=True,
-            bind_subject=rr.get('bind_subject') or None, bind_cohort=rr.get('bind_cohort') or None,
+            bind_subject=resumed_bind(rr), bind_cohort=rr.get('bind_cohort') or None,
             panel_confirm=panel_confirm, switch_page=rr.get('switch_page') or None,
             inline_job_id=job_id, force_local=True, ctx=ctx, resume_base=resumed_base(rr))
     # The job body ran when the reply carries this job id (the status,
@@ -664,10 +664,36 @@ def resume_record(*, text, history, base, panel_charge=None, probe=False,
     return rec
 
 
+def _brief_label(rr):
+    """The brief's own label when the record's words are a brief on works
+    they name, counted on a base they state themselves (all US people);
+    '' otherwise. Such a read has no file as its base, so a record that
+    pinned one (2026-11-17: Grace Yin's eleven books, started on the We
+    Were Liars Subscriber IQ file) is run again on the brief itself."""
+    try:
+        from . import read_brief as _rb
+        t = str((rr or {}).get('text') or '')
+        if t and _rb.own_base_brief(t):
+            return str((_rb.read(t) or {}).get('subject') or '').strip()
+    except Exception:
+        pass
+    return ''
+
+
+def resumed_bind(rr):
+    """The subject a resumed read is bound to: the brief's own label for
+    a brief on its own base, else the subject the record carries."""
+    rr = rr if isinstance(rr, dict) else {}
+    return _brief_label(rr) or (str(rr.get('bind_subject') or '').strip() or None)
+
+
 def resumed_base(rr):
     """The base a resume record pins, with its screen data back on it;
-    None when the record predates the pin."""
+    None when the record predates the pin, or its words are a brief on
+    its own base."""
     rr = rr if isinstance(rr, dict) else {}
+    if _brief_label(rr):
+        return None
     b = rr.get('base')
     if not isinstance(b, dict) or not (b.get('subject') or b.get('s3_key')):
         return None
@@ -1281,7 +1307,7 @@ def recover(job_id, status=None, reason='no heartbeat'):
             headers['X-Prometheus-Caller'] = 'resume:orphaned-read'
         panel_confirm = None
         if isinstance(rr.get('panel_charge'), dict):
-            panel_confirm = {'subject': rr.get('bind_subject') or '',
+            panel_confirm = {'subject': resumed_bind(rr) or '',
                              'resume_charge': rr['panel_charge']}
         ctx = resumed_ctx(rr)
         body_json = {'text': rr['text']}
@@ -1294,7 +1320,7 @@ def recover(job_id, status=None, reason='no heartbeat'):
             resp = c._pm_generate_metrics_response(
                 user, rr['text'], list(rr.get('history') or []),
                 prefer_catalog=True,
-                bind_subject=rr.get('bind_subject') or None,
+                bind_subject=resumed_bind(rr),
                 bind_cohort=rr.get('bind_cohort') or None,
                 panel_confirm=panel_confirm,
                 switch_page=rr.get('switch_page') or None,

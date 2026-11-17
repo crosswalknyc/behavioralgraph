@@ -175,6 +175,19 @@ class TheWords(unittest.TestCase):
         rr = __import__('prometheus.read_recovery', fromlist=['resume_record']).resume_record(text=SPEC, history=[], base={})
         self.assertEqual(rr['text'], SPEC)
 
+    def test_a_read_started_on_the_series_file_is_run_again_on_the_brief(self):
+        # her 17:35 read was started on the We Were Liars Subscriber IQ file; a run of it after a restart is on her titles
+        RR = __import__('prometheus.read_recovery', fromlist=['resume_record'])
+        series = {'subject': 'We Were Liars', 's3_key': 'subiq:We_Were_Liars_04_07_2026_19_50.csv', 'source': 'subscriber_iq', 'bound': True}
+        rr = RR.resume_record(text=BRACKETS, history=[], base=series)
+        self.assertEqual(rr['bind_subject'], 'We Were Liars')          # what the job record holds today
+        self.assertIsNone(RR.resumed_base(rr))
+        self.assertEqual(RR.resumed_bind(rr), ELEVEN_SUBJECT)
+        # any other read keeps the base and the subject it was started on
+        rr2 = RR.resume_record(text='What else do We Were Liars viewers watch?', history=[], base=series)
+        self.assertEqual(RR.resumed_base(rr2)['s3_key'], series['s3_key'])
+        self.assertEqual(RR.resumed_bind(rr2), 'We Were Liars')
+
     def test_titles_at_the_lead_with_no_author(self):
         self.assertEqual(RB.titles(TWO_BOOKS), [('The Love Hypothesis', ''), ('The Map That Leads To You', '')])
 
