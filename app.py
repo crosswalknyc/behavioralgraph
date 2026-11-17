@@ -4404,6 +4404,11 @@ def login_page():
             })
             user['activity']['recent_actions'] = user['activity']['recent_actions'][:100]
             save_users(users_data)
+            try:
+                import login_notify as _ln
+                _ln.notify_first_login(user, username, users_data)
+            except Exception:
+                traceback.print_exc()
             session['username'] = username
             session['role'] = _normalize_role(user.get('role', 'user'))
             return jsonify({
@@ -4458,6 +4463,11 @@ def login_page():
         user['activity']['recent_actions'] = user['activity']['recent_actions'][:100]
         
         save_users(users_data)
+        try:
+            import login_notify as _ln
+            _ln.notify_first_login(user, username, users_data)
+        except Exception:
+            traceback.print_exc()
         
         # Set session
         session['username'] = username
