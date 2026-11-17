@@ -4198,10 +4198,60 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
     return out
 
 
+def attach_firmness(rec: dict, roster: list, priors: Optional[dict], twin: dict, s3=None) -> Optional[dict]:
+    """The firmness block on a question record (``rec['firmness']``, the
+    public view; the signals on the trail). The prior is the first
+    segment's; the ledger history is for this question kind on this class
+    of audience."""
+    from migration import digital_twin_confidence as CONF
+    from migration import digital_twin_ledger as LG
+    prior = next(iter((priors or {}).values()), None) if isinstance(priors, dict) else None
+    try:
+        hist = LG.history_for(s3, 'room_count', question_kind=str(rec.get('kind') or ''), audience_class=subject_class(twin))
+    except Exception:
+        hist = {}
+    block = CONF.firmness_for_room(rec, roster, prior=prior, history=hist)
+    rec.setdefault('trail', {})['firmness'] = {k: v for k, v in block.items() if k != 'ranges'}
+    rec['firmness'] = CONF.public_firmness(block)
+    if rec['firmness'] and rec['firmness'].get('line'):
+        rec['firmness']['line'] = scrub(rec['firmness']['line'])
+    return rec['firmness']
+
+
+def ledger_row_for_question(s3, twin: dict, session: dict, rec: dict, twin_key: str = '') -> Optional[dict]:
+    """The published split on the outcome ledger as a room_count row:
+    the distribution over the options, the question, the anchor status
+    and the firmness word. A question answered on a counted result is
+    post hoc (the outcome was known) and never counts toward the record.
+    A rating or a probe has no outcome to score and is not recorded."""
+    from migration import digital_twin_ledger as LG
+    kind = str(rec.get('kind') or '')
+    if kind in ('rating', 'probe') or not rec.get('options'):
+        return None
+    opts = [o for o in rec['options'] if isinstance(o, dict) and o.get('label')]
+    if not opts:
+        return None
+    trail = rec.get('trail') or {}
+    status = str(trail.get('anchor_status') or '')
+    lead = max(opts, key=lambda o: float(o.get('pct') or 0))
+    pred = {'distribution': [{'label': o['label'], 'pct': float(o.get('pct') or 0)} for o in opts], 'point': float(lead.get('pct') or 0), 'unit': 'pct'}
+    fb = rec.get('firmness') or {}
+    lead_r = (fb.get('lead') or {}) if isinstance(fb, dict) else {}
+    if lead_r.get('low_pct') is not None:
+        pred['low'], pred['high'] = lead_r['low_pct'], lead_r['high_pct']
+    if rec.get('yes_pct') is not None:
+        pred['probability'] = round(float(rec['yes_pct']) / 100.0, 4)
+    return LG.record_prediction(s3, 'room_count', str(_meta(twin).get('subject') or _twin_name(twin)), pred, measure=f"share:{str(lead.get('label') or '')[:60]}",
+                                twin_key=twin_key or str(_meta(twin).get('key') or ''), session_id=str(session.get('id') or ''), question_id=str(rec.get('id') or ''),
+                                question=str(rec.get('q') or ''), question_kind=kind, audience_class=subject_class(twin), method_version=ROOM_VERSION,
+                                basis={'anchor_status': status, 'firmness': {'word': fb.get('word') if isinstance(fb, dict) else None}}, post_hoc=(status == 'result'))
+
+
 def chat_lines(session: dict, rec: dict) -> list:
     """Plain lines for chat: the question as asked, the % table, the read
-    and the voices. The moderator's framing is the seats' briefing, never
-    a chat line (Jenna, 2026-11-04: launch into what the seats say)."""
+    and the voices, and how firm the count is. The moderator's framing is
+    the seats' briefing, never a chat line (Jenna, 2026-11-04: launch
+    into what the seats say)."""
     out = [str(rec.get('q') or '')]
     rows = rec.get('options') if (rec.get('options') and isinstance(rec['options'][0], dict) and 'pct' in rec['options'][0]) else (rec.get('distribution') or [])
     for r in rows[:8]:
@@ -4209,6 +4259,14 @@ def chat_lines(session: dict, rec: dict) -> list:
         out.append(f"{r['label']}: {r['pct']}% ({int(r['people']):,} people{tally})")
     if rec.get('read'):
         out.append(str(rec['read']))
+    fb = rec.get('firmness') if isinstance(rec.get('firmness'), dict) else None
+    if fb and fb.get('line'):
+        out.append(str(fb['line']))
+    try:   # the People column, when a check with real people has landed (2026-11-17)
+        from migration.digital_twin_validation import check_lines
+        out.extend(check_lines(rec))
+    except Exception:
+        pass
     for v in (rec.get('voices') or [])[:VOICES_N]:
         out.append(f"{v['name']}, {v['age']}, {v['city']}: {v['line']}")
     return out
@@ -4815,15 +4873,30 @@ def run_question(ctx: dict) -> dict:
             if not any(re.sub(r'[^a-z0-9]+', ' ', str(f).lower()).strip()[:60] == _ock for f in rec['facts_used']):
                 rec['facts_used'] = ([_oc] + list(rec['facts_used']))[:6]
         timings['read_s'] = round(time.time() - t, 2)
+        # 5b. how firm the count is (2026-11-17): the evidence it rests on, the seats' agreement against the prior, the
+        #     anchor's own range, the ledger's record on questions like it, and how much the desk found; a range per option,
+        #     one of three words, and the decline line when the room has too little to call it
+        try:
+            attach_firmness(rec, roster, priors, twin, s3)
+        except Exception as e:
+            print(f"[twin-room] firmness skipped: {str(e)[:120]}")
     except Exception as e:
         traceback.print_exc()
         fallbacks.append(f"engine: {str(e)[:120]}")
         _deterministic_fill(ctx)
+        try:
+            attach_firmness(rec, roster, {}, twin, s3)
+        except Exception as e2:
+            print(f"[twin-room] firmness skipped on the fill: {str(e2)[:120]}")
     # 6. the trail and the landing
     tot = models.totals()
     trail.update({'models': tot['models'], 'tokens': tot['tokens'], 'searches': tot['searches'], 'cost_usd': tot['cost_usd'], 'calls': tot['calls'], 'version': ROOM_VERSION})
     timings['total_s'] = round(time.time() - ctx['t0'], 2)
     rec['finished_at'] = _now()
+    try:   # the count on the outcome ledger (2026-11-17): scored later against what happened; a count on a result already known is post hoc
+        ledger_row_for_question(s3, twin, session, rec, twin_key=ctx.get('twin_key') or '')
+    except Exception as e:
+        print(f"[twin-room] ledger skipped: {str(e)[:120]}")
     try:
         refresh_memory(session)
     except Exception:

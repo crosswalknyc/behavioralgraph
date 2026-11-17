@@ -589,8 +589,14 @@ def csv_rows(payload: dict) -> list:
                 rows.append(['Spend Engine', sp.get('plan_id'), f"day {d.get('day')} {b.get('channel')}", b.get('first_actions'), 'first actions', f"spend {b.get('spend')}, cpa {b.get('cpa')}"])
     for ps in payload.get('panel_sessions') or []:
         for q in ps.get('questions') or []:
+            fb = q.get('firmness') if isinstance(q.get('firmness'), dict) else {}
+            rng = {r.get('label'): r for r in (fb.get('ranges') or []) if isinstance(r, dict)}
             for r in q.get('distribution') or []:
-                rows.append(['Focus Group IQ', ps.get('id'), f"{q.get('q')}: {r.get('label')}", r.get('pct'), '%', f"{r.get('people')} people"])
+                rr = rng.get(r.get('label')) or {}
+                span = f"; {rr['low_pct']}% to {rr['high_pct']}%" if rr.get('low_pct') is not None else ''
+                rows.append(['Focus Group IQ', ps.get('id'), f"{q.get('q')}: {r.get('label')}", r.get('pct'), '%', f"{r.get('people')} people{span}"])
+            if fb.get('line'):
+                rows.append(['Focus Group IQ', ps.get('id'), f"{q.get('q')}: how firm", fb.get('word'), '', fb.get('line')])
     for ps in payload.get('pilot_sessions') or []:
         sc = ps.get('scorecard') or {}
         head = ((sc.get('battery') or {}).get('headline')) or {}

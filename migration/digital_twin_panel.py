@@ -2004,13 +2004,24 @@ def session_csv(session: dict) -> str:
     import io
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(['Session', 'Question id', 'Question', 'Kind', 'Segment', 'Answer', 'Share %', 'People'])
+    w.writerow(['Session', 'Question id', 'Question', 'Kind', 'Segment', 'Answer', 'Share %', 'People', 'Low %', 'High %', 'How firm'])
     for q in session.get('questions') or []:
+        fb = q.get('firmness') if isinstance(q.get('firmness'), dict) else {}
+        rng = {str(r.get('label')): r for r in (fb.get('ranges') or []) if isinstance(r, dict)}
         for r in q.get('distribution') or []:
-            w.writerow([session.get('id'), q.get('id'), q.get('q'), q.get('kind'), 'Whole room', r.get('label'), r.get('pct'), r.get('people')])
+            rr = rng.get(str(r.get('label'))) or {}
+            w.writerow([session.get('id'), q.get('id'), q.get('q'), q.get('kind'), 'Whole room', r.get('label'), r.get('pct'), r.get('people'), rr.get('low_pct'), rr.get('high_pct'), fb.get('word') or ''])
         for sr in q.get('by_segment') or []:
             for r in sr.get('distribution') or []:
-                w.writerow([session.get('id'), q.get('id'), q.get('q'), q.get('kind'), sr.get('segment'), r.get('label'), r.get('pct'), r.get('people')])
+                w.writerow([session.get('id'), q.get('id'), q.get('q'), q.get('kind'), sr.get('segment'), r.get('label'), r.get('pct'), r.get('people'), '', '', ''])
+    # who sat in the room (2026-11-17): each seat, the kind of person it stands for and the people behind it
+    roster = ((session.get('group') or {}).get('roster') or [])
+    if roster:
+        w.writerow([])
+        w.writerow(['Session', 'Seat', 'Name', 'Age', 'City', 'Segment', 'Kind', 'People'])
+        for r in roster:
+            if isinstance(r, dict):
+                w.writerow([session.get('id'), r.get('seat'), r.get('name'), r.get('age'), r.get('city'), r.get('segment'), (r.get('archetype') or {}).get('label') or '', r.get('people') or r.get('stands_for_people')])
     w.writerow([])
     w.writerow(['Session', 'Question id', 'Twin', 'Age', 'City', 'Segment', 'Line'])
     for q in session.get('questions') or []:

@@ -77,6 +77,9 @@ _PANEL_ASK_RX = re.compile(r"^\s*(?:ask\s+(?:them|the\s+room|the\s+twins?|the\s+
 _COMPARE_RX = re.compile(r"\bcompare\b[^.?!]{0,80}\btwins?\b|\btwins?\b[^.?!]{0,60}\b(?:side by side|against|vs\.?|versus)\b", re.I)
 _CATALOG_RX = re.compile(r"\b(?:do (?:we|you) have|is there|are there|which|what|list|show me)\b[^.?!]{0,30}\btwins?\b|\btwins?\b[^.?!]{0,20}\b(?:do (?:we|you) have|are there|in the library|on the shelf)\b", re.I)
 _STATUS_RX = re.compile(r"\b(?:is|are)\s+(?:my|the|our)\s+twins?\s+(?:ready|done|built|finished|up)\b|\btwins?\s+(?:status|ready\s+yet)\b|\bwhere\s+is\s+(?:my|the)\s+twin\b", re.I)
+# the track record (2026-11-17): how the twins have done against what happened
+_RECORD_RX = re.compile(r"\b(?:track\s+record|how\s+(?:accurate|right|good|close)\s+(?:are|were|have|is|was)\b[^.?!]{0,40}\b(?:twins?|rooms?|digital twins iq|focus groups?|pilot tests?|forecasts?|calls?)|"
+                        r"\b(?:twins?|digital twins iq)\b[^.?!]{0,40}\b(?:accuracy|accurate|right|wrong|misses?|hits?|scored|track record)\b|\bhow\s+(?:did|do)\s+(?:the\s+)?twins?\s+do\b)", re.I)
 # who makes up an audience (Jenna 2026-11-17): the kinds of people in a twin, their sizes and the person who stands for each
 _KINDS_RX = re.compile(r"\b(?:who|what)\s+(?:makes?\s+up|is\s+in|comprises?|composes?)\b[^.?!]{0,60}\btwins?\b|\b(?:kinds?|types?|groups?|archetypes?)\s+of\s+(?:people|viewers|fans|buyers|subscribers|listeners)\b[^.?!]{0,60}\btwins?\b|"
                        r"\btwins?\b[^.?!]{0,40}\b(?:archetypes?|kinds?\s+of\s+people|made\s+(?:up\s+)?of|composition|break(?:s|ing)?\s+down)\b|\bwho\s+(?:is|are)\s+(?:in|behind)\s+the\s+(?:room|seats)\b", re.I)
@@ -313,7 +316,9 @@ def twin_intent(text, chip=''):
     if _BUILD_RX.search(low) and not re.search(r"\btwin\s+(?:bed|peaks|cities|falls|flame|turbo|engine)\b", low):
         return True
     if 'twin' in low and (_GREENLIGHT_RX.search(low) or _LAUNCH_RX.search(low) or _SPEND_RX.search(low) or _COMPARE_RX.search(low) or _CATALOG_RX.search(low) or _STATUS_RX.search(low)
-                          or _KINDS_RX.search(low)):
+                          or _KINDS_RX.search(low) or _RECORD_RX.search(low)):
+        return True
+    if _RECORD_RX.search(low) and re.search(r"\b(?:twins?|digital twins iq|focus groups?|pilot tests?)\b", low):
         return True
     if _PANEL_OPEN_RX.search(low) and ('twin' in low or 'panel lab' in low or 'focus group' in low or 'survey' in low):
         return True
@@ -1707,6 +1712,38 @@ def start_build(user, uname, confirm, *, thread_id='', ask_text='', extras=None,
     return job_id, (_TNP.promise(subject) if pull else J.build_promise(subject)), None
 
 
+def track_record_reply(user):
+    """How the twins have done (2026-11-17): the scored calls on the
+    outcome ledger, in plain words, with the biggest recent rows. Never a
+    post hoc row, never a method word."""
+    from migration import digital_twin_ledger as LG
+    s3 = _s3()
+    sm = LG.summary(s3)
+    rows = LG.public_rows(s3, limit=8)
+    n = int(sm.get('n_scored') or 0)
+    if n == 0:
+        return _payload('No call has settled yet. Every forecast and every room count goes on the record when it is made, and is scored the moment the outcome lands; the record page fills from there.',
+                        [OPEN_CHIP], open_view='digitalTwinsIQ')
+    parts = [f"{n} call{'s' if n != 1 else ''} the twins made before the outcome have settled."]
+    if sm.get('hit_rate') is not None:
+        by = (sm.get('by_kind') or {}).get('call') or {}
+        parts.append(f"Of the called outcomes, {int(round(float(sm['hit_rate']) * 100))}% landed on the right side" + (f" ({by.get('n')} calls)." if by.get('n') else '.'))
+    if sm.get('mean_rel_error') is not None:
+        parts.append(f"On the counts, the typical miss is {float(sm['mean_rel_error']) * 100:.1f}% of the figure that happened.")
+    if sm.get('coverage') is not None:
+        parts.append(f"{int(round(float(sm['coverage']) * 100))}% of outcomes landed inside the range given.")
+    lines = []
+    for r in rows:
+        said, happened = r.get('said'), r.get('happened')
+        def fmt(v, unit=r.get('unit')):
+            if isinstance(v, (int, float)):
+                return f"{v:,.1f}%" if unit == 'pct' else (f"{v:+.1f} points" if unit == 'points' else f"{int(round(v)):,}")
+            return str(v or '')
+        lines.append(f"- {r.get('subject')}, {str(r.get('what') or '').rstrip('?').lower()}: said {fmt(said)}, happened {fmt(happened)} ({r.get('called_on')} to {r.get('settled_on')}).")
+    reply = _scrub(' '.join(parts) + ('\n\n' + '\n'.join(lines) if lines else ''))
+    return _payload(reply, [OPEN_CHIP], open_view='digitalTwinsIQ', action_hint={'view': 'digitalTwinsIQ', 'tab': 'twins'})
+
+
 def kinds_reply(text, body, history, user):
     """Who makes up a twin (Jenna 2026-11-17): the kinds of people in
     the audience, each with its people and the person who stands for it,
@@ -1879,6 +1916,9 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
         # 4b. who makes up the audience (2026-11-17)
         if _KINDS_RX.search(low) and not _BUILD_RX.search(low) and not _PANEL_ASK_RX.search(low):
             return kinds_reply(t, body, history, user)
+        # 4c. the track record (2026-11-17)
+        if _RECORD_RX.search(low) and not _BUILD_RX.search(low) and not _PANEL_ASK_RX.search(low):
+            return track_record_reply(user)
         # 5. the panel
         pr = run_panel(t, body, history, user, ppu)
         if pr is not None:

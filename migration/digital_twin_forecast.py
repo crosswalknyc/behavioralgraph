@@ -418,7 +418,62 @@ def forecast_for_session(twin: dict, sess: dict, *, s3=None, ledger: Optional[di
     if cal['scope'] == 'none':
         notes.append(NO_ANCHOR_NOTE)
     out['notes'] = notes
+    # how firm the figure is (2026-11-17): the ledger's own miss on week-one figures once it holds three, else the
+    # calibration range; the word from how the count was anchored
+    try:
+        from migration import digital_twin_confidence as CONF
+        from migration import digital_twin_ledger as LG
+        hist = LG.history_for(s3, 'forecast', measure='week_one_audience', audience_class='title') if base > 0 else {}
+        fb = CONF.firmness_for_count(out['episode']['week_one_audience'] or 0, low=out['episode']['low'], high=out['episode']['high'],
+                                     calibration_scope=cal['scope'], history=hist, appeal_known=bool(hd_known(sc)))
+        out['firmness'] = fb
+        if base > 0 and out['episode']['week_one_audience']:
+            # the ranges the reader sees follow the ledger's word when it has one
+            if fb.get('low') is not None and fb.get('high') is not None and hist.get('n_scored', 0) >= 3:
+                out['episode']['low'] = people('week_one_low_h', fb['low'])
+                out['episode']['high'] = people('week_one_high_h', fb['high'])
+    except Exception as e:
+        print(f"[twin-forecast] firmness skipped: {str(e)[:120]}")
+    try:
+        _ledger_rows(s3, twin, sess, out, show)
+    except Exception as e:
+        print(f"[twin-forecast] ledger skipped: {str(e)[:120]}")
     return out
+
+
+def hd_known(sc: dict) -> bool:
+    hd = ((sc or {}).get('battery') or {}).get('headline') or {}
+    return hd.get('total_positive_pct') is not None
+
+
+def _ledger_rows(s3, twin: dict, sess: dict, out: dict, show: str) -> None:
+    """The forecast's figures on the outcome ledger (2026-11-17): one row
+    per measure, keyed to the session, so a re-read updates the row and
+    the hash still dates the first call; an actual on the record lands as
+    the outcome. A forecast made after the title aired is post hoc."""
+    from migration import digital_twin_ledger as LG
+    sid = str(sess.get('id') or '')
+    if not sid or not isinstance(out.get('episode'), dict):
+        return
+    base = int(out.get('base_people') or 0)
+    cal = out.get('calibration') or {}
+    post_hoc = bool((out.get('actual') or {}).get('week_one_audience')) and any((a.get('show') or '') == show for a in (cal.get('anchors') or []))
+    basis = {'anchor_status': cal.get('scope'), 'firmness': {'word': (out.get('firmness') or {}).get('word')}}
+    ep = out['episode']
+    twin_key = str(_meta(twin).get('key') or '')
+    rows = []
+    if base > 0 and ep.get('week_one_audience'):
+        rows.append(LG.record_prediction(s3, 'forecast', show, {'point': ep['week_one_audience'], 'low': ep.get('low'), 'high': ep.get('high'), 'unit': 'people'},
+                                         measure='week_one_audience', twin_key=twin_key, session_id=sid, question='Week-one audience if released', question_kind='forecast',
+                                         audience_class='title', method_version=f"forecast-{VERSION}", basis=basis, post_hoc=post_hoc))
+    ser = out.get('series') or {}
+    if ser.get('season_completion_pct') is not None:
+        rows.append(LG.record_prediction(s3, 'forecast', show, {'point': ser['season_completion_pct'], 'unit': 'pct'}, measure='season_completion_pct', twin_key=twin_key, session_id=sid,
+                                         question='Share of episode viewers who watch through the finale', question_kind='forecast', audience_class='title', method_version=f"forecast-{VERSION}",
+                                         basis=basis, post_hoc=post_hoc))
+    act = out.get('actual') or {}
+    if act.get('week_one_audience') and rows and rows[0]:
+        LG.record_outcome(s3, rows[0]['id'], value=act['week_one_audience'], source_class='published', note=str(act.get('note') or '')[:200])
 
 
 def record_actual(s3, twin: dict, sess: dict, *, people: int, measure: str, aired: str = '', note: str = '', episode=None, ledger: Optional[dict] = None, save: bool = True) -> dict:
@@ -569,9 +624,16 @@ def public_forecast(fc: Optional[dict]) -> Optional[dict]:
     if not isinstance(fc, dict):
         return fc
     from migration.digital_twin_copy import strip_calibration_lines
-    out = {k: v for k, v in fc.items() if k not in ('calibration', 'actual')}
+    out = {k: v for k, v in fc.items() if k not in ('calibration', 'actual', 'firmness')}
     if isinstance(out.get('episode'), dict):
         out['episode'] = {k: v for k, v in out['episode'].items() if k != 'uncalibrated'}   # the pre-anchor figure is audit too
+    try:
+        from migration.digital_twin_confidence import public_firmness
+        pf = public_firmness(fc.get('firmness'))
+        if pf:
+            out['firmness'] = pf
+    except Exception:
+        pass
     for k in ('notes', 'board_notes'):
         if k in out:
             out[k] = strip_calibration_lines(out.get(k) or [])

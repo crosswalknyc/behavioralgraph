@@ -64,6 +64,13 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/panel/<sid>/duplicate  a new room with the same twins, cohorts and seats ('<name> copy'); no questions, nothing paid
   GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
   GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
+  POST /api/digital-twins/<key>/check/<sid>           a check with real people on a room or a test (2026-11-17): the request, the quote, the team mailed
+  GET  /api/digital-twins/<key>/check/<sid>/<vid>     the check's status and, once in, the people's answers
+  POST /api/digital-twins/<key>/check/<sid>/<vid>/results  admin: the study's answers per question; the People column and the ledger outcome land
+  GET  /api/digital-twins/track-record                every scored call the twins made before its outcome, next to what happened (2026-11-17)
+  GET  /api/digital-twins/ledger/summary              admin: the outcome ledger's summary by kind and unit, with the index rows
+  POST /api/digital-twins/ledger/<rid>/outcome        admin: what happened on a ledger row (value, distribution, winner, yes or no); the row is scored
+  POST /api/digital-twins/ledger/backfill             admin: the first rows (the midterm calls, the NCIS: New York pilot), idempotent
   GET  /api/digital-twins/pilot-norms?format=&genre=  the norm and genre norm columns (no sources)
   GET  /api/digital-twins/pilot-norms/all?genre=      every format's cells for the Norms tab, with our test count per cell
   POST /api/digital-twins/<key>/pilot/<sid>/assets    a further trailer, an episode, key art (image) or a script file (text)
@@ -3093,6 +3100,151 @@ def dt_pilot_brief(key, sid):
     brief = CMP.activation_brief(sess, payload)
     DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'brief': brief, 'session_id': sid}))
+
+
+def _session_for_check(payload: dict, sid: str):
+    for coll in ('panel_sessions', 'pilot_sessions'):
+        for sess in payload.get(coll) or []:
+            if isinstance(sess, dict) and str(sess.get('id')) == str(sid):
+                return sess
+    return None
+
+
+@bp.route(f'{PREFIX}/<path:key>/check/<sid>', methods=['POST'])
+def dt_check_request(key, sid):
+    """A check with real people on a room or a test (2026-11-17): the
+    request is recorded with the questions and the twins' answers, the
+    team is mailed, and the quote comes back. Nothing is charged here."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, perr = _twin_or_404(user, key)
+    if perr:
+        return perr
+    sess = _session_for_check(payload, sid)
+    if sess is None:
+        return jsonify({'success': False, 'error': 'no such room or test'}), 404
+    from migration import digital_twin_validation as V
+    body = request.get_json(silent=True) or {}
+    doc = V.request_check(_s3(), payload, sess, username=_uname(user), question_ids=body.get('question_ids') if isinstance(body.get('question_ids'), list) else None,
+                          note=str(body.get('note') or ''))
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'check': V.public_request(doc),
+                             'message': f"Requested. The same questions go to real people recruited to this audience; the answers land beside the twins' as a People column. Quote ${doc['quote_usd']:,.2f}, billed when the study is delivered."}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/check/<sid>/<vid>', methods=['GET'])
+def dt_check_read(key, sid, vid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, perr = _twin_or_404(user, key)
+    if perr:
+        return perr
+    from migration import digital_twin_validation as V
+    doc = V.load(_s3(), vid)
+    if not doc or str(doc.get('session_id')) != str(sid):
+        return jsonify({'success': False, 'error': 'no such check'}), 404
+    return _nocache(jsonify({'success': True, 'check': V.public_request(doc)}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/check/<sid>/<vid>/results', methods=['POST'])
+def dt_check_results(key, sid, vid):
+    """The study's answers (admin): {results: {question id: [{label, pct}]}, n_people, note}.
+    They land beside each question as the People column and on the
+    outcome ledger."""
+    user, err = _gate()
+    if err:
+        return err
+    if not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'admin only'}), 403
+    payload, perr = _twin_or_404(user, key)
+    if perr:
+        return perr
+    sess = _session_for_check(payload, sid)
+    if sess is None:
+        return jsonify({'success': False, 'error': 'no such room or test'}), 404
+    from migration import digital_twin_validation as V
+    body = request.get_json(silent=True) or {}
+    doc = V.ingest_results(_s3(), payload, sess, vid, body.get('results') if isinstance(body.get('results'), dict) else {}, n_people=int(body.get('n_people') or 0), note=str(body.get('note') or ''))
+    if not doc:
+        return jsonify({'success': False, 'error': 'no such check'}), 404
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'check': V.public_request(doc)}))
+
+
+@bp.route(f'{PREFIX}/track-record', methods=['GET'])
+def dt_track_record():
+    """The track record a reader may see (2026-11-17): every scored call
+    the twins made before its outcome, what was said, what happened, the
+    miss, and the hash that dates the call. Never a post hoc row, never a
+    method word. The summary rides beside it."""
+    user, err = _gate()
+    if err:
+        return err
+    from migration import digital_twin_ledger as LG
+    s3 = _s3()
+    rows = LG.public_rows(s3, limit=int(request.args.get('limit') or 200))
+    sm = LG.summary(s3)
+    public_summary = {'calls_scored': sm.get('n_scored'), 'hit_rate': sm.get('hit_rate'), 'mean_relative_miss': sm.get('mean_rel_error'), 'coverage': sm.get('coverage'),
+                      'by_kind': {k: {'n': v.get('n'), 'hit_rate': v.get('hit_rate'), 'mean_relative_miss': v.get('mean_rel_error'), 'mean_tvd': v.get('mean_tvd')} for k, v in (sm.get('by_kind') or {}).items()},
+                      'as_of': sm.get('as_of')}
+    return _nocache(jsonify({'success': True, 'rows': rows, 'summary': public_summary,
+                             'line': 'Every call the twins made before its outcome, next to what happened. The hash on each row dates the call.'}))
+
+
+@bp.route(f'{PREFIX}/ledger/summary', methods=['GET'])
+def dt_ledger_summary():
+    """The full ledger summary for an admin: by kind, by unit, with the
+    index rows (filters: kind, question_kind, audience_class, measure)."""
+    user, err = _gate()
+    if err:
+        return err
+    if not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'admin only'}), 403
+    from migration import digital_twin_ledger as LG
+    s3 = _s3()
+    filt = {k: str(request.args.get(k) or '') for k in ('kind', 'question_kind', 'audience_class', 'measure')}
+    sm = LG.summary(s3, **{k: v for k, v in filt.items() if v})
+    rows = LG.load_index(s3).get('records') or []
+    for k, v in filt.items():
+        if v:
+            rows = [r for r in rows if str(r.get(k) or '') == v]
+    return _nocache(jsonify({'success': True, 'summary': sm, 'rows': rows[-500:], 'filters': filt}))
+
+
+@bp.route(f'{PREFIX}/ledger/<rid>/outcome', methods=['POST'])
+def dt_ledger_outcome(rid):
+    """An admin records what happened on a ledger row: a value, a
+    distribution, a winner, a yes or no, the class of the outcome and a
+    note. The row is scored and the summaries move."""
+    user, err = _gate()
+    if err:
+        return err
+    if not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'admin only'}), 403
+    from migration import digital_twin_ledger as LG
+    body = request.get_json(silent=True) or {}
+    rec = LG.record_outcome(_s3(), str(rid), body.get('value'), distribution=body.get('distribution') if isinstance(body.get('distribution'), list) else None,
+                            happened=body.get('happened'), winner=body.get('winner'), source_class=str(body.get('source_class') or ''), note=str(body.get('note') or ''),
+                            observed_at=str(body.get('observed_at') or ''))
+    if not rec:
+        return jsonify({'success': False, 'error': 'no such row'}), 404
+    return _nocache(jsonify({'success': True, 'record': rec}))
+
+
+@bp.route(f'{PREFIX}/ledger/backfill', methods=['POST'])
+def dt_ledger_backfill():
+    """The first rows (the midterm calls and the NCIS: New York pilot),
+    on the ledger with the dates they were made. Idempotent; admin."""
+    user, err = _gate()
+    if err:
+        return err
+    if not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'admin only'}), 403
+    from migration import digital_twin_ledger as LG
+    rows = LG.backfill_known(_s3())
+    return _nocache(jsonify({'success': True, 'rows': len(rows), 'summary': LG.summary(_s3())}))
 
 
 @bp.route(f'{PREFIX}/pilot-norms/all', methods=['GET'])

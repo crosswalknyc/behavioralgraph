@@ -1638,7 +1638,64 @@ def attach_norms(scorecard: dict, fmt: str, genre: str, s3=None, company: Option
     people = next((q.get('people') for q in (bat.get('quadrants') or []) if isinstance(q, dict) and q.get('key') == 'total'), None) or scorecard.get('people')
     scorecard['denominator_line'] = denominator_line(seats, people)
     scorecard['tallies'] = {k: v for k, v in tallies.items() if k != 'seats'}
+    try:   # how firm the card is (2026-11-17): a range on every money measure and one word for the card
+        scorecard['firmness'] = scorecard_firmness(scorecard, fmt, genre or 'all', seats, s3=s3)
+    except Exception as e:
+        print(f"[twin-pilot] scorecard firmness skipped: {str(e)[:120]}")
     return scorecard
+
+
+def scorecard_firmness(scorecard: dict, fmt: str, genre: str, seats: int, s3=None) -> dict:
+    """How firm the scorecard's money measures are: the evidence is how
+    many of our own tests sit in the norm cell the card is read against
+    (a card read against a stand-in norm is a lean), the agreement is
+    the spread of the seats' own answers on the battery (a room split
+    down the middle is less firm than one that agrees), the history is
+    the ledger's miss on scorecard measures once it holds three. A range
+    on each headline share and one word for the card; the signals stay
+    internal (``public`` is the reader's view)."""
+    from migration import digital_twin_confidence as CONF
+    from migration import digital_twin_ledger as LG
+    cols = scorecard.get('norm_columns') or {}
+    own = [int((c or {}).get('own_tests') or 0) for c in cols.values() if isinstance(c, dict) and (c or {}).get('own_tests') is not None]
+    own_n = max(own) if own else 0
+    stand_in = any(str((c or {}).get('stand_in') or '') for c in cols.values() if isinstance(c, dict))
+    ev = 0.85 if own_n >= 5 else (0.6 if own_n >= 2 else (0.4 if not stand_in else 0.35))
+    bat = scorecard.get('battery') or {}
+    head = bat.get('headline') or {}
+    by_seat = bat.get('by_seat') or []
+    spread = []
+    for key in ('total_positive', 'definitely_recommend', 'finish'):
+        vals = []
+        for row in by_seat:
+            if not isinstance(row, dict):
+                continue
+            v = row.get(key)
+            if isinstance(v, bool):
+                vals.append(1.0 if v else 0.0)
+            elif isinstance(v, (int, float)):
+                vals.append(1.0 if float(v) >= 0.5 else 0.0)
+        if vals:
+            p = sum(vals) / len(vals)
+            spread.append(abs(p - 0.5) * 2.0)      # 0 at a coin flip, 1 when every seat agrees
+    agreement = (sum(spread) / len(spread)) if spread else 0.5
+    seat_sig = CONF._clamp(0.3 + 0.7 * min(1.0, (seats or 0) / 16.0), 0.0, 1.0)
+    try:
+        hist = LG.history_for(s3, 'scorecard', audience_class='title')
+    except Exception:
+        hist = {}
+    signals = {'evidence': {'signal': ev, 'own_tests': own_n, 'stand_in': stand_in}, 'agreement': {'signal': round(0.6 * agreement + 0.4 * seat_sig, 4), 'seats': seats},
+               'stability': {'signal': 0.6}, 'history': CONF.history_signal(hist, 'pct'), 'novelty': {'signal': 0.6}}
+    err = CONF.predicted_error_pp(signals)
+    word = CONF.word_for(err)
+    ranges = {}
+    for key in ('total_positive_pct', 'definitely_recommend_pct', 'excellent_pct', 'finish_pct', 'tune_in_pct'):
+        v = head.get(key)
+        if isinstance(v, (int, float)):
+            ranges[key] = {'low': round(CONF._clamp(float(v) - err, 0.0, 100.0), 1), 'high': round(CONF._clamp(float(v) + err, 0.0, 100.0), 1)}
+    line = f"{CONF.WORD_LINE[word]}: each share on the card sits within about {err:.0f} points of the figure shown; {CONF.WORD_PLAIN[word]}."
+    # the stored block is the reader's shape (the signals are recomputable and never travel with the session)
+    return {'version': CONF.VERSION, 'word': word, 'predicted_error_pp': err, 'ranges': ranges, 'line': line, 'own_tests': own_n}
 
 
 def _share_word(v, high: str, mid: str, high_at: float = 90.0, mid_at: float = 65.0) -> str:
@@ -3735,12 +3792,19 @@ def session_lines(session: dict) -> list:
         out.append(f"Dial average {pct1(sc.get('overall_like'))}.")
     for l in (sc.get('norm_lines') or [])[:2]:
         out.append(l)
+    fbl = (sc.get('firmness') or {}).get('line') if isinstance(sc.get('firmness'), dict) else ''   # how firm the card is (2026-11-17)
+    if fbl:
+        out.append(str(fbl))
     if fav.get('line'):
         out.append(f"Favorite moment at {fav.get('clock')}: {fav.get('line')}")
     if dead.get('line'):
         out.append(f"Dead spot at {dead.get('clock')}: {dead.get('line')}")
     for n in (sc.get('notes') or [])[:3]:
         out.append(n)
+    fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
+    ffl = (fc.get('firmness') or {}).get('line') if isinstance(fc.get('firmness'), dict) else ''
+    if fc.get('episode') and ffl:
+        out.append(f"The week-one figure: {str(ffl)[0].lower() + str(ffl)[1:]}")
     # no calibrated / anchored / as aired / ratings-service sentence in the short read (Jenna 2026-11-05)
     from migration.digital_twin_copy import strip_calibration_lines
     return strip_calibration_lines([x for x in out if x])

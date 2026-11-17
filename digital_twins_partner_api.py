@@ -273,6 +273,21 @@ def _result(sess: dict, twin_name: str) -> dict:
                         'finish_pct': _num(head.get('finish_pct')), 'tune_in_pct': _num(head.get('tune_in_pct')), 'urgency_opening_pct': _num(head.get('urgency_opening_pct')),
                         'better_than_expected_pct': _num(head.get('better_than_expected_pct')), 'full_price_pct': _num(head.get('full_price_pct')), 'confusion_pct': _num(head.get('confusion_pct')),
                         'dial_average': _num(sc.get('overall_like')), 'lines': [l for l in (scrub_text(x, 240) for x in (sc.get('norm_lines') or [])) if l]}
+    fb = sc.get('firmness') if isinstance(sc.get('firmness'), dict) else {}
+    if fb.get('word'):
+        # how firm the card is (2026-11-17): the word, the line and a range per share; never the signals behind it
+        out['scorecard']['firmness'] = {'word': str(fb.get('word')), 'line': scrub_text(fb.get('line'), 240),
+                                        'ranges': {k: {'low': _num(v.get('low')), 'high': _num(v.get('high'))} for k, v in (fb.get('ranges') or {}).items() if isinstance(v, dict)}}
+    fc = sess.get('forecast') if isinstance(sess.get('forecast'), dict) else {}
+    if fc.get('episode'):
+        from migration.digital_twin_forecast import public_forecast
+        pf = public_forecast(fc) or {}
+        ep, se, su = pf.get('episode') or {}, pf.get('series') or {}, pf.get('subscriptions') or {}
+        out['forecast'] = {'week_one_audience': ep.get('week_one_audience'), 'low': ep.get('low'), 'high': ep.get('high'),
+                           'season_completion_pct': _num(se.get('season_completion_pct')), 'second_screen_pct': _num(se.get('second_screen_pct')),
+                           'subscribe_pct_of_nonsubscribers': _num(su.get('subscribe_pct_of_nonsubscribers')), 'reactivate_pct_of_dormant': _num(su.get('reactivate_pct_of_dormant')),
+                           'firmness': ({'word': str((pf.get('firmness') or {}).get('word') or ''), 'line': scrub_text((pf.get('firmness') or {}).get('line'), 240)} if pf.get('firmness') else None),
+                           'notes': [l for l in (scrub_text(x, 240) for x in (pf.get('notes') or [])) if l]}
     out['norms'] = {m: {'norm': _num((norm_cols.get(m) or {}).get('norm')), 'genre_norm': _num((norm_cols.get(m) or {}).get('genre_norm'))} for m in N.METRICS if norm_cols.get(m) and (norm_cols.get(m) or {}).get('norm') is not None}
     out['questions'] = [{'id': q.get('id'), 'label': scrub_text(q.get('label'), 80), 'rows': _rows(q.get('rows'))} for q in (bat.get('questions') or []) if isinstance(q, dict)]
     out['quadrants'] = [{'label': scrub_text(q.get('label'), 40), 'seats': q.get('n'), 'people': q.get('people'), 'excellent_pct': _num(q.get('excellent_pct')), 'total_positive_pct': _num(q.get('total_positive_pct')),

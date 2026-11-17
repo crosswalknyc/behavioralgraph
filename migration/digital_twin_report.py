@@ -442,10 +442,17 @@ def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None
             eyebrow += ', A or B'
     except Exception:
         pass
+    fb = rec.get('firmness') if isinstance(rec.get('firmness'), dict) else {}
+    firm_line = _clean(str(fb.get('line') or '')) if fb else ''     # how firm the count is (2026-11-17), under the read
+    try:
+        from migration.digital_twin_validation import check_lines
+        extra = list(extra) + [_clean(x) for x in check_lines(rec)]   # the People column, when a check has landed
+    except Exception:
+        pass
     return {'kind': 'question', 'eyebrow': eyebrow, 'header': _clean(header),
             'sub': _clean(f"{_q_when(rec, session)}." + (f" {lead_line}" if lead_line else '')),
             'framing': _clean(str(rec.get('framing') or '')), 'head': ('Answer', 'Share', 'People and seats'), 'rows': split,
-            'read': _clean(str(rec.get('read') or '')), 'voices': voices,
+            'read': _clean(' '.join(x for x in (str(rec.get('read') or ''), firm_line) if x)), 'voices': voices, 'firmness': fb.get('word') or '',
             'knew': [_clean(str(f)) for f in (rec.get('facts_used') or [])[:KNEW_ON_PAGE] if str(f or '').strip()] + [_clean(x) for x in extra],
             'talk': [_clean(str(t)) for t in (rec.get('talk') or [])[:TALK_ON_PAGE] if str(t or '').strip()],
             'seats_total': seats_total, 'dark': dark}
@@ -835,7 +842,10 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
         # our own, with no 'as aired' comparison and no note on what it was set against
         for n in [x for x in (_clean(str(n)) for n in (fc.get('notes') or [])[:2]) if x]:
             body.append(n)
-        pages.append({'kind': 'tiles', 'header': _words(_clean(f"If released, {_people_short(ep.get('week_one_audience'))} people watch in the first week.")), 'sub': _clean(ep.get('definition') or ''), 'tiles': tiles, 'body': body, 'dark': False})
+        fbl = (fc.get('firmness') or {}).get('line') if isinstance(fc.get('firmness'), dict) else ''   # how firm the figure is (2026-11-17)
+        if fbl and _clean(str(fbl)) not in body:
+            body.append(_clean(str(fbl)))
+        pages.append({'kind': 'tiles', 'header': _words(_clean(f"If released, {_people_short(ep.get('week_one_audience'))} people watch in the first week.")), 'sub': _clean(ep.get('definition') or ''), 'tiles': tiles, 'body': body[:4], 'dark': False})
     pages.append({'kind': 'bullets', 'header': 'Key conclusions and what to do next.', 'sub': '', 'body': _conclusions(session) or ['Keep the favorite moment. Look hard at the dead spot.'], 'dark': False})
     for pg in pages:
         pg['header'] = _clean(pg.get('header') or '')
