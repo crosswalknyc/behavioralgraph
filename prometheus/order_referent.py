@@ -91,6 +91,29 @@ def _clean(s):
     return ' '.join(str(s or '').split()).strip()
 
 
+# A platform or a kind of people the reader ruled OUT is never the universe ("all US people as the base, not
+# YouTube viewers", "Do NOT limit to YouTube viewers or any other platform": Grace Yin, Amazon, 2026-11-17; an
+# order behind that read came back as "... viewers on YouTube").
+_NEGATION_RX = re.compile(
+    r"\b(?:not|no|never|don'?t|doesn'?t|isn'?t|aren'?t|without|exclud\w*|rather than|instead of|other than)\b[^.;!?\n,]{0,32}$", re.I)
+# a subject that already says who its people are ("..., US people, calendar year 2022") takes no consumer noun
+_POPULATION_RX = re.compile(r"\b(?:people|persons|adults|americans|consumers|households|gen pop|general population)\b", re.I)
+
+
+def _ruled_out(text, start):
+    """True when the words just before ``start``, in the same sentence, rule the thing out."""
+    head = str(text or '')[max(0, start - 64):start]
+    return bool(_NEGATION_RX.search(head))
+
+
+def _kept(rx, text):
+    """The first match of ``rx`` the reader did not rule out, else None."""
+    for m in rx.finditer(text):
+        if not _ruled_out(text, m.start()):
+            return m
+    return None
+
+
 def platform_in(text):
     """The platform the words name a title on ('Gilmore Girls Viewers ON
     HULU' -> 'Hulu'; 'who watched Fallout on Prime Video' -> 'Prime
@@ -100,7 +123,7 @@ def platform_in(text):
     if not t:
         return ''
     for label, on_rx, noun_rx, _any in _PLATFORM_RX:
-        if on_rx.search(t) or noun_rx.search(t):
+        if _kept(on_rx, t) or _kept(noun_rx, t):
             return label
     return ''
 
@@ -122,7 +145,7 @@ def window_in(text, today=None):
 def consumer_noun(text):
     """'viewers' in 'who watched X' / 'X viewers'; '' when the words carry no consumer noun."""
     t = _clean(text)
-    m = _NOUN_RX.search(t)
+    m = _kept(_NOUN_RX, t)
     if m:
         return m.group('noun').lower()
     if re.search(r"\b(?:watch|watched|watches|watching|stream|streamed|streaming)\b", t, re.I):
@@ -140,7 +163,7 @@ def _with_noun(subject, noun):
     s = _clean(subject)
     if not s or not noun:
         return s
-    if _NOUN_RX.search(s):
+    if _NOUN_RX.search(s) or _POPULATION_RX.search(s):
         return s
     if re.search(r"\((?:[^)]*\b(?:cut|universe|vs)\b[^)]*)\)", s, re.I):
         return s          # a read label like 'X (Season 3 cut vs full viewers universe)' names its own universe
@@ -234,8 +257,23 @@ def _last_read(history):
     return '', '', ''
 
 
+def _landed_read_subject(history):
+    """The subject of the newest landed read in the thread, else ''."""
+    for t in reversed([h for h in (history or []) if isinstance(h, dict)]):
+        if str(t.get('role') or '') == 'user' or not _is_landed_read(t):
+            continue
+        meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+        subj = _clean(meta.get('subject') or '')
+        if not subj:
+            mm = re.match(r"^On\s+(?P<s>.{2,120}?)(?:\s+-\s+[^:]{1,80})?:", _clean(t.get('text') or t.get('content') or ''))
+            subj = _clean(mm.group('s')) if mm else ''
+        if subj and subj.lower() not in _DEIXIS:
+            return subj
+    return ''
+
+
 def resolve(text, history=None, ctx=None, page=''):
-    """{'subject', 'platform', 'window', 'noun', 'referent', 'source'} for
+    """{'subject', 'platform', 'window', 'noun', 'referent', 'source', 'landed_read'} for
     an order whose subject slot holds a referent; None when the text is
     not such an order or nothing in the message, the thread or the
     screen names the subject. Never raises."""
@@ -248,6 +286,7 @@ def resolve(text, history=None, ctx=None, page=''):
         platform = platform_in(_orders.order_core(t))
         subj, before = _own_message(t, page)
         source = 'message'
+        from_read = False
         read_text, question = '', ''
         if subj:
             platform = platform or platform_in(before)
@@ -256,6 +295,7 @@ def resolve(text, history=None, ctx=None, page=''):
         else:
             subj, read_text, question = _last_read(history)
             source = 'thread'
+            from_read = bool(subj) and _landed_read_subject(history) == subj
             noun = consumer_noun(question) or consumer_noun(subj)
             if subj:
                 platform = platform or platform_in(question) or platform_in(subj)
@@ -279,7 +319,7 @@ def resolve(text, history=None, ctx=None, page=''):
             noun = rn
         subject = _with_noun(subj, noun if noun and noun != 'audience' else '')
         return {'subject': subject, 'platform': platform, 'window': window, 'noun': noun or '',
-                'referent': ref, 'source': source}
+                'referent': ref, 'source': source, 'landed_read': bool(from_read and source == 'thread')}
     except Exception:
         return None
 

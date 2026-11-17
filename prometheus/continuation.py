@@ -34,8 +34,9 @@ import datetime as _dt
 import re
 
 from . import subject_rules as _sr
+from .orders import READ_NOUNS as _READ_NOUNS
 
-__all__ = ['classify', 'previous_deliverable', 'rerun_window', 'window_phrase',
+__all__ = ['classify', 'previous_deliverable', 'rerun_window', 'window_phrase', 'year_window', 'rewindowed', 'rerun_question',
            'rerun_confirm', 'parameter_change_hint', 'KINDS']
 
 KINDS = ('new_ask', 'chip_answer', 'correction', 'question_about_answer',
@@ -44,6 +45,21 @@ KINDS = ('new_ask', 'chip_answer', 'correction', 'question_about_answer',
 _RERUN_RX = re.compile(
     r"^\W*(?:please\s+|can you\s+|could you\s+)?(?:re-?r(?:u|eu)n|rerun|re-?pull|re-?do|redo|run\s+(?:it|that|this|the\s+same)\s+again|"
     r"same\s+(?:read|thing|analysis|report|pull)\s+(?:but\s+)?(?:for|in|on|over))\b", re.I)
+# "Run the same eleven-title comparison for 2023", "same breakdown for Q4 2025", "run it again for January 2026",
+# "run the same for 2023": the last read on another window (Grace Yin, Amazon, 2026-11-17: the chip under her
+# eleven-book read was taken for an order and a profile was built on it). prometheus.orders stands aside for
+# these; the window comes from rerun_window.
+_SAME_AGAIN_RX = re.compile(
+    r"^\W*(?:(?:please|pls|now|then|next|and|also|ok(?:ay)?|can you|could you|would you)[,\s]+)*"
+    r"(?:(?:re-?run|run|do|pull|re-?pull|repeat|redo|give me|show me|get me|i(?:'d| would) like|i want|i need|let'?s (?:do|run|see))\s+)?"
+    r"(?:(?:the|that|this)\s+)?same\s+(?:(?!(?:on|of|for|about|from|with|in|to|at|by|and|or|but|again|as|into)\b)"
+    r"[^\s.,;:?!()]+\s+){0,5}?(?:" + _READ_NOUNS + r")\b"
+    # the read named, then again / another window, or nothing at all ("the same table shows up twice" is a remark)
+    r"(?=\s*(?:again\b|(?:but\s+)?(?:for|in|over|during|across)\b|[.!]*\s*$))", re.I)
+_POINTED_WINDOW_RX = re.compile(
+    r"^\W*(?:(?:please|pls|now|then|next|and|also|ok(?:ay)?|can you|could you|would you)[,\s]+)*"
+    r"(?:re-?run|run|pull|re-?pull|do|redo)\s+(?:it|that|this|them|those|these|the same)\s+(?:again\s+)?(?:but\s+)?"
+    r"(?:for|in|over|during|across)\b", re.I)
 _MONTHS = ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
            'september', 'october', 'november', 'december')
 _MON_RX = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?"
@@ -53,6 +69,10 @@ _WINDOW_MON_RX = re.compile(
     r"(?P<am>" + _MON_RX + r")\s+(?P<ad>\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(?P<ay>\d{4}))?\s*(?:-|to|through|thru|until|till|\u2013|\u2014)\s*"
     r"(?:(?P<bm>" + _MON_RX + r")\s+)?(?P<bd>\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(?P<by>\d{4}))?", re.I)
 _WINDOW_MONTH_ONLY_RX = re.compile(r"\b(?P<m>" + _MON_RX + r")\s+(?P<y>\d{4})\b", re.I)
+_WINDOW_YEAR_RX = re.compile(
+    r"\b(?:(?:for|in|during|over|across)\s+(?:the\s+)?(?:(?:calendar\s+)?year\s+|calendar\s+|cy\s*)?|calendar\s+(?:year\s+)?|"
+    r"(?:the\s+)?year\s+|cy\s*)(?P<y>20\d{2})\b(?!\s*(?:/|-\s*\d|\u2013\s*\d))", re.I)
+_WINDOW_YTD_RX = re.compile(r"\b(?P<y>20\d{2})\s+(?:year[- ]to[- ]date|ytd|so far)\b", re.I)
 _WINDOW_RELATIVE_RX = re.compile(r"\b(?:last|past|trailing)\s+(?P<n>\d+)\s+(?P<u>days?|weeks?|months?)\b", re.I)
 _WINDOW_Q_RX = re.compile(r"\b(?P<q>q[1-4])\s*(?:of\s+)?(?P<y>\d{4}|last\s+year|this\s+year)?\b", re.I)
 
@@ -282,6 +302,69 @@ def rerun_window(text, today=None):
     return None
 
 
+def year_window(text, today=None):
+    """The calendar year a re-run names on its own ("for 2023",
+    "calendar year 2024", "2026 year to date"): the whole year, or the
+    year so far when it is this one. None when the words name no year,
+    more than one, or one that has not started. Read only where the
+    turn is already a re-run; a year in any other sentence describes
+    its subject."""
+    t = str(text or '')
+    if len(set(re.findall(r"\b(20\d{2})\b", t))) != 1:
+        return None
+    m = _WINDOW_YEAR_RX.search(t) or _WINDOW_YTD_RX.search(t)
+    if not m:
+        return None
+    y = int(m.group('y'))
+    end = today or _dt.date.today()
+    if y < end.year:
+        return _dt.date(y, 1, 1).isoformat(), _dt.date(y, 12, 31).isoformat()
+    if y == end.year:
+        return _dt.date(y, 1, 1).isoformat(), end.isoformat()
+    return None
+
+
+def _whole_year(window):
+    """The year a window covers when it is one calendar year (or this year so far), else None."""
+    try:
+        a = _dt.date.fromisoformat(window[0])
+        b = _dt.date.fromisoformat(window[1])
+    except Exception:
+        return None
+    if a.month == 1 and a.day == 1 and a.year == b.year and ((b.month == 12 and b.day == 31) or b.year == _dt.date.today().year):
+        return a.year
+    return None
+
+
+def rewindowed(words, window):
+    """The question (or the subject label) a re-run reads on its new
+    window. Words that state one calendar year as their window
+    ("calendar year 2022 (Jan 1 - Dec 31, 2022)") carry the new year in
+    its place, so the read is never handed two windows; a year to date
+    is spelled out. Anything else comes back unchanged (the caller adds
+    the window as its own line)."""
+    q = str(words or '')
+    y = _whole_year(window)
+    if not q.strip() or not y:
+        return q
+    years = set(re.findall(r"\b(20\d{2})\b", q))
+    if len(years) != 1:
+        return q
+    y0 = int(next(iter(years)))
+    if y0 == y or not (_WINDOW_YEAR_RX.search(q) or re.search(r"\bcalendar\s+year\b", q, re.I)):
+        return q
+    out = re.sub(r"\b" + str(y0) + r"\b", str(y), q)
+    try:
+        b = _dt.date.fromisoformat(window[1])
+        if not (b.month == 12 and b.day == 31):
+            # this year so far: the closing date in the words is today's, never December 31
+            out = re.sub(r"\b(?:Dec(?:ember)?\.?\s+31|12\s*/\s*31)(,?\s*" + str(y) + r")\b",
+                         f"{_MONTHS[b.month - 1][:3].title()} {b.day}\\1", out, flags=re.I)
+    except Exception:
+        pass
+    return out
+
+
 def window_phrase(window):
     """('2026-09-16', '2026-09-30') -> 'September 16 to September 30, 2026'."""
     if not window:
@@ -334,8 +417,11 @@ def classify(text, history, reading=None, page=''):
         out.update(kind='acceptance', confidence=0.9, subject=(deliv or {}).get('subject', ''))
         return out
     # re-run in a window
-    if _RERUN_RX.match(t) or (re.search(r"\b(?:re-?r(?:u|eu)n|rerun|re-?pull)\b", low) and rerun_window(t)):
-        out.update(kind='rerun_window', window=rerun_window(t), confidence=0.9 if rerun_window(t) else 0.7,
+    _win = rerun_window(t)
+    if _RERUN_RX.match(t) or _SAME_AGAIN_RX.match(t) or (_POINTED_WINDOW_RX.match(t) and (_win or year_window(t))) \
+            or (re.search(r"\b(?:re-?r(?:u|eu)n|rerun|re-?pull)\b", low) and _win):
+        _win = _win or year_window(t)
+        out.update(kind='rerun_window', window=_win, confidence=0.9 if _win else 0.7,
                    subject=(deliv or {}).get('subject', ''))
         return out
     # a question that quotes a figure Prometheus stated earlier is a
@@ -444,6 +530,21 @@ def parameter_change_hint(text):
     return hint
 
 
+def rerun_question(question, window):
+    """The question a re-run asks: the one that drew the read, on the new
+    window. A question that states its window as a calendar year reads
+    with the new year in its place; any other takes the window as a
+    closing line."""
+    q = str(question or '').strip()
+    wp = window_phrase(window)
+    if not q or not wp:
+        return q
+    swapped = rewindowed(q, window)
+    if swapped != q:
+        return swapped
+    return f"{q} Window: {wp}."
+
+
 def rerun_confirm(deliv, window, price_label, *, what='', included=False):
     """The confirm card for a re-run: names the deliverable, the window
     and the standing price. Never a silent 'working on it'. ``included``
@@ -467,7 +568,7 @@ def rerun_confirm(deliv, window, price_label, *, what='', included=False):
         reply = f"I can run the {subj} {noun} again. Tell me the window (two dates, a month, or a quarter) and I will quote it; pulling this data will cost {price_label}."
         chips = ['Something else']
     q = str((deliv or {}).get('question') or '').strip()
-    merged = (f"{q} Window: {wp}." if (q and wp) else q)
+    merged = rerun_question(q, window)
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips,
             'offer_deck': False, 'deck_angle': None,
             'rerun_confirm': {'subject': subj, 'kind': kind, 'window': list(window) if window else None,

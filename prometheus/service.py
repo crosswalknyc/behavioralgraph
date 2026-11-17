@@ -800,8 +800,13 @@ def ask(user, body, *, via='session'):
                 except Exception as _fx:
                     _faults.note('service', _fx)
                 body = dict(body, _pm_order_words=text)   # the reader's own words, before the referent was resolved (the valuation reads them, 2026-11-11)
+                # "run it" / "build that" under a read names no product: the file it would build is shown for the
+                # reader's yes, never started on a guess (Grace Yin 2026-11-17, a build nobody ordered)
+                _unnamed = bool((_rs or {}).get('landed_read')) and not _orders.product_of(text)
                 text = str(_rw)
                 body = dict(body, text=text, _pm_order_referent=True)
+                if _unnamed:
+                    body['_pm_no_auto_start'] = True
             body = dict(body, _pm_order=True, _pm_order_text=text)
     except Exception as _fx:
         _faults.note('service.orders', _fx)
@@ -1440,6 +1445,18 @@ def ask(user, body, *, via='session'):
                         text = _cy
                         body = dict(body, text=text, _pm_read_brief_carried=True)
                         _bf = _rbf.read(text)
+                if not _bf:
+                    # "Run the same eleven-title comparison for 2023" under a brief's read is that brief on the new
+                    # window: the same titles, base and columns, never an order to build a file (Grace Yin 2026-11-17)
+                    _rrb = _rbf.rerun(text, history)
+                    if _rrb:
+                        text = _rrb
+                        body = dict(body, text=text, _pm_read_brief_rerun=True)
+                        _bf = _rbf.read(text)
+                        try:
+                            host.ask_hint(route='rerun_window', outcome='brief_on_new_window', subject=(_bf or {}).get('subject'))
+                        except Exception as _fx:
+                            _faults.note('service', _fx)
                 if _bf:
                     _is_brief = True
                     if not body.get('bind_subject') and not (isinstance(body.get('extra'), dict) and body['extra'].get('bind_subject')):

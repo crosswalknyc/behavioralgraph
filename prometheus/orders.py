@@ -55,7 +55,7 @@ from __future__ import annotations
 import re
 
 __all__ = ['is_order', 'is_profile_order', 'product_of', 'split', 'deliverable_notes', 'order_core',
-           'build_line', 'deliverable_line', 'referent', 'with_subject', 'REFERENT_WORDS']
+           'build_line', 'deliverable_line', 'referent', 'with_subject', 'REFERENT_WORDS', 'READ_NOUNS']
 
 # the products an order can name, longest first where one contains another
 _PRODUCTS = (
@@ -71,6 +71,25 @@ _PRODUCTS = (
 # a pronoun standing for the thing to build ("ok queue it", "build it on Mountain Dew"); never a named product,
 # so is_profile_order stays False and the surface keeps its own read of a bare "run it"
 _PRONOUN_PRODUCT = r"it|that|this|them|those|these|the same|another one|one more|that one|this one"
+# the things a read is called. "Run the same eleven-title comparison for 2023" points at a read the thread
+# already holds: the pointing word is the article of that read, never a product to build. Grace Yin, Amazon,
+# 2026-11-17: the follow-up chip under her eleven-book read on all US people was read as an order, resolved to
+# "Please queue one Profile IQ: ... viewers on YouTube" and started a build. It is the read again on the new
+# window (prometheus.continuation), so it is not an order here.
+READ_NOUNS = (
+    r"comparisons?|analys[ie]s|breakdowns?|break[- ]?outs?|tables?|splits?|questions?|quer(?:y|ies)|numbers|figures|"
+    r"reports?|views?|looks?|rankings?|charts?|counts?|math|sizing|read[- ]?outs?|things?|exercises?|versions?|"
+    r"calculations?|tall(?:y|ies)"
+)
+# "run the same for 2023", "run it again for Q4 2025", "pull that for January 2026": nothing but a window behind
+# the pointing word is the last thing run, on that window
+_WINDOW_HEAD_RX = re.compile(
+    r"^\W*(?:again\W+)?(?:but\W+)?(?:for|in|over|during|across)\s+(?:the\s+)?(?:calendar\s+(?:year\s+)?|year\s+|cy\s*)?"
+    r"(?:20\d{2}\b|q[1-4]\b|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d|\d{1,2}\s*/\s*\d{1,2}|"
+    r"(?:the\s+)?(?:last|past|trailing)\s+\d+\s+(?:days?|weeks?|months?))", re.I)
+_POINTED_READ_RX = re.compile(
+    r"^\s*(?:(?!(?:on|of|for|about|from|with|in|to|at|by|and|or|but|again|as|into)\b)[^\s.,;:?!()]+\s+){0,5}?(?:"
+    + READ_NOUNS + r")\b", re.I)
 _VERBS = (
     r"queue|re-?queue|run|re-?run|build|re-?build|pull|re-?pull|create|make|generate|draft|set ?up|spin up|"
     r"start|open|launch|kick ?off|order|commission|fire off|schedule|put together|get going on|produce"
@@ -277,6 +296,13 @@ def is_order(text):
         return False
     m = _order_match(t)
     if not m:
+        return False
+    # "run the same comparison for 2023", "run that breakdown again": the read the thread holds, run again
+    if m.group('pronoun') and _squash(m.group('pronoun')).lower() in ('the same', 'this', 'that', 'these', 'those') \
+            and _POINTED_READ_RX.match(m.group('rest') or ''):
+        return False
+    if m.group('pronoun') and re.match(r"(?:re-?)?(?:run|pull)$", _squash(m.group('verb2') or ''), re.I) \
+            and _WINDOW_HEAD_RX.match(m.group('rest') or ''):
         return False
     # the sentence the order sits in
     start = _order_start(m)

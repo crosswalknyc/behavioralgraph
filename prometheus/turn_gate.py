@@ -549,7 +549,8 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             # service opens the reply with the included line
             wp = _cont.window_phrase(cont.get('window'))
             body = dict(body)
-            body['bind_subject'] = body.get('bind_subject') or deliv.get('subject') or ''
+            # the read's label on its new window ("..., calendar year 2022" run for 2023 is "..., calendar year 2023")
+            body['bind_subject'] = body.get('bind_subject') or _cont.rewindowed(deliv.get('subject') or '', cont['window'])
             body['surface'] = 'analyze'
             body['rerun_charge'] = {'subject': deliv.get('subject'), 'window': list(cont['window']), 'price_key': key,
                                     'price_label': 'Included with your plan', 'included': True}
@@ -563,7 +564,7 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                 host.ask_hint(route='rerun_window', outcome='included', subject=deliv.get('subject'))
             except Exception as _fx:
                 _faults.note('turn_gate', _fx)
-            return {'text': (f"{q} Window: {wp}." if wp else q), 'body': body}
+            return {'text': (_cont.rerun_question(q, cont['window']) if wp else q), 'body': body}
         raw = _cont.rerun_confirm(deliv, cont.get('window'), label, included=included)
         raw['subject'] = deliv.get('subject') or ''
         raw['rerun_confirm']['price_key'] = key

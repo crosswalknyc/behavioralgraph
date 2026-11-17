@@ -106,7 +106,7 @@ import re
 __all__ = ['read', 'is_brief', 'titles', 'subject_label', 'holds', 'housekeeping', 'is_method_question',
            'method_questions', 'population', 'framing_lines', 'counted_line', 'MailHold', 'should_retry',
            'HOUSEKEEPING_RUN_CHIP', 'own_population', 'engagement_ask', 'sources_listed', 'stands_on_its_own',
-           'thread_brief', 'carry', 'own_base_brief']
+           'thread_brief', 'carry', 'rerun', 'own_base_brief']
 
 US_PEOPLE = 'US people'
 HOUSEKEEPING_RUN_CHIP = 'Run it'
@@ -675,6 +675,37 @@ def carry(text, history=None):
         lead = f"For these titles: {named}. Audience: all US people engaged with each title, the same base and windows as the brief above."
         out = f"{lead} {t}"
         return out if is_brief(out) else ''
+    except Exception:
+        return ''
+
+
+def rerun(text, history=None):
+    """The brief behind the thread's last read, on the window this turn
+    names. "Run the same eleven-title comparison for 2023, the year
+    Butcher & Blackbird enters", the chip under a brief's read on
+    calendar year 2022, is that brief for calendar year 2023: the same
+    titles, the same base, the same columns. Grace Yin, Amazon,
+    2026-11-17: the chip was taken for an order, its "the same" was
+    resolved to the read's label with "viewers on YouTube" behind it
+    (her brief says "not YouTube viewers"), and a profile build started
+    and failed. '' when the turn is not a re-run on a window, the last
+    read was not drawn by a brief, or the window is the one it had."""
+    try:
+        t = _squash(text)
+        if not t or len(t) > 400 or titles(text) or is_brief(text):
+            return ''
+        from . import continuation as _ct
+        c = _ct.classify(text, history)
+        if c.get('kind') != 'rerun_window' or not c.get('window'):
+            return ''
+        d = c.get('deliverable') if isinstance(c.get('deliverable'), dict) else {}
+        if d.get('kind') != 'read':
+            return ''
+        q = str(d.get('question') or '').strip()
+        if not q or not is_brief(q):
+            return ''
+        out = _ct.rerun_question(q, c['window'])
+        return out if (out and out != q and is_brief(out)) else ''
     except Exception:
         return ''
 
