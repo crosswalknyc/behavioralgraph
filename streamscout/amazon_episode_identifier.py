@@ -38,6 +38,7 @@ import argparse
 import csv
 import difflib
 import gzip
+import itertools
 import re
 import os
 import sys
@@ -370,29 +371,99 @@ def _gti_from_url(url):
 DISCOVERY_TIMEOUT = 12
 
 
+class _SearchBlocked(RuntimeError):
+    """Amazon's title search could not be read from here (bot wall, stub
+    page, network failure). Raised instead of returning 0 rows so the miss
+    surfaces upstream as 'unverified' (could not look), never as 'not on
+    Amazon' (2026-11-17, Euphoria). A silent 0 on a blocked day is what
+    produced the old 'Amazon never resolves from a bare title' rule on
+    2026-10-26: the same four titles resolve by title when the search page
+    loads."""
+
+
+# What the last bare-title discovery could actually read. A 0 only counts as
+# an answer when Amazon's own search results page was read.
+_DISCOVERY = {"search_read": False, "candidates": 0, "pages_read": 0,
+              "pages_unread": 0, "web_down": False}
+
+_VIDEO_LINK = re.compile(r'/(?:gp/video/detail|dp)/' + ASIN_RE)
+
+
+def _search_page_read(code, html):
+    """True when an Amazon search response is a real results page: a full
+    page that carries video links. The wall, the 200 stub and an empty
+    response all fail this."""
+    return bool(code == 200 and html and len(html) > 20000
+                and _VIDEO_LINK.search(html))
+
+
+def _plain_fetch(url, timeout=DISCOVERY_TIMEOUT):
+    """One plain HTTP GET with no browser fallback; same return shape as
+    fetch(). The browser fallback exists to clear amazon.com's wall. Sent
+    at a web-search engine that is refusing us it only burns about a
+    minute per call before giving up (2026-11-17, Euphoria: six refused
+    DuckDuckGo calls held one lookup for almost six minutes)."""
+    req = urllib.request.Request(url, headers={
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read()
+            if r.headers.get("Content-Encoding") == "gzip":
+                raw = gzip.decompress(raw)
+            return r.getcode(), r.geturl(), raw.decode("utf-8", "replace")
+    except Exception:
+        return None, url, ""
+
+
 def _web_search(query, timeout=DISCOVERY_TIMEOUT):
-    """Return raw HTML from a DuckDuckGo HTML endpoint (best effort)."""
+    """Return raw HTML from a DuckDuckGo HTML endpoint (best effort). Once
+    both endpoints refuse a query the rest of this lookup skips them."""
+    if _DISCOVERY["web_down"]:
+        return ""
     for engine in ("https://lite.duckduckgo.com/lite/",
                    "https://html.duckduckgo.com/html/"):
-        code, _, html = fetch(engine + "?" +
-                              urllib.parse.urlencode({"q": query}), timeout=timeout)
+        code, _, html = _plain_fetch(
+            engine + "?" + urllib.parse.urlencode({"q": query}), timeout=timeout)
         if code == 200 and html:
             return urllib.parse.unquote(html)
+    _DISCOVERY["web_down"] = True
     return ""
 
 
 def _candidate_asins(title, limit=8, max_pv_fetch=4):
-    """Gather up to `limit` candidate detail ASINs for a title from search.
+    """Yield up to `limit` candidate detail ASINs for a title from search.
 
     Robust to messy client titles: we search a few normalized VARIANTS of the
     title (extra franchise prefix dropped, year dropped, de-punctuated) so a
     wordy or lightly-mistyped query still surfaces the right listing.
 
+    Lazy: Amazon's own search comes first, and the web-search fallback only
+    runs if the caller is still asking after those (discover_asin stops at
+    the first confident match, so a title Amazon's search finds never waits
+    on a web search).
+
     Bounded work: at most `max_pv_fetch` primevideo GTI->ASIN look-ups total,
     and we stop early once we have enough candidates (so a popular title with
     dozens of GTIs in the SERP can't blow up into dozens of fetches)."""
+    seen = []
+    for stage in (_search_candidates, _web_candidates):
+        extra = {"max_pv_fetch": max_pv_fetch} if stage is _web_candidates else {}
+        for asin in stage(title, limit=limit, **extra):
+            if asin in seen:
+                continue
+            seen.append(asin)
+            yield asin
+            if len(seen) >= limit:
+                return
+
+
+def _search_candidates(title, limit=8):
+    """Stage A: candidates from Amazon's own instant-video search."""
     variants = title_variants(title)
-    want = set(tokens(title))
     cands = []
 
     def _enough():
@@ -406,6 +477,8 @@ def _candidate_asins(title, limit=8, max_pv_fetch=4):
             "https://www.amazon.com/s?" +
             urllib.parse.urlencode({"k": v, "i": "instant-video"}),
             timeout=DISCOVERY_TIMEOUT)
+        if _search_page_read(code, html):
+            _DISCOVERY["search_read"] = True
         if code == 200 and html and len(html) > 20000:
             for m in re.finditer(r'/gp/video/detail/(' + ASIN_RE + r')', html):
                 ctx = html[max(0, m.start() - 800):m.start() + 400].lower()
@@ -433,6 +506,17 @@ def _candidate_asins(title, limit=8, max_pv_fetch=4):
                 cands += list(dict.fromkeys(page_asins))[:6]
         if cands:
             break
+    return list(dict.fromkeys(cands))[:limit]
+
+
+def _web_candidates(title, limit=8, max_pv_fetch=4):
+    """Stage B: candidates from a web search, for when Amazon's own search
+    did not settle it."""
+    variants = title_variants(title)
+    cands = []
+
+    def _enough():
+        return len(dict.fromkeys(cands)) >= limit
 
     # B) Web search — amazon ASINs (free) and, sparingly, primevideo GTIs.
     #    Iterate (variant x query) but stay bounded via early-exit + pv cap.
@@ -477,10 +561,17 @@ def discover_asin(title, kind="series"):
     extra/re-ordered words in the client's query. No login."""
     want = set(tokens(title))
     best, best_score = None, (-1, -1, -1.0, -1)
-    for asin in _candidate_asins(title)[:6]:
+    _DISCOVERY.update(search_read=False, candidates=0, pages_read=0,
+                      pages_unread=0, web_down=False)
+    for asin in itertools.islice(_candidate_asins(title), 6):
+        _DISCOVERY["candidates"] += 1
         _, _, page = fetch("https://www.amazon.com/gp/video/detail/%s/" % asin)
         kind_ok = bool(movie_entries(page)) if kind == "movie" \
             else bool(self_entries(page))
+        if kind_ok or (page and not _looks_walled(page)):
+            _DISCOVERY["pages_read"] += 1
+        else:
+            _DISCOVERY["pages_unread"] += 1
         have = set(tokens(show_name(page, "")))
         equal = (have == want)                       # true token-set equality
         # char-level closeness catches typos ("Alien Extinciton")
@@ -534,6 +625,19 @@ def resolve(title=None, url=None, kind="series", seasons=None, all_asins=True):
             entry_asin = asin_from_pv(pv)
     if not entry_asin and title:
         entry_asin = discover_asin(title, kind=kind)
+        if not entry_asin:
+            # No match is only an answer when we could actually look.
+            if not _DISCOVERY["search_read"]:
+                raise _SearchBlocked(
+                    "Amazon's search page could not be read from here "
+                    "(blocked or empty response); could not look, not absent")
+            if _DISCOVERY["pages_unread"]:
+                # a page we could not open may have been the title
+                raise _SearchBlocked(
+                    "Amazon's title pages could not be read from here "
+                    "(%d of %d candidate page(s) blocked); could not look, "
+                    "not absent" % (_DISCOVERY["pages_unread"],
+                                    _DISCOVERY["candidates"]))
     if not entry_asin:
         return (show, [])
 
