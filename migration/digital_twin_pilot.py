@@ -2343,7 +2343,7 @@ def cohort_segments(cohorts, twin_key: str) -> list:
     return out if len(out) >= 2 else []
 
 
-def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM,
+def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = 0,
                  title: str = '', created_by: str = '', session_id: str = '',
                  media: Optional[dict] = None, mode: str = 'pilot', logline: str = '', text: str = '',
                  options: Optional[list] = None, rough_cut: bool = False, critics_room: bool = False, group: Optional[dict] = None,

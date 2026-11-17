@@ -24,6 +24,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+os.environ.setdefault('DTIQ_ARCHETYPE_SEATS', '0')   # these tests pin the equal-seat room they were written against; the kinds room is tested in test_digital_twin_archetypes.py
 os.environ.setdefault('CORPUS_CATALOG', '0')
 
 from migration import digital_twin_pilot as PI  # noqa: E402

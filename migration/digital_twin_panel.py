@@ -685,12 +685,100 @@ def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
     return False
 
 
-def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, seed: str = '') -> dict:
+def _kinds_available(twins: list, segs: list, wants: list, seating: Optional[str]) -> bool:
+    """Whether the room seats by the kinds of people in the audience
+    (Jenna 2026-11-17): every twin in the room carries its kinds (or can
+    derive them), no cohort asked for its own seat count, and the caller
+    did not ask for quota seating (a recruited screening block)."""
+    if seating == 'quota' or _flag_off('DTIQ_ARCHETYPE_SEATS'):
+        return False
+    if any(int(w or 0) > 0 for w in wants):
+        return False
+    try:
+        from migration import digital_twin_archetypes as A
+        for t in twins:
+            if not isinstance(t, dict) or not (t.get('identity') or {}).get('demographics'):
+                return False
+            A.ensure_archetypes(t)
+            if not ((t.get('archetypes') or {}).get('groups')):
+                return False
+    except Exception as e:
+        print(f"[twin-panel] kinds unavailable, seating by quota: {str(e)[:120]}")
+        return False
+    return True
+
+
+def _flag_off(name: str) -> bool:
+    import os
+    return (os.environ.get(name) or '1').strip().lower() in ('0', 'false', 'no', 'off')
+
+
+def _kinds_roster(twins: list, segs: list, by_key: dict, in_room: int, seed: str) -> list:
+    """One seat per kind of person in each segment, sized to the people
+    the kind stands for in that segment (Jenna 2026-11-17: "200k are
+    archetype x so that'll be Harold, 54 from NYC with that persona. 354k
+    are y"). An explicit ``in_room`` is met by merging the smallest kinds
+    or splitting the largest, spread across the segments by their people;
+    the room never exceeds MAX_IN_ROOM seats."""
+    from migration import digital_twin_archetypes as A
+    total = sum(int(s.get('people') or 0) for s in segs) or 1
+    wants = [None] * len(segs)
+    if in_room and in_room > 0:
+        n = int(clamp(int(in_room), max(2, len(segs)), MAX_IN_ROOM))
+        raw = [int(s.get('people') or 0) / total * n for s in segs]
+        got = [max(1, int(r)) for r in raw]
+        while sum(got) < n:
+            k = max(range(len(segs)), key=lambda i: raw[i] - got[i])
+            got[k] += 1
+        while sum(got) > n:
+            k = max(range(len(segs)), key=lambda i: got[i] if got[i] > 1 else -1)
+            got[k] -= 1
+        wants = got
+    kinds_by_seg = []
+    for s, want in zip(segs, wants):
+        t = by_key.get(s['twin']) or {}
+        arch = (t.get('archetypes') or {})
+        kinds = A.seat_archetypes(t, arch, s.get('_filter') or s.get('filter') or {}, int(s.get('people') or 0), f"{seed}|{s['label']}", want=want, max_seats=MAX_IN_ROOM)
+        kinds_by_seg.append(kinds)
+    # the room holds at most MAX_IN_ROOM seats: the biggest segments give up their smallest kinds first
+    while sum(len(k) for k in kinds_by_seg) > MAX_IN_ROOM:
+        i = max(range(len(kinds_by_seg)), key=lambda j: len(kinds_by_seg[j]))
+        s = segs[i]
+        kinds_by_seg[i] = A.fit_count(kinds_by_seg[i], len(kinds_by_seg[i]) - 1, f"{seed}|{s['label']}|cap")
+        kinds_by_seg[i] = A._settle_people(kinds_by_seg[i], int(s.get('people') or 0), f"{seed}|{s['label']}|seg")
+    roster, seat_no = [], 0
+    for s, kinds in zip(segs, kinds_by_seg):
+        t = by_key.get(s['twin']) or {}
+        s['seats'] = len(kinds)
+        for r in A.roster_from_kinds(t, kinds, f"{seed}|{s['label']}", start_seat=seat_no + 1):
+            seat_no += 1
+            r['seat'] = seat_no
+            r['segment'] = s['label']
+            r['twin'] = s['twin']
+            if s.get('composition'):
+                r['cohort'] = s['label']
+            f = s.get('_filter') or s.get('filter') or {}
+            if f.get('language') and not r.get('language'):
+                r['language'] = str(f['language'])
+            roster.append(r)
+    return roster
+
+
+def build_group(twins: list, segments: Optional[list] = None, in_room: int = 0, seed: str = '', seating: Optional[str] = None) -> dict:
     """The group: segments with their share of the room and the people
     they stand for, and a seated roster with stable names, ages and
     cities. ``size_people`` is the sum of the segments; a segment with
-    no filter is the whole twin."""
-    in_room = int(clamp(int(in_room or DEFAULT_IN_ROOM), 2, MAX_IN_ROOM))
+    no filter is the whole twin.
+
+    Seating (Jenna 2026-11-17): the room seats one person per kind of
+    people in the audience (``digital_twin_archetypes``), each standing
+    for the people of that kind, so a 1M audience made of twelve kinds
+    seats twelve people whose counts add up to the million. ``in_room``
+    left at 0 takes the kinds as they are; a count the user asked for is
+    met by merging the smallest kinds or splitting the largest.
+    ``seating='quota'`` keeps the older equal-slice seating (a recruited
+    screening block asks for it); a cohort that names its own seat count
+    seats by quota too."""
     by_key = {_twin_key(t): t for t in twins}
     segs = []
     spec = segments or [{'label': _twin_name(t), 'twin': _twin_key(t)} for t in twins]
@@ -712,6 +800,28 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
     is_cohorts = any(s.get('composition') for s in segs)
     sizing = {}
     total_people = _size_segments(segs, by_key, seed, cohorts=is_cohorts, sizing_out=sizing)
+    wants = [s.get('_want', 0) for s in segs]
+    use_kinds = _kinds_available(twins, segs, wants, seating)
+    if use_kinds:
+        roster = _kinds_roster(twins, segs, by_key, int(in_room or 0), seed)
+        for s in segs:
+            s.pop('_filter', None)
+            s.pop('_want', None)
+        seen = set()
+        for r in roster:
+            bank = _NAMES_F if r['gender'] == 'F' else (_NAMES_X if r['gender'] == 'X' else _NAMES_M)
+            if r['name'] in seen:
+                r['name'] = _free_name(r['name'], bank, seen)
+            seen.add(r['name'])
+        spread_seat_people(roster, segs, seed)
+        from migration.digital_twin_sizing import sizing_line
+        sizing = dict(sizing or {}, version=1)
+        sizing['basis'] = {'step': str(sizing.get('step') or 'twin')}
+        sizing['line'] = sizing_line(sizing)
+        return annotate_seat_stands_for({'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
+                                         'size_people': total_people, 'twin_people': int(sizing.get('twin_people') or 0), 'sizing': sizing,
+                                         'in_room': len(roster), 'seating': 'kinds', 'roster': roster})
+    in_room = int(clamp(int(in_room or DEFAULT_IN_ROOM), 2, MAX_IN_ROOM))
     for s in segs:
         s.pop('_filter', None)
     wants = [s.pop('_want', 0) for s in segs]
@@ -848,7 +958,7 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
     sizing['line'] = sizing_line(sizing)
     return annotate_seat_stands_for({'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
                                      'size_people': total_people, 'twin_people': int(sizing.get('twin_people') or 0), 'sizing': sizing,
-                                     'in_room': in_room, 'roster': roster})
+                                     'in_room': in_room, 'seating': 'quota', 'roster': roster})
 
 
 def _free_name(base: str, bank: tuple, seen: set) -> str:
@@ -897,6 +1007,13 @@ def spread_seat_people(roster: list, segments: list, seed: str = '') -> None:
     for lab, seats in by_seg.items():
         total = seg_people.get(lab, 0)
         if total <= 0:
+            continue
+        if all(isinstance(r.get('archetype'), dict) and _count(r.get('people')) > 0 for r in seats):
+            # seats by kind (2026-11-17) carry the people of their kind; only the rounding gap moves, onto the largest seat
+            gap = total - sum(_count(r.get('people')) for r in seats)
+            if gap:
+                big = max(seats, key=lambda r: _count(r.get('people')))
+                big['people'] = max(1, _count(big.get('people')) + gap)
             continue
         base = total / float(len(seats))
         if base < 20:
@@ -1014,8 +1131,9 @@ def rebuild_group(session: dict, twins: list, seed: str = '') -> dict:
     if session.get('questions'):
         return session
     g = session.get('group') or {}
+    kinds_room = str(g.get('seating') or '') == 'kinds' or not g.get('roster')
     session['group'] = build_group(twins, segments=g.get('segments') or None,
-                                   in_room=int(g.get('in_room') or DEFAULT_IN_ROOM),
+                                   in_room=0 if kinds_room else int(g.get('in_room') or DEFAULT_IN_ROOM),
                                    seed=seed or str(session.get('id') or ''))
     for seat in session['group'].get('roster') or []:
         seat.pop('persona', None)
@@ -1034,6 +1152,14 @@ def needs_reseat(session: dict, twins: list) -> bool:
         return True
     if not any(r.get('orientation') or r.get('education') or r.get('occupation') for r in roster):
         return True
+    g0 = session.get('group') or {}
+    if str(g0.get('seating') or '') != 'kinds':
+        # an empty room seated before the kinds (2026-11-17) is reseated by them
+        try:
+            if all(isinstance(t, dict) and (t.get('identity') or {}).get('demographics') for t in twins) and _kinds_available(twins, g0.get('segments') or [], [0] * len(g0.get('segments') or []), None):
+                return True
+        except Exception:
+            pass
     t0 = twins[0] if twins else {}
     demo_g = _demo(t0, 'gender')
     if demo_g:
@@ -1541,7 +1667,7 @@ def clean_room_title(title: str) -> str:
     return ' '.join(str(title or '').split())[:120]
 
 
-def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, title: str = '',
+def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = 0, title: str = '',
                  created_by: str = '', session_id: str = '') -> dict:
     """A new room. Opening is free: ``questions_paid`` starts at 0 and the
     session price is taken on the first question (``charge_due``)."""
@@ -1608,7 +1734,7 @@ def duplicate_room(payload: dict, twins: list, sid: str, *, created_by: str = ''
                 for k in ('people', 'share_pct', 'twin_name'):
                     s.pop(k, None)          # re-derived by the builder; label, twin, composition, filter and seats are the plan
     try:
-        in_room = int(g.get('in_room') or DEFAULT_IN_ROOM)
+        in_room = 0 if str(g.get('seating') or '') == 'kinds' else int(g.get('in_room') or DEFAULT_IN_ROOM)
     except (TypeError, ValueError):
         in_room = DEFAULT_IN_ROOM
     taken = [str(s.get('title') or '') for s in (payload.get('panel_sessions') or []) if isinstance(s, dict)]
@@ -1636,7 +1762,7 @@ def segment_labels(twins: list, segments: Optional[list] = None) -> list:
     return sorted(out)
 
 
-def find_reusable_session(payload: dict, twins: list, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, created_by: str = '', title: str = '') -> Optional[dict]:
+def find_reusable_session(payload: dict, twins: list, segments: Optional[list] = None, in_room: int = 0, created_by: str = '', title: str = '') -> Optional[dict]:
     """An existing room on the twin with no questions yet and the same
     twins, segments and seat count (2026-10-26, Jenna: repeated clicks
     on Open the room left four empty 'Room: Gilmore Girls'). A named
@@ -1646,7 +1772,7 @@ def find_reusable_session(payload: dict, twins: list, segments: Optional[list] =
     none."""
     want_keys = sorted(_twin_key(t) for t in twins)
     want_labels = segment_labels(twins, segments)
-    want_room = int(clamp(int(in_room or DEFAULT_IN_ROOM), 2, MAX_IN_ROOM))
+    want_room = int(clamp(int(in_room), 2, MAX_IN_ROOM)) if int(in_room or 0) > 0 else 0   # 0: seated by the kinds (2026-11-17)
     want_title = clean_room_title(title)
     hits = []
     for s in (payload or {}).get('panel_sessions') or []:
@@ -1657,7 +1783,8 @@ def find_reusable_session(payload: dict, twins: list, segments: Optional[list] =
         g = s.get('group') or {}
         keys = sorted(str(k) for k in (s.get('twin_keys') or g.get('twins') or []))
         labels = sorted(str(x.get('label') or '').strip().lower() for x in (g.get('segments') or []))
-        if keys == want_keys and labels == want_labels and int(g.get('in_room') or 0) == want_room:
+        same_room = (int(g.get('in_room') or 0) == want_room) if want_room else (str(g.get('seating') or '') == 'kinds')
+        if keys == want_keys and labels == want_labels and same_room:
             hits.append(s)
     if not hits:
         return None

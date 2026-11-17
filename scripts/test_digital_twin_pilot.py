@@ -1115,8 +1115,12 @@ class People(unittest.TestCase):
         self.assertTrue(all(isinstance(p, int) and p > 0 for p in own), own)
         self.assertEqual(sum(own), seg['people'], 'the seats add up to their segment exactly')
         self.assertGreaterEqual(len(set(own)), len(own) - 2, 'messy per-seat counts, not one value stamped down the column')
-        for p in own:
-            self.assertAlmostEqual(p, seg['people'] / 12.0, delta=seg['people'] / 12.0 * 0.01)
+        # the seats are the kinds of people in the audience (2026-11-17): each carries its kind's people, not an equal slice
+        self.assertEqual(g.get('seating'), 'kinds')
+        for r in g['roster']:
+            self.assertEqual(int(r['people']), int(r['archetype']['people']), 'a seat stands for the people of its kind')
+            self.assertTrue(r['archetype'].get('label'))
+        self.assertGreater(max(own), min(own) * 1.5, 'the kinds are not equal slices')
         PI.prepare_watch(sess, {'jb': twin}, duration_s=600, title='A comedy pilot')
         sc = sess['scorecard']
         total = next(q['people'] for q in sc['battery']['quadrants'] if q['key'] == 'total')

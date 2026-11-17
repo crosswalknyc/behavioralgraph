@@ -721,7 +721,7 @@ def dt_build():
               'format': str(body.get('format') or ''), 'platform_home': str(body.get('platform_home') or ''), 'name': str(body.get('name') or '')[:120],
               'window': body.get('window') if isinstance(body.get('window'), dict) else None, 'ask_text': str(body.get('ask_text') or '')[:400], 'op': 'build',
               'source': source if source in ('profile', 'demographics') else '', 'profile_key': profile_key, 'profile_name': profile_name,
-              'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists, 'via': 'dashboard'}
+              'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists, 'panelists_explicit': bool(int(body.get('panelists') or 0)), 'via': 'dashboard'}
     from prometheus import digital_twin_job as J
     from prometheus import twin_named_pull as TNP
     uname = _uname(user)
@@ -1133,7 +1133,7 @@ def dt_panel_open(key):
         in_room = int(body.get('in_room') or 0)
     except (TypeError, ValueError):
         in_room = 0
-    in_room = in_room or DT.panelists_for(payload)       # the seats chosen when the twin was built, else the twelve a session covers
+    in_room = in_room or DT.requested_seats(payload)     # a count asked for by hand; else 0: one seat per kind of person in the audience (2026-11-17)
     title = str(body.get('title') or '')[:120]
     # A room is one GROUP, charged as it opens at the company's plan rate for the tier chosen here (1-20 or 1-40
     # questions; Jenna 2026-11-05, the per-group card). An empty room with the same twins, segments and seats is
@@ -1769,7 +1769,7 @@ def dt_pilot_open(key):
         in_room = 0
     if segments and any(int(x.get('seats') or 0) for x in segments if isinstance(x, dict)):
         in_room = sum(int(x.get('seats') or 0) or 1 for x in segments if isinstance(x, dict))
-    in_room = in_room or DT.panelists_for(payload)
+    in_room = in_room or DT.requested_seats(payload)     # a count asked for by hand; else 0: one seat per kind of person (2026-11-17)
     title = str(body.get('title') or '')[:120]
     mode = str(body.get('mode') or 'pilot').strip().lower()
     mode = mode if mode in PI.MODES else 'pilot'

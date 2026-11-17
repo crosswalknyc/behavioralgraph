@@ -472,6 +472,21 @@ def _pages(payload: dict) -> list:
     for p in (ident.get('platforms') or [])[:5]:
         rows.append((f"On {p['label']}", f"{float(p['reach_pct']):.1f}%", 'in a year'))
     pages.append({'kind': 'table', 'header': _words(f"{human_people(m.get('size_us'))} people, and here is who they are"), 'sub': ident.get('read') or '', 'rows': rows[:14], 'head': ('', 'Share', ''), 'dark': False})
+    # the kinds of people in the audience (2026-11-17): each with its people and the person who stands for it
+    arch = payload.get('archetypes') or {}
+    if arch.get('groups'):
+        try:
+            from migration.digital_twin_archetypes import archetype_summary_line
+            sub = archetype_summary_line(payload)
+        except Exception:
+            sub = ''
+        krows = []
+        for g in (arch.get('groups') or [])[:14]:
+            rep = g.get('representative') or {}
+            who = f"{rep.get('name')}, {rep.get('age')}, {rep.get('city')}" if rep.get('name') else ''
+            krows.append((str(g.get('label') or ''), f"{float(g.get('share_pct') or 0):.1f}%", f"{int(g.get('people') or 0):,} {arch.get('noun') or 'people'}" + (f". {who}" if who else '')))
+        pages.append({'kind': 'table', 'header': _words(f"{len(arch.get('groups') or [])} kinds of people make up this audience"), 'sub': sub,
+                      'rows': krows, 'head': ('Kind', 'Share', 'People, and who stands for them'), 'dark': True})
     traits = payload.get('traits') or {}
     tr_rows = sorted(traits.items(), key=lambda kv: -abs(float(kv[1].get('value') or 50) - 50))[:8]
     pages.append({'kind': 'table', 'header': 'How this audience responds, strongest dials first.', 'sub': 'Each dial runs 0 to 100; 50 is an ordinary US audience.',

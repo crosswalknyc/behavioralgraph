@@ -261,6 +261,8 @@ def _result(sess: dict, twin_name: str) -> dict:
            'title': scrub_text(sess.get('title'), 160), 'audience': scrub_text(twin_name, 120), 'cut_label': scrub_text(sess.get('cut_label'), 40),
            'genre': scrub_text(sess.get('genre'), 40), 'format': scrub_text(sc.get('format') or sess.get('format'), 20),
            'seats': int((sess.get('group') or {}).get('in_room') or len((sess.get('group') or {}).get('roster') or [])), 'people': people,
+           'room': [{'name': scrub_text(r.get('name'), 40), 'age': r.get('age'), 'city': scrub_text(r.get('city'), 40), 'kind': scrub_text((r.get('archetype') or {}).get('label'), 90), 'people': r.get('people')}
+                    for r in ((sess.get('group') or {}).get('roster') or []) if isinstance(r, dict)][:40],
            'runtime_s': (sess.get('media') or {}).get('runtime_s'), 'created_at': sess.get('created_at'), 'updated_at': sess.get('updated_at'),
            'price_usd': sess.get('price_usd'), 'questions': int(sess.get('group_tier') or sess.get('questions_paid') or 0) or None,
            'questions_asked': len(sess.get('questions') or []),
@@ -437,9 +439,9 @@ def v1_screening_open():
             mode = 'script'
     title = ' '.join(str(body.get('title') or '').split())[:120] or f"{PI.MODE_TITLE_WORD.get(mode, 'Screening')}: {prompt[:70]}"
     try:
-        in_room = int(body.get('seats') or body.get('in_room') or 0) or DT.panelists_for(payload)
+        in_room = int(body.get('seats') or body.get('in_room') or 0) or DT.requested_seats(payload)   # 0: one seat per kind of person (2026-11-17)
     except (TypeError, ValueError):
-        in_room = DT.panelists_for(payload)
+        in_room = DT.requested_seats(payload)
     options = _options_from(body, request.form if is_multipart else None)
     text = str(body.get('text') or body.get('script') or body.get('concept') or '')
     if mode == 'concept' and not text:

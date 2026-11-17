@@ -921,6 +921,13 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     sid = f"{session_seed}|seat{seat.get('seat')}|{seat.get('name')}"
     demo = ((twin or {}).get('identity') or {}).get('demographics') or {}
     tv = {k: float((v.get('value') if isinstance(v, dict) else v) or 50) for k, v in ((twin or {}).get('traits') or {}).items()}
+    kind = seat.get('archetype') if isinstance(seat.get('archetype'), dict) else {}
+    for k, v in (kind.get('traits') or {}).items():
+        # a seat by kind (2026-11-17) carries its kind's dials, so the devoted regular and the drifting viewer answer differently
+        try:
+            tv[k] = float(v)
+        except (TypeError, ValueError):
+            continue
     g = lambda k: tv.get(k, 50.0)
     age = int(seat.get('age') or 35)
     gc = str(seat.get('gender') or 'F')
@@ -933,7 +940,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     lc = (twin or {}).get('lifecycle') or {}
     stages = [('discovering', float(lc.get('discovering_pct') or 15)), ('trying', float(lc.get('trying_pct') or 15)), ('in the habit', float(lc.get('habit_pct') or 40)),
               ('lapsing', float(lc.get('lapsing_pct') or 18)), ('returning', float(lc.get('returning_pct') or 12))]
-    stage = _pick_by_share([{'label': a, 'pct': b} for a, b in stages], unit('stage', sid))
+    stage = str(seat.get('stage') or '') if str(seat.get('stage') or '') in dict(stages) else _pick_by_share([{'label': a, 'pct': b} for a, b in stages], unit('stage', sid))
     income = str(seat.get('income') or '') or _pick_by_share(demo.get('income') or [], unit('income', sid), '')
     education = str(seat.get('education') or '') or _pick_by_share(demo.get('education') or [], unit('education', sid), '')
     parental = str(seat.get('parental') or '') or _pick_by_share(demo.get('parental') or [], unit('parental', sid), '')
@@ -1123,6 +1130,16 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
             'habits': [price, loyal, merch, physical, churn, social, wom, live, ads, binge, second],
             'streams_on': services, 'shops_at': shops}
+    if kind:
+        # the kind of person this seat stands for (2026-11-17): its label, its people, and the desk's read of it
+        try:
+            from migration.digital_twin_archetypes import noun_for
+            noun = noun_for(twin)
+        except Exception:
+            noun = 'people'
+        card['kind'] = {'label': str(kind.get('label') or ''), 'people': int(seat.get('people') or kind.get('people') or 0), 'share_pct': kind.get('share_pct'), 'noun': noun,
+                        'who': str(kind.get('who') or ''), 'relationship': str(kind.get('relationship') or ''), 'decides': str(kind.get('decides') or ''),
+                        'moves_them': str(kind.get('moves_them') or ''), 'holds_them_back': str(kind.get('holds_them_back') or ''), 'intensity': str(seat.get('intensity') or '')}
     card['bio'] = str(seat.get('persona') or '') or persona_bio(card, twin, sid)   # the bio on the seat, once written, is the one the agent acts on
     return card
 
@@ -1276,6 +1293,22 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
         work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'} and works as {bank[int(unit('job', sid) * len(bank))]}."
     stage = {'discovering': 'just finding it', 'trying': 'still trying it on', 'in the habit': 'firmly in the habit', 'lapsing': 'drifting away from it lately', 'returning': 'back to it after a break'}.get(str(card.get('lifecycle_stage') or ''), 'in the habit')
     sent = [work_sent]
+    kind = card.get('kind') if isinstance(card.get('kind'), dict) else {}
+    if kind and kind.get('label'):
+        # the seat stands for a kind of person in the audience (2026-11-17): the group is named with its size, then read
+        lab = str(kind['label']).strip().rstrip('.')
+        lab = lab[0].lower() + lab[1:] if lab and not lab[:2].isupper() else lab
+        ppl = int(kind.get('people') or 0)
+        head = f"{name} stands for the {lab}" if not re.match(r"^(?:the|a|an)\b", lab, re.I) else f"{name} stands for {lab}"
+        head += f", about {ppl:,} {kind.get('noun') or 'people'} in this audience." if ppl > 0 else '.'
+        sent.append(head)
+        for k in ('who', 'relationship', 'decides'):
+            v = ' '.join(str(kind.get(k) or '').split())
+            if v:
+                sent.append(v if v.endswith(('.', '!', '?')) else v + '.')
+        mv, hb = ' '.join(str(kind.get('moves_them') or '').split()).rstrip('.'), ' '.join(str(kind.get('holds_them_back') or '').split()).rstrip('.')
+        if mv and hb:
+            sent.append(f"What moves people like {obj} most is {mv[0].lower() + mv[1:]}; what holds them back is {hb[0].lower() + hb[1:]}.")
     ow = _orientation_words(card.get('orientation') or '', g)
     if ow:
         sent.append(f"{pron.capitalize()} {be} {ow}.")
@@ -2854,6 +2887,7 @@ def weigh(answers: list, options: list, roster: list, segments: list, priors: Op
         n_seg = len(rs)
         w_seg = float(seg_people.get(s['label']) or 0)
         w_seat = (w_seg / n_seg) if n_seg else 0.0
+        w_by_seat = _seat_weights(rs, w_seg)
         prior = dict((priors or {}).get(s['label']) or {})
         if others:
             prior.setdefault('other', 0.0)
@@ -2866,13 +2900,14 @@ def weigh(answers: list, options: list, roster: list, segments: list, priors: Op
         residual = alpha
         for r in rs:
             a = by_seat.get(int(r['seat']))
+            w_r = w_by_seat.get(int(r['seat']), w_seat)
             if a is None:
-                residual += w_seat
+                residual += w_r
                 continue
             f = _conf_factor(a.get('confidence'))
             oid = a.get('option') if a.get('option') in ids else 'other'
-            mass[oid] += w_seat * f
-            residual += w_seat * (1.0 - f)
+            mass[oid] += w_r * f
+            residual += w_r * (1.0 - f)
         for i in row_ids:
             mass[i] += prior[i] * residual
         denom = (w_seg + alpha) or 1.0
@@ -2890,10 +2925,65 @@ def weigh(answers: list, options: list, roster: list, segments: list, priors: Op
         opts_out.append({'id': o['id'], 'label': o['label'], 'lean': o.get('lean') or 'other', 'pct': 0.0, 'people': ppl, 'seats': seats,
                          'seats_n': len(seats), 'tally': f"{len(seats)} of {n_total}", 'room_pct': round(len(seats) / n_total * 100.0, 1)})
     _pcts_from_people(opts_out, int(total))
+    seat_people_pct(opts_out, roster)
     for sr in by_segment:
         sr['distribution'] = [{'label': r['label'], 'pct': r['pct'], 'people': r['people']} for r in sr['distribution']]
         sr['yes_pct'] = round(sum(r['pct'] for r, o in zip(sr['distribution'], rows_spec) if (o.get('lean') or 'other') == 'yes'), 1)
     return opts_out, by_segment
+
+
+def _seat_weights(seats: list, seg_people: float) -> dict:
+    """{seat id: the people it stands for}, scaled to the segment. Seats
+    by kind (2026-11-17) carry their kind's people; an older room's seats
+    split the segment evenly."""
+    out = {}
+    raw = {}
+    for r in seats:
+        try:
+            raw[int(r['seat'])] = float(r.get('people') or 0)
+        except (TypeError, ValueError):
+            raw[int(r['seat'])] = 0.0
+    if not raw:
+        return out
+    if any(v <= 0 for v in raw.values()) or not any(isinstance(r.get('archetype'), dict) for r in seats):
+        w = seg_people / float(len(raw)) if raw else 0.0
+        return {k: w for k in raw}
+    tot = sum(raw.values()) or 1.0
+    return {k: v / tot * seg_people for k, v in raw.items()}
+
+
+def weighted_room(roster: list) -> bool:
+    """True when the seats stand for different numbers of people (a room
+    seated by kind), so the count mirrors onto seats by their people."""
+    vals = []
+    for r in roster or []:
+        if not isinstance(r.get('archetype'), dict):
+            return False
+        try:
+            vals.append(float(r.get('people') or 0))
+        except (TypeError, ValueError):
+            return False
+    if not vals or min(vals) <= 0:
+        return False
+    return (max(vals) - min(vals)) / (sum(vals) / len(vals)) > 0.05
+
+
+def seat_people_pct(opts_out: list, roster: list) -> None:
+    """On every option, the share of the room's people the seats on it
+    stand for (``seat_people_pct``) and those people (``seat_people``),
+    beside the bare seat count; one decimal, summing to 100 across the
+    options that hold a seat."""
+    ppl = {}
+    for r in roster or []:
+        try:
+            ppl[int(r['seat'])] = max(0.0, float(r.get('people') or 0))
+        except (TypeError, ValueError):
+            continue
+    tot = sum(ppl.values())
+    for o in opts_out or []:
+        sp = sum(ppl.get(int(sid), 0.0) for sid in (o.get('seats') or []))
+        o['seat_people'] = int(round(sp))
+        o['seat_people_pct'] = round(sp / tot * 100.0, 1) if tot > 0 else None
 
 
 def _pcts_from_people(rows: list, total_people: int):
@@ -3404,6 +3494,108 @@ def _lean_gap(a: str, b: str) -> float:
     return abs(_LEAN_RANK.get(str(a or 'other'), 1.5) - _LEAN_RANK.get(str(b or 'other'), 1.5))
 
 
+def _mirror_weighted(opts_out: list, by_segment: list, answers: list, roster: list, segments: list) -> dict:
+    """The seats mirror the count by the people they stand for (a room
+    seated by kind, 2026-11-17). In each segment every option's target is
+    its share of the segment's people; seats keep their own vote while
+    the option still has room for them, and the rest move, one at a
+    time, wherever a move cuts the gap between the people on each option
+    and its target the most (the nearest stance first, the least sure
+    seat first). A side worth at least half the smallest seat holds one
+    seat somewhere. Returns the same plan shape as ``mirror_seats``."""
+    ids = [o['id'] for o in opts_out]
+    if not ids or not roster:
+        return {'alloc': {}, 'moved': [], 'floor_pct': None}
+    by_id = {o['id']: o for o in opts_out}
+    by_seat = {int(a['seat']): a for a in answers}
+    seg_rows = {sr['segment']: sr for sr in by_segment}
+    ppl = {}
+    for r in roster:
+        try:
+            ppl[int(r['seat'])] = max(1.0, float(r.get('people') or 0))
+        except (TypeError, ValueError):
+            ppl[int(r['seat'])] = 1.0
+    total_people = sum(ppl.values()) or 1.0
+    smallest = min(ppl.values()) if ppl else 1.0
+    moved = []
+    room_alloc = {k: 0 for k in ids}
+    for s in segments:
+        rs = [r for r in roster if r.get('segment') == s['label']]
+        if not rs:
+            continue
+        seg_people = sum(ppl[int(r['seat'])] for r in rs) or 1.0
+        sr = seg_rows.get(s['label']) or {}
+        dist = sr.get('distribution') or []
+        shares = {ids[i]: float((dist[i] or {}).get('pct') or 0.0) for i in range(min(len(ids), len(dist)))} or {o['id']: float(o.get('pct') or 0.0) for o in opts_out}
+        tot_sh = sum(max(0.0, shares.get(k, 0.0)) for k in ids) or 100.0
+        target = {k: max(0.0, shares.get(k, 0.0)) / tot_sh * seg_people for k in ids}
+        have = {k: [] for k in ids}
+        stray = []
+        for r in rs:
+            a = by_seat.get(int(r['seat']))
+            oid = (a or {}).get('option') if a and a.get('option') in by_id else None
+            (have[oid] if oid else stray).append(int(r['seat']))
+
+        def _assigned(k):
+            return sum(ppl[sid] for sid in have[k])
+
+        def _gap():
+            return sum(abs(_assigned(k) - target[k]) for k in ids)
+
+        # strays (a vote the board no longer carries) land first, on the option they leave shortest
+        for sid in sorted(stray):
+            k = max(ids, key=lambda kk: (target[kk] - _assigned(kk), -ids.index(kk)))
+            have[k].append(sid)
+            a = by_seat.get(sid) or {}
+            moved.append({'seat': sid, 'from': a.get('option'), 'to': k})
+            a['option'], a['option_label'], a['mirrored'] = k, by_id[k]['label'], True
+        guard = 0
+        while guard < 4 * len(rs):
+            guard += 1
+            best = None
+            cur = _gap()
+            for j in ids:
+                if not have[j]:
+                    continue
+                for k in ids:
+                    if k == j:
+                        continue
+                    for sid in have[j]:
+                        p = ppl[sid]
+                        new_gap = cur - abs(_assigned(j) - target[j]) - abs(_assigned(k) - target[k]) + abs(_assigned(j) - p - target[j]) + abs(_assigned(k) + p - target[k])
+                        gain = cur - new_gap
+                        if gain <= 1e-9:
+                            continue
+                        a = by_seat.get(sid) or {}
+                        key = (-gain, _lean_gap(by_id[j].get('lean'), by_id[k].get('lean')), -_label_hits(a.get('line') or '', by_id[k].get('label')), int(a.get('confidence') or 0), sid)
+                        if best is None or key < best[0]:
+                            best = (key, j, k, sid)
+            if best is None:
+                break
+            _key, j, k, sid = best
+            have[j].remove(sid)
+            have[k].append(sid)
+            a = by_seat.get(sid) or {}
+            moved.append({'seat': sid, 'from': a.get('option'), 'to': k})
+            a['option'], a['option_label'], a['mirrored'] = k, by_id[k]['label'], True
+        # the floor: a side worth half the smallest seat holds one seat; the smallest seat on the side with the most spare people gives it
+        for k in sorted(ids, key=lambda kk: -target[kk]):
+            if have[k] or target[k] < 0.5 * smallest or target[k] <= 0:
+                continue
+            donors = [(j, sid) for j in ids if len(have[j]) >= 2 for sid in have[j]]
+            if not donors:
+                break
+            j, sid = min(donors, key=lambda c: (-( _assigned(c[0]) - target[c[0]]), ppl[c[1]], c[1]))
+            have[j].remove(sid)
+            have[k].append(sid)
+            a = by_seat.get(sid) or {}
+            moved.append({'seat': sid, 'from': a.get('option'), 'to': k})
+            a['option'], a['option_label'], a['mirrored'] = k, by_id[k]['label'], True
+        for k in ids:
+            room_alloc[k] += len(have[k])
+    return {'alloc': room_alloc, 'moved': moved, 'floor_pct': round(0.5 * smallest / total_people * 100.0, 2), 'weighted': True}
+
+
 def mirror_seats(opts_out: list, by_segment: list, answers: list, roster: list, segments: list) -> dict:
     """Allocate the seats to the count, in place on ``answers``: in each
     segment, largest remainder over the segment's own rows (the floor at
@@ -3418,6 +3610,8 @@ def mirror_seats(opts_out: list, by_segment: list, answers: list, roster: list, 
     ids = [o['id'] for o in opts_out]
     if not ids or not roster:
         return {'alloc': {}, 'moved': [], 'floor_pct': None}
+    if weighted_room(roster):
+        return _mirror_weighted(opts_out, by_segment, answers, roster, segments)
     by_id = {o['id']: o for o in opts_out}
     n_total = len(roster)
     by_seat = {int(a['seat']): a for a in answers}
@@ -3493,6 +3687,7 @@ def retally(opts_out: list, by_segment: list, answers: list, roster: list) -> No
     for o in opts_out:
         seats = sorted(int(a['seat']) for a in answers if a.get('option') == o['id'])
         o['seats'], o['seats_n'], o['tally'], o['room_pct'] = seats, len(seats), f"{len(seats)} of {n_total}", round(len(seats) / n_total * 100.0, 1)
+    seat_people_pct(opts_out, roster)
     for sr in by_segment:
         rs = [r for r in roster if r.get('segment') == sr.get('segment')]
         sr['tally'] = [{'label': o['label'], 'seats': len([r for r in rs if (by_seat.get(int(r['seat'])) or {}).get('option') == o['id']])} for o in opts_out]

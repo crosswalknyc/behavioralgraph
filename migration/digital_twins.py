@@ -124,6 +124,22 @@ def panelists_for(payload: dict) -> int:
     return max(2, min(n, PANEL_SEATS_MAX)) if n else PANEL_SEATS_INCLUDED
 
 
+def requested_seats(payload: dict) -> int:
+    """The seat count a room on this twin must meet, or 0 when the room
+    seats by the kinds of people in the audience (Jenna 2026-11-17: one
+    seat per kind, each sized by the people it stands for). Only a count
+    the builder set by hand on the twin (``meta.panelists_explicit``)
+    forces a number; the stored default of twelve does not."""
+    meta = (payload or {}).get('meta') or {}
+    if not meta.get('panelists_explicit'):
+        return 0
+    try:
+        n = int(meta.get('panelists') or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return max(2, min(n, PANEL_SEATS_MAX)) if n else 0
+
+
 # ------------------------------------------------------------- the index
 def list_runs(s3, *, username: Optional[str] = None, limit: int = 500) -> list:
     if s3 is None:
@@ -552,6 +568,13 @@ def csv_rows(payload: dict) -> list:
     for k, v in (payload.get('lifecycle') or {}).items():
         if k.endswith('_pct'):
             rows.append(['Lifecycle', k[:-4], k[:-4], v, '%', ''])
+    # the kinds of people in the audience (2026-11-17): one row per kind with its people and the person who stands for it
+    arch = payload.get('archetypes') or {}
+    for g in (arch.get('groups') or []):
+        rep = g.get('representative') or {}
+        who = f"{rep.get('name')}, {rep.get('age')}, {rep.get('city')}" if rep.get('name') else ''
+        rows.append(['Who makes up this audience', g.get('id'), g.get('label'), g.get('people'), arch.get('noun') or 'people',
+                     f"{float(g.get('share_pct') or 0):.1f}%. {who}. {g.get('who') or ''} {g.get('relationship') or ''}".strip()])
     for r in product_runs(payload):
         o = r.get('outputs') or {}
         unit = 'USD' if o.get('unit') == 'usd' else (o.get('noun') or 'people')
@@ -609,6 +632,13 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
                      'recommendation': r.get('recommendation')} for r in product_runs(payload)[:8]]}
     if payload.get('standing_questions'):
         out['standing_questions'] = payload['standing_questions']
+    try:
+        from migration.digital_twin_archetypes import public_groups, archetype_summary_line
+        if (payload.get('archetypes') or {}).get('groups'):
+            out['kinds'] = public_groups(payload['archetypes'])
+            out['kinds_line'] = archetype_summary_line(payload)
+    except Exception:
+        pass
     if run_id:
         r = next((x for x in product_runs(payload) if x.get('id') == run_id), None)
         if r:
@@ -656,6 +686,13 @@ def twin_lines(payload: dict) -> list:
     if ident.get('purchase'):
         lines.append('They buy: ' + '; '.join(f"{p['label']} {float(p['pct']):.1f}%" for p in ident['purchase'][:8]))
     out.append('WHO THEY ARE:\n' + '\n'.join(lines))
+    try:
+        from migration.digital_twin_archetypes import archetype_lines, archetype_summary_line
+        kl = archetype_lines(payload)
+        if kl:
+            out.append('WHO MAKES UP THIS AUDIENCE:\n' + archetype_summary_line(payload) + '\n' + '\n'.join(kl))
+    except Exception:
+        pass
     traits = payload.get('traits') or {}
     if traits:
         out.append('TRAITS (0 to 100):\n' + '\n'.join(f"{v.get('label')}: {v.get('value')}; they {v.get('read')}" for v in traits.values()))
@@ -752,9 +789,10 @@ HOW_TO = [
         'answers': 'Who an audience is and how it behaves: its people, platforms and buying, twelve dials for how it responds, and where it sits in its lifecycle.',
         'put_in': ('Build a twin on the Twins tab walks you through it. First, what the twin stands for: a defined group from a profile (the audience of a title, a talent or a brand). '
                    'A named subject sits on its Total Universe. If none is on file, one is pulled first and that file is what the twin and every room use. '
-                   'The seats in a room match that file\'s mix (gender, orientation, education, occupation) and each persona is built from those attributes. '
-                   'Or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for, '
-                   f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} by default, up to {PANEL_SEATS_MAX}; the seats are part of the group price). Or type the ask to Prometheus with a window if it is not the last 12 months.'),
+                   'The twin page then shows who makes up the audience: the kinds of people in it, how many people each kind is, and the person who stands for each one; '
+                   'the seats in a room match that file\'s mix (gender, orientation, education, occupation) and each persona is built from its kind and those attributes. '
+                   'Or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for. '
+                   f'Rooms on the twin seat one person per kind (up to {PANEL_SEATS_MAX} seats, part of the group price); set a seat count by hand only if you want to change that. Or type the ask to Prometheus with a window if it is not the last 12 months.'),
         'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of women 25 to 44 in Dallas who shop at Target'],
         'attach': 'Nothing is needed. If you have a brief or a deck on the subject, attach it with the paper clip and the twin reads it.',
         'comes_back': ('The twin lands on the Twins tab in a few minutes, with its first two runs. Prometheus confirms in the chat; there is no email. '
@@ -808,7 +846,8 @@ HOW_TO = [
         'id': 'panel', 'title': 'Focus Group IQ',
         'answers': 'A focus group Prometheus moderates for you (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and Prometheus runs the room: the %s and people counts, the split by segment, a one-line read and a few panelist voices, in a minute or two. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
         'put_in': (f'A name for the room (you can change it later on the room page), the twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), '
-                   f'how many panelists sit in the room ({PANEL_SEATS_INCLUDED} by default, up to {PANEL_SEATS_MAX}; the seats are part of the group price), whether the group answers 1-20 or 1-40 questions, then your questions. '
+                   f'whether the group answers 1-20 or 1-40 questions, then your questions. The room seats one person for each kind of people in the audience, and each seat stands for the people of that kind '
+                   f'(an audience of a million made of twelve kinds seats twelve people whose counts add up to the million); ask for a number of seats (2 to {PANEL_SEATS_MAX}) only if you want to change that. '
                    'The seats match the twin\'s profile (the gender split, orientation, education and the rest); each persona is built from those attributes.'),
         'type_this': ['Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box', 'Ask them why', 'Show of hands, who watched season 1?',
                       'Ask the room: trailer A vs trailer B', 'Re-ask at $19'],
@@ -826,10 +865,9 @@ HOW_TO = [
                     'how soon, against expectations, worth full price), each next to the norm and the genre norm, the four quadrants '
                     '(women and men, under and over 35), the dial split by any group in the room (age, ethnicity, orientation, education, '
                     'where they are with the title, avid or casual), the favorite moment, the dead spot, the transcript.'),
-        'put_in': (f'A name for the test, the twin (or a second twin) in the room, how many panelists sit '
-                   f'({PANEL_SEATS_INCLUDED} by default, up to {PANEL_SEATS_MAX}; the seats are part of the group price), whether the group answers 1-20 or 1-40 questions, and the cut: upload an mp4, mov or webm, '
-                   'paste a watch link from any streamer, or type a title and a runtime if the file is not in hand yet. The seats match the twin\'s profile '
-                   '(gender, orientation, education, occupation); each persona is built from those attributes. '
+        'put_in': (f'A name for the test, the twin (or a second twin) in the room, whether the group answers 1-20 or 1-40 questions, and the cut: upload an mp4, mov or webm, '
+                   'paste a watch link from any streamer, or type a title and a runtime if the file is not in hand yet. The room seats one person per kind of people in the audience, '
+                   f'each standing for the people of that kind (up to {PANEL_SEATS_MAX} seats, part of the group price); set a seat count by hand only to change that. '
                    'The genre is read from the cut; change it with the chip on the test if it reads wrong.'),
         'type_this': ['Open Pilot Testing on the Gilmore Girls twin and play the season 2 pilot',
                       'Ask the room at 12:40: would you keep watching?',
@@ -994,7 +1032,7 @@ def is_how_to_ask(text: str) -> bool:
 __all__ = ['list_runs', 'load_twin', 'save_twin', 'has_access', 'is_admin', 'can_open', 'visible_runs', 'allowed_keys', 'find_twin', 'csv_rows', 'csv_text', 'csv_filename',
            'view_summary', 'twin_lines', 'deck_context', 'how_to', 'how_to_text', 'is_how_to_ask', 'pricing_lines', 'PRICING', 'PULL_TYPES', 'MODE_PRICE_KEY', 'PANEL_QUESTIONS_INCLUDED', 'GROUP_RATES',
            'product_runs', 'is_retired_run', 'RETIRED_RUN_KINDS', 'GREENLIGHT_RETIRED_LINE',
-           'PANEL_SEATS_INCLUDED', 'PANEL_SEATS_MAX', 'extra_panelists', 'panelists_for',
+           'PANEL_SEATS_INCLUDED', 'PANEL_SEATS_MAX', 'extra_panelists', 'panelists_for', 'requested_seats',
            'can_delete_twin', 'delete_twin', 'deleted_twin_key', 'deleted_twin_sidecar_key', 'drop_twin_from_allowed_runs',
            'DELETED_TWINS_PREFIX', 'DELETED_TWIN_KEEP_DAYS',
            'ACCESS_FLAG', 'RUNS_FIELD', 'PRODUCT_KEY', 'PRODUCT_LABEL', 'JOBS_PREFIX', 'REQUESTS_PREFIX', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'HOW_TO']

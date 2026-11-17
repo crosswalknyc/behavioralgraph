@@ -474,7 +474,7 @@ def apply_quotas(session: dict, twins: list, quotas: dict, seed: str = '') -> di
     for label, f, count in cells:
         if count <= 0:
             continue
-        sub = build_group(twins, segments=[{'label': label, 'twin': str(((twin or {}).get('meta') or {}).get('key') or ''), 'filter': dict(f)}], in_room=max(2, count), seed=f"{seed}|{label}")
+        sub = build_group(twins, segments=[{'label': label, 'twin': str(((twin or {}).get('meta') or {}).get('key') or ''), 'filter': dict(f)}], in_room=max(2, count), seed=f"{seed}|{label}", seating='quota')
         taken = (sub.get('roster') or [])[:count]
         for r in taken:
             seat_no += 1

@@ -515,8 +515,17 @@ def _twin_body(payload: dict, key: str, st: dict, inputs: dict, via: str, s3=Non
         lines.append(f"Kind: {kind}" + (f", {m.get('format')}" if m.get('format') else ''))
     if m.get('platform_home'):
         lines.append(f"Home: {m.get('platform_home')}")
-    if m.get('panelists'):
-        lines.append(f"Seats in a room: {_int(m.get('panelists'))}")
+    if m.get('panelists_explicit') and m.get('panelists'):
+        lines.append(f"Seats in a room: {_int(m.get('panelists'))} (set by hand)")
+    try:   # who makes up the audience (2026-11-17): the kinds, their people and who stands for each
+        from migration.digital_twin_archetypes import archetype_lines, archetype_summary_line
+        kl = archetype_lines(payload)
+        if kl:
+            lines.append('')
+            lines.append(archetype_summary_line(payload))
+            lines.extend(f"  - {ln}" for ln in kl)
+    except Exception:
+        pass
     ask = ' '.join(str((inputs or {}).get('ask_text') or '').split())
     if ask:
         lines.append(f"Asked: \"{ask[:240]}\"")

@@ -1616,6 +1616,7 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
         panelists = int(inputs.get('panelists') or 0)
     except (TypeError, ValueError):
         panelists = 0
+    panelists_explicit = bool(panelists) and bool(inputs.get('panelists_explicit'))   # a count the builder asked for by hand (2026-11-17); rooms otherwise seat by the kinds
     panelists = int(clamp(panelists, 2, 40)) if panelists else 12
     if by_demo:
         # the second door: Gen Pop cut to the picks; no catalog lookup and no outside research for a shape the reader chose
@@ -1692,7 +1693,7 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
             # the walkthrough's record: where the audience came from and how many panelists a room on this twin seats
             'source': 'demographics' if by_demo else ('profile' if corpus.get('profile_key') else 'research'),
             'profile_key': '' if by_demo else str(corpus.get('profile_key') or ''), 'profile_name': '' if by_demo else str(prof.get('subject_row') or ''),
-            'demographics_spec': demo_spec if by_demo else None, 'panelists': panelists}
+            'demographics_spec': demo_spec if by_demo else None, 'panelists': panelists, 'panelists_explicit': panelists_explicit}
     # an account-holder universe seats adults only (2026-11-10): the
     # profile's age rows already carry no under-18 band; the flag rides
     # the meta so the room's seating honors it too
@@ -1795,6 +1796,20 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
             timings['persona_base_s'] = round(time.time() - t0 - sum(v for k, v in timings.items() if k.endswith('_s') and k != 'total_s'), 2)
         except Exception as e:
             print(f"[twin] persona base skipped: {e}")
+    # the kinds of people in the audience (Jenna 2026-11-17): the deterministic kinds always, the archetype desk's names and
+    # reads when the model is on; rooms on this twin seat one person per kind, sized by the people it stands for
+    try:
+        from migration.digital_twin_archetypes import derive_archetypes as _derive_archetypes
+        _t_arch = time.time()
+
+        def _arch_call(system, user, max_tokens, temperature):
+            if claude_json is None:
+                return None
+            return claude_json(system, user, max_tokens=max_tokens, temperature=temperature, surface='twin_archetypes')
+        _derive_archetypes(twin, call=_arch_call if (claude_json is not None and with_research) else None)
+        timings['archetypes_s'] = round(time.time() - _t_arch, 2)
+    except Exception as e:
+        print(f"[twin] archetypes skipped: {e}")
     timings['total_s'] = round(time.time() - t0, 2)
     twin['diagnostics'] = {
         'version': VERSION, 'seed': seed, 'timings': timings, 'size_source': size_source, 'momentum': momentum,

@@ -22,6 +22,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+os.environ.setdefault('DTIQ_ARCHETYPE_SEATS', '0')   # these tests pin the equal-seat room they were written against; the kinds room is tested in test_digital_twin_archetypes.py
 os.environ.setdefault('CORPUS_CATALOG', '0')
 os.environ.setdefault('DTW_WATCH_URL_FETCH', '0')
 

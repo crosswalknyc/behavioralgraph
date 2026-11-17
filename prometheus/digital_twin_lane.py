@@ -77,6 +77,9 @@ _PANEL_ASK_RX = re.compile(r"^\s*(?:ask\s+(?:them|the\s+room|the\s+twins?|the\s+
 _COMPARE_RX = re.compile(r"\bcompare\b[^.?!]{0,80}\btwins?\b|\btwins?\b[^.?!]{0,60}\b(?:side by side|against|vs\.?|versus)\b", re.I)
 _CATALOG_RX = re.compile(r"\b(?:do (?:we|you) have|is there|are there|which|what|list|show me)\b[^.?!]{0,30}\btwins?\b|\btwins?\b[^.?!]{0,20}\b(?:do (?:we|you) have|are there|in the library|on the shelf)\b", re.I)
 _STATUS_RX = re.compile(r"\b(?:is|are)\s+(?:my|the|our)\s+twins?\s+(?:ready|done|built|finished|up)\b|\btwins?\s+(?:status|ready\s+yet)\b|\bwhere\s+is\s+(?:my|the)\s+twin\b", re.I)
+# who makes up an audience (Jenna 2026-11-17): the kinds of people in a twin, their sizes and the person who stands for each
+_KINDS_RX = re.compile(r"\b(?:who|what)\s+(?:makes?\s+up|is\s+in|comprises?|composes?)\b[^.?!]{0,60}\btwins?\b|\b(?:kinds?|types?|groups?|archetypes?)\s+of\s+(?:people|viewers|fans|buyers|subscribers|listeners)\b[^.?!]{0,60}\btwins?\b|"
+                       r"\btwins?\b[^.?!]{0,40}\b(?:archetypes?|kinds?\s+of\s+people|made\s+(?:up\s+)?of|composition|break(?:s|ing)?\s+down)\b|\bwho\s+(?:is|are)\s+(?:in|behind)\s+the\s+(?:room|seats)\b", re.I)
 _PRICE_RX = re.compile(r"\$\s?(\d[\d,]*(?:\.\d+)?)\s*([kKmM])?")
 _GOAL_RX = re.compile(r"\b(?:goal|clears?|hits?|reach(?:es)?|beats?|target)\b[^.?!\d$]{0,20}\$?\s?(\d[\d,]*(?:\.\d+)?)\s*([kKmM])?\s*(viewers|buyers|listeners|players|readers|people|subscribers|subs|first actions|signups)?", re.I)
 _WEEKS_RX = re.compile(r"(\d{1,2})\s*weeks?\b", re.I)
@@ -309,7 +312,8 @@ def twin_intent(text, chip=''):
         return False
     if _BUILD_RX.search(low) and not re.search(r"\btwin\s+(?:bed|peaks|cities|falls|flame|turbo|engine)\b", low):
         return True
-    if 'twin' in low and (_GREENLIGHT_RX.search(low) or _LAUNCH_RX.search(low) or _SPEND_RX.search(low) or _COMPARE_RX.search(low) or _CATALOG_RX.search(low) or _STATUS_RX.search(low)):
+    if 'twin' in low and (_GREENLIGHT_RX.search(low) or _LAUNCH_RX.search(low) or _SPEND_RX.search(low) or _COMPARE_RX.search(low) or _CATALOG_RX.search(low) or _STATUS_RX.search(low)
+                          or _KINDS_RX.search(low)):
         return True
     if _PANEL_OPEN_RX.search(low) and ('twin' in low or 'panel lab' in low or 'focus group' in low or 'survey' in low):
         return True
@@ -1703,6 +1707,39 @@ def start_build(user, uname, confirm, *, thread_id='', ask_text='', extras=None,
     return job_id, (_TNP.promise(subject) if pull else J.build_promise(subject)), None
 
 
+def kinds_reply(text, body, history, user):
+    """Who makes up a twin (Jenna 2026-11-17): the kinds of people in
+    the audience, each with its people and the person who stands for it,
+    read off the twin (derived on the spot when an older twin has none)."""
+    from migration import digital_twins as DT
+    from migration import digital_twin_archetypes as A
+    found, runs = resolve_twins(text, body, history, user, limit=1)
+    if not found:
+        return _which_twin(runs, 'read', text)
+    r = found[0]
+    s3 = _s3()
+    payload = DT.load_twin(s3, r.get('key')) if s3 is not None else None
+    if not payload:
+        return _payload(f"I could not open the {r.get('name')} twin just now. Try again in a moment.", [OPEN_CHIP])
+    had = bool((payload.get('archetypes') or {}).get('groups'))
+    try:
+        A.ensure_archetypes(payload)
+    except Exception as e:
+        print(f"[twin-lane] kinds skipped: {str(e)[:120]}")
+    if not had and (payload.get('archetypes') or {}).get('groups') and s3 is not None:
+        try:
+            DT.save_twin(s3, r.get('key'), payload)
+        except Exception as e:
+            print(f"[twin-lane] kinds not saved: {str(e)[:120]}")
+    lines = A.archetype_lines(payload)
+    if not lines:
+        return _payload(f"The {r.get('name')} twin has no breakdown yet; open it and I will build one.", [OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ')
+    head = A.archetype_summary_line(payload)
+    reply = _scrub(head + '\n\n' + '\n'.join(f"- {ln}" for ln in lines) + '\n\nA room on this twin seats one person per kind, each standing for the people of that kind.')
+    return _payload(reply, [f"Open a focus group with the {r.get('name')} twin", f"Open the {r.get('name')} twin", OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ',
+                    action_hint={'view': 'digitalTwinsIQ', 'tab': 'twins', 'twin_key': r.get('key')})
+
+
 def status_reply(user):
     from . import digital_twin_job as J
     s3, bucket = _s3()
@@ -1839,6 +1876,9 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
         # 4. status
         if _STATUS_RX.search(low):
             return status_reply(user)
+        # 4b. who makes up the audience (2026-11-17)
+        if _KINDS_RX.search(low) and not _BUILD_RX.search(low) and not _PANEL_ASK_RX.search(low):
+            return kinds_reply(t, body, history, user)
         # 5. the panel
         pr = run_panel(t, body, history, user, ppu)
         if pr is not None:
