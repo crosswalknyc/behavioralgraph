@@ -452,7 +452,7 @@ def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None
     return {'kind': 'question', 'eyebrow': eyebrow, 'header': _clean(header),
             'sub': _clean(f"{_q_when(rec, session)}." + (f" {lead_line}" if lead_line else '')),
             'framing': _clean(str(rec.get('framing') or '')), 'head': ('Answer', 'Share', 'People and seats'), 'rows': split,
-            'read': _clean(' '.join(x for x in (str(rec.get('read') or ''), firm_line) if x)), 'voices': voices, 'firmness': fb.get('word') or '',
+            'read': _clean(' '.join(x for x in (str(rec.get('read') or ''), (firm_line if firm_line not in str(rec.get('read') or '') else '')) if x)), 'voices': voices, 'firmness': fb.get('word') or '',
             'knew': [_clean(str(f)) for f in (rec.get('facts_used') or [])[:KNEW_ON_PAGE] if str(f or '').strip()] + [_clean(x) for x in extra],
             'talk': [_clean(str(t)) for t in (rec.get('talk') or [])[:TALK_ON_PAGE] if str(t or '').strip()],
             'seats_total': seats_total, 'dark': dark}

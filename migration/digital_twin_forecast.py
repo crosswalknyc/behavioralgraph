@@ -426,7 +426,7 @@ def forecast_for_session(twin: dict, sess: dict, *, s3=None, ledger: Optional[di
         hist = LG.history_for(s3, 'forecast', measure='week_one_audience', audience_class='title') if base > 0 else {}
         fb = CONF.firmness_for_count(out['episode']['week_one_audience'] or 0, low=out['episode']['low'], high=out['episode']['high'],
                                      calibration_scope=cal['scope'], history=hist, appeal_known=bool(hd_known(sc)))
-        out['firmness'] = fb
+        out['firmness'] = fb     # the page reads it from here (public_forecast carries the word and the line); the notes stay as the rule has them
         if base > 0 and out['episode']['week_one_audience']:
             # the ranges the reader sees follow the ledger's word when it has one
             if fb.get('low') is not None and fb.get('high') is not None and hist.get('n_scored', 0) >= 3:

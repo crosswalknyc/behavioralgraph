@@ -4215,6 +4215,11 @@ def attach_firmness(rec: dict, roster: list, priors: Optional[dict], twin: dict,
     rec['firmness'] = CONF.public_firmness(block)
     if rec['firmness'] and rec['firmness'].get('line'):
         rec['firmness']['line'] = scrub(rec['firmness']['line'])
+        # the page reads the record's read: the firmness line rides as its last sentence (once), so every surface shows it
+        line = rec['firmness']['line']
+        read = str(rec.get('read') or '').rstrip()
+        if line and line not in read:
+            rec['read'] = (read + ' ' + line).strip()
     return rec['firmness']
 
 

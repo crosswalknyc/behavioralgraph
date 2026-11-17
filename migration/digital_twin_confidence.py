@@ -60,7 +60,7 @@ FIRM_PP = 5.0
 LEANING_PP = 12.0
 WORDS = ('firm', 'leaning', 'early')
 WORD_LINE = {'firm': 'Firm', 'leaning': 'Leaning', 'early': 'An early read'}
-WORD_PLAIN = {'firm': 'the room is sure of this one', 'leaning': 'a lean, not a lock', 'early': 'an early read; treat it as a direction, not a count'}
+WORD_PLAIN = {'firm': 'the room is sure of this one', 'leaning': 'a lean, not a lock', 'early': 'treat it as a direction, not a count'}
 
 
 def _clamp(x, lo, hi):
@@ -230,7 +230,7 @@ def firmness_line(word: str, lead: Optional[dict], decline: bool = False, what_s
         return f"{WORD_LINE.get(word, 'Leaning')}."
     core = f"the lead ({str(lead.get('label') or '').strip().rstrip('.')}) sits between {lead['low_pct']:.1f}% and {lead['high_pct']:.1f}%"
     if decline:
-        line = f"Not enough to call it yet: {core}, {WORD_PLAIN['early']}."
+        line = f"Not enough to call it yet: {core}; {WORD_PLAIN['early']}."
     else:
         line = f"{WORD_LINE.get(word, 'Leaning')}: {core}; {WORD_PLAIN.get(word, '')}."
     if what_settles and word != 'firm':
