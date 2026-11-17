@@ -593,6 +593,11 @@ def redirect_if_dashboard_view_locked():
             return None
     except Exception:
         return None
+    try:
+        import lock_hit_notify as _lhn
+        _lhn.notify_opening_lock_hit(user, uname, where="dashboard")
+    except Exception:
+        pass
     if path.startswith('/api/'):
         return jsonify({
             'error': 'card_required',
@@ -613,6 +618,13 @@ def _post_auth_redirect(user, users_data=None):
         data = users_data if users_data is not None else load_users()
         if (_wallet_lock.dashboard_view_locked(user, data)
                 and not _wallet_lock.complimentary_view_unlocked(user, data)):
+            try:
+                import lock_hit_notify as _lhn
+                uname = (session.get('username')
+                         or user.get('username') or '')
+                _lhn.notify_opening_lock_hit(user, uname, where="login")
+            except Exception:
+                pass
             return '/wallet'
     except Exception:
         pass
@@ -52665,6 +52677,12 @@ def api_brief_chat_funds():
             'reason': reason,
             'no_funds': False,
         })
+    if reason == 'opening_topup':
+        try:
+            import lock_hit_notify as _lhn
+            _lhn.notify_opening_lock_hit(user, uname, where="prometheus")
+        except Exception:
+            pass
     return jsonify({
         'success': True,
         'allowed': False,

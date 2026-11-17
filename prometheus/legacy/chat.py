@@ -11532,6 +11532,12 @@ def _pm_funds_gate(user):
         except Exception as _fx:
             _faults.note('chat', _fx)
         print(f"[prometheus] funds gate blocked {uname!r} ({reason})")
+        if reason == 'opening_topup':
+            try:
+                import lock_hit_notify as _lhn
+                _lhn.notify_opening_lock_hit(user, uname, where="prometheus")
+            except Exception:
+                pass
         reply = (_H.opening_funds_message(user) if reason == 'opening_topup'
                  else _H.NO_FUNDS_MESSAGE)
         return jsonify({
