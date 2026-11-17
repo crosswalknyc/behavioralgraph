@@ -555,6 +555,34 @@ def _score(block, asked):
     return (subj, 1 if block['window_days'] >= 300 else 0, -float(block['count']['value']))
 
 
+# a base that is one service's viewers ("people who watched ... on YouTube in the window")
+_SERVICE_BASE_RX = re.compile(r"\bpeople who (?:watched|streamed|viewed|listened to)\b.{0,160}\bon [A-Z]", re.S)
+# the reader disputes that base ('says its base is "people who watched ... on YouTube." Is that right?')
+_DISPUTES_BASE_RX = re.compile(
+    r"\b(?:its|the|that) base (?:is|was|reads?|says)\b.{0,160}\b(?:is that (?:right|correct)|that (?:is|'s) (?:wrong|not right)|"
+    r"should(?: not|n'?t) be)\b|\b(?:do not|don'?t|not) limit(?:ed)? to\b", re.I | re.S)
+
+
+def _service_base(block):
+    return bool(_SERVICE_BASE_RX.search(str(block.get('universe') or '')))
+
+
+def _prefers_whole_base(text, history):
+    """True when a read on one service's viewers must not be the basis:
+    the reader disputes that base, or this thread's brief was on US
+    people (prometheus.read_brief). The read on the brief's own base is
+    the one to keep (Grace Yin 2026-11-17: the lane picked the read on
+    'people who watched ... on YouTube' over the brief's)."""
+    try:
+        if _DISPUTES_BASE_RX.search(' '.join(str(text or '').split())):
+            return True
+        from . import read_brief as _rb
+        parent = _rb.thread_brief(history)
+        return bool(parent and _rb.population(parent))
+    except Exception:
+        return False
+
+
 def _cap(s):
     s = str(s or '')
     return s[:1].upper() + s[1:] if s else s
@@ -702,10 +730,12 @@ def _why(canon, asked, blocks):
     bits = []
     hit = sorted(_tokens(canon['universe']) & asked)
     if hit:
-        # the asked word in the universe's own spelling
+        # the asked word in the universe's own spelling; two words are named together only when the universe
+        # writes them together ("After book" out of "Every Summer After (book member only)" names nothing, 2026-11-17)
         words = {w.lower().strip("'"): w for w in re.findall(r"[A-Za-z0-9']+", canon['universe'])}
         named = ' '.join(words.get(h, h) for h in hit[:2])
-        bits.append(f"it is the read that counts {named} itself")
+        if len(hit) == 1 or re.search(r"\b" + r"[ ]+".join(re.escape(words.get(h, h)) for h in hit[:2]) + r"\b", canon['universe'], re.I):
+            bits.append(f"it is the read that counts {named} itself")
     if canon['window_days'] >= 300:
         bits.append('it sits on a full window')
     full = [b for b in blocks if not b.get('_pct_only')]
@@ -777,7 +807,8 @@ def answer(text, history, ctx=None, ledger=None, host=None):
                     'deck_angle': None, 'reconcile': {'found': False, 'quoted': [q['raw'] for q in quoted]}}
         asked = _asked_tokens(text)
         full = [b for b in blocks if not b.get('_pct_only')] or blocks
-        canon = max(full, key=lambda b: _score(b, asked))
+        _whole = _prefers_whole_base(text, history) and any(not _service_base(b) for b in full)
+        canon = max(full, key=lambda b: ((0 if (_whole and _service_base(b)) else 1),) + tuple(_score(b, asked)))
         n_fig = len(blocks)
         opener = (f"Here is what {'each of those figures' if n_fig > 1 else 'that figure'} counted, from the reads already "
                   f"delivered in this thread, and the one basis to use from here.")

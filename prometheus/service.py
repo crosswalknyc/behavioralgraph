@@ -1431,6 +1431,15 @@ def ask(user, body, *, via='session'):
                     _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
                     return env, 200
                 _bf = _rbf.read(text)
+                if not _bf:
+                    # the next question in a brief's thread ("Split each title-year by engagement source (book order,
+                    # Goodreads, TikTok, YouTube, search)", Grace Yin 2026-11-17) is on that brief's titles and base:
+                    # never the page, never a service its list of sources names
+                    _cy = _rbf.carry(text, history)
+                    if _cy:
+                        text = _cy
+                        body = dict(body, text=text, _pm_read_brief_carried=True)
+                        _bf = _rbf.read(text)
                 if _bf:
                     _is_brief = True
                     if not body.get('bind_subject') and not (isinstance(body.get('extra'), dict) and body['extra'].get('bind_subject')):

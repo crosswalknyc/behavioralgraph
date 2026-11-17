@@ -265,6 +265,11 @@ def _pm_detect_multi_year_ask(text):
         from prometheus import read_brief as _rb
         if _rb.is_brief(t) or (_rb.holds(t) and _rb.titles(t)):
             return None
+        # words that state their own base and count engagement ("Audience (base): all US people ... each calendar
+        # year separately: 2021 ... 2026") are a measurement of their own, whatever profile is open and whether or
+        # not every title in them was recognized (Grace Yin 2026-11-17: six year profiles of Hazbin Hotel at $300)
+        if _rb.stands_on_its_own(t):
+            return None
     except Exception:
         pass
     this_year = datetime.now().year

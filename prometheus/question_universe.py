@@ -396,7 +396,9 @@ def question_universe(text, page='', history=None):
     # the page's name (prometheus.read_brief, Grace Yin 2026-11-11)
     try:
         from . import read_brief as _rb
-        if _rb.population(text):
+        if _rb.population(text) or (_rb.own_population(text) and _rb.engagement_ask(text)):
+            # the words state their own base ("Audience (base): all US people. Do NOT limit to YouTube viewers or any
+            # other platform"): that is the base whether or not every title in them was recognized (2026-11-17)
             return Universe('named', US_PEOPLE, US_PEOPLE, (US_PEOPLE,), True)
     except Exception:
         pass

@@ -167,6 +167,12 @@ def wants_unprojected(text):
     except Exception:
         pass
     try:
+        from . import read_brief as _rb
+        if _rb.stands_on_its_own(t):
+            return False      # "US people engaged, split into 1 touch, 2-3 touches and 4+ touches, with the count in the data" asks for a read with its base count beside it, never the size of whatever is on file (Grace Yin 2026-11-17: answered with the Zac Efron audience)
+    except Exception:
+        pass
+    try:
         from . import segment_sizing as _seg
         if _seg.is_segment_ask(t):
             return False      # a demographic filter ("income $50k-$200k") is a segment to size, never a figure to unproject (2026-11-11)

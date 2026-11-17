@@ -574,6 +574,15 @@ def title_universe_label(text, subject, category=''):
     title, paren_plat = strip_platform_paren(head)
     if not title:
         return ''
+    try:
+        # a count of engagement with a work, on its own base or across a list of sources (book orders, Goodreads,
+        # TikTok, YouTube, search), is not a count of people who watched it on one of them: a service in a list of
+        # sources is a source (Grace Yin 2026-11-17: a split by source came back on "people who watched ... on YouTube")
+        from . import read_brief as _rb
+        if _rb.is_brief(text) or _rb.stands_on_its_own(text) or _rb.sources_listed(text) >= 3:
+            return ''
+    except Exception:
+        pass
     if not title_viewing_ask(text, title) or audience_of_person(text, title):
         return ''
     cat = str(category or '').strip().upper()
