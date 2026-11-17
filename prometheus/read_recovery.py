@@ -638,7 +638,7 @@ def resume_record(*, text, history, base, panel_charge=None, probe=False,
     nine of Liz's reads landed as "Pulling this data will cost $100")."""
     base = base if isinstance(base, dict) else {}
     rec = {
-        'text': str(text or '')[:1200],
+        'text': str(text or '')[:6000],   # a brief is run again whole: its columns and rules sit past the first 1200 characters (2026-11-17)
         'history': _trim_history(history),
         'bind_subject': str(base.get('subject') or '')[:200],
         'bind_cohort': str(bind_cohort or '')[:120] or None,

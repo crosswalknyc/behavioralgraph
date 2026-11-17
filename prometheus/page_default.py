@@ -559,6 +559,20 @@ def subject_category(subject, base=None, catalog=None):
         return ''
 
 
+def brief_on_own_base(text):
+    """True when the words are a brief on works they name, counted on a
+    base they state themselves (all US people). No file is the base of
+    that read: not the open page, not a library file, and not a
+    Subscriber IQ run that carries one title's name (Grace Yin
+    2026-11-17: a brief on eleven books was started on the We Were Liars
+    Subscriber IQ file, the series). Never raises."""
+    try:
+        from . import read_brief as _rb
+        return bool(_rb.own_base_brief(text))
+    except Exception:
+        return False
+
+
 def title_universe_label(text, subject, category=''):
     """The universe a title-viewing read counts, in plain words for the
     opener and the Base line. A person's works: 'people who watched a

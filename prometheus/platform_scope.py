@@ -331,6 +331,9 @@ def for_read(text, history, base, ledger, bind_subject='', subj_hint=''):
     reader's: it is overridden only when the ledger holds the subject
     the words name (never on the thread alone)."""
     try:
+        from . import read_brief as _rb
+        if _rb.own_base_brief(text):
+            return None     # a service a brief lists as a source or a split is a column of its table, never where the read is scoped (2026-11-17)
         cands = []
         if isinstance(base, dict) and str(base.get('source') or '') in ('catalog', 'page'):
             cands.append(str(base.get('subject') or '').split(' - ')[0])

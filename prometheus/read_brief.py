@@ -106,7 +106,7 @@ import re
 __all__ = ['read', 'is_brief', 'titles', 'subject_label', 'holds', 'housekeeping', 'is_method_question',
            'method_questions', 'population', 'framing_lines', 'counted_line', 'MailHold', 'should_retry',
            'HOUSEKEEPING_RUN_CHIP', 'own_population', 'engagement_ask', 'sources_listed', 'stands_on_its_own',
-           'thread_brief', 'carry']
+           'thread_brief', 'carry', 'own_base_brief']
 
 US_PEOPLE = 'US people'
 HOUSEKEEPING_RUN_CHIP = 'Run it'
@@ -118,7 +118,11 @@ _CAP = r"[A-Z\u00c0-\u00de][A-Za-z\u00c0-\u00ff0-9'\u2019]*"
 _TITLE = r"(?P<title>" + _CAP + r"(?:[ ](?:" + _CAP + r"|" + _SMALL + r"|&|\d+))*)"
 _AUTHOR = r"(?P<author>[A-Z][A-Za-z.'\u2019-]*(?:[ ][A-Z][A-Za-z.'\u2019-]*){0,3})"
 _BY_RX = re.compile(_TITLE + r"[ ]+by[ ]+" + _AUTHOR)
-_PAREN_RX = re.compile(_TITLE + r"[ ]*\([ ]*" + _AUTHOR + r"[ ]*\)")
+# "Title (Author)", "Title (Author One, Author Two, Author Three)", "Title (Author, book 1)"
+_NAME = r"[A-Z][A-Za-z.'\u2019-]*(?:[ ][A-Z][A-Za-z.'\u2019-]*){0,3}"
+_PAREN_RX = re.compile(
+    _TITLE + r"[ ]*\([ ]*(?P<author>" + _NAME + r"(?:(?:[ ]*,[ ]*(?:and[ ]+)?|[ ]+and[ ]+|[ ]*&[ ]*)" + _NAME + r"){0,4})"
+    r"(?:[ ]*[,;:][ ]*(?i:book|vol\.?|volume|part|no\.?|#)[ ]*\d+(?:[ ]+only)?)?[ ]*\)")
 _QUOTED_RX = re.compile(r"[\"\u201c]([A-Z][^\"\u201c\u201d\n]{2,80})[\"\u201d]")
 # a list item: "1. The Love Hypothesis - Ali Hazelwood", "- Culpa M\u00eda \u2013 Mercedes Ron (book 1 only)"
 _LIST_RX = re.compile(r"(?:^|(?<=[\s:;]))(?:\d{1,2}[.)]|[\u2022*])[ ]+" + _TITLE + r"[ ]+[-\u2013\u2014][ ]+" + _AUTHOR)
@@ -609,6 +613,23 @@ def strip_hold(text):
 _ROWS_RX = re.compile(
     r"\b(?:each|every|per|by|those|these|the(?:\s+same)?|all)\s+(?:(?:three|two|four|five|six|eleven|\d+)\s+)?"
     r"(?:title[- ]years?|titles?|books?|novels?)\b|\btitle[- ]years?\b", re.I)
+
+
+def own_base_brief(text):
+    """True when the words are a brief on works they name, on a base they
+    state themselves (all US people). No file is the base of that read:
+    a library or Subscriber IQ file that carries one title's name (a
+    series called We Were Liars under a brief on eleven books) is a row
+    of the answer at most, never the audience it is counted on."""
+    try:
+        t = _squash(text)
+        if not t or not titles(text):
+            return False
+        if not (own_population(t) or population(t)):
+            return False
+        return bool(is_brief(text) or stands_on_its_own(text))
+    except Exception:
+        return False
 
 
 def thread_brief(history):

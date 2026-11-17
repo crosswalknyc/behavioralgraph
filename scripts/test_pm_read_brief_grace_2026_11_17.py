@@ -93,6 +93,20 @@ RECONCILE = (
     'in your Nov 12 file). Which figures are correct, and why do they differ? The second read also says its ba'
     'se is "people who watched \u2026 on YouTube." Is that right?')
 
+# 2026-11-17 17:35 UTC, the same ask a third way: titles with the authors in brackets, split by semicolons
+BRACKETS = (
+    'Compare these 11 books for US people, calendar year 2022 (Jan 1 \u2013 Dec 31, 2022): The Love Hypot'
+    'hesis (Ali Hazelwood); The Map That Leads To You (J.P. Monninger); Every Summer After (Carley Fortun'
+    'e); The Deal (Elle Kennedy); We Were Liars (E. Lockhart); My Lady Jane (Cynthia Hand, Brodi Ashton, '
+    'Jodi Meadows); The Idea of You (Robinne Lee); Culpa M\xeda (Mercedes Ron, book 1); Perfect Addiction'
+    ' (Claudia Tan); Butcher & Blackbird (Brynne Weaver); The Bad Boy\'s Girl (Blair Holden, book 1).\n\u258e'
+    '\n\u258e Use the book member only (no adaptation, no author-only activity), and all US people as the'
+    ' base, not YouTube viewers. For each book, give: total US people engaged and the count in the data; '
+    'the split into Prime members who watched Prime Video, Prime members who didn\'t, and non-Prime membe'
+    'rs; the split into 1 touch, 2\u20133 touches and 4+ touches; and people by source (book orders, Good'
+    'reads, Wattpad, other fan fiction, TikTok, YouTube, fan sites, search), with a person counted once i'
+    'nside each source.'
+)
 ELEVEN = ['The Love Hypothesis', 'The Map That Leads To You', 'Every Summer After', 'The Deal', 'We Were Liars', 'My Lady Jane',
           'The Idea of You', 'Culpa M\u00eda', 'Perfect Addiction', 'Butcher & Blackbird', "The Bad Boy's Girl"]
 AUTHORS = ['Ali Hazelwood', 'J.P. Monninger', 'Carley Fortune', 'Elle Kennedy', 'E. Lockhart', 'Cynthia Hand', 'Robinne Lee',
@@ -112,6 +126,54 @@ class TheWords(unittest.TestCase):
 
     def test_the_prose_names_all_eleven_books(self):
         self.assertEqual([t for t, _a in RB.titles(SINGLE_2022)], ELEVEN)
+
+    def test_authors_in_brackets_name_all_eleven_books(self):
+        # three authors in one bracket (My Lady Jane) and "book 1" inside it (Culpa M\u00eda, The Bad Boy's Girl)
+        # dropped three of her eleven: the read said "and 5 more titles"
+        got = RB.titles(BRACKETS)
+        self.assertEqual([t for t, _a in got], ELEVEN)
+        self.assertEqual(dict(got)['My Lady Jane'], 'Cynthia Hand, Brodi Ashton, Jodi Meadows')
+        self.assertEqual(dict(got)['Culpa M\u00eda'], 'Mercedes Ron')
+        self.assertEqual(RB.read(BRACKETS)['subject'], ELEVEN_SUBJECT)
+
+    def test_no_file_is_the_base_of_a_brief_on_us_people(self):
+        # the read was started on a Subscriber IQ file called We Were Liars, the series, because one of her eleven
+        # books shares its name
+        for words in (SPEC, SINGLE_2022, BRACKETS, TWO_BOOKS, THREE_BOOKS):
+            self.assertTrue(RB.own_base_brief(words), words[:60])
+        carried = RB.carry(SOURCE_SPLIT, [{'role': 'user', 'text': THREE_BOOKS}])
+        self.assertTrue(RB.own_base_brief(carried), carried[:80])
+        for words in ('How many Hazbin Hotel viewers also watch Prime Video?',
+                      'We Were Liars viewers on Prime Video: what else do they watch',
+                      'What share of all US adults watch We Were Liars (E. Lockhart) on Prime Video?',
+                      'Compare The Idea of You (Robinne Lee) and Culpa M\u00eda (Mercedes Ron, book 1) viewers on Prime Video by age',
+                      'size the fan audience for The Deal by Elle Kennedy'):
+            self.assertFalse(RB.own_base_brief(words), words)
+
+    def test_the_read_path_asks_before_it_takes_a_file(self):
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        resolver = src[src.index('def _pm_generation_base('):src.index("_pm_generation_base = _primary_profile.held(")]
+        # the resolver itself returns no file for such a brief, before the open product, the page, the library and Subscriber IQ
+        self.assertIn('_page_default.brief_on_own_base(text)', resolver)
+        self.assertLess(resolver.index('brief_on_own_base(text)'), resolver.index('# 0. The open product is the base'))
+        self.assertLess(resolver.index('brief_on_own_base(text)'), resolver.index('# 3. Subscriber IQ runs count as pulled bases too.'))
+        # the read drops a file it reached through the brief's label and never pairs two library files under it
+        self.assertIn("if base and not _pinned_base and _page_default.brief_on_own_base(text):", src)
+        self.assertIn('_two = None if _page_default.brief_on_own_base(text) else _pm_two_base_detect(text, ctx)', src)
+        from prometheus import page_default as PD, platform_scope as PS
+        self.assertTrue(PD.brief_on_own_base(BRACKETS))
+        self.assertFalse(PD.brief_on_own_base('We Were Liars viewers on Prime Video: what else do they watch'))
+        # a service the brief lists as a source or a split never scopes the read
+
+        class _Ledger:
+            def __getattr__(self, name):
+                raise AssertionError('the ledger is not asked for a brief on its own base')
+        for words in (SPEC, BRACKETS):
+            self.assertIsNone(PS.for_read(words, [], {'subject': 'YouTube', 'source': 'catalog', 's3_key': 'YouTube.csv'}, _Ledger(), '', ''))
+            self.assertIsNone(PS.for_read(words, [], None, _Ledger(), 'YouTube', ''))
+        # a read run again is run on the whole brief, columns and rules included
+        rr = __import__('prometheus.read_recovery', fromlist=['resume_record']).resume_record(text=SPEC, history=[], base={})
+        self.assertEqual(rr['text'], SPEC)
 
     def test_titles_at_the_lead_with_no_author(self):
         self.assertEqual(RB.titles(TWO_BOOKS), [('The Love Hypothesis', ''), ('The Map That Leads To You', '')])

@@ -12561,6 +12561,8 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     ask wins over the open page; the page stays the fallback.
     """
     import prometheus_analysis as pma
+    if _page_default.brief_on_own_base(text):
+        return None   # a brief on works it names, on its own base (all US people): no page, library file or Subscriber IQ run is its base (2026-11-17)
     # 0. The open product is the base (2026-10-22, Alexia / The Influencer
     # Project): with an Attribution IQ campaign, a Digital Journey or a Brand
     # Partnership read on screen, an ask that refers to it or names its own
@@ -13754,6 +13756,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                                prefer_catalog=True)
         except Exception:
             traceback.print_exc()
+    if base and not _pinned_base and _page_default.brief_on_own_base(text):
+        base, digest_block = None, ''   # nor a file reached through the brief's own label (2026-11-17)
     if base and not _pinned_base and str(base.get('source') or '') in ('page', 'catalog') and not str(base.get('s3_key') or '').startswith('subiq:'):
         _stands, _why = _page_default.base_stands(text, history, base, bind_subject, normalize=_H._normalize_for_match,
                                                   stop_tokens=_PM_CLARIFY_STOP_TOKENS, brand_named=_pm_page_brand_named, ask_user=_pm_ask_log_user(''))
@@ -13888,7 +13892,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # its own published measurements ride the anchors block so both
     # sides stay consistent with what each already shipped.
     try:
-        _two = _pm_two_base_detect(text, ctx)
+        _two = None if _page_default.brief_on_own_base(text) else _pm_two_base_detect(text, ctx)
     except Exception:
         _two = None
     if _two:
