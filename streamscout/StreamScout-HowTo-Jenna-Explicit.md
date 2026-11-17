@@ -7,9 +7,12 @@
 > 2. **Netflix:** it runs headless on a saved login. If Netflix titles drop to
 >    **0 en masse**, the login expired — refresh it once with
 >    `netflix_title_identifier.py --headed …`, then headless resumes. (§5h)
-> 3. **Amazon:** it **never** resolves from a bare title — always pass a pinned
->    **series-level** Amazon watch URL (`url=`), then eyeball the returned `SHOW`.
->    And ~5 ids per episode is **by design** — collapse to one id per
+> 3. **Amazon:** **always scan it.** Pass a pinned **series-level** Amazon watch
+>    URL (`url=`) when you have one; when you don't, call it **by title** like
+>    every other platform — never skip Amazon for lack of a pin. A title-only
+>    call that could not look comes back under `failed` (*unverified*), not as 0.
+>    (Corrected 2026-11-17: the earlier "never resolves from a bare title" rule
+>    was wrong.) And ~5 ids per episode is **by design** — collapse to one id per
 >    (season, episode) at your counting layer, preferring `amzn1.dv.gti`. (§5i, §8)
 > 4. **Held-title alerts** (ambiguous look-alike / "which version?") email **you +
 >    Jess** — those are confirmations to action, not errors. (§5e, §5g)
@@ -215,9 +218,9 @@ except PlatformScopeError as e:
 > own door-level clarity handler already catches the "not sure which
 > platform/version" case *before* a build, and the mail path was firing false
 > **"build refused"** alerts — both transient (a resolver's momentary 0; e.g.
-> *Gilmore Girls on Hulu*, which is actually live, 153 rows) and **structural**
-> (Amazon/Prime Video never resolves from a bare title — §5i — so every scoped
-> Prime Video ask would email forever). **The guarantee that matters is
+> *Gilmore Girls on Hulu*, which is actually live, 153 rows) and **recurring**
+> (a blocked Amazon search used to read as 0 — §5i — so scoped Prime Video asks
+> emailed on every blocked day). **The guarantee that matters is
 > unchanged:** a scoped miss still raises `PlatformScopeError`, so no other
 > platform's seeds are ever substituted. `notify=True` / `notify_context` and the
 > CLI `--notify` flag are still accepted but are now **no-ops**.
@@ -500,26 +503,54 @@ that header refresh + Render push for the emergency/fallback case.
 > A bare-title Netflix query still works for everything else — pin only when the
 > name is ambiguous.
 
-### 5i. Amazon ALWAYS needs a pinned series-level URL (this is how Amazon works)
+### 5i. Amazon: always scan it — by pinned page when you have one, by title when you don't
 
-Amazon is the one platform that does **not** resolve from a bare title. Amazon's
-title-search discovery returns **0** — for brand-new *and* long-catalog titles
-alike (verified on *The Rainmaker*, *Riverdale*, *The Big Bang Theory*,
-*The Hitman's Bodyguard* — all 0 by title). **This is expected, not an outage.**
-To get Amazon coverage you must hand it the exact page via `url=` (or the
-per-platform `hints={"amazon": "<url>"}`):
+> **Corrected 2026-11-17.** This section used to say Amazon *never* resolves from
+> a bare title and must always be pinned. **That was wrong.** It was read off one
+> day (2026-10-26) when Amazon was blocking us and the resolver answered 0
+> without saying it could not look. The same four titles (*The Rainmaker*,
+> *Riverdale*, *The Big Bang Theory*, *The Hitman's Bodyguard*) resolve by title
+> when Amazon's search loads. The cost of the old rule: a title with no Amazon
+> page stored yet was never scanned on Amazon at all (*Euphoria*, 2026-11-17 —
+> 240 Amazon ids missed).
+
+**The rule now: every scan includes Amazon. Never skip it for lack of a pin.**
+
+1. **You have a pinned page** (the content map's stored placement, a link the
+   client gave) → pass it as `url=` / `hints={"amazon": "<url>"}`. It skips the
+   search and opens the page directly.
+2. **You have no pinned page** → call Amazon **by title**, exactly like every
+   other platform. The look-alike guard (§5e) and the which-version hold (§5g)
+   apply to a title-only call, as they do everywhere else.
+3. **Read the answer with `query_report`:**
+   - rows → the title is on Amazon;
+   - **0 rows and `failed["amazon"]` set → unverified.** Amazon could not be
+     read from here (its search or its title pages were blocked). This is
+     could-not-look, never not-there: stored placements stand, try again later
+     or pin the page;
+   - 0 rows and nothing under `failed` → Amazon's own search was read and the
+     title was not on it.
 
 ```python
-# Series: pin the SERIES-level Amazon page (spans every season)
+# No pin: by title
+rep = query_report("Euphoria", platforms=["amazon"], kind="series")
+rows, could_not_look = rep["rows"], rep["failed"].get("amazon")
+
+# Series pin: the SERIES-level Amazon page (spans every season)
 streamscout_query("Riverdale", platforms="amazon", kind="series",
                   url="https://www.amazon.com/gp/video/detail/B01MU3G91Q")
 
-# Movie: pin the movie's /dp/ page
+# Movie pin: the movie's /dp/ page
 streamscout_query("The Hitman's Bodyguard", platforms="amazon", kind="movie",
                   url="https://www.amazon.com/Hitmans-Bodyguard-Ryan-Reynolds/dp/B074VZK5TS")
 ```
 
-**Use the right URL shape — this matters:**
+Amazon blocks us from time to time (seen from the office Mac and from server
+addresses), and a block hits pinned pages and title searches alike. A blocked
+title-only call now comes back under `failed`; it used to answer 0, and could
+stall for minutes on a refused web search.
+
+**When you pin, use the right URL shape — this matters:**
 
 - ✅ A **series-level** `amazon.com/.../dp/<ASIN>` or
   `amazon.com/gp/video/detail/<ASIN>` **streaming** page — it shows the full
@@ -538,8 +569,9 @@ MORE.`** instead of the real show. If you see that, the pin was blocked: re-pull
 (it's often transient) or grab a fresh series-level URL. A correct pull shows the
 real title (e.g. `THE BIG BANG THEORY`) across every expected season.
 
-> **Rule of thumb:** seeding Amazon = *find the series-level Amazon watch page →
-> pass it as `url=` → confirm the `SHOW` name looks right.* Expect the keep-all
+> **Rule of thumb:** seeding Amazon = *pass the series-level Amazon watch page
+> as `url=` if you have it (and confirm the `SHOW` name looks right), otherwise
+> ask by title; a `failed` Amazon is unverified, never absent.* Expect the keep-all
 > SKU fan-out from §8 (hundreds/thousands of rows for a long series is normal;
 > Promy collapses to one id per episode at counting).
 
@@ -600,8 +632,9 @@ streamscout_query("Gilmore Girls", platforms="hulu", strict=True)
   (prefer the streaming `amzn1.dv.gti` over the `detail/B0…` store ASINs) so a
   viewer isn't counted multiple times. It is **not** a bug to see 5× Amazon rows
   for an episode.
-- **Amazon won't resolve from a bare title — pin a series-level URL.** This is
-  how Amazon always works; see **§5i** for the required URL shape and the
+- **Amazon resolves by title or by pin — never skip it.** Pin a series-level URL
+  when you have one; otherwise call it by title. A blocked search comes back
+  under `failed` (unverified), not as 0. See **§5i** for the URL shape and the
   blocked-page (`AMAZON.COM. SPEND LESS…`) tell.
 - **The cap is a *survey*, not a filter.** It never changes a show's audience
   size (sizing is show-level); it just keeps the id set processable while

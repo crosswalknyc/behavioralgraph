@@ -286,8 +286,8 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
         **no longer sends a scope-miss email** as of 2026-10-26. The scope alert
         was retired because Promy's own door-level clarity handler already catches
         the "not sure which platform/version" case, and the wrapper's mail path
-        was firing false "build refused" alerts (transient resolver 0s, and the
-        structural Amazon-never-resolves-from-a-bare-title case, §5i). The
+        was firing false "build refused" alerts (transient resolver 0s, and a
+        blocked Amazon search that used to read as 0, §5i). The
         anti-fallback guarantee is unchanged: a scoped miss still raises
         ``PlatformScopeError`` so no other platform's seeds get substituted.
     notify_context : dict | None
@@ -352,9 +352,9 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
             # platform/version" BEFORE a build, so this wrapper's mail path was
             # pure noise — and it fired false "build refused" alerts for cases
             # that are either transient (a resolver's momentary 0, e.g. Gilmore
-            # Girls on Hulu, which is actually live — 153 rows) or STRUCTURAL
-            # (Amazon/Prime Video never resolves from a bare title, §5i, so every
-            # scoped Prime Video ask would email forever). The anti-fallback
+            # Girls on Hulu, which is actually live — 153 rows) or RECURRING
+            # (a blocked Amazon search used to read as 0, §5i, so scoped Prime
+            # Video asks emailed on every blocked day). The anti-fallback
             # CONTRACT is unchanged: we still raise PlatformScopeError so no other
             # platform's seeds are ever substituted. `notify` / `notify_context`
             # stay in the signature (CLI --notify still parses) but no longer send
