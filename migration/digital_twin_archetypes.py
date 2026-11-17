@@ -150,9 +150,10 @@ Rules:
 - who: two sentences about who they are and how the subject fits their week. relationship: one sentence on where they stand with the subject now. decides: one sentence on how they decide to watch, buy or show up. moves_them: a short phrase. holds_them_back: a short phrase.
 - share_adjust_pct: a relative nudge to the kind's share, between -30 and 30, when the audience's facts argue the skeleton has it too big or too small. The totals are re-fitted afterwards; you shape the mix, not the size of the audience.
 - trait_shifts: up to five of these dials moved by -20 to 20 points for this kind: discovery_social_vs_search, binge_vs_appointment, price_sensitivity, churn_propensity, franchise_loyalty, merch_propensity, second_screen, live_events, creator_follow, ad_tolerance, trial_speed, word_of_mouth.
+- profile_lean: who this kind is, when it really skews, as the share (percent, 0 to 100) of the kind on the named rows, by category: gender, sexual_orientation, ethnicity, income, parental, relationship, education. Use the audience's own row labels (the gender rows you were given, for example Female, Male, Non-Binary, Trans Female, Trans Male; the orientation rows, for example LGBTQ+ or Gay or Lesbian). Rows you do not name share what is left in the audience's own proportions. A kind that is gay men: {"gender": {"Male": 95}, "sexual_orientation": {"LGBTQ+": 95}}; a kind that is trans women: {"gender": {"Trans Female": 90}, "sexual_orientation": {"LGBTQ+": 85}}; a kind of young mothers: {"parental": {"Has Children": 92}}. {} when the kind is the audience's own mix. The other kinds are re-fitted so the audience's totals hold, and a kind can never hold more of a row than the audience has (a 7% kind can be 90% trans women only if the audience is at least 6.3% trans women; if the rows do not hold a kind, do not name it), so lean only where the facts argue it.
 - Plain English a high school student follows; third person; no first names; never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data. No em dashes.
 Return JSON only:
-{"groups": [{"id": "<skeleton id>", "label": "...", "who": "...", "relationship": "...", "decides": "...", "moves_them": "...", "holds_them_back": "...", "share_adjust_pct": 0, "trait_shifts": {}, "merge_into": null, "split_label": null, "split_share_pct": null}], "notes": "<one sentence on what distinguishes this audience's kinds>"}"""
+{"groups": [{"id": "<skeleton id>", "label": "...", "who": "...", "relationship": "...", "decides": "...", "moves_them": "...", "holds_them_back": "...", "share_adjust_pct": 0, "trait_shifts": {}, "profile_lean": {}, "merge_into": null, "split_label": null, "split_share_pct": null}], "notes": "<one sentence on what distinguishes this audience's kinds>"}"""
 
 _BANNED_RX = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|estimate|research(?:ed)?|panel|panelists?|sample|archetypes?|personas?|segments?|cohorts?|confidence|data)\b", re.I)
 
@@ -668,6 +669,11 @@ def _apply_desk(sk: dict, data: dict) -> tuple:
                 except (TypeError, ValueError):
                     continue
         c['discovery'] = _discovery_mode(c['traits'])
+        leans = g.get('profile_lean') if isinstance(g.get('profile_lean'), dict) else {}
+        if leans:
+            c['profile'], set_rows = _lean_profile(c.get('profile') or {}, leans)
+            if set_rows:
+                c['set_rows'] = set_rows
         if g.get('merge_into') and str(g['merge_into']) in cells and str(g['merge_into']) != cid:
             merges.append((cid, str(g['merge_into'])))
         if g.get('split_label') and g.get('split_share_pct') is not None:
@@ -699,6 +705,125 @@ def _apply_desk(sk: dict, data: dict) -> tuple:
         b['label'] = label_b or f"{c['label']} (a second kind)"
         out = [x for x in out if x is not c] + [a, b]
     return out, {'applied': applied > 0, 'groups_read': applied, 'merges': merges, 'splits': [s[0] for s in splits], 'notes': scrub_text(str(data.get('notes') or ''))[:240]}
+
+
+_LEAN_CATS = ('gender', 'sexual_orientation', 'ethnicity', 'income', 'parental', 'relationship', 'education', 'occupation', 'party', 'urbanicity')
+PIN_SHARE = 70.0     # a kind whose rows sit at or above this on one label, and well above the audience's own share of it, is that label
+PIN_OVER = 1.25      # ... 'well above': at least this many times the audience's own share (so a 72% female audience does not pin every kind female)
+PIN_HARD = 90.0      # a row at or above this pins whatever the audience's share (a kind of gay men seats a gay man)
+
+
+def _lean_profile(profile: dict, leans: dict) -> tuple:
+    """The desk's word on who a kind is: the named rows take the shares
+    given (percent of the kind, case-insensitive on the label); the rows
+    not named share what is left in their own proportions. Returns (the
+    profile, {category: [labels set]}) so the re-fit to the audience's
+    margins leaves the set rows alone. Unknown categories and labels are
+    ignored; a set that asks for more than 100 is scaled to 100."""
+    out = {k: list(v) for k, v in (profile or {}).items()}
+    set_rows = {}
+    for cat, want in (leans or {}).items():
+        cat = str(cat or '').strip().lower().replace(' ', '_')
+        cat = {'orientation': 'sexual_orientation', 'parents': 'parental', 'kids': 'parental'}.get(cat, cat)
+        if cat not in _LEAN_CATS or not isinstance(want, dict) or not out.get(cat):
+            continue
+        by = {}
+        for k, v in want.items():
+            try:
+                by[str(k).strip().lower()] = clamp(float(v), 0.0, 100.0)
+            except (TypeError, ValueError):
+                continue
+        rows = out[cat]
+        hit = [r for r in rows if str(r.get('label') or '').strip().lower() in by]
+        if not hit:
+            continue
+        asked = sum(by[str(r.get('label') or '').strip().lower()] for r in hit)
+        scale = min(1.0, 100.0 / asked) if asked > 0 else 1.0
+        rest = [r for r in rows if r not in hit]
+        rest_tot = sum(float(r.get('pct') or 0) for r in rest) or 1.0
+        left = max(0.0, 100.0 - asked * scale)
+        new_rows = []
+        for r in rows:
+            key = str(r.get('label') or '').strip().lower()
+            if key in by:
+                new_rows.append(dict(r, pct=by[key] * scale))
+            else:
+                new_rows.append(dict(r, pct=float(r.get('pct') or 0) / rest_tot * left))
+        out[cat] = _norm_rows(new_rows)
+        set_rows[cat] = [str(r.get('label')) for r in hit]
+    return out, set_rows
+
+
+def fit_profiles_to_margins(cells: list, twin: dict, rounds: int = 6) -> list:
+    """Across the kinds, every category's rows re-fitted so the
+    share-weighted sum of the kinds' rows is the twin's own row for each
+    label (the room's totals stay the audience's, however the kinds
+    differ). Age is left alone (its margin is held by the cell raking).
+    Iterative: each label scaled by twin over implied, each kind
+    renormalized, a few rounds."""
+    demo = ((twin or {}).get('identity') or {}).get('demographics') or {}
+    out = [dict(c, profile={k: list(v) for k, v in (c.get('profile') or {}).items()}) for c in cells]
+    tot_share = sum(float(c.get('share_pct') or 0) for c in out) or 100.0
+    for cat in _LEAN_CATS:
+        target = {str(r.get('label')): float(r.get('pct') or 0) for r in (demo.get(cat) or []) if isinstance(r, dict) and r.get('label')}
+        ttot = sum(target.values())
+        if not target or ttot <= 0:
+            continue
+        target = {k: v / ttot * 100.0 for k, v in target.items()}
+        kinds_with = [c for c in out if c['profile'].get(cat)]
+        if not kinds_with:
+            continue
+        # the kinds the desk set on this category stand as set; the rest are fitted so the audience's totals hold
+        fixed = [c for c in kinds_with if cat in (c.get('set_rows') or {})]
+        free = [c for c in kinds_with if c not in fixed]
+        if not free:
+            continue
+        w_all = sum(float(c.get('share_pct') or 0) / tot_share for c in kinds_with) or 1.0
+
+        def _fixed_part():
+            part = {}
+            for c in fixed:
+                w = float(c.get('share_pct') or 0) / tot_share / w_all
+                for r in c['profile'][cat]:
+                    part[str(r.get('label'))] = part.get(str(r.get('label')), 0.0) + w * float(r.get('pct') or 0)
+            return part
+
+        fixed_part = _fixed_part()
+        # the audience's rows win over the desk's word: a kind cannot hold more of a label than the audience has (a 7% kind
+        # of trans women in an audience that is 0.2% trans women is scaled to what the audience holds, with a sliver left over)
+        over = {lab: target.get(lab, 0.0) * 0.98 / v for lab, v in fixed_part.items() if v > 0 and v > target.get(lab, 0.0) * 0.98}
+        if over:
+            for c in fixed:
+                rows = [dict(r) for r in c['profile'][cat]]
+                removed = 0.0
+                for r in rows:
+                    f = over.get(str(r.get('label')))
+                    if f is not None:
+                        cut = float(r.get('pct') or 0) * (1.0 - f)
+                        r['pct'] = float(r.get('pct') or 0) - cut
+                        removed += cut
+                if removed > 0:
+                    # what the kind cannot be goes back to its other rows in their own proportions (never a renormalize, which
+                    # would inflate the capped row again)
+                    others = [r for r in rows if str(r.get('label')) not in over]
+                    o_tot = sum(float(r.get('pct') or 0) for r in others)
+                    for r in others:
+                        r['pct'] = float(r.get('pct') or 0) + (removed * float(r.get('pct') or 0) / o_tot if o_tot > 0 else removed / max(1, len(others)))
+                    c.setdefault('lean_capped', []).append(cat)
+                c['profile'][cat] = _norm_rows(rows)
+            fixed_part = _fixed_part()
+        free_w = sum(float(c.get('share_pct') or 0) / tot_share / w_all for c in free) or 1.0
+        free_target = {k: max(0.0, target.get(k, 0.0) - fixed_part.get(k, 0.0)) / free_w for k in set(target) | set(fixed_part)}
+        for _ in range(rounds):
+            implied = {}
+            for c in free:
+                w = float(c.get('share_pct') or 0) / tot_share / w_all / free_w
+                for r in c['profile'][cat]:
+                    implied[str(r.get('label'))] = implied.get(str(r.get('label')), 0.0) + w * float(r.get('pct') or 0)
+            factor = {k: (free_target.get(k, 0.0) / implied[k] if implied.get(k, 0.0) > 0 else 1.0) for k in implied}
+            for c in free:
+                c['profile'][cat] = _norm_rows([dict(r, pct=float(r.get('pct') or 0) * clamp(factor.get(str(r.get('label')), 1.0), 0.2, 5.0)) for r in c['profile'][cat]])
+    return out
 
 
 def _rerake(cells: list, mg: dict) -> list:
@@ -833,8 +958,6 @@ def representative(twin: dict, kind: dict, seed: str, seat_no: int = 0) -> dict:
     age = int(clamp(age, 18, 84))
     city = P._draw_city(twin, unit('city', sid))
     orientation = _draw(prof.get('sexual_orientation') or [], unit('orient', sid), '')
-    if g == 'X' and prof.get('sexual_orientation'):
-        orientation = next((str(r['label']) for r in prof['sexual_orientation'] if re.search(r"lgbtq|gay|lesbian|another|queer", str(r.get('label') or ''), re.I)), orientation)
     seat = {'seat': seat_no, 'name': name, 'age': age, 'city': city, 'gender': g, 'gender_label': g_label,
             'orientation': orientation,
             'education': _draw(prof.get('education') or [], unit('edu', sid), ''),
@@ -889,6 +1012,7 @@ def derive_archetypes(twin: dict, *, call: Optional[Callable] = None, force: boo
         elif trail['desk'] is None:
             trail['desk'] = {'applied': False, 'reason': 'no answer'}
     cells = _rerake(cells, sk['margins'])
+    cells = fit_profiles_to_margins(cells, twin)
     cells = _settle_people(cells, size, seed)
     groups = []
     for i, c in enumerate(cells):
@@ -1155,40 +1279,109 @@ def _quota_counts(targets: dict, n: int) -> dict:
     return out
 
 
-def assign_labels(kinds: list, cat: str, seed: str) -> dict:
-    """{kind id: label} for one demographic category across the seats of
-    a room: the room's labels are a people-weighted quota of the kinds'
-    own profiles (so twelve kinds of a 72% female audience seat about
-    nine women), and each label goes to the kinds whose profile carries
-    it most. Deterministic; a kind with no rows for the category gets
-    ''."""
+def _rows_for(kinds: list, cat: str) -> dict:
+    """{kind id: {label: share}} for one category, prefer-not-to-say
+    rows dropped (they never take a seat), zero rows dropped."""
     rows_by = {}
     for k in kinds:
         rows = [r for r in ((k.get('profile') or {}).get(cat) or []) if r.get('label') and float(r.get('pct') or 0) > 0]
-        soft = [r for r in rows if 'prefer' not in str(r.get('label') or '').lower()]   # prefer-not-to-say never takes a seat (the room's quota rule)
+        soft = [r for r in rows if 'prefer' not in str(r.get('label') or '').lower()]
         rows_by[k['id']] = {str(r.get('label')): max(0.0, float(r.get('pct') or 0)) for r in (soft or rows)}
-    if not any(rows_by.values()):
-        return {k['id']: '' for k in kinds}
-    people = {k['id']: max(1.0, float(k.get('people') or k.get('share_pct') or 1)) for k in kinds}
+    return rows_by
+
+
+def _assign_within(kids: list, rows_by: dict, people: dict, cat: str, seed: str, margin: Optional[dict] = None) -> dict:
+    """The quota over one set of kinds. The room's seats per label are
+    the people-weighted quota of every kind's own rows; a kind that is
+    one thing (a row at PIN_HARD, or at PIN_SHARE and well above the
+    audience's own share of it, so the audience's majority label never
+    pins every kind) takes that label outright and uses up one of its
+    seats; the seats left go to the free kinds whose profile carries the
+    label most (ties broken by a salted draw per category, so two
+    categories never land on the same kinds by accident of size). Only a
+    kind that carries a label can seat it."""
+    out = {}
+    free = []
+    margin = margin or {}
+
+    def _share(kid, lab):
+        rows = rows_by.get(kid) or {}
+        return rows.get(lab, 0.0) / (sum(rows.values()) or 1.0)
+
     targets = {}
-    for kid, rows in rows_by.items():
+    for kid in kids:
+        rows = rows_by.get(kid) or {}
         tot = sum(rows.values()) or 1.0
         for lab, v in rows.items():
             targets[lab] = targets.get(lab, 0.0) + people[kid] * v / tot
-    counts = _quota_counts(targets, len(kinds))
-    out = {}
-    free = [k['id'] for k in kinds]
-    # labels in order of seats to fill; each takes the free kinds that carry it most (ties: the larger kind, then the id)
-    for lab in sorted(counts, key=lambda l: (-counts[l], -targets[l], l)):
+    if not targets:
+        return {kid: '' for kid in kids}
+    counts = _quota_counts(targets, len(kids))
+    for kid in kids:
+        rows = rows_by.get(kid) or {}
+        tot = sum(rows.values()) or 1.0
+        pinned = None
+        for lab, v in rows.items():
+            share = v / tot * 100.0
+            base = float(margin.get(lab, 0.0) or 0.0)
+            if share >= PIN_HARD or (share >= PIN_SHARE and share >= base * PIN_OVER):
+                pinned = lab
+                break
+        if pinned is not None:
+            out[kid] = pinned
+            counts[pinned] = max(0, counts.get(pinned, 0) - 1)      # the pin uses one of its label's seats
+        else:
+            free.append(kid)
+    for lab in sorted(counts, key=lambda l: (-counts[l], -targets.get(l, 0.0), l)):
         need = counts[lab]
         while need > 0 and free:
-            best = max(free, key=lambda kid: (rows_by[kid].get(lab, 0.0) / (sum(rows_by[kid].values()) or 1.0), people[kid], unit('tie', seed, cat, kid, lab), kid))
+            # only a kind that carries the label can seat it (a kind of people under 35 never seats a 70-year-old because the
+            # quota rounded 65+ up by one); a seat the carrying kinds cannot fill falls to the free kinds' own top labels below
+            carrying = [kid for kid in free if _share(kid, lab) > 0.005]
+            if not carrying:
+                break
+            best = max(carrying, key=lambda kid: (round(_share(kid, lab), 4), unit('tie', seed, cat, kid, lab), kid))
             out[best] = lab
             free.remove(best)
             need -= 1
     for kid in free:
         rows = rows_by.get(kid) or {}
         out[kid] = max(rows, key=lambda l: rows[l]) if rows else ''
+    return out
+
+
+def assign_labels(kinds: list, cat: str, seed: str, groups: Optional[dict] = None, margin: Optional[dict] = None) -> dict:
+    """{kind id: label} for one demographic category across the seats of
+    a room. The room's labels are a people-weighted quota of the kinds'
+    own profiles (twelve kinds of a 72% female audience seat about nine
+    women); a kind that is one thing (a row at PIN_SHARE or more: a kind
+    of gay men, of trans women) takes that label outright; the rest goes
+    to the kinds whose profile carries it most. With ``groups`` ({kind
+    id: group label}, the seats' genders) the quota runs inside each
+    group from that group's own kinds, so who is LGBTQ+ among the men is
+    read from the kinds that are men, never from a rule that fills one
+    gender first (Jenna 2026-11-17). Deterministic; a kind with no rows
+    gets ''."""
+    rows_by = _rows_for(kinds, cat)
+    if not any(rows_by.values()):
+        return {k['id']: '' for k in kinds}
+    people = {k['id']: max(1.0, float(k.get('people') or k.get('share_pct') or 1)) for k in kinds}
+    if margin is None:
+        # the audience's own share of each row: the people-weighted mean of the kinds (what the margin re-fit holds them to)
+        margin = {}
+        tot_p = sum(people.values()) or 1.0
+        for kid, rows in rows_by.items():
+            t = sum(rows.values()) or 1.0
+            for lab, v in rows.items():
+                margin[lab] = margin.get(lab, 0.0) + people[kid] / tot_p * v / t * 100.0
+    if not groups:
+        return _assign_within([k['id'] for k in kinds], rows_by, people, cat, seed, margin)
+    out = {}
+    by_group = {}
+    for k in kinds:
+        by_group.setdefault(str(groups.get(k['id']) or ''), []).append(k['id'])
+    for g, kids in by_group.items():
+        out.update(_assign_within(kids, rows_by, people, cat, f"{seed}|{g}", margin))
     return out
 
 
@@ -1200,19 +1393,10 @@ def roster_from_kinds(twin: dict, kinds: list, seed: str, start_seat: int = 1) -
     rest while each seat still carries its own kind's tilt."""
     from migration import digital_twin_panel as P
     roster = []
-    labels = {cat: assign_labels(kinds, cat, seed) for cat, _field in _ROSTER_CATS}
-    # the house pairing: LGBTQ+ seats go to women first when the audience is female-skewed, so the room does not seat gay
-    # men in place of the lesbian share (digital_twin_panel._pair_orientation)
-    gl = labels.get('gender') or {}
-    ol = labels.get('sexual_orientation') or {}
-    if ol and gl:
-        order = [k['id'] for k in kinds]
-        genders = [gl.get(kid) or '' for kid in order]
-        orients = [ol.get(kid) or '' for kid in order]
-        paired = P._pair_orientation(genders, [o for o in orients if o])
-        for kid, o in zip(order, paired):
-            if o:
-                ol[kid] = o
+    labels = {cat: assign_labels(kinds, cat, seed) for cat, _field in _ROSTER_CATS if cat != 'sexual_orientation'}
+    # who is LGBTQ+ is read inside each gender from the kinds that carry that gender: a kind of gay men seats a gay man, a kind of
+    # trans women a trans woman; nothing fills one gender first (Jenna 2026-11-17: "it should be based on the archetype")
+    labels['sexual_orientation'] = assign_labels(kinds, 'sexual_orientation', seed, groups=labels.get('gender') or {})
     for i, k in enumerate(kinds):
         rep = representative(twin, k, seed, seat_no=start_seat + i)
         for cat, field in _ROSTER_CATS:
@@ -1228,9 +1412,6 @@ def roster_from_kinds(twin: dict, kinds: list, seed: str, start_seat: int = 1) -
             rep['gender'] = g
             bank = P._NAMES_F if g == 'F' else (P._NAMES_X if g == 'X' else P._NAMES_M)
             rep['name'] = bank[int(unit('name', f"{seed}|rep|{k.get('id')}", g) * len(bank))]
-        if g == 'X' and rep.get('orientation') and not re.search(r"lgbtq|gay|lesbian|another|queer|bi", str(rep['orientation']), re.I):
-            prof_o = (k.get('profile') or {}).get('sexual_orientation') or []
-            rep['orientation'] = next((str(r['label']) for r in prof_o if re.search(r"lgbtq|gay|lesbian|another|queer", str(r.get('label') or ''), re.I)), rep['orientation'])
         if rep.get('age', 0) >= 66 and rep.get('occupation') and not re.search(r"retired", str(rep['occupation']), re.I) and unit('retire', seed, k['id']) < 0.7:
             rep['occupation'] = 'Retired'
         rep['people'] = int(k.get('people') or 0)

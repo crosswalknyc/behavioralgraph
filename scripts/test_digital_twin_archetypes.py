@@ -21,8 +21,13 @@ Held here:
     kinds' people sum to the cohort;
   * the roster: one seat per kind, each seat's people its kind's, the
     room's gender / orientation / age labels a people-weighted quota of
-    the kinds (nine women of twelve for a 72% female audience; LGBTQ+
-    seats on women first), names unique, ages inside the label;
+    the kinds (nine women of twelve for a 72% female audience; who is
+    LGBTQ+ read inside each gender from its own kinds, never one gender
+    filled first), names unique, ages inside the label;
+  * a kind is who the desk says it is: a kind of gay men seats a gay
+    man, a kind of trans women seats a trans woman and the bio says so;
+    the other kinds are re-fitted so the audience's totals hold, and a
+    kind can never hold more of a row than the audience has;
   * build_group seats by kinds by default, meets an explicit count by
     merging or splitting, falls back to quota seating on request or when
     DTIQ_ARCHETYPE_SEATS=0, and partitions a cohort room by kinds;
@@ -49,6 +54,7 @@ import os
 import re
 import sys
 import unittest
+from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -236,6 +242,72 @@ class Desk(unittest.TestCase):
         self.assertEqual(arch['trail']['desk']['applied'], True)
         self.assertNotIn('research', arch['trail']['desk']['notes'].lower())
 
+    def _desk_with_queer_kinds(self, t):
+        cells = A.merge_small(A.skeleton(t)['cells'], A.MIN_SHARE_PCT)
+        data = {'groups': [{'id': c['id'], 'label': f"Kind {i}"} for i, c in enumerate(cells)]}
+        data['groups'][0].update(label='Gay men who found her through Flashdance nights',
+                                 profile_lean={'gender': {'Male': 95}, 'sexual_orientation': {'LGBTQ+': 95}})
+        data['groups'][1].update(label='Trans women who see themselves in her roles',
+                                 profile_lean={'gender': {'Trans Female': 90}, 'sexual_orientation': {'LGBTQ+': 85}})
+        return data
+
+    @staticmethod
+    def _implied(arch, cat):
+        out = {}
+        for g in arch['groups']:
+            for r in g['profile'].get(cat, []):
+                out[r['label']] = out.get(r['label'], 0.0) + g['share_pct'] / 100.0 * r['pct']
+        return out
+
+    def test_a_kind_is_who_the_desk_says_it_is(self):
+        # Jenna 2026-11-17: "why is filling with women a house rule? it should be based on the archetype. if it is gay men,
+        # trans women, etc then that's what it should be."
+        t = _beals()
+        t['identity']['demographics']['gender'] = [{'label': 'Female', 'pct': 66.0}, {'label': 'Male', 'pct': 24.0}, {'label': 'Non-Binary', 'pct': 2.7},
+                                                   {'label': 'Trans Male', 'pct': 0.7}, {'label': 'Trans Female', 'pct': 6.6}]
+        arch = A.derive_archetypes(t, call=self._desk(self._desk_with_queer_kinds(t)))
+        gay = next(g for g in arch['groups'] if g['label'].startswith('Gay men'))
+        trans = next(g for g in arch['groups'] if g['label'].startswith('Trans women'))
+        self.assertGreaterEqual(next(r['pct'] for r in gay['profile']['gender'] if r['label'] == 'Male'), 94.0)
+        self.assertGreaterEqual(next(r['pct'] for r in trans['profile']['gender'] if r['label'] == 'Trans Female'), 89.0)
+        for cat in ('gender', 'sexual_orientation', 'ethnicity', 'education'):
+            want = {r['label']: r['pct'] for r in t['identity']['demographics'][cat]}
+            got = self._implied(arch, cat)
+            for lab, v in want.items():
+                self.assertAlmostEqual(got.get(lab, 0.0), v, delta=0.05, msg=f"{cat} {lab}: the other kinds re-fit so the audience's totals hold")
+        g = P.build_group([t], seed='beals')
+        seats = {r['archetype']['label'][:9]: r for r in g['roster']}
+        self.assertEqual((seats['Gay men w']['gender_label'], seats['Gay men w']['gender']), ('Male', 'M'))
+        self.assertIn('LGBTQ', seats['Gay men w']['orientation'])
+        self.assertEqual((seats['Trans wom']['gender_label'], seats['Trans wom']['gender']), ('Trans Female', 'F'))
+        self.assertIn('LGBTQ', seats['Trans wom']['orientation'])
+        queer = [r for r in g['roster'] if 'LGBTQ' in str(r.get('orientation') or '')]
+        self.assertGreaterEqual(sum(1 for r in queer if r['gender'] == 'M'), 2, 'the gay men kind and the men the rows carry')
+        bio_t = ROOM.persona_bio(ROOM.persona_card(t, seats['Trans wom'], 'x'), t, 'x')
+        self.assertIn('She is a trans woman.', bio_t)
+        self.assertNotIn('lesbian', bio_t, 'the bare LGBTQ+ row adds nothing once the seat is named')
+        bio_g = ROOM.persona_bio(ROOM.persona_card(t, seats['Gay men w'], 'x'), t, 'x')
+        self.assertIn('He is gay.', bio_g)
+        self.assertNotIn('trans', bio_g)
+        for r in g['roster']:
+            band = A._age_band(r.get('age_label'))
+            if band:
+                lo, hi = next((a, z) for k, a, z in A.LIFE if k == band)
+                self.assertTrue(lo <= r['age'] <= min(hi, 84), (r['archetype']['label'], r['age'], r['age_label']))
+
+    def test_a_kind_never_holds_more_of_a_row_than_the_audience_has(self):
+        t = _beals()          # 0.23% trans women: a 7% kind of trans women is more than the audience holds
+        arch = A.derive_archetypes(t, call=self._desk(self._desk_with_queer_kinds(t)))
+        trans = next(g for g in arch['groups'] if g['label'].startswith('Trans women'))
+        self.assertLess(next(r['pct'] for r in trans['profile']['gender'] if r['label'] == 'Trans Female'), 5.0)
+        self.assertAlmostEqual(sum(r['pct'] for r in trans['profile']['gender']), 100.0, places=2)
+        want = {r['label']: r['pct'] for r in t['identity']['demographics']['gender']}
+        got = self._implied(arch, 'gender')
+        for lab, v in want.items():
+            self.assertAlmostEqual(got.get(lab, 0.0), v, delta=0.05, msg=lab)
+        gay = next(g for g in arch['groups'] if g['label'].startswith('Gay men'))
+        self.assertGreaterEqual(next(r['pct'] for r in gay['profile']['gender'] if r['label'] == 'Male'), 94.0, 'the men the audience has are enough for a kind of gay men')
+
     def test_a_failed_desk_leaves_the_deterministic_kinds(self):
         t = _twin()
 
@@ -284,7 +356,9 @@ class Roster(unittest.TestCase):
         self.assertEqual(sum(1 for r in roster if r['gender'] == 'F'), 9, 'a 72% female audience seats nine women of twelve')
         queer = [r for r in roster if 'LGBTQ' in str(r.get('orientation') or '')]
         self.assertEqual(len(queer), 4)
-        self.assertTrue(all(r['gender'] == 'F' for r in queer), 'LGBTQ+ seats go to women first')
+        # who is LGBTQ+ follows the kinds inside each gender (Jenna 2026-11-17: "it should be based on the archetype"): the
+        # kinds carry the audience's 33% on both sides, so three of the nine women and one of the three men
+        self.assertEqual(Counter(r['gender'] for r in queer), Counter({'F': 3, 'M': 1}))
         self.assertFalse(any('prefer' in str(r.get('orientation') or '').lower() for r in roster))
         self.assertEqual(len({r['name'] for r in roster}), 12)
         seg = g['segments'][0]

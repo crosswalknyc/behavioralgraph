@@ -1120,7 +1120,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     picks = base_picks(twin, sid, age)
     if picks.get('device') and klass in ('platform', 'audience', 'title') or (picks.get('device') and klass == 'talent' and talent_is_creator(twin)):
         physical = picks['device']   # the screen the base really watches on, from the record, over the age prior
-    card = {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
+    card = {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'gender_label': str(seat.get('gender_label') or ''), 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
             'income': income, 'education': education, 'parental': parental, 'relationship_status': relationship,
             'orientation': orientation, 'occupation': occupation, 'ethnicity': ethnicity,
             'language': str(seat.get('language') or ''), 'cohort': str(seat.get('cohort') or ''),
@@ -1310,7 +1310,15 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
         if mv and hb:
             sent.append(f"What moves people like {obj} most is {mv[0].lower() + mv[1:]}; what holds them back is {hb[0].lower() + hb[1:]}.")
     ow = _orientation_words(card.get('orientation') or '', g)
-    if ow:
+    gl = str(card.get('gender_label') or '').lower()
+    if 'trans' in gl:
+        # the audience's own rows name the seat (2026-11-17): a trans woman or a trans man is said plainly, once; the bare
+        # LGBTQ+ row adds nothing to that, a specific word (lesbian, bisexual) rides along
+        generic = bool(re.search(r"lgbtq", str(card.get('orientation') or ''), re.I)) and ow in ('lesbian', 'gay', 'queer')
+        sent.append(f"{pron.capitalize()} {be} a trans {'woman' if g == 'woman' else 'man'}{'' if (generic or not ow) else ' and ' + ow}.")
+    elif ('non-binary' in gl or 'nonbinary' in gl) and they:
+        sent.append(f"{pron.capitalize()} {be} non-binary{' and ' + ow if ow else ''}.")
+    elif ow:
         sent.append(f"{pron.capitalize()} {be} {ow}.")
     rel_w = _relationship_words(card.get('relationship_status') or '')
     par_w = _parental_words(card.get('parental') or '')

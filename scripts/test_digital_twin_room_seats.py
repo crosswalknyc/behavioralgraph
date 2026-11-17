@@ -88,7 +88,8 @@ class Seats(unittest.TestCase):
         self.assertEqual(sum(1 for r in roster if r['gender'] == 'M'), 3)
         queer = [r for r in roster if 'LGBTQ' in str(r.get('orientation') or '')]
         self.assertEqual(len(queer), 4)
-        self.assertTrue(all(r['gender'] == 'F' for r in queer))
+        # inside each gender from its own kinds (2026-11-17): three of the nine women, one of the three men
+        self.assertEqual(sorted(r['gender'] for r in queer), ['F', 'F', 'F', 'M'])
         self.assertTrue(all(r.get('education') for r in roster))
         self.assertTrue(all(r.get('occupation') for r in roster))
 
@@ -99,7 +100,8 @@ class Seats(unittest.TestCase):
         self.assertEqual(n, 12)
         texts = [str(r.get('persona') or '') for r in sess['group']['roster']]
         self.assertTrue(all(texts))
-        self.assertGreaterEqual(sum(1 for p in texts if 'lesbian' in p.lower()), 3)
+        self.assertEqual(sum(1 for p in texts if 'lesbian' in p.lower()), 3)
+        self.assertEqual(sum(1 for p in texts if 'he is gay' in p.lower()), 1)
         self.assertGreaterEqual(sum(1 for p in texts if "bachelor" in p.lower() or 'graduate' in p.lower()), 5)
         self.assertTrue(any('works in' in p.lower() for p in texts))
         self.assertFalse(any('synth' in p.lower() or 'modeled' in p.lower() for p in texts))
