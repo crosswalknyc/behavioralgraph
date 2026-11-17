@@ -1765,8 +1765,8 @@ def top_up_min_custom(subject=None, subject_key: str = "") -> float:
 
     $5,000 globally; nothing lower. Custom amounts above the floor
     are allowed. Excel Sports Management is $500 (Jenna 2026-09-29).
-    A stored top_up_min_usd at or above the $500 opening floor is
-    honored so a company can keep that exception without a rename
+    A stored top_up_min_usd above zero is honored so a company can
+    keep a custom floor (Excel $500, CAA $250) without a rename
     match.
     """
     if is_excel_sports_subject(subject, subject_key):
@@ -1775,7 +1775,7 @@ def top_up_min_custom(subject=None, subject_key: str = "") -> float:
         v = float((subject or {}).get("top_up_min_usd") or 0)
     except (TypeError, ValueError):
         v = 0.0
-    if v >= OPENING_TOPUP_MIN_USD:
+    if v > 0:
         return round(v, 2)
     return float(TOP_UP_MIN_USD)
 
@@ -1898,17 +1898,57 @@ def access_window_expired(user: dict, today=None) -> bool:
     return now > exp
 
 
+def _opening_need_usd(user: dict = None, users_data: dict = None) -> float:
+    """Seat opening amount, or the $500 house floor when unset."""
+    need = float(OPENING_TOPUP_MIN_USD)
+    try:
+        if isinstance(user, dict):
+            n = opening_topup_usd(user)
+            if isinstance(users_data, dict):
+                subject, _, _ = resolve_billing_subject(user, users_data)
+                n = max(n, opening_topup_usd(subject or {}))
+            if n > 0:
+                need = float(n)
+    except Exception:
+        pass
+    return need
+
+
+def opening_pack_sizes(need: float) -> list:
+    """Preset amounts on a still-locked opening checkout.
+
+    Starts at the seat's opening amount, then the global packs at
+    or above that amount, so the user can add any amount at or
+    above the opener.
+    """
+    try:
+        need = float(need)
+    except (TypeError, ValueError):
+        need = float(OPENING_TOPUP_MIN_USD)
+    if need <= 0:
+        need = float(OPENING_TOPUP_MIN_USD)
+    packs = [round(need, 2)]
+    for p in TOP_UP_PACKS_USD:
+        if p + 1e-9 >= need and abs(p - need) > 0.005:
+            packs.append(float(p))
+    return packs
+
+
 def opening_checkout_allowed(amt, *, amount_locked: bool = False,
                              user: dict = None,
                              users_data: dict = None) -> bool:
     """Allow a sub-$5,000 amount only for an amount-locked admin
     payment link, or a seat whose opening top-up is still unpaid.
-    Regular Add Funds stays at $5,000."""
+    The floor is that seat's opening amount (USA Today $500, CAA
+    $250). Regular Add Funds stays at $5,000 unless the subject
+    has its own stored min."""
     try:
         amt = float(amt)
     except (TypeError, ValueError):
         return False
-    if amt + 1e-9 < OPENING_TOPUP_MIN_USD:
+    need = (_opening_need_usd(user, users_data)
+            if user else float(OPENING_TOPUP_MIN_USD))
+    if amt + 1e-9 < need:
         return False
     if amt + 1e-9 >= TOP_UP_MIN_USD:
         return True
@@ -1925,17 +1965,7 @@ def opening_funds_copy(user: dict = None, users_data: dict = None) -> str:
     Uses the seat's own opening amount so a $2,500 opener is not
     told $500. USA Today-class $500 openers still read $500.
     """
-    need = OPENING_TOPUP_MIN_USD
-    try:
-        if isinstance(user, dict):
-            n = opening_topup_usd(user)
-            if isinstance(users_data, dict):
-                subject, _, _ = resolve_billing_subject(user, users_data)
-                n = max(n, opening_topup_usd(subject or {}))
-            if n > 0:
-                need = n
-    except Exception:
-        pass
+    need = _opening_need_usd(user, users_data)
     if abs(need - round(need)) < 1e-9:
         amt = f"${need:,.0f}"
     else:
@@ -5490,6 +5520,7 @@ __all__ = [
     "opening_funding_unmet", "access_window_expired",
     "has_complimentary_grant", "complimentary_view_unlocked",
     "opening_checkout_allowed", "opening_funds_copy",
+    "opening_pack_sizes",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
     "billing_mode", "billing_currency", "money_symbol", "format_money",

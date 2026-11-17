@@ -332,7 +332,9 @@ def wallet_state():
     if payload["dashboard_locked"]:
         need = float(payload["opening_topup_usd"]
                      or wallet.OPENING_TOPUP_MIN_USD)
-        payload["top_up_packs_usd"] = [need]
+        pack_fn = getattr(wallet, "opening_pack_sizes", None)
+        payload["top_up_packs_usd"] = (
+            pack_fn(need) if callable(pack_fn) else [need])
         payload["top_up_min_custom_usd"] = need
     return jsonify(payload)
 
