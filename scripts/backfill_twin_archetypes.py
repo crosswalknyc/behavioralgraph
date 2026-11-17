@@ -14,8 +14,11 @@ current version is skipped unless ``--force``.
     python3 scripts/backfill_twin_archetypes.py --key digital-twins/jenna/gilmore_girls_...json.gz
     python3 scripts/backfill_twin_archetypes.py --dry-run  # say what would change
 
-Needs the model (the Prometheus host or ANTHROPIC_API_KEY); without one
-the deterministic kinds are written and the desk runs at the next open.
+Needs the model (ANTHROPIC_API_KEY in the environment); without one, or
+when the desk does not answer inside DTIQ_ARCHETYPE_BUDGET_S (default
+300 s; the box can afford 900), the deterministic kinds are written and
+the desk runs again at the next open or the next pass of this script
+(a deterministic twin is never skipped).
 """
 from __future__ import annotations
 
@@ -28,6 +31,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+# a script talks to the models directly through the strong chain; binding the Prometheus host would boot the dashboard's
+# background threads inside this process (2026-11-17, seen on the box)
+os.environ.setdefault('DTIQ_ROOM_HOST', '0')
 
 
 def main(argv=None) -> int:

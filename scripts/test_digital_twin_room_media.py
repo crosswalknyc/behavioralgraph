@@ -230,7 +230,7 @@ class HostFallthrough(unittest.TestCase):
         calls = []
         M = ROOM.Models()
         M._host_claude = lambda: (lambda *a, **k: None)
-        M._chain = lambda system, user, max_tokens, temperature, surface, chain, tools=None: (calls.append((surface, tuple(chain))) or ({'options': [{'id': 'a', 'label': 'x', 'lean': 'yes'}]}, chain[0]))
+        M._chain = lambda system, user, max_tokens, temperature, surface, chain, tools=None, stream=False: (calls.append((surface, tuple(chain))) or ({'options': [{'id': 'a', 'label': 'x', 'lean': 'yes'}]}, chain[0]))
         os.environ['REGRESSION_TEST_MODE'] = '0'
         try:
             data, rec = M.call('moderator', 'sys', '{}', max_tokens=10)

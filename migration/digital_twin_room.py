@@ -176,7 +176,8 @@ MODELS = {
     'strong': ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6'],
 }
 BUDGET_S = {'research': 75.0, 'media': 150.0, 'options': 40.0, 'persona': 50.0, 'mirror': 35.0, 'read': 50.0,   # the media desk's searches run longer than the facts desk's
-            'study': 420.0, 'anchor': 120.0}   # the study desk searches heavily and a question may take longer for it (Jenna 2026-11-05); the anchor reasons without tools
+            'study': 420.0, 'anchor': 120.0,   # the study desk searches heavily and a question may take longer for it (Jenna 2026-11-05); the anchor reasons without tools
+            'archetype': float(os.environ.get('DTIQ_ARCHETYPE_BUDGET_S') or 300.0)}   # the kinds desk: one long answer per twin; past the budget the deterministic kinds stand and the desk runs at the next open
 MIRROR_FLOOR_SEATS = 0.5      # an option holding at least half a seat's worth of the audience (4.2% with twelve seats) holds a seat (Jenna 2026-11-05)
 MAX_OPTIONS = 5
 VOICES_N = 4
@@ -341,6 +342,8 @@ class Models:
 
     @staticmethod
     def _host_claude():
+        if (os.environ.get('DTIQ_ROOM_HOST') or '').strip().lower() in ('0', 'no', 'off', 'false'):
+            return None      # a script on the box (the kinds backfill) talks to the models directly; binding the host boots the dashboard's threads
         try:
             from prometheus.host import host
             if host.has('claude_data'):
@@ -387,7 +390,7 @@ class Models:
             self.calls.append(rec)
         return rec
 
-    def call(self, role: str, system: str, user: str, *, max_tokens: int = 1200, temperature: float = 0.4, tools=None) -> tuple:
+    def call(self, role: str, system: str, user: str, *, max_tokens: int = 1200, temperature: float = 0.4, tools=None, stream: bool = False) -> tuple:
         t0 = time.time()
         if self.fn is not None:   # a test's fake
             try:
@@ -406,7 +409,7 @@ class Models:
         if regression_mode():   # REGRESSION_TEST_MODE never calls a model: a test without a fake lands on the fallbacks
             return None, self._log(role, 'off', {}, t0, False)
         if role == 'persona':
-            data, model = self._chain(system, user, max_tokens, temperature, surface, MODELS['persona'])
+            data, model = self._chain(system, user, max_tokens, temperature, surface, MODELS['persona'], stream=stream)
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         # the study desk (role 'study') is the research desk with a heavier search budget; the anchor desk (role 'anchor') reasons
@@ -416,13 +419,13 @@ class Models:
         search_cap = {'media': MEDIA_MAX_SEARCHES, 'study': STUDY_MAX_SEARCHES}.get(role, RESEARCH_MAX_SEARCHES)
         research_tools = tools if tools is not None else (self._tools(search_cap) if role in ('research', 'media', 'study') else None)
         if want:
-            data, model = self._chain(system, user, max_tokens, temperature, surface, [want] + [m for m in MODELS['strong'] if m != want], tools=research_tools)
+            data, model = self._chain(system, user, max_tokens, temperature, surface, [want] + [m for m in MODELS['strong'] if m != want], tools=research_tools, stream=stream)
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         cj = self._host_claude()
         if cj is None:
             chain = MODELS['strong'] if role in strong_roles else MODELS['persona']
-            data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools)
+            data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools, stream=stream)
             return data, self._log(role, model, self._stats_now(), t0, data is not None)
         try:
             got = cj(system, user, max_tokens=max_tokens, temperature=temperature, surface=surface, usage_extras=self.extras,
@@ -438,13 +441,13 @@ class Models:
             # call): the named chain answers directly rather than the room falling back to defaults
             # (2026-11-04: a re-run from a shell without USE_CLAUDE_REASONING landed yes/maybe/no options)
             chain = MODELS['strong'] if role in strong_roles else MODELS['persona']
-            data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools)
+            data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools, stream=stream)
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         stats = self._stats_now()
         return data, self._log(role, stats.get('model') or '', stats, t0, data is not None)
 
-    def _chain(self, system, user, max_tokens, temperature, surface, chain, tools=None):
+    def _chain(self, system, user, max_tokens, temperature, surface, chain, tools=None, stream=False):
         """Named models through claude_reason_json; (data, model) or
         (None, '')."""
         try:
@@ -465,7 +468,7 @@ class Models:
             for m in chain:
                 try:
                     raw = claude_reason_json(system=system, user=user, model=m, max_tokens=max_tokens, temperature=temperature, max_retries=2,
-                                             raise_on_error=True, usage_tag=tag, tools=plan)
+                                             raise_on_error=True, usage_tag=tag, tools=plan, stream=bool(stream))
                 except Exception as e:
                     print(f"[twin-room] {m} failed on {surface}: {str(e)[:160]}; trying next")
                     continue

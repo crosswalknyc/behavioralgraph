@@ -79,6 +79,7 @@ import copy
 import hashlib
 import json
 import re
+import threading
 import time
 from typing import Callable, Optional
 
@@ -1051,17 +1052,45 @@ def ensure_archetypes(twin: dict, *, models=None, usage_extras: Optional[dict] =
     if isinstance(have, dict) and have.get('groups') and not force and have.get('fingerprint') == fingerprint(twin) and int(have.get('version') or 0) >= ARCHETYPE_VERSION:
         return have
     call = None
+    budget = 300.0
     try:
         from migration import digital_twin_room as ROOM
+        budget = float((ROOM.BUDGET_S or {}).get('archetype') or budget)
         if models is not None or not ROOM.regression_mode():
             M = models or ROOM.Models(usage_extras=usage_extras)
 
             def call(system, user, max_tokens, temperature):
-                data, _rec = M.call('archetype', system, user, max_tokens=max_tokens, temperature=temperature, tools=None)
+                try:
+                    data, _rec = M.call('archetype', system, user, max_tokens=max_tokens, temperature=temperature, tools=None, stream=True)
+                except TypeError:
+                    data, _rec = M.call('archetype', system, user, max_tokens=max_tokens, temperature=temperature, tools=None)
                 return data
     except Exception:
         call = None
-    return derive_archetypes(twin, call=call, force=force)
+    if call is None:
+        return derive_archetypes(twin, call=None, force=force)
+    # the desk answers on a shadow of the twin under a wall budget: a stalled request can never hold a build or a room open,
+    # and an answer that lands after the budget is dropped rather than written over the kinds already in use
+    shadow = copy.deepcopy(twin)
+    box: dict = {}
+
+    def _run():
+        try:
+            box['arch'] = derive_archetypes(shadow, call=call, force=force)
+        except Exception as e:
+            box['err'] = e
+    th = threading.Thread(target=_run, name='twin-archetype-desk', daemon=True)
+    t0 = time.time()
+    th.start()
+    th.join(max(1.0, budget))
+    arch = box.get('arch')
+    if th.is_alive() or not isinstance(arch, dict) or not arch.get('groups'):
+        why = f"did not answer within {budget:.0f}s" if th.is_alive() else f"failed: {str(box.get('err') or 'no kinds')[:120]}"
+        print(f"[archetypes] the kinds desk {why}; the deterministic kinds stand and the desk runs at the next open")
+        return derive_archetypes(twin, call=None, force=True)
+    twin['archetypes'] = arch
+    print(f"[archetypes] {arch.get('k')} kinds ({arch.get('method')}) in {time.time() - t0:.1f}s")
+    return arch
 
 
 def public_groups(arch: dict) -> list:

@@ -218,8 +218,16 @@ def claude_reason_json(
     raise_on_error: bool = False,
     usage_tag=None,
     tools=None,
+    stream: bool = False,
 ) -> str:
     """Send a single-shot reasoning prompt to Claude; return the raw text.
+
+    ``stream=True`` issues the request as a stream and accumulates the
+    final message (same response, same billing). A long non-streaming
+    create waits for the whole generation before the first byte arrives,
+    so a stall looks exactly like a slow answer and the client's read
+    timeout never fires (2026-11-17: the archetype desk sat 11 minutes on
+    response headers); streamed, the read timeout bounds each chunk.
 
     Returns "" on any failure so callers can fall back to GPT or the panel
     default. The prompt should ask for JSON output; the caller is responsible
@@ -277,7 +285,7 @@ def claude_reason_json(
                 # 2026-08-21: the SDK refuses non-streaming create when
                 # max_tokens implies >10 min runtime (~24k on Sonnet);
                 # stream + accumulate for big budgets, same response.
-                if int(_kw.get("max_tokens") or 0) >= 12000:
+                if stream or int(_kw.get("max_tokens") or 0) >= 12000:
                     with client.messages.stream(**_kw) as _s:
                         return _s.get_final_message()
                 return client.messages.create(**_kw)

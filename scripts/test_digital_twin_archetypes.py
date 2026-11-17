@@ -308,6 +308,37 @@ class Desk(unittest.TestCase):
         gay = next(g for g in arch['groups'] if g['label'].startswith('Gay men'))
         self.assertGreaterEqual(next(r['pct'] for r in gay['profile']['gender'] if r['label'] == 'Male'), 94.0, 'the men the audience has are enough for a kind of gay men')
 
+    def test_a_slow_desk_hits_the_budget_and_the_deterministic_kinds_stand(self):
+        # 2026-11-17: on the box the first desk call sat eleven minutes on response headers; the desk now answers on a shadow
+        # of the twin under a wall budget, and a late answer is dropped, never written over the kinds in use
+        import time as _time
+        t = _twin()
+        cells = A.merge_small(A.skeleton(t)['cells'], A.MIN_SHARE_PCT)
+        data = {'groups': [{'id': c['id'], 'label': f"Late kind {i}"} for i, c in enumerate(cells)]}
+
+        def slow(role, system, user, **kw):
+            _time.sleep(1.2)
+            return data
+        old_budget = ROOM.BUDGET_S.get('archetype')
+        ROOM.BUDGET_S['archetype'] = 1.0
+        try:
+            t0 = _time.time()
+            arch = A.ensure_archetypes(t, models=ROOM.Models(model_fn=slow), force=True)
+            took = _time.time() - t0
+        finally:
+            ROOM.BUDGET_S['archetype'] = old_budget
+        self.assertLess(took, 3.0)
+        self.assertEqual(arch['method'], 'deterministic')
+        self.assertIs(t['archetypes'], arch)
+        self.assertEqual(sum(g['people'] for g in arch['groups']), 1_000_000)
+        _time.sleep(0.6)      # the late answer lands on the shadow, not on the twin
+        self.assertEqual(t['archetypes']['method'], 'deterministic')
+        self.assertFalse(any(g['label'].startswith('Late kind') for g in t['archetypes']['groups']))
+        # a desk that answers inside the budget is written on the twin
+        arch2 = A.ensure_archetypes(t, models=ROOM.Models(model_fn=lambda role, system, user, **kw: data), force=True)
+        self.assertEqual(arch2['method'], 'reasoned')
+        self.assertTrue(any(g['label'].startswith('Late kind') for g in t['archetypes']['groups']))
+
     def test_a_failed_desk_leaves_the_deterministic_kinds(self):
         t = _twin()
 
