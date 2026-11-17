@@ -11137,6 +11137,7 @@ def index():
     except Exception:
         _seat_included = bool(effective_credits == -1)
     return render_template('index.html', 
+                           app_build_version=APP_BUILD_VERSION,
                            seat_included=_seat_included,
                            username=session.get('username'),
                            insights_quick_snapshot_icon=insights_quick_snapshot_icon,

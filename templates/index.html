@@ -56451,6 +56451,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // interact and engage with them"). The page keeps the clock, the events and the questions; the window is the
             // room's surface: the same markup, painted there, with the inline handlers routed back to this page.
             function piRoomPopped() { var p = S.roomPop; return !!(p && p.win && !p.win.closed); }
+            // A room popped out into its own window lives off this page: an update never refreshes under it.
+            try { (window.cwHoldRefresh = window.cwHoldRefresh || []).push(function() { return piRoomPopped(); }); } catch (_) {}
             function piPopoutShims(win, html) {
                 // every dtw* handler the page exposes answers in that window too (the markup's inline handlers call them by name)
                 var names = {}; String(html || '').replace(/\b(dtw[A-Za-z0-9_]+)\s*\(/g, function(_, n) { names[n] = 1; return ''; });
@@ -205558,6 +205560,137 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         init();
     }
 })();
+</script>
+<script id="cw-stale-tab-refresh">
+    // Bring an open tab up to date after an update lands (Jenna 2026-11-17).
+    // The first version of this (2026-07-31) fell out of this page on
+    // 2026-08-07, so a tab left open kept running whatever it had loaded:
+    // the Build a twin audience step without its share fields, four days
+    // after they shipped. This one never interrupts work. It refreshes only
+    // when the tab has sat in the background for five minutes, or on screen
+    // and untouched for fifteen, and never over an unsent draft, an ask or a
+    // run in flight, a walkthrough touched in the last hour, a playing video
+    // or a popped-out room. It compares the commit only: boot time differs
+    // across instances and looped the admin page (2026-09-17).
+    (function() {
+        var PAGE = {{ (app_build_version or '')|tojson }};
+        var POLL_MS = 60000, HIDDEN_POLL_MS = 120000;
+        var AWAY_MS = 300000;      // in the background this long
+        var IDLE_MS = 900000;      // or on screen and untouched this long
+        var QUIET_MS = 180000;     // never this soon after a keystroke
+        var RECENT_MS = 3600000;   // a walkthrough or a short field holds this long
+        var LOOP_MS = 600000;      // never twice inside this
+        var BACK_MS = 20000;       // the moment of coming back to the tab
+        var KEY = 'cw_refresh_at';
+        var live = '', pending = false, going = false;
+        var t0 = Date.now();
+        var lastMove = t0, lastAct = t0, lastKey = 0;
+        var hiddenAt = document.hidden ? t0 : 0, backAt = 0;
+        var touched = [];
+        window.cwHoldRefresh = window.cwHoldRefresh || [];
+
+        function real(v) { return !!v && String(v).indexOf('local-') !== 0; }
+        function on(type, fn) { try { document.addEventListener(type, fn, { capture: true, passive: true }); } catch (e) {} }
+        function note(e) {
+            var t = e && e.target;
+            if (!e || e.isTrusted === false || !t || t.nodeType !== 1) return;
+            if (touched.indexOf(t) < 0) { touched.push(t); if (touched.length > 200) touched.shift(); }
+        }
+        on('mousemove', function() { lastMove = Date.now(); });
+        on('scroll', function() { lastMove = Date.now(); });
+        on('wheel', function() { lastMove = Date.now(); });
+        on('pointerdown', function() { lastMove = lastAct = Date.now(); });
+        on('touchstart', function() { lastMove = lastAct = Date.now(); });
+        on('keydown', function() { lastMove = lastAct = lastKey = Date.now(); });
+        on('input', note);
+        on('change', note);
+
+        // 2 = long-form work (a message, a note, a chosen file): held for as
+        // long as it sits there. 1 = a short field: held while it is recent.
+        function weight(el) {
+            var tag = String(el.tagName || '').toLowerCase(), type = String(el.type || '').toLowerCase();
+            if (tag === 'input' && type === 'file') return (el.files && el.files.length) ? 2 : 0;
+            if (tag === 'textarea') return String(el.value || '').trim() ? 2 : 0;
+            if (tag === 'input') {
+                if (/^(checkbox|radio|range|color|button|submit|reset|hidden|image)$/.test(type)) return 0;
+                return String(el.value || '').trim() ? 1 : 0;
+            }
+            if (el.isContentEditable) return String(el.textContent || '').trim() ? 2 : 0;
+            return 0;
+        }
+        function held() {
+            var now = Date.now(), recent = (now - lastAct) < RECENT_MS, i, w;
+            if (lastKey && (now - lastKey) < QUIET_MS) return 'typing';
+            for (i = 0; i < touched.length; i++) {
+                try {
+                    if (!touched[i].isConnected) continue;
+                    w = weight(touched[i]);
+                    if (w === 2 || (w === 1 && recent)) return 'draft';
+                } catch (e) {}
+            }
+            try { if (typeof synthChatInflightController !== 'undefined' && synthChatInflightController) return 'ask'; } catch (e) {}
+            try { if (typeof _pmDeckInFlight !== 'undefined' && _pmDeckInFlight) return 'deck'; } catch (e) {}
+            try { if (typeof _pmServerPullBusy !== 'undefined' && _pmServerPullBusy) return 'pull'; } catch (e) {}
+            try { if (typeof _pmReopenBusy !== 'undefined' && _pmReopenBusy) return 'reopen'; } catch (e) {}
+            try { if (document.querySelector('#analysisStatusModal.active, .dtw-busy')) return 'run'; } catch (e) {}
+            try { if (recent && document.querySelector('#dtwBuildDrawer.open, #dtwNewRoomDrawer.open')) return 'walkthrough'; } catch (e) {}
+            try {
+                var media = document.querySelectorAll('video, audio');
+                for (i = 0; i < media.length; i++) { if (!media[i].paused && !media[i].ended) return 'playing'; }
+            } catch (e) {}
+            var holds = window.cwHoldRefresh || [];
+            for (i = 0; i < holds.length; i++) { try { if (holds[i]()) return 'held'; } catch (e) {} }
+            return '';
+        }
+        function ready() {
+            var now = Date.now(), last = 0;
+            try { last = parseInt(sessionStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
+            if (last && (now - last) < LOOP_MS) return false;
+            if (document.hidden) return !!hiddenAt && (now - hiddenAt) >= AWAY_MS;
+            if (backAt && (now - backAt) < BACK_MS && lastAct < backAt) return true;
+            return (now - lastMove) >= IDLE_MS;
+        }
+        function maybe() {
+            if (going || !pending) return;
+            if (!ready() || held()) return;
+            going = true;
+            try { sessionStorage.setItem(KEY, String(Date.now())); } catch (e) {}
+            try { console.log('[refresh] update landed', PAGE, '->', live); } catch (e) {}
+            setTimeout(function() { try { window.location.reload(); } catch (e) {} }, 250);
+        }
+        function check() {
+            if (going) return Promise.resolve();
+            return fetch('/api/version', { cache: 'no-store', credentials: 'same-origin' })
+                .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(function(v) {
+                    var ver = String((v && v.version) || '');
+                    if (!real(ver)) return;
+                    if (!real(PAGE)) { PAGE = ver; return; }
+                    live = ver;
+                    pending = (ver !== PAGE);
+                    maybe();
+                })
+                .catch(function() {});
+        }
+        function loop() {
+            setTimeout(function() {
+                check().then(function() { maybe(); if (!going) loop(); });
+            }, document.hidden ? HIDDEN_POLL_MS : POLL_MS);
+        }
+        setTimeout(function() { check().then(loop); }, 5000);
+        document.addEventListener('visibilitychange', function() {
+            var now = Date.now();
+            if (document.hidden) { hiddenAt = now; backAt = 0; return; }
+            backAt = (hiddenAt && (now - hiddenAt) >= AWAY_MS) ? now : 0;
+            hiddenAt = 0;
+            maybe();
+            check();
+        });
+        window.addEventListener('pageshow', function(e) { if (e && e.persisted) check(); });
+        window.cwRefreshState = function() {
+            return { page: PAGE, live: live, pending: pending, held: held(), ready: ready() };
+        };
+    })();
 </script>
 </body>
 </html>

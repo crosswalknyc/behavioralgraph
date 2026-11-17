@@ -241,6 +241,17 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "Digital Twins IQ Focus Group question picker on the split card"),
     ('id="dtwBuildDrawer"',
      "Digital Twins IQ Build a twin walkthrough (profile or demographics, panelists, review)"),
+    # An open tab comes up to date after an update lands. The first version
+    # (2026-07-31) was dropped from this page by 5aaad71d on 2026-08-07 and
+    # nobody saw it go: on 2026-11-17 Jenna was looking at the Build a twin
+    # audience step without the share fields that had shipped four days
+    # before.
+    ('id="cw-stale-tab-refresh"',
+     "refreshes an open tab after an update, never over work in progress"),
+    ('window.cwRefreshState',
+     "state of the stale-tab refresh (page version, live version, holds)"),
+    ('then set a share if you want one',
+     "Build a twin audience step: a share field beside every demographic pick"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives).
