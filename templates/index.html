@@ -90692,6 +90692,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // in-flight run and show step X of Y with percent complete. Prior
         // handler only looked at the last run in on-page history, so a
         // user with two concurrent builds saw only one.
+        function _synthChatLastReplyWasLost() {
+            // the last thing this chat said was the line the page prints when a reply did not arrive
+            try {
+                for (var i = synthChatHistory.length - 1; i >= 0; i--) {
+                    var t = synthChatHistory[i] || {};
+                    if (t.role === 'user') continue;
+                    return String(t.text || '').trim() === SYNTH_CHAT_CALM_MSG;
+                }
+            } catch (_) {}
+            return false;
+        }
+
         async function _synthChatReplyWithAllActiveStatus() {
             try {
                 var r = await fetch('/api/brief-chat/active-runs',
@@ -90707,6 +90719,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return s !== 'complete' && s !== 'error' && s !== 'failed';
                 });
                 if (runs.length === 0) {
+                    // 2026-11-17 (Cara): her question never came back, the
+                    // page said it was in progress, and "is it done" drew
+                    // "You don't have any profiles running". Say what is
+                    // true: no build is running and the answer is not here.
+                    if (_synthChatLastReplyWasLost()) {
+                        synthChatPushTurn('agent',
+                            "No profile build is running, and the answer to your last question has not come back to this chat. " +
+                            "Send the question again and I will answer it here.");
+                        return true;
+                    }
                     synthChatPushTurn('agent',
                         "You don't have any profiles running right now. " +
                         "Start a new one by describing the audience or subject.");
@@ -205569,8 +205591,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     // after they shipped. This one never interrupts work. It refreshes only
     // when the tab has sat in the background for five minutes, or on screen
     // and untouched for fifteen, and never over an unsent draft, an ask or a
-    // run in flight, a walkthrough touched in the last hour, a playing video
-    // or a popped-out room. It compares the commit only: boot time differs
+    // run in flight, a brief or a question waiting on an answer in the chat,
+    // a walkthrough touched in the last hour, a playing video or a
+    // popped-out room. It compares the commit only: boot time differs
     // across instances and looped the admin page (2026-09-17).
     (function() {
         var PAGE = {{ (app_build_version or '')|tojson }};
@@ -205632,6 +205655,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             try { if (typeof _pmDeckInFlight !== 'undefined' && _pmDeckInFlight) return 'deck'; } catch (e) {}
             try { if (typeof _pmServerPullBusy !== 'undefined' && _pmServerPullBusy) return 'pull'; } catch (e) {}
             try { if (typeof _pmReopenBusy !== 'undefined' && _pmReopenBusy) return 'reopen'; } catch (e) {}
+            // A brief waiting on approve, or a question waiting on its answer,
+            // is work in hand: a refresh drops it and the answer then lands as
+            // a new question ("no, build fresh", twenty minutes after the
+            // brief, ran as a question of its own on 2026-11-17).
+            if (recent) {
+                var waits = [
+                    function() { return synthChatCurrentDraft; }, function() { return synthChatBatchDrafts; },
+                    function() { return synthChatBatchClarify; }, function() { return synthChatActiveRun; },
+                    function() { return synthChatAwaitingDateConfirm; }, function() { return synthChatStashedDraft; },
+                    function() { return synthChatStashedBatchData; }, function() { return synthChatIncidenceOffer; },
+                    function() { return synthChatDiscoveryOffer; }, function() { return synthChatClarify; },
+                    function() { return synthChatStashedClarifySteps; }
+                ];
+                for (i = 0; i < waits.length; i++) {
+                    try { w = waits[i](); if (w && (!Array.isArray(w) || w.length)) return 'brief'; } catch (e) {}
+                }
+            }
             try { if (document.querySelector('#analysisStatusModal.active, .dtw-busy')) return 'run'; } catch (e) {}
             try { if (recent && document.querySelector('#dtwBuildDrawer.open, #dtwNewRoomDrawer.open')) return 'walkthrough'; } catch (e) {}
             try {

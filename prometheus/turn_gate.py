@@ -495,6 +495,20 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             _g2._pm_repeat_n = n_rep
         except Exception:
             pass
+        # A question about us (where something sits, how a figure is worked
+        # out, what we hold) has one answer. When the thread does not carry
+        # it yet, it is given now, ahead of the other path and the hold
+        # (Cara Dorfman 2026-11-17: the first reply never reached her, and
+        # the same words sent again ran as a read with figures in it).
+        if callable(direct) and not body.get('panel_confirm'):
+            try:
+                _d = direct(text)
+            except Exception as e:
+                _faults.note('turn_gate.repeat_direct', e)
+                _d = None
+            _d_raw, _d_route = (_d if isinstance(_d, tuple) else (_d, 'standing')) if _d else (None, '')
+            if isinstance(_d_raw, dict) and _d_raw.get('reply') and not _said_already(_d_raw.get('reply'), history):
+                return _answer(_d_raw, 'repeat_direct', route=str(_d_route or 'standing'), outcome='answered', **common)
         # A yes to what the reply promised ("Name the months you want and I
         # will set it up") re-runs the ask once through the other path; the
         # continuation classifier reads the re-run against the reply as a

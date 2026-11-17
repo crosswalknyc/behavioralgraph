@@ -571,7 +571,7 @@ LANE_ORDER = (
     'bpiq_wizard', 'build_fix', 'build_facts',
     'wayfinding', 'study_record',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
-    'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'short_reply',
+    'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'match_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
@@ -1695,6 +1695,33 @@ def ask(user, body, *, via='session'):
                 host.ask_hint(route='confirm_answer',
                               outcome='resolved',
                               subject=_ca.get('subject'))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+
+    # lane: match_answer
+    # The answer to "We have X - is that what you meant?" with nothing
+    # armed (2026-11-17 audit, Armine: the chip "no, build fresh" was
+    # pressed twenty minutes after the question, the page had lost the
+    # brief, and the words ran as a read on "Build Euphoria series").
+    # The question is in the thread, so the server resolves the answer:
+    # no builds the subject as stated, yes takes the profile on offer.
+    # The build flow never asks about the same profile twice
+    # (prometheus.match_question).
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import match_question as _mq
+            _ma = _mq.lane(text, history)
+        except Exception as e:
+            _faults.note('service.match_answer', e)
+            _ma = None
+        if _ma:
+            text = _ma['rewrite']
+            body = dict(body)
+            body['text'] = text
+            body.pop('surface', None)
+            try:
+                host.ask_hint(route='match_answer', outcome='resolved',
+                              subject=_ma.get('subject'))
             except Exception as _fx:
                 _faults.note('service', _fx)
 

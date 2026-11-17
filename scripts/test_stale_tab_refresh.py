@@ -17,9 +17,12 @@ What this holds:
      looped the admin page on 2026-09-17).
   3. It refreshes a tab that has sat in the background, or on screen and
      untouched, and one that is returned to after time away.
-  4. It never refreshes over an unsent draft, an ask in flight, a
-     walkthrough that was just touched, a playing video or a popped-out
-     room, and never twice in a row.
+  4. It never refreshes over an unsent draft, an ask in flight, a brief or
+     a question waiting on an answer in the chat (2026-11-17: "no, build
+     fresh" pressed twenty minutes after the brief ran as a question of
+     its own, because the page no longer held the brief), a walkthrough
+     that was just touched, a playing video or a popped-out room, and
+     never twice in a row.
   5. The Build a twin audience step still draws a share field beside each
      pick.
 
@@ -147,6 +150,30 @@ function world(opts) {
     globalThis.synthChatInflightController = null;
     await w.advance(3 * MIN); out.ask_answered = w.reloads();
     delete globalThis.synthChatInflightController;
+
+    // A brief waiting on approve in the chat, touched within the hour.
+    w = world({ live: 'bbbbbbbbbbbb' });
+    globalThis.synthChatCurrentDraft = { subject: 'Euphoria' };
+    await w.fire('pointerdown');
+    await w.hide(); await w.advance(30 * MIN); out.brief_30m = w.reloads();
+    await w.advance(40 * MIN); out.brief_70m = w.reloads();
+    delete globalThis.synthChatCurrentDraft;
+
+    // A question waiting on a yes or a no.
+    w = world({ live: 'bbbbbbbbbbbb' });
+    globalThis.synthChatClarify = { steps: [{ kind: 'qualifier_match' }] };
+    await w.fire('pointerdown');
+    await w.hide(); await w.advance(20 * MIN); out.question_20m = w.reloads();
+    globalThis.synthChatClarify = null;
+    await w.advance(3 * MIN); out.question_answered = w.reloads();
+    delete globalThis.synthChatClarify;
+
+    // An empty batch is nothing waiting.
+    w = world({ live: 'bbbbbbbbbbbb' });
+    globalThis.synthChatBatchDrafts = [];
+    await w.fire('pointerdown');
+    await w.hide(); await w.advance(7 * MIN); out.empty_batch = w.reloads();
+    delete globalThis.synthChatBatchDrafts;
 
     // A run in progress.
     w = world({ live: 'bbbbbbbbbbbb', hidden: true });
@@ -327,6 +354,17 @@ class WhenItRefreshes(unittest.TestCase):
     def test_never_while_an_ask_is_in_flight(self):
         self.assertEqual(self.out['ask_in_flight'], 0)
         self.assertEqual(self.out['ask_answered'], 1)
+
+    def test_a_brief_waiting_in_the_chat_holds_while_it_is_fresh(self):
+        self.assertEqual(self.out['brief_30m'], 0)
+        self.assertEqual(self.out['brief_70m'], 1)
+
+    def test_a_question_waiting_on_its_answer_holds(self):
+        self.assertEqual(self.out['question_20m'], 0)
+        self.assertEqual(self.out['question_answered'], 1)
+
+    def test_an_empty_batch_is_nothing_waiting(self):
+        self.assertEqual(self.out['empty_batch'], 1)
 
     def test_never_while_a_run_is_in_progress(self):
         self.assertEqual(self.out['run_in_progress'], 0)

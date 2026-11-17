@@ -22,6 +22,10 @@ description. Three things live here:
             and how it is computed. Service-level churn, retention and the
             retention (survival) curve have their own entries below; every
             other term stays with prometheus.kpi_definitions and its lane.
+            Hours streamed per viewer has its own entry too (2026-11-17:
+            "how can i attempt to calculate monthly hours streamed per
+            customer for a specific service like paramount+?" was run as
+            a read that printed a made-up mix of inputs).
   about     "I want to know about the survival curve", "what is a retention
             curve", "do you have churn for a whole service", "where are
             retention curves": the same entry, with where it sits.
@@ -75,7 +79,24 @@ ENTRIES = {
             "is a reactivation: it counts as active again from the month it returns, and never as a new signup. "
             "An average over a window is weighted by the accounts active at the start of each month."),
     },
+    # method questions only (never the where / about path: "hours watched" is in too many reads to
+    # be answered with a definition unless the reader asked how it is worked out)
+    'hours': {
+        'label': 'Hours streamed per viewer',
+        'definition': (
+            "Hours streamed per viewer is the average time a person who watched a service in a month spent "
+            "watching it that month."),
+        'computed': (
+            "Viewing is measured in time, per person and per sitting. A sitting starts at the first second of "
+            "playback and closes after 30 minutes without activity. Each person's sittings on the service are "
+            "added up for the calendar month. The month's total hours, divided by the people with at least one "
+            "play on the service that month, is hours per viewer. For hours per account, divide the same total "
+            "by the accounts active on the service that month; an account shared by several people carries more "
+            "hours than any one of them. A month by month line uses the same rule in every month, so the months "
+            "compare cleanly."),
+    },
 }
+_EXAMPLES = {'hours': "{name} hours per viewer by month, past 12 months"}
 
 # One answer said "active" is a session and a published study said it is billing; a reader checking one
 # against the other was right to ask which (Cara Dorfman, 2026-11-16). Both are true of different things,
@@ -103,6 +124,11 @@ _METHOD_RXS = (
     re.compile(r"\b(?:walk|talk|take)\s+me\s+through\s+(?:how|the\s+(?:math|calculation|method|formula))\b", re.I),
     re.compile(r"\bexplain\s+(?:to\s+me\s+)?how\s+" + _WHO + r"?\s*(?:\w+\s+){0,2}?" + _COMPUTE + r"\b", re.I),
     re.compile(r"\bwhat\s+(?:goes|went)\s+into\b|\bhow\s+does\s+.{0,60}?\bwork\b", re.I),
+    # the reader's own first person, with a narrow verb list ("how can i attempt to calculate ...",
+    # Cara Dorfman 2026-11-17); "how do I find / get to / see" stays a where question
+    re.compile(r"\bhow\s+(?:do|would|can|could|should|might)\s+(?:i|one|someone|somebody|a\s+person)\s+"
+               r"(?:(?:attempt|try|go\s+about|start|begin|best)\s+(?:to\s+)?)?"
+               r"(?:calculat\w*|comput\w*|estimat\w*|measur\w*|deriv\w*|quantif\w*|work(?:ing)?\s+out)\b", re.I),
 )
 _WHERE_RX = re.compile(
     r"\bwhere\s+(?:(?:can|do|would|could|should|might)\s+(?:i|we|you|one)\s+|to\s+|is\s+|are\s+|does\s+|did\s+)"
@@ -126,6 +152,10 @@ _CURVE_RX = re.compile(
     r"\b(?:retention|survival|survivor|churn|attrition|cohort|tenure|decay)\s+curves?\b|\bcohort\s+(?:survival|retention)\b|"
     r"\bsurvival\s+(?:rate|rates|analysis|table|function)\b|\bcurves?\s+(?:of|for)\s+(?:retention|survival|churn)\b", re.I)
 _CHURN_RX = re.compile(r"\b(?:churn\w*|attrition|retention|retain\w*|cancel+ations?|cancel\s+rates?|stay\s+subscribed|drop[- ]?off\s+rate)\b", re.I)
+_HOURS_RX = re.compile(
+    r"\b(?:hours?|minutes?|time)\s+(?:streamed|watched|viewed|spent|of\s+(?:streaming|viewing|watching))\b|"
+    r"\b(?:watch|viewing|streaming|view)\s+(?:time|hours|minutes)\b|"
+    r"\b(?:hours?|minutes?)\s+(?:per|a|each)\s+(?:customer|subscriber|viewer|account|user|person|member|sub)\b", re.I)
 _SUBS_RX = re.compile(
     r"\b(?:subscriber\s+(?:counts?|numbers?|estimates?|bases?|totals?|figures?)|number\s+of\s+subscribers|"
     r"how\s+many\s+(?:customers|people|subscribers|accounts|users|members)\s+(?:subscribe|are\s+subscribed|pay|have\s+a\s+subscription)|"
@@ -202,9 +232,12 @@ def _subscribers_text():
         return ''
 
 
-def _example(text):
+def _example(text, keys=()):
     svcs = _services(text)
     name = svcs[0]['name'] if svcs else 'Paramount+'
+    for k in keys or ():
+        if k in _EXAMPLES:
+            return '"' + _EXAMPLES[k].format(name=name) + '"'
     return f"\"{name} churn, past 12 months\""
 
 
@@ -239,13 +272,15 @@ def answer(text, ctx=None, *, correction=False):
             keys = [k for k in topics if k in ENTRIES] if service_level else []
             if 'curve' in keys and 'churn' in keys and not re.search(r"\bchurn\w*\b", _CURVE_RX.sub(' ', t), re.I):
                 keys = ['curve']     # "retention curve" names one thing
+            if service_level and _HOURS_RX.search(t):
+                keys.append('hours')
             if keys:
                 parts = [_entry_text(k) for k in keys]
                 if 'subscribers' in topics:
                     sub = _subscribers_text()
                     if sub:
                         parts.insert(0, sub)
-                reply = '\n\n'.join(parts) + '\n\n' + _NEXT_LINE.format(example=_example(t))
+                reply = '\n\n'.join(parts) + '\n\n' + _NEXT_LINE.format(example=_example(t, keys))
                 return _payload(reply, keys, 'method')
             # every other term is the glossary's, in its own lane with its own route (prometheus.kpi_definitions:
             # "how is penetration calculated?" on a profile, "how are reactivated accounts counted?" on

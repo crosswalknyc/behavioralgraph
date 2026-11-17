@@ -3931,13 +3931,8 @@ def api_synth_chat_clarify():
         # fresh build for the subject exactly as the user stated it.
         data = draft.get('qualifier_match_data') or {}
         disp = str(data.get('display_name') or '').strip()
-        low = answer.lower().strip()
-        said_no = bool(_re.search(
-            r'\b(no|nope|nah|not that|fresh|new|build fresh|'
-            r'something else|different|as stated|keep mine)\b', low))
-        said_yes = bool(_re.search(
-            r'\b(yes|yep|yeah|yup|correct|exactly|that one|'
-            r'that works|use it|use that|i meant that)\b', low))
+        from prometheus import match_question as _mq   # "Build Euphoria series viewers" at the question is a no (2026-11-17)
+        said_yes, said_no = _mq.reply_reading(answer, draft.get('subject') or subject, disp)
         if said_yes and not said_no and disp:
             entity = disp.split(' - ', 1)[0].strip()
             draft['subject'] = entity
@@ -5939,8 +5934,12 @@ def _pm_interpret_core(user, body, text, history):
     try:
         from prometheus import guards as _pg_lk
         _lk_title = _pg_lk.subiq_lookup_title(text)
+        _sp = None if _lk_title else _pm_subiq_platform_only_question({'title': _pg_lk.subiq_platform_only(text)}, text)
     except Exception:
-        _lk_title = ''
+        _lk_title, _sp = '', None
+    if _sp:   # "Pull Subscriber IQ for Starz" waited 81s for this question; the reader had already stopped (Bria 2026-11-17)
+        _pm_ask_hint(route='subiq_platform_only', outcome='asked_title')
+        return jsonify(_sp)
     if _lk_title:
         _lk_reply, _lk_chips = _pm_subiq_lookup_answer(user, _lk_title)
         try:
@@ -6515,8 +6514,9 @@ def _pm_interpret_core(user, body, text, history):
         # qualifier_match clarify question; yes routes to the existing
         # profile, no proceeds with the fresh build as stated.
         try:
+            from prometheus import match_question as _mq_g   # one profile is asked about once in a thread (2026-11-17)
             _uq_acted, _uq_note = _H._apply_universe_qualifier_gate(
-                spec_draft, text, allow_ask=True)
+                spec_draft, text, allow_ask=not _mq_g.asked_before(history, spec_draft.get('existing_match_display_name')))
             if _uq_acted:
                 print(f"[synth-chat interpret] {_uq_note}")
         except Exception as _uq_err:
@@ -12230,13 +12230,6 @@ def _pm_short_name_identity(toks, raw_text):
 _PM_PENDING_Q_S3_KEY = 'system/pm_pending_questions.json'
 
 
-_PM_UNRESOLVED_SUBJECT_COPY = (
-    "I could not find {subj} as a brand, person, or title, so I have "
-    "not set up a build for it. Check the spelling, or tell me who or "
-    "what it is (a website or the platform it lives on is enough) and "
-    "I will set up the brief.")
-
-
 _PM_VERIFY_CACHE = {}
 _PM_VERIFY_CACHE_LOCK = threading.Lock()
 _PM_VERIFY_TTL_S = 24 * 3600
@@ -12351,14 +12344,15 @@ def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None):
         ok, _subj, suggest = res
         if ok:
             return None
+        from prometheus import match_question as _mq   # "Euphoria US ... Did you mean Euphoria?" to the person who typed Euphoria (2026-11-17)
+        _un = _mq.unresolved(subj, suggest, text)
+        if _un.get('adopt'):
+            spec_draft['subject'] = spec_draft['name'] = _un['adopt']
+            spec_draft.pop('file_stem', None)
+            return None
         _pm_ask_hint(route='subject_unresolved', outcome='asked_subject',
                      subject=subj)
-        chips = []
-        if suggest and str(suggest).strip().lower() != subj.lower():
-            chips.append(f"Build a profile for {str(suggest).strip()}")
-        copy = _PM_UNRESOLVED_SUBJECT_COPY.format(subj=subj)
-        if chips:
-            copy += f" Did you mean {str(suggest).strip()}?"
+        chips, copy = list(_un.get('chips') or []), _un['copy']
         payload = {'success': False, 'guidance': True, 'error': copy}
         if chips:
             payload['followups'] = chips

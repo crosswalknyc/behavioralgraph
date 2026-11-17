@@ -519,6 +519,31 @@ def is_streaming_platform(name):
     return t.replace(' plus', '+') in _PLATFORMS
 
 
+_SUBIQ_PLATFORM_ORDER_RX = re.compile(
+    r"^\W*(?:please\s+|can\s+you\s+|could\s+you\s+)?(?:pull|run|build|create|make|get|start|do|generate|give\s+me|"
+    r"show\s+me|i\s+(?:want|need|would\s+like))\s+(?:me\s+)?(?:an?\s+|the\s+|some\s+)?"
+    r"(?:subscriber\s*iq|sub\s*iq|subiq)(?:\s+(?:read|report|pull|tracker|analysis|data|numbers))?\s+"
+    r"(?:for|on|of|about)\s+(?P<slot>[^\n]{1,60}?)[\s.,;:!?\"']*$", re.I)
+
+
+def subiq_platform_only(text):
+    """The streaming service named in the title slot of a Subscriber IQ
+    order ("Pull Subscriber IQ for Starz" -> "Starz"), else ''. Subscriber
+    IQ reads one title on a service, so the title is asked for at once,
+    before any model call (Bria 2026-11-17: the question took 81 seconds
+    and she had pressed stop at 56). A title, a title on a service, or
+    anything longer than a service name returns ''."""
+    try:
+        m = _SUBIQ_PLATFORM_ORDER_RX.match(' '.join(str(text or '').split()))
+        if not m:
+            return ''
+        slot = re.sub(r"^(?:the\s+)", '', m.group('slot').strip(), flags=re.I).strip(' .,;:!?"\'')
+        slot = re.sub(r"\s+(?:subscribers?|subs|viewers|users|members)$", '', slot, flags=re.I).strip()
+        return slot if slot and is_streaming_platform(slot) else ''
+    except Exception:
+        return ''
+
+
 # -------------------------------------------------------------- subject
 _REASONING_LEAK_RX = re.compile(
     r'\b(?:the\s+)?(?:prior|previous|earlier|last|this|current|new)\s+'

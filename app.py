@@ -46134,6 +46134,26 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
                     _typed_swap = True
         except Exception:
             _typed_swap = False
+    # A different thing is not a spelling (2026-11-17 audit: "Run a
+    # profile for Euphoria" drew "We have Sephora - is that what you
+    # meant?" under a brief whose own subject line read "Euphoria, the
+    # series on Max"). When the brief itself names the typed subject and
+    # not the profile on offer, or describes a kind of thing the profile
+    # is not, there is no question to ask: the typed subject builds
+    # fresh (prometheus.match_question.own_subject).
+    _own_subject = False
+    if _typed_swap:
+        try:
+            from prometheus import match_question as _mq
+            from prometheus.subject_rules import explicit_build_subject as _ebs0
+            _med0 = str(draft.get('medium') or '').strip().lower()
+            _at0 = _ask_entity_type(prompt) or (_ask_entity_type(f"the {_med0}") if _med0 else None)
+            _cat0 = _catalog_category_for_display(disp) if _at0 else ''
+            _own_subject = bool(_mq.own_subject(
+                str(_ebs0(prompt) or ''), draft, disp,
+                kind_conflict=bool(_at0 and _cat0 and not _entity_type_compatible(_at0, _cat0))))
+        except Exception:
+            _own_subject = False
     if not _identity_mismatch and not _typed_swap and _universe_qualifiers_compatible(prompt, disp):
         return False, ''
     # derive_cut parents: the parent's qualifier set only needs to be
@@ -46182,7 +46202,8 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
         except Exception:
             pass
         note = (f"Changed-name gate: the typed subject {str(draft.get('subject') or '')!r} shares no naming "
-                f"word with candidate {disp!r}; {'asking' if allow_ask else 'demoted to new_build'}.")
+                f"word with candidate {disp!r}; "
+                f"{'its own subject, built fresh as typed' if _own_subject else ('asking' if allow_ask else 'demoted to new_build')}.")
     elif _identity_mismatch:
         note = (f"Subject-identity gate: ask subject "
                 f"{str(draft.get('subject') or '')!r} shares no identity "
@@ -46205,9 +46226,15 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
         f"The ask describes the {draft.get('subject') or subj} universe; "
         f"the closest existing profile ({disp}) covers a different "
         f"audience scope, so a fresh build is planned.")
+    if _own_subject:
+        # an unrelated profile is never named beside the brief
+        draft.pop('related_profile_display_name', None)
+        draft['decision_reason'] = (
+            f"No existing profile covers {draft.get('subject') or subj}, "
+            f"so a fresh build is planned.")
     draft.pop('derive_type', None)
     draft.pop('ask_existing_profile', None)
-    if allow_ask and not _identity_mismatch:
+    if allow_ask and not _identity_mismatch and not _own_subject:
         draft['ask_qualifier_match'] = True
         draft['qualifier_match_data'] = {
             'display_name': disp,
@@ -55695,6 +55722,12 @@ def _set_resolved_identity_line(draft):
     """Compose the human-readable resolved-identity line surfaced on
     the approval card and the /check response."""
     note = _scrub_identity_dashes(draft.get('identity_note'))
+    if note:
+        try:   # who the subject is, never the working behind it (2026-11-17: "set to false pending user confirmation" on a brief)
+            from prometheus import identity_line as _idl
+            note = _idl.clean(note)
+        except Exception:
+            pass
     if note:
         draft['identity_note'] = note
         draft['resolved_identity'] = note
