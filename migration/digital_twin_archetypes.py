@@ -90,6 +90,7 @@ MIN_K = 6
 MAX_K = 16
 MIN_SHARE_PCT = 2.5          # a kind under this share of the audience merges into its nearest neighbor
 MIN_SEGMENT_SHARE_PCT = 3.0  # inside a cohort, a kind under this share of the cohort merges
+DESK_MAX_TOKENS = 12000      # the desk's one answer per twin; streamed, so a stall is bounded by the read timeout, not the whole generation
 IPF_ROUNDS = 40
 
 STAGES = ('discovering', 'trying', 'habit', 'lapsing', 'returning')
@@ -1001,7 +1002,9 @@ def derive_archetypes(twin: dict, *, call: Optional[Callable] = None, force: boo
     method, trail = 'deterministic', {'desk': None}
     if call is not None:
         try:
-            data = call(ARCHETYPE_SYSTEM, _desk_user(twin, {'cells': cells, 'noun': sk['noun']}), 6000, 0.3)
+            # the answer runs about 470 tokens a kind (who, relationship, decides, the leans and the dial shifts): 16 kinds
+            # need about 8,000; at 6,000 every call truncated and re-ran at twice the spend (the box, 2026-11-17)
+            data = call(ARCHETYPE_SYSTEM, _desk_user(twin, {'cells': cells, 'noun': sk['noun']}), DESK_MAX_TOKENS, 0.3)
         except Exception as e:
             data = None
             trail['desk'] = {'error': str(e)[:160]}
