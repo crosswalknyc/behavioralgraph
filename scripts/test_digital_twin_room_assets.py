@@ -561,6 +561,27 @@ class Routes(Setup):
         for want in ('function assetsStripHtml(', 'window.dtwPanelAssetAdd', 'window.dtwPanelAssetUrl', 'window.dtwPanelAssetOpen', 'function scheduleAssetPoll(', 'Add content',
                      "'Ask about ' + ready[0].label + ', ' + ready[1].label + ' or both.'", "assetsStripHtml(s, true)", 'asset_read: \'Content read\''):
             self.assertIn(want, html)
+        # one bar (Jenna 2026-11-16: 'this is confusing with the two bars. instead it just needs to have a place where you
+        # can upload in the actual question part'): content is added from inside the question field; no second row of inputs
+        for gone in ('dtwFgAssetUrl', 'dtwFgAssetLabel', 'dtw-fg-addrow', 'or paste a direct link to a video', 'Label: A, B or a name'):
+            self.assertNotIn(gone, html)
+        i = html.index("function composerHtml(typed, typedOpts)")
+        comp = html[i:html.index('function actsHtml(s)', i)]
+        self.assertEqual(comp.count('<input id="dtwPnQ"'), 1)
+        self.assertLess(comp.index('class="dtw-fg-field has-attach"'), comp.index("attachHtml()"))
+        self.assertLess(comp.index("attachHtml()"), comp.index('<input id="dtwPnQ"'))
+        self.assertIn('ondrop="dtwPanelAssetDrop(event)"', comp)
+        self.assertIn('onpaste="dtwPanelAssetPaste(event)"', comp)
+        j = html.index('function attachHtml()')
+        att = html[j:html.index('function assetsStripHtml(', j)]
+        self.assertIn('type="file"', att)
+        self.assertIn('dtwPanelAssetAdd(this.files[0])', att)
+        # a link on its own in the question field goes in as content, and is never sent to the room as a question
+        k = html.index('window.dtwPanelAsk = async function(presetQ, askAgain)')
+        ask = html[k:k + 2400]
+        self.assertIn("dtwPanelAssetUrl(q); return;", ask)
+        self.assertLess(ask.index("dtwPanelAssetUrl(q); return;"), ask.index('S.asking = true'))
+        self.assertIn('window.dtwPanelAssetPaste', html)
 
 
 if __name__ == '__main__':

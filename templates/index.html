@@ -51509,7 +51509,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-old .chev { color: var(--dtw-mute); font-size: 12px; margin-top: 2px; transition: transform .15s; flex: none; }
         #digitalTwinsIQView .dtw-fg-old.open .chev { transform: rotate(180deg); }
         #digitalTwinsIQView .dtw-fg-empty-t { padding: 10px 0 10px 40px; font-size: 12.5px; line-height: 17px; color: var(--dtw-body); }
-        /* content in the room (Jenna 2026-11-05): the strip of what the room was shown and the Add content control sit above the question bar */
+        /* content in the room (Jenna 2026-11-05): the strip of what the room was shown sits above the question bar. One bar
+           (Jenna 2026-11-16): content is added from the clip inside the question field, not from a second row of inputs. */
         #digitalTwinsIQView .dtw-fg-addc { margin-bottom: 8px; border: 1px dashed var(--dtw-rule); border-radius: 8px; padding: 8px 10px; background: var(--dtw-raised); }
         #digitalTwinsIQView .dtw-fg-addc.over { border-color: var(--dtw-accent); }
         #digitalTwinsIQView .dtw-fg-assets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -51525,12 +51526,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-asset.failed .st { color: #E682FF; }
         #digitalTwinsIQView .dtw-fg-asset .x { position: absolute; right: 4px; top: 4px; width: 16px; height: 16px; border-radius: 999px; border: 0; background: transparent; color: var(--dtw-mute); font-size: 13px; line-height: 16px; cursor: pointer; padding: 0; }
         #digitalTwinsIQView .dtw-fg-asset .x:hover { color: var(--dtw-ink); background: var(--dtw-raised); }
-        #digitalTwinsIQView .dtw-fg-addrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        #digitalTwinsIQView .dtw-fg-addrow .dtw-fg-act.add { border-style: solid; color: var(--dtw-ink); }
-        #digitalTwinsIQView .dtw-fg-addrow input.dtw-in { height: 26px; font-size: 11.5px; padding: 0 8px; min-width: 0; }
-        #digitalTwinsIQView .dtw-fg-addrow input.url { flex: 1 1 220px; }
-        #digitalTwinsIQView .dtw-fg-addrow input.lab { flex: 0 0 150px; }
-        #digitalTwinsIQView .dtw-fg-addrow .hint { flex: 1 1 100%; font-size: 10.5px; color: var(--dtw-mute); line-height: 14px; }
+        #digitalTwinsIQView .dtw-fg-composer > .dtw-fg-assets { margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-fg-field.has-attach { padding-left: 7px; gap: 10px; }
+        #digitalTwinsIQView .dtw-fg-field.over { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-attach { flex: none; width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--dtw-rule); color: var(--dtw-body); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        #digitalTwinsIQView .dtw-fg-attach:hover, #digitalTwinsIQView .dtw-fg-attach:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-body); outline: none; }
+        #digitalTwinsIQView .dtw-fg-attach svg { width: 15px; height: 15px; display: block; }
         #digitalTwinsIQView .dtw-fg-ard { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dtw-rule); display: grid; gap: 5px; font-size: 12px; line-height: 16px; color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-fg-ard b { color: var(--dtw-ink); font-weight: 600; }
         #digitalTwinsIQView .dtw-fg-ard .pics { display: flex; gap: 6px; margin: 2px 0 4px; }
@@ -53980,19 +53981,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '<button type="button" class="dtw-fg-asset ' + esc(a.status || '') + on + '" data-asset="' + esc(a.id) + '" title="' + esc(ttl) + '" onclick="dtwPanelAssetOpen(\'' + esc(jsq(a.id)) + '\')"><span class="th">' + th + '</span><span class="body"><span class="lb">' + esc(a.label || '') + '</span><span class="st">' + assetStatusHtml(a) + '</span></span>'
                     + '<span class="x" role="button" aria-label="Remove ' + esc(a.label || 'this') + '" title="Remove from the room" onclick="event.stopPropagation(); dtwPanelAssetDelete(\'' + esc(jsq(a.id)) + '\')">&#215;</span></button>';
             }
+            // One bar (Jenna 2026-11-16: 'this is confusing with the two bars. instead it just needs to have a place where you can upload in
+            // the actual question part'): the clip inside the question field adds a file; a direct link typed or pasted into the field and sent
+            // goes in as content; a file can be dropped on the field or pasted into it. The room labels each one itself (A, B, ...).
+            var ASSET_ACCEPT = '.mp4,.mov,.webm,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,video/mp4,video/quicktime,video/webm,image/png,image/jpeg,image/webp,audio/mpeg,audio/mp4,audio/wav';
+            var CLIP_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 9.4l-6.6 6.6a4 4 0 0 1-5.7-5.7l7-7a2.7 2.7 0 0 1 3.8 3.8l-6.9 6.9a1.3 1.3 0 0 1-1.9-1.9l6.2-6.2"/></svg>';
+            function attachHtml() {
+                return '<label class="dtw-fg-attach" id="dtwFgAttach" tabindex="0" role="button" aria-label="Add content" title="Add content: a video (mp4, mov, webm), an image (png, jpg, webp) or audio (mp3, m4a, wav). A second one makes it an A or B." onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.querySelector(\'input\').click();}">' + CLIP_ICON
+                    + '<input type="file" accept="' + ASSET_ACCEPT + '" hidden onchange="dtwPanelAssetAdd(this.files[0]); this.value=\'\';"></label>';
+            }
             function assetsStripHtml(s, compact) {
                 var list = fgAssets(s);
                 if (compact) return list.length ? '<div class="dtw-fg-addc"><div class="dtw-fg-assets">' + list.map(function(a) { return assetChipHtml(s, a); }).join('') + '</div></div>' : '';
-                var accept = '.mp4,.mov,.webm,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,video/mp4,video/quicktime,video/webm,image/png,image/jpeg,image/webp,audio/mpeg,audio/mp4,audio/wav';
-                var ready = list.filter(function(a) { return a.status === 'ready'; });
-                var hint = !list.length ? 'A video, an image or an audio file (or a direct link to one). The room takes it in and reacts; then ask about it. A second one makes it an A or B.'
-                    : (ready.length >= 2 ? 'Ask about ' + esc(ready[0].label) + ', ' + esc(ready[1].label) + ' or both: \'which do you prefer, ' + esc(ready[0].label) + ' or ' + esc(ready[1].label) + '?\'' : (ready.length ? 'Ask about ' + esc(ready[0].label) + ' in plain words, or add a second one for an A or B.' : 'The room is taking it in; its read lands in the thread in a minute or two.'));
-                return '<div class="dtw-fg-addc" id="dtwFgAddC" ondragover="event.preventDefault(); this.classList.add(\'over\');" ondragleave="this.classList.remove(\'over\');" ondrop="dtwPanelAssetDrop(event)">'
-                    + '<div class="dtw-fg-assets" id="dtwFgAssets">' + list.map(function(a) { return assetChipHtml(s, a); }).join('') + '</div>'
-                    + '<div class="dtw-fg-addrow"><label class="dtw-fg-act add" title="A video (mp4, mov, webm), an image (png, jpg, webp) or audio (mp3, m4a, wav)">Add content<input type="file" accept="' + accept + '" hidden onchange="dtwPanelAssetAdd(this.files[0]); this.value=\'\';"></label>'
-                    + '<input id="dtwFgAssetUrl" class="dtw-in url" placeholder="or paste a direct link to a video, image or audio file" aria-label="Link to the file" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPanelAssetUrl();}">'
-                    + '<input id="dtwFgAssetLabel" class="dtw-in lab" maxlength="40" placeholder="Label: A, B or a name" aria-label="Label" value="' + esc(S.fg.assetLabel || '') + '" oninput="S.fg.assetLabel=this.value">'
-                    + '<span class="hint" id="dtwFgAssetHint">' + hint + '</span></div></div>';
+                return list.length ? '<div class="dtw-fg-assets" id="dtwFgAssets">' + list.map(function(a) { return assetChipHtml(s, a); }).join('') + '</div>' : '';
             }
             function assetReadExtras(q) {
                 if (!q || q.kind !== 'asset_read') return '';
@@ -54038,7 +54039,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 };
                 S.assetPollTimer = setTimeout(tick, 5000);
             }
-            function assetLabelTyped() { var inp = el('dtwFgAssetLabel'); var v = inp ? inp.value.trim() : (S.fg.assetLabel || ''); S.fg.assetLabel = ''; if (inp) inp.value = ''; return v; }
             async function assetPost(fd) {
                 var r = await fetch('/api/digital-twins/' + encodeURIComponent(S.key) + '/panel/' + encodeURIComponent(S.session.id) + '/assets', { method: 'POST', credentials: 'same-origin', body: fd });
                 var u = null; try { u = await r.json(); } catch (_) { u = null; }
@@ -54064,27 +54064,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!/\.(mp4|mov|webm|m4v|png|jpe?g|webp|mp3|m4a|wav)$/i.test(file.name || '')) { liveNote('Use a video (mp4, mov, webm), an image (png, jpg, webp) or audio (mp3, m4a, wav).'); return; }
                 S.assetBusy = true;
                 liveNote('Storing ' + (file.name || 'the file') + '...');
-                var fd = new FormData(); fd.append('file', file); var lab = assetLabelTyped(); if (lab) fd.append('label', lab);
+                var fd = new FormData(); fd.append('file', file);
                 try { assetAdopt(await assetPost(fd)); } catch (e) { assetFail(e); }
                 S.assetBusy = false;
             };
-            window.dtwPanelAssetUrl = async function() {
-                var inp = el('dtwFgAssetUrl'), url = inp ? inp.value.trim() : ''; if (!S.session || !url) return;
+            window.dtwPanelAssetUrl = async function(link) {
+                var inp = el('dtwPnQ'), url = String(link || (inp ? inp.value : '') || '').trim(); if (!S.session || !url) return;
                 if (!/^https?:\/\//i.test(url)) { liveNote('Paste a direct link to the file (https://...).'); return; }
                 if (S.assetBusy) { liveNote('One piece of content at a time; the last one is still going in.'); return; }
                 S.assetBusy = true;
                 liveNote('Fetching the file...');
-                var fd = new FormData(); fd.append('url', url); var lab = assetLabelTyped(); if (lab) fd.append('label', lab);
-                try { assetAdopt(await assetPost(fd)); if (inp) inp.value = ''; } catch (e) { assetFail(e); }
+                var fd = new FormData(); fd.append('url', url);
+                try { var got = await assetPost(fd); var now = el('dtwPnQ'); if (now && now.value.trim() === url) now.value = ''; assetAdopt(got); } catch (e) { assetFail(e); }
                 S.assetBusy = false;
             };
             window.dtwPanelAssetDrop = function(ev) {
                 try { ev.preventDefault(); } catch (_) {}
-                var box = el('dtwFgAddC'); if (box) box.classList.remove('over');
+                var box = el('dtwFgField'); if (box) box.classList.remove('over');
                 var f = ev && ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
                 if (f) { dtwPanelAssetAdd(f); return; }
                 var txt = ev && ev.dataTransfer ? (ev.dataTransfer.getData('text/uri-list') || ev.dataTransfer.getData('text/plain') || '') : '';
-                if (/^https?:\/\//i.test(txt.trim())) { var inp = el('dtwFgAssetUrl'); if (inp) inp.value = txt.trim(); dtwPanelAssetUrl(); }
+                if (/^https?:\/\/\S+$/i.test(txt.trim())) dtwPanelAssetUrl(txt.trim());
+            };
+            // a file copied to the clipboard (a screenshot, a copied image) pasted into the question field goes in as content
+            window.dtwPanelAssetPaste = function(ev) {
+                var f = ev && ev.clipboardData && ev.clipboardData.files && ev.clipboardData.files[0];
+                if (!f) return;
+                try { ev.preventDefault(); } catch (_) {}
+                dtwPanelAssetAdd(f);
             };
             window.dtwPanelAssetOpen = function(id) {
                 var a = fgAssets(S.session).filter(function(x) { return x.id === id; })[0]; if (!a) return;
@@ -54242,10 +54249,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // ---- the composer, under the thread, as the Prometheus chat: the kind chips, the field, Ask the room as the one Signal Green button.
             function composerHtml(typed, typedOpts) {
                 var ready = fgAssets(S.session).filter(function(a) { return a.status === 'ready'; });
-                var ph = ready.length >= 2 ? 'Ask about ' + ready[0].label + ', ' + ready[1].label + ' or both.' : (ready.length ? 'Ask about ' + ready[0].label + ', or anything else in plain words.' : 'Ask the room anything in plain words.');
+                var ph = ready.length >= 2 ? 'Ask about ' + ready[0].label + ', ' + ready[1].label + ' or both.' : (ready.length ? 'Ask about ' + ready[0].label + ', or anything else in plain words.' : (fgAssets(S.session).length ? 'Ask the room anything in plain words.' : 'Ask the room anything, or add a video, image or audio file to show it.'));
                 var out = '<div class="dtw-fg-composer">' + assetsStripHtml(S.session) + '<div id="dtwPnKinds" class="dtw-fg-kinds">' + KINDS.map(function(k) { return '<button type="button" class="dtw-fg-chip' + (S.panelKind === k[0] ? ' on' : '') + '" data-k="' + k[0] + '" onclick="dtwPanelKind(\'' + k[0] + '\')">' + k[1] + '</button>'; }).join('') + '</div>';
                 out += '<textarea id="dtwPnOptions" class="dtw-in dtw-fg-opts" style="display:' + ((S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none') + ';" placeholder="Options, one per line (or comma separated)">' + esc(typedOpts) + '</textarea>';
-                out += '<div class="dtw-fg-field"><input id="dtwPnQ" value="' + esc(typed) + '" placeholder="' + esc(ph) + '" aria-label="Ask the room" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" id="dtwPnAskBtn" class="dtw-fg-send" onclick="dtwPanelAsk()">Ask the room<span class="arr"></span></button></div>';
+                out += '<div class="dtw-fg-field has-attach" id="dtwFgField" ondragover="event.preventDefault(); this.classList.add(\'over\');" ondragleave="this.classList.remove(\'over\');" ondrop="dtwPanelAssetDrop(event)">' + attachHtml() + '<input id="dtwPnQ" value="' + esc(typed) + '" placeholder="' + esc(ph) + '" aria-label="Ask the room" onpaste="dtwPanelAssetPaste(event)" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" id="dtwPnAskBtn" class="dtw-fg-send" onclick="dtwPanelAsk()">Ask the room<span class="arr"></span></button></div>';
                 out += '<div class="dtw-fg-live" id="dtwPnLive"></div></div>';
                 return out;
             }
@@ -54531,6 +54538,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!S.session) return;
                 var inp = el('dtwPnQ'); var q = presetQ || (inp && inp.value.trim());
                 if (!q) { if (inp) { try { inp.focus(); } catch (_) {} } return; }
+                if (!presetQ && /^https?:\/\/\S+$/i.test(q)) { dtwPanelAssetUrl(q); return; }   // a link on its own is content for the room
                 var inflight = (S.session.questions || []).filter(qInFlight);
                 if (inflight.length) {
                     var same = inflight.some(function(x) { return normQ(x.q) === normQ(q); });

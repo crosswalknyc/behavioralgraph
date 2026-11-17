@@ -1051,9 +1051,9 @@ def run_asset_intake(text, body, history, user, ppu=None, thread_id=''):
     if not url and att is None:
         page = _VIDEO_PAGE_RX.search(str(text or ''))
         if page:
-            return _payload(f"That link is a page on {page.group(1)}, not the file itself. Paste a direct link to the video, image or audio file, or add it from the room page (Add content) and I will read it there.",
+            return _payload(f"That link is a page on {page.group(1)}, not the file itself. Paste a direct link to the video, image or audio file, or add it from the room page (the clip in the question bar) and I will read it there.",
                             ['Open Focus Group IQ'], panel_session={'key': active['key'], 'sid': sess['id']}, open_view='digitalTwinsIQ', twin_key=active['key'])
-        return _payload('Attach the image to this thread, or paste a direct link to the video, image or audio file (https://...), and I put it to the room. Videos and audio go in from the room page too (Add content).',
+        return _payload('Attach the image to this thread, or paste a direct link to the video, image or audio file (https://...), and I put it to the room. Videos and audio go in from the room page too (the clip in the question bar).',
                         ['Open Focus Group IQ'], panel_session={'key': active['key'], 'sid': sess['id']}, open_view='digitalTwinsIQ', twin_key=active['key'])
     funds = _charge_panel_question(user, payload, sess, text)      # the read is one question on the cap
     if funds is not None:
