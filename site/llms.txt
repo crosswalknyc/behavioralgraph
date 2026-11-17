@@ -16,6 +16,7 @@ Crosswalk Technologies, Inc. serves studios, streamers, brands, agencies, and fi
 - [Rankers IQ](https://www.crosswalknyc.com/ranker-iq.html): Rankers IQ ranks free ad-supported TV, streaming, music, podcasts, and gaming on observed behavior, updated every morning. Not a follower count.
 - [Subscriber IQ](https://www.crosswalknyc.com/subscriber-iq.html): Subscriber IQ ties account opens, returns, and cancels to the titles and windows that moved them, on the same opted-in people. A play is not a signup.
 - [Trends IQ](https://www.crosswalknyc.com/trends-iq.html): Trends IQ ranks what moved yesterday: searches, headlines, people, books, comics, Broadway, and the box office, day over day on the same 30 million people.
+- [Digital twins track record](https://www.crosswalknyc.com/twins-track-record.html): Every call the Crosswalk twins make goes on the record before the outcome, dated and hashed, and is scored the moment the outcome lands. The method, the words for how firm a count is, and the record itself.
 
 ## The panel and the company
 - [The panel](https://www.crosswalknyc.com/panel.html): 30 million people worldwide chose to be counted, 10 million of them in the US. How the panel works, what gets counted, your rights, and what clients receive.

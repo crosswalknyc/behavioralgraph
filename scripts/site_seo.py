@@ -105,6 +105,11 @@ PAGES = {
         description="Twin IQ builds a digital twin of each of the 10 million US people in the Crosswalk panel, from observed behavior, not surveys. Test a plan, a title, or a price first.",
         kind="product", name="Twin IQ", crumb_label="Digital twins",
         og_image="assets/images/og-digital-twins.png"),
+    "twins-track-record.html": dict(
+        title="Digital Twins: How We Score Ourselves | Crosswalk",
+        description="Every call the Crosswalk twins make goes on the record before the outcome, dated and hashed, and is scored the moment the outcome lands. The method, the words for how firm a count is, and the record itself.",
+        kind="product", name="Digital twins track record", crumb_label="Track record",
+        og_image="assets/images/og-digital-twins.png"),
     "micro-series.html": dict(
         title="Micro-series: who watches vertical dramas, and where | Crosswalk",
         description="Who watches vertical dramas on ReelShort, DramaBox, GoodShort, NetShort and Peacock, who pays, and where the paywall sits. Counted from 10 million US people, updated daily.",

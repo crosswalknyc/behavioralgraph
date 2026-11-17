@@ -1,0 +1,177 @@
+{
+ "as_of": "2026-11-17T20:36:39Z",
+ "rows": [
+  {
+   "subject": "NCIS: New York",
+   "what": "Share who come back for episode two",
+   "kind": "forecast",
+   "unit": "pct",
+   "said": 85.7,
+   "said_distribution": null,
+   "low": null,
+   "high": null,
+   "happened": 86.8,
+   "happened_distribution": null,
+   "outcome_class": "panel",
+   "called_on": "2026-10-30",
+   "settled_on": "2026-11-05",
+   "abs_error": 1.1,
+   "rel_error": 0.0127,
+   "tvd": null,
+   "covered": null,
+   "hit": null,
+   "hash": "b12411aad757ca28d3c6049da7afe77b3c6563f55e24a7d374a76c5663e41658"
+  },
+  {
+   "subject": "NCIS: New York",
+   "what": "Share who finish the pilot",
+   "kind": "forecast",
+   "unit": "pct",
+   "said": 83.9,
+   "said_distribution": null,
+   "low": null,
+   "high": null,
+   "happened": 81.6,
+   "happened_distribution": null,
+   "outcome_class": "panel",
+   "called_on": "2026-10-30",
+   "settled_on": "2026-11-05",
+   "abs_error": 2.3,
+   "rel_error": 0.0282,
+   "tvd": null,
+   "covered": null,
+   "hit": null,
+   "hash": "1c240fcda97a6c04ee154746a7d61e2dca46a25f8bba6856cbfda7a39bc01b8b"
+  },
+  {
+   "subject": "NCIS: New York",
+   "what": "Week-one audience if released",
+   "kind": "forecast",
+   "unit": "people",
+   "said": 10040000,
+   "said_distribution": null,
+   "low": null,
+   "high": null,
+   "happened": 10250000.0,
+   "happened_distribution": null,
+   "outcome_class": "published",
+   "called_on": "2026-10-30",
+   "settled_on": "2026-11-05",
+   "abs_error": 210000.0,
+   "rel_error": 0.0205,
+   "tvd": null,
+   "covered": null,
+   "hit": null,
+   "hash": "c61f921f94533ec2b8c2f5a21de764b62f82fcf082830e5e23dced97dbd8ea59"
+  },
+  {
+   "subject": "Nevada 4th District voters",
+   "what": "What is the margin in NV-4?",
+   "kind": "call",
+   "unit": "points",
+   "said": 23.0,
+   "said_distribution": null,
+   "low": null,
+   "high": null,
+   "happened": 22.7,
+   "happened_distribution": null,
+   "outcome_class": "certified result",
+   "called_on": "2026-10-30",
+   "settled_on": "2026-11-04",
+   "abs_error": 0.3,
+   "rel_error": 0.0132,
+   "tvd": null,
+   "covered": null,
+   "hit": true,
+   "hash": "f26bad6103e7c7bb036eccce03c2c1aac2d42f568a830048e45179fa00827e7e"
+  },
+  {
+   "subject": "Ohio potential voters",
+   "what": "How many of the 7.9M potential voters vote, and who wins the governor race?",
+   "kind": "call",
+   "unit": "people",
+   "said": 4200000,
+   "said_distribution": null,
+   "low": null,
+   "high": null,
+   "happened": 4600000.0,
+   "happened_distribution": null,
+   "outcome_class": "certified result",
+   "called_on": "2026-10-30",
+   "settled_on": "2026-11-04",
+   "abs_error": 400000.0,
+   "rel_error": 0.087,
+   "tvd": null,
+   "covered": null,
+   "hit": true,
+   "hash": "9bbf2e13facce4314858f8c9d490a40aa32e0e62c460d54abb7ad31ea495a1e9"
+  },
+  {
+   "subject": "Texas likely voters",
+   "what": "Who wins the Texas Senate race?",
+   "kind": "call",
+   "unit": "pct",
+   "said": "Talarico",
+   "said_distribution": [
+    {
+     "label": "Talarico",
+     "pct": 54.6
+    },
+    {
+     "label": "Paxton",
+     "pct": 43.3
+    },
+    {
+     "label": "Other",
+     "pct": 2.1
+    }
+   ],
+   "low": null,
+   "high": null,
+   "happened": "Talarico",
+   "happened_distribution": [
+    {
+     "label": "Talarico",
+     "pct": 55.1
+    },
+    {
+     "label": "Paxton",
+     "pct": 43.0
+    },
+    {
+     "label": "Other",
+     "pct": 1.9
+    }
+   ],
+   "outcome_class": "certified result",
+   "called_on": "2026-10-30",
+   "settled_on": "2026-11-04",
+   "abs_error": null,
+   "rel_error": null,
+   "tvd": 0.5,
+   "covered": null,
+   "hit": true,
+   "hash": "610ccc5e238fdeb83b076f922d30f6bbe9bc55848807d4af19656c55db4fab56"
+  }
+ ],
+ "summary": {
+  "calls_scored": 6,
+  "hit_rate": 1.0,
+  "mean_relative_miss": 0.0323,
+  "coverage": null,
+  "by_kind": {
+   "forecast": {
+    "n": 3,
+    "hit_rate": null,
+    "mean_relative_miss": 0.0205,
+    "mean_tvd": null
+   },
+   "call": {
+    "n": 3,
+    "hit_rate": 1.0,
+    "mean_relative_miss": 0.0501,
+    "mean_tvd": 0.5
+   }
+  }
+ }
+}
