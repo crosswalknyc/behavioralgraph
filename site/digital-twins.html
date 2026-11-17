@@ -60,6 +60,9 @@
   .light .shot img { border-color: var(--rule-l); box-shadow: 0 24px 60px rgba(12,22,24,0.14); }
   .shot figcaption { font-size: 12px; color: var(--t3-d); margin-top: 12px; }
   .light .shot figcaption { color: var(--t3-l); }
+  .vid { margin: 0 0 48px; scroll-margin-top: 96px; }
+  .vid video { width: 100%; height: auto; aspect-ratio: 16 / 9; display: block; border-radius: 12px; border: 1px solid var(--rule-l); background: #0C1618; box-shadow: 0 24px 60px rgba(12,22,24,0.14); }
+  .vid figcaption { font-size: 13px; }
   .cmp { border-top: 1px solid var(--rule-d); }
   .cmp .r { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--rule-d); font-size: 15px; }
   .cmp .r.head { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); padding: 10px 0; }
@@ -120,7 +123,21 @@
       "about": {"@id": "https://www.crosswalknyc.com/digital-twins.html#service"},
       "breadcrumb": {"@id": "https://www.crosswalknyc.com/digital-twins.html#breadcrumb"},
       "primaryImageOfPage": "https://www.crosswalknyc.com/assets/images/og-digital-twins.png",
+      "video": {"@id": "https://www.crosswalknyc.com/digital-twins.html#video"},
       "inLanguage": "en-US"
+    },
+    {
+      "@type": "VideoObject",
+      "@id": "https://www.crosswalknyc.com/digital-twins.html#video",
+      "name": "How Crosswalk digital twins work",
+      "description": "A ten million person census-matched US panel, a digital twin for each person, forecasts within plus or minus three percent, and the record on Election 2026 and the NCIS: New York pilot. Four and a half minutes.",
+      "thumbnailUrl": ["https://www.crosswalknyc.com/assets/images/twins/video-poster.jpg"],
+      "uploadDate": "2026-11-16",
+      "duration": "PT4M36S",
+      "contentUrl": "https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-digital-twins-how-it-works.mp4",
+      "inLanguage": "en-US",
+      "publisher": {"@id": "https://www.crosswalknyc.com/#organization"},
+      "isPartOf": {"@id": "https://www.crosswalknyc.com/digital-twins.html#webpage"}
     },
     {
       "@type": "BreadcrumbList",
@@ -212,7 +229,7 @@
       <div class="eyebrow"><span class="n">01</span> Digital twins</div>
       <h1 class="h-l">Digital twins built from what ten million people actually do.</h1>
       <p class="lead" style="margin-top:20px">A digital twin is a working copy of a real person's behavior. Twin IQ builds one for each of the 10 million US people in the Crosswalk panel, which counts 30 million people worldwide. It comes from what they watch, search, buy, and pay for, not from what they tell a survey. Put a plan, a title, a price, or an idea in front of the twins and see what happens before you spend.</p>
-      <div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap"><a class="btn btn-green" href="company.html#contact">Talk to us about digital twins</a><a class="btn btn-ghost" href="#how">How it works</a></div>
+      <div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap"><a class="btn btn-green" href="company.html#contact">Talk to us about digital twins</a><a class="btn btn-ghost" href="#video">Watch how it works</a></div>
       <p class="fine" style="color:var(--t3-d);margin-top:18px">Synthetic data, grounded in real behavior. Clients see group statistics only. No individual is ever identified.</p>
     </div>
     <div class="panel twin">
@@ -263,6 +280,13 @@
         <p class="lead">Every person in the Crosswalk panel gets a twin built from what they do. You put in a plan, a title, or an idea. Prometheus runs it forward on the twins and returns the odds, the audience, and the package that earns the most. Then it sets the plan live inside the ad platforms and keeps score.</p>
       </div>
     </div>
+    <figure class="shot vid" id="video">
+      <video controls preload="metadata" playsinline poster="assets/images/twins/video-poster.jpg" title="How Crosswalk digital twins work">
+        <source src="https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-digital-twins-how-it-works.mp4" type="video/mp4">
+        <track kind="captions" src="assets/video/digital-twins.vtt" srclang="en" label="English">
+      </video>
+      <figcaption>How Crosswalk digital twins work, in four and a half minutes: the panel, the twin, the forecast, and the record on Election 2026 and the NCIS: New York pilot.</figcaption>
+    </figure>
     <div class="cards3">
       <div class="c"><div class="k">What it is</div><p>One twin per person: observed behavior, 4,600+ audiences already read, outside anchors, and what each person pays.</p></div>
       <div class="c"><div class="k">Why now</div><p>Twin and AI research tools raised more than $250 million in the past year. Every one of them is built on what people say, none on what they do.</p></div>
