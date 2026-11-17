@@ -148,6 +148,14 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
             _pvg.guard_payload(raw, decision=decision, question=_q)
         except Exception:
             pass
+        # What a valuation costs is fixed (Jenna 2026-11-16): a written
+        # answer never says what would make it cheaper. Those sentences
+        # come out and one line says what the price depends on.
+        try:
+            from . import valuation_price as _vpg
+            _vpg.guard_payload(raw, decision=decision, question=_q)
+        except Exception:
+            pass
     # Reply shape (2026-10-06): chat answers read as answers, not
     # reports (no capital-letter headers, definitions out of the
     # sentence). Analyze surface only; briefs and guidance keep shape.

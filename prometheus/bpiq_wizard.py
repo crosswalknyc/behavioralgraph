@@ -971,16 +971,26 @@ def _wants(text, body, history, store, user, thread_id):
     extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
     if body.get('bpiq_confirm') or extra.get('bpiq_confirm'):
         return True
-    # what a partnership is worth in dollars, asked cold or about this
-    # thread's partnership, and a deck of a read that stated it, are the
-    # valuation's (Jenna 2026-11-11)
-    if pv_kind(text, history, body=body):
-        return True
     if store is None and user:
         try:
             store = store_for(body)
         except Exception:
             store = None
+    # what a valuation costs, and an order to run the quoted one with or
+    # without its control group, are answered from the two prices (Jenna
+    # 2026-11-16); the store is only read when the words could be either
+    try:
+        from prometheus import valuation_price as _vp
+        if _vp.is_price_question(text) or _vp.control_change(text) is not None:
+            if price_kind(text, history, open_draft(body, history, store, user, thread_id)):
+                return True
+    except Exception:
+        pass
+    # what a partnership is worth in dollars, asked cold or about this
+    # thread's partnership, and a deck of a read that stated it, are the
+    # valuation's (Jenna 2026-11-11)
+    if pv_kind(text, history, body=body):
+        return True
     # a deck asked of the valuation still running on this thread is answered here, in one line
     if running_deck_answer(text, history, '', store, user, thread_id, None, body=body, chat=True)[0]:
         return True
@@ -1678,6 +1688,199 @@ def control_explainer(draft=None):
     except Exception:
         pass
     return line + ' Include one? Yes or No.'
+
+
+# ------------------------------------------------------------- the price
+# What a valuation costs is fixed (Jenna 2026-11-16, Samantha Kolton at
+# CAA): the control price with a control group, the base price without
+# one, and the base price is the lowest it goes. Nothing else changes it.
+# She declined a $1,000 quote, asked "Can you do it without the control
+# group?" and was told the comparison group "does not change the price of
+# the run"; she asked "Can we narrow the asset scope to lower the cost"
+# and was told handing over links would make it cheaper. Both answers
+# were written on the spot. A question about the price, and an order to
+# run the quoted valuation with or without its control group, are
+# answered here from the two prices, and the order comes back ready to
+# accept. `prometheus.valuation_price` holds the words.
+def _quote_context(history, look=10):
+    """True when this thread's last few turns hold a valuation quote or
+    one of the order's own questions."""
+    for turn in reversed(list(history or [])[-look:]):
+        if not isinstance(turn, dict) or str(turn.get('role') or '') not in ('agent', 'assistant'):
+            continue
+        txt = str(turn.get('text') or turn.get('content') or '').strip()
+        if not txt:
+            continue
+        if txt == DECLINE_REPLY or txt.startswith("It's running") or step_from_prompt(txt) is not None:
+            return True
+    return False
+
+
+def _draft_from_recap(text):
+    """The order a recap spells out ("Here's what I'll run: ..."), as a
+    draft at the charge step. None when the lines do not read."""
+    lines = [ln.strip() for ln in str(text or '').split('\n')]
+    try:
+        at = next(i for i, ln in enumerate(lines) if ln.startswith("Here's what I'll run"))
+    except StopIteration:
+        return None
+    body = [ln for ln in lines[at + 1:] if ln]
+    if len(body) < 6:
+        return None
+    talent, campaign = body[0], body[1]
+    camp = next((ln for ln in body if ln.startswith('Campaign dates:')), '')
+    attr = next((ln for ln in body if ln.startswith('Attribution window:')), '')
+    ctrl = next((ln for ln in body if ln.startswith('Control group:')), '')
+    if not (talent and campaign and camp and attr and ctrl):
+        return None
+
+    def _range(line):
+        val = line.split(':', 1)[1].strip()
+        a, b = parse_dates(val)
+        if a and b:
+            return a, b
+        try:
+            one = _slots.single_date(val, _today(None))
+        except Exception:
+            one = None
+        return (one, one) if one else (None, None)
+    cs, ce = _range(camp)
+    as_, ae = _range(attr)
+    if not (cs and ce and as_ and ae):
+        return None
+    links_line = next((ln for ln in body if ln.startswith('Links:')), '')
+    links = [u.strip() for u in links_line.split(':', 1)[1].split(', ') if u.strip()] if links_line else []
+    d = empty_draft()
+    d.update({
+        'talent': talent, 'campaign': campaign, 'campaign_start': cs, 'campaign_end': ce,
+        'attr_start': as_, 'attr_end': ae, 'attr_ok': True,
+        'control_group': ctrl.split(':', 1)[1].strip().lower().startswith('y'),
+        'asset_mode': 'links' if links else 'find', 'links': links,
+        'brand_partner': _brand_from_campaign(campaign, talent), 'step': STEP_CHARGE,
+    })
+    return _price_draft(d)
+
+
+def quoted_draft(history, today=None, look=12):
+    """The order this thread last quoted and has not run: the recap in
+    its last few turns, as a draft at the charge step. None when there
+    is no recap there, or the quoted order was accepted and is running.
+    The thread's own answers are replayed first so the draft keeps what
+    the reader said about the window; the recap's lines are the check
+    and the fallback."""
+    turns = [t for t in list(history or []) if isinstance(t, dict)]
+    idx = None
+    for i in range(len(turns) - 1, max(-1, len(turns) - 1 - look), -1):
+        if str(turns[i].get('role') or '') not in ('agent', 'assistant'):
+            continue
+        txt = str(turns[i].get('text') or turns[i].get('content') or '').strip()
+        if txt.startswith("It's running") or txt.startswith('That valuation is already running'):
+            return None
+        if "Here's what I'll run" in txt:
+            idx = i
+            break
+    if idx is None:
+        return None
+    seen = _draft_from_recap(str(turns[idx].get('text') or turns[idx].get('content') or ''))
+    if seen is None:
+        return None
+    start = 0
+    for i in range(idx - 1, -1, -1):
+        if str(turns[i].get('role') or '') != 'user':
+            continue
+        txt = str(turns[i].get('text') or turns[i].get('content') or '').strip()
+        if is_decline(txt) or is_cancel(txt):
+            start = i + 1
+            break
+        if is_start(txt):
+            start = i
+            break
+    try:
+        played = replay_history(turns[start:idx], today=today)
+    except Exception:
+        played = None
+    if isinstance(played, dict) and all(
+            str(played.get(k) or '').strip().lower() == str(seen.get(k) or '').strip().lower()
+            for k in ('talent', 'campaign', 'campaign_start', 'campaign_end', 'attr_start', 'attr_end')):
+        played = dict(played, step=STEP_CHARGE, attr_ok=True, control_group=seen['control_group'],
+                      asset_mode=seen['asset_mode'], links=list(seen['links']))
+        played.pop('misses', None)
+        return _price_draft(played)
+    return seen
+
+
+def price_kind(text, history=None, draft=None, today=None):
+    """'with' / 'without' when the words order this thread's valuation
+    run with or without its control group, 'price' when they ask what a
+    valuation costs or how to make it cost less, '' otherwise. A reply
+    the open step is waiting for (yes or no at the control question)
+    stays the step's."""
+    try:
+        from prometheus import valuation_price as _vp
+        t = str(text or '').strip()
+        if not t or is_start(t) or is_cancel(t) or is_decline(t) or _ACCEPT_RE.match(t):
+            return ''
+        step = (draft or {}).get('step') if isinstance(draft, dict) else None
+        if step == STEP_CONTROL and (_YES_RE.match(t) or _NO_RE.match(t) or _CONTROL_YES_RE.match(t)
+                                     or _CONTROL_NO_RE.match(t)):
+            return ''
+        here = bool(draft) or _vp.names_valuation(t) or _quote_context(history)
+        if not here:
+            return ''
+        change = _vp.control_change(t)
+        if change is not None:
+            has_order = (isinstance(draft, dict) and draft.get('control_group') is not None
+                         and step in (STEP_ASSETS, STEP_LINKS, STEP_CHARGE))
+            if has_order or (not draft and quoted_draft(history, today=today) is not None):
+                return 'with' if change else 'without'
+        if _vp.is_price_question(t):
+            return 'price'
+        return ''
+    except Exception:
+        return ''
+
+
+def price_answer(kind, text, history, draft, store, user, thread_id, today=None):
+    """The payload for a `price_kind` turn. A changed control group puts
+    the order back at its recap with the new price and the Accept chip;
+    a price question gets the two prices and the one thing that moves
+    between them. Nothing is charged and nothing starts here."""
+    from prometheus import valuation_price as _vp
+    yes, no = price_label(price_usd(True)), price_label(price_usd(False))
+    included = included_seat(draft)
+    quoted = None if draft else quoted_draft(history, today=today)
+    if kind in ('with', 'without'):
+        d = dict(draft or quoted)
+        d['control_group'] = kind == 'with'
+        d = _price_draft(d)
+        d.pop('misses', None)
+        if d.get('step') not in (STEP_ASSETS, STEP_LINKS):
+            d['step'] = STEP_CHARGE
+        if store is not None:
+            try:
+                store.save(user, thread_id, d)
+            except Exception:
+                pass
+        reply, chips = step_prompt(d, today=today)
+        lead = _vp.change_lead(yes, no, d['control_group'], included=included)
+        return _payload(f"{lead}\n\n{reply}", chips, draft=d, valuation_price=kind)
+    held = draft or quoted
+    control = held.get('control_group') if isinstance(held, dict) else None
+    reply = _vp.answer(yes, no, lower=_vp.asks_lower(text), included=included, control=control)
+    if draft:
+        # the order stays open at its step; the way back rides on the answer
+        if draft.get('step') == STEP_CHARGE:
+            usd = price_usd(bool(draft.get('control_group')))
+            chips = [accept_chip(usd, included=included),
+                     _vp.RUN_WITH_CHIP if control is False else _vp.RUN_WITHOUT_CHIP, CHIP_DECLINE, CHIP_CANCEL]
+        else:
+            chips = [RESUME_CHIP, CHIP_CANCEL]
+        return _payload(reply, chips, draft=draft, valuation_price='price')
+    if quoted is not None:
+        chips = [_vp.RUN_WITHOUT_CHIP, _vp.RUN_WITH_CHIP]
+    else:
+        chips = [CHIP]
+    return _payload(reply, chips, draft=None, bpiq_collect=False, valuation_price='price')
 
 
 def open_range_chip(start):
@@ -3151,6 +3354,13 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
         if store is not None:
             store.clear(uname or user, thread_id)
         return _payload(DECLINE_REPLY, [], draft=None, bpiq_collect=False)
+
+    # What a valuation costs is fixed, and it is this order's to say
+    # (Jenna 2026-11-16): the two prices, and the quoted order back at
+    # its recap when the words change its control group.
+    _pk = price_kind(t, history, draft, today=today)
+    if _pk:
+        return price_answer(_pk, t, history, draft, store, uname or user, thread_id, today=today)
 
     # What a partnership is worth in dollars is this order's to state
     # (prometheus.partnership_value, Jenna 2026-11-11): asked cold, the
