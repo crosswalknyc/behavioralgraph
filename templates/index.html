@@ -51731,8 +51731,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-bw-group .k { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); margin: 0 0 0.35rem; display: flex; justify-content: space-between; gap: 8px; }
         #digitalTwinsIQView .dtw-bw-group .k em { font-style: normal; font-weight: 400; letter-spacing: 0; text-transform: none; }
         #digitalTwinsIQView .dtw-bw-group .dtw-chips { margin: 0; }
-        #digitalTwinsIQView .dtw-bw-shares { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0.5rem 0 0; }
-        #digitalTwinsIQView .dtw-bw-share { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-chips-cols { align-items: flex-start; }
+        #digitalTwinsIQView .dtw-chipcol { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+        #digitalTwinsIQView .dtw-bw-share { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-bw-share input.dtw-in { width: 58px; margin: 0; padding: 0.24rem 0.4rem; text-align: right; font-size: 0.76rem; }
         #digitalTwinsIQView .dtw-bw-share i { font-style: normal; color: var(--dtw-mute); }
         #digitalTwinsIQView .dtw-bw-shareline { font-size: 0.7rem; line-height: 1.4; color: var(--dtw-mute); margin-top: 0.35rem; }
@@ -52710,13 +52711,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 shares = shares || bwSharesBody();
                 return Object.keys(shares).map(function(c) { var blk = shares[c] || {}; return (BW_SHARE_LABEL[c] || c) + ': ' + Object.keys(blk).map(function(v) { return v + ' ' + bwPctWords(blk[v]); }).join(', ') + '.'; }).join(' ');
             }
-            function bwShareRow(cat) {
-                var b = S.bw, picks = b.demo[cat] || [], sh = (b.shares || {})[cat] || {};
+            function bwShareInput(cat, v) {
+                // the share box sits right under the pill it belongs to (Jenna 2026-11-17), so the pill names it
+                var sh = (S.bw.shares || {})[cat] || {};
+                return '<label class="dtw-bw-share"><input class="dtw-in" inputmode="decimal" maxlength="5" autocomplete="off" value="' + esc(sh[v] == null ? '' : sh[v]) + '" placeholder="share" aria-label="Share of the group that is ' + esc(v) + ', in percent" data-cat="' + cat + '" data-v="' + esc(v) + '" oninput="dtwBwShare(this)"><i>%</i></label>';
+            }
+            function bwShareLine(cat) {
+                var picks = S.bw.demo[cat] || [];
                 if (!picks.length) return '';
                 var st = bwShareState(cat);
-                return '<div class="dtw-bw-shares">' + picks.map(function(v) {
-                    return '<label class="dtw-bw-share"><span>' + esc(v) + '</span><input class="dtw-in" inputmode="decimal" maxlength="5" autocomplete="off" value="' + esc(sh[v] == null ? '' : sh[v]) + '" placeholder="share" aria-label="Share of the group that is ' + esc(v) + ', in percent" data-cat="' + cat + '" data-v="' + esc(v) + '" oninput="dtwBwShare(this)"><i>%</i></label>';
-                }).join('') + '</div><div class="dtw-bw-shareline' + (st.err ? ' err' : '') + '" id="dtwBwShareLine-' + cat + '">' + esc(st.err || st.line || BW_SHARE_HINT) + '</div>';
+                return '<div class="dtw-bw-shareline' + (st.err ? ' err' : '') + '" id="dtwBwShareLine-' + cat + '">' + esc(st.err || st.line || BW_SHARE_HINT) + '</div>';
             }
             function bwShareSeats(n) {
                 // whole seats: what each share comes to at this room size
@@ -52835,9 +52839,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var out = '<div class="dtw-bw-q">Who is in the group?</div><div class="dtw-bw-sub">Pick as much or as little as you like. Anything you leave open stays the US mix.</div>';
                     BW_DEMO.forEach(function(g) {
                         var picks = b.demo[g[0]] || [];
-                        out += '<div class="dtw-bw-group"><div class="k"><span>' + esc(g[1]) + '</span><em>pick any, then set a share if you want one</em></div><div class="dtw-chips">' + g[2].map(function(o) {
-                            return '<button type="button" class="dtw-chip' + (picks.indexOf(o) >= 0 ? ' on' : '') + '" onclick="dtwBwPick(\'' + g[0] + '\', this)" data-v="' + esc(o) + '">' + esc(o) + '</button>';
-                        }).join('') + '</div>' + bwShareRow(g[0]) + '</div>';
+                        out += '<div class="dtw-bw-group"><div class="k"><span>' + esc(g[1]) + '</span><em>pick any, then set a share if you want one</em></div><div class="dtw-chips dtw-chips-cols">' + g[2].map(function(o) {
+                            var on = picks.indexOf(o) >= 0;
+                            return '<span class="dtw-chipcol">' + '<button type="button" class="dtw-chip' + (on ? ' on' : '') + '" onclick="dtwBwPick(\'' + g[0] + '\', this)" data-v="' + esc(o) + '">' + esc(o) + '</button>' + (on ? bwShareInput(g[0], o) : '') + '</span>';
+                        }).join('') + '</div>' + bwShareLine(g[0]) + '</div>';
                     });
                     out += '<div class="dtw-bw-group"><div class="k"><span>Markets</span><em>optional, by name</em></div><input class="dtw-in" value="' + esc(b.markets) + '" placeholder="Dallas, Los Angeles (blank is national)" oninput="dtwBwField(\'markets\', this.value)"></div>';
                     out += '<div class="dtw-bw-group"><div class="k"><span>They also</span><em>optional</em></div><input class="dtw-in" value="' + esc(b.interests) + '" placeholder="shop at Target, follow NASCAR, subscribe to Hulu" oninput="dtwBwField(\'interests\', this.value)"></div>';
