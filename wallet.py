@@ -831,6 +831,40 @@ def module_catalog(*, include_hidden: bool = False) -> list:
 # invalidate via _clear_pricing_cache.
 _pricing_cache: dict = {"value": None, "loaded_at": 0.0}
 _PRICING_CACHE_TTL_S = 30.0
+_PRICING_BUCKET = "dashboard-inputs"
+_pricing_s3: dict = {"client": None, "tried": False}
+
+
+def _pricing_store():
+    """The S3 client and bucket for the pricing document, without ever
+    importing the dashboard.
+
+    Until 2026-11-17 this did ``from app import s3_client``, so any
+    process that made one tagged model call (the usage log reads the
+    markup, the markup reads the pricing) booted the whole dashboard
+    inside itself: its background threads ran from a one-off script on
+    the build server and held the process open after its work was done.
+    Now: the dashboard's own client when the dashboard is the running
+    process (``app`` already imported and initialized), a plain boto3
+    client otherwise, nothing under REGRESSION_TEST_MODE (the local
+    mirror and DEFAULT_PRICING stand in). Returns (client or None,
+    bucket)."""
+    import sys
+    mod = sys.modules.get("app")
+    if mod is not None and getattr(mod, "s3_client", None):
+        return mod.s3_client, str(getattr(mod, "METADATA_BUCKET", None) or _PRICING_BUCKET)
+    if os.environ.get("REGRESSION_TEST_MODE") == "1":
+        return None, _PRICING_BUCKET
+    if _pricing_s3["client"] is None and not _pricing_s3["tried"]:
+        _pricing_s3["tried"] = True
+        try:
+            import boto3  # type: ignore
+            _pricing_s3["client"] = boto3.client(
+                "s3", region_name=os.environ.get("AWS_REGION")
+                or os.environ.get("AWS_DEFAULT_REGION") or "us-east-2")
+        except Exception as e:
+            print(f"[wallet] pricing S3 client unavailable: {e}")
+    return _pricing_s3["client"], _PRICING_BUCKET
 
 
 def _clear_pricing_cache():
@@ -856,14 +890,14 @@ def load_pricing(*, force_reload: bool = False) -> dict:
                 < _PRICING_CACHE_TTL_S):
         return _pricing_cache["value"]
     doc = None
-    # S3 first (canonical). Import lazily so this module has no hard
-    # dep on app.py's boto3 client during tests.
+    # S3 first (canonical), through a client of this module's own: the
+    # dashboard is never imported for it (see _pricing_store).
     try:
-        from app import s3_client, METADATA_BUCKET  # type: ignore
+        s3_client, bucket = _pricing_store()
         if s3_client:
             try:
                 resp = s3_client.get_object(
-                    Bucket=METADATA_BUCKET, Key=PRICING_S3_KEY)
+                    Bucket=bucket, Key=PRICING_S3_KEY)
                 raw = resp["Body"].read().decode("utf-8")
                 doc = json.loads(raw)
             except Exception as e:
@@ -871,7 +905,7 @@ def load_pricing(*, force_reload: bool = False) -> dict:
                 if "NoSuchKey" not in _msg and "404" not in _msg:
                     print(f"[wallet] pricing S3 load failed: {e}")
     except Exception:
-        # app not importable (tests) - fall through to local mirror.
+        # no client at all (tests) - fall through to the local mirror.
         pass
     if doc is None:
         try:
@@ -1055,11 +1089,11 @@ def save_pricing(new_pricing: dict) -> dict:
     merged["top_up_min_custom_usd"] = float(TOP_UP_MIN_USD)
     # Write to S3
     try:
-        from app import s3_client, METADATA_BUCKET  # type: ignore
+        s3_client, bucket = _pricing_store()
         if s3_client:
             body = json.dumps(merged, indent=2).encode("utf-8")
             s3_client.put_object(
-                Bucket=METADATA_BUCKET, Key=PRICING_S3_KEY,
+                Bucket=bucket, Key=PRICING_S3_KEY,
                 Body=body, ContentType="application/json")
     except Exception as e:
         print(f"[wallet] pricing S3 save failed: {e}")
