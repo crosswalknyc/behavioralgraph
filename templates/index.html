@@ -51562,6 +51562,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-popout .dtw-fg-addc { margin: 8px 0; }
         /* the composer: the kind chips above the field, Ask the room as the one Signal Green button */
         #digitalTwinsIQView .dtw-fg-composer { position: sticky; bottom: -1rem; z-index: 6; padding: 10px 0 calc(1rem + 2px); background: var(--dtw-page); border-top: 1px solid var(--dtw-rule); }
+        /* ---- theater (2026-11-18): a Predictive Analytics room running for you is watched, not steered ---- */
+        #digitalTwinsIQView.is-theater .dtw-spine { opacity: .55; transition: opacity .35s ease; }
+        #digitalTwinsIQView.is-theater .dtw-spine:hover, #digitalTwinsIQView.is-theater .dtw-spine:focus-within { opacity: 1; }
+        #digitalTwinsIQView.is-theater.is-fg-room .dtw-fg-hero .dtw-fg-seatrow { display: grid; --circ: 76px; --seat-pitch: 120; padding: 8px 0 2px; }
+        #digitalTwinsIQView.is-theater.is-fg-room .dtw-fg-hero { padding-bottom: 6px; }
+        #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .dtw-fg-circ img, #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .dtw-fg-circ .ini { opacity: .3; }
+        #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .nm, #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .ag { opacity: .5; }
+        #digitalTwinsIQView.is-theater .dtw-fg-roomsec { display: none; }
+        #digitalTwinsIQView .dtw-fg-theater { position: sticky; bottom: -1rem; z-index: 6; padding: 14px 0 calc(1rem + 2px); background: linear-gradient(180deg, rgba(0,0,0,0) 0%, var(--dtw-page) 22%); }
+        #digitalTwinsIQView .dtw-fg-theater .in { border: 1px solid var(--dtw-accent); border-radius: 14px; background: var(--dtw-raised); padding: 12px 16px 12px; box-shadow: 0 0 0 1px rgba(199,242,62,0.08), 0 -14px 40px rgba(0,0,0,0.25); }
+        #digitalTwinsIQView .dtw-fg-theater .row1 { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; font-size: 12px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-theater .badge { display: inline-flex; align-items: center; gap: 7px; min-height: 24px; padding: 0 11px 0 9px; border-radius: 999px; background: var(--dtw-accent); color: var(--dtw-accent-ink); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+        #digitalTwinsIQView .dtw-fg-theater .badge .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; background: var(--dtw-accent-ink); box-shadow: 0 0 0 2px rgba(12,22,24,0.25); }
+        #digitalTwinsIQView .dtw-fg-theater .prog { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-theater .prog b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-theater .prog .t { width: 120px; height: 5px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; }
+        #digitalTwinsIQView .dtw-fg-theater .prog .f { display: block; height: 100%; background: var(--dtw-accent); border-radius: 999px; transition: width .4s ease; }
+        #digitalTwinsIQView .dtw-fg-theater .stage { display: inline-flex; align-items: center; gap: 2px; color: var(--dtw-ink); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-theater .stage .dtw-fg-pulse { margin-right: 8px; }
+        #digitalTwinsIQView .dtw-fg-theater .acts { margin-left: auto; display: inline-flex; gap: 6px; }
+        #digitalTwinsIQView .dtw-fg-theater .cur { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
+        #digitalTwinsIQView .dtw-fg-theater .cur .k { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-theater .cur .qt { font-size: 16px; line-height: 22px; font-weight: 600; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-theater .note { margin-top: 8px; font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-theater .plan { margin-top: 10px; border-top: 1px solid var(--dtw-hair); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow: auto; scrollbar-width: thin; }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 12px; line-height: 16px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r .n { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--dtw-rule); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: var(--dtw-mute); align-self: center; }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r.done .n { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r.now { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r.now .n { border-color: var(--dtw-accent); color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r.wait { opacity: .6; }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r .q { overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-theater .plan .r .lv { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); white-space: nowrap; }
+        @media (max-width: 760px) { #digitalTwinsIQView .dtw-fg-theater .prog .t { width: 70px; } #digitalTwinsIQView .dtw-fg-theater .acts { margin-left: 0; } }
         #digitalTwinsIQView .dtw-fg-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
         #digitalTwinsIQView .dtw-fg-kinds .dtw-fg-chip { min-height: 20px; font-size: 10.5px; padding: 1px 8px; }
         #digitalTwinsIQView .dtw-fg-opts { display: block; margin-bottom: 8px; min-height: 48px; }
@@ -53729,6 +53763,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var view = el('digitalTwinsIQView');
                 if (view) {
                     view.classList.toggle('is-fg-room', room);
+                    // theater (Jenna 2026-11-18): a Predictive Analytics room running its planned questions is watched, not steered
+                    view.classList.toggle('is-theater', room && paRunning(S.session));
                     if (!room) view.style.removeProperty('--dtw-main-h');
                 }
                 var b = document.querySelector('#digitalTwinsIQView .dtw-body');
@@ -53865,6 +53901,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var w = document.querySelector('#dtwPnTranscript .dtw-fg-working[data-qid="' + (q.id || '') + '"]');
                         if (w) { if (e > 300 && !w.classList.contains('slow')) { w.outerHTML = workingLine(q); } else { var sp = w.querySelector('.el'); if (sp) sp.textContent = e; } }
                         var h = el('dtwFgStageEl'); if (h) h.textContent = e;
+                        var th = el('dtwFgTheaterEl'); if (th) th.textContent = e;
                     });
                 }, 1000);
                 var tick = async function() {
@@ -53872,7 +53909,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!S.session || S.session.id !== sid || S.key !== key) { clearRoomPoll(); return; }
                     var open = (S.session.questions || []).filter(qInFlight);
                     if (!open.length && !paRunning(S.session)) { clearRoomPoll(); setAskEnabled(true); return; }
-                    var changed = false;
+                    var changed = false, wasRunning = paRunning(S.session);
                     try {
                         var d = await api('/' + key + '/panel/' + sid);
                         ((d.session || {}).questions || []).forEach(function(fq) { if (adoptQuestion(fq)) changed = true; });
@@ -53890,6 +53927,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!S.session || S.session.id !== sid) { clearRoomPoll(); return; }
                     if (changed) {
                         fgRefresh();
+                        if (wasRunning && !paRunning(S.session) && S.session.guided && S.session.guided.outcome) fgToast('The outcome is in. The report is ready on Predictive Analytics.');
                         if (S.fg.seat != null) renderSeatPanel();
                         var ss = (S.twin || {}).panel_sessions || []; for (var k = 0; k < ss.length; k++) { if (ss[k].id === sid) ss[k] = S.session; }
                         renderPanelSessions();
@@ -54477,6 +54515,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<div class="dtw-fg-live" id="dtwPnLive"></div></div>';
                 return out;
             }
+            // The theater bar (Jenna 2026-11-18: "a theater style view where you really feel like you're watching because you cant
+            // really inject into the process because it's running for you"). Stands where the composer would while a Predictive
+            // Analytics room runs its planned questions: Watching, the progress, what is on the floor now with the stage words and
+            // the clock, the plan on a toggle, Leave. The composer returns when the outcome lands.
+            function theaterBarHtml(s) {
+                var g = (s || {}).guided || {}, plan = g.plan || {}, qs = plan.questions || [], done = Number(g.done || 0), total = Number(g.total || qs.length || 0), fly = flyQ();
+                var now = fly ? '<span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(fly))) + SEP + '<span id="dtwFgTheaterEl">' + qElapsedS(fly) + '</span>s</span>' : '<span class="dtw-fg-pulse"></span><span>The next question is on its way</span>';
+                var at = fly ? Math.max(0, Math.min(qs.length - 1, done)) : done, cur = fly ? String(fly.q || '') : String((qs[at] || {}).q || ''), lvl = (qs[at] || {}).level;
+                var list = qs.map(function(q, i) {
+                    var st = i < done ? 'done' : (i === done ? 'now' : 'wait');
+                    return '<div class="r ' + st + '"><span class="n">' + (st === 'done' ? '&#10003;' : (i + 1)) + '</span><span class="q">' + esc(q.q || '') + '</span><span class="lv">' + esc(PA_LEVELS[q.level] || '') + '</span></div>';
+                }).join('');
+                return '<div class="dtw-fg-theater" id="dtwFgTheater"><div class="in">'
+                    + '<div class="row1"><span class="badge"><span class="dtw-fg-pulse"></span>Watching</span>'
+                    + '<span class="prog"><span class="t"><span class="f" style="width:' + (total ? Math.round(done / total * 100) : 0) + '%"></span></span><b>' + done + ' of ' + total + '</b> answered</span>'
+                    + '<span class="stage">' + now + '</span>'
+                    + '<span class="acts"><button type="button" class="dtw-fg-act" onclick="dtwFgTheaterPlan()">' + (S.fg.theaterPlan ? 'Hide the plan' : 'The plan') + '</button><button type="button" class="dtw-fg-act" onclick="dtwPanelClose()">Leave</button></span></div>'
+                    + (cur ? '<div class="cur"><span class="k">' + (fly ? 'On the floor now' : 'Up next') + (lvl && PA_LEVELS[lvl] ? SEP + esc(PA_LEVELS[lvl]) : '') + '</span><span class="qt">' + esc(cur) + '</span></div>' : '')
+                    + '<div class="note">Prometheus is running the planned questions for you. The outcome and the report land with the last one; you can ask your own then.</div>'
+                    + (S.fg.theaterPlan && list ? '<div class="plan">' + list + '</div>' : '')
+                    + '</div></div>';
+            }
+            window.dtwFgTheaterPlan = function() { S.fg.theaterPlan = !S.fg.theaterPlan; var th = el('dtwFgTheater'); if (th && S.session) th.outerHTML = theaterBarHtml(S.session); };
             function actsHtml(s) {
                 var n = ((S.twin || {}).panel_sessions || []).length;
                 var acts = '<span class="dtw-fg-saved" id="dtwPnSaved"></span><button type="button" class="dtw-fg-act" onclick="dtwRoomsOpen(true)">Rooms<b id="dtwFgRoomsN">' + n + '</b></button><button type="button" class="dtw-fg-act" onclick="dtwNewRoomOpen(true)">New room</button>';
@@ -54548,7 +54609,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
                 var out = '<div class="dtw-fg-hero" id="dtwFgHero">' + heroHtml(s, g, roster, fq, fly) + '</div>';
                 out += '<div class="dtw-fg-dock" id="dtwFgDock">' + dockHtml(s, g, roster, fq, fly) + '</div>';
-                out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, latest, fly) + '</div>' + composerHtml(typed, typedOpts) + '</div>';
+                out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, latest, fly) + '</div>' + (paRunning(s) ? theaterBarHtml(s) : composerHtml(typed, typedOpts)) + '</div>';
                 out += '<aside class="dtw-fg-tally" id="dtwFgTally" aria-label="The split">' + tallyHtml(s, g, roster, fq) + '</aside></div>';
                 out += popHtml();
                 h.innerHTML = out;
@@ -54564,8 +54625,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // A refresh while the room works or a portrait lands: the band, the thread and the tally redraw; the composer keeps what was typed.
             function fgRefresh() {
                 var s = S.session, h = el('dtwPnConsole'); if (!s || !h || !el('dtwFgHero') || !el('dtwFgDock')) { renderPanelConsole(); return; }
+                // the theater bar and the composer trade places when a Predictive Analytics run starts or lands (2026-11-18)
+                if (!!el('dtwFgTheater') !== paRunning(s)) { renderPanelConsole(); return; }
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
                 paintFgDock(s, g, roster, fq, fly);
+                var thb = el('dtwFgTheater'); if (thb) thb.outerHTML = theaterBarHtml(s);
                 var tr = el('dtwPnTranscript');
                 if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, latest, fly); if (atEnd) fgScrollEnd(); }
                 var ta = el('dtwFgTally'); if (ta) { ta.innerHTML = tallyHtml(s, g, roster, fq); fgLayoutSeats(); }
