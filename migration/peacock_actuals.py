@@ -797,9 +797,11 @@ def binding_block(text, windows=None) -> str:
 
 
 def scale_lines() -> list:
-    """Plain sentences on how large a series is on Peacock, from the
-    anchored shows, in viewers: what bounds a figure for any other
-    Peacock title."""
+    """Plain sentences on how large a series is on Peacock and how hard
+    its viewers play it, from the shows on file, in viewers: what any
+    other Peacock title is read against. The library shows on file are
+    second-tier library titles, and the lines say so, so the service's
+    most played library series is never read down to their level."""
     try:
         doc = load()
         if not doc:
@@ -812,11 +814,13 @@ def scale_lines() -> list:
             ya = b.replace(year=b.year - 1) + timedelta(days=1)
         except ValueError:
             ya = b - timedelta(days=364)
-        cur, lib = [], []
+        cur, lib, per_m, per_y = [], [], [], []
         for key in (doc["months"][ym].get("shows") or {}):
             mv, yv = viewers(key, a, b), viewers(key, ya, b)
             if mv and yv:
                 (cur if _on_air(doc, key) else lib).append((mv["viewers"], yv["viewers"]))
+                per_m.append(mv["plays"] / float(mv["viewers"]))
+                per_y.append(yv["plays"] / float(yv["viewers"]))
         out = []
         if cur:
             cur.sort()
@@ -826,9 +830,14 @@ def scale_lines() -> list:
                        f"across twelve.")
         if lib:
             lib.sort()
-            out.append(f"A library series with no season on air draws about {lib[len(lib) // 2][0]:,} US viewers in a "
-                       f"month and about {lib[len(lib) // 2][1]:,} across twelve months, the largest about {lib[-1][1]:,} "
-                       f"across twelve.")
+            out.append(f"A second-tier library series with no season on air draws about {lib[len(lib) // 2][0]:,} US viewers "
+                       f"in a month and about {lib[len(lib) // 2][1]:,} across twelve months. The service's most played "
+                       f"library series sit well above that, between it and the largest drama with a season on air.")
+        if per_m and per_y:
+            out.append(f"Peacock series viewers play hard: a viewer plays about {int(round(min(per_m)))} to "
+                       f"{int(round(max(per_m)))} episodes of a series in a month and about {int(round(min(per_y)))} to "
+                       f"{int(round(max(per_y)))} across twelve months. A series' viewers are its total play divided by "
+                       f"play per viewer at that level, never by a handful of plays each.")
         if out:
             out.append("A series figure on Peacock is read against this scale, and one that sits above the largest of "
                        "these needs clear evidence of its own; live events and sport are outside it, and films, reality "
