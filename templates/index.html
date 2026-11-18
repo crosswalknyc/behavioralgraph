@@ -51596,6 +51596,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-lrow .l1 b { color: var(--dtw-ink); font-weight: 600; font-size: 12px; min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-fg-lrow.lead .l1 .lab { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-fg-lrow .det { font-size: 10.5px; color: var(--dtw-clabel); font-variant-numeric: tabular-nums; }
+        /* still tallying (Jenna 2026-11-18): the dot pulses, a spinner sits where the percent will land, the bar shimmers */
+        #digitalTwinsIQView .dtw-fg-lrow.live .dtw-fg-dot { animation: dtwPulse 1.5s ease-in-out infinite; }
+        #digitalTwinsIQView .dtw-fg-lrow.live .lab, #digitalTwinsIQView .dtw-fg-lrow.live .det { color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-lrow.live .det { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; }
+        #digitalTwinsIQView .dtw-fg-rowspin { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--dtw-mute); border-right-color: transparent; animation: dtwSpin 0.9s linear infinite; flex: none; }
+        #digitalTwinsIQView .dtw-fg-th.live .t { font-size: 13px; color: var(--dtw-ink); font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
+        #digitalTwinsIQView .dtw-fg-th.live .t .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; box-shadow: 0 0 0 2px var(--dtw-track); }
+        #digitalTwinsIQView .dtw-fg-stack.live { position: relative; }
+        #digitalTwinsIQView .dtw-fg-stack.live i { opacity: 0.55; }
+        #digitalTwinsIQView .dtw-fg-stack.live::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(233,232,225,0.22) 50%, transparent 100%); background-size: 200% 100%; animation: dtwFgShimmer 1.6s linear infinite; }
+        @keyframes dtwFgShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+        @media (prefers-reduced-motion: reduce) { #digitalTwinsIQView .dtw-fg-stack.live::after { animation-duration: 4s; } #digitalTwinsIQView .dtw-fg-rowspin { animation-duration: 2.4s; } }
         #digitalTwinsIQView .dtw-fg-lrow .ctx { font-size: 10.5px; color: var(--dtw-clabel); line-height: 14px; margin-top: 1px; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-sec { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--dtw-rule); }
         #digitalTwinsIQView .dtw-fg-fact { display: flex; gap: 9px; font-size: 11px; line-height: 14px; color: var(--dtw-cbody); margin-top: 3px; }
@@ -53941,7 +53953,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function questionStack(q, cls) {
                 var opts = optsOf(q), rk = rankMap(q), live = qInFlight(q), counts = live ? liveCounts(q) : null, seats = seatsTotal(q);
-                return stack(opts.map(function(o) { var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0); return { pct: v, color: seriesOf(rk, o.id) }; }), cls);
+                // while the room is still answering the bar is in motion (a shimmer), so it never reads as the published split
+                return stack(opts.map(function(o) { var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0); return { pct: v, color: seriesOf(rk, o.id) }; }), (cls || '') + (live ? ' live' : ''));
+            }
+            // A row of the split while the room is still answering (Jenna 2026-11-18: "if it's still tallying it shouldn't show %'s
+            // because it's confusing ... have those pinwheel or something or animate so you know they are being worked on until
+            // they are final"): the seat tally so far, a pulsing dot, and a spinner where the percent lands once the count publishes.
+            function liveRow(o, count, seats, color, lead) {
+                var tally = (count || 0) + (seats ? ' of ' + seats : '') + ' so far';
+                return '<div class="dtw-fg-lrow live' + (lead ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + color + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span><span class="det">' + tally + '<span class="dtw-fg-rowspin" aria-label="Still tallying" title="Still tallying"></span></span></div></div></div>';
+            }
+            function liveHead(nA, seats, sub) {
+                return '<div class="dtw-fg-th live"><span class="t"><span class="dtw-fg-pulse"></span>The split so far.</span><span>' + nA + (seats ? ' of ' + seats : '') + ' answered' + (sub ? SEP + sub : '') + '</span></div>';
             }
             function questionLolli(q) {
                 var opts = optsOf(q), rk = rankMap(q), live = qInFlight(q), counts = live ? liveCounts(q) : null, seats = seatsTotal(q);
@@ -54405,20 +54428,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 else if (qFailed(fq)) body = '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">' + esc(fq.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</div>' + factsSec(fq) + roomSeatsSec(g, roster, fq, fly0);
                 else {
                     var live = qInFlight(fq), opts = optsOf(fq), rk = rankMap(fq), seats = seatsTotal(fq), counts = live ? liveCounts(fq) : null, nA = (fq.answers || []).length;
-                    body = '<div class="dtw-fg-th">' + (live ? 'The split so far.' : 'The split.') + '<span>' + (live ? nA + (seats ? ' of ' + seats : '') + ' answered' : 'Share of the room, by answer') + '</span></div>';
+                    body = live ? liveHead(nA, seats, 'the shares land when the last answer does') : '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div>';
                     if (!opts.length) { body += '<div class="dtw-fg-quiet">' + (live ? 'The options land with the first answers.' : 'An open question: the read and the voices carry it.') + '</div>'; }
                     else {
                         body += questionStack(fq);
                         body += opts.map(function(o) {
-                            var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0);
-                            // while the room is still answering the row is the seat tally so far and carries no percent: a share of the
-                            // audience only exists once the count publishes (Jenna 2026-11-18: an audience of millions is never 0.0%).
-                            // A published option with people behind it but no seat reads 'under a seat', not '0 of 16'.
-                            var tally = live ? ((counts[String(o.id)] || 0) + (seats ? ' of ' + seats : '') + ' so far') : ((o.seats_n === 0 || (o.tally && /^0 of /.test(String(o.tally)))) && v > 0 ? 'under a seat' : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : '')));
+                            // while the room is still answering the row is the seat tally so far, in motion, and carries no percent: a
+                            // share of the audience only exists once the count publishes (Jenna 2026-11-18: an audience of millions is
+                            // never 0.0%, and a row that is still tallying must look like it). A published option with people behind it
+                            // but no seat reads 'under a seat', not '0 of 16'.
+                            if (live) return liveRow(o, counts[String(o.id)] || 0, seats, seriesOf(rk, o.id), rk[String(o.id)] === 0);
+                            var v = Number(o.pct || 0);
+                            var tally = ((o.seats_n === 0 || (o.tally && /^0 of /.test(String(o.tally)))) && v > 0 ? 'under a seat' : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : '')));
                             var det = [];
-                            if (!live && o.people != null) det.push(fmtN(o.people) + ' people');
+                            if (o.people != null) det.push(fmtN(o.people) + ' people');
                             if (tally) det.push(tally);
-                            return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + (live ? '' : '<b>' + pct(v, 1) + '</b>') + '</div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
+                            return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
                         }).join('');
                     }
                     // under the split: Responses and What the room knew fold (Jenna 2026-11-18), then the cohorts, then the room's faces
@@ -56317,14 +56342,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }).join('') + '</select></div>' : '';
                 if (qFailed(q)) return head + pick + '<div class="dtw-fg-sec"><div class="rd">' + esc(q.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</div><div class="dtw-pi-probes"><button type="button" class="dtw-pi-probe" onclick="dtwPilotRecordClose(this);dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(q.q || '')) + '\')">Ask again</button></div></div>';
                 var live = qInFlight(q), opts = optsOf(q), rk = rankMap(q), seats = seatsTotal(q), counts = live ? liveCounts(q) : null, nA = (q.answers || []).length;
-                var body = '<div class="dtw-fg-sec"><div class="dtw-fg-th">' + (live ? 'The split so far.' : 'The split.') + '<span>' + (live ? nA + (seats ? ' of ' + seats : '') + ' answered' : 'Share of the room, by answer') + '</span></div>';
+                var body = '<div class="dtw-fg-sec">' + (live ? liveHead(nA, seats, '') : '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div>');
                 if (!opts.length) body += '<div class="dtw-pi-fn" style="margin-top:4px">' + (live ? 'The options land with the first answers.' : 'An open question: the read and the voices carry it.') + '</div>';
                 else {
                     body += questionStack(q) + opts.map(function(o) {
-                        var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0);
-                        var tally = live ? ((counts[String(o.id)] || 0) + (seats ? ' of ' + seats : '')) : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : ''));
+                        // still tallying: the seat count so far in motion, no percent (Jenna 2026-11-18); the share lands with the count
+                        if (live) return liveRow(o, counts[String(o.id)] || 0, seats, seriesOf(rk, o.id), rk[String(o.id)] === 0);
+                        var v = Number(o.pct || 0);
+                        var tally = ((o.seats_n === 0 || (o.tally && /^0 of /.test(String(o.tally)))) && v > 0 ? 'under a seat' : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : '')));
                         var det = [];
-                        if (!live && o.people != null) det.push(fmtN(o.people) + ' people');
+                        if (o.people != null) det.push(fmtN(o.people) + ' people');
                         if (tally) det.push(tally);
                         return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div></div></div>';
                     }).join('');
