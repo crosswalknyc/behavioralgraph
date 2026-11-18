@@ -8428,67 +8428,13 @@ _PM_RECENT_BUILDS_KEY = 'system/usage/recent_builds.json'
 
 
 def _pm_recent_build_guard(username, subject, ws='', we=''):
-    """Same user re-approving the same subject within 30 minutes is a
-    duplicate, not a second order (smclain, Trinity Tatum x2,
-    2026-09-29: a 6-day window drift ran two full builds). Returns the
-    earlier entry when this enqueue should be blocked, else records
-    this one and returns None. A window that moved more than 21 days
-    on either end is a correction and is allowed through. Fail-open:
-    any storage trouble means no block."""
-    try:
-        norm = re.sub(r'[^a-z0-9]+', ' ',
-                      str(subject or '').lower()).strip()
-        username = str(username or '').strip()
-        if not norm or not username:
-            return None
-        now = time.time()
-        try:
-            _r = _H.s3_client.get_object(Bucket=_H.S3_BUCKET,
-                                      Key=_PM_RECENT_BUILDS_KEY)
-            doc = json.loads(_r['Body'].read().decode('utf-8'))
-        except Exception:
-            doc = {}
-        entries = [e for e in (doc.get('entries') or [])
-                   if isinstance(e, dict)
-                   and now - float(e.get('t') or 0) < 86400]
-
-        def _d(s):
-            try:
-                return datetime.strptime(str(s)[:10], '%Y-%m-%d')
-            except Exception:
-                return None
-
-        hit = None
-        for e in entries:
-            if e.get('u') != username or e.get('s') != norm:
-                continue
-            if now - float(e.get('t') or 0) > 1800:
-                continue
-            ws0, we0 = _d(e.get('ws')), _d(e.get('we'))
-            ws1, we1 = _d(ws), _d(we)
-            if ws0 and we0 and ws1 and we1:
-                drift = max(abs((ws1 - ws0).days),
-                            abs((we1 - we0).days))
-                if drift > 21:
-                    continue
-            hit = e
-            break
-        if hit is None:
-            entries.append({'u': username, 's': norm,
-                            'ws': str(ws or '')[:10],
-                            'we': str(we or '')[:10], 't': now})
-            try:
-                _H.s3_client.put_object(
-                    Bucket=_H.S3_BUCKET, Key=_PM_RECENT_BUILDS_KEY,
-                    Body=json.dumps(
-                        {'entries': entries[-200:]}).encode('utf-8'),
-                    ContentType='application/json')
-            except Exception as _fx:
-                _faults.note('chat', _fx)
-        return hit
-    except Exception:
-        traceback.print_exc()
-        return None
+    """The half-hour duplicate rule (smclain, Trinity Tatum x2, 2026-09-29: a 6-day window drift ran two full
+    builds). Since 2026-11-17 it is one guard for every product an approval can start, kept in
+    prometheus.repeat_approval beside the day-long check the approve path runs first. Returns the earlier entry
+    when this profile build was ordered in the last half hour, else records it and returns None. A window that
+    moved more than 21 days on either end is a correction and is allowed through. Fail-open."""
+    from prometheus import repeat_approval as _repeat
+    return _repeat.legacy_hold(_H, username, subject, ws, we)
 
 
 def _pm_seat_reads_included(amount_usd=None, username=None):   # 'Included with your plan.' in place of a price
@@ -8734,6 +8680,19 @@ def _pm_approve_core(user, body):
         spec['anchor_title'] = _siq_title[:120]
         spec['anchor_season'] = _siq_season
 
+    # ---- A repeat approval is answered, never run twice (2026-11-17, Naomi at Sony: the team had started her
+    # Subscriber IQ for her and it was delivered; the Approve & run card for the same brief was still open in
+    # her tab, and one more click would have run and charged it a second time). Before anything is priced,
+    # charged or queued, the order is compared with what is already running or was delivered in the last day
+    # for this account or its company wallet, however that run was started (prometheus.repeat_approval). Nothing
+    # in the request switches this off: a deliberate second run is an operator's, on the build server.
+    _rpa_who = (session.get('username') or user.get('username') or '').strip()
+    _rpa = __import__('prometheus.repeat_approval', fromlist=['Gate']).Gate(
+        _H, user, _rpa_who, probe=bool(_pm_probe_caller() or _faults.is_probe() or _pm_is_probe_user(_rpa_who)))
+    _rpa_reply = _rpa.check(decision, spec, draft, d_type, ex_key)
+    if _rpa_reply is not None:
+        return jsonify(_rpa_reply)
+
     # ---- Credit pricing + preflight (2026-08-21 Jenna directive: the
     # chatbot must charge and record usage like the dashboard and the
     # partner API do - including for unlimited users, whose history and
@@ -8836,27 +8795,12 @@ def _pm_approve_core(user, body):
     except Exception as _fx:
         _faults.note('chat', _fx)
 
-    # A re-approve of the same subject minutes later is a duplicate,
-    # not a second order (smclain, Trinity Tatum x2, 2026-09-29).
-    # Blocked BEFORE the queue post, so nothing is charged. A window
-    # that moved materially is a correction and still builds.
-    if decision == 'new_build':
-        _dup_dr = (draft.get('date_range')
-                   if isinstance(draft.get('date_range'), dict) else {})
-        _dup = _pm_recent_build_guard(
-            _approve_username, spec.get('name'),
-            ws=_dup_dr.get('start') or '', we=_dup_dr.get('end') or '')
-        if _dup is not None:
-            return jsonify({
-                'success': False,
-                'guidance': True,
-                'error': (f"{spec.get('name', 'That profile')} is "
-                          "already building from your request a few "
-                          "minutes ago, so I did not start a second "
-                          "copy or charge you again. It lands in "
-                          "Select Profile when it finishes. Ask me "
-                          "for a status update any time."),
-            })
+    # The half-hour duplicate rule (smclain, Trinity Tatum x2, 2026-09-29), now for every product an approval
+    # can start: the order goes on record BEFORE the queue post, so a second click while the first is on its
+    # way to the engine is caught and nothing is charged. A profile window that moved materially still builds.
+    _rpa_reply = _rpa.hold()
+    if _rpa_reply is not None:
+        return jsonify(_rpa_reply)
 
     try:
         import requests as _requests
@@ -8881,12 +8825,15 @@ def _pm_approve_core(user, body):
                 'brief-chat/approve',
                 f'order {_q_state}: {_H._clean_queue_error_text(_q_detail)[:400]}',
                 tb=str(_q_detail or '')[:2000] or '(empty queue reply)')
+            if _q_state == 'not_started':
+                _rpa.not_started()   # it did not start: sending it again must work
             return jsonify(_order_truth.not_started_payload(spec.get('name')) if _q_state == 'not_started'
                            else _order_truth.unconfirmed_payload(spec.get('name')))
         _pm_ask_stage('approve_queue_post', t0=_t_queue)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/approve', e)
+        _rpa.not_started()
         return jsonify(_order_truth.not_started_payload(spec.get('name')))
 
     # Queue-returned-200-without-run_id parity fix (2026-08-19, Jessie
@@ -8909,6 +8856,7 @@ def _pm_approve_core(user, body):
             + str(queue_resp)[:400],
             tb='(queue reply inspection)')
         return jsonify(_order_truth.unconfirmed_payload(spec.get('name')))
+    _rpa.started(_session_run_id)   # the hold now points at the run (prometheus.repeat_approval)
     # The launch is on record with the thread it was asked in, so the server posts the finished line there
     # itself, browser or no browser (2026-11-10, prometheus.build_ready).
     try:

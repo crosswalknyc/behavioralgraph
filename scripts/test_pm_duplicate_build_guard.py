@@ -3,6 +3,13 @@
 queue post, worded durations bind the window, and clarify answers
 (bare or typo'd) re-run their original question.
 
+2026-11-17: the half-hour guard is one guard for every product an
+approval can start, kept in prometheus.repeat_approval beside the
+day-long check (scripts/test_pm_repeat_approval_guard.py in bg-webapp).
+Its contract here is unchanged: the same user and subject inside half an
+hour is a duplicate, a materially different window is a correction, and
+storage trouble never blocks.
+
 Hermetic: extracts the helpers from app.py source with stubbed
 storage, plus source-wiring asserts.
 """
@@ -148,15 +155,25 @@ check("named audience still merges",
 # ------------------------------------------------------------------
 # Source wiring.
 # ------------------------------------------------------------------
+_HOLD = "_rpa.hold()"
+_core = SRC[SRC.index("def _pm_approve_core(user, body):"):]
 check("guard called before queue post",
-      "_dup = _pm_recent_build_guard(" in SRC)
-check("guard blocks only new_build",
-      "if decision == 'new_build':" in SRC.split(
-          "_dup = _pm_recent_build_guard(")[0][-600:])
+      _HOLD in _core and _core.index(_HOLD) < _core.index("/synth/queue"))
+# 2026-11-17: every product an approval can start, not new builds only
+check("guard is no longer new_build only",
+      "if decision == 'new_build':\n        _dup_dr" not in SRC
+      and "_dup = _pm_recent_build_guard(" not in SRC)
+check("the old guard name is the same guard",
+      "_repeat.legacy_hold(_H, username, subject, ws, we)" in SRC)
+_ra_src = (Path(_pm_r) / 'bg-webapp' / 'prometheus'
+           / 'repeat_approval.py').read_text()
 check("block is guidance, no charge",
-      "did not start a second\n                          "
-      "\"copy or charge you again" in SRC
-      or "did not start a second" in SRC)
+      "so I did not start it again" in _ra_src
+      and "'guidance': True" in _ra_src
+      and "consume_credit" not in _ra_src)
+check("one record for both tiers",
+      "STORE_KEY = 'system/usage/recent_builds.json'" in _ra_src
+      and "_PM_RECENT_BUILDS_KEY = 'system/usage/recent_builds.json'" in SRC)
 check("worded durations in the interpret rule",
       "three years = trailing 36 months" in SRC)
 
