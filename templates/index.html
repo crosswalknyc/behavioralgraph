@@ -54310,11 +54310,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         body += questionStack(fq);
                         body += opts.map(function(o) {
                             var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0);
-                            var tally = live ? ((counts[String(o.id)] || 0) + (seats ? ' of ' + seats : '')) : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : ''));
+                            // while the room is still answering the row is the seat tally so far and carries no percent: a share of the
+                            // audience only exists once the count publishes (Jenna 2026-11-18: an audience of millions is never 0.0%).
+                            // A published option with people behind it but no seat reads 'under a seat', not '0 of 16'.
+                            var tally = live ? ((counts[String(o.id)] || 0) + (seats ? ' of ' + seats : '') + ' so far') : ((o.seats_n === 0 || (o.tally && /^0 of /.test(String(o.tally)))) && v > 0 ? 'under a seat' : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : '')));
                             var det = [];
                             if (!live && o.people != null) det.push(fmtN(o.people) + ' people');
                             if (tally) det.push(tally);
-                            return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
+                            return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + (live ? '' : '<b>' + pct(v, 1) + '</b>') + '</div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
                         }).join('');
                     }
                     // under the split: Responses and What the room knew fold (Jenna 2026-11-18), then the cohorts, then the room's faces
