@@ -1244,6 +1244,10 @@ def _keeps_sample_words(raw):
     payload says product_fact, or the ask in flight was that question."""
     if isinstance(raw, dict) and raw.get('product_fact'):
         return True
+    if isinstance(raw, dict) and raw.get('brief_term'):
+        # the answer to "what does Avid tier mean" says Avid tier: the reader asked about a word on their own
+        # brief, and the word they asked about is the one explained (2026-11-18, prometheus.brief_terms)
+        return True
     try:
         from flask import g as _g
         ask = str(getattr(_g, '_pm_ask_text', '') or '')

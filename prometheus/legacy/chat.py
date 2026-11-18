@@ -6997,7 +6997,7 @@ def _pm_interpret_core(user, body, text, history):
         # partner surfaces, and the delivered file all agree.
         _t_estimate = time.monotonic()
         try:
-            _est_rng = _H._estimated_audience_range(   # a one-service order is sized by the rule before the brief quotes it (2026-11-11)
+            _est_rng = __import__('prometheus.brief_size_hold', fromlist=['ranged']).ranged(_H._estimated_audience_range, spec_draft,   # a one-service order is sized by the rule before the brief quotes it (2026-11-11); the first size held for a subject and window stands (2026-11-18)
                 __import__('migration.service_scope_sizing', fromlist=['apply_to_draft']).apply_to_draft(spec_draft).get('subject_raw_tu'))
             if _est_rng and _dec_norm in ('new_build',
                                           'time_shifted_refresh',

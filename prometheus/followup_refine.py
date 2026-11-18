@@ -792,6 +792,16 @@ def at_interpret(text, history, body=None, ask_hint=None):
     turn points back and neither the thread nor the page holds anything
     to point at (no draft, no lookup, nothing said back as a name)."""
     try:
+        # a question about a word on the thread's own brief is answered, never drafted (Grace Yin 2026-11-18:
+        # "wjat does Avid tier: ~3,837 mean" drew a third brief; prometheus.brief_terms)
+        from . import brief_terms as _bt
+        bt = _bt.answer(text, history)
+        if bt and bt.get('reply'):
+            _hint(ask_hint, route='brief_terms', outcome='answered', subject=bt.get('subject') or None)
+            return None, dict(_guidance(bt['reply']), brief_term=bt.get('term'))
+    except Exception:
+        pass
+    try:
         b = body if isinstance(body, dict) else {}
         page = ''
         try:

@@ -574,7 +574,7 @@ LANE_ORDER = (
     'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'match_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
-    'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
+    'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'dataset_build',
     'talent_list_acceptance', 'meta_check', 'standing', 'multi_ask', 'catalog_exists', 'service_subscribers', 'where_watched',
     'sizing_quote', 'status_fast',
     'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'subiq_library', 'catalog',
@@ -584,12 +584,12 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
+    'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'service_subscribers', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
     'us_scope', 'segment_sizing', 'read_brief'))
-NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope', 'segment_sizing',
                                 'read_brief'))
@@ -1921,6 +1921,35 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
             return env, 200
 
+    # lane: brief_terms
+    # "wjat does Avid tier: ~3,837 mean" with a brief on screen drew a third brief (Grace Yin 2026-11-18). A
+    # question about what a term or a line on the thread's own brief means is answered in plain words from that
+    # brief, with the number the reader quoted read in its place. Never a draft, a quote or a job, and never
+    # held back because the widget is sitting in its build flow (prometheus.brief_terms).
+    if referent_decision is None and not _is_order and not body.get('_meta_replay') and not _in_a_wizard(body):
+        _bt_raw = None
+        try:
+            from . import brief_terms as _bt
+            _bt_raw = _bt.answer(text, history)
+        except Exception as _fx:
+            _faults.note('service.brief_terms', _fx)
+            _bt_raw = None
+        if _bt_raw:
+            raw = {'success': True, 'action': 'answer', 'reply': _bt_raw['reply'], 'followups': [],
+                   'offer_deck': False, 'deck_angle': None, 'brief_term': _bt_raw.get('term')}
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'brief_terms', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = []
+                raw['brief_term'] = _bt_raw.get('term')      # the words of the brief are kept as the reader asked about them
+            try:
+                host.ask_hint(route='brief_terms', outcome='answered', subject=_bt_raw.get('subject') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # lane: product_facts
     # "What can you do", "can I upload a list of names", "how do I value
     # a partnership": the facts in one or two sentences, from the product
@@ -3063,10 +3092,20 @@ def ask(user, body, *, via='session'):
     # Accept the charge lands here once and rides the confirm so no
     # lane charges again.
     if surface == 'analyze' and referent_decision is None and not _no_build:
+        _wg = None
+        if not _armed(body) and not _is_order and not body.get('_meta_replay'):
+            # words about one work on a service that name no title anyone can place are asked which title; no lane
+            # reads the whole service in its place (Grace Yin 2026-11-18, prometheus.title_on_service)
+            try:
+                from . import title_on_service as _tos
+                _wg = _tos.unnamed_title(text, history, ctx, reading if isinstance(reading, dict) else None)
+            except Exception as _fx:
+                _faults.note('service.title_on_service', _fx)
+                _wg = None
         try:
             from . import priced_read as _prw
-            _wg = _prw.work_gate(text, history, ctx, user, body, username=uname,
-                                 consume=(host.consume_credit if host.has('consume_credit') else None))
+            _wg = _wg or _prw.work_gate(text, history, ctx, user, body, username=uname,
+                                        consume=(host.consume_credit if host.has('consume_credit') else None))
         except Exception as _fx:
             _faults.note('service.work_gate', _fx)
             _wg = None
@@ -3663,6 +3702,18 @@ def _in_a_step(body):
     extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
     keys = tuple(k for k in _ANALYZE_PASSTHROUGH if k not in ('bind_subject', 'bind_cohort', 'overall_ranks')) + _ARMED_BODY_KEYS
     return any(extra.get(k) or body.get(k) for k in keys)
+
+
+_WIZARD_KEYS = ('panel_confirm', 'bpiq_inputs', 'bpiq_confirm', 'bpiq_wizard', 'jiq_inputs', 'jiq_confirm', 'fw_inputs',
+                'fw_confirm', 'aiq_inputs', 'aiq_confirm', 'twin_inputs', 'twin_confirm', 'angle', 'confirm_open_screen')
+
+
+def _in_a_wizard(body):
+    """True when the body answers a product wizard, a priced confirm or a
+    picker. A brief on screen (a draft, a clarify step) is not one: a
+    question about the brief is still a question."""
+    extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+    return any(extra.get(k) or body.get(k) for k in _WIZARD_KEYS)
 
 
 def _armed(body):

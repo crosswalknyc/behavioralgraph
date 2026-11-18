@@ -644,6 +644,15 @@ def _single_library_subject(r, text=''):
     if len(cats) != 1:
         return ''
     bind = cats[0]
+    try:
+        # a streaming service the words name as where a title is watched scopes that title; it is never the
+        # subject while the words or the reading name something else (Grace Yin 2026-11-18: "customers who watched
+        # TONY ... streaming on Amazon Prime Video" was quoted on Amazon Prime Video; prometheus.title_on_service)
+        from . import title_on_service as _tos
+        if _tos.service_is_scope(bind, r, text):
+            return ''
+    except Exception:
+        traceback.print_exc()
     if text:
         try:
             from . import question_universe as _qu

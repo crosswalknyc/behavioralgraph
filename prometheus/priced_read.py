@@ -470,7 +470,13 @@ def bound_subject(text, history=None, ctx=None, fallback='', reading=None):
             verb = str(s.qualifiers.get('verb') or '')
             plat = str(s.qualifiers.get('platform') or '')
             if s.kind == 'title' and verb and not re.search(r"\b" + re.escape(verb) + r"\b", s.display, re.I):
-                return f"{s.display} {verb}" + (f" on {plat}" if plat else '')
+                # the title with its scope: the one service the words name as where it is watched rides the label
+                # ("Tony viewers on Amazon Prime Video", Grace Yin 2026-11-18; prometheus.title_on_service)
+                try:
+                    from . import title_on_service as _tos
+                    return _tos.scoped_label(s.display, verb, text, plat)
+                except Exception:
+                    return f"{s.display} {verb}" + (f" on {plat}" if plat else '')
             return s.label()
         # The thread's subject beats the open page (Jay's "what did the
         # BookTok exposed viewers watch next" with Prime Video open is on
@@ -2019,6 +2025,16 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
         subject = bound_subject(words, history, ctx, fallback='', reading=reading)
         if subject and is_everyone(subject):
             subject = GEN_POP_LABEL
+        _one_title = False
+        try:
+            # words about one work on a service ("the film ... streaming on Prime Video") that name no title we
+            # can place are asked which title; the read never runs on the whole service (2026-11-18)
+            from . import title_on_service as _tos
+            _one_title = bool(not subject and platform_subject(words) and _tos.describes_a_title(words))
+        except Exception:
+            _one_title = False
+        if _one_title:
+            return _tos.which_title(words)
         if not subject and hit['kind'] == 'viewership':
             # a viewing metric of a named service ("total hours by month for
             # 2025 ... for Prime Video and YouTube") is a read on that

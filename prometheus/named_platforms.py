@@ -522,6 +522,28 @@ def promote(draft):
     return []
 
 
+_FILM_WORDS = frozenset(('movie', 'film', 'feature', 'feature film', 'standalone_film', 'franchise_film'))
+
+
+def _is_film(draft, spec=None):
+    """The draft is a film's audience: the kind it was resolved to, its
+    viewer scope, or the MOVIE category it carries."""
+    try:
+        for d in (draft, spec):
+            if not isinstance(d, dict):
+                continue
+            if str(d.get('medium') or '').strip().lower() in _FILM_WORDS:
+                return True
+            vs = d.get('viewer_scope') if isinstance(d.get('viewer_scope'), dict) else {}
+            if str(vs.get('kind') or '').strip().lower() in _FILM_WORDS:
+                return True
+            if str(d.get('brand_category') or '').strip().upper() == 'MOVIE':
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def stamp_spec(spec, draft, scrub, subject):
     """The kind the reader meant rides the spec as ``medium`` (the kind
     every placement lookup is told) with what they ruled out beside it.
@@ -530,6 +552,11 @@ def stamp_spec(spec, draft, scrub, subject):
         if not isinstance(spec, dict) or not isinstance(draft, dict) or not spec.get('seed_source'):
             return spec
         kind = str(draft.get('content_kind') or '').strip().lower()
+        if kind not in set(_KINDS.values()) and _is_film(draft, spec):
+            # a film is told to every placement lookup as a film (2026-11-18, Grace Yin: "Tony (2026 Film) Viewers
+            # on Amazon Prime Video" carried no kind, its own Amazon page was opened as a series, answered nothing,
+            # and the build was refused with "We can't see Tony (2026) on Amazon at this time")
+            kind = 'movie'
         if kind in set(_KINDS.values()):
             spec['medium'] = kind
         ex = [str(x).strip().lower() for x in (draft.get('content_exclude') or []) if str(x).strip().lower() in set(_KINDS.values())]
