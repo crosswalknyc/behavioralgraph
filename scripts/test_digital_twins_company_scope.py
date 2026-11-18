@@ -420,13 +420,16 @@ class Chat(unittest.TestCase):
 
 
 class Frontend(unittest.TestCase):
-    def test_index_has_the_staff_filter_and_assign_control(self):
+    def test_index_has_the_assign_control_and_no_spine_dropdowns(self):
+        # Jenna 2026-11-17 ('remove these drop downs'): the company filter and the twin switcher left the Twins tab spine; the
+        # staff scope still rides the list call (?company=) and the assign control stays on the twin page
         with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
             html = fh.read()
-        self.assertIn('dtwCompanyFilter', html)
+        self.assertNotIn('id="dtwCompanyFilter"', html)
+        self.assertNotIn('id="dtwTwinSwitch"', html)
+        self.assertNotIn('dtwCompanyFilterChange', html)
         self.assertIn('dtwAssignCompany', html)
         self.assertIn("api('/list' + (S.companyFilter ? '?company=' + encodeURIComponent(S.companyFilter) : ''))", html)
-        self.assertIn('dtwCompanyFilterChange', html)
         self.assertIn("api('/' + key + '/company'", html)
         # nothing client-side lists the bucket or caches other companies' keys
         self.assertNotIn("'digital-twins/_index.json'", html)

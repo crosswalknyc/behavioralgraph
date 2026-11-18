@@ -10,8 +10,9 @@ Held here:
     (the midterm calls, the NCIS: New York pilot) backfill idempotently;
     summaries are unit-aware; history_for reads the typical miss;
   * firmness: a counted result reads firm; a research-anchored count
-    leans; a room on its habit prior alone with nothing found declines
-    (early, with the line that says what would settle it); an agreeable
+    leans; a room on its habit prior alone with nothing found is an early
+    call that still names the lead and its range (never a decline, never
+    a line about what would settle it: Jenna 2026-11-17); an agreeable
     room is capped; ranges clip to 0..100 and sum sensibly; the public
     view carries no signals; the forecast word follows the calibration
     scope and the ledger's own miss once it has three rows;
@@ -207,21 +208,22 @@ class Firmness(unittest.TestCase):
     def _roster(self, n=12, weighted=False):
         return [{'seat': i, 'people': (100_000 + 15_000 * i if weighted else 83_333), 'archetype': {'id': f"k{i}"} if weighted else None} for i in range(1, n + 1)]
 
-    def test_a_counted_result_is_firm_and_a_prior_alone_declines(self):
+    def test_a_counted_result_is_firm_and_a_prior_alone_is_an_early_call(self):
         fb = CONF.firmness_for_room(self._rec('result'), self._roster())
         self.assertEqual(fb['word'], 'firm')
         self.assertLessEqual(fb['predicted_error_pp'], 3.0)
-        self.assertFalse(fb['decline'])
         self.assertTrue(fb['line'].startswith('Firm:'))
         fb2 = CONF.firmness_for_room(self._rec('derived'), self._roster(), prior={'a': 0.5, 'b': 0.3, 'c': 0.2})
         self.assertIn(fb2['word'], ('firm', 'leaning'))
+        # Jenna 2026-11-17: "we should always be able to call it based on the extensive outside research done and then the personas
+        # of each panelist who is standing in for that archetype". A room on its prior alone still calls it: the lead and its range,
+        # marked early; never a decline, never a line about what would settle it
         fb3 = CONF.firmness_for_room(self._rec('prior', facts=0, study_ok=False), self._roster(), prior={'a': 0.5, 'b': 0.3, 'c': 0.2})
         self.assertEqual(fb3['word'], 'early')
-        self.assertTrue(fb3['decline'])
-        self.assertTrue(fb3['line'].startswith('Not enough to call it yet'))
-        self.assertIn('What would settle it', fb3['line'])
-        self.assertIn('a counted read on this audience', fb3['line'])
-        for bad in ('real people', 'survey', 'study', 'People'):
+        self.assertNotIn('decline', fb3)
+        self.assertTrue(fb3['line'].startswith('Early: the lead (Yes) sits between'), fb3['line'])
+        self.assertIn('the room calls it', fb3['line'])
+        for bad in ('Not enough', 'settle', 'direction, not a count', 'real people', 'survey', 'study', 'People'):
             self.assertNotIn(bad, fb3['line'])
         for r in fb3['ranges']:
             self.assertTrue(0.0 <= r['low_pct'] <= r['pct'] <= r['high_pct'] <= 100.0)
@@ -241,7 +243,7 @@ class Firmness(unittest.TestCase):
         self.assertFalse(ag2['agreeable'])
         # the public view: the word, the line, the ranges, nothing about the weighing
         pub = CONF.public_firmness(good)
-        self.assertEqual(set(pub) - {'what_settles'}, {'word', 'line', 'decline', 'ranges', 'lead'})
+        self.assertEqual(set(pub), {'word', 'line', 'ranges', 'lead'})
         self.assertNotIn('confidence', json.dumps(pub).lower())
 
     def test_weighted_seats_count_by_their_people(self):
@@ -291,15 +293,16 @@ class InTheRoom(unittest.TestCase):
         self.assertIn('firm', csv_text.lower())
         self.assertIn('Kind', csv_text)
 
-    def test_a_prior_only_question_declines_and_still_publishes(self):
+    def test_a_prior_only_question_still_calls_it_and_publishes(self):
         twin = _pvalley()
         sess = P.open_session([twin], title='P2', session_id='firm-room-2')
         rec = ROOM.ask_room(sess, {'pv': twin}, 'would you buy a Pynk hoodie for $45?', s3=None, twin_key='pv', run_async=False)
         self.assertTrue(rec['options'] and rec['read'])
         fb = rec['firmness']
         self.assertEqual(fb['word'], 'early')
-        self.assertTrue(fb['decline'])
-        self.assertTrue(fb['line'].startswith('Not enough to call it yet'))
+        self.assertTrue(fb['line'].startswith('Early: the lead ('), fb['line'])
+        self.assertNotIn('Not enough', rec['read'])
+        self.assertNotIn('settle', fb['line'])
         rows = LG.load_index(None)['records']
         self.assertEqual(len(rows), 1)
         self.assertFalse(rows[0]['post_hoc'])

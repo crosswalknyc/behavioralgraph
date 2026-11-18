@@ -499,6 +499,25 @@ def _plainly_free(user) -> bool:
     return str(user.get('email') or '').strip().lower().endswith('@crosswalknyc.com')
 
 
+def included_with_plan(user, username='') -> bool:
+    """Whether every group on this seat reads as included (Jenna
+    2026-11-08 / 2026-11-17): a free seat (unlimited, staff) always; a
+    funded monthly allowance through prometheus.priced_read once the
+    app is loaded. digital_twins_api._group_card asks this; the sibling
+    change that introduced the call (2026-11-17, the monthly allowance)
+    landed without the function here, which blanked every group card."""
+    if seat_is_free(user, username):
+        return True
+    import sys as _sys
+    if 'app' not in _sys.modules:
+        return False
+    try:
+        from prometheus.priced_read import included_with_plan as _incl
+        return bool(_incl(user, username or None, None))
+    except Exception:
+        return False
+
+
 def seat_is_free(user, username='') -> bool:
     """Crosswalk staff, super admins and unlimited seats are never
     charged: the seat's own flags first, then the live row through

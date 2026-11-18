@@ -2,9 +2,11 @@
 
 Jenna, 2026-11-17: a predictive product has to say how sure it is. Every
 count the twins publish (a room's split, a scorecard measure, a
-forecast figure) carries a range and a plain word for how firm it is,
-and a room that has too little to go on says so instead of publishing a
-number as if it were settled.
+forecast figure) carries a range and a plain word for how firm it is.
+The room always makes the call (Jenna, later the same day: "we should
+always be able to call it based on the extensive outside research done
+and then the personas of each panelist who is standing in for that
+archetype"); the word and the range say how firm the call is.
 
 THE FIVE SIGNALS (version 1, weights documented here; version 2 trains
 the same mapping on the ledger once it holds a few hundred scored rows)
@@ -30,9 +32,8 @@ the same mapping on the ledger once it holds a few hundred scored rows)
 The weighted score (0 to 1) maps to a predicted error in points:
 2 + 18 x (1 - score), so a count never claims better than about two
 points and never worse than twenty. The word: firm at 5 points or
-under, leaning to 12, early above. A room with no evidence and no
-research declines to call it: the split still publishes (nothing is
-ever held), marked early, with one line saying what would settle it.
+under, leaning to 12, early above. The room always calls it: an early
+read still names the lead and its range; nothing is ever held.
 
 THE RANGE  a share: the point plus or minus the predicted error (clipped
 to 0..100), the people scaled the same way; a count: the ledger's own
@@ -40,7 +41,7 @@ relative error when it has one for this measure, else the forecast's
 calibration range, else plus or minus a quarter.
 
 WHAT THE READER SEES  a range and one of three words (firm, leaning,
-early) on the count, and the decline line when it applies. Never a tier
+early) on the count. Never a tier
 label, never a score, never the word confidence, never a method word.
 ``public_firmness`` is the only shape that leaves the record; the
 signals stay on the trail. Companion rule carve-out:
@@ -59,8 +60,8 @@ ERROR_CEILING_PP = 20.0
 FIRM_PP = 5.0
 LEANING_PP = 12.0
 WORDS = ('firm', 'leaning', 'early')
-WORD_LINE = {'firm': 'Firm', 'leaning': 'Leaning', 'early': 'An early read'}
-WORD_PLAIN = {'firm': 'the room is sure of this one', 'leaning': 'a lean, not a lock', 'early': 'treat it as a direction, not a count'}
+WORD_LINE = {'firm': 'Firm', 'leaning': 'Leaning', 'early': 'Early'}
+WORD_PLAIN = {'firm': 'the room is sure of this one', 'leaning': 'a lean, not a lock', 'early': 'the room calls it; the range is wide'}
 
 
 def _clamp(x, lo, hi):
@@ -173,7 +174,8 @@ def word_for(error_pp: float) -> str:
 def firmness_for_room(rec: dict, roster: list, *, prior: Optional[dict] = None, history: Optional[dict] = None) -> dict:
     """The firmness block for a room question record (after the count is
     published): the signals, the predicted error, the word, the per
-    option ranges, the decline. Internal fields and the public view."""
+    option ranges. The room always calls it. Internal fields and the
+    public view."""
     trail = rec.get('trail') or {}
     status = str(trail.get('anchor_status') or '')
     kind = str(rec.get('kind') or '')
@@ -195,7 +197,6 @@ def firmness_for_room(rec: dict, roster: list, *, prior: Optional[dict] = None, 
     elif status == 'poll':
         err = min(err, 6.0)
     word = word_for(err)
-    decline = bool(status in ('unresearched', 'unanchored', 'prior', '') and nov['signal'] <= 0.4 and kind not in ('rating', 'probe'))
     total = int(sum(int(o.get('people') or 0) for o in rec.get('options') or []) or 0)
     ranges = []
     for o in rec.get('options') or []:
@@ -207,35 +208,18 @@ def firmness_for_room(rec: dict, roster: list, *, prior: Optional[dict] = None, 
         ranges.append({'id': o.get('id'), 'label': o.get('label'), 'pct': p, 'low_pct': lo, 'high_pct': hi,
                        'low_people': int(round(total * lo / 100.0)), 'high_people': int(round(total * hi / 100.0))})
     lead = max(ranges, key=lambda r: r['pct']) if ranges else None
-    what_settles = _settles_line(status, nov, ag)
-    return {'version': VERSION, 'word': word, 'predicted_error_pp': err, 'decline': decline, 'ranges': ranges, 'lead': lead,
-            'signals': signals, 'what_settles': what_settles, 'line': firmness_line(word, lead, decline, what_settles)}
+    return {'version': VERSION, 'word': word, 'predicted_error_pp': err, 'ranges': ranges, 'lead': lead,
+            'signals': signals, 'line': firmness_line(word, lead)}
 
 
-def _settles_line(status: str, nov: dict, ag: dict) -> str:
-    if status in ('result', 'poll'):
-        return ''
-    parts = []
-    if status in ('unresearched', 'unanchored', '', 'prior') or nov.get('signal', 0) <= 0.4:
-        parts.append('a counted read on this audience')      # our own count; the twins never need a survey (Jenna 2026-11-17)
-    if ag.get('agreeable'):
-        parts.append('a wider room')
-    return ('What would settle it: ' + ' and '.join(parts) + '.') if parts else ''
-
-
-def firmness_line(word: str, lead: Optional[dict], decline: bool = False, what_settles: str = '') -> str:
-    """The one line a reader sees. 'Firm: the lead sits between 38.1%
-    and 44.9%.' An early read that declines says so first."""
+def firmness_line(word: str, lead: Optional[dict], *_ignored) -> str:
+    """The one line a reader sees. 'Firm: the lead (Yes) sits between
+    38.1% and 44.9%; the room is sure of this one.' The call is always
+    made; the word and the range say how firm it is."""
     if not lead:
         return f"{WORD_LINE.get(word, 'Leaning')}."
     core = f"the lead ({str(lead.get('label') or '').strip().rstrip('.')}) sits between {lead['low_pct']:.1f}% and {lead['high_pct']:.1f}%"
-    if decline:
-        line = f"Not enough to call it yet: {core}; {WORD_PLAIN['early']}."
-    else:
-        line = f"{WORD_LINE.get(word, 'Leaning')}: {core}; {WORD_PLAIN.get(word, '')}."
-    if what_settles and word != 'firm':
-        line += ' ' + what_settles
-    return line
+    return f"{WORD_LINE.get(word, 'Leaning')}: {core}; {WORD_PLAIN.get(word, '')}."
 
 
 def firmness_for_count(point: float, *, low: Optional[float] = None, high: Optional[float] = None, calibration_scope: str = '', history: Optional[dict] = None,
@@ -266,7 +250,7 @@ def firmness_for_count(point: float, *, low: Optional[float] = None, high: Optio
     if not appeal_known:
         word = 'early'
     err_rel = round((hi - lo) / (2.0 * pt), 3) if pt > 0 else None
-    return {'version': VERSION, 'word': word, 'low': lo, 'high': hi, 'relative_error': err_rel, 'decline': False,
+    return {'version': VERSION, 'word': word, 'low': lo, 'high': hi, 'relative_error': err_rel,
             'signals': {'history': hist, 'calibration_scope': scope},
             'line': f"{WORD_LINE[word]}: {WORD_PLAIN[word]}."}
 
@@ -276,7 +260,7 @@ def public_firmness(block: Optional[dict]) -> Optional[dict]:
     score, nothing about how it was weighed."""
     if not isinstance(block, dict) or not block.get('word'):
         return None
-    out = {'word': block['word'], 'line': block.get('line') or '', 'decline': bool(block.get('decline'))}
+    out = {'word': block['word'], 'line': block.get('line') or ''}
     if block.get('ranges'):
         out['ranges'] = [{k: v for k, v in r.items() if k in ('id', 'label', 'pct', 'low_pct', 'high_pct', 'low_people', 'high_people')} for r in block['ranges']]
     if block.get('lead'):
@@ -284,8 +268,6 @@ def public_firmness(block: Optional[dict]) -> Optional[dict]:
     for k in ('low', 'high'):
         if block.get(k) is not None:
             out[k] = block[k]
-    if block.get('what_settles'):
-        out['what_settles'] = block['what_settles']
     return out
 
 

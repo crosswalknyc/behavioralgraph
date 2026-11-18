@@ -4888,8 +4888,8 @@ def run_question(ctx: dict) -> dict:
                 rec['facts_used'] = ([_oc] + list(rec['facts_used']))[:6]
         timings['read_s'] = round(time.time() - t, 2)
         # 5b. how firm the count is (2026-11-17): the evidence it rests on, the seats' agreement against the prior, the
-        #     anchor's own range, the ledger's record on questions like it, and how much the desk found; a range per option,
-        #     one of three words, and the decline line when the room has too little to call it
+        #     anchor's own range, the ledger's record on questions like it, and how much the desk found; a range per option and
+        #     one of three words. The room always calls it (Jenna 2026-11-17); the word says how firm the call is
         try:
             attach_firmness(rec, roster, priors, twin, s3)
         except Exception as e:
