@@ -3197,7 +3197,9 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
         rows.append(("x our 2026 value per new engaged person", f"${rate:,.2f}"))
     if ctx.has_control:
         if whole:
-            note = (f"Brand lift counts everyone who began engaging with {ctx.b} {ctx.after_word}. "
+            # each page says it in its own words (the short version: 'began engaging'; the method
+            # note: 'every new engager'), so no phrase is stamped down the deck
+            note = (f"This is the whole rise in {ctx.ba} engagers {ctx.after_word}. "
                     f"A matched group {_matched_move(ctx)} over the same days, against "
                     f"{ctx.delta_pp:.1f} points for the people reached.")
         else:
@@ -3557,7 +3559,7 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
         windows.append(f"The first runs {_days_phrase(ctx.pre_days)} and the second {_days_phrase(ctx.post_days)}.")
     if ctx.has_control and _lift_counts(ctx)["whole"]:
         # the valuation priced everyone newly engaging; the matched group is the comparison beside it
-        lift = (f"Brand lift value counts everyone who began engaging with {ctx.b} {ctx.after_word}. The lift "
+        lift = (f"Brand lift value prices every new {ctx.ba} engager {ctx.after_word}. The lift "
                 "over the matched group is the gain among the people reached minus that group's gain over the "
                 f"same days. That group {'is the same size, ' if _same_size(ctx) else ''}started at about the "
                 f"same {ctx.ba} engagement{',' if _same_size(ctx) else ''} and had no exposure to the campaign.")

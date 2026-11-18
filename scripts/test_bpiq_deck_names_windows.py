@@ -524,6 +524,8 @@ def test_matched_group():
                   "Less the same gain in the matched group" not in blv and "0" not in blv, blv)
             said = re.search(r"A matched group gained (\d+\.\d) points over the same days, against (\d+\.\d) points "
                              r"for the people reached\.", " ".join(blv))
+            check("whole: the lift page says the count is the whole rise",
+                  f"This is the whole rise in {BRAND} engagers after launch." in " ".join(blv), blv)
             check("whole: the lift page states the matched group's gain in the points the engagement page prints",
                   bool(said) and f"+{said.group(1)} points" in strip
                   and said.group(2) == f"{cg['treat_delta_pp']:.1f}", (said.group(0) if said else blv, strip))
@@ -534,7 +536,7 @@ def test_matched_group():
                   "the gain the matched group did not make" not in text
                   and f"New engagement is worth ${v['brand_lift_value']:,.2f}." in text)
             check("whole: the method page says what brand lift value counts and what the matched group is for",
-                  f"Brand lift value counts everyone who began engaging with {BRAND} after launch." in text
+                  f"Brand lift value prices every new {BRAND} engager after launch." in text
                   and "The lift over the matched group is the gain among the people reached minus that group's gain" in text)
         check(f"{lift}: brand lift is new people times rate, and is its tile",
               abs(new * rate - money(after(blv, "BRAND LIFT VALUE"))) < 0.005
