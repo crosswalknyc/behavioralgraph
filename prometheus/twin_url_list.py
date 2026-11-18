@@ -7,10 +7,12 @@ watched, read or visited that content in the window. Two doors, one
 build:
 
   Twins tab   'Build a twin', then the 'From a list' card on its first
-              step (Jenna 2026-11-17: the separate toolbar button is
-              gone): a CSV / TXT / XLSX of URLs (or pasted URLs), a
-              plain audience name, the window, the parsed list read
-              back with the price, confirm.
+              step, a card like the other two (Jenna 2026-11-17; the
+              separate drawer and toolbar button are gone): the audience
+              step is the list (a CSV / TXT / XLSX of URLs, or pasted
+              URLs), a plain audience name and the window; Next reads
+              the list back; the review shows what it read with the
+              price; Build starts the audience pull and the twin.
   Prometheus  a sheet or text file with URL rows on the thread (or URLs
               pasted in the message) plus twin words: 'build a twin from
               these URLs', 'make a digital twin of the people who watched
