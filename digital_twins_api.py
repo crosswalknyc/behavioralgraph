@@ -3191,24 +3191,35 @@ def dt_guided_run(key):
     if funds is not None:
         return funds
     payload.setdefault('panel_sessions', []).insert(0, sess)
+    PT = _portraits()
     try:
         try:
             ROOM.ensure_personas(sess, {key: payload}, session_seed=str(sess.get('id') or ''))
         except Exception:
             traceback.print_exc()
-        PT = _portraits()
         if PT is not None:
             try:
-                PT.attach_portraits(sess, s3)
+                PT.attach_portraits(sess, s3)      # seats already pictured (another room with the same twin) carry their url at once
             except Exception:
                 pass
         DT.save_twin(s3, key, payload)
     except Exception:
         traceback.print_exc()
-        _refund_group(user, sess, 'Guided focus group did not open')
+        _refund_group(user, sess, 'Predictive Analytics room did not open')
         payload['panel_sessions'] = [x for x in payload.get('panel_sessions') or [] if x is not sess]
         return jsonify({'success': False, 'error': 'The room could not be opened. Nothing was charged; try again in a moment.'}), 500
     _team_notice('notify_room_opened', payload, sess, username=_uname(user), via='dashboard')
+    if PT is not None:
+        try:
+            # the faces land in the session document when they finish, as on every room (2026-11-18: the first Predictive Analytics
+            # room shipped on initials because this pass was never started)
+            PT.schedule_room_portraits(s3, key, sess, {key: payload}, payload)
+        except Exception as e:
+            try:
+                from prometheus import faults as _faults
+                _faults.note('digital_twins_api.guided_portraits', e)
+            except Exception:
+                pass
     job = _guided_start(user, payload, key, sess, plan_doc)
     return _nocache(jsonify({'success': True, 'session_id': sess['id'], 'session': sess, 'job_id': job.get('job_id'), 'guided': GD.public_guided(sess),
                              'message': 'On it. The room is seated; the questions run in order and the outcome lands when the last one does.'}))

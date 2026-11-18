@@ -21,8 +21,8 @@ How it runs:
 - ``schedule_room_portraits(s3, key, sess, twins_by_key)`` is called
   when a room opens. It starts one daemon thread; the room answers in
   seconds and the faces land in the session document when they
-  finish. At most ``MAX_PER_OPEN`` (12) generations per room open; a
-  seat beyond the cap waits for the next open.
+  finish. At most ``MAX_PER_OPEN`` (16, the largest room) generations
+  per room open; a seat beyond the cap waits for the next open.
 - The cache is content-addressed: ``portrait_hash(seat)`` is the sha256
   of (name, age, gender, city, segment, STYLE_VERSION). The 512 px
   JPEG lives at ``digital-twins/portraits/<hash>.jpg``, the 128 px
@@ -74,7 +74,7 @@ FALLBACK_MODELS = ('gpt-image-1', 'gpt-image-1-mini', 'gpt-image-2', 'dall-e-3')
 GEN_SIZE = '1024x1024'
 OUT_SIZE = 512
 THUMB_SIZE = 128
-MAX_PER_OPEN = 12
+MAX_PER_OPEN = 16   # a room seats one person per kind, twelve to sixteen (2026-11-17); every seat gets its face on the first open
 WORKERS = 3
 URL_BASE = '/api/digital-twins/portrait/'
 _ENDPOINT = 'https://api.openai.com/v1/images/generations'

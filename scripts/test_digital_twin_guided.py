@@ -307,5 +307,44 @@ class Api(unittest.TestCase):
             h.close()
 
 
+class Faces(unittest.TestCase):
+    """A Predictive Analytics room gets its faces like every room (Jenna
+    2026-11-18: 'it needs to show their pictures on these'): the portrait
+    pass starts when the room opens and the seats carry their url."""
+
+    def test_the_run_starts_the_portrait_pass_and_the_seats_carry_their_faces(self):
+        import io
+        import test_digital_twin_pricing as TP
+        from migration import digital_twin_portraits as PT
+        try:
+            from PIL import Image
+        except Exception:
+            self.skipTest('PIL not installed')
+        buf = io.BytesIO()
+        Image.new('RGB', (64, 64), (40, 120, 200)).save(buf, format='PNG')
+        png = buf.getvalue()
+        asked = []
+        PT.reset_for_tests()
+        PT.configure(generator=lambda prompt: asked.append(prompt) or png, background=False, verify_delay=0)
+        h = TP.Harness(self)
+        try:
+            h.s3.head_object = lambda Bucket, Key, **kw: ({} if Key in h.s3.objs else (_ for _ in ()).throw(KeyError(Key)))
+            key = TP.KEY
+            d = h.c.post(f'/api/digital-twins/{key}/guided/plan', json={'goal': 'Should we sign her for a two-year activewear deal?'}).get_json()
+            r = h.c.post(f'/api/digital-twins/{key}/guided/run', json={'plan': d['plan']})
+            self.assertEqual(r.status_code, 200, r.get_data(as_text=True)[:300])
+            sid = r.get_json()['session_id']
+            twin = h.twin()
+            sess = next(x for x in twin['panel_sessions'] if x['id'] == sid)
+            roster = sess['group']['roster']
+            self.assertTrue(roster)
+            self.assertTrue(asked, 'the portrait pass ran on open')
+            self.assertTrue(all(r_.get('portrait_hash') and r_.get('portrait_url') for r_ in roster), 'every seat carries its face')
+        finally:
+            PT.configure()
+            PT.reset_for_tests()
+            h.close()
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
