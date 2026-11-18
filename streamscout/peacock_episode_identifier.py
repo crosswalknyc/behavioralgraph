@@ -177,28 +177,65 @@ def _fetch_tree(u):
     return None, None
 
 
+# The web search is the last resort for a title Peacock's own pages and index
+# did not place, and a search engine that is refusing us can hang a connection
+# until it times out. Measured 2026-11-17 through the dashboard: a title
+# Peacock does not carry took 188 seconds (3 queries x 2 engines x 30 seconds)
+# to answer 0. Now a short time limit per call, an engine that refused or
+# failed once is not asked again in the same lookup, and a budget for the
+# whole search. The answer is unchanged: a miss here is still an honest 0
+# when Peacock itself was read.
+SEARCH_CALL_TIMEOUT_S = 8.0
+SEARCH_BUDGET_S = 25.0
+_SEARCH_REFUSED = ("anomaly", "bots use duckduckgo", "unusual traffic", "are you a robot",
+                   "verify you are human", "captcha")
+
+
+def _search_budget():
+    try:
+        return max(4.0, float(os.environ.get("STREAMSCOUT_PEACOCK_SEARCH_BUDGET_S") or SEARCH_BUDGET_S))
+    except (TypeError, ValueError):
+        return SEARCH_BUDGET_S
+
+
 def search_peacock_page(title):
-    """Fallback: find a Peacock show page via web search. Returns a /stream-tv/
-    or /watch-online/tv/<slug>/<seriesId> URL (the latter is what covers titles
-    with no stream-tv page, e.g. "La Casa de los Famosos")."""
+    """Fallback: find a Peacock show page via web search, inside a time
+    budget. Returns a /stream-tv/ or /watch-online/tv/<slug>/<seriesId> URL
+    (the latter is what covers titles with no stream-tv page, e.g. "La Casa
+    de los Famosos"), or None."""
     want = set(tokens(title))
 
     def _slug_score(u):
         m = re.search(r"/(?:stream-tv|watch-online/tv)/([a-z0-9-]+)", u)
         return len(want & set(tokens(m.group(1)))) if m else 0
 
+    deadline = time.monotonic() + _search_budget()
+    engines = ("https://html.duckduckgo.com/html/", "https://lite.duckduckgo.com/lite/")
+    down = set()
     for q in (f"{title} peacock watch-online tv",
               f"{title} peacock stream-tv",
               f"site:peacocktv.com {title}"):
         html = ""
-        for engine in ("https://html.duckduckgo.com/html/",
-                       "https://lite.duckduckgo.com/lite/"):
+        for engine in engines:
+            if engine in down:
+                continue
+            left = deadline - time.monotonic()
+            if left <= 0.5:
+                return None
             try:
-                _, _, html = fetch(engine,
-                                   data=urllib.parse.urlencode({"q": q}).encode())
-                break
+                code, _, html = fetch(engine, data=urllib.parse.urlencode({"q": q}).encode(),
+                                      timeout=min(SEARCH_CALL_TIMEOUT_S, left))
             except Exception:
-                time.sleep(0.8)
+                down.add(engine)        # refused, reset or timed out: not asked again in this lookup
+                html = ""
+                continue
+            if code != 200 or any(mk in html[:60000].lower() for mk in _SEARCH_REFUSED):
+                down.add(engine)        # the engine's refusal page, not results
+                html = ""
+                continue
+            break
+        if len(down) == len(engines):
+            return None
         if not html:
             continue
         # DDG wraps hrefs percent-encoded; search both raw + decoded text.

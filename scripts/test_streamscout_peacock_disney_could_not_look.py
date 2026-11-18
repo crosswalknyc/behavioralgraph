@@ -160,6 +160,41 @@ got, err = peacock_run(us, title="Poker Face", url="https://www.peacocktv.com/st
 check("a series page handed in still returns its episodes, never the page id",
       err is None and got and [r["identifier"] for r in got[1]] == [UID1, UID2], repr(got or err))
 
+print("[3b] Peacock web search is bounded (a miss cost 188 seconds through the dashboard)")
+SEARCH_CALLS: list = []
+
+
+def us_search_hangs(url):
+    if "duckduckgo" in url:
+        SEARCH_CALLS.append(url)
+        raise TimeoutError("timed out")
+    return us(url)
+
+
+got, err = peacock_run(us_search_hangs, title="Amandaland")
+check("engines that hang are each asked once, not once per query (2 calls, not 6)", len(SEARCH_CALLS) == 2, str(len(SEARCH_CALLS)))
+check("the answer is still an honest 0: Peacock's own pages and index were read", err is None and got == ("Amandaland", []), repr(got or err))
+check("the worst case is seconds: 2 engines x 8 seconds inside a 25 second budget",
+      2 * pk.SEARCH_CALL_TIMEOUT_S <= pk.SEARCH_BUDGET_S <= 30, f"{pk.SEARCH_CALL_TIMEOUT_S} / {pk.SEARCH_BUDGET_S}")
+del SEARCH_CALLS[:]
+REAL_FETCH_PK = pk.fetch
+TIMEOUTS: list = []
+
+
+def _spy_fetch(url, data=None, timeout=30):
+    if "duckduckgo" in url:
+        TIMEOUTS.append(float(timeout))
+    return REAL_FETCH_PK(url, data=data, timeout=timeout)
+
+
+pk.fetch = _spy_fetch
+try:
+    got, err = peacock_run(us, title="Amandaland")          # the engines answer with their refusal page
+finally:
+    pk.fetch = REAL_FETCH_PK
+check("a refusal page takes the engine out for the rest of the lookup", len(TIMEOUTS) == 2, str(len(TIMEOUTS)))
+check("every search call carries the short time limit", TIMEOUTS and all(t_ <= pk.SEARCH_CALL_TIMEOUT_S for t_ in TIMEOUTS), str(TIMEOUTS))
+
 # ---------------------------------------------------------------- Disney+
 RESULTS_NONE = "<html><body>" + ("<div class='result'>unrelated things</div>" * 200) + "</body></html>"
 RESULTS_HIT = ("<html><body>" + ("<div class='result'>x</div>" * 150)
