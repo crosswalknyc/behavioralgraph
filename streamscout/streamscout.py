@@ -891,8 +891,15 @@ def main() -> int:
         try:
             rows = resolver_lookup(platform, title, kind, seasons)
         except Exception as e:  # noqa: BLE001
-            print(f"  ! {label} resolver failed: {e}")
-            return 2
+            if platform == "disney" and type(e).__name__ == "DiscoveryUnavailable":
+                # the web search never answered (2026-11-17: it raises now
+                # instead of returning nothing); the logged-in search below
+                # takes over exactly as it did for an empty result
+                print(f"  ! {label}: {e}")
+                rows = []
+            else:
+                print(f"  ! {label} resolver failed: {e}")
+                return 2
         # Disney+ SITUATIONAL escalation: the no-login path handles most titles,
         # but a client can ask for anything out of the blue. If the no-login
         # discovery came back empty or low-confidence, escalate to a logged-in

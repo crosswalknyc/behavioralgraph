@@ -124,8 +124,49 @@ def _disney_links(html):
     return uniq
 
 
+class DiscoveryUnavailable(Exception):
+    """The title could not be looked up from here: every search engine
+    refused or timed out before one results page was read. 'Could not look'
+    is never 'not there' (2026-11-17): StreamScout reports a raised resolver
+    under ``failed`` (unverified), so a stored placement stands and no build
+    is refused on a search that never answered."""
+
+
+# The title search is a web search, and a search engine that is refusing us
+# can hang a connection until it times out. Before 2026-11-17 one lookup
+# tried 3 queries x 3 engines x 2 attempts at 30 seconds each: Nurses, The
+# Other Guy and Las Culturistas Culture Awards each held a build's seed step
+# for about four and a half minutes, twice. Now: a short time limit per call,
+# an engine that refused or failed once is not asked again in the same
+# lookup, and the whole search has a budget.
+SEARCH_CALL_TIMEOUT_S = 10.0
+SEARCH_BUDGET_S = 45.0
+_SEARCH_REFUSED = ("anomaly", "bots use duckduckgo", "unusual traffic", "are you a robot",
+                   "verify you are human", "captcha")
+
+
+def _search_budget():
+    try:
+        return max(5.0, float(os.environ.get("STREAMSCOUT_DISNEY_SEARCH_BUDGET_S") or SEARCH_BUDGET_S))
+    except (TypeError, ValueError):
+        return SEARCH_BUDGET_S
+
+
+def _search_answered(code, html):
+    """True when a search response is a results page that was read: HTTP 200
+    with a real body and none of the engines' refusal pages (DuckDuckGo
+    answers 202 with its 'bots use DuckDuckGo too' challenge)."""
+    if code != 200 or not html or len(html) < 2000:
+        return False
+    low = html[:60000].lower()
+    return not any(mk in low for mk in _SEARCH_REFUSED)
+
+
 def search_disney_url(title, kind):
-    """Best-effort title -> disneyplus.com entity/show link via web search."""
+    """Title -> disneyplus.com entity/show link via web search, inside a time
+    budget. Returns None when a results page was read and carried no Disney+
+    page for the title; raises DiscoveryUnavailable when no engine answered
+    (could not look)."""
     noun = "movie" if kind == "movie" else "series"
     queries = [f"{title} disney plus {noun}",
                f"{title} disneyplus.com",
@@ -135,26 +176,46 @@ def search_disney_url(title, kind):
         ("https://html.duckduckgo.com/html/", True),
         ("https://www.bing.com/search?q=", False),
     ]
+    deadline = time.monotonic() + _search_budget()
+    down, answered, out_of_time = set(), False, False
     for q in queries:
         for base, is_post in engines:
-            for attempt in range(2):
-                try:
-                    if is_post:
-                        _, _, html = fetch(
-                            base, data=urllib.parse.urlencode({"q": q}).encode())
-                    else:
-                        _, _, html = fetch(base + urllib.parse.quote(q))
-                    links = _disney_links(html)
-                    if links:
-                        want = set(tokens(title))
-                        # prefer a link whose slug best covers the title tokens
-                        links.sort(key=lambda u: (
-                            0 if "/browse/entity-" in u else 1,
-                            -len(want & set(tokens(u.rsplit("/", 1)[-1])))))
-                        return links[0]
-                    time.sleep(0.8 * (attempt + 1))
-                except Exception:
-                    time.sleep(0.8 * (attempt + 1))
+            if base in down:
+                continue
+            left = deadline - time.monotonic()
+            if left <= 0.5:
+                out_of_time = True
+                break
+            try:
+                if is_post:
+                    code, _, html = fetch(
+                        base, data=urllib.parse.urlencode({"q": q}).encode(),
+                        timeout=min(SEARCH_CALL_TIMEOUT_S, left))
+                else:
+                    code, _, html = fetch(base + urllib.parse.quote(q),
+                                          timeout=min(SEARCH_CALL_TIMEOUT_S, left))
+            except Exception:
+                down.add(base)          # refused, reset or timed out: not asked again in this lookup
+                continue
+            if not _search_answered(code, html):
+                down.add(base)
+                continue
+            answered = True
+            links = _disney_links(html)
+            if links:
+                want = set(tokens(title))
+                # prefer a link whose slug best covers the title tokens
+                links.sort(key=lambda u: (
+                    0 if "/browse/entity-" in u else 1,
+                    -len(want & set(tokens(u.rsplit("/", 1)[-1])))))
+                return links[0]
+        if out_of_time or len(down) == len(engines):
+            break
+    if not answered:
+        raise DiscoveryUnavailable(
+            "no search engine answered while looking for %r on Disney+ (%s); "
+            "could not look, not absent"
+            % (title, "the search ran out of time" if out_of_time else "every engine refused"))
     return None
 
 

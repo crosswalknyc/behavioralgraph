@@ -166,6 +166,19 @@ def detect_consumption_scoped(subject, *extra_texts):
     return {"qualifier": qual, "title_hint": title, "research_hint": hint}
 
 
+# The research hint carries the client's own words as context for the
+# research call ('Nurses (context: Can we build a profile for Nurses series
+# in 2020)'). That is for the researcher only. It is never the title: a doc
+# whose title kept the hint put the client's sentence into a BRAND INPUT cell
+# as name variants (2026-11-17, Nurses Viewers).
+_CONTEXT_TAIL_RE = re.compile(r"\s*\(\s*context\s*:.*$", re.IGNORECASE | re.DOTALL)
+
+
+def title_of_hint(hint):
+    """The title a research hint names, with the '(context: ...)' tail off."""
+    return _clean(_CONTEXT_TAIL_RE.sub("", str(hint or "")))
+
+
 # ---------------------------------------------------------------------------
 # URL normalization (clickstream form: domain + path, no protocol,
 # no tracking params, no fragment)
@@ -237,15 +250,51 @@ SANCTIONED_TRANSACTION_PREFIXES = {
 }
 
 
+# A watch page whose id rides in the query string is a specific page, never a
+# landing surface: youtube.com/watch?v=<id> names one video. The path alone
+# ('watch') reads generic once the query is dropped, so every YouTube watch
+# URL in a BRAND INPUT cell was removed as a landing page, and a cell made
+# only of them fell back to the subject's name (2026-11-17, Amandaland
+# Viewers shipped the label 'Amandaland Viewers' in place of 60 watch URLs).
+_QUERY_ID_PAGES = {
+    ("youtube.com", "watch"): ("v",),
+    ("m.youtube.com", "watch"): ("v",),
+    ("music.youtube.com", "watch"): ("v",),
+    ("youtube.com", "playlist"): ("list",),
+}
+_QUERY_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,}$")
+
+
+def has_query_content_id(u):
+    """True for a URL whose content id is in its query string on a page shape
+    that takes one (a YouTube watch or playlist URL)."""
+    s = str(u or "").strip()
+    if "?" not in s:
+        return False
+    host, segs = _split_host_path(s)
+    keys = _QUERY_ID_PAGES.get((host, segs[0].lower() if len(segs) == 1 else ""))
+    if not keys:
+        return False
+    query = s.split("#", 1)[0].split("?", 1)[1]
+    for part in query.split("&"):
+        k, _, v = part.partition("=")
+        if k in keys and _QUERY_ID_RE.match(v):
+            return True
+    return False
+
+
 def is_generic_landing_url(u, require_platform_domain=True):
     """True when a URL-ish token is a platform landing page rather than
     a specific title path: bare domain, or a path whose ONLY segment is
     a generic surface word (welcome / home / browse / ...). Deep paths
-    (>= 2 segments) are never generic. With require_platform_domain
-    (default), only known carriage-platform domains are flagged so a
-    brand's own site root never false-positives."""
+    (>= 2 segments) are never generic, and neither is a watch page whose
+    content id rides in the query string (youtube.com/watch?v=<id>). With
+    require_platform_domain (default), only known carriage-platform
+    domains are flagged so a brand's own site root never false-positives."""
     host, segs = _split_host_path(u)
     if not host or "." not in host or " " in host:
+        return False
+    if has_query_content_id(u):
         return False
     normalized = "/".join([host] + segs)
     for pref in SANCTIONED_TRANSACTION_PREFIXES:
@@ -335,7 +384,7 @@ def normalize_carriage_doc(doc, subject="", qualifier="", title_hint=""):
     if not carriers:
         return None
     exclusive = len(carriers) == 1
-    title = _clean(doc.get("show_title") or doc.get("title")) or title_hint
+    title = title_of_hint(doc.get("show_title") or doc.get("title")) or title_of_hint(title_hint)
     return {
         "consumption_scoped": True,
         "subject": _clean(subject),
@@ -360,7 +409,7 @@ def failed_carriage_doc(subject, qualifier, title_hint, reason):
         "consumption_scoped": True,
         "subject": _clean(subject),
         "qualifier": qualifier,
-        "title": title_hint,
+        "title": title_of_hint(title_hint),
         "carriers": [],
         "exclusive": False,
         "clip_platforms": [],

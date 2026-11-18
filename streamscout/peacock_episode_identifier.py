@@ -36,6 +36,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -52,6 +53,32 @@ _ANYUUID = re.compile(UUID)
 PLAYBACK = "https://www.peacocktv.com/watch/playback/vod/_/%s"
 SITEMAP = "https://www.peacocktv.com/sitemap.xml"
 _MOVIE_INDEX = None  # lazily-built [(slug, uuid)] from the movies sitemap
+
+
+class DiscoveryUnavailable(Exception):
+    """Peacock could not be read from here, so nothing can be said about the
+    title: 'could not look' is never 'not there' (2026-11-17). peacocktv.com
+    answers every request from outside the US with its /unavailable page
+    ('Unavailable In Your Region'), and before this the resolver read that
+    page as a title with no episodes and answered 0 rows. StreamScout reports
+    a raised resolver under ``failed`` (unverified), so a caller keeps its
+    stored placements and never refuses a build on it."""
+
+
+# What the current lookup could actually read. A miss is only an answer when
+# Peacock's own pages or index were read from here.
+_SEEN = {"blocked": False, "read": False}
+_BLOCK_URL = re.compile(r"peacocktv\.com/unavailable(?:[/?#]|$)", re.I)
+_BLOCK_TITLE = re.compile(r"unavailable\s+in\s+your\s+region", re.I)
+
+
+def _region_blocked(final, body):
+    """True when Peacock answered with its out-of-region page instead of the
+    page that was asked for."""
+    if _BLOCK_URL.search(final or ""):
+        return True
+    m = _OG_TITLE.search((body or "")[:200000])
+    return bool(m and _BLOCK_TITLE.search(m.group(1)))
 
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
@@ -93,11 +120,22 @@ def fetch(url, data=None, timeout=30):
         "Accept-Encoding": "gzip, deflate",
         "Content-Type": "application/x-www-form-urlencoded",
     })
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        raw = r.read()
-        if r.headers.get("Content-Encoding") == "gzip":
-            raw = gzip.decompress(raw)
-        return r.getcode(), r.geturl(), raw.decode("utf-8", "replace")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read()
+            if r.headers.get("Content-Encoding") == "gzip":
+                raw = gzip.decompress(raw)
+            code, final, text = r.getcode(), r.geturl(), raw.decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        if "peacocktv.com" in (url or "") and e.code in (404, 410):
+            _SEEN["read"] = True        # Peacock answered: there is no such page
+        raise
+    if "peacocktv.com" in (url or ""):
+        if _region_blocked(final, text):
+            _SEEN["blocked"] = True
+        elif code == 200 and text:
+            _SEEN["read"] = True
+    return code, final, text
 
 
 # ── discovery ─────────────────────────────────────────────────────────────────
@@ -112,7 +150,12 @@ def _slug_from_url(u):
 # some Telemundo/Spanish titles have). watch/asset/tv/<slug>/<seriesId> works too.
 _CONTENT_URL = re.compile(
     r"peacocktv\.com/(?:stream-tv/[a-z0-9-]+"
-    r"|(?:watch-online|watch/asset)/tv/[a-z0-9-]+/\d+)", re.I)
+    r"|(?:watch-online|watch/asset)/tv/[a-z0-9-]+/(?:\d+|" + UUID + r"))", re.I)
+# A special or an event (an awards night, a one-off) has no season tree: its
+# page is /watch-online/tv/<slug>/<UUID> and that UUID is the programme's own
+# playback id (2026-11-17, Las Culturistas Culture Awards).
+_PROGRAMME_URL = re.compile(
+    r"peacocktv\.com/(?:watch-online|watch/asset)/tv/([a-z0-9-]+)/(" + UUID + r")(?:[/?#]|$)", re.I)
 # Show-page links we accept from a web-search result page.
 _PAGE_LINK = re.compile(
     r"https?://www\.peacocktv\.com/(?:stream-tv/[a-z0-9-]+"
@@ -125,6 +168,8 @@ def _fetch_tree(u):
     try:
         u = u if u.startswith("http") else "https://" + u.lstrip("/")
         _, final, html = fetch(u)
+        if _region_blocked(final, html):
+            return None, None       # the out-of-region page carries a tree of its own; it is not the title's
         if _NEXT.search(html):
             return final, html
     except Exception:
@@ -181,6 +226,7 @@ def _tv_index():
     """
     global _TV_INDEX
     if _TV_INDEX is not None:
+        _SEEN["read"] = True            # Peacock's own index, read earlier in this process
         return _TV_INDEX
     idx = {}
     try:
@@ -196,6 +242,8 @@ def _tv_index():
                 idx.setdefault(slug, sid)  # series landing wins; episodes dedupe
     except Exception:
         pass
+    if not idx:
+        return idx          # nothing read (blocked, refused): not cached, so a later lookup can try again
     _TV_INDEX = idx
     return idx
 
@@ -323,6 +371,7 @@ def _movie_index():
     """
     global _MOVIE_INDEX
     if _MOVIE_INDEX is not None:
+        _SEEN["read"] = True
         return _MOVIE_INDEX
     idx = []
     try:
@@ -337,6 +386,8 @@ def _movie_index():
                     idx.append((mm.group(1), mm.group(2)))
     except Exception:
         pass
+    if not idx:
+        return idx          # nothing read: not cached
     _MOVIE_INDEX = idx
     return idx
 
@@ -375,17 +426,24 @@ def resolve(title=None, url=None, kind="series", seasons=None):
     Returns (show_name, rows); each row is
         {season, episode, title, identifier, watch_url}
     with the identifier being the playback UUID (season/episode "" for a movie).
+
+    Raises DiscoveryUnavailable when Peacock could not be read from here (the
+    out-of-region page, or nothing at peacocktv.com answered): a miss is only
+    an answer when Peacock's own pages or index were read.
     """
+    _SEEN.update(blocked=False, read=False)
     if kind == "movie":
         vid = movie_uuid(title=title, url=url)
         if vid:
             return (title or "", [{"season": "", "episode": "", "title": "",
                                    "identifier": vid,
                                    "watch_url": PLAYBACK % vid}])
+        _raise_if_could_not_look(title)
         return (title or "", [])
 
     final, html = _load_page(title, url)
     if not html:
+        _raise_if_could_not_look(title)
         return (title or "", [])
     data_m = _NEXT.search(html)
     data = json.loads(data_m.group(1)) if data_m else {}
@@ -400,7 +458,29 @@ def resolve(title=None, url=None, kind="series", seasons=None):
             "episode": str(e["number"]) if e["number"] is not None else "",
             "title": e["name"], "identifier": e["uuid"],
             "watch_url": PLAYBACK % e["uuid"]})
+    if not rows and seasons is None:
+        # no season tree: a special or an event, whose page id is its own
+        # playback id. Only from a page that was pasted or stored (never a
+        # guess from the title), and only when the page really is that one.
+        m = _PROGRAMME_URL.search(final or "") if url and _PROGRAMME_URL.search(url) else None
+        if m and m.group(2).lower() in (url or "").lower():
+            uid = m.group(2).lower()
+            rows.append({"season": "", "episode": "", "title": show, "identifier": uid,
+                         "watch_url": PLAYBACK % uid})
     return (show, rows)
+
+
+def _raise_if_could_not_look(title):
+    """No rows is an answer only when Peacock was read. The out-of-region
+    page, or no page at peacocktv.com answering at all, is could-not-look."""
+    if _SEEN["blocked"]:
+        raise DiscoveryUnavailable(
+            "peacocktv.com answered with its out-of-region page from here "
+            "(Peacock is read from a US address); could not look for %r, not absent" % (title or ""))
+    if not _SEEN["read"]:
+        raise DiscoveryUnavailable(
+            "peacocktv.com did not answer from here while looking for %r; "
+            "could not look, not absent" % (title or ""))
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
