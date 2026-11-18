@@ -26,9 +26,6 @@
   .caps.four { grid-template-columns: repeat(4, 1fr); }
   @media (max-width: 1023px) { .caps.four { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 767px) { .caps.four { grid-template-columns: 1fr; } }
-  .hero-shot { margin: 0; }
-  .hero-shot img { width: 100%; height: auto; display: block; border-radius: 16px; border: 1px solid var(--rule-d); box-shadow: 0 30px 80px rgba(0,0,0,0.4); }
-  .hero-shot figcaption { font-size: 12px; color: var(--t3-d); margin-top: 12px; }
   .shot { margin: 0; }
   .vid { margin: 0 0 20px; scroll-margin-top: 96px; }
   .vid video { width: 100%; height: auto; aspect-ratio: 16 / 9; display: block; border-radius: 12px; border: 1px solid var(--rule-l); background: #0C1618; box-shadow: 0 24px 60px rgba(12,22,24,0.14); }
@@ -187,18 +184,23 @@
 <body>
 <div id="nav"></div>
 
-<section class="band dark glow page-hero">
+<section class="band light">
   <div class="wrap">
-    <div>
-      <div class="eyebrow"><span class="n">01</span> Prometheus</div>
-      <h1 class="h-l">Ask anything about ten million real people.</h1>
-      <p class="lead" style="margin-top:20px">Prometheus is the research assistant built on Crosswalk's behavioral data: the digital lives of 10 million US people, recorded day by day since 2021. Ask a question the way you would ask it in a meeting, and it answers from that record, in minutes. What people really did, not what they said they would do.</p>
-      <div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap"><a class="btn btn-green" href="#video">Watch how it works</a><a class="btn btn-ghost" href="signup.html">Sign up and ask</a></div>
-      <p class="fine" style="color:var(--t3-d);margin-top:18px">Clients see group statistics only. No individual is ever identified.</p>
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">01</span> Prometheus</div>
+        <h1 class="h-l">How Prometheus works.</h1>
+      </div>
+      <div>
+        <p class="lead">What it is built on, how it computes an answer, and why no other data source can beat it.</p>
+      </div>
     </div>
-    <figure class="hero-shot">
-      <img src="assets/images/prometheus/widget-answer.png" width="960" height="1120" alt="Prometheus in the Crosswalk dashboard answering: Who watches Landman, and what do they buy? 6,184,372 US viewers, half of them 35 to 54, and a purchase category mix led by grocery, family and CPG." loading="eager">
-      <figcaption>Prometheus in the dashboard, answering a question as it was asked.</figcaption>
+    <figure class="shot vid" id="video">
+      <video controls preload="metadata" playsinline poster="assets/images/prometheus/video-poster.jpg" title="How Prometheus works">
+        <source src="https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-prometheus-how-it-works.mp4" type="video/mp4">
+        <track kind="captions" src="assets/video/prometheus.vtt" srclang="en" label="English">
+      </video>
+      <figcaption>How Prometheus works: the data, the record, a real answer, the breadth, and why it is different. Five minutes.</figcaption>
     </figure>
   </div>
 </section>
@@ -212,32 +214,11 @@
   </div>
 </section>
 
-<section class="band light">
-  <div class="wrap">
-    <div class="band-head">
-      <div>
-        <div class="eyebrow"><span class="n">02</span> Watch</div>
-        <h2 class="h-l">How Prometheus works, in five minutes.</h2>
-      </div>
-      <div>
-        <p class="lead">What it is built on, how it reads the record, a real answer on who watches Landman and what they buy, the nine kinds of report, and why no other data source works the same way.</p>
-      </div>
-    </div>
-    <figure class="shot vid" id="video">
-      <video controls preload="metadata" playsinline poster="assets/images/prometheus/video-poster.jpg" title="How Prometheus works">
-        <source src="https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-prometheus-how-it-works.mp4" type="video/mp4">
-        <track kind="captions" src="assets/video/prometheus.vtt" srclang="en" label="English">
-      </video>
-      <figcaption>How Prometheus works: the data, the record, a real answer, the breadth, and why it is different. Five minutes.</figcaption>
-    </figure>
-  </div>
-</section>
-
 <section class="band dark">
   <div class="wrap">
     <div class="band-head">
       <div>
-        <div class="eyebrow"><span class="n">03</span> What it is built on</div>
+        <div class="eyebrow"><span class="n">02</span> What it is built on</div>
         <h2 class="h-l">Behavioral data on 30 million digital lives.</h2>
       </div>
       <div>
@@ -255,7 +236,7 @@
 
 <section class="band light">
   <div class="wrap">
-    <div class="eyebrow"><span class="n">04</span> How it works</div>
+    <div class="eyebrow"><span class="n">03</span> How it works</div>
     <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Ask Prometheus. It answers from that record.</h2>
     <p class="lead" style="margin-bottom:44px">Every answer is read from the longitudinal behavior of the people who fit your question.</p>
     <div class="caps">
@@ -270,7 +251,7 @@
   <div class="wrap">
     <div class="band-head">
       <div>
-        <div class="eyebrow"><span class="n">05</span> A real answer</div>
+        <div class="eyebrow"><span class="n">04</span> A real answer</div>
         <h2 class="h-l">Who watches Landman, and what do they buy?</h2>
       </div>
       <div>
@@ -287,7 +268,7 @@
 
 <section class="band light" id="reports">
   <div class="wrap">
-    <div class="eyebrow"><span class="n">06</span> The breadth</div>
+    <div class="eyebrow"><span class="n">05</span> The breadth</div>
     <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Nine kinds of answer, and the digital twins.</h2>
     <p class="lead" style="margin-bottom:40px">The syndicated reports: one question each, the same ten million people behind all of them.</p>
     <div class="rep">
@@ -309,7 +290,7 @@
   <div class="wrap">
     <div class="band-head">
       <div>
-        <div class="eyebrow"><span class="n">07</span> Why it is different</div>
+        <div class="eyebrow"><span class="n">06</span> Why it is different</div>
         <h2 class="h-l">Built on what people do, not what they say.</h2>
       </div>
       <div>
@@ -330,7 +311,7 @@
 
 <section class="band light">
   <div class="wrap">
-    <div class="eyebrow"><span class="n">08</span> Where it lives</div>
+    <div class="eyebrow"><span class="n">07</span> Where it lives</div>
     <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">On every page, on your desktop, and in your API.</h2>
     <p class="lead" style="margin-bottom:44px">Type to it or talk to it. The same brain answers wherever you are.</p>
     <div class="caps">
@@ -345,7 +326,7 @@
   <div class="wrap">
     <div class="band-head">
       <div>
-        <div class="eyebrow"><span class="n">09</span> Why you need it</div>
+        <div class="eyebrow"><span class="n">08</span> Why you need it</div>
         <h2 class="h-l">Minutes, not weeks. Cents, not a budget line.</h2>
       </div>
       <div>
@@ -362,7 +343,7 @@
 
 <section class="band light" style="padding-top:72px;border-top:1px solid var(--rule-l)">
   <div class="wrap">
-    <div class="eyebrow"><span class="n">10</span> Questions</div>
+    <div class="eyebrow"><span class="n">09</span> Questions</div>
     <h2 class="h-l" style="max-width:20ch;margin-bottom:28px">Prometheus, in plain words.</h2>
     <div class="faq">
       <div class="item">
@@ -395,7 +376,7 @@
 
 <section class="band dark glow" style="text-align:center">
   <div class="wrap">
-    <div class="eyebrow" style="justify-content:center"><span class="n">11</span> Sign up</div>
+    <div class="eyebrow" style="justify-content:center"><span class="n">10</span> Sign up</div>
     <h2 class="h-l" style="max-width:18ch;margin:0 auto">Ask your first question today.</h2>
     <p class="lead" style="margin:16px auto 0;text-align:center">Sign up for the dashboard with a $500 opening balance. Ask Prometheus anything. You pay only for the reports you pull.</p>
     <div style="display:flex;gap:10px;margin-top:30px;justify-content:center;flex-wrap:wrap"><a class="btn btn-green" href="signup.html">Sign up and ask</a><a class="btn btn-ghost" href="company.html#contact">Talk to us</a></div>
