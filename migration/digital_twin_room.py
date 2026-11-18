@@ -4260,7 +4260,8 @@ def ledger_row_for_question(s3, twin: dict, session: dict, rec: dict, twin_key: 
     return LG.record_prediction(s3, 'room_count', str(_meta(twin).get('subject') or _twin_name(twin)), pred, measure=f"share:{str(lead.get('label') or '')[:60]}",
                                 twin_key=twin_key or str(_meta(twin).get('key') or ''), session_id=str(session.get('id') or ''), question_id=str(rec.get('id') or ''),
                                 question=str(rec.get('q') or ''), question_kind=kind, audience_class=subject_class(twin), method_version=ROOM_VERSION,
-                                basis={'anchor_status': status, 'firmness': {'word': fb.get('word') if isinstance(fb, dict) else None}}, post_hoc=(status == 'result'))
+                                basis={'anchor_status': status, 'firmness': {'word': fb.get('word') if isinstance(fb, dict) else None}}, post_hoc=(status == 'result'),
+                                company=LG.twin_company_of(twin, twin_key or str(_meta(twin).get('key') or '')))
 
 
 def chat_lines(session: dict, rec: dict) -> list:

@@ -123,6 +123,7 @@ def _index_row(rec: dict) -> dict:
             'question_kind': rec.get('question_kind'), 'audience_class': rec.get('audience_class'), 'measure': rec.get('measure'), 'unit': (rec.get('prediction') or {}).get('unit'),
             'created_at': rec.get('created_at'), 'observed_at': (rec.get('outcome') or {}).get('observed_at'), 'has_outcome': bool(rec.get('outcome')),
             'post_hoc': bool(rec.get('post_hoc')), 'backfilled': bool(rec.get('backfilled')), 'public': bool(rec.get('public')),
+            'company': str(rec.get('company') or ''), 'house': is_house(rec),
             'abs_error': sc.get('abs_error'), 'rel_error': sc.get('rel_error'), 'tvd': sc.get('tvd'), 'covered': sc.get('covered'), 'brier': sc.get('brier'),
             'hit': sc.get('hit'), 'anchor_status': (rec.get('basis') or {}).get('anchor_status'), 'firmness': ((rec.get('basis') or {}).get('firmness') or {}).get('word')}
 
@@ -238,14 +239,52 @@ def score(prediction: dict, outcome: dict) -> dict:
 
 
 # ------------------------------------------------------------------- writes
+def is_house(rec: dict) -> bool:
+    """A row the house made on its own twins (Crosswalk's company, or a
+    backfilled call the house made before its outcome). Rows written
+    before the company rode on the record read as house only when
+    backfilled."""
+    if 'house' in (rec or {}):
+        return bool(rec.get('house'))
+    comp = str((rec or {}).get('company') or '')
+    if comp:
+        try:
+            from migration import digital_twin_company as CO
+            return CO.same_company(comp, CO.STAFF_COMPANY)
+        except Exception:
+            return comp.strip().lower() == 'crosswalk'
+    return bool((rec or {}).get('backfilled'))
+
+
+def visible(row: dict, *, company: Optional[str] = None, staff: bool = False) -> bool:
+    """Who may read a row (2026-11-17): staff read everything; a seat
+    reads the house's public record and its own company's calls. A
+    client's room or test never shows to another company."""
+    if staff:
+        return True
+    if row.get('public') or is_house(row):
+        return True
+    if company and row.get('company'):
+        try:
+            from migration import digital_twin_company as CO
+            return CO.same_company(row.get('company'), company)
+        except Exception:
+            return str(row.get('company')).strip().lower() == str(company).strip().lower()
+    return False
+
+
 def record_prediction(s3, kind: str, subject: str, prediction: dict, *, measure: str = '', twin_key: str = '', session_id: str = '', question_id: str = '',
                       question: str = '', question_kind: str = '', audience_class: str = '', method_version: str = '', basis: Optional[dict] = None,
-                      post_hoc: bool = False, public: bool = True, created_at: str = '', backfilled: bool = False, note: str = '') -> Optional[dict]:
+                      post_hoc: bool = False, public: Optional[bool] = None, created_at: str = '', backfilled: bool = False, note: str = '',
+                      company: str = '', house: Optional[bool] = None) -> Optional[dict]:
     """A prediction on the ledger. ``prediction`` carries any of point /
     low / high / unit, distribution [{label, pct}], probability, call.
     Idempotent per (kind, subject, session, question, measure): a repeat
     updates the row and keeps the first created_at and hash unless the
-    prediction itself changed. Never raises."""
+    prediction itself changed. ``company`` is the twin's company; a house
+    row (Crosswalk's own twins, the backfilled calls) is public by
+    default, a client's row is not until an admin releases it
+    (``release``). Never raises."""
     try:
         kind = kind if kind in KINDS else 'call'
         rid = record_id(kind, subject, session_id, question_id, measure)
@@ -253,12 +292,17 @@ def record_prediction(s3, kind: str, subject: str, prediction: dict, *, measure:
         pred = {k: v for k, v in (prediction or {}).items() if v is not None}
         if have and _canon(have.get('prediction')) == _canon(pred) and not have.get('outcome'):
             return have     # the same prediction already on the ledger
+        company = str(company or (have or {}).get('company') or '')
+        if house is None:
+            house = is_house({'company': company, 'backfilled': backfilled}) if (company or backfilled) else bool((have or {}).get('house'))
+        if public is None:
+            public = bool((have or {}).get('public')) if have and 'public' in have else bool(house)
         rec = {'id': rid, 'version': VERSION, 'kind': kind, 'subject': str(subject or ''), 'twin_key': str(twin_key or ''), 'session_id': str(session_id or ''),
                'question_id': str(question_id or ''), 'question': ' '.join(str(question or '').split())[:400], 'measure': str(measure or ''),
                'question_kind': str(question_kind or ''), 'audience_class': str(audience_class or ''), 'method_version': str(method_version or ''),
                'prediction': pred, 'basis': dict(basis or {}), 'created_at': created_at or (have or {}).get('created_at') or _now(),
                'post_hoc': bool(post_hoc), 'public': bool(public) and not post_hoc, 'backfilled': bool(backfilled), 'note': str(note or '')[:400],
-               'outcome': (have or {}).get('outcome'), 'score': None}
+               'company': company, 'house': bool(house), 'outcome': (have or {}).get('outcome'), 'score': None}
         if have and have.get('outcome') and _canon(have.get('prediction')) != _canon(pred):
             # a prediction revised after its outcome landed is a new row, never a rewrite of a scored one
             rec['id'] = rid + '_r' + hashlib.sha256(_canon(pred).encode()).hexdigest()[:4]
@@ -291,6 +335,49 @@ def record_outcome(s3, rid: str, value=None, *, distribution: Optional[list] = N
         return None
 
 
+def twin_company_of(twin: Optional[dict], twin_key: str = '') -> str:
+    """The company a twin belongs to, for the row (fail-safe '')."""
+    try:
+        from migration import digital_twin_company as CO
+        return str(CO.twin_company(twin if isinstance(twin, dict) else None, None, str(twin_key or '')) or '')
+    except Exception:
+        return ''
+
+
+def restamp(s3) -> int:
+    """One pass over rows written before the company rode on the record
+    (2026-11-17): the company from the twin key, house from it, and a
+    client's row taken off the public record (a house row stays as it
+    was). Idempotent; returns the rows changed."""
+    n = 0
+    for r in list(load_index(s3).get('records') or []):
+        rec = load_record(s3, r['id'])
+        if not rec or 'house' in rec:
+            continue
+        comp = str(rec.get('company') or '') or twin_company_of(None, rec.get('twin_key') or '')
+        rec['company'] = comp
+        rec['house'] = is_house({'company': comp, 'backfilled': rec.get('backfilled')})
+        if not rec['house']:
+            rec['public'] = False
+        _save(s3, rec)
+        n += 1
+    return n
+
+
+def release(s3, rid: str, public: bool) -> Optional[dict]:
+    """An admin puts a row on the public record, or takes it off. A post
+    hoc row can never be public. Never raises."""
+    try:
+        rec = load_record(s3, rid)
+        if not rec:
+            return None
+        rec['public'] = bool(public) and not rec.get('post_hoc')
+        return _save(s3, rec)
+    except Exception as e:
+        print(f"[twin-ledger] release failed: {str(e)[:160]}")
+        return None
+
+
 def find(s3, *, kind: str = '', subject: str = '', session_id: str = '', measure: str = '') -> list:
     rows = load_index(s3).get('records') or []
     out = []
@@ -316,12 +403,20 @@ def _median(xs):
     return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2.0
 
 
-def summary(s3, *, kind: str = '', question_kind: str = '', audience_class: str = '', measure: str = '', include_backfilled: bool = True) -> dict:
+def summary(s3, *, kind: str = '', question_kind: str = '', audience_class: str = '', measure: str = '', include_backfilled: bool = True,
+            company: Optional[str] = None, staff: bool = False, site: bool = False, scope: bool = False) -> dict:
     """How the twins have done: counts, mean and median absolute error,
     mean relative error, coverage of the ranges, mean TVD, Brier and hit
     rate, over the scored rows (never the post hoc ones), by the filters
-    given, with a breakdown by kind."""
+    given, with a breakdown by kind. With ``scope`` the rows are the ones
+    a reader may see (``company`` / ``staff``); with ``site`` only the
+    public ones. The firmness layer reads it unscoped (every scored row
+    teaches it)."""
     rows = [r for r in (load_index(s3).get('records') or []) if not r.get('post_hoc') and (include_backfilled or not r.get('backfilled'))]
+    if site:
+        rows = [r for r in rows if r.get('public')]
+    elif scope:
+        rows = [r for r in rows if visible(r, company=company, staff=staff)]
     if kind:
         rows = [r for r in rows if r.get('kind') == kind]
     if question_kind:
@@ -419,27 +514,62 @@ def backfill_known(s3) -> list:
 
 
 # ------------------------------------------------------------------- the public view
-def public_rows(s3, limit: int = 200) -> list:
-    """The track record a reader may see: scored, public, never post hoc.
-    No method words, no source names beyond the class of the outcome."""
+def _row_view(rec: dict) -> dict:
+    pred, out = rec.get('prediction') or {}, rec.get('outcome') or {}
+    sc = rec.get('score') or {}
+    fb = ((rec.get('basis') or {}).get('firmness') or {})
+    return {'id': rec.get('id'), 'subject': rec.get('subject'), 'what': rec.get('question') or rec.get('measure'), 'kind': rec.get('kind'), 'unit': pred.get('unit'),
+            'said': pred.get('point') if pred.get('point') is not None else (pred.get('call') or (pred.get('distribution') or [{}])[0].get('label')),
+            'said_distribution': pred.get('distribution'), 'low': pred.get('low'), 'high': pred.get('high'),
+            'happened': out.get('value') if out.get('value') is not None else (out.get('winner') or (out.get('distribution') or [{}])[0].get('label')),
+            'happened_distribution': out.get('distribution'), 'outcome_class': out.get('source_class'),
+            'called_on': str(rec.get('created_at') or '')[:10], 'settled_on': str(out.get('observed_at') or '')[:10],
+            'abs_error': sc.get('abs_error'), 'rel_error': sc.get('rel_error'), 'tvd': sc.get('tvd'), 'covered': sc.get('covered'), 'hit': sc.get('hit'), 'hash': rec.get('hash'),
+            'company': str(rec.get('company') or ''), 'house': is_house(rec), 'public': bool(rec.get('public')), 'firmness': fb.get('word') if isinstance(fb, dict) else None,
+            'twin_key': rec.get('twin_key'), 'session_id': rec.get('session_id')}
+
+
+def open_rows(s3, limit: int = 200, *, company: Optional[str] = None, staff: bool = False) -> list:
+    """The calls still waiting on their outcome, newest first: what was
+    said and when, dated by the hash. Scoped to what the reader may
+    see; never a post hoc row."""
     rows = []
     for r in reversed(load_index(s3).get('records') or []):
-        if not (r.get('has_outcome') and r.get('public') and not r.get('post_hoc')):
+        if r.get('has_outcome') or r.get('post_hoc') or not visible(r, company=company, staff=staff):
             continue
         rec = load_record(s3, r['id']) or {}
-        pred, out = rec.get('prediction') or {}, rec.get('outcome') or {}
-        sc = rec.get('score') or {}
-        rows.append({'subject': rec.get('subject'), 'what': rec.get('question') or rec.get('measure'), 'kind': rec.get('kind'), 'unit': pred.get('unit'),
-                     'said': pred.get('point') if pred.get('point') is not None else (pred.get('call') or (pred.get('distribution') or [{}])[0].get('label')),
-                     'said_distribution': pred.get('distribution'), 'low': pred.get('low'), 'high': pred.get('high'),
-                     'happened': out.get('value') if out.get('value') is not None else (out.get('winner') or (out.get('distribution') or [{}])[0].get('label')),
-                     'happened_distribution': out.get('distribution'), 'outcome_class': out.get('source_class'),
-                     'called_on': str(rec.get('created_at') or '')[:10], 'settled_on': str(out.get('observed_at') or '')[:10],
-                     'abs_error': sc.get('abs_error'), 'rel_error': sc.get('rel_error'), 'tvd': sc.get('tvd'), 'covered': sc.get('covered'), 'hit': sc.get('hit'), 'hash': rec.get('hash')})
+        if rec:
+            rows.append(_row_view(rec))
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def public_rows(s3, limit: int = 200, *, company: Optional[str] = None, staff: bool = False, site: bool = True) -> list:
+    """The track record a reader may see: scored, never post hoc. With
+    ``site`` (the default, the website and the partner surface) only the
+    public rows: the house's own calls and any client row an admin
+    released. With ``site=False`` the rows the seat may read in the
+    dashboard: the public record plus its own company's calls; staff
+    read everything. No method words, no source names beyond the class
+    of the outcome."""
+    rows = []
+    for r in reversed(load_index(s3).get('records') or []):
+        if not r.get('has_outcome') or r.get('post_hoc'):
+            continue
+        if site:
+            if not r.get('public'):
+                continue
+        elif not visible(r, company=company, staff=staff):
+            continue
+        rec = load_record(s3, r['id']) or {}
+        if not rec:
+            continue
+        rows.append(_row_view(rec))
         if len(rows) >= limit:
             break
     return rows
 
 
 __all__ = ['VERSION', 'KINDS', 'record_prediction', 'record_outcome', 'record_id', 'record_hash', 'score', 'tvd', 'summary', 'history_for', 'find',
-           'load_record', 'load_index', 'rebuild_index', 'backfill_known', 'public_rows', 'reset_memory']
+           'load_record', 'load_index', 'rebuild_index', 'backfill_known', 'public_rows', 'open_rows', 'release', 'visible', 'is_house', 'twin_company_of', 'restamp', 'reset_memory']

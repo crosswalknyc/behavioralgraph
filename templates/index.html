@@ -20471,6 +20471,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                             <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/indexing.mp4') }}" data-howto-title="Indexing">Indexing</button>
                                         </div>
                                         <button type="button" class="user-dropdown-subitem" id="btnOpenMethodology">Methodology</button>
+                                        <a class="user-dropdown-subitem" href="https://www.crosswalknyc.com/twins-track-record.html" target="_blank" rel="noopener">Digital Twins track record</a>
                                         <button type="button" class="user-dropdown-subitem" id="btnOpenPricing">Prometheus Pricing</button>
                                         <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>Metric Glossary<span class="user-dropdown-soon">Soon</span></button>
                                         <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>FAQs<span class="user-dropdown-soon">Soon</span></button>
@@ -52170,6 +52171,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <select id="dtwCompanyFilter" class="dtw-in dtw-switch" aria-label="Company" title="Crosswalk only: see the library as one company sees it" onchange="dtwCompanyFilterChange(this.value)" hidden><option value="">All companies</option></select>
                         <select id="dtwTwinSwitch" class="dtw-in dtw-switch" aria-label="Switch twin" onchange="dtwSwitchTwin(this.value)"><option value="">No twins yet</option></select>
                         <button type="button" class="dtw-btn" onclick="dtwHowtoOpen(true)">How to</button>
+                        <button type="button" class="dtw-btn" onclick="dtwRecordOpen(true)" title="Every call the twins made before its outcome, next to what happened">Track record</button>
                         <button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build a twin</button>
                     </div>
                 </div>
@@ -52332,6 +52334,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <div class="dtw-eyebrow">Digital Twins IQ</div>
                 <h2>Build a twin from a list</h2>
                 <div id="dtwListBody"></div>
+            </aside>
+            <div id="dtwRecordScrim" class="dtw-scrim" onclick="dtwRecordOpen(false)"></div>
+            <aside id="dtwRecordDrawer" class="dtw-drawer dtw-drawer-build" role="dialog" aria-label="Track record" aria-hidden="true">
+                <button type="button" class="dtw-btn dtw-btn-sm dtw-drawer-x" onclick="dtwRecordOpen(false)">Close</button>
+                <div class="dtw-eyebrow">Digital Twins IQ</div>
+                <h2>Track record</h2>
+                <div id="dtwRecordBody"></div>
             </aside>
         </div>
         <script>
@@ -52978,6 +52987,67 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function ulFresh() { var w = ulDefaultWindow(); return { name: '', text: '', file: null, fileName: '', ws: w[0], we: w[1], preview: null, busy: false, err: '', job: null }; }
             function ulIso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
             function ulDefaultWindow() { var e = new Date(), s = new Date(e); s.setMonth(s.getMonth() - 12); return [ulIso(s), ulIso(e)]; }
+            // ---- the track record (Jenna 2026-11-17: the record is not a twin's; it lives in one place for everyone). One ledger for the
+            // whole product: every call any room or test made before its outcome. A seat reads its own company's calls and the house's
+            // public record (the website carries the house's calls); staff read every company.
+            function recUnit(v, unit, kind) {
+                if (v == null || v === '') return '';
+                if (typeof v === 'string') return v;
+                var n = Number(v);
+                if (unit === 'people') return fmtN(n) + ' people';
+                if (unit === 'points') return (Math.round(n * 10) / 10) + ' points';
+                if (unit === 'pct') return (Math.round(n * 10) / 10) + '%';
+                return fmtN(n);
+            }
+            function recSaid(r, which) {
+                var dist = r[which + '_distribution'], v = r[which];
+                if (dist && dist.length) return dist.slice(0, 4).map(function(d) { return esc(d.label) + ' ' + (Math.round(Number(d.pct) * 10) / 10) + '%'; }).join(', ');
+                var s = recUnit(v, r.unit, r.kind);
+                if (which === 'said' && r.low != null && r.high != null && typeof v !== 'string') s += ' <span class="dtw-muted">(' + recUnit(r.low, r.unit) + ' to ' + recUnit(r.high, r.unit) + ')</span>';
+                return esc(s).replace(/&lt;span class=&quot;dtw-muted&quot;&gt;/g, '<span class="dtw-muted">').replace(/&lt;\/span&gt;/g, '</span>');
+            }
+            function recMiss(r) {
+                if (r.hit === true) return 'Called right';
+                if (r.hit === false) return 'Called wrong';
+                if (r.tvd != null) return (Math.round(Number(r.tvd) * 10) / 10) + ' points off';
+                if (r.rel_error != null) return (Math.round(Number(r.rel_error) * 1000) / 10) + '% off';
+                if (r.abs_error != null) return recUnit(r.abs_error, r.unit) + ' off';
+                return '';
+            }
+            function recKind(k) { return { forecast: 'Pilot test', room_count: 'Focus group', scorecard: 'Scorecard', call: 'Call' }[k] || k || ''; }
+            function recTable(rows, staff, settled) {
+                if (!rows.length) return '<p class="dtw-muted">' + (settled ? 'Nothing settled yet.' : 'Nothing waiting.') + '</p>';
+                var head = '<tr><th>Audience</th><th>What was asked</th><th>We said</th>' + (settled ? '<th>What happened</th><th>Miss</th>' : '<th>How firm</th>') + '<th>Called</th>' + (settled ? '<th>Settled</th>' : '') + (staff ? '<th>Company</th>' : '') + '</tr>';
+                var body = rows.map(function(r) {
+                    return '<tr><td>' + esc(r.subject) + '<div class="dtw-muted">' + esc(recKind(r.kind)) + (r.house ? ' &middot; house' : '') + '</div></td><td>' + esc(r.what) + '</td><td>' + recSaid(r, 'said') + '</td>'
+                        + (settled ? '<td>' + recSaid(r, 'happened') + (r.outcome_class ? '<div class="dtw-muted">' + esc(r.outcome_class) + '</div>' : '') + '</td><td>' + esc(recMiss(r)) + '</td>' : '<td>' + esc(r.firmness ? r.firmness.charAt(0).toUpperCase() + r.firmness.slice(1) : '') + '</td>')
+                        + '<td>' + esc(r.called_on) + '</td>' + (settled ? '<td>' + esc(r.settled_on) + '</td>' : '') + (staff ? '<td>' + esc(r.company || '') + (r.public ? ' <span class="dtw-muted">public</span>' : '') + '</td>' : '') + '</tr>';
+                }).join('');
+                return '<table class="dtw-table">' + head + body + '</table>';
+            }
+            function renderRecord(d) {
+                var h = el('dtwRecordBody'); if (!h) return;
+                if (!d) { h.innerHTML = '<p class="dtw-muted">Reading the record...</p>'; return; }
+                if (d.error) { h.innerHTML = '<p class="dtw-muted">The record could not be read: ' + esc(d.error) + '</p>'; return; }
+                var sm = d.summary || {}, staff = !!d.staff;
+                var tiles = '<div class="dtw-bw-sum">'
+                    + '<div class="r"><span class="k">Calls scored</span><span class="v">' + fmtN(sm.calls_scored || 0) + '</span></div>'
+                    + (sm.hit_rate != null ? '<div class="r"><span class="k">Called right</span><span class="v">' + Math.round(sm.hit_rate * 100) + '% of the calls</span></div>' : '')
+                    + (sm.mean_relative_miss != null ? '<div class="r"><span class="k">Typical miss</span><span class="v">' + (Math.round(sm.mean_relative_miss * 1000) / 10) + '% on a count</span></div>' : '')
+                    + '</div>';
+                var who = staff ? (d.company ? 'The calls of ' + esc(d.company) + ' and the public record.' : 'Every company\'s calls and the public record.') : 'Your company\'s rooms and tests, and the public record. Another company never sees yours.';
+                h.innerHTML = '<div class="dtw-bw-sub">' + esc(d.line || '') + ' ' + who + '</div>' + tiles
+                    + '<h4 style="margin-top:1rem;">Settled</h4><div class="dtw-bw-sub">What we said, then what happened.</div>' + recTable(d.rows || [], staff, true)
+                    + '<h4 style="margin-top:1.2rem;">Open</h4><div class="dtw-bw-sub">Calls waiting on their outcome. Each is dated by its hash; nothing is added after the fact.</div>' + recTable(d.open || [], staff, false)
+                    + '<div class="dtw-bw-sub" style="margin-top:1.2rem;">The public record, the house\'s own calls, is on the website: <a class="dtw-link" href="' + esc(d.public_url || 'https://www.crosswalknyc.com/twins-track-record.html') + '" target="_blank" rel="noopener">crosswalknyc.com/twins-track-record</a>.</div>';
+            }
+            window.dtwRecordOpen = function(on) {
+                if (on) { try { dtwBuildOpen(false); dtwListOpen(false); dtwNewRoomOpen(false); dtwRoomsOpen(false); dtwHowtoOpen(false); } catch (_) {} }
+                drawer('dtwRecordDrawer', 'dtwRecordScrim', on, function() {
+                    renderRecord(null);
+                    api('/track-record').then(function(d) { S.record = d; renderRecord(d); }).catch(function(e) { renderRecord({ error: String((e && e.message) || e) }); });
+                });
+            };
             window.dtwListOpen = function(on) {
                 if (on) { try { dtwBuildOpen(false); dtwNewRoomOpen(false); dtwRoomsOpen(false); dtwHowtoOpen(false); } catch (_) {} if (!S.ul || (S.ul.job && S.ul.job.done)) S.ul = ulFresh(); }
                 drawer('dtwListDrawer', 'dtwListScrim', on, function() { renderUl(); if (!(S.pricing || []).length) dtwLoadList(false).then(function() { renderUl(); }); });
@@ -54388,6 +54458,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var p = el('dtwSeatPop'); if (p && p.classList.contains('open')) { dtwSeatOpen(null); return; }
                 var bd = el('dtwBuildDrawer'); if (bd && bd.classList.contains('open')) { dtwBuildOpen(false); return; }
                 var ld = el('dtwListDrawer'); if (ld && ld.classList.contains('open')) { dtwListOpen(false); return; }
+                var td = el('dtwRecordDrawer'); if (td && td.classList.contains('open')) { dtwRecordOpen(false); return; }
                 var nd = el('dtwNewRoomDrawer'); if (nd && nd.classList.contains('open')) { dtwNewRoomOpen(false); return; }
                 var rd = el('dtwRoomsDrawer'); if (rd && rd.classList.contains('open')) { dtwRoomsOpen(false); return; }
                 // with no popover or drawer open, Escape closes the room (Jenna 2026-10-27); a first Escape inside the composer only leaves the field

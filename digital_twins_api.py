@@ -64,7 +64,9 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/panel/<sid>/duplicate  a new room with the same twins, cohorts and seats ('<name> copy'); no questions, nothing paid
   GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
   GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
-  GET  /api/digital-twins/track-record                every scored call the twins made before its outcome, next to what happened (2026-11-17)
+  GET  /api/digital-twins/track-record                the track record a seat may read (2026-11-17): its company's calls and the house's public record, settled
+                                                      and still open, with the summary; ?site=1 is the public view the website shows; staff may pass ?company=
+  POST /api/digital-twins/ledger/<rid>/release        admin: put a client's row on the public record ({public: true}) or take it off
   GET  /api/digital-twins/ledger/summary              admin: the outcome ledger's summary by kind and unit, with the index rows
   POST /api/digital-twins/ledger/<rid>/outcome        admin: what happened on a ledger row (value, distribution, winner, yes or no); the row is scored
   POST /api/digital-twins/ledger/backfill             admin: the first rows (the midterm calls, the NCIS: New York pilot), idempotent
@@ -3110,13 +3112,44 @@ def dt_track_record():
         return err
     from migration import digital_twin_ledger as LG
     s3 = _s3()
-    rows = LG.public_rows(s3, limit=int(request.args.get('limit') or 200))
-    sm = LG.summary(s3)
+    limit = int(request.args.get('limit') or 200)
+    site = str(request.args.get('site') or '').strip().lower() in ('1', 'true', 'yes')
+    staff = CO.is_staff(user, _uname(user))
+    company = _company_filter(user) if staff else CO.caller_company(user, _uname(user))
+    scoped_staff = staff and not company          # a staff seat reads every company unless it asked for one
+    if site:
+        rows, open_rows = LG.public_rows(s3, limit=limit, site=True), []
+        sm = LG.summary(s3, site=True)
+    else:
+        rows = LG.public_rows(s3, limit=limit, site=False, company=company, staff=scoped_staff)
+        open_rows = LG.open_rows(s3, limit=limit, company=company, staff=scoped_staff)
+        sm = LG.summary(s3, scope=True, company=company, staff=scoped_staff)
     public_summary = {'calls_scored': sm.get('n_scored'), 'hit_rate': sm.get('hit_rate'), 'mean_relative_miss': sm.get('mean_rel_error'), 'coverage': sm.get('coverage'),
                       'by_kind': {k: {'n': v.get('n'), 'hit_rate': v.get('hit_rate'), 'mean_relative_miss': v.get('mean_rel_error'), 'mean_tvd': v.get('mean_tvd')} for k, v in (sm.get('by_kind') or {}).items()},
                       'as_of': sm.get('as_of')}
-    return _nocache(jsonify({'success': True, 'rows': rows, 'summary': public_summary,
+    if not staff:
+        for r in rows + open_rows:
+            r.pop('company', None)      # a seat sees its own rows and the public record; the company name adds nothing it does not know
+    return _nocache(jsonify({'success': True, 'rows': rows, 'open': open_rows, 'summary': public_summary, 'staff': staff, 'company': company or '',
+                             'public_url': 'https://www.crosswalknyc.com/twins-track-record.html',
                              'line': 'Every call the twins made before its outcome, next to what happened. The hash on each row dates the call.'}))
+
+
+@bp.route(f'{PREFIX}/ledger/<rid>/release', methods=['POST'])
+def dt_ledger_release(rid):
+    """Admin: put a row on the public record ({public: true}) or take it
+    off. A client's call never reaches the website without this."""
+    user, err = _gate()
+    if err:
+        return err
+    if not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'admin only'}), 403
+    from migration import digital_twin_ledger as LG
+    body = request.get_json(silent=True) or {}
+    rec = LG.release(_s3(), str(rid), bool(body.get('public')))
+    if not rec:
+        return jsonify({'success': False, 'error': 'no such row'}), 404
+    return _nocache(jsonify({'success': True, 'id': rec['id'], 'public': bool(rec.get('public'))}))
 
 
 @bp.route(f'{PREFIX}/ledger/summary', methods=['GET'])

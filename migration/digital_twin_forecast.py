@@ -461,16 +461,17 @@ def _ledger_rows(s3, twin: dict, sess: dict, out: dict, show: str) -> None:
     basis = {'anchor_status': cal.get('scope'), 'firmness': {'word': (out.get('firmness') or {}).get('word')}}
     ep = out['episode']
     twin_key = str(_meta(twin).get('key') or '')
+    company = LG.twin_company_of(twin, twin_key)
     rows = []
     if base > 0 and ep.get('week_one_audience'):
         rows.append(LG.record_prediction(s3, 'forecast', show, {'point': ep['week_one_audience'], 'low': ep.get('low'), 'high': ep.get('high'), 'unit': 'people'},
                                          measure='week_one_audience', twin_key=twin_key, session_id=sid, question='Week-one audience if released', question_kind='forecast',
-                                         audience_class='title', method_version=f"forecast-{VERSION}", basis=basis, post_hoc=post_hoc))
+                                         audience_class='title', method_version=f"forecast-{VERSION}", basis=basis, post_hoc=post_hoc, company=company))
     ser = out.get('series') or {}
     if ser.get('season_completion_pct') is not None:
         rows.append(LG.record_prediction(s3, 'forecast', show, {'point': ser['season_completion_pct'], 'unit': 'pct'}, measure='season_completion_pct', twin_key=twin_key, session_id=sid,
                                          question='Share of episode viewers who watch through the finale', question_kind='forecast', audience_class='title', method_version=f"forecast-{VERSION}",
-                                         basis=basis, post_hoc=post_hoc))
+                                         basis=basis, post_hoc=post_hoc, company=company))
     act = out.get('actual') or {}
     if act.get('week_one_audience') and rows and rows[0]:
         LG.record_outcome(s3, rows[0]['id'], value=act['week_one_audience'], source_class='published', note=str(act.get('note') or '')[:200])

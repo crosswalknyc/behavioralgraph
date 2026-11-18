@@ -18,6 +18,12 @@ Held here:
   * the room: a question lands with a firmness block and a ledger row;
     the chat and the CSV carry the range; a scorecard carries a range per
     money measure;
+  * the record lives in one place for everyone: a row carries its twin's
+    company; a seat reads its own company's calls and the house's public
+    record (settled and open), another company never sees them, the
+    website shows only the public rows, an admin can release a client's
+    row and take it back, a post hoc row is never public, older rows are
+    restamped with their company (Jenna 2026-11-17);
   * nothing anywhere offers a survey or a check with people: the twins
     stand on their own (Jenna 2026-11-17); what settles an early read is
     our own counted read on the audience.
@@ -105,8 +111,62 @@ class Ledger(unittest.TestCase):
         self.assertFalse(ph['public'])
         LG.record_outcome(None, ph['id'], distribution=[{'label': 'A', 'pct': 55.1}, {'label': 'B', 'pct': 44.9}])
         self.assertEqual(LG.summary(None)['n_scored'], 1, 'a post hoc row never counts')
-        self.assertEqual(len(LG.public_rows(None)), 1)
+        # a row with no company behind it is nobody's: not the house's, not public, read by staff alone (2026-11-17)
+        self.assertEqual(len(LG.public_rows(None, site=True)), 0)
+        self.assertEqual(len(LG.public_rows(None, site=False, staff=True)), 1)
+        self.assertEqual(len(LG.public_rows(None, site=False, company='Acme')), 0)
         self.assertEqual(LG.tvd([{'label': 'x', 'pct': 50}], [{'label': 'y', 'pct': 50}]), None)
+
+    def test_the_record_is_scoped_by_company_and_the_site_shows_the_house(self):
+        # Jenna 2026-11-17: the record is not a twin's; it lives in one place. A seat reads its own company's calls and the
+        # house's public record; another company never sees them; the website carries the house's calls and what an admin released
+        acme = LG.record_prediction(None, 'room_count', 'Acme buyers', {'distribution': [{'label': 'Yes', 'pct': 60.0}, {'label': 'No', 'pct': 40.0}], 'point': 60.0, 'unit': 'pct'},
+                                    measure='share:Yes', session_id='a1', question_id='q1', question='Would you renew?', company='Acme Studios')
+        beta = LG.record_prediction(None, 'room_count', 'Beta fans', {'distribution': [{'label': 'Yes', 'pct': 30.0}, {'label': 'No', 'pct': 70.0}], 'point': 70.0, 'unit': 'pct'},
+                                    measure='share:No', session_id='b1', question_id='q1', question='Would you come back?', company='Beta Media')
+        house = LG.record_prediction(None, 'forecast', 'Our own title', {'point': 1_234_567, 'unit': 'people'}, measure='week_one_audience', session_id='h1', company='Crosswalk')
+        self.assertFalse(acme['public']); self.assertFalse(acme['house'])
+        self.assertTrue(house['house']); self.assertTrue(house['public'], 'a house row is public by default')
+        # open calls: each company its own, the house's for everyone, staff everything
+        self.assertEqual(sorted(r['subject'] for r in LG.open_rows(None, company='Acme Studios')), ['Acme buyers', 'Our own title'])
+        self.assertEqual(sorted(r['subject'] for r in LG.open_rows(None, company='Beta Media')), ['Beta fans', 'Our own title'])
+        self.assertEqual(len(LG.open_rows(None, staff=True)), 3)
+        self.assertEqual([r['subject'] for r in LG.open_rows(None, company='Nobody Inc')], ['Our own title'])
+        # settled: the same scope; the website only the public rows
+        LG.record_outcome(None, acme['id'], distribution=[{'label': 'Yes', 'pct': 58.0}, {'label': 'No', 'pct': 42.0}], source_class='panel')
+        LG.record_outcome(None, house['id'], value=1_300_000, source_class='published')
+        self.assertEqual(sorted(r['subject'] for r in LG.public_rows(None, site=False, company='Acme Studios')), ['Acme buyers', 'Our own title'])
+        self.assertEqual([r['subject'] for r in LG.public_rows(None, site=False, company='Beta Media')], ['Our own title'])
+        self.assertEqual([r['subject'] for r in LG.public_rows(None, site=True)], ['Our own title'])
+        self.assertEqual(LG.summary(None, scope=True, company='Acme Studios')['n_scored'], 2)
+        self.assertEqual(LG.summary(None, scope=True, company='Beta Media')['n_scored'], 1)
+        self.assertEqual(LG.summary(None, site=True)['n_scored'], 1)
+        self.assertEqual(LG.summary(None)['n_scored'], 2, 'the firmness layer learns from every scored row')
+        # an admin releases a client's row to the public record, and can take it back
+        LG.release(None, acme['id'], True)
+        self.assertEqual(sorted(r['subject'] for r in LG.public_rows(None, site=True)), ['Acme buyers', 'Our own title'])
+        LG.release(None, acme['id'], False)
+        self.assertEqual([r['subject'] for r in LG.public_rows(None, site=True)], ['Our own title'])
+        # a post hoc row can never be released
+        ph = LG.record_prediction(None, 'call', 'Known', {'call': 'A', 'distribution': [{'label': 'A', 'pct': 60.0}, {'label': 'B', 'pct': 40.0}], 'unit': 'pct'}, session_id='p1', post_hoc=True, company='Crosswalk')
+        LG.record_outcome(None, ph['id'], winner='A', distribution=[{'label': 'A', 'pct': 61.0}, {'label': 'B', 'pct': 39.0}])
+        self.assertFalse(LG.release(None, ph['id'], True)['public'])
+        # the public view carries no company or key
+        row = LG.public_rows(None, site=True)[0]
+        self.assertNotIn('question_text', row)
+        for k in ('subject', 'what', 'said', 'happened', 'called_on', 'settled_on', 'hash'):
+            self.assertIn(k, row)
+
+    def test_restamp_puts_the_company_on_older_rows(self):
+        old = LG.record_prediction(None, 'room_count', 'Old row', {'distribution': [{'label': 'Yes', 'pct': 50.0}, {'label': 'No', 'pct': 50.0}], 'point': 50.0, 'unit': 'pct'},
+                                   measure='share:Yes', session_id='o1', question_id='q1', public=True)
+        rec = LG.load_record(None, old['id'])
+        del rec['house']; rec['public'] = True
+        LG._save(None, rec)
+        self.assertEqual(LG.restamp(None), 1)
+        rec = LG.load_record(None, old['id'])
+        self.assertFalse(rec['house']); self.assertFalse(rec['public'], 'a row with no company behind it leaves the public record')
+        self.assertEqual(LG.restamp(None), 0, 'idempotent')
 
     def test_backfill_is_idempotent_and_public(self):
         rows = LG.backfill_known(None)
@@ -243,7 +303,8 @@ class InTheRoom(unittest.TestCase):
         rows = LG.load_index(None)['records']
         self.assertEqual(len(rows), 1)
         self.assertFalse(rows[0]['post_hoc'])
-        self.assertTrue(rows[0]['public'])
+        self.assertFalse(rows[0]['public'], "a client room's call is on the ledger, never on the public record by itself")
+        self.assertTrue(LG.visible(rows[0], staff=True))
 
 
 if __name__ == '__main__':
