@@ -2035,6 +2035,17 @@ def session_csv(session: dict) -> str:
     for q in session.get('questions') or []:
         for v in q.get('voices') or []:
             w.writerow([session.get('id'), q.get('id'), v.get('name'), v.get('age'), v.get('city'), v.get('segment'), v.get('line')])
+    # a Predictive Analytics room (2026-11-18): the business question and the outcome, one line each, after the record
+    try:
+        from migration import digital_twin_guided as GD
+        glines = GD.outcome_lines(session)
+    except Exception:
+        glines = []
+    if glines:
+        w.writerow([])
+        w.writerow(['Session', 'Predictive Analytics', 'Line'])
+        for ln in glines:
+            w.writerow([session.get('id'), '', ln])
     # what the room knew and what people were saying (2026-11-04), one line each
     if any((q.get('facts_used') or q.get('talk')) for q in session.get('questions') or []):
         w.writerow([])

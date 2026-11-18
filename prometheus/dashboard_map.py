@@ -160,8 +160,8 @@ PRODUCTS = (
     {'value': 'digitalTwinsIQ', 'label': 'Digital Twins IQ', 'rule': _r_twins,
      'aliases': ('digital twins iq', 'digital twins', 'digital twin', 'twins iq', 'twin iq', 'the twins tab', 'twin dashboard'),
      'picker': 'the Twins tab',
-     'picker_line': "Your twins are listed on the Twins tab; Greenlight, Launch, Focus Group IQ, Pilot Testing, Trailers, Titles and Key Art and Norms are the tabs across the top.",
-     'tabs': ('Twins', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'),
+     'picker_line': "Your twins are listed on the Twins tab; Predictive Analytics, Greenlight, Launch, Focus Group IQ, Pilot Testing, Trailers, Titles and Key Art and Norms are the tabs across the top.",
+     'tabs': ('Twins', 'Predictive Analytics', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'),
      'lands': 'a finished twin appears on the Twins tab in Digital Twins IQ',
      'blurb': 'Digital Twins IQ is where a twin of an audience is built and asked questions, in a focus group, a pilot test or a lab.'},
     {'value': 'intentIQ', 'label': 'Attribution IQ', 'rule': _r_attribution,
@@ -264,6 +264,7 @@ product_by_value = product
 # (product value, tab id the page uses, label as the tab shows it, aliases)
 TABS = (
     ('digitalTwinsIQ', 'twins', 'Twins', ('twins tab', 'the twins list')),
+    ('digitalTwinsIQ', 'predict', 'Predictive Analytics', ('predictive analytics', 'predictive analytics tab', 'the wizard', 'business question', 'predict')),
     ('digitalTwinsIQ', 'greenlight', 'Greenlight', ('greenlight', 'green light', 'script read', 'concept test', 'greenlight lab')),
     ('digitalTwinsIQ', 'launch', 'Launch', ('launch tab', 'launch lab', 'spend engine', 'the launch')),
     ('digitalTwinsIQ', 'panel', 'Focus Group IQ', ('focus group iq', 'focus group', 'focus groups', 'the room', 'panel lab', 'the panel')),

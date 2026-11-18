@@ -812,12 +812,13 @@ class Page(unittest.TestCase):
         cls.block = cls.html[start:cls.html.index('</script>', i)]
 
     def test_every_new_tab_is_on_the_page(self):
-        for tab, pane, host in (('trailer', 'dtwTabTrailer', 'dtwTrConsole'), ('titles', 'dtwTabTitles', 'dtwTiConsole'), ('norms', 'dtwTabNorms', 'dtwNoConsole')):
+        # Predictive Analytics (Jenna 2026-11-18) is its own tab under Digital Twins, right after Twins
+        for tab, pane, host in (('predict', 'dtwTabPredict', 'dtwPaConsole'), ('trailer', 'dtwTabTrailer', 'dtwTrConsole'), ('titles', 'dtwTabTitles', 'dtwTiConsole'), ('norms', 'dtwTabNorms', 'dtwNoConsole')):
             self.assertIn(f'data-tab="{tab}"', self.html, tab)
             self.assertIn(f'id="{pane}"', self.html, pane)
             self.assertIn(f'id="{host}"', self.html, host)
-        self.assertIn("var TABS = ['twins', 'greenlight', 'launch', 'spend', 'panel', 'pilot', 'trailer', 'titles', 'norms'];", self.html)
-        for label in ('>Trailers<', '>Titles and Key Art<', '>Norms<', '>Greenlight<'):
+        self.assertIn("var TABS = ['twins', 'predict', 'greenlight', 'launch', 'spend', 'panel', 'pilot', 'trailer', 'titles', 'norms'];", self.html)
+        for label in ('>Predictive Analytics<', '>Trailers<', '>Titles and Key Art<', '>Norms<', '>Greenlight<'):
             self.assertIn(label, self.html, label)
         self.assertIn('flex-wrap: wrap', self.html[self.html.index('.dtw-segs {'):self.html.index('.dtw-segs {') + 200])
 
@@ -827,7 +828,7 @@ class Page(unittest.TestCase):
         bar = self.html[self.html.index('<div class="dtw-segs" role="tablist">'):self.html.index('<div class="dtw-fg-acts" id="dtwFgActs"')]
         labels = re.findall(r'role="tab" onclick="dtwTab\(\'[a-z]+\'\)">([^<]+)</button>', bar)
         # Launch holds the plan and the Spend Engine as two options (Jenna 2026-11-03: "combine launch and spend engine into one")
-        self.assertEqual(labels, ['Twins', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'])
+        self.assertEqual(labels, ['Twins', 'Predictive Analytics', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'])
         self.assertNotIn('id="dtwTabSpend"', self.html)
         launch = self.html[self.html.index('<section id="dtwTabLaunch"'):self.html.index('<section id="dtwTabPanel"')]
         for need in ('data-la="plan"', 'data-la="spend"', "dtwLaunchPick('plan')", "dtwLaunchPick('spend')", '>The plan<', '>Spend Engine<',

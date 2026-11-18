@@ -172,7 +172,7 @@ class Routing(unittest.TestCase):
                      'Brand Partnership IQ', 'Flywheel', 'Micro-Series', 'Fin IQ', 'Brand Tracking', 'SF Conversion', 'Flywheel Conversion', 'Blue IQ'):
             self.assertIn(want, labels)
         self.assertEqual([t[2] for t in M.TABS if t[0] == 'digitalTwinsIQ'],
-                         ['Twins', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'])
+                         ['Twins', 'Predictive Analytics', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'])
         self.assertEqual(M.picker_of('journeyIQ'), 'Select a journey')
         self.assertEqual(M.picker_of('profileIQ'), 'Select Profile')
         self.assertEqual(M.deep_link('journeyIQ'), 'https://dashboard.crosswalknyc.com/?view=journeyIQ')

@@ -76,6 +76,13 @@ def test_api_path_tabs():
     assert DT.tab_for_api_path('/api/digital-twins/digital-twins/x.json.gz/spend/activate') == 'launch'
     assert DT.tab_for_api_path('/api/digital-twins/pilot-norms') == 'norms'
     assert DT.tab_for_api_path('/api/digital-twins/digital-twins/x.json.gz/pilot/open') is None
+    # Predictive Analytics (2026-11-18) is its own tab; its routes and aliases resolve to it
+    assert DT.tab_for_api_path('/api/digital-twins/digital-twins/x.json.gz/guided/plan') == 'predict'
+    assert DT.tab_for_api_path('/api/digital-twins/digital-twins/x.json.gz/guided/abc/report.pdf') == 'predict'
+    assert DT.normalize_tab('predictive_analytics') == 'predict'
+    assert DT.normalize_tab('Predictive') == 'predict'
+    assert DT.tab_allowed({'role': 'user', DT.TABS_FIELD: ['predict']}, 'predict') is True
+    assert DT.tab_allowed({'role': 'user', DT.TABS_FIELD: ['panel']}, 'predict') is False
 
 
 def test_index_hides_denied_tabs():
@@ -93,7 +100,7 @@ def test_admin_tab_checkboxes():
                              'templates', 'admin.html'), encoding='utf-8').read()
     assert 'allowAllDigitalTwinsTabs' in html
     assert 'allowed_digital_twins_tabs: getAllowedDigitalTwinsTabsPayload()' in html
-    for tab in ('twins', 'panel', 'pilot', 'greenlight', 'launch', 'trailer', 'titles', 'norms'):
+    for tab in ('twins', 'predict', 'panel', 'pilot', 'greenlight', 'launch', 'trailer', 'titles', 'norms'):
         assert f'data-tab="{tab}"' in html
 
 

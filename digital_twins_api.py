@@ -64,6 +64,11 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/panel/<sid>/duplicate  a new room with the same twins, cohorts and seats ('<name> copy'); no questions, nothing paid
   GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
   GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
+  POST /api/digital-twins/<key>/guided/plan           the guided focus group (2026-11-18): a business question in; the goal, what counts as yes and
+                                                      five to eight questions from the wide to the narrow out (nothing charged)
+  POST /api/digital-twins/<key>/guided/run            open a room for the plan (one group), run the questions in order, the outcome lands on the session
+  POST /api/digital-twins/<key>/guided/<sid>/resume   a stopped guided run picks up at the first unanswered question
+  GET  /api/digital-twins/<key>/guided/<sid>/report | report.pdf   the report of the whole process (data for the page; the PDF)
   GET  /api/digital-twins/track-record                the track record a seat may read (2026-11-17): its company's calls and the house's public record, settled
                                                       and still open, with the summary; ?site=1 is the public view the website shows; staff may pass ?company=
   POST /api/digital-twins/ledger/<rid>/release        admin: put a client's row on the public record ({public: true}) or take it off
@@ -3107,6 +3112,150 @@ def dt_pilot_brief(key, sid):
     brief = CMP.activation_brief(sess, payload)
     DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'brief': brief, 'session_id': sid}))
+
+
+# ---- Predictive Analytics (Jenna 2026-11-18): its own tab; the audience, the business question, the room's questions planned from the
+#      wide to the narrow, run in order by Prometheus, the outcome that answers the question, and the report of the whole process
+@bp.route(f'{PREFIX}/<path:key>/guided/plan', methods=['POST'])
+def dt_guided_plan(key):
+    """The plan for a business question on this twin: the goal restated,
+    what counts as yes, five to eight questions from the wide to the
+    narrow, the one that settles it. Nothing is charged here."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    goal = ' '.join(str(body.get('goal') or body.get('question') or '').split())
+    if not goal:
+        return jsonify({'success': False, 'error': 'Say what you need to know, in your own words.'}), 400
+    from migration import digital_twin_guided as GD
+    plan_doc = GD.plan(payload, goal, str(body.get('kind') or ''))
+    return _nocache(jsonify({'success': True, 'plan': plan_doc, 'kinds': [{'id': k[0], 'label': k[1], 'blurb': k[2], 'example': k[3]} for k in GD.KINDS]}))
+
+
+def _guided_start(user, payload, key, sess, plan_doc):
+    from migration import digital_twin_guided as GD
+    s3 = _s3()
+    return GD.start_run(s3, payload, key, sess, plan_doc, username=_uname(user), twins_by_key={key: payload}, voices_fn=_voices_fn(), usage_extras=_usage_extras(user),
+                        save=lambda p: DT.save_twin(_s3(), key, p))
+
+
+@bp.route(f'{PREFIX}/<path:key>/guided/run', methods=['POST'])
+def dt_guided_run(key):
+    """Open a room for the plan (one group, charged as any room is) and
+    run its questions in order on a background thread; the outcome lands
+    on the session when the last one does. Returns the session and the
+    job to poll."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    from migration import digital_twin_guided as GD
+    plan_doc = body.get('plan') if isinstance(body.get('plan'), dict) else None
+    qs = [q for q in ((plan_doc or {}).get('questions') or []) if isinstance(q, dict) and ' '.join(str(q.get('q') or '').split())]
+    if not plan_doc or not qs:
+        return jsonify({'success': False, 'error': 'Plan the room first.'}), 400
+    plan_doc = dict(plan_doc, questions=qs[:GD.MAX_QUESTIONS])
+    try:
+        fi = int(plan_doc.get('final'))
+    except (TypeError, ValueError):
+        fi = len(plan_doc['questions']) - 1
+    plan_doc['final'] = fi if 0 <= fi < len(plan_doc['questions']) else len(plan_doc['questions']) - 1
+    from migration import digital_twin_panel as P
+    from migration import digital_twin_room as ROOM
+    from migration.digital_twin_synthesis import hydrate_identity_from_profile
+    s3 = _s3()
+    try:
+        hydrate_identity_from_profile(payload, s3)
+    except Exception:
+        traceback.print_exc()
+    plan = _plan(user)
+    tier = PR.normalize_tier(body.get('tier'), plan)
+    gate = _open_gate(user, tier, plan)
+    if gate is not None:
+        return gate
+    title = str(body.get('title') or '')[:120] or str(plan_doc.get('goal') or 'Guided focus group')[:120]
+    sess = P.open_session([payload], in_room=0, title=title, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
+    sess['twin_keys'] = [key]
+    sess['product'] = 'predict'     # a Predictive Analytics room: the Rooms list and the chat say so
+    PR.record_tier(sess, tier, plan)
+    if len(plan_doc['questions']) > PR.question_cap(sess, plan):
+        return jsonify({'success': False, 'error': f"This room takes up to {PR.question_cap(sess, plan)} questions; the plan has {len(plan_doc['questions'])}."}), 400
+    funds = _charge_group(user, payload, sess, kind='panel', tier=tier, plan=plan)
+    if funds is not None:
+        return funds
+    payload.setdefault('panel_sessions', []).insert(0, sess)
+    try:
+        try:
+            ROOM.ensure_personas(sess, {key: payload}, session_seed=str(sess.get('id') or ''))
+        except Exception:
+            traceback.print_exc()
+        PT = _portraits()
+        if PT is not None:
+            try:
+                PT.attach_portraits(sess, s3)
+            except Exception:
+                pass
+        DT.save_twin(s3, key, payload)
+    except Exception:
+        traceback.print_exc()
+        _refund_group(user, sess, 'Guided focus group did not open')
+        payload['panel_sessions'] = [x for x in payload.get('panel_sessions') or [] if x is not sess]
+        return jsonify({'success': False, 'error': 'The room could not be opened. Nothing was charged; try again in a moment.'}), 500
+    _team_notice('notify_room_opened', payload, sess, username=_uname(user), via='dashboard')
+    job = _guided_start(user, payload, key, sess, plan_doc)
+    return _nocache(jsonify({'success': True, 'session_id': sess['id'], 'session': sess, 'job_id': job.get('job_id'), 'guided': GD.public_guided(sess),
+                             'message': 'On it. The room is seated; the questions run in order and the outcome lands when the last one does.'}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/guided/<sid>/report', methods=['GET'])
+@bp.route(f'{PREFIX}/<path:key>/guided/<sid>/report.pdf', methods=['GET'])
+def dt_guided_report(key, sid):
+    """The report of the whole process: as data for the page, or the
+    PDF (the cover with the question and the call, the outcome, one page
+    per question in the order it ran, who sat in the room)."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess or not isinstance(sess.get('guided'), dict):
+        return jsonify({'success': False, 'error': 'No Predictive Analytics run on this room.'}), 404
+    from migration import digital_twin_guided as GD
+    if request.path.endswith('.pdf'):
+        PT = _portraits()
+        portrait_fn = (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
+        return Response(GD.build_report_pdf(payload, sess, portrait_fn=portrait_fn), mimetype='application/pdf',
+                        headers={'Content-Disposition': f'attachment; filename="{GD.report_filename(payload, sess, ".pdf")}"'})
+    return _nocache(jsonify({'success': True, 'report': GD.report(payload, sess), 'guided': GD.public_guided(sess)}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/guided/<sid>/resume', methods=['POST'])
+def dt_guided_resume(key, sid):
+    """A guided run that stopped picks up at the first unanswered
+    question. Nothing is charged again."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess or not isinstance(sess.get('guided'), dict) or not (sess['guided'].get('plan') or {}).get('questions'):
+        return jsonify({'success': False, 'error': 'No guided run on this room.'}), 404
+    if sess['guided'].get('status') == 'running':
+        return _nocache(jsonify({'success': True, 'job_id': sess['guided'].get('job_id'), 'guided': __import__('migration.digital_twin_guided', fromlist=['public_guided']).public_guided(sess), 'note': 'Still running.'}))
+    from migration import digital_twin_guided as GD
+    job = _guided_start(user, payload, key, sess, sess['guided']['plan'])
+    return _nocache(jsonify({'success': True, 'job_id': job.get('job_id'), 'guided': GD.public_guided(sess)}))
 
 
 @bp.route(f'{PREFIX}/track-record', methods=['GET'])

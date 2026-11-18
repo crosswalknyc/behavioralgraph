@@ -35,11 +35,12 @@ RUNS_FIELD = 'allowed_digital_twin_runs'
 TABS_FIELD = 'allowed_digital_twins_tabs'
 # Visible strip on Digital Twins IQ. ['*'] is every current and future tab.
 TAB_KEYS = (
-    'twins', 'panel', 'pilot', 'greenlight', 'launch', 'trailer', 'titles', 'norms',
+    'twins', 'predict', 'panel', 'pilot', 'greenlight', 'launch', 'trailer', 'titles', 'norms',
 )
 TAB_ALIASES = {
     'twin': 'twins', 'create': 'twins', 'creation': 'twins',
     'twins_creation': 'twins', 'twin_creation': 'twins',
+    'predictive': 'predict', 'predictive_analytics': 'predict', 'prediction': 'predict', 'guided': 'predict',
     'focus': 'panel', 'focus_group': 'panel', 'focus_group_iq': 'panel',
     'pilot_testing': 'pilot',
     'script': 'greenlight', 'concept': 'greenlight',
@@ -242,6 +243,8 @@ def tab_for_api_path(path: str):
         return 'launch'
     if rest.endswith('/run') or '/run/' in rest:
         return 'launch'
+    if '/guided/' in rest:
+        return 'predict'
     if '/panel/' in rest or rest.endswith('/panel/open'):
         return 'panel'
     if '/pilot/' in rest or rest.endswith('/pilot/open') or '/pilot/setups' in rest:
@@ -842,6 +845,21 @@ HOW_TO = [
         'cost_key': 'digital_twin_spend', 'export': 'Export moves (CSV) under Spend Engine on the Launch tab; the plan also exports with the twin.',
     },
     {
+        'id': 'predict', 'title': 'Predictive Analytics',
+        'answers': ('One business question, answered by the audience: will this move lift that result, which option wins, should we do it, what will they pay. '
+                    'You pick the audience and say the question in your own words; Prometheus plans the room, runs it from the big picture down to the question itself, '
+                    'and hands you the report of the whole process with the call at the top.'),
+        'put_in': ('The Predictive Analytics tab walks you through it. The audience (a twin; build one first if it is not there), then the question in plain words '
+                   '(If I do X, will Y happen? Will X win? Should I do X? What will they pay? or anything else), and a look at the plan: the goal restated, what would count as yes, '
+                   'five to eight questions from the wide to the narrow. Change a question or drop one, then run it. Nothing else to set.'),
+        'type_this': ['Will more people buy season two if we add a holiday boxed set at Target?', 'Should we sign her for a two-year activewear deal?', 'Will this audience pay $45 for a hoodie from her collection?'],
+        'attach': 'Nothing is needed.',
+        'comes_back': ('The room runs on its own; each answer lands as it finishes and the outcome lands with the last one. The report: the call in one line, why, the numbers it rests on, '
+                       'who in the room drove it, what would change it, one question worth asking next, then every question in the order it ran with its split, the read and the voices, '
+                       'and who sat in the room. The room itself is saved under Focus Group IQ, where you can keep asking.'),
+        'cost_key': 'group', 'export': 'Predictive Analytics tab: the report as a PDF, or the room as a CSV.',
+    },
+    {
         'id': 'panel', 'title': 'Focus Group IQ',
         'answers': 'A focus group Prometheus moderates for you (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and Prometheus runs the room: the %s and people counts, the split by segment, a one-line read and a few panelist voices, in a minute or two. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
         'put_in': (f'A name for the room (you can change it later on the room page), the twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), '
@@ -945,6 +963,8 @@ def how_to(price_fn=None) -> dict:
         row = dict(it)
         if it['id'] == 'panel':
             row['cost'] = f"A focus group room is {group}"
+        elif it['id'] == 'predict':
+            row['cost'] = f"A Predictive Analytics run is {group}; planning it is free"
         elif it['id'] == 'pilot':
             row['cost'] = f"A pilot test (a feature, an episode, a binge test, a rough cut or a critics room) is {group}; a recut on the same room is a new group"
         elif it['id'] == 'twin':
