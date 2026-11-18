@@ -110,7 +110,7 @@ BACKUP = 'trends_iq_snapshots/_backups/{folder}.pre_history_backfill_{ts}.json'
 DEFAULT_RAILS = (
     'netflix', 'max', 'hulu', 'primevideo', 'disneyplus', 'paramountplus',
     'peacock', 'amcplus', 'lionsgateplus', 'moviesphereplus', 'starz',
-    'mgmplus', 'britbox',
+    'mgmplus', 'britbox', 'hallmarkplus',
     'tubi', 'pluto', 'roku', 'xumo',
 )
 

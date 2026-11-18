@@ -388,6 +388,12 @@ STREAMING_PLATFORMS = [
     # could not satisfy the subset invariant, and for the two sources
     # that were tried and do not work.
     ('lionsgateplus', 'Lionsgate+', False),
+    # 2026-11-18 (Jenna): Hallmark+, Hallmark Media's own subscription
+    # service (Hallmark Movies Now until September 2024). Read in the
+    # Mac residential lane off the site's own JSON API, which also
+    # publishes the service's 'Top Movies Today' chart; the site
+    # answers a geo wall from the build box.
+    ('hallmarkplus', 'Hallmark+', False),
     ('espnplus',   'ESPN+',        False),
     # 2026-08-20: BritBox (BBC + ITV joint venture, US premium British
     # TV catalog) and MGM+ (Amazon-owned premium, formerly Epix). Both
@@ -448,6 +454,8 @@ STREAMING_PLATFORMS = [
     ('peacock_amazon', 'Peacock on Amazon', False),
     ('britbox_amazon', 'BritBox on Amazon', False),
     ('mgmplus_amazon', 'MGM+ on Amazon',    False),
+    # 2026-11-18 (Jenna): Hallmark+ as carried on Prime Video Channels.
+    ('hallmarkplus_amazon', 'Hallmark+ on Amazon', False),
 ]
 
 # 2026-08-20: Gaming tab. First platform was Xbox Game Pass Ultimate;
@@ -4619,6 +4627,13 @@ _AUDIENCE_NOUN_BY_KIND_PLATFORM = {
     ('film', 'lionsgateplus'):     'US views on Lionsgate+, carried on Amazon',
     ('tv', 'lionsgateplus'):       'US views on Lionsgate+, carried on Amazon',
     ('title', 'lionsgateplus'):    'US views on Lionsgate+, carried on Amazon',
+    # 2026-11-18: Hallmark+ and its Prime Video Channels breakout.
+    ('film', 'hallmarkplus'):      'US views on Hallmark+, every distribution path',
+    ('tv', 'hallmarkplus'):        'US views on Hallmark+, every distribution path',
+    ('title', 'hallmarkplus'):     'US views on Hallmark+, every distribution path',
+    ('film', 'hallmarkplus_amazon'):  'US views on Hallmark+ through Prime Video Channels',
+    ('tv', 'hallmarkplus_amazon'):    'US views on Hallmark+ through Prime Video Channels',
+    ('title', 'hallmarkplus_amazon'): 'US views on Hallmark+ through Prime Video Channels',
 }
 
 
@@ -4945,6 +4960,9 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'peacock_amazon':  'peacock',
     'britbox_amazon':  'britbox',
     'mgmplus_amazon':  'mgmplus',
+    # 2026-11-18: Hallmark+ and its Amazon breakout.
+    'hallmarkplus':        'hallmarkplus',
+    'hallmarkplus_amazon': 'hallmarkplus',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See
@@ -11836,6 +11854,7 @@ _STREAM_DEPTH_ALIAS = {
     'max_amazon':     'max',
     'britbox_amazon': 'britbox',
     'mgmplus_amazon': 'mgmplus',
+    'hallmarkplus_amazon': 'hallmarkplus',
 }
 
 

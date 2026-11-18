@@ -57,6 +57,8 @@
     "google_trends_wide.py",
     "headline_estimates.py",
     "hulu.py",
+    "hallmarkplus.py",
+    "hallmarkplus_amazon.py",
     "hulu_popular.py",
     "instagram.py",
     "instagram_hashtags.py",

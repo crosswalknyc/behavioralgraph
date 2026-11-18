@@ -142,6 +142,12 @@ RESIDENTIAL_SCRAPERS = [
     # runs here so the mirror refreshes in the same pass rather than
     # waiting for the next Hetzner batch.
     ('starz_amazon',  'Starz on Amazon'),
+    # Hallmark+ (2026-11-18, Jenna): the site's own JSON API (Accedo)
+    # answers anonymously from a US residential IP, catalog rails and
+    # the service's 'Top Movies Today' chart included. From the build
+    # box every call 301s to a Hallmark Media 'availability' landing
+    # page, so it runs here. No session, no cookies.
+    ('hallmarkplus',  'Hallmark+'),
     # Xbox Game Pass Ultimate (2026-08-20): Gaming tab. Parses
     # window.__PRELOADED_STATE__ on /en-US/play for the "Most popular
     # on cloud" SIGL rail, then hydrates the top 25 product IDs via

@@ -45,6 +45,7 @@ _SERVICE_BY_PATH_HINT = {
     'britbox': 'britbox', 'amcplus': 'amc',
     'moviesphereplus': 'moviesphere',
     'lionsgateplus': 'lionsgate',
+    'hallmarkplus': 'hallmark',
 }
 
 # A rail that is one service carried on another names both, and both
@@ -54,6 +55,7 @@ _SERVICE_BY_PATH_HINT = {
 # `starz_amazon` resolves here rather than falling to `starz`.
 _EXTRA_OWN_SERVICES = {
     'starz_amazon': {'starz', 'prime'},
+    'hallmarkplus_amazon': {'hallmark', 'prime'},
 }
 
 

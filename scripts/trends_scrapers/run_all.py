@@ -226,6 +226,11 @@ SCRAPERS = [
      'BritBox on Amazon', 'streaming'),
     ('mgmplus_amazon', 'scripts.trends_scrapers.mgmplus_amazon',
      'MGM+ on Amazon', 'streaming'),
+    # 2026-11-18 (Jenna): Hallmark+ on Amazon. S3-only mirror of the
+    # residentially read Hallmark+ snapshot; the parent itself runs in
+    # the Mac lane (`local_residential_run.py`) behind a geo wall.
+    ('hallmarkplus_amazon', 'scripts.trends_scrapers.hallmarkplus_amazon',
+     'Hallmark+ on Amazon', 'streaming'),
     # Streaming depth extender (2026-09-09, Jenna: every list carries
     # 100+ items where the source has them). JustWatch top-100 films +
     # top-100 shows per platform for the residential-scraped streamers

@@ -79,6 +79,10 @@ _PLATFORMS: list[tuple[str, str, str]] = [
     ('britbox',    'BritBox',     'bbo'),
     ('mgmplus',    'MGM+',        'epx'),
     ('starz',      'Starz',       'stz'),
+    # 2026-11-18: Hallmark+. JustWatch carries no standalone package
+    # for the service; `ahm` is Hallmark+ as an Amazon Channel, which
+    # is the same catalog and the same entitlement, so it stands in.
+    ('hallmarkplus', 'Hallmark+',  'ahm'),
 ]
 
 _PER_KIND_LIMIT = 100

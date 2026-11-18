@@ -1151,6 +1151,7 @@ def _collect_all_items() -> list[dict]:
                          ('lionsgateplus', 'Lionsgate+'),
                          ('britbox',       'BritBox'),
                          ('mgmplus',       'MGM+'),
+                         ('hallmarkplus',  'Hallmark+'),
                          ('starz',         'Starz'),
                          ('espnplus',      'ESPN+')):
         snap = _read(slug) or {}

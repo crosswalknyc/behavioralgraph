@@ -657,6 +657,11 @@ _STREAMING_SLUGS = (
     # own Prime Video storefront. Anchors + ceiling live in
     # _STREAMING_PLATFORMS_META below.
     ('lionsgateplus', 'Lionsgate+'),
+    # 2026-11-18: Hallmark+ (Hallmark Media's own subscription service,
+    # read residentially off the site's own JSON API, which also carries
+    # the service's 'Top Movies Today' chart). Anchors + ceiling live in
+    # _STREAMING_PLATFORMS_META below.
+    ('hallmarkplus',  'Hallmark+'),
 )
 
 
@@ -3089,6 +3094,68 @@ _STREAMING_PLATFORMS_META = [
          'the same storefront drawn from the same library, which is a '
          'different service with a different audience.'
      )},
+    # 2026-11-18: Hallmark+. Hallmark Media's subscription service, the
+    # September 2024 rebrand of Hallmark Movies Now, US only, $7.99 a
+    # month or $79.99 a year with retail benefits attached.
+    #
+    # How the level was reached:
+    #   1. Hallmark's platform vendor reports the service launched to
+    #      "over one million users" at the rebrand, and Hallmark Media's
+    #      president said in August 2026 that subscribers grew 31% year
+    #      over year, the second-fastest among the niche services it
+    #      compares itself to (Acorn TV, AMC+, BritBox, PBS Masterpiece,
+    #      Shudder, Starz, Discovery+), behind only MGM+. Neither has
+    #      published a current total; a trade aggregator's 3.5M claim
+    #      is unsourced and is not used.
+    #   2. One million-plus at September 2024 compounding near 31% a
+    #      year puts the service at about 1.4M to 1.7M US subscriber
+    #      ACCOUNTS in November 2026, in the window where the holiday
+    #      run adds most of its gross.
+    #   3. The audience is engaged for its size: Hallmark says Hope
+    #      Valley: 1874 reached more than a third of subscribers, and
+    #      the base is the Hallmark Channel audience that organises
+    #      watch parties and buys the merchandise. Hallmark properties
+    #      were 0.8% of US TV viewing in May 2026 and 1.2% in December
+    #      (Nielsen Gauge), the large majority of that linear.
+    # Accounts are not people and the base is older and couple-heavy,
+    # so about 1.7 viewers an account; a film-led service opens on
+    # about 2.4 days a week for a weekly active, and the season drives
+    # a December peak well above the spring floor.
+    {'key': 'hallmarkplus',
+     'label': 'Hallmark+',
+     # Weekly cap for one title: the flagship Countdown to Christmas
+     # premiere weekend or a Hope Valley: 1874 episode week at about
+     # 24K-33K accounts a day, times seven, with headroom for the
+     # December peak.
+     'ceiling': 247_613,
+     'anchors': (
+         "Hallmark+ is Hallmark Media's own subscription service (the "
+         'September 2024 rebrand of Hallmark Movies Now), US only, about '
+         '1.4-1.7M US subscriber accounts in late 2026 after a million-plus '
+         'launch base and about 31% year-over-year growth. Counted in '
+         'ACCOUNTS: a view is one account playing one title on one day. '
+         'A loyal, older, female-skewing base that watches Christmas and '
+         'mystery movies in volume; the top 100 titles sum near 0.22 '
+         'views per account per day, about 320K-370K, with a December '
+         'peak and a spring floor. Levels: the flagship of the week (a '
+         'new Countdown to Christmas premiere on its first weekend, a '
+         'Hope Valley: 1874 or When Calls the Heart episode week, the '
+         'Mistletoe Murders or The Way Home season drop) 24K-33K US '
+         'accounts a day; steady-state top-10 9K-24K; ranks 11-40 '
+         '3K-9K; ranks 41-100 1.2K-3K; deep catalog (older Hallmark '
+         'Channel movies, acquired British mysteries, Hallmark Hall of '
+         'Fame) 150-1.2K. The service publishes its own chart, Top '
+         'Movies Today, twenty deep, films only; where a title carries a '
+         'position on it the number descends across those positions. '
+         'IMPORTANT: Hallmark+ the streaming service, NOT Hallmark '
+         'Channel, Hallmark Mystery or Hallmark Family, the cable '
+         'networks, whose Nielsen ratings are linear households and run '
+         'many times larger; a movie that drew 3M on Hallmark Channel '
+         'on Saturday night does not carry that number here. NOT the '
+         'free Hallmark Movies & More FAST channel. A title here never '
+         'reaches a Nielsen streaming Top-10 threshold. Reason from the '
+         'account base and these shares.'
+     )},
     # 2026-09-15: Starz as carried on Amazon Prime Video Channels.
     # `derived_from` marks it as a DISTRIBUTION PATH of another entry
     # rather than a service of its own: it is never put in front of
@@ -3200,6 +3267,21 @@ _STREAMING_PLATFORMS_META = [
          'which is the share of MGM+ US streaming that watches inside '
          'Prime Video rather than through cable carriage, the MGM+ app '
          'or another storefront.'
+     )},
+    # 2026-11-18: Hallmark+ as carried on Amazon Prime Video Channels.
+    # Hallmark+'s ceiling x 0.420 (top of the film band): 247,613 x
+    # 0.420 = 103,997. Band and working in `carriage_mix.py` under
+    # `hallmarkplus`, registry in `derived_rails.py`.
+    {'key': 'hallmarkplus_amazon',
+     'label': 'Hallmark+ on Amazon',
+     'ceiling': 103_997,
+     'derived_from': 'hallmarkplus',
+     'anchors': (
+         'Hallmark+ sold through Amazon Prime Video Channels. Same '
+         'catalog and same entitlement as Hallmark+; what differs is '
+         'the audience, which is the share of Hallmark+ US streaming '
+         'that watches inside Prime Video rather than in the Hallmark+ '
+         'app, another storefront or a cable on-demand path.'
      )},
 ]
 
@@ -4002,6 +4084,12 @@ _CHART_LABEL_TO_PLATFORM = (
     ('lionsgate+',       'lionsgateplus'),
     ('lionsgate plus',   'lionsgateplus'),
     ('lionsgateplus',    'lionsgateplus'),
+    # 2026-11-18: Hallmark+. No bare 'hallmark' key on purpose - the
+    # cable networks and the free FAST channel share the name and are
+    # not on the Streaming tab, so only the '+' spellings route here.
+    ('hallmark+',        'hallmarkplus'),
+    ('hallmark plus',    'hallmarkplus'),
+    ('hallmarkplus',     'hallmarkplus'),
     # FAST-channel platforms (chart-label prefixes from `_FAST_SLUGS`).
     # 'xumo' must sit with the FAST group; the Streaming tab has no
     # Xumo panel.
@@ -8994,6 +9082,23 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
         'mode':  'collection',
         'collections': ('starz top 10 movies today',),
         'depth': 10,
+    },
+    # Hallmark+ publishes one, on its movies page, and the collection
+    # behind the rail describes itself as 'Dynamic, Top 20 Movies
+    # Today': computed by the service, dated, twenty deep. Films only;
+    # the series page is browse rails and 'Hallmark Original Series'
+    # is the service's own shelf, not a ranking. Read as viewing: on
+    # 2026-11-18 it ran five new Countdown to Christmas premieres and
+    # then catalog the audience went back to (A Biltmore Christmas
+    # 2023, A Shoe Addict's Christmas 2018, Christmas Under Wraps 2014,
+    # Miss Christmas 2017), which a merchandising shelf does not do.
+    # The scraper stamps the rows `collection = 'Hallmark+ Top Movies
+    # Today'` and the rest of the catalog a blank collection.
+    'hallmarkplus': {
+        'label': 'Hallmark+ Top Movies Today',
+        'mode':  'collection',
+        'collections': ('hallmark+ top movies today', 'top movies today'),
+        'depth': 20,
     },
     # Peacock publishes two, on its signed-in home. Separate rankings,
     # so the top show and the top film are both #1.

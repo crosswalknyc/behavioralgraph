@@ -453,6 +453,61 @@ _MIX: dict = {
                'and same-day ITV premieres that BritBox markets direct '
                'under-index.'),
     ),
+    # 2026-11-18 (Jenna): Hallmark+ and its Amazon breakout.
+    'hallmarkplus': ServiceCarriage(
+        slug='hallmarkplus', label='Hallmark+',
+        paths=('the Hallmark+ app and site', 'Prime Video Channels',
+               'The Roku Channel', 'Apple TV Channels',
+               'YouTube Primetime Channels and YouTube TV add-ons',
+               'Sling, Philo, Fubo and Frndly TV add-ons',
+               'cable on-demand through Xfinity, DirecTV, Dish, Cox and '
+               'Frontier'),
+        amazon_share=0.36, on_amazon=True, breakout=True,
+        basis=('BAND 0.300 to 0.420 of the Hallmark+ US streaming audience, '
+               'centre 0.36. Hallmark publishes no split, so the band is '
+               'built by correcting the specialty-category figure DOWN '
+               'for what is known about this service, the same way the '
+               'BritBox band was built, and it lands lower than BritBox '
+               'for three reasons that are specific to Hallmark. The '
+               'frame: Antenna has two of every three specialty '
+               'subscriptions it measures arriving through Amazon '
+               'Channels and 67% of specialty gross adds billed through '
+               'Amazon in Q2 2026, and says itself that the figure '
+               'overstates Amazon because specialty direct is measured '
+               'for only three services. Hallmark is the clearest case '
+               'where direct is real and large. First, the service was '
+               'Hallmark Movies Now from 2017 with its own apps on every '
+               'device and a million-plus audience at the September 2024 '
+               'rebrand, and Amazon Channels was one of many storefronts '
+               'it joined (November 2017) rather than the way it reached '
+               'the market. Second, the membership is built to be bought '
+               "direct: Hallmark's own care page states that the Crown "
+               'Rewards benefits (monthly store coupons, free greeting '
+               'cards, bonus points, member gifts) come only with a '
+               'subscription taken on the Hallmark+ site or app, and that '
+               'a Prime Video, Roku or cable subscription is a separate '
+               'thing without them, so the retail network pulls the base '
+               'toward direct. Third, the carriage is unusually wide: '
+               'besides Amazon the care page lists The Roku Channel, Apple '
+               'TV Channels, YouTube Channels, YouTube TV, Sling, Philo, '
+               'Fubo and Frndly TV plus five cable on-demand providers, so '
+               'the non-Amazon storefront share is larger than for a '
+               'service sold through two or three. Starting from two in '
+               'three, removing the other eight storefronts and the '
+               'operator paths, restoring a measured direct base with a '
+               'retail incentive behind it, and applying the churn '
+               'correction (Amazon-sold subscriptions churn faster than '
+               'direct ones, so a base share reads under a gross-add '
+               'share) brackets Amazon at 30% to 42% of the Hallmark+ US '
+               'audience. Per title: the Countdown to Christmas library, '
+               'the Hallmark Channel and Hallmark Mystery movie catalog and '
+               'the acquired British mysteries that an older Prime Video '
+               'browser adds as a channel over-index; the Hallmark+ '
+               'exclusive series (Hope Valley: 1874, The Way Home, '
+               'Mistletoe Murders, Paris Is Always a Good Idea) and the '
+               'membership-led reality shows that people join Hallmark+ '
+               'direct for under-index.'),
+    ),
 
     # ---------------------------------------------------------------
     # Amazon-only in the US. A breakout would equal the parent, which

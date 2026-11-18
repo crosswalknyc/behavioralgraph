@@ -306,6 +306,30 @@ _RAILS: dict[str, DerivedRail] = {
                 'inside Prime Video'),
         reasoned=True,
     ),
+    # Hallmark+ (2026-11-18, Jenna). A specialty service with an
+    # unusually strong DIRECT path: the membership's retail benefits
+    # (Crown Rewards points, store coupons, free cards) come only with
+    # a subscription taken on Hallmark's own site or app, the service
+    # had its own app and a million-plus direct base before it was
+    # ever rebranded, and it is sold through eight other storefronts
+    # and five cable on-demand paths besides Amazon. So the Amazon
+    # slice sits well under the specialty-category two-thirds and
+    # under BritBox: the band is 30% to 42%, working in
+    # `carriage_mix.py` under `hallmarkplus`.
+    'hallmarkplus_amazon': DerivedRail(
+        child='hallmarkplus_amazon',
+        parent='hallmarkplus',
+        label='Hallmark+ on Amazon',
+        anchor_share=0.36,
+        bands={
+            'film': (0.340, 0.420),
+            'tv':   (0.300, 0.380),
+            '':     (0.300, 0.420),
+        },
+        method=("the part of this title's Hallmark+ audience that watches "
+                'inside Prime Video'),
+        reasoned=True,
+    ),
 }
 
 # How far a title's share may move from one day to the next, as a

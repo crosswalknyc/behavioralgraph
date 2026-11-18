@@ -126,6 +126,11 @@ GAUGE_SHARES: dict[str, dict[str, float]] = {
         # the two partner-calibrated channels run ~22K and ~44K streams a day
         # (first_party_calibration); their budget is set from that, not the Gauge
         'lionsgateplus': 0.00005, 'moviesphereplus': 0.0001,
+        # Hallmark+ (2026-11-18): Hallmark properties are 0.8% of US TV
+        # viewing in May and 1.2% in December, the large majority of it
+        # the cable networks; the subscription service's own share of
+        # streaming is a small fraction of that, near MGM+ and BritBox.
+        'hallmarkplus': 0.0005,
     },
 }
 
