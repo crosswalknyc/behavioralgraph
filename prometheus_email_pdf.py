@@ -292,7 +292,10 @@ def _render(title, body_text, date_label, table_highlight_prefix):
             return None
         rows, n = tab
         hi = table_highlight_prefix
-        data = [[_esc(c) for c in r] for r in rows]
+        # table cells are drawn as plain strings, never as markup: escaping
+        # them printed 'Law &amp; Order' in every table that named the show
+        # (2026-11-18, Liz's nine series on Peacock)
+        data = [[str(c) for c in r] for r in rows]
         if n == 2:
             # Label / value list: hairlines, right-aligned bold values.
             cw = [content_w * 0.62, content_w * 0.38]

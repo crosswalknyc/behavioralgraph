@@ -390,6 +390,19 @@ class TheTable(unittest.TestCase):
         html = peh.render_answer_email_html('Dick Wolf series on Peacock', before + '\n\nPrometheus\nCrosswalk')
         self.assertGreaterEqual(html.count('<table'), 3)          # the tables render as tables in the mail
         self.assertIn('Law &amp; Order: Special Victims Unit', html)
+        # the PDF of the same words prints the show's name, never its markup
+        import prometheus_email_pdf as pep
+        pdf = pep.render_answer_pdf('Dick Wolf series on Peacock', before + '\n\nPrometheus\nCrosswalk')
+        self.assertGreater(len(pdf), 2000)
+        try:
+            import io as _io
+            import pypdf
+        except Exception:
+            pypdf = None
+        if pypdf is not None:
+            text = ' '.join((pg.extract_text() or '') for pg in pypdf.PdfReader(_io.BytesIO(pdf)).pages)
+            self.assertIn('Law & Order: Special Victims Unit', text)
+            self.assertNotIn('&amp;', text)
 
     def test_a_stored_pool_moves_the_row_and_the_table_still_coheres(self):
         """Whatever sets a pool after the pass (a figure already held, a
