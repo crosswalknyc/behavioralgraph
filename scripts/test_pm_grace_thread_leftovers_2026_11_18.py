@@ -487,6 +487,32 @@ def _read(*parts):
         return fh.read()
 
 
+# ============================================================================ e
+class NotNeedingTheAvidTierIsANo(unittest.TestCase):
+    """At 01:21 she wrote "you don't need the Avid tier: ~14,574 for this
+    pull" and the next brief still carried one. The opt-out reader, from
+    app.py's own source."""
+
+    @classmethod
+    def setUpClass(cls):
+        src = _read('app.py')
+        i = src.index('_AVID_OPTOUT_PATTERNS = [')
+        j = src.index('# Decisions where an Avid cohort is not applicable', i)
+        ns = {}
+        exec(src[i:j], ns)
+        cls.optout = staticmethod(ns['_user_optout_of_avid'])
+
+    def test_her_words_and_near_ones(self):
+        for q in (NO_AVID, 'i dont need the avid tier', 'we do not want the avid cut', 'drop the avid tier', 'leave out the avid fans',
+                  'no need for an avid tier', 'the avid tier is not needed', 'no avid', 'TU only'):
+            self.assertTrue(self.optout(q), q)
+
+    def test_a_question_or_a_yes_is_not_a_no(self):
+        for q in (HERS, 'what does avid tier mean', 'what is the avid tier', 'i need the avid tier too', "don't forget the avid tier",
+                  'run a profile on Tony viewers with the avid tier', 'build avid and total universe'):
+            self.assertFalse(self.optout(q), q)
+
+
 class Wiring(unittest.TestCase):
     def test_the_lane_is_in_the_order_and_never_priced(self):
         from prometheus import service as S

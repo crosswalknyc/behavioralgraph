@@ -50165,6 +50165,14 @@ _AVID_OPTOUT_PATTERNS = [
     r'\btotal\s+universe\s+only\b',
     r'\bno\s+avid\s+(cut|cohort|version)\b',
     r'\bavid\s+not\s+needed\b',
+    # 2026-11-18 (Grace Yin): "you don't need the Avid tier: ~14,574 for
+    # this pull, i just want the demo by age, gender" drew a second brief
+    # with the Avid tier still on it. Not needing, not wanting, dropping
+    # or leaving out the avid tier / cut / fans is a no.
+    r"\b(?:don'?t|do\s+not|doesn'?t|does\s+not|won'?t|will\s+not)\s+(?:need|want|include|add|require|care\s+about)\s+(?:the\s+|an?\s+|any\s+)?avid\b",
+    r"\bno\s+need\s+for\s+(?:the\s+|an?\s+)?avid\b",
+    r"\b(?:drop|remove|exclude|omit|leave\s+out|leave\s+off|take\s+off|take\s+out)\s+(?:the\s+)?avid\b",
+    r"\bavid\s+(?:tier|cut|cohort|fans?)?\s*(?:is\s+|are\s+)?(?:not\s+needed|not\s+necessary|unnecessary|not\s+required)\b",
 ]
 
 
