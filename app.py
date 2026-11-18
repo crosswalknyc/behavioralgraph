@@ -638,6 +638,10 @@ S3_BUCKET = 'dashboard-inputs'
 # Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
 GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
+# Internal copies (the state of a file before a correction, kept under
+# _backups/ and friends) are never listed, opened or downloaded by any
+# seat. One predicate for every product (2026-11-17).
+import internal_copies as _internal_copies
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Fin IQ ticker data
@@ -9986,6 +9990,9 @@ def get_admin_content():
                     # Skip historic folder, purgatory (unreleased), and non-CSV files
                     if key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX) or not key.endswith('.csv'):
                         continue
+                    # Internal copies are not active files.
+                    if not _internal_copies.subscriber_iq_key_servable(key):
+                        continue
                     
                     filename = key.split('/')[-1]
                     # Extract show name from filename
@@ -18609,6 +18616,13 @@ def _require_profile_run_access(s3_key: str):
             'success': False,
             'error': 'Not authenticated',
         }), 401)
+    # An internal copy (the state of a file before a correction) is
+    # never opened or downloaded through a profile route, by any seat.
+    if _internal_copies.is_internal_copy_key(s3_key):
+        return False, (jsonify({
+            'success': False,
+            'error': _internal_copies.NOT_FOUND,
+        }), 404)
     role = _normalize_role(user.get('role', 'user'))
     if role in ('admin', 'super_admin'):
         return True, None
@@ -20263,6 +20277,10 @@ def api_intent_export_xlsx(title_slug):
 def _user_can_open_subscriber(user, s3_key, label=''):
     if not user:
         return False
+    # Live trackers only, for every seat, staff included: an internal
+    # copy, an archived file or an unreleased one is never opened here.
+    if not _internal_copies.subscriber_iq_key_servable(s3_key):
+        return False
     role = _normalize_role(user.get('role', 'user'))
     if role in ('admin', 'super_admin'):
         return True
@@ -20304,6 +20322,10 @@ def list_subscriber_iq_files():
                 key = obj['Key']
                 # Skip historic folder, purgatory (unreleased), and non-CSV files
                 if key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX) or not key.endswith('.csv'):
+                    continue
+                # Live trackers only: never an internal copy (_backups/,
+                # any underscore folder, a .pre_ correction suffix).
+                if not _internal_copies.subscriber_iq_key_servable(key):
                     continue
                 
                 # Extract show name from filename (format: ShowName_MM_DD_YYYY_HH_MM.csv)
@@ -20361,6 +20383,10 @@ def get_subscriber_iq_data(s3_key):
     if not s3_client:
         print("❌ S3 client not configured")
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    # A key the list never shows reads as not found, whoever asks.
+    if not _internal_copies.subscriber_iq_key_servable(s3_key):
+        return jsonify({'success': False,
+                        'error': _internal_copies.SUBIQ_NOT_FOUND}), 404
     user = get_current_user()
     if not _user_can_open_subscriber(user, s3_key):
         return jsonify({'success': False,
@@ -27062,6 +27088,8 @@ def admin_subscriber_episode_dates():
             if not file_key:
                 return jsonify({'success': False, 'error': 'file_key required'})
             s3_key = resolve_subscriber_iq_s3_key(file_key)
+            if not _internal_copies.subscriber_iq_key_servable(s3_key):
+                return jsonify({'success': False, 'error': _internal_copies.SUBIQ_NOT_FOUND}), 404
             if not s3_client:
                 return jsonify({'success': False, 'error': 'S3 not configured'}), 500
             try:
@@ -27092,6 +27120,8 @@ def admin_subscriber_episode_dates():
             return jsonify({'success': False, 'error': 'episodes list required'})
 
         s3_key = resolve_subscriber_iq_s3_key(file_key)
+        if not _internal_copies.subscriber_iq_key_servable(s3_key):
+            return jsonify({'success': False, 'error': _internal_copies.SUBIQ_NOT_FOUND}), 404
         cleaned = []
         for row in episodes_in:
             ep = str(row.get('episode', '')).strip()
@@ -27465,6 +27495,9 @@ def rename_file():
         # within the wrong bucket and raised NoSuchKey on CopyObject.)
         if old_key.startswith('svod-acquisition/'):
             bare_old = resolve_subscriber_iq_s3_key(old_key)
+            # An internal copy is never renamed or moved from here.
+            if not _internal_copies.subscriber_iq_key_servable(bare_old):
+                return jsonify({'success': False, 'error': _internal_copies.SUBIQ_NOT_FOUND}), 404
             old_filename = bare_old.split('/')[-1]
             folder = '/'.join(bare_old.split('/')[:-1])
             extension = ''
@@ -28539,6 +28572,8 @@ def change_file_category():
             # SVOD files can have subcategories (TALENT, CONTENT, etc.)
             # but they're always grouped under SVOD ACQUISITION master category
             actual_key = file_key.replace('svod-acquisition/', '')
+            if not _internal_copies.subscriber_iq_key_servable(actual_key):
+                return jsonify({'success': False, 'error': _internal_copies.SUBIQ_NOT_FOUND}), 404
             metadata = load_svod_metadata()
             if actual_key not in metadata:
                 metadata[actual_key] = {}
@@ -28775,6 +28810,10 @@ def _is_root_csv_key(key) -> bool:
     if '/' in key:
         return False
     if not key.lower().endswith('.csv'):
+        return False
+    # A root file that is itself an internal copy (a .pre_ correction
+    # suffix, an underscore name) is not a profile either.
+    if _internal_copies.is_internal_copy_key(key):
         return False
     return True
 
@@ -40169,7 +40208,8 @@ def _bpiq_is_backup_key(key):
         return True
     if k.startswith('_backups/'):
         return True
-    return False
+    # The shared rule: any underscore folder, backups/, a .pre_ suffix.
+    return _internal_copies.is_internal_copy_key(k)
 
 
 # "Movie context" needles. Audience qualifies when the movie name appears
@@ -42823,6 +42863,11 @@ def get_journey_iq_result(s3_key):
         else:
             full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) \
                 else _jiq.S3_PREFIX + s3_key
+            # Internal copies and the tab's own index files are never a
+            # run a reader can open by key.
+            if _internal_copies.is_internal_copy_key(full_key):
+                return jsonify({'success': False,
+                                'error': 'Run not found'}), 404
 
         user = get_current_user()
         # Access guard #1: anyone with Digital Journey IQ access can load any

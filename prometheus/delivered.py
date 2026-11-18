@@ -188,6 +188,12 @@ def subiq_tracker_files(s3_key, *, s3_client=None, host=None, bucket=SUBIQ_BUCKE
     key = str(s3_key or '').strip()
     if not key:
         return []
+    try:
+        import internal_copies as _ic
+        if not _ic.subscriber_iq_key_servable(key):
+            return []   # only a live tracker is ever attached (2026-11-17)
+    except Exception:
+        return []
     s3 = s3_client or (getattr(host, 's3_client', None) if host is not None else None)
     if s3 is None:
         return []

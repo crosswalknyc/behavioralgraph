@@ -21,6 +21,8 @@ import re
 import time
 import traceback
 
+import internal_copies as _internal_copies
+
 _LIBRARY_RX = re.compile(
     r"\b(?:existing|available|all|every|across|among|of)\s+(?:the\s+|our\s+|your\s+)?(?:subscriber\s*iqs?|subscriber\s+iq\s+(?:reads?|files?|trackers?|reports?))\b"
     r"|\bsubscriber\s*iqs?\s+(?:available|on\s+the\s+dashboard|in\s+the\s+library|you\s+have|we\s+have)\b"
@@ -122,6 +124,9 @@ def library(s3, bucket, can_open=None, now=None):
                 for o in page.get('Contents') or []:
                     k = str(o.get('Key') or '')
                     if not k.endswith('.csv') or k.startswith(_SKIP_PREFIXES):
+                        continue
+                    # live trackers only: never an internal copy (2026-11-17)
+                    if not _internal_copies.subscriber_iq_key_servable(k):
                         continue
                     keys.append((k, o.get('LastModified')))
             from concurrent.futures import ThreadPoolExecutor

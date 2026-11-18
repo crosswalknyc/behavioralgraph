@@ -33,6 +33,8 @@ import unicodedata
 
 import pandas as pd
 
+import internal_copies as _internal_copies   # internal copies never reach a reader (2026-11-17)
+
 # ---------------------------------------------------------------------------
 # CSV loading and parsing helpers
 # ---------------------------------------------------------------------------
@@ -2125,7 +2127,7 @@ def _load_catalog_names(s3_client, bucket):
             for job in (cache.get('jobs') or []):
                 nm = str((job or {}).get('display_name') or '').strip()
                 sk = str((job or {}).get('s3_key') or '').strip()
-                if nm and sk:
+                if nm and sk and not _internal_copies.is_internal_copy_key(sk):
                     names.append((nm, sk))
         except Exception:
             names = []
@@ -2157,6 +2159,10 @@ def _load_subiq_index(s3_client, subiq_bucket):
                             or key.startswith('_backups/')
                             or '/_backups/' in key
                             or '.pre_' in key):
+                        continue
+                    # The shared rule (2026-11-17): live trackers only,
+                    # never an internal copy under any underscore folder.
+                    if not _internal_copies.subscriber_iq_key_servable(key):
                         continue
                     stem = key.rsplit('/', 1)[-1][:-4]
                     m = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',

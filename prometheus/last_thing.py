@@ -33,6 +33,7 @@ tests run with no network.
 """
 from __future__ import annotations
 from . import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
+import internal_copies as _internal_copies   # an internal copy is never handed over (2026-11-17)
 
 import csv
 import io
@@ -487,6 +488,8 @@ def file_bytes(file, s3, *, bucket='dashboard-inputs', extra_buckets=()):
     the dashboard bucket, then any extra), or None."""
     if not isinstance(file, dict) or not file.get('s3_key') or s3 is None:
         return None
+    if _internal_copies.is_internal_copy_key(file.get('s3_key')):
+        return None   # an internal copy is never handed over, whoever names it (2026-11-17)
     tried = []
     for b in [file.get('bucket'), bucket, *extra_buckets]:
         if not b or b in tried:
@@ -504,6 +507,8 @@ def fresh_url(file, s3, *, bucket='dashboard-inputs', expires=7 * 24 * 3600):
     the same-origin link as it is."""
     if not isinstance(file, dict):
         return ''
+    if _internal_copies.is_internal_copy_key(file.get('s3_key')):
+        return ''   # no link is minted for an internal copy (2026-11-17)
     if file.get('same_origin') or not file.get('s3_key') or s3 is None:
         return str(file.get('url') or '')
     try:

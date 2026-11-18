@@ -112,6 +112,8 @@ import uuid
 
 from flask import Blueprint, Response, g, jsonify, request, session
 
+import internal_copies as _internal_copies
+
 from migration import digital_twins as DT
 from migration import digital_twin_company as CO
 from migration import digital_twin_pricing as PR
@@ -223,6 +225,9 @@ def _menu_locked(user):
 def _twin_or_404(user, key):
     key = str(key or '')
     if not key.startswith(DT.S3_PREFIX) or not key.endswith('.json.gz'):
+        return None, (jsonify({'success': False, 'error': 'twin not found'}), 404)
+    # an internal copy of a twin is never opened by key, by any seat (2026-11-17)
+    if _internal_copies.is_internal_copy_key(key):
         return None, (jsonify({'success': False, 'error': 'twin not found'}), 404)
     runs = DT.list_runs(_s3())
     run = next((r for r in runs if r.get('key') == key), None)
