@@ -187,7 +187,7 @@ def term_of(text, brief):
         for key, aliases in TERMS.items():
             for a in aliases:
                 fa = _fold(a)
-                if fa and (' ' + fa + ' ') in ft and len(fa) > best and (key in brief['lines'] or key in ('incidence', 'audience', 'total_universe')):
+                if fa and (' ' + fa + ' ') in ft and len(fa) > best:      # a line this brief does not carry is still explained
                     named, best = key, len(fa)
         if quoted:
             on_line = brief['numbers'][quoted[0]]
@@ -250,6 +250,9 @@ def _avid(brief, number):
         first = _glossary('avid_fan') or "The Avid tier is the most engaged part of the audience."
     n = number or next((k for k, v in brief['numbers'].items() if v == 'avid'), '')
     parts = [first]
+    if not n and 'avid' not in brief['lines']:
+        # the reader took it off, or the brief never had one: say so, and do not read a figure that is not there
+        return first + " The brief in front of you does not carry one; it covers the full audience only."
     if n:
         parts.append(f"The ~{_pretty(n)} on your brief is how many of those people are in our data for {_for_what(brief)}.")
     aud = _squash(brief['lines'].get('audience') or '')
@@ -326,9 +329,13 @@ def answer(text, history):
         if not term:
             return None
         quoted = _numbers(term)
-        brief = brief_in_thread(history, number=(quoted[0] if quoted else None))
-        if not brief:
+        # the brief in front of the reader answers; an earlier one only when the number they quote sits on it
+        latest = brief_in_thread(history)
+        if not latest:
             return None
+        brief = latest
+        if quoted and quoted[0] not in latest['numbers']:
+            brief = brief_in_thread(history, number=quoted[0]) or latest
         key, number = term_of(text, brief)
         if not key or key not in _COMPOSE:
             return None

@@ -213,6 +213,21 @@ class ATermOnTheBriefIsAnswered(unittest.TestCase):
         self.assertIn('1,310,264 to 1,803,596 US people', a['reply'])
         self.assertNotIn('3,837', a['reply'])
 
+    def test_a_line_the_brief_no_longer_carries_is_still_explained_never_drafted(self):
+        # the brief in front of her after the Avid tier came off: no Avid line, and the number she quotes is on no brief
+        no_avid = BRIEF_2.replace('Avid tier: ~3,837\n', '')
+        h = thread()[:3] + [{'role': 'agent', 'text': no_avid}]
+        a = BT.answer(HERS, h)
+        self.assertEqual(a['term'], 'avid')
+        self.assertEqual(a['reply'], 'The Avid tier is the people who watched it four or more times, on Amazon Prime Video. The brief in '
+                                     'front of you does not carry one; it covers the full audience only.\n\nYour brief is unchanged and '
+                                     'nothing has started.')
+        self.assertNotIn('3,837', a['reply'])                           # a figure that is on no brief is never read back
+        # a number she misquotes is not read back either: the brief's own figure is
+        b = BT.answer('what does Avid tier: ~9,999 mean', thread())
+        self.assertIn('The ~3,837 on your brief', b['reply'])
+        self.assertNotIn('9,999', b['reply'])
+
     def test_the_other_lines_of_the_brief(self):
         for q, key, has in (('what does 0.174% incidence mean', 'incidence', 'The 0.174% on your brief'),
                             ("what's incidence", 'incidence', 'Incidence is the share of all US people who are in this audience.'),
