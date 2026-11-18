@@ -159,7 +159,7 @@ def build_pdf(payload: dict) -> bytes:
                f"{f['bought'] / f['reached'] * 100:.2f}% of the {_fmt(f['reached'])} people reached. Here is what matters and what to do.")
     d.bullets(short_points(payload), d.m, d.y, full_w, size=12)
     d.meaning(f"The partnership reached {_fmt(f['reached'])} people and {_fmt(f['bought'])} of them bought. "
-              f"The rest of this file shows each step between, and what would move more of them.")
+              f"The next pages show each step between.")
 
     # 03 the path
     spine = j.get('spine') or []
@@ -177,8 +177,8 @@ def build_pdf(payload: dict) -> bytes:
             note='Kept is the share of the branch above it. Same-session orders and orders after a return add up to the buyers.')
     after = [(float(st.get('kept') or 0), str(st.get('label') or '')) for st in spine[3:] if float(st.get('kept') or 0) > 0]
     worst = min(after) if after else None
-    d.meaning(f"{_pct(f['bought'], f['cart'])} of the people who added a piece to the bag bought. "
-              + (f"The biggest loss after engaging is at \"{_low(worst[1])}\": {worst[0]:.1f}% of the step before got there." if worst else ''))
+    d.meaning(f"The biggest loss after engaging is at \"{_low(worst[1])}\": {worst[0]:.1f}% of the step before got there." if worst
+              else f"{_pct(f['bought'], f['cart'])} of the people who added a piece to the bag bought.")
 
     # 04 where it started
     fc, pl, gr = _find(payload, r"^first .*content they saw"), _find(payload, r"^where they engaged with"), _find(payload, r"^growth in the")
