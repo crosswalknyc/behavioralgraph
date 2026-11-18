@@ -36,7 +36,8 @@ What holds it now:
                   resolved from the question in the thread when the page
                   no longer holds the brief.
   unresolved      a suggestion that is the name the person typed is taken,
-                  not offered back; a sentence is never echoed as a name.
+                  not offered back; a sentence is never echoed as a name,
+                  whatever its length (2026-11-18, prometheus.followup_refine).
 
 Pure text; no Flask, no network, no model call. Never raises. Wired in
 app._apply_universe_qualifier_gate, prometheus.legacy.chat (the
@@ -241,10 +242,18 @@ def unresolved(subj, suggest, ask_text):
             if st and tt and st == tt:
                 return {'adopt': sug}
         long_name = len(name.split()) > 8 or len(name) > 70
+        if not long_name:
+            # a sentence of any length is never said back as a name (Grace Yin 2026-11-18: "I could not find But
+            # The Title Just Launched Svod as a brand, person, or title"); prometheus.followup_refine reads it
+            try:
+                from . import followup_refine as _fur
+                long_name = bool(_fur.never_echo(name, ask_text))
+            except Exception:
+                long_name = False
         copy = _UNRESOLVED_LONG_COPY if long_name else _UNRESOLVED_COPY.format(subj=name)
         chips = [f"Build a profile for {sug}"] if differs else []
         if chips:
             copy += f" Did you mean {sug}?"
         return {'copy': copy, 'chips': chips}
     except Exception:
-        return {'copy': _UNRESOLVED_COPY.format(subj=_squash(subj)), 'chips': []}
+        return {'copy': _UNRESOLVED_LONG_COPY, 'chips': []}

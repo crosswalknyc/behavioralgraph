@@ -6368,6 +6368,9 @@ def _pm_interpret_core(user, body, text, history):
             print(f"[synth-chat interpret] marker-batch fallback "
                   f"failed, continuing to single interpret: {_marker_err}")
 
+    _fur = __import__('prometheus.followup_refine', fromlist=['at_interpret']); _fu, _fu_early = _fur.at_interpret(text, history, body, _pm_ask_hint)   # a follow-up is the ask before it with one thing changed, read from the thread's own turns (Grace Yin 2026-11-18)
+    if _fu_early:
+        return jsonify(_fu_early)   # it points back and nothing is there: which title, in plain words, before any draft
     try:
         _t_prep = time.monotonic()
         try:
@@ -6488,7 +6491,7 @@ def _pm_interpret_core(user, body, text, history):
         # search; still-ambiguous drafts stash a confirm question.
         _t_identity = time.monotonic()
         try:
-            _H._resolve_subject_identity(spec_draft, text, allow_ask=True)
+            _H._resolve_subject_identity(spec_draft, text, allow_ask=True) if not _fu else _H._resolve_subject_identity(spec_draft, text, allow_ask=True, **_fur.identity_kwargs(_fu))   # on a follow-up, a name the reader gave earlier in the thread is their own word (2026-11-18)
         except Exception as _id_err:
             print(f"[synth-chat interpret] identity error: {_id_err}")
         _pm_ask_stage('identity', t0=_t_identity)
@@ -6533,7 +6536,7 @@ def _pm_interpret_core(user, body, text, history):
         # PM_CHAT_SUBJECT_VERIFY=0 for hermetic runs.
         _t_verify = time.monotonic()
         _sv_block = _pm_chat_subject_verify(spec_draft, candidates, text,
-                                            preverify=_preverify)
+                                            history=history, followup=_fu, preverify=_preverify)
         _pm_ask_stage('verify', t0=_t_verify)
         if _sv_block is not None:
             return _sv_block
@@ -6714,8 +6717,10 @@ def _pm_interpret_core(user, body, text, history):
         # a real-world event/stint, the resolved event dates override
         # the default window - on cuts too - and unresolved event dates
         # trigger a clarify ask instead of a silent default.
-        _ev_state = _H._apply_event_window_to_draft(
-            spec_draft, text, decision=decision_str, history=history)
+        _ev_state, _fu_ask = _fur.settle_window_on_host(spec_draft, _fu, _H._apply_event_window_to_draft(
+            spec_draft, text, decision=decision_str, history=history), _H, decision_str, _pm_ask_hint)   # "after it launched": the day the reader gave through the last full day (2026-11-18)
+        if _fu_ask:
+            return jsonify(_fu_ask)   # no day given and none resolved: one short question for the date
 
         # Date-clarification gate. If the user didn't specify a window
         # AND Claude also flagged the range as non-explicit, we return
@@ -12294,7 +12299,7 @@ def _pm_start_preverify(text, candidates):
     return t
 
 
-def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None):
+def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None, history=None, followup=None):
     """Run the subject-verification ladder on a fresh chat build.
     Returns a guidance response when the subject does not resolve,
     else None (2026-10-02 S6). Never raises; any failure is None.
@@ -12307,9 +12312,10 @@ def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None):
         dec = str((spec_draft or {}).get('decision') or '')
         if dec not in ('new_build', 'cut_needs_parent'):
             return None
+        _fu_ask = __import__('prometheus.followup_refine', fromlist=['settle_subject']).settle_subject(spec_draft, text, history, followup, _pm_ask_hint)   # a sentence is never looked up as a name: the thread's subject, or which title (2026-11-18)
         subj = str(spec_draft.get('subject') or '').split(' - ', 1)[0].strip()
-        if not subj:
-            return None
+        if not subj or _fu_ask:
+            return (jsonify(_fu_ask), 400) if _fu_ask else None
         if spec_draft.get('_persona_universe') or spec_draft.get('ask_ip_scope') or spec_draft.get('clarify_question') \
                 or _cohort_scope.apply_to_draft(spec_draft, text):   # compound cohort anchored on an entity (2026-10-12)
             return None

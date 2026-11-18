@@ -591,6 +591,13 @@ _TYPE_LED_RX = re.compile(
     r"(?!(?:and|or|but|nor|vs|versus|than|that|which|who|whose|is|are|was|were|"
     r"in|on|of|for|to|with|without|by|at|from|as|if|so|then|there|here|"
     r"it|its|they|them|we|you|he|she|his|her|their|our|your|my)\b)"
+    # "the title just launched SVOD on Prime video": a predicate about the thing pointed at, never its name
+    # (Grace Yin 2026-11-18: "Just Launched SVOD" was bound as a title). Two words, so Just Shoot Me, Only
+    # Murders in the Building and Hit Man stay names.
+    r"(?!(?:(?:just|only|recently|already|finally|now)\s+){1,2}(?:launched|premiered|debuted|released|aired|dropped|came|"
+    r"went|started|landed|arrived|moved|ended|hit)\b|(?:has|have|had)\s+(?:just|only|recently|already|not|been|now)\b|"
+    r"(?:launched|premiered|debuted|released|dropped|aired)\s+(?:on|in|at|svod|avod|tvod|pvod|last|this|yesterday|"
+    r"today|recently|theatrically)\b|came\s+out\b|went\s+live\b)"
     r"(?P<name>(?:the\s+|a\s+|an\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
     r"[\"\u201c\u201d'\u2018\u2019]?"
     + _CARRIAGE_END + _OBJECT_END[3:], re.I)

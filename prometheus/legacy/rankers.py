@@ -229,8 +229,12 @@ def _pm_rankers_board_block(text, view_id=''):
 # only the single-window base, invented the per-year numbers, and the
 # verifier held the reply - the user paid attention and got nothing.
 # These asks now route to a paid year-build package up front.
+# An age is never a span of years (2026-11-18, Grace Yin: "a 19-year-old
+# Anthony Bourdain" in a film's description drew "A 6-year read of Amazon
+# Prime Video needs one profile per year", five year profiles at $300).
+# Both patterns stop short of "-old", " old", "-olds".
 _PM_MY_RANGE_RE = re.compile(
-    r'\b(\d)\s*(?:-|to|or)\s*(\d)\s*[- ]?year', re.I)
+    r'\b(\d)\s*(?:-|to|or)\s*(\d)\s*[- ]?year(?!s?[- ]?olds?\b)', re.I)
 
 
 _PM_MY_LAST_RE = re.compile(
@@ -238,7 +242,7 @@ _PM_MY_LAST_RE = re.compile(
     re.I)
 
 
-_PM_MY_NYEAR_RE = re.compile(r'\b(\d+)[- ]year\b', re.I)
+_PM_MY_NYEAR_RE = re.compile(r'\b(\d+)[- ]year\b(?!s?[- ]?olds?\b)', re.I)
 
 
 _PM_MY_SINCE_RE = re.compile(r'\bsince\s+(20\d\d)\b', re.I)

@@ -86,7 +86,9 @@ HARNESS_LIMITED_OUTCOMES = frozenset({
 # under-specified ask (2026-10-02 W2). It is reported as drift, never
 # as a regression, unless the reply itself is broken.
 CLARIFY_OUTCOMES = frozenset({'clarified', 'asked_open_screen', 'asked_base',
-                              'asked_what', 'asked_subject'})
+                              'asked_what', 'asked_subject',
+                              # a follow-up with nothing to point at, or with no launch day in hand (2026-11-18)
+                              'asked_which_title', 'asked_launch_date'})
 
 # Routes that read Subscriber IQ files the replay does not carry. An
 # honest miss there is unchecked, as is any miss on a non-profile

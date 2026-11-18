@@ -270,6 +270,23 @@ def _subject_label(surface):
     return 'Subject' if str(surface or '').lower() == 'interpret' else 'Open profile'
 
 
+def _subject_line(subject, question=''):
+    """The subject shown on the copy. A sentence is never shown as one
+    (2026-11-18: 'Subject: But The Title Just Launched Svod' on a
+    follow-up that named no title; prometheus.followup_refine). The
+    build flow now records the thread's subject for a follow-up; this
+    is the net under it: a subject that still reads as a sentence, or
+    as a piece of the question itself, is left off the copy."""
+    s = str(subject or '').strip()
+    if not s:
+        return ''
+    try:
+        from prometheus import followup_refine as _fur
+        return _fur.subject_line(s, question)
+    except Exception:
+        return s
+
+
 def _address(record, username, via):
     email = str((record or {}).get('email') or '')
     company = str((record or {}).get('company') or '')
@@ -319,7 +336,7 @@ def _send(username, record, question, answer, subject, via=None, surface=None, s
         return
     mail_subject, stall_line = _stall(mail_subject, stall)
     when = datetime.now(timezone.utc).strftime('%b %d, %Y %I:%M %p UTC')
-    subj_line = str(subject or '').strip()
+    subj_line = _subject_line(subject, question)
     correct_url = _correct_link(username, question, answer, subj_line)
     text = (
         f"{who} at {label} asked Prometheus a question{' over the API' if api else ''}.\n"
@@ -358,7 +375,7 @@ def send_walk(username, record, turns, outcome, subject=None,
         return
     mail_subject, stall_line = _stall(mail_subject, stall)
     when = datetime.now(timezone.utc).strftime('%b %d, %Y %I:%M %p UTC')
-    subj_line = str(subject or '').strip()
+    subj_line = _subject_line(subject, ' '.join(str((t or {}).get('q') or '') for t in turns[-3:]))
     q_for_link = recap_q or str((turns[0] or {}).get('q') or '')
     a_for_link = recap_a or str((turns[-1] or {}).get('a') or '')
     correct_url = _correct_link(username, q_for_link, a_for_link, subj_line) if recap_a or recap_q else ''

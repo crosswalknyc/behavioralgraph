@@ -56254,7 +56254,7 @@ def _guard_short_name_identity(draft, prompt, allow_ask=True):
         return False
 
 
-def _resolve_subject_identity(draft, prompt, allow_ask=True):
+def _resolve_subject_identity(draft, prompt, allow_ask=True, thread_words=''):
     """In-place server-side identity backstop. Runs on every draft;
     only content-typed subjects with binding medium/platform words and
     a suspect resolution pay the web-search verify cost.
@@ -56262,7 +56262,16 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
     allow_ask=True (chatbot): unresolvable ambiguity stashes a clarify
     question (`ask_identity` + `identity_data`).
     allow_ask=False (partner API / batch): unresolvable ambiguity keeps
-    the user's own words as the subject - never a famous lookalike."""
+    the user's own words as the subject - never a famous lookalike.
+
+    thread_words (2026-11-18, Grace Yin): the reader's earlier words in
+    this thread, passed only when this turn is a follow-up that names
+    nothing itself ("but the title just launched SVOD on Prime video in
+    2026 so i just want recent data after it launched" had its subject,
+    Tony, reset to "But The Title Just Launched Svod"). A name the
+    reader gave earlier is their own word, never a lookalike; the medium
+    and platform they gave there still bind; a sentence is never taken
+    for a title. prometheus.followup_refine reads the thread."""
     if not isinstance(draft, dict):
         return draft
     decision = str(draft.get('decision') or 'new_build').strip().lower()
@@ -56305,6 +56314,28 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
         _apply_identity_version(draft, model_versions[0])
         draft['identity_confident'] = False
     sig = _identity_signals_from_prompt(prompt)
+    _thread_words = str(thread_words or '').strip()
+    _own_words = ((_thread_words + ' \n' + str(prompt or ''))
+                  if _thread_words else prompt)
+    if _thread_words:
+        try:
+            _tsig = _identity_signals_from_prompt(_thread_words)
+            if not sig.get('medium') and _tsig.get('medium'):
+                sig['medium'] = _tsig['medium']
+                sig['medium_word'] = _tsig.get('medium_word')
+            if not sig.get('platform') and _tsig.get('platform'):
+                sig['platform'] = _tsig['platform']
+        except Exception:
+            pass
+        # this turn points back at the thread: its words are not a title
+        sig['title_guess'] = None
+    elif sig.get('title_guess'):
+        try:
+            from prometheus import followup_refine as _fur_id
+            if _fur_id.reads_as_sentence(sig['title_guess'], prompt):
+                sig['title_guess'] = None
+        except Exception:
+            pass
     medium_field = str(draft.get('medium') or '').strip().lower()
     content_typed = (
         _draft_is_ip_content(draft)
@@ -56331,7 +56362,7 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
         return draft
 
     subject_entity = str(draft.get('subject') or '').split(' - ', 1)[0]
-    missing = _identity_tokens_missing_from_prompt(subject_entity, prompt)
+    missing = _identity_tokens_missing_from_prompt(subject_entity, _own_words)
     plat_ok = True
     if sig['platform']:
         want = _normalize_for_match(sig['platform']).replace(' ', '')
@@ -56352,7 +56383,7 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
 
     ver = None
     try:
-        ver = _verify_content_identity(draft, prompt, sig)
+        ver = _verify_content_identity(draft, _own_words, sig)
     except Exception as e:
         try:
             print(f"[identity] verify call failed: {e}")
