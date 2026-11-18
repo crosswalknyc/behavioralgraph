@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "b2314e17de4bae02272aba5f52f864e333f89c086008a831cd413c5dd997ef0a",
+ "content_hash": "96e63427c11175fca07df2b8ad5d1a41d5576ea8d4f3ed73c344e9d9e4081437",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1234,7 +1234,24 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "peacock_title_figures",
+   "decided": "2026-11-18",
+   "statement": "A title's audience on Peacock is stated in viewers (people, each counted once) and in plays. When the prompt carries Peacock title figures on file, they are binding: they take precedence over an earlier figure for the same title on Peacock, and a figure for any other window is consistent with them (a shorter window sits below a longer one). A Peacock title with no figure on file is read against the Peacock scale the prompt carries, and a series figure above the largest long-running drama on the service needs clear evidence of its own. A title's account count on a service is not a figure Crosswalk states: a question that asks for accounts is answered in viewers, with one plain sentence that the count is people. An answer never says where a Peacock figure comes from and never attributes a figure to the service or to a studio. This applies to Peacock only and never moves a figure for the same title on another service.",
+   "match_terms": [
+    "peacock",
+    "on peacock",
+    "peacock viewers",
+    "peacock accounts",
+    "peacock plays",
+    "peacock audience",
+    "peacocktv"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-11-12T05:20:05Z"
+ "generated_at": "2026-11-18T17:11:06Z"
 }

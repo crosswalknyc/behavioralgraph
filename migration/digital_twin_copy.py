@@ -121,6 +121,11 @@ def strip_calibration_language(text: str) -> str:
     t = str(text or '')
     if not t:
         return t
+    try:   # a figure off the Peacock record or one put at the service's door never ships (2026-11-18)
+        from migration import peacock_actuals as _pk_net
+        t = str(_pk_net.scrub(t) or '')
+    except Exception:
+        pass
     if not _DROP_RX.search(t) and not any(rx.search(t) for rx, _ in _REWRITES):
         return t
     return '\n'.join(_strip_line(ln) for ln in t.split('\n'))

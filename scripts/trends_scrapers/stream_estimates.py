@@ -8023,6 +8023,12 @@ def _apply_first_party_calibration(researched: dict[str, dict],
     return fpc.apply_to_store(researched, target_date_iso)
 
 
+def _apply_peacock_scale(researched: dict[str, dict],
+                         target_date_iso: str) -> dict:
+    from scripts.trends_scrapers import peacock_scale as pks
+    return pks.apply_to_store(researched, target_date_iso)
+
+
 def _finalize_published_charts(researched: dict[str, dict],
                                target_date_iso: str) -> dict:
     """The closing sequence every writer of the store runs last.
@@ -8049,6 +8055,10 @@ def _finalize_published_charts(researched: dict[str, dict],
             # them (chart position -> its measured level, titled rows
             # -> their own reading, the rest held under the service).
             ('first_party', lambda: _apply_first_party_calibration(
+                researched, target_date_iso)),
+            # 2026-11-18: the Peacock rail reads the Peacock figures on
+            # file for the shows the record names (peacock_scale).
+            ('peacock_scale', lambda: _apply_peacock_scale(
                 researched, target_date_iso)),
             ('ceiling', lambda: _reclamp_carried_to_platform_ceiling(researched)),
             ('coherence', lambda: _enforce_published_chart_coherence(

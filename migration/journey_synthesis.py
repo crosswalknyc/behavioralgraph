@@ -1507,6 +1507,27 @@ def title_anchor_for(inputs: dict) -> Optional[dict]:
             ta = None
         if ta and int(ta.get('us_viewers') or 0) > 0:
             return ta
+    return _peacock_title_anchor(inputs, cands)
+
+
+def _peacock_title_anchor(inputs: dict, cands: list) -> Optional[dict]:
+    """A viewers journey on Peacock for a show on file, with no title
+    universe established yet: the Peacock figure on file for the
+    journey's window is the universe its watch stage lands on
+    (migration/peacock_actuals.py, 2026-11-18). Peacock only; None for
+    any other platform, a title the record does not name, or no record."""
+    try:
+        from migration import peacock_actuals as _pk
+        if not _pk.is_peacock(inputs.get('platform')):
+            return None
+        start, end = _dates(inputs)
+        for c in cands:
+            v = _pk.viewers(c, start, end) if c else None
+            if v:
+                return {'title': v['title'], 'us_viewers': int(v['viewers']), 'sample_size': int(v['sample']),
+                        'window': dict(v['window']), 'source_product': 'profile_iq'}
+    except Exception:
+        return None
     return None
 
 

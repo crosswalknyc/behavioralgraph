@@ -540,11 +540,34 @@ def _aired_check(ledger: dict, sess: dict) -> Optional[dict]:
     return rec
 
 
+def _peacock_on_file(twin: dict, sess: dict) -> Optional[dict]:
+    """A twin whose home is Peacock, testing a title on file whose season
+    is on air: the first-week audience of a new episode on the service is
+    the Peacock figure on file (migration/peacock_actuals.py, 2026-11-18),
+    so the forecast anchors to it with no research call. None for any
+    other home, a title the record does not name, or no record. Internal
+    like every anchor here: the reader never sees it (public_forecast)."""
+    try:
+        from migration import peacock_actuals as _pk
+        if not _pk.is_peacock(str(_meta(twin).get('platform_home') or '')):
+            return None
+        ev = _pk.episode_viewers(_show_name(twin, sess))
+        if not ev or int(ev.get('people') or 0) < AIRED_MIN_PEOPLE:
+            return None
+        return {'aired': True, 'aired_on': '', 'people': int(ev['people']), 'measure': 'first-week audience of a new episode on the service',
+                'source_class': 'on file', 'note': ''}
+    except Exception:
+        return None
+
+
 def aired_performance(twin: dict, sess: dict, *, model_fn=None) -> Optional[dict]:
     """Whether the title behind this test has aired, and its first-week
     audience when it has: one research call on the room's media desk model
     (web search on), or None when no model answers. The answer is internal;
     the reader never sees it (``public_forecast``)."""
+    on_file = _peacock_on_file(twin, sess)
+    if on_file is not None:
+        return on_file
     try:
         from migration.digital_twin_room import Models, model_available
     except Exception:

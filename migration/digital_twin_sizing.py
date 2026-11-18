@@ -245,12 +245,39 @@ def title_audience(twin: dict, title: str, *, episode_words: str = '', platform:
     if not isinstance(data, dict):
         return None
     doc = _normalize_research(data, title)
+    _peacock_on_file(doc, title, platform or str(_meta(twin).get('platform_home') or ''))
     if doc.get('released') and not any(v is not None for v in (doc.get('skews') or {}).values()):
         # a released title with no profile of its own: one narrow look-up for the franchise's or the prior season's
         _franchise_skews(doc, title, platform=platform, model_fn=model_fn, tools=tools)
     if doc.get('released') is not None:
         _cache_put(s3, key, doc)        # a definite answer holds for the day; an answer that could not be supported is asked again
     return doc
+
+
+def _peacock_on_file(doc: dict, title: str, platform: str) -> None:
+    """A twin whose home is Peacock sizes a title on file from the
+    Peacock figure on file (migration/peacock_actuals.py, 2026-11-18):
+    a new episode's audience on the service in its first week, low to
+    high across the season on air. Peacock only; any other home, a title
+    the record does not name, or no record leaves the research as it
+    came back. The figure is ours and the basis stays on the record
+    like every other sizing basis (public_sizing drops it)."""
+    try:
+        from migration import peacock_actuals as _pk
+        if not _pk.is_peacock(platform):
+            return
+        ev = _pk.episode_viewers(title)
+        if not ev or int(ev.get('people') or 0) < AUDIENCE_MIN_PEOPLE:
+            return
+        low, high, typ = int(ev['low']), int(ev['high']), int(ev['people'])
+        doc['released'] = True
+        doc['audience_range'] = {'low': low, 'high': high, 'typical': typ}
+        doc['audience_low'] = int(round(low + (max(high, low) - low) * LOW_THIRD_POSITION))
+        doc['measure'] = 'people who watch a new episode on the service in its first seven days'
+        doc['window'] = 'first seven days per episode'
+        doc['source_class'] = 'on file'
+    except Exception:
+        return
 
 
 def _franchise_skews(doc: dict, title: str, *, platform: str = '', model_fn=None, tools=None) -> None:

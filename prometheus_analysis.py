@@ -3796,6 +3796,14 @@ def scrub_user_text(text):
     s = re.sub(r'\b([Ee])stimates?\b',
                lambda m: ('Figure' if m.group(1) == 'E' else 'figure') + ('s' if m.group(0).endswith('s') else ''), s)
     s = _drop_frame_breaking_sentences(s)
+    # A figure off the Peacock record, a figure put at the service's door,
+    # or a title's account count never ships (2026-11-18); a text with
+    # none of those comes back byte for byte.
+    try:
+        from migration import peacock_actuals as _pk_net
+        s = _pk_net.scrub(s)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     # Method language (2026-10-06, Jenna: "never mention anything that
     # sounds synthetic"): sentences about how a figure was made go;
     # the figures stay. One rule, every exit that calls this.

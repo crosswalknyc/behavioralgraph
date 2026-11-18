@@ -7493,7 +7493,33 @@ def _build_synthetic_panel(config: dict) -> dict:
                 except (TypeError, ValueError):
                     pass
 
-    if 'held' in reach_source:
+    # A title on Peacock reads the Peacock figure on file (2026-11-18,
+    # migration/peacock_actuals.py): a show the record names takes its own
+    # figure for this window, any other Peacock title takes the correction
+    # the record taught. Peacock only; a no-op on every other platform and
+    # when the record cannot be read. It is the last word on the reach
+    # ahead of the explicit override: it sits after the held-figure floor
+    # (a figure of our own never lifts a title back over the service's
+    # count) and it locks the reach the same way a held figure does. The
+    # title's established universe (the override below) still wins, so
+    # one title keeps one number.
+    try:
+        from migration import peacock_actuals as _pk_scale
+        _pk_got = _pk_scale.calibrate(
+            show_name, [config.get('platform_name', '')],
+            config.get('campaign_start'), config.get('campaign_end'), reach_us,
+            surface='window_viewers',
+            kind=_pk_scale.kind_of(config.get('genre'), config.get('dashboard_category')),
+            on_air=(True if str(config.get('content_cadence') or '').strip().lower() == 'weekly' else None),
+            original=bool(is_new and 'original' in str(config.get('genre') or '').lower()))
+        if _pk_got and int(_pk_got.get('people') or 0) > 0:
+            print(f"   Reach on file for this service: {reach_us:,} -> {int(_pk_got['people']):,} US")
+            reach_us = int(_pk_got['people'])
+            reach_source = f'{reach_source}+on_file'
+    except Exception as _pk_err:
+        print(f"   (service figure on file not read: {type(_pk_err).__name__})")
+
+    if 'held' in reach_source or 'on_file' in reach_source:
         config['_held_locked_reach'] = reach_us
 
     # Explicit override always wins (CLI --reach-us flag)

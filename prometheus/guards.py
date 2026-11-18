@@ -1154,6 +1154,11 @@ def scrub_method_language(text):
     t = str(text or '')
     if not t.strip():
         return t
+    try:   # a figure off the Peacock record or one put at the service's door never ships (2026-11-18)
+        from migration import peacock_actuals as _pk_net
+        t = str(_pk_net.scrub(t) or '')
+    except Exception:
+        pass
     paras = t.split('\n')
     out_paras = []
     def _subs(x):

@@ -501,6 +501,18 @@ def _margin(title, tag, lo, hi) -> float:
     return lo + (hi - lo) * _unit(title_key(title), tag, "margin")
 
 
+def _peacock():
+    """The Peacock record's reader, or None when it cannot be imported."""
+    try:
+        try:
+            from migration import peacock_actuals as _pk
+        except ImportError:
+            import peacock_actuals as _pk  # type: ignore
+        return _pk
+    except Exception:
+        return None
+
+
 # ----------------------------------------------------------------- the size
 def size(spec, subject="", *, facts=None, record=None, drafted_people=None) -> dict | None:
     """The rule's verdict for a scoped build, or None when the spec is
@@ -582,13 +594,46 @@ def size(spec, subject="", *, facts=None, record=None, drafted_people=None) -> d
             elif mine and theirs and mine > theirs and people <= bn:
                 people = bn * (1.0 + _margin(title, "full:" + "+".join(bs), 0.04, 0.11))
                 notes.append(f"a full carrier sits over the settled {'+'.join(bs)} slice")
+    # A scope on Peacock reads the Peacock figure on file (migration/peacock_actuals.py, 2026-11-18): a show the
+    # record names takes its own figure for this window, any other title on Peacock alone takes the correction the
+    # record taught, and a set that names Peacock among others is at least its Peacock part. A build already
+    # settled on the same window keeps its figure (one number per title and window). Peacock only: no other
+    # service's scope is touched. Silent, and a no-op when the record cannot be read.
+    on_file, pk_floor = None, 0.0
+    try:
+        pk = _peacock()
+        if pk is not None and "peacock" in svcs and basis != "anchor":
+            if svcs == ["peacock"]:
+                on_file = pk.calibrate(title, svcs, win[0], win[1], people, surface="scoped_build",
+                                       kind=pk.kind_of(spec.get("genre"), spec.get("brand_category"), spec.get("content_kind")))
+                if on_file:
+                    people = float(on_file["people"])
+                    basis = "on_file" if on_file["basis"] == "anchor" else "on_file_scaled"
+                    notes.append(f"peacock figure on file ({on_file['basis']})")
+            else:
+                part = pk.component(title, svcs, win[0], win[1])
+                if part and people < part:
+                    people = part * (1.0 + _margin(title, "+".join(svcs) + ">peacock", 0.04, 0.11))
+                    pk_floor = people
+                    notes.append("lifted over its Peacock part")
+    except Exception:
+        on_file, pk_floor = None, 0.0
+    if on_file and on_file.get("basis") == "anchor":
+        pk_floor = people
+    if pk_floor > 0:
+        need = pk_floor / (1.0 - _margin(title, "under-whole", 0.12, 0.2))
+        if need > whole_win:
+            whole_win = need                    # the whole clears the Peacock figure on file, as it clears a settled build
+            notes.append("whole lifted to clear the Peacock figure on file")
     # never the whole, and under it by a real margin
-    ceiling = whole_win * min(hi if 0 < hi < 1 else 1.0, 1.0 - _margin(title, "under-whole", 0.12, 0.2))
+    ceiling = whole_win * min((hi if 0 < hi < 1 and pk_floor <= 0 else 1.0), 1.0 - _margin(title, "under-whole", 0.12, 0.2))
     if people > ceiling:
         people = ceiling
         notes.append("held under the whole")
     if basis == "anchor":
         sample = int(same[0].get("sample") or 0) or _messy(subject or spec.get("name"), round(people / PANEL_TO_US))
+    elif basis == "on_file" and on_file and int(on_file.get("sample") or 0) > 0 and people == float(on_file["people"]):
+        sample = int(on_file["sample"])                              # the figure on file ships as it is
     else:
         base = max(1, int(round(people / PANEL_TO_US)))
         sample = _messy(subject or spec.get("name"), base)
