@@ -4218,7 +4218,7 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
         # Sized off the title's held figure (2026-11-18): the held figure is
         # the anchor; the plausibility flags are recorded, never applied.
         _lock_msg = (
-            f"AI adjustments skipped — viewers sized off the title's held "
+            f"AI adjustments skipped: viewers sized off the title's held "
             f"figure ({int(p['_held_locked_reach']):,} US). The AI "
             f"plausibility flags are recorded for audit but not applied."
         )
