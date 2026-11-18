@@ -2100,8 +2100,22 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         # shape too, every table derived from one model of the cast draws.
         from migration import journey_premiere as _pr
         return _pr.synthesize(inputs, claude_json, tools=tools, created_by=created_by)
-    start, end = _dates(inputs)
     anchors = corpus_anchors(inputs)
+    # A partnership we already valued (2026-11-17, Coach x WNBA): the
+    # journey is the same people in the same window as the Brand
+    # Partnership IQ valuation, and lands on its counts.
+    valuation = None
+    try:
+        from migration import journey_bpiq_anchor as _jba
+        if str(inputs.get('journey_kind') or 'purchase').lower() == 'purchase':
+            valuation = _jba.find_valuation(inputs, anchors)
+        if valuation and not (inputs.get('start_date') and inputs.get('end_date')) \
+                and valuation['window'].get('start') and valuation['window'].get('end'):
+            inputs = dict(inputs, start_date=valuation['window']['start'], end_date=valuation['window']['end'])
+    except Exception as exc:
+        print(f'[journey] valuation anchor skipped: {exc}')
+        valuation = None
+    start, end = _dates(inputs)
     # Same ask, same answer (2026-10-05): a stored journey that IS this
     # ask replays with fresh run metadata instead of a cold rebuild.
     replay = find_replayable_journey(inputs, anchors)
@@ -2127,7 +2141,9 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         except Exception as exc:
             print(f'[journey] paths attach on replay skipped: {exc}')
         return reconcile_payload(replay)
-    norms_on = _norms_enabled()
+    # the valuation, not the exposure band, sets the level of a valued
+    # partnership: its window is a whole season and its counts are held
+    norms_on = _norms_enabled() and not valuation
     band0 = None
     # The definition a watch journey carries (Carolyn Bisson, 2026-10-22):
     # the research always reasons the Babylon 5 click chain on its own band;
@@ -2159,6 +2175,7 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             'chain above exactly as described and give title_viewers_in_window your best public-anchor figure'))
     user_prompt = json.dumps({
         'norms': norms_block,
+        'valuation_anchor': (_jba.prompt_block(valuation) if valuation else None),
         'corpus_anchors': anchors_prompt_block(anchors),
         'subject': inputs['subject'],
         'platform': inputs['platform'],
@@ -2172,14 +2189,15 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'tam_accounts': int(inputs.get('tam_accounts') or US_GEN_POP),
         'notes': inputs.get('notes') or '',
     })
-    prim = claude_json(RESEARCH_SYSTEM_PROMPT + COMPACT_OUTPUT_RULE, user_prompt,
+    system_prompt = RESEARCH_SYSTEM_PROMPT + (_jba.VALUATION_RULE if valuation else '') + COMPACT_OUTPUT_RULE
+    prim = claude_json(system_prompt, user_prompt,
                        max_tokens=24000, temperature=0.6,
                        surface='journey_synthesis', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
         # One more try, tighter: the first read ran long or came back
         # empty (The Following, 2026-10-14). Same ask, shorter answer.
         print('[journey] research returned no primitives; one compact re-ask')
-        prim = claude_json(RESEARCH_SYSTEM_PROMPT + COMPACT_OUTPUT_RULE + COMPACT_RETRY_RULE, user_prompt,
+        prim = claude_json(system_prompt + COMPACT_RETRY_RULE, user_prompt,
                            max_tokens=24000, temperature=0.4,
                            surface='journey_synthesis_retry', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
@@ -2187,7 +2205,15 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     if anchors.get('attribution'):
         prim = dict(prim)
         prim['tracked_assets'] = anchors['attribution'].get('assets') or []
+    if valuation:
+        try:
+            prim = _jba.seat_primitives(prim, valuation, int(inputs.get('tam_accounts') or US_GEN_POP),
+                                        str(inputs.get('platform') or ''))
+        except Exception as exc:
+            print(f'[journey] valuation seat skipped: {exc}')
     payload = build_journey(inputs, prim, created_by=created_by)
+    if valuation:
+        payload = _jba.hold(payload, valuation, prim, inputs, seed=f"{inputs['subject']}|{inputs['platform']}")
     if anchors.get('attribution'):
         try:
             payload = apply_attribution_anchors(
@@ -2220,11 +2246,15 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         payload = _jg.apply(payload, inputs, claude_json, seed=f"{inputs['subject']}|{inputs['platform']}")
     except Exception as exc:
         print(f'[journey] gold standard pass skipped: {exc}')
+    if valuation:
+        payload = _jba.finish(payload, valuation, inputs, seed=f"{inputs['subject']}|{inputs['platform']}")
     try:
         from migration.journey_clickstream import attach_clickstream
         attach_clickstream(payload, prim, inputs)
     except Exception as exc:
         print(f'[journey] clickstream attach skipped: {exc}')
+    if valuation:
+        payload = _jba.settle_urls(payload, valuation, seed=f"{inputs['subject']}|{inputs['platform']}")
     # Pathways and One viewer on every journey (Jenna 2026-11-03), reasoned
     # from the finished spine, fork, tables and clickstream so the three
     # reads agree with the rest of the file.

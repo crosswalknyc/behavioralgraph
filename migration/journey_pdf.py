@@ -455,6 +455,12 @@ def _build_pdf(payload: dict) -> bytes:
     if not G.is_watch_journey(payload):
         from migration import journey_gold_purchase as _gp
         if _gp.is_purchase_journey(payload):
+            if (payload.get('meta') or {}).get('valuation_anchor'):
+                # a journey on a valued partnership has its own words
+                # (2026-11-17): it starts on the people the partnership
+                # reached and runs a season, not 30 days from a post
+                from migration import journey_pdf_partnership as _pv
+                return _pv.build_pdf(payload)
             from migration import journey_pdf_purchase as _pp
             return _pp.build_pdf(payload)
     from migration import journey_gold_watch as _gw

@@ -180,6 +180,11 @@ The reader already has the path counts. You supply the named rows for the sectio
 Rules: labels name real things for this brand, never placeholders. A label is a plain phrase of 4 to 9 words in sentence case that reads on its own ("Checked the price on Walmart first", "Searched for an Amazon promo code", "Asked Reddit whether 200mg of caffeine is safe", "Warheads Sour Watermelon 12-pack"). `doing` is what that looked like click by click, 6 to 14 words, sentence case, and never a restatement of the label. Shares are messy (no .0 or .5 endings), no two shares identical, the largest row under 60. Nothing else in the output."""
 
 
+ABOUT_RULE = """
+
+`about` says who these people are and what brought them: a named partnership, its content and its beats. Every section is about THOSE people, so the rows name that partnership's own content, pieces, searches and pages wherever they apply (the pieces the talent carried, the films, the events), next to the brand's ordinary ones. `about.tables_already_written` lists rows the journey already holds: use the same names for the same things, and keep top_products in step with what they bought first (a piece that leads one cannot trail in the other). Keep each `doing` under 12 words."""
+
+
 def is_purchase_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
     meta = payload.get('meta') or {}
     kind = str((inputs or {}).get('journey_kind') or meta.get('journey_kind') or '').lower()
@@ -273,9 +278,15 @@ def _research_rows(wanted: list, title: str, platform: str, payload: dict, claud
         return {}
     meta = payload.get('meta') or {}
     try:
-        user = json.dumps({'brand': title, 'where_sold': platform, 'window': f"{meta.get('start_date')} to {meta.get('end_date')}",
-                           'category': meta.get('category') or '', 'wanted': list(wanted)})
-        out = claude_json(RESEARCH_PROMPT, user, max_tokens=4000, temperature=0.4, surface='journey_gold_purchase')
+        ask = {'brand': title, 'where_sold': platform, 'window': f"{meta.get('start_date')} to {meta.get('end_date')}",
+               'category': meta.get('category') or '', 'wanted': list(wanted)}
+        system = RESEARCH_PROMPT
+        about = (meta.get('valuation_anchor') or {}).get('brief')
+        if about:                                       # a journey on a valued partnership (2026-11-17, Coach x WNBA)
+            ask['about'] = about
+            system += ABOUT_RULE
+        user = json.dumps(ask)
+        out = claude_json(system, user, max_tokens=4000 if not about else 7000, temperature=0.4, surface='journey_gold_purchase')
         if not isinstance(out, dict):
             return {}
         clean = {}
@@ -510,6 +521,8 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
     Returns the payload (unchanged when it is not a purchase journey)."""
     try:
         if not isinstance(payload, dict) or not is_purchase_journey(payload, inputs):
+            return payload
+        if _settled(payload):
             return payload
         j = payload.get('fragrance_shop_journey')
         if not isinstance(j, dict) or not j.get('spine'):
@@ -750,8 +763,19 @@ def section(payload: dict, key: str) -> Optional[dict]:
         return None
 
 
+def _settled(payload: dict) -> bool:
+    """A journey on a valued partnership that already went through this
+    pass and was then settled to the valuation (2026-11-17). Its section
+    set is final: a second pass (a replay, the PDF, the short lines) would
+    bring back the whole-market tables the valuation replaced."""
+    meta = payload.get('meta') or {}
+    return bool(meta.get('valuation_anchor') and (meta.get('gold') or {}).get('standard'))
+
+
 def is_gold(payload: dict) -> bool:
     try:
+        if _settled(payload):
+            return True
         j = payload.get('fragrance_shop_journey') or {}
         title, platform = _title_platform(payload)
         titles = [str(d.get('title') or '') for d in (j.get('detours') or [])]
@@ -797,7 +821,23 @@ def ship_summary(payload: dict) -> dict:
     return out
 
 
+def _valued(payload: dict, fn: str):
+    """A journey on a valued partnership carries its own short version
+    (2026-11-17): the standard lines read a 30-day path from a post."""
+    if not (payload.get('meta') or {}).get('valuation_anchor'):
+        return None
+    try:
+        from migration import journey_pdf_partnership as _pv
+        return getattr(_pv, fn)(payload) or None
+    except Exception as exc:
+        print(f'[journey-gold-purchase] partnership words skipped: {exc}')
+        return None
+
+
 def ship_lines(payload: dict) -> list:
+    own = _valued(payload, 'short_lines')
+    if own:
+        return own
     s = ship_summary(payload)
     T, P = s['title'], s['platform']
     lines = [f"The short version, {s['window'] or 'the window'}, unique US people:" if s['window'] else "The short version, unique US people:",
@@ -818,6 +858,9 @@ def ship_lines(payload: dict) -> list:
 
 def analysis_points(payload: dict) -> list:
     """The TLDR for the PDF: what we found, why it matters, what to do."""
+    own = _valued(payload, 'short_points')
+    if own:
+        return own
     s = ship_summary(payload)
     T, P = s['title'], s['platform']
     pts = []
