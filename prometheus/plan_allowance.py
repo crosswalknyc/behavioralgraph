@@ -86,7 +86,7 @@ def seat_reads_included(host, session=None, amount_usd=None, username=None):
         return False
 
 
-def refusal_payload(host, username, pull_type, addon_cuts=0, credits_required=0, money=None):
+def refusal_payload(host, username, pull_type, addon_cuts=0, credits_required=0, money=None, quarter_reads=0):
     """The 402 body for an Approve that cannot start for funding reasons.
     The line is the wallet's shared one; a plan allowance carries no
     balance on the payload either."""
@@ -95,7 +95,7 @@ def refusal_payload(host, username, pull_type, addon_cuts=0, credits_required=0,
         import wallet as _w
         data = host.load_users()
         user = (data.get('users') or {}).get(username) or {}
-        verdict = _w.pull_funding(user, data, pull_type, addon_cuts=addon_cuts)
+        verdict = _w.pull_funding(user, data, pull_type, addon_cuts=addon_cuts, quarter_reads=quarter_reads)
         line = _w.funds_refusal_line(verdict, money=money)
     except Exception:
         traceback.print_exc()
@@ -162,8 +162,17 @@ def lock_total(included, total, base):
 def lock_cuts(included, n, price):
     if included:
         return 'the cuts are '
-    # n is the cuts the approval charges for (prometheus.order_quote.lock); a dated quarter read is not one
-    return f"{n} x {price} for the cuts, " if n else 'the quarter reads are '
+    # n is what the approval charges for (prometheus.order_quote.lock): the add-on cuts and the dated quarter
+    # reads, each at the cut price (Jenna 2026-11-18)
+    return f"{n} x {price} for the cuts, " if n else 'the cuts are '
+
+
+def quarter_price(kind, included, price):
+    """What one dated quarter read costs, said where the chat offers them (Jenna 2026-11-18: $100 each). Nothing
+    for a seat whose plan includes it, for a brief that does not deliver quarter reads, or for another period."""
+    if kind != 'quarter' or included or not price or str(price).lstrip('$\u00a3\u20ac').strip('0.') == '':
+        return ''
+    return f", {price} each"
 
 
 def build_cost_clause(included, price):
@@ -172,4 +181,4 @@ def build_cost_clause(included, price):
 
 __all__ = ['INCLUDED', 'SUBIQ_JUST', 'SUBIQ_ADDED', 'OUT_OF_PLAN', 'APPROVE_WHAT', 'subiq_ask', 'approve_what',
            'seat_reads_included', 'refusal_payload', 'out_of_plan_reply', 'cut_rate', 'cut_prompt_note',
-           'cut_each', 'cut_word', 'cut_tag', 'lock_total', 'lock_cuts', 'build_cost_clause']
+           'cut_each', 'cut_word', 'cut_tag', 'lock_total', 'lock_cuts', 'quarter_price', 'build_cost_clause']

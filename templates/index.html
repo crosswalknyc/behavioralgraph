@@ -94377,7 +94377,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var decision = String(d.decision || 'new_build').toLowerCase();
                 var _bPt = d.price_table || (synthChatCurrentDraft && synthChatCurrentDraft.price_table) || null;
                 var _bCuts = (_bPt && _bPt.by_cuts) ? _synthChatBillableCuts(d) : ((d.addon_cuts && d.addon_cuts.length) || 0);
-                var _bUsd = _bPt ? _synthChatPriceUsd(_bPt, decision, _bCuts) : null;
+                var _bUsd = _bPt ? _synthChatPriceUsd(_bPt, decision, _bCuts, _synthChatQuarterReads(d, decision).length) : null;
                 if (_bUsd === null) { _usdKnown = false; } else { _usdTotal += _bUsd; }
                 var cred = (_bUsd !== null) ? _synthChatUsd(_bUsd) : '';
                 if (typeof window !== 'undefined' && window.PM_SEAT_INCLUDED) cred = '';   // included with the plan: no price on the line (2026-11-16)
@@ -95735,10 +95735,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _dk = String(s.decision || 'new_build').toLowerCase();
                 if (_dk === 'existing_match') {
                     facts.push('Cost: $0 to reuse the existing file, or '
-                        + _synthChatUsd(_synthChatPriceUsd(_pt, 'new_build', _nCuts))
+                        + _synthChatUsd(_synthChatPriceUsd(_pt, 'new_build', _nCuts, _synthChatQuarterReads(s, 'new_build').length))
                         + ' for a fresh build');
                 } else {
-                    facts.push('Cost: ' + _synthChatUsd(_synthChatPriceUsd(_pt, _dk, _nCuts))
+                    facts.push('Cost: ' + _synthChatUsd(_synthChatPriceUsd(_pt, _dk, _nCuts, _synthChatQuarterReads(s, _dk).length))
                         + ' on approval');
                 }
             }
@@ -95747,9 +95747,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (facts.length) line += '\n\n' + facts.join('\n');
             var _cuts = s.addon_cuts;
             if (_cuts && _cuts.length) {
-                line += '\n\nAdd-on cuts' + (_pt ? ' (' + _synthChatUsd(_pt.addon_cut) + ' each)' : '') + ':';
+                // an included seat reads no price on the legend either (2026-11-18)
+                var _cutsPriced = _pt && !(typeof window !== 'undefined' && window.PM_SEAT_INCLUDED);
+                line += '\n\nAdd-on cuts' + (_cutsPriced ? ' (' + _synthChatUsd(_pt.addon_cut) + ' each)' : '') + ':';
                 for (var _ci = 0; _ci < _cuts.length; _ci++) {
                     line += '\n- ' + (_cuts[_ci].label || _cuts[_ci].cut_id);
+                }
+            }
+            // Dated quarter reads: each its own file, each charged at the
+            // cut price (Jenna 2026-11-18). Listed with what one costs.
+            var _qReads = _synthChatQuarterReads(s);
+            if (_qReads.length) {
+                var _qPriced = _pt && _pt.quarter_read != null && Number(_pt.quarter_read) > 0 &&
+                    !(typeof window !== 'undefined' && window.PM_SEAT_INCLUDED);
+                line += '\n\nQuarter reads' + (_qPriced ? ' (' + _synthChatUsd(_pt.quarter_read) + ' each)' : '') + ':';
+                for (var _qi = 0; _qi < _qReads.length; _qi++) {
+                    line += '\n- ' + _qReads[_qi];
                 }
             }
             // The reader asked how the build works ("talk me through how you
@@ -95808,7 +95821,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Mirrors the server's _v1_price_usd_for: the tier price plus
         // add-on cuts, with the first cut baked into cut_needs_parent
         // and a cuts-only derive priced per cut.
-        function _synthChatPriceUsd(pt, decision, nCuts) {
+        // The dated quarter reads an approval charges for (2026-11-18):
+        // the ones the build ships (a 'Q1 2026' label, ISO start before
+        // ISO end, each quarter once, eight at most), on a decision that
+        // delivers them. Mirrors the server's wallet.billable_quarter_reads.
+        function _synthChatQuarterReads(d, decision) {
+            var dec = String(decision || (d && d.decision) || 'new_build').toLowerCase();
+            if (dec !== 'new_build' && dec !== 'time_shifted_refresh' && dec !== 'cut_needs_parent') return [];
+            var raw = (d && d.quarter_cuts) || [];
+            var out = [], seen = {};
+            for (var i = 0; i < raw.length && out.length < 8; i++) {
+                var q = raw[i];
+                if (!q || typeof q !== 'object') continue;
+                var label = String(q.label || '').toUpperCase().trim().replace(/\s+/g, ' ');
+                var alt = /^([1-4])Q ((?:20)?\d{2})$/.exec(label);
+                if (alt) label = 'Q' + alt[1] + ' ' + alt[2];
+                var st = String(q.start || '').trim(), en = String(q.end || '').trim();
+                if (!/^Q[1-4] (?:20)?\d{2}$/.test(label) || !/^\d{4}-\d{2}-\d{2}$/.test(st) ||
+                    !/^\d{4}-\d{2}-\d{2}$/.test(en) || !(st < en) || seen[label]) continue;
+                seen[label] = true;
+                out.push(label);
+            }
+            return out;
+        }
+        function _synthChatPriceUsd(pt, decision, nCuts, nQuarters) {
             var cut = Number(pt.addon_cut) || 0;
             var n = Math.max(Number(nCuts) || 0, 0);
             if (decision === 'existing_match') return 0;
@@ -95820,9 +95856,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var _by = pt.by_cuts || null;
             var _row = _by ? (_by[decision] || _by.new_build) : null;
             if (_row && _row.length >= 2) {
-                if (n < _row.length) return Number(_row[n]) || 0;
+                // A brief's rows already hold its quarter reads (the
+                // server writes them in). When the brief's count has
+                // moved since, the difference is added at the table's own
+                // price; a table from before quarter reads were charged
+                // carries none and adds nothing.
+                var _moved = 0;
+                if (nQuarters != null && pt.quarter_read != null &&
+                    (decision === 'new_build' || decision === 'time_shifted_refresh' || decision === 'cut_needs_parent')) {
+                    _moved = (Number(pt.quarter_read) || 0) * ((Number(nQuarters) || 0) - (Number(pt.quarter_reads) || 0));
+                }
+                if (n < _row.length) return (Number(_row[n]) || 0) + _moved;
                 var _last = Number(_row[_row.length - 1]) || 0;
-                return _last + (_last - (Number(_row[_row.length - 2]) || 0)) * (n - _row.length + 1);
+                return _last + (_last - (Number(_row[_row.length - 2]) || 0)) * (n - _row.length + 1) + _moved;
             }
             if (decision === 'derive_cut') return cut * Math.max(n, 1);
             if (decision === 'cut_needs_parent') {

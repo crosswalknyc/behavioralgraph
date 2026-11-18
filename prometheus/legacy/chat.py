@@ -2580,7 +2580,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         except Exception as _fx:
             _faults.note('chat', _fx)
 
-        spec_draft['price_table'] = _pm_price_table()
+        spec_draft['price_table'] = _oq.table_for_draft(_H, None, spec_draft, _pm_price_table())   # its quarter reads inside it
         return {
             'success': True, 'subject_input': subject,
             'spec_draft': spec_draft,
@@ -3715,14 +3715,17 @@ def api_synth_chat_clarify():
         total = base_credits + _H.ADDON_CUT_CREDITS * n_all
         draft['estimated_credits'] = total
         draft.pop('strategist_recs', None)
+        if qcuts or (draft.get('price_table') or {}).get('quarter_reads'):   # the card's table holds the quarter reads as they now stand
+            draft['price_table'] = _oq.table_for_draft(_H, None, draft, draft.get('price_table'))
         if cuts or qcuts:
             _lk = _pm_seat_reads_included()   # an included seat reads no price on the cuts or the total (2026-11-17)
+            _lq = _oq.lock(_H, draft)   # what Approve charges: the build, its add-on cuts and its quarter reads (2026-11-18)
             cut_lines = "\n".join(
                 [f"  - {c.get('label') or c.get('cut_id')}"
                  f"{_plan.cut_tag(_lk, _pm_usd_label(_pm_cut_usd(draft)))}" for c in cuts]
                 + [f"  - {q['label']} quarter read "
-                   f"({_H._ew_format_label(q.get('start'), q.get('end'))})" for q in qcuts])
-            _lq = _oq.lock(_H, draft)   # what Approve charges: the build and its add-on cuts, never a second sum
+                   f"({_H._ew_format_label(q.get('start'), q.get('end'))})"
+                   f"{_plan.cut_tag(_lk or not _lq['quarters'], _pm_usd_label(_lq['quarter_each']))}" for q in qcuts])
             msg = (f"Locked in {n_all} cut"
                    f"{'s' if n_all != 1 else ''}:\n{cut_lines}\n\n"
                    f"{_plan.lock_total(_lk, _pm_usd_label(_lq['total']), _pm_usd_label(_lq['base']))}"
@@ -4402,8 +4405,6 @@ def api_synth_chat_clarify():
                     or subject).strip()
         subiq_credits = int(data.get('subiq_credits') or _H.CREDITS_SVOD)
         _sq = _oq.subiq(_H, draft, label, _pm_usd_label)   # the tracker with and without the Profile IQ, as Approve charges it
-        prof_credits = int(data.get('profile_credits')
-                           or _H.CREDITS_PROFILE_ANALYSIS)
         low = answer.lower().strip()
         said_yes = bool(_re.match(
             r'^(yes|yep|yeah|ok|okay|sure|add|both|include|do it|'
@@ -4414,8 +4415,7 @@ def api_synth_chat_clarify():
             r'without)\b', low)) or low.startswith('2')
         if said_yes and not said_no:
             subiq['addon_profile'] = True
-            total = subiq_credits + prof_credits
-            draft['estimated_credits'] = total
+            draft['estimated_credits'] = subiq_credits   # the add-on rides the tracker, in credits as in dollars (2026-11-18)
             draft.pop('ask_subiq_upsell', None)
             draft.pop('subiq_upsell_data', None)
             return jsonify({
@@ -5186,7 +5186,8 @@ def api_synth_chat_clarify():
         return jsonify({
             'success': True, 'draft': draft,
             'message': (f"I can do that. Each {_unit[:-1]} ships as its "
-                        f"own dated read on the same audience. Which "
+                        f"own dated read on the same audience"
+                        f"{_plan.quarter_price(_win['kind'], _pm_seat_reads_included(), _pm_usd_label(_oq.quarter_each(_H, draft)))}. Which "
                         f"{_unit} do you want? For example {_eg}. Or say "
                         "none to skip the cuts."),
             'next_step': 'cuts',
@@ -7114,7 +7115,7 @@ def _pm_interpret_core(user, body, text, history):
             _auto = None
         if _auto is not None:
             return _auto
-        spec_draft['price_table'] = _ptab = _pm_price_table()  # money, not credits
+        spec_draft['price_table'] = _ptab = _oq.table_for_draft(_H, None, spec_draft, _pm_price_table())  # money, not credits; its quarter reads inside it
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -8100,23 +8101,10 @@ def _spec_from_draft(draft):
     # on dates' ask): each entry ships as its own dated deliverable
     # off the finished parent - the worker fans them out as window
     # re-reads, so the numbers stay anchored to the same universe.
-    _qcuts = draft.get('quarter_cuts') or []
-    if isinstance(_qcuts, list) and _qcuts:
-        _clean_q = []
-        for q in _qcuts:
-            if not isinstance(q, dict):
-                continue
-            _ql = str(q.get('label') or '').strip().upper()
-            _qs = str(q.get('start') or '').strip()
-            _qe = str(q.get('end') or '').strip()
-            if not (re.fullmatch(r'Q[1-4] (?:20)?\d{2}', _ql)
-                    and re.fullmatch(r'\d{4}-\d{2}-\d{2}', _qs)
-                    and re.fullmatch(r'\d{4}-\d{2}-\d{2}', _qe)
-                    and _qs < _qe):
-                continue
-            _clean_q.append({'label': _ql, 'start': _qs, 'end': _qe})
-        if _clean_q:
-            spec['quarter_cuts'] = _clean_q[:8]
+    # The list is the wallet's (2026-11-18): what is sent is what an approval charges for, $100 a quarter read.
+    _clean_q = __import__('wallet').clean_quarter_reads(draft)
+    if _clean_q:
+        spec['quarter_cuts'] = _clean_q
     # If Claude proposed clickstream_signals at interpret time (for a
     # platform/retailer behavioral cohort), thread them into a partial
     # persona_doc so the synth engine can use them for BRAND INPUT even
@@ -8689,26 +8677,31 @@ def _pm_approve_core(user, body):
     _charge_user = (session.get('username') or user.get('username')
                     or '').strip()
     _billable_cuts = __import__('wallet').billable_cuts(draft)
-    if d_type == 'addon_cuts' and _billable_cuts:
-        # cuts-only derive: the cuts ARE the deliverable - no base fee
-        price = _H.ADDON_CUT_CREDITS * len(_billable_cuts)
-    else:
-        price = (_H._V1_CREDITS.get(decision, _H.CREDITS_PROFILE_ANALYSIS)
-                 + _H.ADDON_CUT_CREDITS * len(_billable_cuts))
-    if decision == 'subscriber_iq' and (spec.get('subiq')
-                                        or {}).get('addon_profile'):
-        # Tracker + Profile IQ add-on: both deliverables price in.
-        price += _H.CREDITS_PROFILE_ANALYSIS
+    # Dated quarter reads charge with the build, each at the cut price (Jenna 2026-11-18: "Charge $100 each, as
+    # the chat used to say"); the list is the one the spec ships and every quote counts.
+    _quarter_reads = len(__import__('wallet').billable_quarter_reads(draft, decision))
+    # Credits follow the dollars' rule (wallet.order_credits): the tier, plus one cut's credits for each add-on
+    # cut and each quarter read; a cuts-only derive has no tier; the Subscriber IQ's Profile IQ add-on rides the
+    # tracker and adds nothing (Jenna 2026-11-18: "Make it 10 credits either way, to match the dollar price").
+    price = __import__('wallet').order_credits(
+        _H._V1_CREDITS, _H.ADDON_CUT_CREDITS, decision, len(_billable_cuts), _quarter_reads,
+        cuts_only=(d_type == 'addon_cuts'), default=_H.CREDITS_PROFILE_ANALYSIS)
     _approve_pull_type = __import__('wallet').chat_pull_type(decision)
+    # A card that shows less than this approval now takes (left open across a price change) is not run: the
+    # reader drafts it again at the price as it stands, and is never charged more than they were quoted.
+    _stale = _oq.stale_quote(_H, _charge_user, draft, decision, lambda v: _pm_usd_label(v, _charge_user))
+    if isinstance(_stale, dict):
+        return jsonify(_stale)
     if price > 0 and _charge_user and not _H.has_credits_for(
             _charge_user, price, pull_type=_approve_pull_type,
-            addon_cuts=len(_billable_cuts), what=_plan.approve_what(decision, spec)):
+            addon_cuts=len(_billable_cuts), what=_plan.approve_what(decision, spec),
+            quarter_reads=_quarter_reads):
         # The refusal is the wallet's one shared line (2026-11-17, Naomi at Sony read "This run costs $0. Wallet
         # balance is $11,000. Top up to keep going." on a funded plan): a plan allowance reads no price and no
         # balance, a pay-per-use wallet its real price, and nothing ever reads "costs $0".
         return jsonify(_plan.refusal_payload(
             _H, _charge_user, _approve_pull_type, len(_billable_cuts), price,
-            lambda v: _pm_usd_label(v, _charge_user))), 402
+            lambda v: _pm_usd_label(v, _charge_user), quarter_reads=_quarter_reads)), 402
 
     # Thread the commissioning user + their exact ask onto the job so a
     # failed build's ops email can name who asked and quote what they
@@ -8871,6 +8864,7 @@ def _pm_approve_core(user, body):
                     job_id=str(_session_run_id),
                     pull_type=_approve_pull_type,
                     credits_used=price,
+                    quarter_reads=_quarter_reads,
                     addon_cuts=len(_billable_cuts)):
                 print(f"[synth_chat_run] WARNING: post-queue credit charge "
                       f"failed user={_charge_user} run={_session_run_id} "

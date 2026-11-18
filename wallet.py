@@ -2873,7 +2873,8 @@ def allowance_is_included(user, users_data=None, amount_usd=None) -> bool:
 
 
 def pull_funding(user, users_data=None, pull_type=None, addon_cuts: int = 0,
-                 quantity: int = 1, tool_key: str = "") -> dict:
+                 quantity: int = 1, tool_key: str = "",
+                 quarter_reads: int = 0) -> dict:
     """The one wallet-side answer to "can this seat pay for this run":
     whether the wallet covers it, why not when it does not, the price
     that would be metered and whether the wallet is a plan allowance.
@@ -2913,7 +2914,8 @@ def pull_funding(user, users_data=None, pull_type=None, addon_cuts: int = 0,
             out["reason"] = "not_paying"
             return out
         usd, mode = should_charge_wallet(subject, tk, addon_cuts=addon_cuts,
-                                         quantity=quantity)
+                                         quantity=quantity,
+                                         quarter_reads=quarter_reads)
         out["usd"] = round(float(usd or 0), 2)
         if mode == "unlimited":
             # A paying subject that is never charged covers every pull
@@ -3178,11 +3180,14 @@ def existing_wallet_refund(subject: dict, *, job_id: str = "",
 
 def should_charge_wallet(user: dict, tool_key: str,
                         pricing: Optional[dict] = None,
-                        addon_cuts: int = 0, quantity: int = 1) -> tuple:
+                        addon_cuts: int = 0, quantity: int = 1,
+                        quarter_reads: int = 0) -> tuple:
     """Decide whether a pull for `tool_key` should hit the wallet AND
     at what dollar amount. `addon_cuts` embedded cuts price in on
     top of the tool (see addon_cuts_usd); `quantity` multiplies the
-    tool price (years of a viewership read, 2026-10-08).
+    tool price (years of a viewership read, 2026-10-08);
+    `quarter_reads` dated quarter reads price in at the add-on cut
+    price each (see quarter_reads_usd, Jenna 2026-11-18).
 
     Returns (usd_to_charge, mode) where:
 
@@ -3217,7 +3222,8 @@ def should_charge_wallet(user: dict, tool_key: str,
         # rows AND the wallet doesn't debit them.
         return 0.0, "retired"
     usd = pull_price_usd(user, tool_key, addon_cuts=addon_cuts,
-                         quantity=quantity, pricing=pricing)
+                         quantity=quantity, pricing=pricing,
+                         quarter_reads=quarter_reads)
     if usd <= 0:
         return 0.0, "no_charge"
     return usd, "wallet"
@@ -3225,10 +3231,11 @@ def should_charge_wallet(user: dict, tool_key: str,
 
 def pull_price_usd(subject, tool_key: str, addon_cuts: int = 0,
                    quantity: int = 1,
-                   pricing: Optional[dict] = None) -> float:
+                   pricing: Optional[dict] = None,
+                   quarter_reads: int = 0) -> float:
     """Dollars one pull takes on this billing subject: the tool price
-    times `quantity`, plus the embedded add-on cuts. 0.0 when the tool
-    has no price.
+    times `quantity`, plus the embedded add-on cuts, plus the dated
+    quarter reads. 0.0 when the tool has no price.
 
     This is the ONE arithmetic. should_charge_wallet debits it and
     every quote reads it (order_price_usd, prometheus.order_quote), so
@@ -3247,6 +3254,7 @@ def pull_price_usd(subject, tool_key: str, addon_cuts: int = 0,
         qty = 1
     usd = usd * qty
     usd += addon_cuts_usd(subject, tool_key, addon_cuts, pricing)
+    usd += quarter_reads_usd(subject, tool_key, quarter_reads, pricing)
     return round(usd, 2)
 
 
@@ -3274,11 +3282,126 @@ def billable_cuts(draft) -> list:
     return [c for c in cuts if isinstance(c, dict) and c.get("cut_id")]
 
 
+# ---- dated quarter reads (Jenna 2026-11-18: "Charge $100 each, as the
+# chat used to say") ----
+# One quarter read is ONE calendar quarter of ONE profile: its own dated
+# Total Universe file, '{Subject} - Q1 2026', re-read off the finished
+# parent (no Avid tier, no further cuts). The build server delivers
+# them on the three decisions that finish with a Total Universe of
+# their own; a cut of a profile we hold, a Subscriber IQ and a reuse of
+# an existing file never fan quarters out, so none is charged there.
+# The filter below is the one the build step ships by (it was inline in
+# _spec_from_draft until this date): what is sent is what is charged.
+# Two things it now does that the inline one did not: a quarter typed
+# at the cut step is labelled '2Q 2026' (guards.parse_quarters) and was
+# dropped on its way to the build server, so it was listed on the brief
+# and never delivered; it is read as 'Q2 2026' here. And the same
+# quarter named twice is one quarter read.
+QUARTER_READ_DECISIONS = frozenset({
+    "new_build", "time_shifted_refresh", "cut_needs_parent"})
+QUARTER_READS_MAX = 8
+_QUARTER_LABEL_RX = re.compile(r"Q[1-4] (?:20)?\d{2}")
+_QUARTER_LABEL_ALT_RX = re.compile(r"([1-4])Q ((?:20)?\d{2})")
+_QUARTER_DAY_RX = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def clean_quarter_reads(draft) -> list:
+    """The dated quarter reads a build ships with, as the build step
+    cleans them: a 'Q1 2026' label, ISO start before ISO end, at most
+    QUARTER_READS_MAX. [] when the draft carries none."""
+    try:
+        raw = (draft or {}).get("quarter_cuts") or []
+    except AttributeError:
+        return []
+    if not isinstance(raw, list):
+        return []
+    out, seen = [], set()
+    for q in raw:
+        if not isinstance(q, dict):
+            continue
+        label = " ".join(str(q.get("label") or "").upper().split())
+        alt = _QUARTER_LABEL_ALT_RX.fullmatch(label)
+        if alt:
+            label = f"Q{alt.group(1)} {alt.group(2)}"
+        start = str(q.get("start") or "").strip()
+        end = str(q.get("end") or "").strip()
+        if not (_QUARTER_LABEL_RX.fullmatch(label)
+                and _QUARTER_DAY_RX.fullmatch(start)
+                and _QUARTER_DAY_RX.fullmatch(end)
+                and start < end):
+            continue
+        if label in seen:
+            continue
+        seen.add(label)
+        out.append({"label": label, "start": start, "end": end})
+    return out[:QUARTER_READS_MAX]
+
+
+def billable_quarter_reads(draft, decision=None) -> list:
+    """The quarter reads an approval charges for: the ones the build
+    ships (clean_quarter_reads), on a decision that delivers them.
+    The approve step counts this list and so does every quote."""
+    d = str(decision if decision is not None
+            else (draft or {}).get("decision") or "new_build"
+            ).strip().lower() or "new_build"
+    if d not in QUARTER_READ_DECISIONS:
+        return []
+    return clean_quarter_reads(draft)
+
+
+def quarter_reads_usd(subject, tool_key: str, quarter_reads: int = 0,
+                      pricing: Optional[dict] = None) -> float:
+    """Dollars the dated quarter reads add to a pull: each one at the
+    add-on cut price for the pull's family (addon_cut_tool_key: $100,
+    or a company's own cut rate through tool_price_overrides). A
+    company's Profile rate (profile_pull_usd) is for the build, never
+    for an add-on, exactly as with cuts."""
+    try:
+        n = max(int(quarter_reads or 0), 0)
+    except (TypeError, ValueError):
+        n = 0
+    if n <= 0:
+        return 0.0
+    each = subject_tool_price_usd(
+        subject, addon_cut_tool_key(str(tool_key or "").strip()),
+        pricing or load_pricing())
+    if each <= 0:
+        return 0.0
+    return round(each * n, 2)
+
+
+def order_credits(tiers, per_item, decision, addon_cuts: int = 0,
+                  quarter_reads: int = 0, cuts_only: bool = False,
+                  default: int = 5) -> int:
+    """What an approval takes from a seat that still holds the old
+    credits, under the same rule as the dollars: the decision's tier
+    (`tiers`, app._V1_CREDITS), plus `per_item` (app.ADDON_CUT_CREDITS,
+    3) for each add-on cut and each dated quarter read. A cuts-only
+    order of a profile we hold has no tier: the cuts are the order.
+    A Subscriber IQ's Profile IQ add-on rides the tracker and adds
+    nothing, as on a dollar wallet (Jenna 2026-11-18: "Make it 10
+    credits either way, to match the dollar price")."""
+    try:
+        n = max(int(addon_cuts or 0), 0)
+    except (TypeError, ValueError):
+        n = 0
+    try:
+        q = max(int(quarter_reads or 0), 0)
+    except (TypeError, ValueError):
+        q = 0
+    each = int(per_item or 0)
+    if cuts_only and n:
+        return each * (n + q)
+    return int((tiers or {}).get(decision, default)) + each * (n + q)
+
+
 def order_price_usd(user, users_data, decision, addon_cuts: int = 0,
                     v1: bool = False,
-                    pricing: Optional[dict] = None) -> float:
+                    pricing: Optional[dict] = None,
+                    quarter_reads: int = 0) -> float:
     """What approving a build at `decision` with `addon_cuts` billable
-    cuts takes from this seat's dollar wallet: the same pull_type ->
+    cuts and `quarter_reads` dated quarter reads takes from this seat's
+    dollar wallet: the same pull_type ->
     tool key -> pull_price_usd the charge runs (consume_credit ->
     _try_wallet_fallback -> should_charge_wallet), on the seat's
     billing subject (a company rate rides through). `user` None
@@ -3291,7 +3414,7 @@ def order_price_usd(user, users_data, decision, addon_cuts: int = 0,
             user, users_data or {})
     tk = pull_type_to_tool_key(chat_pull_type(decision, v1))
     return pull_price_usd(subject, tk, addon_cuts=addon_cuts,
-                          pricing=pricing)
+                          pricing=pricing, quarter_reads=quarter_reads)
 
 
 # Cut keys: a pull whose own tool_key IS a cut already prices its
@@ -5801,7 +5924,8 @@ def _tool_display_name(tool_key: str) -> str:
 
 def user_wallet_covers_pull(user: dict, users_data: dict,
                             pull_type: str = None,
-                            addon_cuts: int = 0, quantity: int = 1) -> bool:
+                            addon_cuts: int = 0, quantity: int = 1,
+                            quarter_reads: int = 0) -> bool:
     """True when the resolved billing subject (personal or company
     wallet) can pay for this pull on dollars, not leftover credits.
 
@@ -5815,7 +5939,8 @@ def user_wallet_covers_pull(user: dict, users_data: dict,
     """
     return bool(pull_funding(user, users_data, pull_type,
                              addon_cuts=addon_cuts,
-                             quantity=quantity).get("covered"))
+                             quantity=quantity,
+                             quarter_reads=quarter_reads).get("covered"))
 
 
 def user_can_spend_from_company(user: dict, tool_key: str,
@@ -6023,6 +6148,8 @@ __all__ = [
     "tool_price_usd", "subject_tool_price_usd",
     "pull_price_usd", "order_price_usd", "chat_pull_type",
     "billable_cuts",
+    "QUARTER_READ_DECISIONS", "QUARTER_READS_MAX", "clean_quarter_reads",
+    "billable_quarter_reads", "quarter_reads_usd", "order_credits",
     "PROFILE_BUILD_TOOL_KEYS",
     "LEGACY_CREDIT_USD", "leftover_credits_to_usd",
     "tool_monthly_usd", "prometheus_markup",

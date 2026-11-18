@@ -413,10 +413,12 @@ def quote(uname, user, draft, decision):
         rec = (data.get('users') or {}).get(uname) or rec
     except Exception as e:                              # noqa: BLE001
         _faults.note('pending_briefs.users', e)
-    usd, cuts = None, len(_billable_cuts(draft))
+    usd, cuts, quarters = None, len(_billable_cuts(draft)), 0
     try:
         import wallet as _w
-        verdict = _w.pull_funding(rec, data, _w.chat_pull_type(decision), addon_cuts=cuts)   # the pull the approve step names
+        quarters = len(_w.billable_quarter_reads(draft, decision))     # dated quarter reads charge with the build (2026-11-18)
+        verdict = _w.pull_funding(rec, data, _w.chat_pull_type(decision), addon_cuts=cuts,
+                                  quarter_reads=quarters)              # the pull the approve step names
         out['allowance'] = bool(verdict.get('allowance'))
         out['covered'] = bool(verdict.get('covered'))
         if verdict.get('paying') and float(verdict.get('usd') or 0) > 0:
@@ -428,6 +430,7 @@ def quote(uname, user, draft, decision):
             from . import ask_outcome as _ao
             table = host.price_table_for(uname) if host.has('price_table_for') else None
             v = _ao.draft_price_usd({'decision': decision, 'addon_cuts': draft.get('addon_cuts'),
+                                     'quarter_cuts': draft.get('quarter_cuts'),
                                      'price_table': table if isinstance(table, dict) else draft.get('price_table')})
             usd = round(float(v), 2) if v is not None and float(v) > 0 else None
         except Exception as e:                          # noqa: BLE001

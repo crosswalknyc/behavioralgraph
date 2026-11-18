@@ -2844,7 +2844,7 @@ def check_user_credits(username):
 
 
 def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1,
-                    what=None):
+                    what=None, quarter_reads=0):
     """Return True if the user can pay for this pull.
 
     Internal credits (personal or company pool) still win when they
@@ -2871,7 +2871,8 @@ def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1,
         if not user:
             return False
         verdict = _w.pull_funding(
-            user, data, pull_type, addon_cuts=addon_cuts, quantity=quantity)
+            user, data, pull_type, addon_cuts=addon_cuts, quantity=quantity,
+            quarter_reads=quarter_reads)
         if (not verdict.get('covered') and verdict.get('reason') == 'no_charge'
                 and not verdict.get('allowance')):
             # A product with no price set keeps the old conservative
@@ -2892,7 +2893,7 @@ def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1,
 
 
 def _funds_refusal_copy(username, pull_type=None, addon_cuts=0, quantity=1,
-                        tool_key=None):
+                        tool_key=None, quarter_reads=0):
     """(line, verdict): what a seat reads when a run cannot start for
     funding reasons, from the shared wallet check. A plan allowance
     reads no price and no balance; a pay-per-use wallet reads its real
@@ -2903,7 +2904,7 @@ def _funds_refusal_copy(username, pull_type=None, addon_cuts=0, quantity=1,
         user = (data.get('users') or {}).get(username or '') or {}
         verdict = _w.pull_funding(
             user, data, pull_type, addon_cuts=addon_cuts, quantity=quantity,
-            tool_key=tool_key or '')
+            tool_key=tool_key or '', quarter_reads=quarter_reads)
         return (_w.funds_refusal_line(
             verdict, money=lambda v: _usd_label(v, username)), verdict)
     except Exception:
@@ -2984,7 +2985,8 @@ def _sanitize_spend_scope(value):
 
 
 def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
-                         data=None, username=None, addon_cuts=0, quantity=1):
+                         data=None, username=None, addon_cuts=0, quantity=1,
+                         quarter_reads=0):
     """Wallet-side fallback for consume_credit (Jenna 2026-09-08).
 
     Called INSIDE the _consume mutator after internal credits (or the
@@ -3020,8 +3022,11 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         # Embedded add-on cuts debit with the pull (Jenna 2026-10-07):
         # the quote on the approve card / partner API is base + cut x n
         # and the wallet takes the same amount.
+        # Dated quarter reads debit with the pull the same way (Jenna
+        # 2026-11-18: "Charge $100 each, as the chat used to say").
         usd, mode = _wallet.should_charge_wallet(
-            subject, tool_key, addon_cuts=addon_cuts, quantity=quantity)
+            subject, tool_key, addon_cuts=addon_cuts, quantity=quantity,
+            quarter_reads=quarter_reads)
         # A product with no price set rides a plan allowance at no
         # charge (Jenna 2026-11-17: an allowance runs everything until
         # it is used up); every other wallet keeps the old rule. A
@@ -3088,6 +3093,7 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         outcome['wallet_charged_usd'] = usd
         outcome['wallet_tool_key'] = tool_key
         outcome['wallet_addon_cuts'] = max(int(addon_cuts or 0), 0)
+        outcome['wallet_quarter_reads'] = max(int(quarter_reads or 0), 0)
         outcome['wallet_quantity'] = max(int(quantity or 1), 1)
         outcome['wallet_subject_kind'] = subject_kind
         outcome['wallet_subject_key'] = subject_key
@@ -3127,6 +3133,8 @@ def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
         stamped['wallet_tool_key'] = outcome['wallet_tool_key']
     if outcome.get('wallet_addon_cuts'):
         stamped['wallet_addon_cuts'] = outcome['wallet_addon_cuts']
+    if outcome.get('wallet_quarter_reads'):
+        stamped['wallet_quarter_reads'] = outcome['wallet_quarter_reads']
     if outcome.get('wallet_quantity') and outcome['wallet_quantity'] > 1:
         stamped['wallet_quantity'] = outcome['wallet_quantity']
     user['credits_used'] = _credit_num(user.get('credits_used'), 0) + credits_used
@@ -3137,11 +3145,12 @@ def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
 
 
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1,
-                   addon_cuts=0, quantity=1):
+                   addon_cuts=0, quantity=1, quarter_reads=0):
     """Consume credits from user and/or company pool.
     Returns True if successful. `addon_cuts` = embedded add-on cuts
     riding the pull; a dollar wallet debits them with the base tool
-    (Jenna 2026-10-07).
+    (Jenna 2026-10-07). `quarter_reads` = dated quarter reads riding
+    the pull, debited the same way at the cut price (2026-11-18).
 
     Runs as a compare-and-swap mutator over a freshly-read users.json
     (see _users_cas_mutate): the debit arithmetic is always applied to
@@ -3206,6 +3215,7 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                                        job_id, outcome, data=data,
                                        username=username,
                                        addon_cuts=addon_cuts,
+                                       quarter_reads=quarter_reads,
                                        quantity=quantity):
                     _record_wallet_fallback_usage(
                         user, entry, outcome, credits_used)
@@ -3217,6 +3227,7 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                                        job_id, outcome, data=data,
                                        username=username,
                                        addon_cuts=addon_cuts,
+                                       quarter_reads=quarter_reads,
                                        quantity=quantity):
                     _record_wallet_fallback_usage(
                         user, entry, outcome, credits_used)
@@ -3240,6 +3251,7 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                                    job_id, outcome, data=data,
                                    username=username,
                                    addon_cuts=addon_cuts,
+                                   quarter_reads=quarter_reads,
                                    quantity=quantity):
                 _record_wallet_fallback_usage(
                     user, entry, outcome, credits_used)
@@ -50570,6 +50582,16 @@ def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
     for _d in drafts:
         if isinstance(_d, dict):
             _d['price_table'] = _ptab
+            if _d.get('quarter_cuts'):
+                # a brief with dated quarter reads carries them inside
+                # its own table, so its card reads the charge (2026-11-18)
+                try:
+                    from prometheus import order_quote as _oq_batch
+                    _d['price_table'] = _oq_batch.table_for_draft(
+                        sys.modules[__name__], session.get('username'),
+                        _d, _ptab)
+                except Exception:
+                    traceback.print_exc()
     return jsonify({
         'success': True,
         'batch': True,
@@ -53635,9 +53657,11 @@ def _v1_tool_price_usd(tool_key: str, default: float,
 
 
 def _v1_price_usd_for(decision: str, cut_count: int = 0,
-                      username: str = None, v1: bool = True) -> float:
+                      username: str = None, v1: bool = True,
+                      quarter_reads: int = 0) -> float:
     """USD a run at `decision` with `cut_count` embedded addon cuts
-    takes from the caller's wallet. Every /check, /run and /status
+    and `quarter_reads` dated quarter reads takes from the caller's
+    wallet. Every /check, /run and /status
     response and the chat's price table read through it.
 
     The figure is the charge itself (Jenna 2026-11-17: "Quote what is
@@ -53661,7 +53685,8 @@ def _v1_price_usd_for(decision: str, cut_count: int = 0,
         except Exception:
             user, data = {}, {}
     from prometheus import order_quote as _oq
-    return _oq.price(user, data, d, cut_count, v1=v1)
+    return _oq.price(user, data, d, cut_count, v1=v1,
+                     quarter_reads=quarter_reads)
 
 
 def _v1_balance_usd(username: str) -> float:
@@ -58506,12 +58531,16 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     # refresh demotion / confidence floor / cuts conversion that hang
     # off it. `match_score` (composite confidence) rides from the same
     # block. Pricing uses that exact list so quote == delivery.
-    if d_type == 'addon_cuts' and cuts:
-        # cuts-only derive: the cuts ARE the deliverable - no base fee
-        price = ADDON_CUT_CREDITS * len(cuts)
-    else:
-        price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
-                 + ADDON_CUT_CREDITS * len(cuts))
+    # Dated quarter reads the run ships (2026-11-18): each is charged at
+    # the cut price, on the decisions that deliver them. One list for
+    # the quote on /check, the charge on /run and the files delivered.
+    import wallet as _w_price
+    quarter_reads = _w_price.billable_quarter_reads(draft, decision)
+    # cuts-only derive: the cuts ARE the deliverable - no base fee
+    price = _w_price.order_credits(
+        _V1_CREDITS, ADDON_CUT_CREDITS, decision, len(cuts),
+        len(quarter_reads), cuts_only=(d_type == 'addon_cuts'),
+        default=CREDITS_PROFILE_ANALYSIS)
 
     # related_profile backstop (2026-08-25 round-2 finding #4): when
     # the model itself decides new_build (so the qualifier gate never
@@ -58545,6 +58574,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
         'ex_key': ex_key,
         'd_type': d_type,
         'cuts': cuts,
+        'quarter_reads': quarter_reads,
         'price': price,
         'buildable': True,
         'refusal_code': None,
@@ -59013,6 +59043,7 @@ def api_v1_profiles_check():
     ex_key = conclusion['ex_key']
     d_type = conclusion['d_type']
     _v1_cuts = conclusion['cuts']
+    _v1_quarters = conclusion.get('quarter_reads') or []
     price = conclusion['price']
     if decision == 'existing_match':
         _em_cr = _existing_match_charge_credits(
@@ -59073,7 +59104,8 @@ def api_v1_profiles_check():
             if (decision == 'existing_match' and price > 0)
             else _v1_price_usd_for(
                 decision, len(_v1_cuts or []),
-                username=user.get('username') or '')),
+                username=user.get('username') or '',
+                quarter_reads=len(_v1_quarters))),
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
         'brief_summary': _scrub_v1_freetext(
@@ -59105,6 +59137,14 @@ def api_v1_profiles_check():
             {'label': c.get('name_label') or c.get('label') or c['cut_id'],
              'price_usd': _cut_usd_each,
              'credits': ADDON_CUT_CREDITS} for c in _v1_cuts]
+    if _v1_quarters:
+        # Each calendar quarter ships as its own dated file and prices
+        # as one cut (2026-11-18); already inside price_usd above.
+        _q_usd_each = _v1_price_usd_for_cut()
+        resp['quarter_reads'] = [
+            {'label': q['label'], 'start': q['start'], 'end': q['end'],
+             'price_usd': _q_usd_each,
+             'credits': ADDON_CUT_CREDITS} for q in _v1_quarters]
     if decision == 'existing_match' and ex_key and price <= 0:
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
         if url:
@@ -59220,6 +59260,7 @@ def api_v1_profiles_run():
     ex_key = conclusion['ex_key']
     d_type = conclusion['d_type']
     _v1_run_cuts = conclusion['cuts']
+    _v1_run_quarters = len(conclusion.get('quarter_reads') or [])
     price = conclusion['price']
     if decision == 'existing_match':
         _em_cr = _existing_match_charge_credits(
@@ -59253,10 +59294,12 @@ def api_v1_profiles_run():
     _v1_pt = __import__('wallet').chat_pull_type(decision, v1=True)
     if price > 0 and not has_credits_for(
             username, price, pull_type=_v1_pt,
+            quarter_reads=_v1_run_quarters,
             addon_cuts=len(_v1_run_cuts or [])):
         _, credits_left = check_user_credits(username)
         _price_usd_tier = _v1_price_usd_for(
-            decision, len(_v1_run_cuts or []), username=username)
+            decision, len(_v1_run_cuts or []), username=username,
+            quarter_reads=_v1_run_quarters)
         _bal_usd = _v1_balance_usd(username)
         _bal_str = ('unlimited' if _bal_usd == -1.0
                     else f"${_bal_usd:.2f}")
@@ -59451,6 +59494,7 @@ def api_v1_profiles_run():
                 job_id='',
                 pull_type=_v1_charge_pull_type,
                 credits_used=price,
+                quarter_reads=_v1_run_quarters,
                 addon_cuts=len(_v1_run_cuts or []),
             ))
         except Exception:
@@ -59459,7 +59503,8 @@ def api_v1_profiles_run():
         if not charged:
             _, credits_left = check_user_credits(username)
             _price_usd_tier = _v1_price_usd_for(
-                decision, len(_v1_run_cuts or []), username=username)
+                decision, len(_v1_run_cuts or []), username=username,
+                quarter_reads=_v1_run_quarters)
             _bal_usd = _v1_balance_usd(username)
             return jsonify({
                 'success': False,
@@ -59556,7 +59601,8 @@ def api_v1_profiles_run():
 
     _, credits_left = check_user_credits(username)
     _charge_usd = _v1_price_usd_for(
-        decision, len(_v1_run_cuts or []), username=username)
+        decision, len(_v1_run_cuts or []), username=username,
+        quarter_reads=_v1_run_quarters)
     _bal_usd = _v1_balance_usd(username)
 
     # PRE-BUILD scope summary (2026-08-24): programmatic, plans only,
@@ -59993,6 +60039,9 @@ def api_v1_schema():
                     'estimated_audience_high': 'integer (when applicable)',
                     'addon_cuts': ('array of {label, price_usd, credits} '
                                    '(when the ask carries derived cuts)'),
+                    'quarter_reads': ('array of {label, start, end, '
+                                      'price_usd, credits} (when the ask '
+                                      'names several calendar quarters)'),
                     'date_window': 'string or null',
                     'download_url': ('string (existing_match only, '
                                      '24h expiry)'),
@@ -60025,6 +60074,7 @@ def api_v1_schema():
                     'cut_needs_parent': _v1_price_usd_for(
                         'cut_needs_parent', 1),
                     'addon_cut_each': _v1_price_usd_for_cut(),
+                    'quarter_read_each': _v1_price_usd_for_cut(),
                     'currency': 'USD',
                 },
                 'credit_tiers': {
@@ -60036,6 +60086,7 @@ def api_v1_schema():
                     'cut_needs_parent': _V1_CREDITS.get(
                         'cut_needs_parent', 8),
                     'addon_cut_each': ADDON_CUT_CREDITS,
+                    'quarter_read_each': ADDON_CUT_CREDITS,
                 },
                 'response': {
                     'success': 'boolean',
