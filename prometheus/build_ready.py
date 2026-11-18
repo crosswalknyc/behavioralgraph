@@ -102,7 +102,9 @@ def ready_text(name, run_doc=None):
     doc = run_doc if isinstance(run_doc, dict) else {}
     if doc.get('subiq_s3_key'):
         return f"{name} is ready. The Subscriber IQ read is live in the Subscriber IQ tab."
-    return f"{name} is ready. It is in the Select Profile dropdown under {name}."
+    # where to find it, in full: the product, the picker, the name it is listed under (Jenna 2026-11-17: "it
+    # should create that profile and tell them where to find it (in profile iq)")
+    return f"{name} is ready. It is in Profile IQ: open the Select Profile dropdown and pick {name}."
 
 
 def ready_turn(run_id, name, run_doc=None, now=None):

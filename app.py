@@ -46878,6 +46878,38 @@ def _is_single_compound_audience(text: str) -> bool:
             t, _re.IGNORECASE):
         return True
 
+    # S1c (2026-11-17, a guest on Jenna's seat): the same one audience
+    # said two other ways. "a group who has engaged with Auberge
+    # Resorts, Discovery Land Company, Aman Resorts and Nobu Hotels"
+    # and "users with at least one digital touchpoint with Auberge
+    # Resorts or Discovery Land Company or Aman Resorts or Nobu Hotels"
+    # name the brands that DEFINE the audience; the list splitter read
+    # the second as three subjects ("users with at least one digital
+    # touchpoint with Auberge Resorts", "Discovery Land Company",
+    # "Aman Resorts").
+    if _re.search(
+        r'\bgroups?\s+(?:of\s+[a-z. ]{2,24}?\s+)?(?:who|that|which)\b',
+            t, _re.IGNORECASE):
+        return True
+    # "... luxury resort engagers who engaged with A, B, C or D": any
+    # audience noun in -ers, then who and what they did
+    if _re.search(
+        r'\b[a-z]{3,}ers\s+who\s+(?:ha(?:ve|s|d)\s+)?(?:also\s+)?'
+        r'(?:engag|watch|view|stream|bought|buy|purchas|shop|visit|listen'
+        r'|follow|subscrib|use|play|read|attend|stay|book|search|click'
+        r'|download|rent)',
+            t, _re.IGNORECASE):
+        return True
+    if _re.search(
+        r'\b(?:people|persons?|users?|consumers?|customers?|viewers?'
+        r'|shoppers?|individuals?|folks?|those|any\s?one|every\s?one'
+        r'|audiences?|groups?|households?)\s+'
+        r'(?:with|having|that\s+ha(?:ve|s|d)|who\s+ha(?:ve|s|d))\s+'
+        r'(?:(?:at\s+least\s+)?(?:an?|one|any|\d+|one\s+or\s+more)\s+)?'
+        r'(?:digital\s+)?touch\s?points?\b',
+            t, _re.IGNORECASE):
+        return True
+
     # Behavioral context: a consumption verb OR an audience-consumption
     # noun. Used to qualify the enumerated-criteria signal below so a
     # bare build list with no behavior ("profiles on any of the
@@ -50886,11 +50918,63 @@ _GENERIC_AUDIENCE_NOUN_RE = (
 )
 
 
+def _embedded_income_floor(text, require_word=True):
+    """(floor in dollars, (start, end)) for an income floor written into
+    a subject label or an ask: '$250K+ HHI', 'household income of
+    250k+', 'with a household income of $250,000 or more', 'income
+    $100K+'. (None, None) when there is none.
+
+    Dollar- or k-anchored and floor-shaped only, so an age ('55+') or a
+    spend ('spent $100+') never reads as income. With `require_word`
+    the amount must sit next to an income word (the form an ASK needs);
+    without it a bare '$250K+' counts too (a subject label the model
+    wrote). The span is what to cut out of the label."""
+    import re as _re
+    t = str(text or '')
+    if not t or not _re.search(r'\$|income|hhi', t, _re.IGNORECASE):
+        return None, None
+    amt = (r'(?:\$\s*\d{1,3}(?:,\d{3})?\s*k?|\b\d{2,3}\s*k)\s*'
+           r'(?:\+|plus\b|or\s+more\b|and\s+(?:up|above|over)\b|'
+           r'or\s+(?:higher|above|greater)\b)')
+    word = r'(?:household\s+incomes?|hh\s*incomes?|hhi|incomes?)'
+    lead = r'[\s,(\-]*(?:\b(?:and\s+)?(?:who\s+)?(?:with|having|have|has|earning|making|at)\s+)?(?:\ban?\s+)?'
+    pats = [
+        lead + word + r'\s*(?:of|over|above|at\s+least|is|:)?\s*' + amt + r'\s*\)?',
+        r'[\s,(\-]*' + amt + r'\s*(?:in\s+)?' + word + r'\s*\)?',
+    ]
+    if not require_word:
+        # a bare amount counts only when it is written as thousands
+        # ('$250K+', '$250,000+'); '$100+' is a price
+        pats.append(r'[\s,(\-]*\(?\s*\$\s*(?:\d{2,3}\s*k|\d{2,3},\d{3})\s*'
+                    r'(?:\+|plus\b|or\s+more\b)\s*\)?')
+    for p in pats:
+        m = _re.search(p, t, _re.IGNORECASE)
+        if not m:
+            continue
+        try:
+            cut = _v1_persona_income_cut_from_text(m.group(0))
+        except Exception:
+            cut = None
+        if not cut:
+            continue
+        mm = _re.search(r'(\d{2,3})', str(cut.get('name_label') or ''))
+        if mm:
+            return int(mm.group(1)) * 1000, (m.start(), m.end())
+    return None, None
+
+
 def _decompose_embedded_subject_cuts(draft, user_text=None):
     """Deterministic backstop for the SUBJECT NAMING + EMBEDDED CUTS
     prompt rule (Jenna 2026-08-20, after 'Go-GURT Consumers (18-24)'
     shipped as a TU titled with the whole cohort string and AGE pinned
     to 18-24).
+
+    2026-11-17 (a guest on Jenna's seat: four luxury resort brands,
+    'household income of 250k+' drafted as 'Ultra-Luxury Resort
+    Touchpoints $250K+ HHI' with the universe narrowed to that tier):
+    an income floor is a demographic qualifier like the others. In the
+    subject it is cut out and rides as an income cut; in the ASK of a
+    fresh build it rides as a cut whether or not the label kept it.
 
     If the draft's subject still embeds a demographic qualifier (age
     band, gender, generation) or a geographic market qualifier, strip
@@ -51059,6 +51143,21 @@ def _decompose_embedded_subject_cuts(draft, user_text=None):
                 extracted.append(geo)
                 base = _strip_geo_qualifier_span(base, geo)
 
+            # -- income floor: '$250K+ HHI', 'Household Income $250K+',
+            #    'with household income of $250,000 or more' ---------
+            try:
+                _inc_floor, _inc_span = _embedded_income_floor(
+                    base, require_word=False)
+            except Exception:
+                _inc_floor, _inc_span = None, None
+            if _inc_floor and _inc_span:
+                extracted.append({'type': 'income_band',
+                                  'floor': _inc_floor})
+                base = (base[:_inc_span[0]] + ' '
+                        + base[_inc_span[1]:]).strip()
+                base = _re.sub(r'\s+(?:with|who|having|and)$', '', base,
+                               flags=_re.IGNORECASE).strip()
+
             # -- tidy the base + strip implicit audience nouns --------
             if extracted:
                 # Drop parens emptied by qualifier extraction, e.g.
@@ -51115,6 +51214,36 @@ def _decompose_embedded_subject_cuts(draft, user_text=None):
                 if not _already:
                     new_cuts = new_cuts + _normalize_cut_items([geo2])
 
+        # PROMPT-side income backstop (2026-11-17): an income floor in
+        # the ask of a fresh build rides as a cut even when the model
+        # left it in prose only. Order words only: a note on what the
+        # file should carry ("include the share with income of ...") is
+        # not a qualifier.
+        _ask_income_note = None
+        if applies and user_text and not any(
+                str(c.get('pin_category') or '').upper() == 'INCOME'
+                for c in (resolved + normalized + new_cuts)):
+            try:
+                try:
+                    from prometheus import orders as _ord_inc
+                    _ask_core = _ord_inc.order_core(user_text) or user_text
+                except Exception:
+                    _ask_core = user_text
+                _floor2, _span2 = _embedded_income_floor(
+                    _ask_core, require_word=True)
+            except Exception:
+                _floor2 = None
+            if _floor2:
+                _inc_cuts = _normalize_cut_items(
+                    [{'type': 'income_band', 'floor': _floor2}])
+                for _c in _inc_cuts:
+                    _c['from_prompt_qualifier'] = True
+                if _inc_cuts:
+                    new_cuts = new_cuts + _inc_cuts
+                    _ask_income_note = ', '.join(
+                        c.get('name_label') or c.get('label')
+                        or c['cut_id'] for c in _inc_cuts)
+
         all_cuts = _merge_cuts(resolved, normalized, new_cuts)
         if all_cuts:
             draft['addon_cuts'] = all_cuts
@@ -51137,6 +51266,18 @@ def _decompose_embedded_subject_cuts(draft, user_text=None):
                     f"universe; {cut_names} ride as derived cut(s) "
                     f"named '{base} - <cut>' at {ADDON_CUT_CREDITS} "
                     "credits each.")
+            draft['_decomposition_note'] = note
+            assumptions = draft.get('assumptions')
+            if isinstance(assumptions, list):
+                assumptions.append(note)
+            else:
+                draft['assumptions'] = [note]
+        elif _ask_income_note:
+            _subj_now = str(draft.get('subject') or '').strip()
+            note = (f"The build covers the full {_subj_now} universe at "
+                    f"every income level; {_ask_income_note} rides as a "
+                    f"derived cut named '{_subj_now} - "
+                    f"{_ask_income_note}'.")
             draft['_decomposition_note'] = note
             assumptions = draft.get('assumptions')
             if isinstance(assumptions, list):

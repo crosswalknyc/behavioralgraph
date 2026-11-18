@@ -247,7 +247,7 @@ class TheServerPostsTheFinishedLine(unittest.TestCase):
         self.assertEqual(len(turns), 1)
         t = turns[0]
         self.assertEqual(t['role'], 'agent')
-        self.assertEqual(t['text'], f"{self.NAME} is ready. It is in the Select Profile dropdown under {self.NAME}.")
+        self.assertEqual(t['text'], f"{self.NAME} is ready. It is in Profile IQ: open the Select Profile dropdown and pick {self.NAME}.")
         self.assertEqual(t['meta']['build_run_id'], self.RUN)
         self.assertEqual(t['meta']['options'], [{'label': f"Open {self.NAME}", 'send': f"Open {self.NAME}"}])
         self.assertTrue(t['meta']['server'])

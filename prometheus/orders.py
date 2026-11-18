@@ -54,9 +54,14 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['is_order', 'is_profile_order', 'product_of', 'split', 'deliverable_notes', 'order_core',
+__all__ = ['is_order', 'is_profile_order', 'defined_group', 'product_of', 'split', 'deliverable_notes', 'order_core',
            'build_line', 'deliverable_line', 'referent', 'with_subject', 'REFERENT_WORDS', 'READ_NOUNS']
 
+# a group named with the clause that defines it: "a group who has engaged with ...", "a group of people that bought ..."
+_GROUP_NOUN = (
+    r"groups?(?=\s+(?:of\s+(?:us\s+|u\.s\.\s+)?(?:people|persons|users|consumers|shoppers|customers|buyers|viewers|fans|adults|"
+    r"individuals|accounts)\s+)?(?:who|that|which)\s)"
+)
 # the products an order can name, longest first where one contains another
 _PRODUCTS = (
     r"profile iqs?|profiles?|subscriber iqs?|digital journey(?: iq)?s?|journey iqs?|journeys?|"
@@ -66,7 +71,13 @@ _PRODUCTS = (
     r"audiences?|universes?|cohorts?|segments?|cuts?|trackers?|tracking|campaigns?|stud(?:y|ies)|"
     r"decks?|one[- ]pagers?|reads?|pulls?|datasets?|data sets?|builds?|runs?|"
     # the typo forms of profile the build order carries (subject_rules.EXPLICIT_BUILD_RX)
-    r"aprofiles?|porfiles?|profles?|proifles?|profiels?|prfiles?|profil|profie|profl"
+    r"aprofiles?|porfiles?|profles?|proifles?|profiels?|prfiles?|profil|profie|profl|"
+    # "pull a group who has engaged with Auberge Resorts, Aman Resorts ..." (2026-11-17, a guest on Jenna's seat):
+    # a group defined by what its people did is an audience, the same order as "pull an audience of ...". Only
+    # with the clause that defines it ("a group who / that ...", "a group of people who ..."); "break this group
+    # out by DMA" and "run the group against Netflix" stay what they were. The brief it drafts waits for the
+    # reader's yes (``defined_group``).
+    + _GROUP_NOUN
 )
 # a pronoun standing for the thing to build ("ok queue it", "build it on Mountain Dew"); never a named product,
 # so is_profile_order stays False and the surface keeps its own read of a bare "run it"
@@ -151,7 +162,11 @@ _BETWEEN = (
 _WANT_LEAD = (
     r"(?:(?:please|pls|also|and|then|ok(?:ay)?|so)[,\s]+)*"
     r"(?:(?:i|we)(?:'d| would)? (?:need|want|like|am after|'m after|am looking for|'m looking for)(?: you to (?:" + _VERBS + r"))?|"
-    r"(?:can|could|may|might) (?:i|we) (?:get|have|order|request)|(?:get|give|send|make) (?:me|us))\s+"
+    r"(?:can|could|may|might) (?:i|we) (?:get|have|order|request)|(?:get|give|send|make) (?:me|us)|"
+    # "please provide me a full profile IQ on users with ..." (2026-11-17): provide me / us is give me / us; a bare
+    # "provide" orders only a profile ("provide the age split as a CSV" stays a note on the file)
+    r"provide (?:me|us)(?: with)?|provide(?=\s+(?:(?:a|an|one|the)\s+)?(?:(?:new|full|complete|whole|separate)\s+)*"
+    r"profile(?:\s+iq)?s?\b))\s+"
 )
 _SENTENCE_START = r"(?:^|(?<=[.;:!?\n])\s*|(?<=[.;:!?])\s+)"
 _ORDER_RX = re.compile(
@@ -172,7 +187,7 @@ _REST_SUBJECT_RX = re.compile(r"^\W*(?:of|on|for|about|around|covering)\s+(?P<su
 # the products whose build flow is the Profile IQ interpret surface
 _PROFILE_PRODUCT_RX = re.compile(
     r"^(?:profile iqs?|profiles?|audiences?|universes?|cohorts?|segments?|cuts?|builds?|datasets?|data sets?|pulls?|"
-    r"aprofiles?|porfiles?|profles?|proifles?|profiels?|prfiles?|profil|profie|profl)$", re.I)
+    r"aprofiles?|porfiles?|profles?|proifles?|profiels?|prfiles?|profil|profie|profl|groups?)$", re.I)
 _PRODUCT_FAMILY = (
     ('subscriber_iq', re.compile(r"^subscriber iq", re.I)),
     ('journey', re.compile(r"^(?:digital journey|journey)", re.I)),
@@ -345,6 +360,20 @@ def is_order(text):
 def is_profile_order(text):
     """An order whose build flow is the Profile IQ interpret surface."""
     return is_order(text) and product_of(text) == 'profile'
+
+
+def defined_group(text):
+    """True when the order names its audience as a group and the clause
+    that defines it ("pull a group who has engaged with X and Y") and
+    never says profile, audience or another product. It is an order for
+    that audience; the brief it drafts is shown for the reader's yes and
+    nothing starts on its own, covered seat or not."""
+    try:
+        m = _order_match(_squash(text))
+        prod = _squash((m.group('product') or m.group('product2') or '') if m else '').lower()
+        return bool(prod) and bool(re.match(r"^groups?$", prod)) and is_order(text)
+    except Exception:
+        return False
 
 
 def referent(text):

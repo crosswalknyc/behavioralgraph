@@ -1155,16 +1155,16 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "'Window:', 'Timeframe:' or 'Period:' clause.\n"
         "  * If the request embeds a demographic qualifier - an age "
         "band ('Go-GURT consumers (18-24)'), a gender ('female Nike "
-        "shoppers'), a generation ('Gen Z Chipotle eaters'), or a "
+        "shoppers'), a generation ('Gen Z Chipotle eaters'), an income floor ('Hilton guests with household income of "
+        "$250K or more'; the same when several named brands define the audience), or a "
         "market ('Joe & the Juice in Miami') - the build plan is "
-        "ALWAYS: Total Universe on the FULL universe (all ages, all "
-        "genders, national) + Avid on that same full universe, and "
-        "each qualifier becomes an add-on cut derived from the TU. "
+        "ALWAYS: Total Universe on the FULL universe (all ages, all genders, all incomes, national), sized on the full "
+        "universe, + Avid on that same full universe, and each qualifier becomes an add-on cut derived from the TU. "
         "Emit the qualifiers in `addon_cuts` (schema below) and keep "
         "them OUT of `subject` and `file_stem`.\n"
         "  * `tu_demos` / `avid_demos` describe the FULL universe, "
-        "NOT the cut. Never pin AGE to one band or GENDER to one "
-        "bucket in tu_demos because the user mentioned a qualifier - "
+        "NOT the cut. Never pin AGE to one band, GENDER to one bucket or INCOME to one tier "
+        "in tu_demos because the user mentioned a qualifier - "
         "the cut pin happens downstream in the derived cut file.\n"
         "  * Generic audience nouns ('consumers', 'shoppers', 'fans', "
         "'eaters', 'audience of') are implicit in a brand TU - drop "
@@ -1338,7 +1338,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "    // SUBJECT NAMING + EMBEDDED CUTS). Empty list when none.\n"
         "    {\"type\": \"gender\", \"id\": \"female|male\"},\n"
         "    {\"type\": \"generation\", \"id\": \"gen_z|millennials|gen_x|boomers\"},\n"
-        "    {\"type\": \"age_band\", \"label\": \"18-24\", \"buckets\": [\"18-24\"]},\n"
+        "    {\"type\": \"age_band\", \"label\": \"18-24\", \"buckets\": [\"18-24\"]},\n    {\"type\": \"income_band\", \"floor\": 250000},\n"
         "    {\"type\": \"dma\", \"dma\": \"<canonical Nielsen DMA name>\"}\n"
         "  ],\n"
         "  \"exclusions\": [{\"brand\": \"Hulu\", \"note\": \"excluding current Hulu subscribers\"}, ...] or [] // see SEMANTIC GUARDS #1,\n"
@@ -6101,7 +6101,7 @@ def _pm_interpret_core(user, body, text, history):
         _pm_ask_stage('router', t0=_t_router)
         if _route_d.get('classify_ms'):
             _pm_ask_stage('router_classify', ms=_route_d['classify_ms'])
-        _route = str(_route_d.get('route') or '')
+        _route = __import__('prometheus.build_lane', fromlist=['keep_order_route']).keep_order_route(str(_route_d.get('route') or ''), body, text, hint=_pm_ask_hint)   # an order for a profile is never deflected to a read here (2026-11-17)
         if _route == 'not_quantifiable':
             # Graceful decline (2026-08-26): behavior with no digital
             # trace never produces a number, on this surface either.

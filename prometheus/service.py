@@ -808,6 +808,10 @@ def ask(user, body, *, via='session'):
                 if _unnamed:
                     body['_pm_no_auto_start'] = True
             body = dict(body, _pm_order=True, _pm_order_text=text)
+            # "pull a group who has engaged with X and Y" names an audience and no product: its brief is shown
+            # for the reader's yes, never started on its own (2026-11-17, prometheus.orders.defined_group)
+            if _orders.defined_group(text):
+                body['_pm_no_auto_start'] = True
     except Exception as _fx:
         _faults.note('service.orders', _fx)
         _is_order = False
@@ -815,7 +819,16 @@ def ask(user, body, *, via='session'):
     # read. a full profile", "One profile of X only on Paramount+", "needs to be run on all 49": Jessie 2026-11-11,
     # prometheus.build_lane), go to the build interpret step as the order they are. That step's decision stays the
     # authority; nothing here picks the build. With no subject anywhere, one plain line asks for it.
-    if not _is_order and not _no_build and not _armed(body) and not body.get('_multi_part') and not body.get('_meta_replay'):
+    # "build the full Profile IQ profile" reads to the order gate as an order on a subject called "profile": it
+    # names none, so it takes the same path and its subject comes from the thread (2026-11-17)
+    _bare_order = False
+    if _is_order:
+        try:
+            from . import build_lane as _bl_b
+            _bare_order = bool(_bl_b.bare_demand(text))
+        except Exception as _fx:
+            _faults.note('service.build_lane', _fx)
+    if (not _is_order or _bare_order) and not _no_build and not _armed(body) and not body.get('_multi_part') and not body.get('_meta_replay'):
         try:
             from . import build_lane as _bl
             _blo = _bl.rewrite(text, history, ctx)

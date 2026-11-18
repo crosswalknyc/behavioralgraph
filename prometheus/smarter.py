@@ -37,6 +37,10 @@ _SUBIQ_RX = re.compile(r"\b(subscriber iq|sub iq|subiq|tracker|signups?|reactiva
 _LIST_RX = re.compile(r"(,|\band\b|\bor\b|\beach\b|\bboth\b|\ball of\b|\bthe following\b)", re.I)
 _PLATFORM_RX = re.compile(r"\b(netflix|prime video|amazon|hulu|disney|max|hbo|peacock|paramount|apple tv|starz|roku|tubi|pluto|youtube|spotify|tiktok|instagram|est|tvod|pvod|svod|avod|fast)\b", re.I)
 _AUTO_RX = re.compile(r"\b(car|auto|automobile|truck|suv|ford|toyota|honda|chevy|chevrolet|tesla|bmw|lincoln|jeep|dealer)\b", re.I)
+# an income condition in an ask: "household income of 250k+", "$75K+ HHI", "income over $100,000"
+INCOME_QUALIFIER_RX = re.compile(
+    r"\bhousehold\s+income\b|\bhhi\b|\bincome\s+(?:of|over|above|under|below|at\s+least|greater|more|less)\b|"
+    r"\$\s*\d{2,3}(?:,\d{3}|\s*k)\b|\b\d{2,3}\s*k\s*(?:\+|plus\b|or\s+more\b|and\s+(?:up|above|over)\b)", re.I)
 _GENDER_RX = re.compile(r"\b(female|male|women|woman|men|man|girls?|boys?|moms?|dads?|mothers?|fathers?|ladies|guys|gender|she|he|her|his)\b", re.I)
 _EVENT_RX = re.compile(r"\b(premiere|launch|opening|tour|release[sd]?|finale|season \d|episode|concert|game day|draft|super bowl|world series|playoffs?|awards?|debut|drop|campaign|event|week of|weekend of|since|after|before|during|around)\b", re.I)
 _KIDS_RX = re.compile(r"\b(kids?|children|child|toddlers?|babies|baby|infants?|toys?|preschool|parents?|family|families|teens?|tweens?|youth)\b", re.I)
@@ -61,7 +65,10 @@ PRUNABLE = {
     'CAR-BRAND SELF-PINS': lambda t, c, r=None: bool(_AUTO_RX.search(t)),
     'PURCHASE-ON-A-PLATFORM': lambda t, c, r=None: bool(_PLATFORM_RX.search(t)) or bool(re.search(r"\b(buy|purchas|shop|consumer)", t, re.I)),
     # Reader-aware (audit item 6, 2026-10-14): sections the reading says cannot apply
-    'GENDER SKEW VOCABULARY': lambda t, c, r=None: bool(_GENDER_RX.search(t)),
+    # this section runs on into SUBJECT NAMING + EMBEDDED CUTS (its heading carries a '+', so the splitter reads
+    # the two as one). An income condition on a named audience ("... who have a household income of 250k+") needs
+    # that rule: it is a cut of the full universe, never the universe (2026-11-17)
+    'GENDER SKEW VOCABULARY': lambda t, c, r=None: bool(_GENDER_RX.search(t)) or bool(INCOME_QUALIFIER_RX.search(t)),
     'EVENT-SCOPED WINDOWS': lambda t, c, r=None: bool(_EVENT_RX.search(t)) or bool((r or {}).get('window')) or 'custom_window' in ((r or {}).get('flags') or []),
     "KIDS' PRODUCTS": lambda t, c, r=None: bool(_KIDS_RX.search(t)),
     'SUBJECT IDENTITY RESOLUTION': lambda t, c, r=None: not _subject_resolved(r),
@@ -216,7 +223,8 @@ def _schema_fields_to_drop(text, candidates, reading, dropped_sections, dropped_
     if not (_PLATFORM_RX.search(text) or re.search(r"\b(buyers?|renters?|switchers?|cancel\w*|customers?|members?|subscribers?|users?|shoppers?|owners?|purchas\w*)\b", text, re.I)) \
             and not any(str(s.get('kind') or '') in ('audience', 'platform') for s in ((reading or {}).get('subjects') or []) if isinstance(reading, dict)):
         fields.append('clickstream_signals')
-    if not (_GENDER_RX.search(text) or _AGE_RX.search(text) or _GEO_RX.search(text) or re.search(r"\b(cut|split|by)\b", text, re.I)):
+    if not (_GENDER_RX.search(text) or _AGE_RX.search(text) or _GEO_RX.search(text) or INCOME_QUALIFIER_RX.search(text)
+            or re.search(r"\b(cut|split|by)\b", text, re.I)):
         fields.append('addon_cuts')
     if _only_entities(reading):
         fields.extend(_IP_FIELDS)
@@ -447,9 +455,28 @@ _DECK_ASK_RX = re.compile(r"\b(?:slide\s+deck|slide\s+presentation|slides?|deck|
 _NEGATED_BUILD_RX = re.compile(r"\b(don'?t|do not|no need to|without|not)\s+(?:build|run|pull|create|make|start)\b|\b(no|not) (?:a )?(?:new )?(?:profile|build|pull|run)\b|\banswer (?:this|it|that) (?:from|with|using)\b|\bjust (?:answer|tell me)\b|\bfrom (?:the )?existing\b", re.I)
 
 
+# "No pull a new profile IQ for users who ..." (2026-11-17, a guest on Jenna's seat): the no refuses the last
+# reply and the order follows it. "no pull" read as "no pull wanted" and the order ran as a read. A leading no
+# in front of words that are an order, with nothing else forbidding a build, is that order.
+_LEAD_NO_RX = re.compile(r"^\W*(?:no+|nope|nah)\b[,.!:;\s]+", re.I)
+
+
 def negated_build(text):
     """True when the ask forbids a build: answer mode only."""
-    return bool(_NEGATED_BUILD_RX.search(str(text or '')))
+    t = str(text or '')
+    if not _NEGATED_BUILD_RX.search(t):
+        return False
+    lead = _LEAD_NO_RX.match(t)
+    if lead:
+        rest = t[lead.end():]
+        if rest.strip() and not _NEGATED_BUILD_RX.search(rest):
+            try:
+                from . import orders as _orders
+                if _orders.is_order(rest):
+                    return False
+            except Exception:
+                pass
+    return True
 
 
 _NEGATION_LEAD_RX = re.compile(

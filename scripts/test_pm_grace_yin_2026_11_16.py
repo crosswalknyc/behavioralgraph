@@ -277,7 +277,7 @@ class ApproveNamesItsThread(unittest.TestCase):
                             save=lambda u, t, turns: threads.update({(u, t): turns}))
         self.assertEqual(out, 'posted')
         self.assertEqual(threads[('graceyin', 'a9dc4257ad')][-1]['text'],
-                         'Zac Efron is ready. It is in the Select Profile dropdown under Zac Efron.')
+                         'Zac Efron is ready. It is in Profile IQ: open the Select Profile dropdown and pick Zac Efron.')
         no_thread = dict(launch, thread_id='')
         self.assertEqual(BR.post_ready(no_thread, {'status': 'complete'}, exists=lambda u, t: True,
                                        load=lambda u, t: [], save=lambda *a: None), 'no_thread')

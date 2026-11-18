@@ -90644,7 +90644,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     case 'running':   head = name + ' is building.'; break;
                     case 'tu_done':   head = name + ': the primary profile is ready.'; break;
                     case 'avid_done': head = name + ': the avid cut is ready.'; break;
-                    case 'complete':  head = name + ' is finished and ready in the Select Profile dropdown.'; break;
+                    case 'complete':  head = name + ' is finished and ready in the Select Profile dropdown in Profile IQ.'; break;
                     default:          head = name + ': ' + label + '.';
                 }
                 var lines = [head];
@@ -96210,7 +96210,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             case 'running':   msg = subject + ' is building.'; break;
                             case 'tu_done':   msg = subject + ': the primary profile is ready.'; break;
                             case 'avid_done': msg = subject + ': the avid cut is ready.'; break;
-                            case 'complete':  msg = subject + ' is finished and ready in the Select Profile dropdown.'; break;
+                            case 'complete':  msg = subject + ' is finished and ready in the Select Profile dropdown in Profile IQ.'; break;
                             default:          msg = subject + ': ' + _synthChatStatusLabel(cur) + '.';
                         }
                         if (cur === 'tu_done' && st.tu_key) msg += '\nIn Select Profile as: ' + _synthChatFileLabel(st.tu_key);
