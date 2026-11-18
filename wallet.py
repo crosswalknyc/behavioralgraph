@@ -2749,6 +2749,97 @@ def apply_wallet_forfeit(user: dict, amount_usd, description: str = "",
     return txn
 
 
+# ---------------------------------------------------------------------------
+# Plan allowance (Jenna 2026-11-17, Sony Pictures Television)
+# ---------------------------------------------------------------------------
+# A company on a plan with a usage allowance reads "Included with your
+# plan." on every price line and runs everything it approves. Each run
+# still meters at its normal price against the allowance. When the
+# allowance cannot cover the next run the seat is asked to top up and
+# Jenna and Liz are mailed once, until money lands on the wallet again.
+
+ALLOWANCE_USED_LINE = (
+    "Your plan's included usage is used up, so this has not started. "
+    "Top up to keep going.")
+ALLOWANCE_SHORT_LINE = (
+    "There is not enough of your plan's included usage left for this "
+    "one, so it has not started. Top up to keep going.")
+SEAT_NOT_SET_UP_LINE = (
+    "Your seat is not set up to start this one. Ask your admin to "
+    "turn it on.")
+NO_COVER_LINE = (
+    "Your account cannot cover this run right now. Top up to keep "
+    "going.")
+
+_FUNDING_TXN_KINDS = ("topup", "auto_reload", "adjustment")
+
+
+def is_plan_allowance(rec) -> bool:
+    """True for a billing record on a metered plan allowance."""
+    return isinstance(rec, dict) and bool(rec.get("included_while_funded"))
+
+
+def _last_funding_txn(rec):
+    """The newest row that put money on the wallet (a top-up, an
+    auto-reload, an admin credit or the monthly allowance). Refunds are
+    money coming back, not money landing, so they never count."""
+    for txn in (rec or {}).get("wallet_transactions") or []:
+        if not isinstance(txn, dict):
+            continue
+        if str(txn.get("kind") or "") not in _FUNDING_TXN_KINDS:
+            continue
+        try:
+            if float(txn.get("amount_usd") or 0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        return txn
+    return None
+
+
+def allowance_episode(rec) -> str:
+    """What one run-out is counted against: the last time money landed.
+    A top-up or the next month's amount starts a new one, so the notice
+    can go out again the next time the allowance runs out."""
+    txn = _last_funding_txn(rec)
+    if not txn:
+        return ""
+    return str(txn.get("stripe_ref") or txn.get("ts") or "").strip()
+
+
+def allowance_usage(rec) -> dict:
+    """Where an allowance stands: its size, what is left, what has been
+    used since money last landed, and lifetime spend."""
+    rec = rec if isinstance(rec, dict) else {}
+    try:
+        size = float(rec.get("monthly_allowance_usd") or 0)
+    except (TypeError, ValueError):
+        size = 0.0
+    left = round(wallet_balance(rec), 2)
+    # used = what the wallet held right after money last landed, less
+    # what it holds now (charges net of refunds, however many rows
+    # have aged out of the ledger since)
+    used = None
+    funded = _last_funding_txn(rec)
+    if funded is not None:
+        try:
+            used = float(funded.get("balance_after_usd")) - left
+        except (TypeError, ValueError):
+            used = None
+    if used is None:
+        used = (size - left) if size > 0 else 0.0
+    try:
+        lifetime = float(rec.get("wallet_lifetime_spend_usd") or 0)
+    except (TypeError, ValueError):
+        lifetime = 0.0
+    return {
+        "allowance_usd": round(size, 2),
+        "left_usd": left,
+        "used_usd": round(max(used, 0.0), 2),
+        "lifetime_usd": round(lifetime, 2),
+    }
+
+
 def allowance_is_included(user, users_data=None, amount_usd=None) -> bool:
     """True while an included_while_funded wallet still covers this pull.
 
@@ -2781,48 +2872,255 @@ def allowance_is_included(user, users_data=None, amount_usd=None) -> bool:
     return bal + 1e-9 >= need
 
 
-def notify_allowance_exhausted(user, users_data=None, billed_via: str = "",
-                               company_name: str = "") -> bool:
-    """Mail Jenna and Liz once this month when an included allowance
-    cannot cover a pull. No-ops for every other wallet."""
-    rec, kind, key = resolve_billing_subject(
-        user if isinstance(user, dict) else {}, users_data or {})
-    if not isinstance(rec, dict):
-        rec = user if isinstance(user, dict) else {}
-        kind, key = "user", ""
-    if not rec.get("included_while_funded"):
-        return False
-    name = str(company_name or "").strip()
-    if not name:
-        if kind == "company":
-            name = str(key or "").strip()
-        else:
-            name = str(
-                (user or {}).get("company")
-                or rec.get("company")
-                or key
-                or "company"
-            ).strip()
-    amt = rec.get("monthly_allowance_usd") or 0
+def pull_funding(user, users_data=None, pull_type=None, addon_cuts: int = 0,
+                 quantity: int = 1, tool_key: str = "") -> dict:
+    """The one wallet-side answer to "can this seat pay for this run":
+    whether the wallet covers it, why not when it does not, the price
+    that would be metered and whether the wallet is a plan allowance.
+
+    Every surface asks here (through app.has_credits_for /
+    user_wallet_covers_pull) and words a refusal with
+    funds_refusal_line, so no surface prices a refused run on its own.
+    Never raises.
+
+    reason: ok | no_charge | insufficient | spend_scope | unlimited |
+            retired | not_paying | no_user | error
+    """
+    out = {
+        "covered": False, "reason": "no_user", "usd": 0.0,
+        "balance_usd": 0.0, "tool_key": "", "allowance": False,
+        "paying": False, "subject_kind": "user", "subject_key": "",
+        "detail": "",
+    }
     try:
+        if not isinstance(user, dict):
+            return out
+        subject, kind, key = resolve_billing_subject(user, users_data or {})
+        if not isinstance(subject, dict):
+            return out
+        tk = str(tool_key or "").strip()
+        if not tk:
+            tk = pull_type_to_tool_key(pull_type) if pull_type else ""
+        if not tk:
+            tk = "profile_iq_build"
+        out.update({
+            "tool_key": tk, "subject_kind": kind, "subject_key": key,
+            "paying": bool(is_paying_customer(subject)),
+            "allowance": is_plan_allowance(subject),
+            "balance_usd": round(wallet_balance(subject), 2),
+        })
+        if not out["paying"]:
+            out["reason"] = "not_paying"
+            return out
+        usd, mode = should_charge_wallet(subject, tk, addon_cuts=addon_cuts,
+                                         quantity=quantity)
+        out["usd"] = round(float(usd or 0), 2)
+        if mode == "unlimited":
+            # A paying subject that is never charged covers every pull
+            # (2026-11-17: refusing here read a funded company as "This
+            # run costs $0 ... Top up to keep going").
+            out["covered"] = True
+            out["reason"] = "unlimited"
+            return out
+        free_on_plan = (mode == "no_charge" and out["allowance"])
+        if (mode != "wallet" or usd <= 0) and not free_on_plan:
+            out["reason"] = mode or "no_charge"
+            return out
+        if kind == "company":
+            allowed, why, _scope = user_can_spend_from_company(
+                user, tk, subject)
+            if not allowed:
+                out["reason"] = "spend_scope"
+                out["detail"] = str(why or "")
+                return out
+        if free_on_plan:
+            # a product with no price set rides the plan at no charge
+            out["covered"] = True
+            out["reason"] = "no_charge"
+            return out
+        ok, why = wallet_can_absorb(subject, usd)
+        out["covered"] = bool(ok)
+        out["reason"] = "ok" if ok else "insufficient"
+        out["detail"] = str(why or "")
+        return out
+    except Exception:
+        out["covered"] = False
+        out["reason"] = "error"
+        return out
+
+
+def _plain_money(v) -> str:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return ""
+    return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+
+
+def funds_refusal_line(verdict, money=None) -> str:
+    """What a seat reads when a run cannot start for funding reasons.
+
+    A plan allowance never reads a price or a balance: it is asked to
+    top up once the included usage cannot cover the run. A pay-per-use
+    wallet reads the real price and its balance. A run with no price on
+    record never reads "costs $0". `money` formats dollars in the
+    seat's currency (defaults to plain dollars)."""
+    v = verdict if isinstance(verdict, dict) else {}
+    fmt = money if callable(money) else _plain_money
+    reason = str(v.get("reason") or "")
+    if reason == "spend_scope":
+        return SEAT_NOT_SET_UP_LINE
+    if v.get("allowance"):
+        try:
+            left = float(v.get("balance_usd") or 0)
+        except (TypeError, ValueError):
+            left = 0.0
+        return ALLOWANCE_USED_LINE if left < 1.0 else ALLOWANCE_SHORT_LINE
+    try:
+        usd = float(v.get("usd") or 0)
+    except (TypeError, ValueError):
+        usd = 0.0
+    if usd <= 0:
+        return NO_COVER_LINE
+    price = str(fmt(usd) or "").strip() or _plain_money(usd)
+    if v.get("paying"):
+        bal = str(fmt(v.get("balance_usd") or 0) or "").strip() \
+            or _plain_money(v.get("balance_usd") or 0)
+        return (f"This run costs {price}. Wallet balance is {bal}. "
+                f"Top up to keep going.")
+    return (f"This run costs {price} and your account cannot cover it "
+            f"right now. Top up to keep going.")
+
+
+def tool_display_name(tool_key: str) -> str:
+    """The billing panel's name for a tool key ('Subscriber IQ - Pull')."""
+    tk = str(tool_key or "").strip()
+    for row in MODULE_CATALOG:
+        if row[0] == tk:
+            return str(row[1])
+    return tk.replace("_", " ").strip().title() if tk else ""
+
+
+def _seat_label(user, username: str = "") -> str:
+    u = user if isinstance(user, dict) else {}
+    name = " ".join(p for p in (
+        str(u.get("first_name") or "").strip(),
+        str(u.get("last_name") or "").strip()) if p)
+    handle = str(username or u.get("username") or "").strip()
+    email = str(u.get("email") or "").strip()
+    who = name or handle or email or "A seat"
+    tail = email if email and email != who else (
+        handle if handle and handle != who else "")
+    return f"{who} ({tail})" if tail else who
+
+
+def _is_probe_seat(user, username: str = "") -> bool:
+    """A probe identity (the canary, the golden set, the replay harness,
+    a sandbox key) never mails."""
+    names = [str(username or "")]
+    if isinstance(user, dict):
+        names += [str(user.get("username") or ""), str(user.get("email") or "")]
+    if any(n.strip().lower().startswith("canary:") for n in names):
+        return True
+    try:
+        from prometheus import probe_identity as _pi
+        for n in names:
+            if n.strip() and _pi.is_probe_user(
+                    n.strip(), user if isinstance(user, dict) else None):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def note_allowance_shortfall(user, users_data=None, verdict=None, *,
+                             username: str = "", what: str = "",
+                             ran: bool = False) -> bool:
+    """Mail Jenna and Liz once when a plan allowance cannot cover a run:
+    which company and seat, what they tried to run, usage to date.
+
+    One notice per company per run-out; a top-up or the next month's
+    amount resets it. No-ops for every wallet that is not a plan
+    allowance, for a verdict that is not a funding shortfall, and for a
+    probe identity. Never mails the seat. Never raises."""
+    try:
+        u = user if isinstance(user, dict) else {}
+        rec, kind, key = resolve_billing_subject(u, users_data or {})
+        if not isinstance(rec, dict):
+            rec, kind, key = u, "user", ""
+        if not is_plan_allowance(rec):
+            return False
+        v = verdict if isinstance(verdict, dict) else None
+        if v is not None and not ran:
+            if v.get("covered") or v.get("reason") != "insufficient":
+                return False
+        if _is_probe_seat(u, username):
+            return False
+        company = str(key or "").strip() if kind == "company" else ""
+        if not company:
+            company = str(u.get("company") or rec.get("company")
+                          or key or username or "A company").strip()
+        tried = str(what or "").strip()
+        price = None
+        if v is not None:
+            if not tried:
+                tried = tool_display_name(v.get("tool_key") or "")
+            try:
+                price = float(v.get("usd") or 0) or None
+            except (TypeError, ValueError):
+                price = None
         from wallet_allowance_notify import send_runout
-        return bool(send_runout(name, amt, billed_via=billed_via))
+        return bool(send_runout(
+            company, rec.get("monthly_allowance_usd") or 0,
+            billed_via=str(username or u.get("username") or ""),
+            who=_seat_label(u, username), what=tried, price_usd=price,
+            usage=allowance_usage(rec), episode=allowance_episode(rec),
+            ran=bool(ran)))
     except Exception as e:
         print(f"[allowance-runout] {e}")
         return False
 
 
+def notify_allowance_exhausted(user, users_data=None, billed_via: str = "",
+                               company_name: str = "", what: str = "",
+                               verdict=None, ran: bool = False) -> bool:
+    """Mail Jenna and Liz once when an included allowance cannot cover a
+    pull. No-ops for every other wallet. Kept under its first name for
+    the charge path; the work is note_allowance_shortfall."""
+    return note_allowance_shortfall(
+        user, users_data, verdict, username=billed_via, what=what, ran=ran)
+
+
 def maybe_notify_allowance_empty(subject, users_data=None,
                                  billed_via: str = "",
-                                 company_name: str = "") -> bool:
+                                 company_name: str = "",
+                                 what: str = "", user=None) -> bool:
     """After a deduct, mail once if the included wallet is now empty."""
     if not isinstance(subject, dict) or not subject.get("included_while_funded"):
         return False
     if wallet_balance(subject) > 0:
         return False
-    return notify_allowance_exhausted(
-        subject, users_data, billed_via=billed_via,
-        company_name=company_name)
+    seat = user if isinstance(user, dict) else None
+    if seat is None:
+        seat = ((users_data or {}).get("users") or {}).get(
+            str(billed_via or "")) if isinstance(users_data, dict) else None
+    if not isinstance(seat, dict):
+        # no seat on hand: report against the wallet record itself
+        try:
+            if _is_probe_seat(None, billed_via):
+                return False
+            from wallet_allowance_notify import send_runout
+            return bool(send_runout(
+                str(company_name or "A company"),
+                subject.get("monthly_allowance_usd") or 0,
+                billed_via=str(billed_via or ""), who=str(billed_via or ""),
+                what=str(what or ""), usage=allowance_usage(subject),
+                episode=allowance_episode(subject), ran=True))
+        except Exception as e:
+            print(f"[allowance-runout] {e}")
+            return False
+    return note_allowance_shortfall(
+        seat, users_data, None, username=billed_via, what=what, ran=True)
 
 
 def apply_wallet_refund(user: dict, amount_usd: float, *,
@@ -5447,36 +5745,12 @@ def user_wallet_covers_pull(user: dict, users_data: dict,
     credit_pool integers. A paying Kartel user with $4,100 on the
     company wallet and 0 credits was blocked even though
     consume_credit would have taken the dollars. This is the
-    wallet-side half of that preflight.
+    wallet-side half of that preflight; the decision itself is
+    pull_funding, the one check every surface shares.
     """
-    try:
-        if not isinstance(user, dict):
-            return False
-        subject, kind, _key = resolve_billing_subject(user, users_data or {})
-        if not is_paying_customer(subject):
-            return False
-        tool_key = pull_type_to_tool_key(pull_type) if pull_type else ""
-        if not tool_key:
-            tool_key = "profile_iq_build"
-        usd, mode = should_charge_wallet(subject, tool_key,
-                                         addon_cuts=addon_cuts,
-                                         quantity=quantity)
-        if mode == "unlimited":
-            # A paying subject that is never charged covers every pull.
-            # Refusing here read a funded company as "This run costs
-            # $0 ... Top up to keep going" (Sony, 2026-11-17).
-            return True
-        if mode != "wallet" or usd <= 0:
-            return False
-        if kind == "company":
-            allowed, _why, _scope = user_can_spend_from_company(
-                user, tool_key, subject)
-            if not allowed:
-                return False
-        ok, _reason = wallet_can_absorb(subject, usd)
-        return bool(ok)
-    except Exception:
-        return False
+    return bool(pull_funding(user, users_data, pull_type,
+                             addon_cuts=addon_cuts,
+                             quantity=quantity).get("covered"))
 
 
 def user_can_spend_from_company(user: dict, tool_key: str,
@@ -5713,6 +5987,11 @@ __all__ = [
     "apply_wallet_forfeit", "credit_recurring_wallet_month",
     "allowance_is_included", "notify_allowance_exhausted",
     "maybe_notify_allowance_empty",
+    "is_plan_allowance", "allowance_usage", "allowance_episode",
+    "pull_funding", "funds_refusal_line", "note_allowance_shortfall",
+    "tool_display_name",
+    "ALLOWANCE_USED_LINE", "ALLOWANCE_SHORT_LINE",
+    "SEAT_NOT_SET_UP_LINE", "NO_COVER_LINE",
     "existing_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb",     "needs_auto_reload",
     "claim_topup_notice",

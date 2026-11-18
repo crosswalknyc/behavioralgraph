@@ -34,6 +34,9 @@ _STATUS_RX = re.compile(
     r"|\bwhere\s+(?:is|are)\s+(?:the|my)\s+(?:results?|answers?|numbers|output|read)\b"
     r"|\bis\s+it\s+(?:there|in\s+the\s+tab|on\s+the\s+site)\b"
     r"|\bwhy\s+did\s+(?:it|that|this|my|the\s+\w+)(?:\s+\w+)?\s+(?:fail|error|break|stop|die|not\s+(?:work|run|finish|land|complete))\b"
+    r"|\b(?:is|are)\s+(?:it|that|they)\s+(?:running|building|started|in\s+progress)\b"
+    r"|\bwhy\s+(?:is|isn'?t|are|aren'?t)\s+(?:it|that|they)\s+(?:not\s+)?(?:running|starting|building|started)\b"
+    r"|\b(?:has|have|did)\s+(?:it|that|they)\s+(?:start(?:ed)?|begun|kick(?:ed)?\s+off)\b"
     r"|^\s*(?:status|any\s+update|update)\s*\??\s*$|\bwhat(?:'s|\s+is)\s+the\s+status\b)", re.I)
 # the fast pass before the reader (2026-10-22 audit): a short status ask the
 # regex recognizes is answered from the records before the reader's model call,
@@ -403,6 +406,123 @@ def open_promise(history, *, host=None, uname=''):
     return {'question': question, 'ts': turns[at].get('ts'), 'held_ref': ref}
 
 
+# AN APPROVAL THAT NEVER STARTED (2026-11-17, Naomi at Sony): her Approve & run was refused, she asked "is it
+# running?" and "why is it not running when i hit approve and run", and was told twice that nothing was running or
+# delivered in the last week. When the last thing this chat said is a refusal to start, or a brief still waiting
+# on Approve, the answer is that it has not started and what to do.
+_REFUSED_RX = re.compile(
+    r"(?:top\s+up\s+to\s+keep\s+going\.?\s*$|^this\s+run\s+costs\b|could\s+not\s+be\s+charged"
+    r"|^your\s+account\s+cannot\s+cover\b|^your\s+seat\s+is\s+not\s+set\s+up\s+to\s+start\b)", re.I)
+_BRIEF_WAITING_RX = re.compile(r"\bapprove\s+to\s+(?:start\s+the\s+build|run|queue)\b", re.I)
+_OWN_STATUS_RX = re.compile(r"^(?:i\s+do\s+not\s+have\s+anything\s+running\s+or\s+delivered|(?:no,\s+)?it\s+has\s+not\s+started)", re.I)
+
+
+def pending_approval(history):
+    """{'state': 'refused' | 'waiting', 'ts': when it was said} when the
+    last thing this chat said (our own status lines aside) is an Approve
+    that was refused for funding, or a brief still waiting on Approve;
+    else None."""
+    turns = [t for t in (history or []) if isinstance(t, dict) and not _turn_meta(t).get('withdrawn')]
+    for t in reversed(turns):
+        if str(t.get('role') or '').lower() == 'user':
+            continue
+        txt = ' '.join(_turn_text(t).split())
+        if not txt:
+            continue
+        m = _turn_meta(t)
+        if m.get('status_items') is not None or _OWN_STATUS_RX.match(txt):
+            continue                    # our own status line is not the answer
+        chips = [o for o in (m.get('options') or []) if isinstance(o, dict)]
+        if _REFUSED_RX.search(txt) or any(o.get('chipAction') == 'buy_credits' for o in chips):
+            return {'state': 'refused', 'ts': t.get('ts')}
+        if _BRIEF_WAITING_RX.search(txt):
+            return {'state': 'waiting', 'ts': t.get('ts')}
+        return None
+    return None
+
+
+def _epoch(v):
+    """Seconds since the epoch for a number or an ISO stamp, else None."""
+    try:
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v or '').strip()
+        if not s:
+            return None
+        if re.fullmatch(r"\d+(?:\.\d+)?", s):
+            return float(s)
+        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return None
+
+
+def _started_since(items, ts):
+    """True when one of the reader's runs started after ``ts`` (the
+    refused Approve or the waiting brief): the thing has started by
+    another route since (a later Approve in another tab, or the team
+    running it for them), so "it has not started" would be wrong and
+    "hit Approve again" would start a second copy. With no stamp on the
+    turn, any run still going counts."""
+    at = _epoch(ts)
+    for it in items or []:
+        started = _epoch(it.get('started'))
+        if at is not None:
+            if started is not None and started >= at - 60:
+                return True
+        elif str(it.get('status') or '').lower() not in ('done', 'complete', 'completed', 'ready', 'error', 'failed'):
+            return True
+    return False
+
+
+def _can_start_now(host, uname, user):
+    """(True | False | None, line): whether this seat can start a priced
+    run right now, and the plain line when it cannot. None = could not
+    look. Reads only; never charges, never mails."""
+    try:
+        from . import priced_read as _pr
+        if _pr.seat_is_free(user, uname, host):
+            return True, ''
+        chk = _pr._host_cap(host, 'check_user_credits')
+        if callable(chk):
+            ok, left = chk(uname)
+            if ok and (int(left) == -1 or int(left) > 0):
+                return True, ''
+        import wallet as _w
+        data = _pr.users_doc(host)
+        rec = _pr.live_user(host, uname, user)
+        if not data or not rec:
+            return None, ''
+        v = _w.pull_funding(rec, data, tool_key='profile_iq_build')
+        if v.get('covered'):
+            return True, ''
+        sym = _w.money_symbol(currency=_w.display_currency(rec, data))
+
+        def _money(x):
+            x = float(x or 0)
+            return f"{sym}{x:,.0f}" if abs(x - round(x)) < 0.009 else f"{sym}{x:,.2f}"
+        return False, _w.funds_refusal_line(v, money=_money)
+    except Exception:
+        traceback.print_exc()
+        return None, ''
+
+
+def approval_reply(pending, can_start=None, line=''):
+    """What a person asking about an approval that never started is told."""
+    if (pending or {}).get('state') == 'waiting':
+        return ('It has not started yet. Nothing runs until you approve the brief: hit Approve & run on the card '
+                'and it starts.')
+    if can_start is True:
+        return ('It has not started. It was stopped when you hit Approve & run, and nothing was charged. '
+                'That is cleared now: hit Approve & run again and it starts.')
+    if can_start is False and line:
+        return f"It has not started, and nothing was charged. {line}"
+    return ('It has not started, and nothing was charged. Hit Approve & run again; if it cannot start I will '
+            'tell you why.')
+
+
 def _short_ask(q, n=110):
     q = ' '.join(str(q or '').split())
     if len(q) <= n:
@@ -448,6 +568,17 @@ def answer(text, uname, *, host, user=None, history=None, thread_id=None):
     except Exception:
         traceback.print_exc()
         promise = None
+    # An approval that never started comes first: it is the last thing this chat said (2026-11-17, Naomi at Sony).
+    try:
+        pending = pending_approval(history)
+    except Exception:
+        traceback.print_exc()
+        pending = None
+    if pending and not _names_an_item(text, items) and not _started_since(items, pending.get('ts')):
+        ok_now, why = (_can_start_now(host, uname, user) if pending.get('state') == 'refused' else (None, ''))
+        return {'success': True, 'action': 'answer', 'reply': approval_reply(pending, ok_now, why), 'followups': [],
+                'offer_deck': False, 'deck_angle': None, 'not_started': True,
+                'status_items': [{'kind': 'approval', 'subject': 'your brief', 'status': 'not_started'}]}
     if promise and not _names_an_item(text, items):
         return {'success': True, 'action': 'answer', 'reply': promise_reply(promise, user), 'followups': [],
                 'offer_deck': False, 'deck_angle': None, 'open_promise': True,

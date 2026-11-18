@@ -94742,7 +94742,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // same title audience.
                 var _suD = (d && d.subiq_upsell_data) || {};
                 return [
-                    {label: 'Add the Profile IQ (+' + _synthChatProfilePriceLabel(d) + ')', send: 'add it'},
+                    {label: ((typeof window !== 'undefined' && window.PM_SEAT_INCLUDED)
+                                ? 'Add the Profile IQ'   // included with the plan: no price on the chip (2026-11-17)
+                                : 'Add the Profile IQ (+' + _synthChatProfilePriceLabel(d) + ')'), send: 'add it'},
                     {label: 'Just the Subscriber IQ',
                      send: 'just the tracker'}
                 ];
@@ -95333,6 +95335,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _suQ = _suQD.subiq_upsell_data || {};
                 var _suLbl = String(_suQ.label || _suQ.title ||
                     _suQD.subject || 'this title');
+                if (typeof window !== 'undefined' && window.PM_SEAT_INCLUDED) {
+                    // included with the plan: no price on the question (2026-11-17)
+                    return 'Want a Profile IQ for the ' + _suLbl +
+                        ' audience alongside it? It is included with your plan. ' +
+                        'It builds on the same viewers, so ' +
+                        'demographics and audience size match across ' +
+                        'both.';
+                }
                 return 'Want a Profile IQ for the ' + _suLbl +
                     ' audience alongside it (+' + _synthChatProfilePriceLabel(_suQD) +
                     ')? It builds on the same viewers, so ' +

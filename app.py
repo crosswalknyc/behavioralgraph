@@ -2400,6 +2400,13 @@ def _funds_short_error(tool_label, tool_key=None, username=None):
             user = (data.get('users') or {}).get(uname) or {}
             if user:
                 subject, _k, _n = _w.resolve_billing_subject(user, data)
+                if _w.is_plan_allowance(subject):
+                    # a plan allowance never reads a price here: it is
+                    # asked to top up once the included usage runs short
+                    _v = _w.pull_funding(user, data, tool_key=tool_key or '')
+                    if _v.get('reason') in ('insufficient', 'spend_scope') \
+                            or _w.wallet_balance(subject) < 1.0:
+                        return _w.funds_refusal_line(_v)
         if tool_key:
             usd = float(_w.tool_price_usd(tool_key, subject=subject) or 0)
     except Exception:
@@ -2832,7 +2839,8 @@ def check_user_credits(username):
     return user_credits > 0, user_credits
 
 
-def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1):
+def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1,
+                    what=None):
     """Return True if the user can pay for this pull.
 
     Internal credits (personal or company pool) still win when they
@@ -2841,6 +2849,11 @@ def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1):
     Kartel user with $4,100 and 0 leftover credits is not blocked.
     `pull_type` selects the priced tool; omitted pulls use the
     Profile IQ full-build price as the conservative default.
+
+    The wallet half is wallet.pull_funding, the one check every
+    surface shares (Jenna 2026-11-17). A plan allowance that cannot
+    cover the run mails Jenna and Liz once per run-out from here;
+    `what` names the run for that notice.
     """
     has_credits, credits_left = check_user_credits(username)
     if has_credits and credits_left == -1:
@@ -2853,11 +2866,46 @@ def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1):
         user = (data.get('users') or {}).get(username)
         if not user:
             return False
-        return bool(_w.user_wallet_covers_pull(
-            user, data, pull_type, addon_cuts=addon_cuts, quantity=quantity))
+        verdict = _w.pull_funding(
+            user, data, pull_type, addon_cuts=addon_cuts, quantity=quantity)
+        if (not verdict.get('covered') and verdict.get('reason') == 'no_charge'
+                and not verdict.get('allowance')):
+            # A product with no price set keeps the old conservative
+            # preflight on a pay-per-use wallet (the wallet holds a
+            # Profile build's worth), exactly what this check asked
+            # before each route named its product (2026-11-17).
+            verdict = _w.pull_funding(user, data, None)
+        if not verdict.get('covered'):
+            try:
+                _w.note_allowance_shortfall(
+                    user, data, verdict, username=username, what=what or '')
+            except Exception:
+                traceback.print_exc()
+        return bool(verdict.get('covered'))
     except Exception:
         traceback.print_exc()
         return False
+
+
+def _funds_refusal_copy(username, pull_type=None, addon_cuts=0, quantity=1,
+                        tool_key=None):
+    """(line, verdict): what a seat reads when a run cannot start for
+    funding reasons, from the shared wallet check. A plan allowance
+    reads no price and no balance; a pay-per-use wallet reads its real
+    price; nothing ever reads "costs $0". Never raises."""
+    try:
+        import wallet as _w
+        data = load_users()
+        user = (data.get('users') or {}).get(username or '') or {}
+        verdict = _w.pull_funding(
+            user, data, pull_type, addon_cuts=addon_cuts, quantity=quantity,
+            tool_key=tool_key or '')
+        return (_w.funds_refusal_line(
+            verdict, money=lambda v: _usd_label(v, username)), verdict)
+    except Exception:
+        traceback.print_exc()
+        return ('Your account cannot cover this run right now. '
+                'Top up to keep going.'), {}
 
 
 def _caller_wallet_snapshot(username):
@@ -2970,7 +3018,15 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         # and the wallet takes the same amount.
         usd, mode = _wallet.should_charge_wallet(
             subject, tool_key, addon_cuts=addon_cuts, quantity=quantity)
-        if mode != 'wallet' or usd <= 0:
+        # A product with no price set rides a plan allowance at no
+        # charge (Jenna 2026-11-17: an allowance runs everything until
+        # it is used up); every other wallet keeps the old rule. A
+        # billing subject that is never charged covers the pull the
+        # same way the preflight says it does (wallet.pull_funding).
+        _free_on_plan = (mode == 'unlimited'
+                         or (mode == 'no_charge'
+                             and _wallet.is_plan_allowance(subject)))
+        if (mode != 'wallet' or usd <= 0) and not _free_on_plan:
             return False
         # Per-member spend scope (Jenna 2026-09-09): when the subject is
         # a company, check whether THIS user is authorized to spend the
@@ -2985,14 +3041,25 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
                 outcome['spend_scope_tool_key'] = tool_key
                 outcome['spend_scope_company'] = subject_key
                 return False
+        if _free_on_plan:
+            outcome['ok'] = True
+            outcome['wallet_charged_usd'] = 0.0
+            outcome['wallet_tool_key'] = tool_key
+            outcome['wallet_subject_kind'] = subject_kind
+            outcome['wallet_subject_key'] = subject_key
+            return True
         can, _reason = _wallet.wallet_can_absorb(subject, usd)
         if not can:
-            try:
-                _wallet.notify_allowance_exhausted(
-                    user, data or {}, billed_via=username or '',
-                    company_name=subject_key if subject_kind == 'company' else '')
-            except Exception:
-                pass
+            # The run-out notice goes out after the write settles
+            # (consume_credit), never from inside the mutator.
+            if _wallet.is_plan_allowance(subject):
+                outcome['allowance_shortfall'] = {
+                    'covered': False, 'reason': 'insufficient',
+                    'usd': usd, 'tool_key': tool_key,
+                    'balance_usd': _wallet.wallet_balance(subject),
+                    'allowance': True, 'paying': True,
+                    'what': description or '',
+                }
             return False
         # billed_via_username stamps who triggered the pull when the
         # subject is a company (so admins get per-user attribution).
@@ -3008,12 +3075,11 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
             tool_key=tool_key,
             job_id=job_id or '',
             billed_via_username=billed_via)
-        try:
-            _wallet.maybe_notify_allowance_empty(
-                subject, data or {}, billed_via=billed_via,
-                company_name=subject_key if subject_kind == 'company' else '')
-        except Exception:
-            pass
+        if _wallet.is_plan_allowance(subject) \
+                and _wallet.wallet_balance(subject) <= 0:
+            outcome['allowance_emptied'] = {
+                'usd': usd, 'tool_key': tool_key,
+                'what': description or ''}
         outcome['ok'] = True
         outcome['wallet_charged_usd'] = usd
         outcome['wallet_tool_key'] = tool_key
@@ -3095,6 +3161,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
 
     def _consume(data):
         outcome['ok'] = False
+        outcome.pop('allowance_shortfall', None)
+        outcome.pop('allowance_emptied', None)
         user = (data.get('users') or {}).get(username)
         if not user:
             return None
@@ -3189,6 +3257,27 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     except Exception:
         traceback.print_exc()
         return False
+
+    # Plan allowance run-out (Jenna 2026-11-17): Jenna and Liz hear once
+    # per run-out, after the write has settled. Never blocks the pull.
+    _short = outcome.get('allowance_shortfall') if not outcome.get('ok') else None
+    _emptied = outcome.get('allowance_emptied') if outcome.get('ok') else None
+    if _short or _emptied:
+        try:
+            import wallet as _wallet_n
+            _n_data = load_users() or {}
+            _n_user = (_n_data.get('users') or {}).get(username) or {}
+            _note = _short or _emptied
+            _wallet_n.note_allowance_shortfall(
+                _n_user, _n_data,
+                {'covered': not bool(_short),
+                 'reason': 'insufficient' if _short else 'ok',
+                 'usd': _note.get('usd'), 'tool_key': _note.get('tool_key'),
+                 'allowance': True, 'paying': True},
+                username=username, what=_note.get('what') or '',
+                ran=bool(_emptied))
+        except Exception:
+            traceback.print_exc()
 
     # Wallet post-hook: if the wallet absorbed this pull AND the
     # subject's billing_mode is auto_reload AND the new balance
@@ -16919,7 +17008,7 @@ def submit_rerun():
     """Submit a profile run using the same search criteria as an existing profile, with new dates. Uses selected profile as reference so demographics stay within margin."""
     try:
         username = session.get('username')
-        if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS):
+        if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS, pull_type='Profile Analysis'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Profile Analysis', 'profile_iq_build'),
@@ -25681,7 +25770,7 @@ def submit_analysis():
     try:
         # Check user credits first (Profile Analysis costs 5 credits)
         username = session.get('username')
-        if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS):
+        if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS, pull_type='Profile Analysis'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Profile Analysis', 'profile_iq_build'),
@@ -33187,7 +33276,7 @@ def submit_talent_theater():
             return jsonify({'error': 'Start date and end date are required'}), 400
         
         username = session.get('username', 'unknown')
-        if not has_credits_for(username, CREDITS_TICKET_SALES):
+        if not has_credits_for(username, CREDITS_TICKET_SALES, pull_type='Ticket Sales'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Ticket Sales', 'ticket_sales'),
@@ -33492,7 +33581,7 @@ def talent_fit_assess():
         credit_cost_per_talent = get_credit_cost('talent_fit_per_talent')
         total_credits = credit_cost_per_talent * len(talents)
         
-        if not has_credits_for(username, total_credits):
+        if not has_credits_for(username, total_credits, pull_type='Talent Fit Assessment'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': f'Talent Fit Assessment requires {total_credits} credits ({credit_cost_per_talent} per talent x {len(talents)} talents). You have {"no" if credits_left == 0 else credits_left} remaining.',
@@ -33618,7 +33707,7 @@ def talent_fit_find_talent():
         username = session.get('username', 'unknown')
         credit_cost = get_credit_cost('talent_fit_find')
         
-        if not has_credits_for(username, credit_cost):
+        if not has_credits_for(username, credit_cost, pull_type='Find Me Talent'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': f'Find Me Talent requires {credit_cost} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
@@ -33989,7 +34078,7 @@ def submit_ticket_sales_tracker():
         if not start_date or not end_date:
             return jsonify({'error': 'Start date and end date are required'}), 400
         username = session.get('username', 'unknown')
-        if not has_credits_for(username, CREDITS_TICKET_SALES_TRACKER):
+        if not has_credits_for(username, CREDITS_TICKET_SALES_TRACKER, pull_type='Ticket Sales Tracker'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Ticket Sales Tracker', 'ticket_sales_tracker'),
@@ -34157,7 +34246,7 @@ def submit_sf_lf_conversion():
             }), 400
         
         username = session.get('username', 'unknown')
-        if not has_credits_for(username, CREDITS_SF_LF_CONVERSION):
+        if not has_credits_for(username, CREDITS_SF_LF_CONVERSION, pull_type='SF-LF Conversion'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('SF-LF Conversion', 'sf_lf_conversion'),
@@ -37075,7 +37164,7 @@ def submit_flywheel_conversion():
             project_name = f"Flywheel_{entry_point[:30]}"
         
         username = session.get('username', 'unknown')
-        if not has_credits_for(username, CREDITS_FLYWHEEL_CONVERSION):
+        if not has_credits_for(username, CREDITS_FLYWHEEL_CONVERSION, pull_type='Flywheel Conversion'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Flywheel Conversion', 'flywheel_conversion'),
@@ -38246,7 +38335,7 @@ def submit_svod_acquisition():
             return jsonify({'error': str(ve)}), 400
 
         username = session.get('username', 'unknown')
-        if not has_credits_for(username, CREDITS_SVOD):
+        if not has_credits_for(username, CREDITS_SVOD, pull_type='SVOD'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Subscriber IQ', 'subscriber_iq_build'),
@@ -38345,7 +38434,7 @@ def submit_campaign_roi():
             return jsonify({'error': 'At least one post domain is required'}), 400
         
         username = session.get('username', 'unknown')
-        if not has_credits_for(username, CREDITS_CAMPAIGN_ROI):
+        if not has_credits_for(username, CREDITS_CAMPAIGN_ROI, pull_type='Campaign ROI'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Campaign ROI', 'campaign_roi'),
@@ -38815,7 +38904,7 @@ def submit_watch_time():
             return jsonify({'error': 'At least one show name is required'}), 400
         
         username = session.get('username', 'unknown')
-        if not has_credits_for(username, CREDITS_WATCH_TIME):
+        if not has_credits_for(username, CREDITS_WATCH_TIME, pull_type='Watch Time'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': f'Watch Time requires {CREDITS_WATCH_TIME} credit(s). You have {"no" if credits_left == 0 else credits_left} remaining.',
@@ -41594,7 +41683,7 @@ def submit_brand_partnership_iq():
             return jsonify({'error': 'attribution_window_days must be 0-365'}), 400
 
         # Credit gate (15 credits per analysis).
-        if not has_credits_for(username, CREDITS_BRAND_PARTNERSHIP_IQ):
+        if not has_credits_for(username, CREDITS_BRAND_PARTNERSHIP_IQ, pull_type='Brand Partnership IQ'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': (f'Brand Partnership Valuation requires '
@@ -42174,7 +42263,7 @@ def submit_journey_iq():
         if forward_days < 0 or forward_days > 60:
             return jsonify({'error': 'forward_days must be 0-60'}), 400
 
-        if not has_credits_for(username, CREDITS_JOURNEY_IQ):
+        if not has_credits_for(username, CREDITS_JOURNEY_IQ, pull_type='Digital Journey IQ'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Digital Journey IQ', 'journey_iq'),
@@ -42365,7 +42454,7 @@ def submit_intent_ingest():
         if len(urls) > 500:
             return jsonify({'error': 'max 500 asset URLs per campaign'}), 400
 
-        if not has_credits_for(username, CREDITS_INTENT_INGEST):
+        if not has_credits_for(username, CREDITS_INTENT_INGEST, pull_type='Attribution IQ Ingest'):
             _, credits_left = check_user_credits(username)
             return jsonify({
                 'error': _funds_short_error('Intent Ingest', 'intent_iq'),
@@ -43024,7 +43113,7 @@ def submit_sentiment_iq():
         # Credit gate - only consume credits when we actually kick off a backfill.
         will_backfill = bool(start_date and end_date)
         if will_backfill:
-            if not has_credits_for(username, CREDITS_SENTIMENT_IQ):
+            if not has_credits_for(username, CREDITS_SENTIMENT_IQ, pull_type='Sentiment IQ'):
                 _, credits_left = check_user_credits(username)
                 return jsonify({
                     'error': _funds_short_error('Sentiment IQ tracking', 'sentiment_iq'),
@@ -52753,32 +52842,18 @@ def _charge_existing_match_or_402(user, username, ex_key, subject_name,
         _, _left = check_user_credits(username)
         _snap = _caller_wallet_snapshot(username)
         _wallet = float(_snap.get('wallet_balance_usd') or 0.0)
-        _usd = 0.0
-        try:
-            import wallet as _w_live
-            _data = load_users()
-            _u = (_data.get('users') or {}).get(username) or user or {}
-            _subj, _, _ = _w_live.resolve_billing_subject(_u, _data)
-            _usd, _ = _w_live.should_charge_wallet(
-                _subj, _w_live.pull_type_to_tool_key(pull_type)
-                or 'api_chatbot_profile_iq_build')
-        except Exception:
-            traceback.print_exc()
-        if _snap.get('paying_customer'):
-            _err = (f"This run costs ${_usd:.2f}. Wallet balance is "
-                    f"${_wallet:.2f}. Top up to keep going.")
-        else:
-            _err = (f"You're out of credits for this run - {price} needed, "
-                    f"{_left} remaining. Top up to keep going.")
+        # one shared line (wallet.funds_refusal_line): a plan allowance
+        # reads no price or balance, a wallet its real price, never $0
+        _err, _fv = _funds_refusal_copy(username, pull_type)
         return jsonify({
             'success': False,
             'guidance': True,
             'error': _err,
             'credits_required': price,
             'credits_remaining': _left,
-            'wallet_balance_usd': _wallet,
+            'wallet_balance_usd': (None if _fv.get('allowance') else _wallet),
             'top_up_url': '/wallet',
-            'top_up_label': 'Buy more credits',
+            'top_up_label': 'Add funds',
         }), 402
     try:
         if not consume_credit(
