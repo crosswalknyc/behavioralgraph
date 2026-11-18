@@ -28,6 +28,23 @@ qualifiers stripped), storing:
 Whichever product builds FIRST for a title establishes the anchor; the
 second product consults it before sizing and must align: same US
 viewer count, same sample basis, matching GENDER + AGE distributions.
+
+Seasons are different things (2026-11-18, Outlander: Blood of My Blood:
+a Season 2 tracker took Season 1's universe as its own and landed 41
+people from it). The entry's own figure belongs to the season that
+established it (``season``); any other season holds its own figure under
+``seasons``:
+
+        "seasons": {"2": {"us_viewers": ..., "sample_size": ...,
+                          "window": {...}, "source_product": ...,
+                          "s3_keys": {...}, "slice_keys": [...]}}
+
+``get_title_anchor(title, season=N)`` returns the entry as a run on
+season N should read it: its own season's figure when one is held
+(``season_match`` True), otherwise the title's establishing read as a
+reference only (``season_match`` False: demos still lock, the universe
+is never copied). A caller that names no season reads the entry as
+before.
 Both products share the same canonical demo bucket labels
 (migration/canonical_demos.PIPELINE_DEMO_SCHEMA GENDER + AGE match the
 Subscriber IQ output schema 1:1), so demos transfer directly.
@@ -155,9 +172,94 @@ def _now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def get_title_anchor(title):
+def _season_num(v):
+    try:
+        n = int(str(v).strip())
+        return n if 1 <= n <= 60 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def season_scope(entry, season):
+    """The entry as a run on `season` reads it (pure, testable offline).
+
+    Returns a copy carrying ``season_match``:
+      True   the figure is this season's own (the entry's season, a
+             season-less entry, or the season's record under ``seasons``,
+             whose figure, window and file keys replace the entry's);
+      False  the entry belongs to another season and this season holds
+             no figure yet: a reference, never the value or a ceiling."""
+    if not isinstance(entry, dict):
+        return None
+    view = dict(entry)
+    view["season_match"] = True
+    want, top = _season_num(season), _season_num(entry.get("season"))
+    if want is None or top is None or want == top:
+        return view
+    rec = (entry.get("seasons") or {}).get(str(want))
+    if isinstance(rec, dict) and rec.get("us_viewers"):
+        for k in ("us_viewers", "sample_size", "window", "source_product",
+                  "s3_keys", "slice_keys"):
+            view[k] = rec.get(k)
+        view["s3_keys"] = dict(rec.get("s3_keys") or {})
+        view["season"] = want
+        return view
+    view["season_match"] = False
+    return view
+
+
+def held_reads(entry):
+    """Every figure the title holds, the establishing read first:
+    [{season, us_viewers, sample_size, window}]. Pure function."""
+    out = []
+    if not isinstance(entry, dict):
+        return out
+
+    def _add(rec, season):
+        try:
+            uv = int(rec.get("us_viewers") or 0)
+        except (TypeError, ValueError):
+            uv = 0
+        if uv > 0:
+            out.append({"season": _season_num(season), "us_viewers": uv,
+                        "sample_size": int(rec.get("sample_size") or 0),
+                        "window": dict(rec.get("window") or {})})
+    _add(entry, entry.get("season"))
+    for s, rec in sorted((entry.get("seasons") or {}).items()):
+        if isinstance(rec, dict):
+            _add(rec, s)
+    return out
+
+
+def _overlap_days(a, b) -> int:
+    try:
+        a0 = date.fromisoformat(str((a or {}).get("start") or "")[:10])
+        a1 = date.fromisoformat(str((a or {}).get("end") or "")[:10])
+        b0 = date.fromisoformat(str((b or {}).get("start") or "")[:10])
+        b1 = date.fromisoformat(str((b or {}).get("end") or "")[:10])
+    except (ValueError, TypeError):
+        return 0
+    return max(0, (min(a1, b1) - max(a0, b0)).days + 1)
+
+
+def season_for_window(entry, window):
+    """The held season whose own window overlaps `window` the most, or
+    None. Lets a run that names no season (a 30-day read inside Season
+    2's dates) read the season it falls in. Pure function."""
+    best, best_days = None, 0
+    for r in held_reads(entry):
+        d = _overlap_days(window, r.get("window"))
+        if r.get("season") is not None and d > best_days:
+            best, best_days = r["season"], d
+    return best
+
+
+def get_title_anchor(title, season=None, window=None):
     """Fetch the anchor for a title from S3. Returns the entry dict or
-    None. Never raises (a registry read failure never blocks a build)."""
+    None. Never raises (a registry read failure never blocks a build).
+    With `season`, the entry is returned through season_scope(); with no
+    season but a `window`, a title that holds more than one season is
+    scoped to the season the window falls in."""
     key = title_key(title)
     if not key:
         return None
@@ -174,7 +276,9 @@ def get_title_anchor(title):
             return None
         if not entry.get("us_viewers"):
             return None
-        return entry
+        if season is None and window and entry.get("seasons"):
+            season = season_for_window(entry, window)
+        return entry if season is None else season_scope(entry, season)
     except Exception as e:
         print(f"[title-anchors] read failed (non-fatal): {e}")
         return None
@@ -250,6 +354,30 @@ def upgrade_title_anchor(title, product, us_viewers, sample_size=None,
             entry = obj.get(key)
             if not isinstance(entry, dict):
                 entry = {"s3_keys": {}, "created_at": _now_iso()}
+            want, top = _season_num(season), _season_num(entry.get("season"))
+            if entry.get("us_viewers") and want is not None \
+                    and top is not None and want != top:
+                # another season raises its own figure, never the title's
+                rec = entry.setdefault("seasons", {}).setdefault(
+                    str(want), {"s3_keys": {}, "created_at": _now_iso()})
+                try:
+                    cur_uv = int(rec.get("us_viewers") or 0)
+                except (TypeError, ValueError):
+                    cur_uv = 0
+                if new_uv <= cur_uv:
+                    return None
+                rec["us_viewers"] = new_uv
+                if sample_size:
+                    rec["sample_size"] = int(sample_size)
+                rec["source_product"] = product
+                if isinstance(window, dict) and window:
+                    rec["window"] = window
+                if s3_key:
+                    rec.setdefault("s3_keys", {})[product] = str(s3_key)
+                rec["upgraded_at"] = rec["updated_at"] = _now_iso()
+                entry["updated_at"] = rec["updated_at"]
+                obj[key] = entry
+                return obj
             try:
                 cur_uv = int(entry.get("us_viewers") or 0)
             except (TypeError, ValueError):
@@ -329,9 +457,37 @@ def record_title_anchor(title, product, us_viewers=None, sample_size=None,
                 }
                 if entry["us_viewers"] <= 0:
                     return None  # nothing countable to anchor - abort
-            keys = entry.setdefault("s3_keys", {})
-            if s3_key and slice and entry.get("us_viewers"):
-                slices = entry.setdefault("slice_keys", [])
+            # Another season of an anchored title holds its own figure
+            # (2026-11-18): first writer for that season establishes it.
+            target = entry
+            want, top = _season_num(season), _season_num(entry.get("season"))
+            if want is not None and top is not None and want != top:
+                seasons = entry.setdefault("seasons", {})
+                target = seasons.get(str(want))
+                if not isinstance(target, dict) or not target.get("us_viewers"):
+                    try:
+                        s_uv = int(us_viewers or 0)
+                    except (TypeError, ValueError):
+                        s_uv = 0
+                    if s_uv <= 0:
+                        return None  # nothing countable for this season yet
+                    target = {
+                        "us_viewers": s_uv,
+                        "sample_size": int(sample_size or 0),
+                        "source_product": product,
+                        "window": window if isinstance(window, dict) else {},
+                        "s3_keys": {},
+                        "created_at": _now_iso(),
+                    }
+                    seasons[str(want)] = target
+                target["updated_at"] = _now_iso()
+            keys = target.get("s3_keys")
+            if not isinstance(keys, dict):
+                keys = target["s3_keys"] = {}
+            if s3_key and slice and target.get("us_viewers"):
+                slices = target.get("slice_keys")
+                if not isinstance(slices, list):
+                    slices = target["slice_keys"] = []
                 if str(s3_key) not in slices:
                     slices.append(str(s3_key))
                     del slices[:-SLICE_KEYS_CAP]

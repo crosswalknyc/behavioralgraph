@@ -4064,10 +4064,10 @@ def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
         from openai import OpenAI
         api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
-            return {'passed': True, 'flags': [], 'note': 'No OpenAI key; skipping validation'}
+            return {'passed': True, 'unchecked': True, 'flags': [], 'note': 'No OpenAI key; skipping validation'}
         client = OpenAI(api_key=api_key)
     except Exception:
-        return {'passed': True, 'flags': [], 'note': 'OpenAI not available; skipping validation'}
+        return {'passed': True, 'unchecked': True, 'flags': [], 'note': 'OpenAI not available; skipping validation'}
 
     viewership_research = _research_show_viewership(client, show_name)
 
@@ -4181,7 +4181,10 @@ Respond in JSON ONLY (no markdown fencing):
         result = json.loads(raw)
         return result
     except Exception as e:
-        return {'passed': True, 'flags': [], 'note': f'AI validation error: {e}'}
+        # The check did not run to an answer: that is "unchecked", never a
+        # pass (2026-11-18: a by-hand regeneration logged a JSON error here
+        # and its sidecar read PASS).
+        return {'passed': True, 'unchecked': True, 'flags': [], 'note': f'AI validation error: {e}'}
 
 
 def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups, platform_name, p):
@@ -4211,6 +4214,17 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
     # the audit sidecar; they just aren't applied to the CSV rows.
     _has_reach_override = p.get('reach_us_override') is not None
     _has_conv_override  = p.get('conversion_pct') is not None
+    if p.get('_held_locked_reach') is not None and not _has_reach_override:
+        # Sized off the title's held figure (2026-11-18): the held figure is
+        # the anchor; the plausibility flags are recorded, never applied.
+        _lock_msg = (
+            f"AI adjustments skipped — viewers sized off the title's held "
+            f"figure ({int(p['_held_locked_reach']):,} US). The AI "
+            f"plausibility flags are recorded for audit but not applied."
+        )
+        print(f"   🔒 {_lock_msg}")
+        p.setdefault('_ai_flags', []).append(_lock_msg)
+        return df_out, changes
     if _has_reach_override or _has_conv_override:
         _lock_bits = []
         if _has_reach_override:
@@ -5999,8 +6013,9 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     #      without polluting the rendered CSV.
     pipeline_flags = list(p.get('_ai_flags', []) or [])
     ai_validation_payload = {
-        'status': 'PASS' if validation.get('passed', True) else 'FLAGGED',
-        'assessment': validation.get('overall_assessment', ''),
+        'status': ('UNCHECKED' if validation.get('unchecked')
+                   else 'PASS' if validation.get('passed', True) else 'FLAGGED'),
+        'assessment': validation.get('overall_assessment', '') or validation.get('note', ''),
         'flags': list(validation.get('flags') or []),
         'pipeline_flags': pipeline_flags,
     }
@@ -6490,6 +6505,162 @@ _RESEARCH_SALVAGE_STR = (
 )
 
 
+# ---------------------------------------------------------------------------
+# The title's held figures (2026-11-18, Outlander: Blood of My Blood on
+# Starz). A 30-day tracker's research reply was cut off, the run fell to an
+# 80,000-base prior and shipped at 131,927 US viewers under a title held at
+# 1,599,223; the hourly check then pulled the title down to match and the
+# next tracker inherited it. Three rules live here:
+#   - a reply that is cut off or will not parse is asked for again, and when
+#     it still fails the run sizes off the title's held figure, scaled to
+#     the run's window, never off a tier constant;
+#   - no tracker ships wildly below the held figure for its window unless a
+#     complete, confident read put it there;
+#   - every figure, including one supplied by hand, is read against the
+#     held figures and the result is reported (never blocks, never mails).
+# ---------------------------------------------------------------------------
+HELD_FLOOR_SHARE = 0.25      # "wildly below": under a quarter of the window-scaled held figure
+HELD_CEILING_MULT = 4.0      # report only: over four times the window-scaled held figure
+HELD_TWIN_SHARE = 0.005      # report only: within half a percent of another season's figure
+
+
+def _window_span_days(start, end) -> int:
+    def _d(v):
+        if isinstance(v, datetime):
+            return v
+        try:
+            return datetime.strptime(str(v or '').strip()[:10], '%Y-%m-%d')
+        except (TypeError, ValueError):
+            return None
+    a, b = _d(start), _d(end)
+    if not a or not b:
+        return 0
+    return max(0, (b - a).days + 1)
+
+
+def _window_scale(run_days: int, held_days: int) -> float:
+    """Share of a held window's unique viewers a run of `run_days` holds.
+    Unique viewers build fast and flatten (a four-day premiere window is
+    about 28% of a 64-day season, a month about three quarters), so the
+    curve is logarithmic, never a straight day count. 1.0 when either span
+    is unknown."""
+    if run_days <= 0 or held_days <= 0:
+        return 1.0
+    r = math.log1p(run_days / 3.0) / math.log1p(held_days / 3.0)
+    return max(0.05, min(1.5, r))
+
+
+def _held_reference(config: dict):
+    """The held read this run is sized and checked against, or None.
+
+    ``config['held_reads']`` is a list of {us_viewers, window:{start,end},
+    season} the caller read off the title's stored figures. A read on the
+    run's own season wins (longest window first); otherwise the title's
+    establishing read stands in, flagged ``same_season=False``."""
+    reads = []
+    for r in (config.get('held_reads') or []):
+        try:
+            uv = int((r or {}).get('us_viewers') or 0)
+        except (TypeError, ValueError):
+            uv = 0
+        if uv > 0:
+            w = (r or {}).get('window') or {}
+            reads.append({'us_viewers': uv, 'season': r.get('season'),
+                          'days': _window_span_days(w.get('start'), w.get('end')), 'window': w})
+    if not reads:
+        return None
+    run_season = config.get('run_season')
+    run_end = config.get('analysis_end_date_override') or config.get('campaign_end')
+    run_days = _window_span_days(config.get('campaign_start'), run_end)
+    same = [r for r in reads if run_season is not None and r.get('season') == run_season]
+    if not same and run_season is None:
+        # no season named: the held read whose dates this run falls in
+        def _overlap(r):
+            w = r.get('window') or {}
+            a0, a1 = config.get('campaign_start'), run_end
+            try:
+                b0 = datetime.strptime(str(w.get('start'))[:10], '%Y-%m-%d')
+                b1 = datetime.strptime(str(w.get('end'))[:10], '%Y-%m-%d')
+                a0 = a0 if isinstance(a0, datetime) else datetime.strptime(str(a0)[:10], '%Y-%m-%d')
+                a1 = a1 if isinstance(a1, datetime) else datetime.strptime(str(a1)[:10], '%Y-%m-%d')
+            except (TypeError, ValueError):
+                return 0
+            return max(0, (min(a1, b1) - max(a0, b0)).days + 1)
+        same = [r for r in reads if _overlap(r) > 0]
+    pick = max(same, key=lambda r: r['days']) if same else reads[0]
+    same_season = bool(same) or run_season is None or pick.get('season') is None
+    scale = _window_scale(run_days, pick['days'])
+    return {
+        'held_us': pick['us_viewers'], 'held_days': pick['days'], 'held_season': pick.get('season'),
+        'held_window': pick.get('window') or {}, 'run_days': run_days, 'run_season': run_season,
+        'same_season': same_season, 'scale': round(scale, 4),
+        'expected_us': int(pick['us_viewers'] * scale), 'reads': reads,
+    }
+
+
+def _held_fallback_reach(held: dict, show_name: str) -> int:
+    """The window-scaled held figure, taken low: 3% to 10% under it on a
+    title-salted draw, so two runs never land on one number."""
+    h = int(_hashlib.md5(f"{show_name}|held|{held['held_us']}|{held['run_days']}".encode()).hexdigest()[:6], 16)
+    return int(held['expected_us'] * (0.90 + (h % 700) / 10000.0))
+
+
+def held_figure_check(config: dict, reach_us: int, reach_source: str = '') -> dict:
+    """Report-only read of a tracker's US viewers against the title's held
+    figures. Runs on every tracker, a supplied figure included. Returns
+    {status, flags, basis}; never raises, never blocks, never mails."""
+    try:
+        held = _held_reference(config)
+        if not held:
+            return {'status': 'NO_HELD_FIGURE', 'flags': [], 'basis': {}}
+        flags = []
+        exp = held['expected_us']
+        reach_us = int(reach_us or 0)
+        if exp > 0 and reach_us < exp * HELD_FLOOR_SHARE:
+            flags.append(f"{reach_us:,} US viewers is under a quarter of the held figure for this window "
+                         f"({exp:,}, from {held['held_us']:,} over {held['held_days']} days)")
+        if held['same_season'] and held['run_days'] and held['held_days'] and \
+                held['run_days'] < held['held_days'] - 10 and reach_us > held['held_us']:
+            flags.append(f"{reach_us:,} US viewers on a {held['run_days']}-day window is above the "
+                         f"{held['held_days']}-day read that contains it ({held['held_us']:,})")
+        elif exp > 0 and reach_us > exp * HELD_CEILING_MULT:
+            flags.append(f"{reach_us:,} US viewers is over four times the held figure for this window ({exp:,})")
+        for r in held['reads']:
+            if held['run_season'] is not None and r.get('season') not in (None, held['run_season']) \
+                    and abs(reach_us - r['us_viewers']) <= r['us_viewers'] * HELD_TWIN_SHARE:
+                flags.append(f"{reach_us:,} US viewers sits on Season {r.get('season')}'s figure "
+                             f"({r['us_viewers']:,}); a season is sized on its own footing")
+        return {'status': 'FLAGGED' if flags else 'OK', 'flags': flags,
+                'basis': {k: held[k] for k in ('held_us', 'held_days', 'held_season', 'run_days',
+                                                'run_season', 'same_season', 'scale', 'expected_us')},
+                'reach_us': reach_us, 'reach_source': reach_source}
+    except Exception as e:   # the check never takes a build down
+        return {'status': 'UNCHECKED', 'flags': [], 'basis': {}, 'note': f'held figure check error: {e}'}
+
+
+def _held_reads_for(config: dict):
+    """Held reads for a caller that did not pass them (a by-hand run): read
+    off the title's stored figures. [] on any miss; never raises. Skipped in
+    test mode and when the config says so."""
+    if config.get('held_reads') is not None or config.get('skip_held_lookup') or os.environ.get('REGRESSION_TEST_MODE'):
+        return config.get('held_reads') or []
+    try:
+        from title_anchors import get_title_anchor, held_reads
+        show = (config.get('show_search_terms') or [config.get('project_name', '')])[0]
+        entry = get_title_anchor(show)
+        return held_reads(entry) if entry else []
+    except Exception as e:
+        print(f"   ⚠️  Held figures not read (non-fatal): {e}")
+        return []
+
+
+_RESEARCH_RETRY_SUFFIX = (
+    "\n\nYour previous reply could not be read to the end. Reply again with the "
+    "single JSON object only, no text before or after it. Keep every list of "
+    "sources to at most three short entries so the object closes."
+)
+
+
 def _parse_research_json(raw: str):
     """The research reply as a dict, or None.
 
@@ -6865,13 +7036,39 @@ def _research_show_externally_with_claude(
     )
     if not raw:
         print(f"   ⚠️  Claude external research returned no text")
-        return None
 
-    result = _parse_research_json(raw)
+    result = _parse_research_json(raw) if raw else None
+    if result is None or result.get('_truncated'):
+        # A reply that was cut off, or will not parse, is never used as if
+        # it were complete: ask once more for the object alone.
+        print("   🔁 Research reply incomplete; asking again for the object alone…")
+        try:
+            raw2 = claude_messages(
+                system=system,
+                user=user + _RESEARCH_RETRY_SUFFIX,
+                max_tokens=8192,
+                temperature=0.25,
+                tools=tools,
+            )
+        except Exception as _retry_err:
+            print(f"   ⚠️  Research retry failed: {_retry_err}")
+            raw2 = None
+        retry = _parse_research_json(raw2) if raw2 else None
+        if retry is not None and not retry.get('_truncated'):
+            result = retry
+            print("   ✅ Research retry returned a complete reply")
+        else:
+            if result is None:
+                result = retry
+            if result is not None:
+                # Still not a complete reply. The headline fields are kept
+                # for the audit trail; the reach decision sizes off the
+                # title's held figure when there is one.
+                result['_incomplete'] = True
     if result is None:
-        if raw.strip().find('{') < 0:
+        if not raw or raw.strip().find('{') < 0:
             print(f"   ⚠️  Claude external research: no JSON found in response")
-            print(f"   First 300 chars: {raw[:300]!r}")
+            print(f"   First 300 chars: {(raw or '')[:300]!r}")
         return None
 
     # Stamp metadata so callers can tell when Claude "searched-and-found-
@@ -7175,7 +7372,20 @@ def _build_synthetic_panel(config: dict) -> dict:
     # *.research.json audit file so anyone can see the room above.
     reach_source = 'priors'
     _reach_conf = str((research or {}).get('reach_confidence') or '').strip().lower()
-    if research and research.get('reach_us_estimate'):
+    config['held_reads'] = _held_reads_for(config)
+    held = _held_reference(config)
+    _incomplete = bool((research or {}).get('_incomplete'))
+    if held and (not research or _incomplete or not research.get('reach_us_estimate')):
+        # No complete read of this window: size off the title's held figure,
+        # scaled to the window and taken low. Never the tier prior.
+        reach_us = _held_fallback_reach(held, show_name)
+        reach_source = 'held_title_figure'
+        _why = ('the research reply was cut off twice' if _incomplete
+                else 'research returned no viewer count' if research else 'no research reply')
+        print(f"   🧷 Reach from the title's held figure ({_why}): {reach_us:,} US "
+              f"({held['held_us']:,} over {held['held_days']} days x {held['scale']} for "
+              f"{held['run_days']} days, taken low)")
+    elif research and research.get('reach_us_estimate'):
         # Any confidence (2026-11-18). A low-confidence bracket used to be
         # thrown away for the tier prior, which put Outlander: Blood of My
         # Blood on Starz at 131,927 US viewers (80,000 base) against a
@@ -7264,6 +7474,27 @@ def _build_synthetic_panel(config: dict) -> dict:
             print(f"   ⛔ Reach {_was:,} meets the title universe ceiling "
                   f"{_ceil:,} (this window is a slice of a season already "
                   f"read in full) -> {reach_us:,} US")
+
+    # Never wildly below the title's held figure for this window unless a
+    # complete, confident read put it there (2026-11-18).
+    if held and reach_source != 'held_title_figure' and not config.get('reach_us_override'):
+        _floor = int(held['expected_us'] * HELD_FLOOR_SHARE)
+        _reasoned = (reach_source.startswith('claude_external_research')
+                     and _reach_conf in ('high', 'medium') and not _incomplete)
+        if reach_us < _floor and not _reasoned:
+            _was = reach_us
+            reach_us = _held_fallback_reach(held, show_name)
+            reach_source = f'{reach_source}+held_floor'
+            print(f"   🧷 Reach {_was:,} is under a quarter of the title's held figure for this "
+                  f"window ({held['expected_us']:,}) with no confident read behind it -> {reach_us:,} US")
+            if config.get('reach_us_ceiling'):
+                try:
+                    reach_us = min(reach_us, int(int(config['reach_us_ceiling']) * 0.97))
+                except (TypeError, ValueError):
+                    pass
+
+    if 'held' in reach_source:
+        config['_held_locked_reach'] = reach_us
 
     # Explicit override always wins (CLI --reach-us flag)
     if config.get('reach_us_override'):
@@ -8736,6 +8967,27 @@ def run_synthetic_attribution(config: dict) -> dict:
     _displayed = _displayed_total_show_watchers(output_path)
     if _displayed:
         result["total_panel"] = _displayed
+    # Report-only: the figure this tracker shipped at, read against the
+    # title's held figures. A figure supplied by hand passes through the
+    # same check (2026-11-18). Nothing here blocks or notifies.
+    try:
+        _shown = int(round(_displayed / SAMPLE_REPRESENTS * US_POPULATION)) if _displayed else int(panel['reach_us'])
+        _held_report = held_figure_check(config, _shown, str(panel.get('reach_source') or ''))
+        result["held_figure_check"] = _held_report
+        print(f"🧷 HELD FIGURE CHECK → status={_held_report['status']}")
+        for _flag in _held_report.get('flags') or []:
+            print(f"   • {_flag}")
+        _sidecar = Path(str(output_path)).with_suffix('.validation.json')
+        _meta = {}
+        if _sidecar.exists():
+            try:
+                _meta = json.loads(_sidecar.read_text(encoding='utf-8'))
+            except Exception:
+                _meta = {}
+        _meta['held_figure_check'] = _held_report
+        _sidecar.write_text(json.dumps(_meta, indent=2, default=str), encoding='utf-8')
+    except Exception as _held_err:
+        print(f"   ⚠️  Held figure check skipped: {_held_err}")
     return result
 
 
