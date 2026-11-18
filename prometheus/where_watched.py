@@ -379,8 +379,12 @@ def _live_platforms(title, kind, timeout_s=40.0):
             if kind == 'podcast':
                 plats = list(_ssq.GROUPS['podcasts'])
             else:
-                # Amazon never resolves from a bare title (its zero is not an
-                # answer); the content map and the research call cover it
+                # Amazon is left out of this time-boxed look: its title search
+                # alone runs about half a minute, most of the box. (It does
+                # resolve by title: the 2026-10-26 'never resolves from a
+                # bare title' rule was corrected on 2026-11-17, and every
+                # profile build now scans it.) The content map and the
+                # research call cover it here.
                 plats = [p for p in _ssq.GROUPS['video']
                          if p != 'amazon' and not (kind == 'movie' and p == 'youtube')]
             k = 'movie' if kind == 'movie' else 'series'
