@@ -37,7 +37,7 @@ one figure were:
     (a league, a team, a show), are the partnership by its own name. A
     total is never credited to one name out of several (`_partner_names`).
   - Every date and day count on every page is the window the valuation's
-    after counts cover (`_after_window`), the cover included. A window
+    after counts cover (`migration/bpiq_windows.py`), the cover included. A window
     that only sits beside the counts (the days from a campaign's end to
     the day the valuation was made) is never printed.
   - The matched group's gain is read from the valuation's own field on
@@ -64,7 +64,6 @@ that introduced this note.
 """
 from __future__ import annotations
 
-import datetime as _dt
 import io
 import os
 import re
@@ -79,6 +78,14 @@ from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.util import Emu, Inches, Pt
+
+# The two windows of a valuation are read in one place, shared with the
+# dashboard's line under the title (2026-11-18): the deck and the page
+# print the same window because they ask the same function.
+try:
+    from .bpiq_windows import after_window as _after_window, before_window as _before_window, ymd as _ymd
+except ImportError:  # pragma: no cover - imported outside the package
+    from bpiq_windows import after_window as _after_window, before_window as _before_window, ymd as _ymd  # type: ignore
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -1709,16 +1716,6 @@ _MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", 
                 "September", "October", "November", "December"]
 
 
-def _ymd(iso: Any) -> Optional[tuple]:
-    try:
-        y, m, d = (int(x) for x in str(iso or "")[:10].split("-"))
-        if 1 <= m <= 12 and 1 <= d <= 31:
-            return y, m, d
-    except (TypeError, ValueError):
-        pass
-    return None
-
-
 def _fmt_date(iso: str, long: bool = False) -> str:
     """YYYY-MM-DD as 'Sep 22, 2026' (or 'September 22, 2026'). The input
     comes back unchanged when it is not a date."""
@@ -1945,101 +1942,6 @@ def _emv_rows(data: dict, brand: str) -> list:
     return rows
 
 
-def _span_days(start: Any, end: Any) -> int:
-    """The days from `start` to `end`, both counted; 0 when either is
-    not a date or the range runs backwards."""
-    a, b = _ymd(start), _ymd(end)
-    if a is None or b is None:
-        return 0
-    try:
-        n = (_dt.date(*b) - _dt.date(*a)).days + 1
-    except ValueError:
-        return 0
-    return n if n > 0 else 0
-
-
-def _day_after(iso: Any) -> str:
-    p = _ymd(iso)
-    if p is None:
-        return ""
-    try:
-        return (_dt.date(*p) + _dt.timedelta(days=1)).isoformat()
-    except ValueError:
-        return ""
-
-
-def _after_window(data: dict) -> dict:
-    """The window the valuation's after counts cover, as {'start',
-    'end', 'days', 'basis'}: the one window every date and day count in
-    the deck is read from (2026-11-18, Coach x WNBA: the counts were for
-    the season, May 8 to Oct 31, 177 days, and every page but the cover
-    labeled them '17 days, Nov 1 to Nov 17', the days from the season's
-    end to the day the valuation was made).
-
-    A valuation carries the campaign's own dates (`event_period`) and a
-    second window (`post_period`). Which one the counts cover depends on
-    how the valuation was made, so it is read from the valuation itself:
-
-      * no second window, or one of no length: the campaign's dates;
-      * a second window that runs from the campaign's first day (the
-        attribution window an order confirms: the campaign plus the
-        days after it): that window;
-      * a second window that starts later: the valuation's own daily
-        rate (`totals.post_hits` over `post_hits_per_day`) says how many
-        days the after counts cover. They cover that later window (a
-        read of the days after an airing), the campaign's dates (the
-        later window is only the days up to when the valuation was
-        made), or the campaign and the later window together (the live
-        pull). With no daily rate to read, a valuation whose stated
-        length is the two together reads as the two together, and any
-        other reads as the later window.
-
-    Never raises; a valuation with no dates gives its stated length."""
-    data = _dict(data)
-    ev, po = _dict(data.get("event_period")), _dict(data.get("post_period"))
-    ev_s = str(ev.get("start") or data.get("start_date") or "")[:10]
-    ev_e = str(ev.get("end") or data.get("end_date") or "")[:10]
-    po_s, po_e = str(po.get("start") or "")[:10], str(po.get("end") or "")[:10]
-    has_event = bool(_ymd(ev_s) and _ymd(ev_e))
-    has_post = bool(_ymd(po_s) and _ymd(po_e))
-    stated = _count(data.get("post_period_days")) or _count(data.get("attribution_window_days"))
-    ev_days = _count(ev.get("days")) or _span_days(ev_s, ev_e)
-    po_days = _count(po.get("days")) if po.get("days") is not None else _span_days(po_s, po_e)
-    event = {"start": ev_s, "end": ev_e, "days": ev_days or stated, "basis": "event"}
-    post = {"start": po_s, "end": po_e, "days": po_days or stated, "basis": "post"}
-    if not has_post:
-        if has_event:
-            return event
-        return {"start": "", "end": "", "days": _count(po.get("days")) or stated, "basis": "stated"}
-    if not has_event:
-        return post
-    if po_days <= 0:
-        return event
-    if po_s <= ev_s:
-        return post
-    joined = po_s <= _day_after(ev_e)
-    both = {"start": ev_s, "end": po_e, "days": _span_days(ev_s, po_e), "basis": "event and post"}
-    # the two together are a third reading only when they are not the campaign's dates again
-    # (a second window that ends where the campaign ends adds no days to it)
-    options = [post, event] + ([both] if joined and both["end"] != event["end"] else [])
-    totals = _dict(data.get("totals"))
-    hits, rate = _num(totals.get("post_hits")), _num(totals.get("post_hits_per_day"))
-    if hits > 0 and rate > 0:
-        fits = [w for w in options if w["days"] > 0 and abs(round(hits / w["days"], 2) - rate) <= 0.011]
-        lengths = {w["days"] for w in fits}
-        if len(lengths) == 1 and len(fits) == 1:
-            return fits[0]
-        if len(lengths) == 1 and {w["basis"] for w in fits} == {"post", "event"}:
-            # the two windows are the same length: a valuation the engine wrote counts the campaign's dates
-            diag = _dict(data.get("diagnostics"))
-            engine = bool(diag.get("run_key")) or "post_window_clipped_to_today" in diag \
-                or bool(_dict(data.get("windows")).get("matched_pre_window"))
-            return event if engine else post
-    if joined and _count(data.get("post_period_days")) == ev_days + po_days and ev_days > 0:
-        return both
-    return post
-
-
 def _window_open(data: dict, post_p: dict) -> bool:
     """Is the valuation's window still open: the campaign was still
     running when it was valued (the order said so, or it runs on a
@@ -2123,13 +2025,12 @@ def _derive_context(data: dict, image_url: Optional[str],
     # ── the two windows ──────────────────────────────────────────────
     # Every date and day count in the deck comes from here. The after
     # window is the one the valuation's after counts cover
-    # (`_after_window`), never a window that only sits beside them
+    # (`migration/bpiq_windows.py`), never a window that only sits beside them
     # (2026-11-18: a season's counts labeled with the 17 days between
     # the season's end and the day the valuation was made).
-    pre_p, ev_p = _dict(data.get("pre_period")), _dict(data.get("event_period"))
+    pre_p, ev_p = _before_window(data), _dict(data.get("event_period"))
     post_p = _after_window(data)
-    pre_days = _count(pre_p.get("days")) or _count(data.get("pre_period_days")) \
-        or _span_days(pre_p.get("start"), pre_p.get("end"))
+    pre_days = _count(pre_p.get("days"))
     post_days = _count(post_p.get("days"))
     pre_range = _fmt_range(pre_p.get("start"), pre_p.get("end")) if pre_p.get("start") and pre_p.get("end") else ""
     post_range = _fmt_range(post_p.get("start"), post_p.get("end")) if post_p.get("start") and post_p.get("end") else ""

@@ -41804,6 +41804,16 @@ def get_brand_partnership_iq_result(s3_key):
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
+        # The windows the page prints under the title (2026-11-18): read
+        # here by the one function the deck uses (migration/bpiq_windows.py)
+        # and carried on this response only, under `_bpiq_window`. The
+        # stored valuation is read, never written; if the reading fails
+        # the response goes out as it always did.
+        try:
+            from migration.bpiq_windows import with_window_view as _bpiq_with_window_view
+            data = _bpiq_with_window_view(data)
+        except Exception:
+            traceback.print_exc()
         return jsonify({
             'success': True,
             'data': data,

@@ -83584,9 +83584,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
 
             var totals = data.totals || {};
-            var preP = data.pre_period || {};
-            var evP = data.event_period || {};
-            var poP = data.post_period || {};
 
             document.getElementById('bpiqDashTitle').textContent = data.project_name || 'Brand Partnership Valuation';
             var meta = '';
@@ -83599,10 +83596,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      + (data._bpiq_active_year_label || data._bpiq_active_year)
                      + '</span> &nbsp; ';
             }
-            meta += 'Campaign: ' + (data.start_date || '') + ' → ' + (data.end_date || '');
-            meta += ' · Attribution: ' + (data.attribution_window_days || 0) + 'd';
-            meta += ' · Pre-window: ' + (preP.start || '') + ' → ' + (preP.end || '') + ' (' + (preP.days || 0) + 'd)';
-            meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
+            // The line under the title (2026-11-18): the campaign's dates,
+            // the days counted after it, the before window, and the after
+            // window the counts cover. The server reads all four from the
+            // valuation (migration/bpiq_windows.py, the same reading the
+            // deck prints) and sends the finished line, so no window is
+            // worked out on this page. Before that date the after window
+            // was written here as the campaign's first day through
+            // post_period.end with the two lengths added, which read a
+            // 177-day season as 194 days and an order's window as twice
+            // its length. Without the server's line (a response cached
+            // from before), only the campaign's own dates print.
+            var _bpiqWin = (data && data._bpiq_window) || null;
+            if (_bpiqWin && _bpiqWin.line) {
+                meta += String(_bpiqWin.line).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            } else {
+                meta += 'Campaign: ' + (data.start_date || '') + ' → ' + (data.end_date || '');
+            }
             // Streaming platform label - shown on a second line under the
             // campaign / windows summary when the payload identifies the
             // service that carried the show (Netflix, Amazon Prime Video,
@@ -84552,6 +84562,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             sliced.end_date   = y.end   || orig.end_date;
             sliced.event_period = { start: y.start, end: y.end, days: y.days };
             sliced.post_period  = { start: y.end,   end: y.end, days: 0 };
+            // The year's own line under the title: the server resolved it
+            // with the valuation's (by_year), so the year view prints the
+            // year's dates and never the whole valuation's.
+            var _bpiqYearWin = (orig._bpiq_window && orig._bpiq_window.by_year) || {};
+            sliced._bpiq_window = _bpiqYearWin[String(y.year)] || null;
             // Pre-window stays the same (constant 2020 H2 baseline).
             sliced.audience_size           = y.audience_size           || orig.audience_size;
             sliced.projected_audience_size = y.projected_audience_size || orig.projected_audience_size;

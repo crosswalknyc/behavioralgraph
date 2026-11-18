@@ -17,10 +17,13 @@ dates and that one figure were. These checks hold the builder to:
       plural subject takes a plural verb.
   [2] windows: every date and day count on every page is the window the
       valuation's after counts cover, whichever way the valuation
-      stores it (the campaign's dates with a later tail, an order's
-      window from the campaign's first day, the days after an airing,
-      the live pull's campaign plus days after, a year slice, bare
-      dates, no dates). The cover prints the same window.
+      stores it (the campaign's dates with a later tail of days or of
+      months, a campaign valued on its last day, an order's window from
+      the campaign's first day, the days after an airing, the live
+      pull's campaign plus days after, a year slice, bare dates, no
+      dates). The cover prints the same window. The dashboard's line
+      under the title reads the same function
+      (scripts/test_bpiq_page_window_line.py).
   [3] the matched group: its gain reads from the valuation's own field
       on every page. A valuation whose lift count is the rise beyond
       the matched group shows the subtraction; one that priced the whole
@@ -102,6 +105,14 @@ WINDOWS = {
     "slice": dict(pre=("2025-02-10", "2026-02-09", 365), event=("2026-02-10", "2026-07-19", 160),
                   post=("2026-07-19", "2026-07-19", 0), stated=160, counted=160,
                   after=("2026-02-10", "2026-07-19", 160)),
+    # a campaign long over, with a tail of many months up to the day the valuation was made
+    "tail": dict(pre=("2024-10-07", "2025-10-06", 365), event=("2025-10-07", "2025-12-27", 82),
+                 post=("2025-12-28", "2026-08-03", 219), stated=219, counted=82,
+                 after=("2025-10-07", "2025-12-27", 82)),
+    # a campaign valued on its last day: the second window is that one day
+    "last_day": dict(pre=("2025-04-29", "2026-04-28", 365), event=("2026-04-29", "2026-08-03", 97),
+                     post=("2026-08-03", "2026-08-03", 1), stated=1, counted=97,
+                     after=("2026-04-29", "2026-08-03", 97)),
 }
 
 
