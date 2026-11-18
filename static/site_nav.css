@@ -7,6 +7,7 @@
     position: sticky;
     top: 0;
     z-index: 40;
+    flex-shrink: 0;
     background: rgba(12, 22, 24, 0.92);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(233, 232, 225, 0.06);
@@ -44,6 +45,7 @@
     border-radius: 999px;
     text-decoration: none;
     border: 1px solid transparent;
+    white-space: nowrap;
 }
 .nav-links a:not(.btn):hover { color: var(--off); }
 .nav-links a.is-on {
@@ -72,8 +74,67 @@
     border: 1px solid rgba(233, 232, 225, 0.24);
 }
 .nav .btn-ghost:hover { border-color: rgba(233, 232, 225, 0.5); }
-@media (max-width: 1023px) { .nav .wrap { width: calc(100% - 48px); } }
-@media (max-width: 767px) {
-    .nav .wrap { width: calc(100% - 40px); }
+
+/* Same narrow-window menu as the marketing site. Below 1050px the
+   row cannot hold the links, so they move into the menu instead of
+   being hidden. */
+@media (max-width: 1199px) {
+    .nav-links { gap: 0; }
+    .nav-links a:not(.btn) { padding: 8px 8px; }
+    .nav-links .btn { padding: 0 13px; margin-left: 4px; }
+}
+.nav-menu-btn {
+    display: none;
+    align-items: center;
+    gap: 7px;
+    background: transparent;
+    color: var(--t2-d);
+    border: 1px solid rgba(233, 232, 225, 0.22);
+    border-radius: 999px;
+    min-height: 36px;
+    padding: 0 14px;
+    margin-left: 4px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.nav-menu-btn:hover { color: var(--off); border-color: rgba(233, 232, 225, 0.4); }
+.nav-menu-btn i { display: block; width: 14px; height: 1.5px; background: currentColor; position: relative; }
+.nav-menu-btn i::before, .nav-menu-btn i::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 14px;
+    height: 1.5px;
+    background: currentColor;
+}
+.nav-menu-btn i::before { top: -4.5px; }
+.nav-menu-btn i::after { top: 4.5px; }
+.nav-menu { display: none; border-top: 1px solid rgba(233, 232, 225, 0.08); }
+.nav-menu-in { display: flex; flex-direction: column; padding: 8px 0 14px; }
+.nav-menu a {
+    color: var(--t2-d);
+    font-size: 15px;
+    font-weight: 500;
+    padding: 11px 2px;
+    border-bottom: 1px solid rgba(233, 232, 225, 0.06);
+    text-decoration: none;
+}
+.nav-menu a:last-child { border-bottom: 0; }
+.nav-menu a:hover, .nav-menu a.is-on { color: var(--off); }
+@media (max-width: 1049px) {
+    .nav .wrap { width: calc(100% - 48px); }
     .nav-links a:not(.btn) { display: none; }
+    .nav-menu-btn { display: inline-flex; }
+    .nav.is-menu-open .nav-menu { display: block; }
+}
+@media (max-width: 460px) {
+    .nav .wrap { width: calc(100% - 40px); }
+    .nav-links .btn-ghost { display: none; }
+    .logo-pill { padding: 7px 11px 7px 10px; }
 }
