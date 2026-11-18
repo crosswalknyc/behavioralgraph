@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prometheus: Ask Anything About 10 Million Real People | Crosswalk</title>
+<meta name="description" content="Prometheus is Crosswalk's research assistant. Ask any audience question in plain English and it answers from the behavior of 10 million US people, recorded day by day since 2021, in minutes.">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+<link rel="canonical" href="https://www.crosswalknyc.com/prometheus.html">
+<link rel="icon" type="image/svg+xml" href="assets/logos/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Crosswalk">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://www.crosswalknyc.com/prometheus.html">
+<meta property="og:title" content="Prometheus: Ask Anything About 10 Million Real People | Crosswalk">
+<meta property="og:description" content="Ask any audience question in plain English. Prometheus answers from the behavior of 10 million US people, recorded day by day since 2021, in minutes.">
+<meta property="og:image" content="https://www.crosswalknyc.com/assets/images/og-prometheus.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Prometheus: Ask Anything About 10 Million Real People | Crosswalk">
+<meta name="twitter:description" content="Ask any audience question in plain English. Prometheus answers from the behavior of 10 million US people, recorded day by day since 2021, in minutes.">
+<meta name="twitter:image" content="https://www.crosswalknyc.com/assets/images/og-prometheus.jpg">
+<link rel="stylesheet" href="assets/css/crosswalk.css">
+<style>
+  .caps.four { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 1023px) { .caps.four { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 767px) { .caps.four { grid-template-columns: 1fr; } }
+  .hero-shot { margin: 0; }
+  .hero-shot img { width: 100%; height: auto; display: block; border-radius: 16px; border: 1px solid var(--rule-d); box-shadow: 0 30px 80px rgba(0,0,0,0.4); }
+  .hero-shot figcaption { font-size: 12px; color: var(--t3-d); margin-top: 12px; }
+  .shot { margin: 0; }
+  .vid { margin: 0 0 20px; scroll-margin-top: 96px; }
+  .vid video { width: 100%; height: auto; aspect-ratio: 16 / 9; display: block; border-radius: 12px; border: 1px solid var(--rule-l); background: #0C1618; box-shadow: 0 24px 60px rgba(12,22,24,0.14); }
+  .vid figcaption { font-size: 13px; color: var(--t3-l); margin-top: 12px; }
+  .cmp { border-top: 1px solid var(--rule-d); }
+  .cmp .r { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--rule-d); font-size: 15px; }
+  .cmp .r.head { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); padding: 10px 0; }
+  .cmp .r.head .us { color: var(--green); }
+  .cmp .q { color: var(--off); font-weight: 600; }
+  .cmp .them { color: var(--t2-d); }
+  .cmp .us { color: var(--off); }
+  @media (max-width: 767px) { .cmp .r { grid-template-columns: 1fr; gap: 6px; } .cmp .r.head { display: none; } }
+  .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+  .faq .item { padding: 22px 0; border-top: 1px solid var(--rule-l); }
+  .faq h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.3; margin: 0 0 8px; color: var(--t1-l); }
+  .faq p { font-size: 15px; line-height: 1.55; color: var(--t2-l); margin: 0; max-width: 52ch; }
+  @media (max-width: 1023px) { .faq { grid-template-columns: 1fr; } }
+  .record { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); margin-top: 40px; }
+  .record .s { padding-top: 18px; border-top: 1px solid var(--rule-d); }
+  .record .s .k { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); margin-bottom: 10px; }
+  .record .s .fig { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: var(--green); line-height: 1; margin-bottom: 10px; }
+  .record .s p { font-size: 15px; line-height: 1.55; color: var(--t2-d); margin: 0; }
+  @media (max-width: 1023px) { .record { grid-template-columns: 1fr; } }
+  .rep { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); }
+  .rep a { display: block; padding: 22px; border-radius: 12px; background: var(--white); border: 1px solid var(--rule-l); }
+  .rep a:hover { border-color: var(--olive); }
+  .rep .q { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--olive); }
+  .rep strong { display: block; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 8px 0 6px; }
+  .rep span { font-size: 14px; color: var(--t2-l); line-height: 1.5; }
+  @media (max-width: 1023px) { .rep { grid-template-columns: 1fr; } }
+  .price3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); margin-top: 40px; }
+  .price3 .c { padding: 24px 26px; border-radius: 12px; background: var(--slate); border: 1px solid var(--rule-d); }
+  .price3 .k { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); margin-bottom: 12px; }
+  .price3 .fig { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; color: var(--green); line-height: 1; }
+  .price3 p { font-size: 15px; line-height: 1.5; color: var(--t2-d); margin: 12px 0 0; }
+  @media (max-width: 1023px) { .price3 { grid-template-columns: 1fr; } }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.crosswalknyc.com/#organization",
+      "name": "Crosswalk Technologies, Inc.",
+      "alternateName": "Crosswalk",
+      "description": "Crosswalk is an opted-in consumer panel of 30 million people worldwide, 10 million of them in the US. It reads what audiences do across their entire digital life, and Prometheus answers audience questions in plain English from the same panel.",
+      "url": "https://www.crosswalknyc.com/",
+      "logo": "https://www.crosswalknyc.com/assets/logos/crosswalk-logo-black.png",
+      "sameAs": ["https://www.linkedin.com/company/crosswalk-technologies"],
+      "email": "hello@crosswalknyc.com",
+      "telephone": "+1-818-231-2610",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "23465 Civic Center Way Bldg 9",
+        "addressLocality": "Malibu",
+        "addressRegion": "CA",
+        "postalCode": "90265",
+        "addressCountry": "US"
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.crosswalknyc.com/#website",
+      "url": "https://www.crosswalknyc.com/",
+      "name": "Crosswalk",
+      "publisher": {"@id": "https://www.crosswalknyc.com/#organization"}
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.crosswalknyc.com/prometheus.html#webpage",
+      "url": "https://www.crosswalknyc.com/prometheus.html",
+      "name": "Prometheus: Ask Anything About 10 Million Real People | Crosswalk",
+      "description": "Prometheus is Crosswalk's research assistant. Ask any audience question in plain English and it answers from the behavior of 10 million US people, recorded day by day since 2021, in minutes.",
+      "isPartOf": {"@id": "https://www.crosswalknyc.com/#website"},
+      "about": {"@id": "https://www.crosswalknyc.com/prometheus.html#service"},
+      "breadcrumb": {"@id": "https://www.crosswalknyc.com/prometheus.html#breadcrumb"},
+      "primaryImageOfPage": "https://www.crosswalknyc.com/assets/images/og-prometheus.jpg",
+      "video": {"@id": "https://www.crosswalknyc.com/prometheus.html#video"},
+      "inLanguage": "en-US"
+    },
+    {
+      "@type": "VideoObject",
+      "@id": "https://www.crosswalknyc.com/prometheus.html#video",
+      "name": "How Prometheus works",
+      "description": "Behavioral data on the digital lives of 10 million US people, the research assistant that answers from it, a real answer on who watches Landman, the nine kinds of report, and why it is different from any other data source. Five minutes.",
+      "thumbnailUrl": ["https://www.crosswalknyc.com/assets/images/prometheus/video-poster.jpg"],
+      "uploadDate": "2026-11-18",
+      "duration": "PT5M1S",
+      "contentUrl": "https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-prometheus-how-it-works.mp4",
+      "inLanguage": "en-US",
+      "publisher": {"@id": "https://www.crosswalknyc.com/#organization"},
+      "isPartOf": {"@id": "https://www.crosswalknyc.com/prometheus.html#webpage"}
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://www.crosswalknyc.com/prometheus.html#breadcrumb",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.crosswalknyc.com/"},
+        {"@type": "ListItem", "position": 2, "name": "Prometheus", "item": "https://www.crosswalknyc.com/prometheus.html"}
+      ]
+    },
+    {
+      "@type": "Service",
+      "@id": "https://www.crosswalknyc.com/prometheus.html#service",
+      "name": "Prometheus",
+      "alternateName": ["Crosswalk Prometheus", "Prometheus research assistant"],
+      "serviceType": "Audience research assistant answering plain-English questions from observed consumer behavior",
+      "description": "Prometheus answers audience, profile, alignment and attribution questions in plain English from the Crosswalk panel: the digital lives of 10 million US people, recorded day by day since 2021. Answers come back in percentages and people, projected to the US population, in minutes, and land in the dashboard as files.",
+      "provider": {"@id": "https://www.crosswalknyc.com/#organization"},
+      "areaServed": {"@type": "Country", "name": "United States"},
+      "audience": {"@type": "BusinessAudience", "audienceType": "Studios, streamers, brands, agencies, sports teams, and finance teams"},
+      "termsOfService": "https://www.crosswalknyc.com/terms-of-use.html",
+      "url": "https://www.crosswalknyc.com/prometheus.html"
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://www.crosswalknyc.com/prometheus.html#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Prometheus?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Prometheus is Crosswalk's research assistant. You ask a question about an audience in plain English, and it answers from the behavior of 10 million US people in the Crosswalk panel: what they search, watch, stream, buy, subscribe to and cancel, recorded day by day since 2021."}
+        },
+        {
+          "@type": "Question",
+          "name": "What can I ask it?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Anything about an audience. Who watches a title and what they buy. Which titles bring a service new subscribers. How people got from a clip to a purchase. Which touchpoint on a campaign moved them. What a sponsorship is worth. What is trending, what is number one, what the consumer is doing on a stock. The nine syndicated reports are the menu, not the limit."}
+        },
+        {
+          "@type": "Question",
+          "name": "How fast is it?",
+          "acceptedAnswer": {"@type": "Answer", "text": "A quick count comes back in seconds. A full read, such as a complete audience profile, takes a few minutes and lands in your dashboard as a file you can download or email."}
+        },
+        {
+          "@type": "Question",
+          "name": "How is this different from a survey or a ratings service?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Surveys tell you what people say. Ratings see one screen, web analytics one site, card data one checkout. Prometheus reads one person across all of it, ten million times over, census matched to the country and refreshed every morning, and its answers are checked against real outcomes rather than more surveys."}
+        },
+        {
+          "@type": "Question",
+          "name": "What does it cost?",
+          "acceptedAnswer": {"@type": "Answer", "text": "You open a dashboard with a $500 opening balance. A quick lookup is about 15 cents, a detailed analysis about 84 cents, and a full Profile IQ report is $300. You pay only for the reports you pull."}
+        },
+        {
+          "@type": "Question",
+          "name": "Is any personal data used or sold?",
+          "acceptedAnswer": {"@type": "Answer", "text": "No. The panel is opted in, identity is kept apart from behavior, and Prometheus never answers about one person. Clients receive group statistics projected to the US population."}
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div id="nav"></div>
+
+<section class="band dark glow page-hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow"><span class="n">01</span> Prometheus</div>
+      <h1 class="h-l">Ask anything about ten million real people.</h1>
+      <p class="lead" style="margin-top:20px">Prometheus is the research assistant built on Crosswalk's behavioral data: the digital lives of 10 million US people, recorded day by day since 2021. Ask a question the way you would ask it in a meeting, and it answers from that record, in minutes. What people really did, not what they said they would do.</p>
+      <div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap"><a class="btn btn-green" href="#video">Watch how it works</a><a class="btn btn-ghost" href="signup.html">Sign up and ask</a></div>
+      <p class="fine" style="color:var(--t3-d);margin-top:18px">Clients see group statistics only. No individual is ever identified.</p>
+    </div>
+    <figure class="hero-shot">
+      <img src="assets/images/prometheus/widget-answer.png" width="960" height="1120" alt="Prometheus in the Crosswalk dashboard answering: Who watches Landman, and what do they buy? 6,184,372 US viewers, half of them 35 to 54, and a purchase category mix led by grocery, family and CPG." loading="eager">
+      <figcaption>Prometheus in the dashboard, answering a question as it was asked.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="dark" style="padding:44px 0 52px;border-top:1px solid var(--rule-d)">
+  <div class="wrap stats">
+    <div class="stat"><div class="lab">Panel</div><div class="fig acc">30M</div><div class="sub">Opted-in people worldwide.</div></div>
+    <div class="stat"><div class="lab">United States</div><div class="fig">10M</div><div class="sub">US panelists, census matched, projected to the US population.</div></div>
+    <div class="stat"><div class="lab">History</div><div class="fig">5 yrs</div><div class="sub">The same people, recorded day by day since January 2021.</div></div>
+    <div class="stat"><div class="lab">Freshness</div><div class="fig">T+1</div><div class="sub">Yesterday's behavior is on the file today.</div></div>
+  </div>
+</section>
+
+<section class="band light">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">02</span> Watch</div>
+        <h2 class="h-l">How Prometheus works, in five minutes.</h2>
+      </div>
+      <div>
+        <p class="lead">What it is built on, how it reads the record, a real answer on who watches Landman and what they buy, the nine kinds of report, and why no other data source works the same way.</p>
+      </div>
+    </div>
+    <figure class="shot vid" id="video">
+      <video controls preload="metadata" playsinline poster="assets/images/prometheus/video-poster.jpg" title="How Prometheus works">
+        <source src="https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-prometheus-how-it-works.mp4" type="video/mp4">
+        <track kind="captions" src="assets/video/prometheus.vtt" srclang="en" label="English">
+      </video>
+      <figcaption>How Prometheus works: the data, the record, a real answer, the breadth, and why it is different. Five minutes.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">03</span> What it is built on</div>
+        <h2 class="h-l">Behavioral data on 30 million digital lives.</h2>
+      </div>
+      <div>
+        <p class="lead">Not a survey and not a model. Crosswalk holds the record of what real people do online: 30 million opted-in people around the world, 10 million of them in a US panel that is census matched to the country. For each person, the entire digital life across every screen, under one ID, kept day by day since January 2021. That record is what Prometheus answers from.</p>
+      </div>
+    </div>
+    <dl class="asks">
+      <div class="row"><dt>Behavioral</dt><dd>What people search, watch, stream, buy, subscribe to and cancel. Observed, not asked.</dd></div>
+      <div class="row"><dt>Longitudinal</dt><dd>The same people, every day, for five years. Not a snapshot and not a fresh sample each time.</dd></div>
+      <div class="row"><dt>Every screen</dt><dd>Phone, laptop, connected TV, tablet, game console. One person, one ID, one ordinary day in order with the time of day.</dd></div>
+      <div class="row"><dt>Projected</dt><dd>Every answer scales from the panel to the US population the way a census sample does, in percentages and in people.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="band light">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">04</span> How it works</div>
+    <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Ask Prometheus. It answers from that record.</h2>
+    <p class="lead" style="margin-bottom:44px">Every answer is read from the longitudinal behavior of the people who fit your question.</p>
+    <div class="caps">
+      <div><div class="n">01</div><h3>You ask.</h3><p>The way you would ask it in a meeting. Any question, in plain English. Type it or say it.</p></div>
+      <div><div class="n">02</div><h3>Prometheus reads the record.</h3><p>It finds the people who fit, reads five years of what they did, and calculates the answer. A quick count takes seconds. A full read, a few minutes.</p></div>
+      <div><div class="n">03</div><h3>You get the answer.</h3><p>Percentages and people, scaled up to the country, with the CSV a click away. Ask it to email you the file, cut the audience, or ask the next question.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">05</span> A real answer</div>
+        <h2 class="h-l">Who watches Landman, and what do they buy?</h2>
+      </div>
+      <div>
+        <p class="lead">One question, asked as written. The answer came back in about three minutes: 6,184,372 US viewers, half of them 35 to 54 and just over half men. Their buying is everyday grocery and family goods first, and the lift against the average American sits in workwear, trucks and hardware. That is a marketing plan in one answer.</p>
+      </div>
+    </div>
+    <div class="record">
+      <div class="s"><div class="k">US viewers</div><div class="fig">6,184,372</div><p>People who watched a Landman title in the window, counted once each and projected to the country. 31.6% are 35 to 44; only 2.1% are over 65.</p></div>
+      <div class="s"><div class="k">Where the buying sits</div><div class="fig">21.3%</div><p>Of purchase signals are grocery, family and CPG, at 79.4% penetration. The lift is Carhartt, Wrangler, Tractor Supply, AutoZone, Yeti and Home Depot.</p></div>
+      <div class="s"><div class="k">How they watch</div><div class="fig">81.0%</div><p>Finish the season, and 48.0% watch with a second screen in hand: phone-led, same-session buying.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band light" id="reports">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">06</span> The breadth</div>
+    <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Nine kinds of answer, and the digital twins.</h2>
+    <p class="lead" style="margin-bottom:40px">The syndicated reports: one question each, the same ten million people behind all of them.</p>
+    <div class="rep">
+      <a href="profile-iq.html"><div class="q">Who is this audience?</div><strong>Profile IQ</strong><span>Who engages with a title, talent, brand, or team, and what they already buy, watch, and use.</span></a>
+      <a href="subscriber-iq.html"><div class="q">Who signed up, and why?</div><strong>Subscriber IQ</strong><span>Signups, cancels, and switches between services, tied to the titles that moved them.</span></a>
+      <a href="digital-journey-iq.html"><div class="q">How did they get there?</div><strong>Digital Journey IQ</strong><span>The path from the first search to the purchase, subscription, or cancel, in order.</span></a>
+      <a href="attribution-iq.html"><div class="q">Which touchpoint moved them?</div><strong>Attribution IQ</strong><span>Every touch on a campaign, paid and organic, with the credit split along the path people took.</span></a>
+      <a href="brand-partnership-iq.html"><div class="q">What is the partnership worth?</div><strong>Brand Partnership IQ</strong><span>Earned media, engagement, lift, and conversion on the same people, priced after it ran.</span></a>
+      <a href="flywheel-iq.html"><div class="q">What does the title do next?</div><strong>Flywheel IQ</strong><span>From one title to the next owned surface, the checkout, and the lapsed accounts that came back.</span></a>
+      <a href="trends-iq.html"><div class="q">What is trending?</div><strong>Trends IQ</strong><span>What is trending across the internet, what people engage with most, and which IP they buy: books, Wattpad, movie and Broadway tickets.</span></a>
+      <a href="ranker-iq.html"><div class="q">What is number one?</div><strong>Rankers IQ</strong><span>FAST, podcasts, gaming, streaming and more, ranked every morning on what people played.</span></a>
+      <a href="fin-iq.html"><div class="q">What is the consumer doing on this name?</div><strong>Fin IQ</strong><span>Tickers and platforms read through consumer behavior, for the desk.</span></a>
+    </div>
+    <p class="so-what" style="margin-top:36px"><b>Digital twins.</b> Test a plan, a title, or a price on ten million twins built from real behavior before you spend. <a href="digital-twins.html" style="text-decoration:underline">See how Twin IQ works</a>. <b>Beyond the menu.</b> Those are the syndicated reports. Ask literally any question about these ten million people, and Prometheus answers it.</p>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">07</span> Why it is different</div>
+        <h2 class="h-l">Built on what people do, not what they say.</h2>
+      </div>
+      <div>
+        <p class="lead">Every other source sees one slice of a life, or asks people to remember. Prometheus sees the whole person, ten million times over, and it answers in minutes.</p>
+      </div>
+    </div>
+    <div class="cmp">
+      <div class="r head"><span>The question</span><span>Other data sources</span><span class="us">Prometheus</span></div>
+      <div class="r"><span class="q">Built on</span><span class="them">Surveys, panels that ask, and models that guess</span><span class="us">What 10M real people do, every day, since 2021</span></div>
+      <div class="r"><span class="q">Sees</span><span class="them">One screen, one store, one site, or one card</span><span class="us">The entire digital life of one person, under one ID</span></div>
+      <div class="r"><span class="q">Freshness</span><span class="them">Last quarter, or last year</span><span class="us">Yesterday. Refreshed every morning</span></div>
+      <div class="r"><span class="q">Scale</span><span class="them">A sample that speaks for itself</span><span class="us">Census matched, projected to 329.9M Americans</span></div>
+      <div class="r"><span class="q">Checked against</span><span class="them">More surveys</span><span class="us">Real outcomes: elections, ratings, accounts opened</span></div>
+      <div class="r"><span class="q">Speed</span><span class="them">Weeks, through a research team</span><span class="us">Minutes, in plain English, any hour of the day</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="band light">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">08</span> Where it lives</div>
+    <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">On every page, on your desktop, and in your API.</h2>
+    <p class="lead" style="margin-bottom:44px">Type to it or talk to it. The same brain answers wherever you are.</p>
+    <div class="caps">
+      <div><div class="n">01</div><h3>The dashboard.</h3><p>Prometheus floats on every page. Open a profile and ask about it; the answer knows what you are looking at.</p></div>
+      <div><div class="n">02</div><h3>Your desktop.</h3><p>A standalone Prometheus app, same account, same balance, same library, without opening a browser.</p></div>
+      <div><div class="n">03</div><h3>Your API.</h3><p>Your own tools ask the same questions and get the same files, with one key and one wallet.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">09</span> Why you need it</div>
+        <h2 class="h-l">Minutes, not weeks. Cents, not a budget line.</h2>
+      </div>
+      <div>
+        <p class="lead">The question that used to wait for a research project now gets answered before the meeting ends. And because every answer comes from the same ten million people, the same question gets the same answer every time, so you can act on it the same day.</p>
+      </div>
+    </div>
+    <div class="price3">
+      <div class="c"><div class="k">A full read</div><div class="fig">Minutes</div><p>From the question to the file, projected to the country. Before: a brief, a vendor, six weeks and a survey of what people remember.</p></div>
+      <div class="c"><div class="k">A quick lookup</div><div class="fig">$0.15</div><p>About fifteen cents a question, and about 84 cents for a detailed analysis, billed on usage.</p></div>
+      <div class="c"><div class="k">A full profile</div><div class="fig">$300</div><p>Thirty-five categories, hundreds of brands, downloadable, from a prepaid balance. <a href="products.html" style="text-decoration:underline;color:var(--off)">All report prices</a>.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band light" style="padding-top:72px;border-top:1px solid var(--rule-l)">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">10</span> Questions</div>
+    <h2 class="h-l" style="max-width:20ch;margin-bottom:28px">Prometheus, in plain words.</h2>
+    <div class="faq">
+      <div class="item">
+        <h3>What is Prometheus?</h3>
+        <p>Crosswalk's research assistant. You ask a question about an audience in plain English, and it answers from the behavior of 10 million US people in the Crosswalk panel: what they search, watch, stream, buy, subscribe to and cancel, recorded day by day since 2021.</p>
+      </div>
+      <div class="item">
+        <h3>What can I ask it?</h3>
+        <p>Anything about an audience. Who watches a title and what they buy. Which titles bring a service new subscribers. How people got from a clip to a purchase. Which touchpoint on a campaign moved them. What a sponsorship is worth. The nine syndicated reports are the menu, not the limit.</p>
+      </div>
+      <div class="item">
+        <h3>How fast is it?</h3>
+        <p>A quick count comes back in seconds. A full read, such as a complete audience profile, takes a few minutes and lands in your dashboard as a file you can download or email.</p>
+      </div>
+      <div class="item">
+        <h3>How is this different from a survey or a ratings service?</h3>
+        <p>Surveys tell you what people say. Ratings see one screen, web analytics one site, card data one checkout. Prometheus reads one person across all of it, ten million times over, census matched and refreshed every morning, and its answers are checked against real outcomes rather than more surveys.</p>
+      </div>
+      <div class="item">
+        <h3>What does it cost?</h3>
+        <p>You open a dashboard with a $500 opening balance. A quick lookup is about 15 cents, a detailed analysis about 84 cents, and a full Profile IQ report is $300. You pay only for the reports you pull.</p>
+      </div>
+      <div class="item">
+        <h3>Is any personal data used or sold?</h3>
+        <p>No. The panel is opted in, identity is kept apart from behavior, and Prometheus never answers about one person. Clients receive group statistics projected to the US population.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark glow" style="text-align:center">
+  <div class="wrap">
+    <div class="eyebrow" style="justify-content:center"><span class="n">11</span> Sign up</div>
+    <h2 class="h-l" style="max-width:18ch;margin:0 auto">Ask your first question today.</h2>
+    <p class="lead" style="margin:16px auto 0;text-align:center">Sign up for the dashboard with a $500 opening balance. Ask Prometheus anything. You pay only for the reports you pull.</p>
+    <div style="display:flex;gap:10px;margin-top:30px;justify-content:center;flex-wrap:wrap"><a class="btn btn-green" href="signup.html">Sign up and ask</a><a class="btn btn-ghost" href="company.html#contact">Talk to us</a></div>
+  </div>
+</section>
+
+<div id="foot"></div>
+<script src="assets/js/crosswalk.js"></script>
+</body>
+</html>

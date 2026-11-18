@@ -5,6 +5,7 @@
 Crosswalk Technologies, Inc. serves studios, streamers, brands, agencies, and finance teams. Prometheus answers audience questions in plain English from the same panel. Clients receive group statistics projected to the US population; no individual is identified.
 
 ## Products
+- [Prometheus](https://www.crosswalknyc.com/prometheus.html): Prometheus is Crosswalk's research assistant. Ask any audience question in plain English and it answers from the behavior of 10 million US people, recorded day by day since 2021, in minutes.
 - [Twin IQ](https://www.crosswalknyc.com/digital-twins.html): Twin IQ builds a digital twin of each of the 10 million US people in the Crosswalk panel, from observed behavior, not surveys. Test a plan, a title, or a price first.
 - [Attribution IQ](https://www.crosswalknyc.com/attribution-iq.html): Attribution IQ reads the same people across every touch, paid and organic, and splits the credit along the path they actually took. Refreshed daily while the campaign runs.
 - [Brand Partnership IQ](https://www.crosswalknyc.com/brand-partnership-iq.html): Brand Partnership IQ puts a dollar figure on a partnership after it runs: earned media, brand engagement, brand lift, and conversion on the same people, each priced.
