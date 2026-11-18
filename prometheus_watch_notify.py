@@ -161,17 +161,10 @@ def answer_text(payload):
         if _included:
             lines.append('Included with your plan.')
         elif pt:
-            dk = str(draft.get('decision') or 'new_build').lower()
-            cuts = len(draft.get('addon_cuts') or []) if isinstance(draft.get('addon_cuts'), list) else 0
-            cut = float(pt.get('addon_cut') or 0)
-            if dk == 'existing_match':
-                usd = 0.0
-            elif dk == 'derive_cut':
-                usd = cut * max(cuts, 1)
-            elif dk == 'cut_needs_parent':
-                usd = float(pt.get('cut_needs_parent') or 0) + cut * max(cuts - 1, 0)
-            else:
-                usd = float(pt.get(dk, pt.get('new_build')) or 0) + cut * cuts
+            # the figure the approval charges, off the same table the
+            # card reads (prometheus.order_quote, Jenna 2026-11-17)
+            from prometheus import order_quote as _oq_cost
+            usd = float(_oq_cost.draft_usd(draft) or 0.0)
             lines.append(f"Cost on approval: ${usd:,.0f}" if abs(usd - round(usd)) < 0.009
                          else f"Cost on approval: ${usd:,.2f}")
         return '\n'.join(lines)[:4000]

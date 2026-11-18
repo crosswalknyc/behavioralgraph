@@ -441,6 +441,12 @@ def _pm_price_table():
             return None
         out = {str(k): float(v) for k, v in tab.items()
                if isinstance(v, (int, float))}
+        # the charge by decision and cut count: the card reads its row
+        # and adds nothing (prometheus.order_quote, 2026-11-17)
+        by = tab.get('by_cuts')
+        if out and isinstance(by, dict):
+            out['by_cuts'] = {str(k): [float(x) for x in v] for k, v in by.items()
+                              if isinstance(v, (list, tuple))}
         return out or None
     except Exception:
         return None

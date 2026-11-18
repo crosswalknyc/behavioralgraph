@@ -358,9 +358,13 @@ def _pm_year_package_reply(subject, years, have, missing):
     """Proposal copy + chips for the year-build package. Live pricing
     from the billing panel."""
     try:
-        each_usd = _C._pm_usd_label(_H._v1_price_usd_for('new_build', 0))
+        # each year is its own build, approved and charged on its own: the price is that approval's charge for
+        # this reader's seat, so a company rate prints the figure the wallet takes (2026-11-17)
+        _uname = __import__('prometheus.ask_outcome', fromlist=['seat_username']).seat_username(None)
+        each_usd = _C._pm_usd_label(_H._v1_price_usd_for('new_build', 0, _uname, False) if _uname
+                                    else _H._v1_price_usd_for('new_build', 0))
     except Exception:
-        each_usd = _C._pm_usd_label(500)
+        each_usd = _C._pm_usd_label(__import__('prometheus.order_quote', fromlist=['price']).price(None, {}, 'new_build'))
     n = len(missing)
     year_list = ', '.join(str(y) for y in missing[:-1]) + \
         (f' and {missing[-1]}' if n > 1 else str(missing[0]))

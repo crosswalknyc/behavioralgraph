@@ -160,7 +160,10 @@ def lock_total(included, total, base):
 
 
 def lock_cuts(included, n, price):
-    return 'the cuts are ' if included else f"{n} x {price} for the cuts, "
+    if included:
+        return 'the cuts are '
+    # n is the cuts the approval charges for (prometheus.order_quote.lock); a dated quarter read is not one
+    return f"{n} x {price} for the cuts, " if n else 'the quarter reads are '
 
 
 def build_cost_clause(included, price):

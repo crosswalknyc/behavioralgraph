@@ -244,9 +244,11 @@ class A_ReadsIncluded(_MailCase):
 
     def test_subscriber_iq_step_prints_no_price_to_an_included_seat(self):
         # the three lines of the add-on step branch on the included check
-        self.assertIn("_plan.SUBIQ_JUST if _pm_seat_reads_included(_usd_sub) else", CHAT_SRC)
-        self.assertIn("_plan.SUBIQ_ADDED if _pm_seat_reads_included(_usd_sub + _usd_prof) else", CHAT_SRC)
-        self.assertIn("_plan.subiq_ask(label) if _pm_seat_reads_included(_usd_sub + _usd_prof) else", CHAT_SRC)
+        # (the figures weighed are the approval's own charge since 2026-11-17: prometheus.order_quote,
+        # scripts/test_quote_equals_charge.py)
+        self.assertIn("_plan.SUBIQ_JUST if _pm_seat_reads_included(_sq['alone']) else", CHAT_SRC)
+        self.assertIn("_plan.SUBIQ_ADDED if _pm_seat_reads_included(_sq['total']) else", CHAT_SRC)
+        self.assertIn("_plan.subiq_ask(label) if _pm_seat_reads_included(_sq['total']) else", CHAT_SRC)
         for line in (PLAN.SUBIQ_JUST, PLAN.SUBIQ_ADDED, PLAN.subiq_ask("Outlander")):
             self.assertIn("ncluded with your plan", line)
             self.assertNotIn("$", line)

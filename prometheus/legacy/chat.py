@@ -65,6 +65,7 @@ from prometheus.legacy import H as _H  # noqa: E402
 from prometheus import intake_draft as _intake_draft  # noqa: E402  (drafts briefs from the open profile)
 from prometheus import seams as _seams, cohort_scope as _cohort_scope, shared_memory as _shared  # noqa: E402
 from prometheus import plan_allowance as _plan  # noqa: E402  (a seat on a plan reads no price, 2026-11-17)
+from prometheus import order_quote as _oq  # noqa: E402  (a quote is the approval's charge, 2026-11-17)
 
 
 def _pm_correct_page(title, body_html):
@@ -3270,7 +3271,7 @@ def _synth_chat_cut_strategist(draft):
     fallback_msg = (
         "Want any add-on cuts beyond the standard build? Female "
         "only, male only, by generation, an age band, or a specific "
-        f"market. {_plan.cut_rate(_cuts_incl, _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0)))} - every cut "
+        f"market. {_plan.cut_rate(_cuts_incl, _pm_usd_label(_pm_cut_usd(draft)))} - every cut "
         "derives from the national total-universe build. Name the "
         "ones you want, or say 'none'.")
 
@@ -3283,7 +3284,7 @@ def _synth_chat_cut_strategist(draft):
         "would genuinely sharpen their business goal, and which cuts "
         "would NOT add a story. Be a consultant, not a menu.\n\n"
         "Available cut types ("
-        f"{_plan.cut_prompt_note(_cuts_incl, _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0)))}):\n"
+        f"{_plan.cut_prompt_note(_cuts_incl, _pm_usd_label(_pm_cut_usd(draft)))}):\n"
         "  - gender: id 'female' or 'male'\n"
         "  - generation: id 'gen_z' (18-24), 'millennials' (25-44), "
         "'gen_x' (45-64), 'boomers' (65+)\n"
@@ -3406,10 +3407,10 @@ def _synth_chat_cut_strategist(draft):
 
     lines = ["Here's how I'd cut this"
              + (f" for {goal.rstrip('.')}" if goal else "")
-             + f" ({_plan.cut_each(_cuts_incl, _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0)))}, derived "
+             + f" ({_plan.cut_each(_cuts_incl, _pm_usd_label(_pm_cut_usd(draft)))}, derived "
              "from the national build):", ""]
     for i, r in enumerate(recs, 1):
-        ln = f"{i}. {r.get('label')}" + ('' if _cuts_incl else f" (+{_H.ADDON_CUT_CREDITS})")
+        ln = f"{i}. {r.get('label')}" + _plan.cut_tag(_cuts_incl, _pm_usd_label(_pm_cut_usd(draft)))
         if r.get('est_lo') and r.get('est_hi'):
             ln += (f" - est. {_H._fmt_est_count(r['est_lo'])}-"
                    f"{_H._fmt_est_count(r['est_hi'])} individuals")
@@ -3425,7 +3426,7 @@ def _synth_chat_cut_strategist(draft):
     lines.append("Reply with the ones you want (\"1 and 3\", "
                  "\"all\", or by name), add any market by name "
                  "(each market is its own "
-                 f"{_plan.cut_word(_cuts_incl, _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0)))}), or say none. "
+                 f"{_plan.cut_word(_cuts_incl, _pm_usd_label(_pm_cut_usd(draft)))}), or say none. "
                  "The total universe and avid stay national either "
                  "way.")
     return recs, skips, "\n".join(lines)
@@ -3718,18 +3719,16 @@ def api_synth_chat_clarify():
             _lk = _pm_seat_reads_included()   # an included seat reads no price on the cuts or the total (2026-11-17)
             cut_lines = "\n".join(
                 [f"  - {c.get('label') or c.get('cut_id')}"
-                 f"{_plan.cut_tag(_lk, _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0)))}" for c in cuts]
+                 f"{_plan.cut_tag(_lk, _pm_usd_label(_pm_cut_usd(draft)))}" for c in cuts]
                 + [f"  - {q['label']} quarter read "
-                   f"({_H._ew_format_label(q.get('start'), q.get('end'))})"
-                   f"{_plan.cut_tag(_lk, _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0)))}" for q in qcuts])
-            _cut_usd = _pm_usd('profile_iq_derived_cut', 100.0)
-            _base_usd = _pm_usd('profile_iq_build', 300.0)
+                   f"({_H._ew_format_label(q.get('start'), q.get('end'))})" for q in qcuts])
+            _lq = _oq.lock(_H, draft)   # what Approve charges: the build and its add-on cuts, never a second sum
             msg = (f"Locked in {n_all} cut"
                    f"{'s' if n_all != 1 else ''}:\n{cut_lines}\n\n"
-                   f"{_plan.lock_total(_lk, _pm_usd_label(_base_usd + _cut_usd * n_all), _pm_usd_label(_base_usd))}"
+                   f"{_plan.lock_total(_lk, _pm_usd_label(_lq['total']), _pm_usd_label(_lq['base']))}"
                    f"covers the national {_pm_universe_phrase(draft)} "
                    f"+ avid; "
-                   f"{_plan.lock_cuts(_lk, n_all, _pm_usd_label(_cut_usd))}"
+                   f"{_plan.lock_cuts(_lk, _lq['n'], _pm_usd_label(_lq['each']))}"
                    "each derived from that national parent so the "
                    "numbers ladder up"
                    + (" - every quarter ships as its own dated file"
@@ -4402,8 +4401,7 @@ def api_synth_chat_clarify():
         label = str(data.get('label') or subiq.get('deliverable_label')
                     or subject).strip()
         subiq_credits = int(data.get('subiq_credits') or _H.CREDITS_SVOD)
-        _usd_sub = _pm_usd('subscriber_iq_build', 500.0)
-        _usd_prof = _pm_usd('profile_iq_build', 300.0)
+        _sq = _oq.subiq(_H, draft, label, _pm_usd_label)   # the tracker with and without the Profile IQ, as Approve charges it
         prof_credits = int(data.get('profile_credits')
                            or _H.CREDITS_PROFILE_ANALYSIS)
         low = answer.lower().strip()
@@ -4422,14 +4420,7 @@ def api_synth_chat_clarify():
             draft.pop('subiq_upsell_data', None)
             return jsonify({
                 'success': True, 'draft': draft,
-                'message': (_plan.SUBIQ_ADDED if _pm_seat_reads_included(_usd_sub + _usd_prof) else
-                            f"Added - a Profile IQ for this audience "
-                            f"builds alongside the tracker, on the "
-                            f"same viewer universe so the two always "
-                            f"agree. Total: {_pm_usd_label(_usd_sub + _usd_prof)} "
-                            f"({_pm_usd_label(_usd_sub)} Subscriber IQ + "
-                            f"{_pm_usd_label(_usd_prof)} Profile IQ). Review the "
-                            f"brief below and approve to start the build."),
+                'message': _plan.SUBIQ_ADDED if _pm_seat_reads_included(_sq['total']) else _sq['added'],
                 'next_step': 'approve'})
         if said_no:
             subiq['addon_profile'] = False
@@ -4438,19 +4429,11 @@ def api_synth_chat_clarify():
             draft.pop('subiq_upsell_data', None)
             return jsonify({
                 'success': True, 'draft': draft,
-                'message': (_plan.SUBIQ_JUST if _pm_seat_reads_included(_usd_sub) else
-                            f"Just the Subscriber IQ - "
-                            f"{_pm_usd_label(_usd_sub)}. Review the "
-                            f"brief below and approve to start the build."),
+                'message': _plan.SUBIQ_JUST if _pm_seat_reads_included(_sq['alone']) else _sq['just'],
                 'next_step': 'approve'})
         return jsonify({
             'success': True, 'draft': draft,
-            'message': (_plan.subiq_ask(label) if _pm_seat_reads_included(_usd_sub + _usd_prof) else
-                        f"Want a Profile IQ for the {label} audience "
-                        f"alongside the tracker (+{_pm_usd_label(_usd_prof)})? "
-                        f"It builds on the same viewers, so "
-                        f"demographics and audience size match across "
-                        f"both. Reply add it or just the tracker."),
+            'message': _plan.subiq_ask(label) if _pm_seat_reads_included(_sq['total']) else _sq['ask'],
             'next_step': 'subiq_upsell'})
 
     if step == 'ip_scope':
@@ -5154,7 +5137,7 @@ def api_synth_chat_clarify():
         n_cuts = len(draft['addon_cuts'])
         draft['estimated_credits'] = base_credits \
             + _H.ADDON_CUT_CREDITS * n_cuts
-        _cut_usd = _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))
+        _cut_usd = _pm_usd_label(_pm_cut_usd(draft))
         parts = [
             "The total universe and avid always build national - "
             "each market you named becomes its own "
@@ -8441,6 +8424,10 @@ def _pm_seat_reads_included(amount_usd=None, username=None):   # 'Included with 
     return _plan.seat_reads_included(_H, session, amount_usd, username)
 
 
+def _pm_cut_usd(draft=None):   # one add-on cut, as the approval charges it (prometheus.order_quote)
+    return _oq.cut_each(_H, draft)
+
+
 _PM_NO_DRAFT_REPLY = 'Nothing is queued yet. Tell me who or what you want pulled, a person, a brand or a title, and I will draft the brief for you to approve.'
 
 
@@ -8602,7 +8589,7 @@ def _pm_approve_core(user, body):
                         or '').strip()
         _em_subject = (draft.get('existing_match_display_name')
                        or spec.get('name') or 'profile')
-        _em_pt = f'Chatbot Profile IQ ({decision})'
+        _em_pt = __import__('wallet').chat_pull_type(decision)
         _em_charged = _H._charge_existing_match_or_402(
             user, _charge_user, ex_key, _em_subject, _em_pt)
         if isinstance(_em_charged, tuple):
@@ -8701,8 +8688,7 @@ def _pm_approve_core(user, body):
     # the charge always matches the estimate shown on the approve card.
     _charge_user = (session.get('username') or user.get('username')
                     or '').strip()
-    _billable_cuts = [c for c in (draft.get('addon_cuts') or [])
-                      if isinstance(c, dict) and c.get('cut_id')]
+    _billable_cuts = __import__('wallet').billable_cuts(draft)
     if d_type == 'addon_cuts' and _billable_cuts:
         # cuts-only derive: the cuts ARE the deliverable - no base fee
         price = _H.ADDON_CUT_CREDITS * len(_billable_cuts)
@@ -8713,7 +8699,7 @@ def _pm_approve_core(user, body):
                                         or {}).get('addon_profile'):
         # Tracker + Profile IQ add-on: both deliverables price in.
         price += _H.CREDITS_PROFILE_ANALYSIS
-    _approve_pull_type = f'Chatbot Profile IQ ({decision})'
+    _approve_pull_type = __import__('wallet').chat_pull_type(decision)
     if price > 0 and _charge_user and not _H.has_credits_for(
             _charge_user, price, pull_type=_approve_pull_type,
             addon_cuts=len(_billable_cuts), what=_plan.approve_what(decision, spec)):
@@ -8883,7 +8869,7 @@ def _pm_approve_core(user, body):
                     description=(f"Chatbot Profile IQ [{decision}] - "
                                  f"{spec.get('name', 'profile')}"),
                     job_id=str(_session_run_id),
-                    pull_type=f'Chatbot Profile IQ ({decision})',
+                    pull_type=_approve_pull_type,
                     credits_used=price,
                     addon_cuts=len(_billable_cuts)):
                 print(f"[synth_chat_run] WARNING: post-queue credit charge "
@@ -10728,7 +10714,7 @@ def _pm_subiq_lookup_answer(user, title):
         return _pm_status_reply_for_runs(runs), []
     nice = title if title != '*' else 'that title'
     return (f"I do not see a Subscriber IQ for {nice} yet. I can build "
-            f"it{_plan.build_cost_clause(_pm_seat_reads_included(_pm_usd('subscriber_iq_build', 500.0)), _pm_usd_label(_pm_usd('subscriber_iq_build', 500.0)))}"
+            f"it{_plan.build_cost_clause(_pm_seat_reads_included(_oq.build_usd(_H, 'subscriber_iq')), _pm_usd_label(_oq.build_usd(_H, 'subscriber_iq')))}"
             f", and it lands in the Subscriber IQ tab when it "
             f"finishes.",
             [f"Pull Subscriber IQ for {nice}"] if title != '*' else [])

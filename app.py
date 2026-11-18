@@ -53625,51 +53625,33 @@ def _v1_tool_price_usd(tool_key: str, default: float,
 
 
 def _v1_price_usd_for(decision: str, cut_count: int = 0,
-                      username: str = None) -> float:
-    """USD price a partner would pay for one v1 run at `decision` tier
-    with `cut_count` embedded addon cuts. This is the ONLY place the
-    API surface converts an internal decision into a dollar amount -
-    every /check, /run, /status response reads through it, so a
-    per-workspace pricing.json edit propagates everywhere at once.
-    Pass `username` so a company profile-pull rate (Kartel $275)
-    quotes the same number that will be charged."""
+                      username: str = None, v1: bool = True) -> float:
+    """USD a run at `decision` with `cut_count` embedded addon cuts
+    takes from the caller's wallet. Every /check, /run and /status
+    response and the chat's price table read through it.
+
+    The figure is the charge itself (Jenna 2026-11-17: "Quote what is
+    charged"): prometheus.order_quote.price -> wallet.order_price_usd,
+    the pull_type -> tool key -> pull_price_usd the wallet debits at
+    /run and at Approve. There is no second sum here, so a price edit,
+    a company rate (Kartel $275 through `username`) and the way cuts
+    add up all move the quote and the debit together. `v1` False
+    names the dashboard's pull instead of the partner API's."""
     d = (decision or '').strip().lower()
-    cut_count = max(int(cut_count or 0), 0)
-    cut_each = _v1_tool_price_usd(
-        'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK, username)
     if d == 'existing_match':
         # Default $0. /check and /run quote the Profile sticker only
         # after _existing_match_charge_credits says this seat still
         # owes for the file (Kartel unpaid catalog, Prometheus-only).
         return 0.0
-    if d == 'subscriber_iq':
-        base = _v1_tool_price_usd(
-            'api_subscriber_iq_build', _V1_USD_FALLBACK['subscriber_iq'],
-            username)
-        return round(base + cut_each * cut_count, 2)
-    if d == 'derive_cut':
-        # Cut-only derive: the addon cut counter and the decision-tier
-        # already both charge for the cut - never double count. Price
-        # is a single cut_each.
-        return round(cut_each, 2)
-    if d == 'cut_needs_parent':
-        # Parent build + one cut, and any additional addon cuts stack
-        # on top the same as new_build.
-        base = _v1_tool_price_usd(
-            'api_chatbot_profile_iq_build',
-            _V1_USD_FALLBACK['new_build'], username)
-        # First cut is baked into the tier; every extra cut is +cut_each.
-        extra_cuts = max(cut_count - 1, 0) if cut_count > 0 else 0
-        return round(base + cut_each + cut_each * extra_cuts, 2)
-    # new_build, time_shifted_refresh, and everything else default to
-    # the api_chatbot_profile_iq_build tier - the same key
-    # pull_type_to_tool_key routes every partner API run to, so quote
-    # and debit always match.
-    base = _v1_tool_price_usd(
-        'api_chatbot_profile_iq_build',
-        _V1_USD_FALLBACK.get(d, _V1_USD_FALLBACK['new_build']),
-        username)
-    return round(base + cut_each * cut_count, 2)
+    user, data = {}, {}
+    if username:
+        try:
+            data = load_users() or {}
+            user = (data.get('users') or {}).get(username) or {}
+        except Exception:
+            user, data = {}, {}
+    from prometheus import order_quote as _oq
+    return _oq.price(user, data, d, cut_count, v1=v1)
 
 
 def _v1_balance_usd(username: str) -> float:
@@ -53700,11 +53682,15 @@ def _v1_price_table_for(username: str = None) -> dict:
     (a Kartel $275 pull) ride through username. Never raises."""
     out = {}
     try:
-        for d in ('new_build', 'time_shifted_refresh', 'derive_cut',
-                  'cut_needs_parent', 'subscriber_iq', 'existing_match'):
-            out[d] = _v1_price_usd_for(d, 0, username)
-        out['addon_cut'] = round(_v1_tool_price_usd(
-            'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK, username), 2)
+        # the charge by decision and cut count, as the dashboard's
+        # Approve names the pull (prometheus.order_quote, 2026-11-17):
+        # the card reads its row, so the card and the debit agree
+        from prometheus import order_quote as _oq
+        _pt_user, _pt_data = {}, {}
+        if username:
+            _pt_data = load_users() or {}
+            _pt_user = (_pt_data.get('users') or {}).get(username) or {}
+        out = _oq.table(_pt_user, _pt_data, v1=False)
     except Exception:
         # published defaults from the one rate card (2026-10-09, item 7);
         # the old inline copy had drifted (subscriber_iq 1000 vs 500)
@@ -59254,7 +59240,7 @@ def api_v1_profiles_run():
     # Exact-tier credit re-check (some tiers cost more than the median
     # preflight - e.g. cut_needs_parent=8). If interpret picked a
     # tier that exceeds the partner's balance, refuse cleanly.
-    _v1_pt = f'Chatbot Profile IQ v1 ({decision})'
+    _v1_pt = __import__('wallet').chat_pull_type(decision, v1=True)
     if price > 0 and not has_credits_for(
             username, price, pull_type=_v1_pt,
             addon_cuts=len(_v1_run_cuts or [])):
@@ -59282,7 +59268,7 @@ def api_v1_profiles_run():
     # Full-access keys reuse the file at $0. Prometheus-only keys pay
     # the retail Profile price, then receive the file.
     if decision == 'existing_match':
-        _em_pt = f'Chatbot Profile IQ v1 ({decision})'
+        _em_pt = __import__('wallet').chat_pull_type(decision, v1=True)
         if price > 0:
             _em_charged = False
             try:
@@ -59435,7 +59421,7 @@ def api_v1_profiles_run():
     # taken.
     charged = False
     _v1_charge_desc = f"Chatbot Profile IQ [{decision}] - {spec.get('name', 'profile')}"
-    _v1_charge_pull_type = f'Chatbot Profile IQ v1 ({decision})'
+    _v1_charge_pull_type = __import__('wallet').chat_pull_type(decision, v1=True)
     # The worker's refund locates this charge by run id once
     # _stamp_charge_run_id has named it (below), or by this description
     # before that (refund_charge.py, 2026-11-05).

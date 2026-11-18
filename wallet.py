@@ -3216,17 +3216,82 @@ def should_charge_wallet(user: dict, tool_key: str,
         # filter in module_catalog() - the panel doesn't show these
         # rows AND the wallet doesn't debit them.
         return 0.0, "retired"
-    pricing = pricing or load_pricing()
-    usd = subject_tool_price_usd(user, tool_key, pricing)
+    usd = pull_price_usd(user, tool_key, addon_cuts=addon_cuts,
+                         quantity=quantity, pricing=pricing)
     if usd <= 0:
         return 0.0, "no_charge"
+    return usd, "wallet"
+
+
+def pull_price_usd(subject, tool_key: str, addon_cuts: int = 0,
+                   quantity: int = 1,
+                   pricing: Optional[dict] = None) -> float:
+    """Dollars one pull takes on this billing subject: the tool price
+    times `quantity`, plus the embedded add-on cuts. 0.0 when the tool
+    has no price.
+
+    This is the ONE arithmetic. should_charge_wallet debits it and
+    every quote reads it (order_price_usd, prometheus.order_quote), so
+    what a seat is told and what its wallet is charged are the same
+    number by construction (Jenna 2026-11-17: "Quote what is
+    charged"). Says nothing about whether the seat is charged at all
+    (paying, unlimited, retired): those stay in should_charge_wallet.
+    """
+    pricing = pricing or load_pricing()
+    usd = subject_tool_price_usd(subject, tool_key, pricing)
+    if usd <= 0:
+        return 0.0
     try:
         qty = max(int(quantity or 1), 1)
     except (TypeError, ValueError):
         qty = 1
     usd = usd * qty
-    usd += addon_cuts_usd(user, tool_key, addon_cuts, pricing)
-    return round(usd, 2), "wallet"
+    usd += addon_cuts_usd(subject, tool_key, addon_cuts, pricing)
+    return round(usd, 2)
+
+
+def chat_pull_type(decision, v1: bool = False) -> str:
+    """The pull_type a Prometheus build is charged under, by the
+    approve step's decision: 'Chatbot Profile IQ (new_build)' on the
+    dashboard and in the Prometheus app, 'Chatbot Profile IQ v1
+    (new_build)' on the partner API. The charge and the quote both
+    name the pull through here."""
+    d = str(decision or "").strip()
+    return f"Chatbot Profile IQ v1 ({d})" if v1 \
+        else f"Chatbot Profile IQ ({d})"
+
+
+def billable_cuts(draft) -> list:
+    """The add-on cuts on a draft that an approval charges for: the
+    resolved ones (a dict carrying a cut_id). The approve step counts
+    this list and so does every quote."""
+    try:
+        cuts = (draft or {}).get("addon_cuts") or []
+    except AttributeError:
+        return []
+    if not isinstance(cuts, list):
+        return []
+    return [c for c in cuts if isinstance(c, dict) and c.get("cut_id")]
+
+
+def order_price_usd(user, users_data, decision, addon_cuts: int = 0,
+                    v1: bool = False,
+                    pricing: Optional[dict] = None) -> float:
+    """What approving a build at `decision` with `addon_cuts` billable
+    cuts takes from this seat's dollar wallet: the same pull_type ->
+    tool key -> pull_price_usd the charge runs (consume_credit ->
+    _try_wallet_fallback -> should_charge_wallet), on the seat's
+    billing subject (a company rate rides through). `user` None
+    quotes the published price. Whether the seat is charged at all is
+    the charge's own decision; this is the amount. Raises nothing the
+    charge would not."""
+    subject = None
+    if isinstance(user, dict) and user:
+        subject, _kind, _key = resolve_billing_subject(
+            user, users_data or {})
+    tk = pull_type_to_tool_key(chat_pull_type(decision, v1))
+    return pull_price_usd(subject, tk, addon_cuts=addon_cuts,
+                          pricing=pricing)
 
 
 # Cut keys: a pull whose own tool_key IS a cut already prices its
@@ -5956,6 +6021,8 @@ __all__ = [
     "RETIRED_TOOL_KEYS",
     "load_pricing", "save_pricing",
     "tool_price_usd", "subject_tool_price_usd",
+    "pull_price_usd", "order_price_usd", "chat_pull_type",
+    "billable_cuts",
     "PROFILE_BUILD_TOOL_KEYS",
     "LEGACY_CREDIT_USD", "leftover_credits_to_usd",
     "tool_monthly_usd", "prometheus_markup",

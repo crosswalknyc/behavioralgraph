@@ -395,7 +395,8 @@ def _open_question(draft, decision=''):
 
 
 def _billable_cuts(draft):
-    return [c for c in (draft.get('addon_cuts') or []) if isinstance(c, dict) and c.get('cut_id')]
+    import wallet as _w
+    return _w.billable_cuts(draft)      # the approve step's own list
 
 
 def quote(uname, user, draft, decision):
@@ -415,7 +416,7 @@ def quote(uname, user, draft, decision):
     usd, cuts = None, len(_billable_cuts(draft))
     try:
         import wallet as _w
-        verdict = _w.pull_funding(rec, data, f'Chatbot Profile IQ ({decision})', addon_cuts=cuts)
+        verdict = _w.pull_funding(rec, data, _w.chat_pull_type(decision), addon_cuts=cuts)   # the pull the approve step names
         out['allowance'] = bool(verdict.get('allowance'))
         out['covered'] = bool(verdict.get('covered'))
         if verdict.get('paying') and float(verdict.get('usd') or 0) > 0:
