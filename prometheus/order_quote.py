@@ -59,7 +59,7 @@ GRID = 16                   # cut counts 0..GRID are on the table; a card reads 
 _PUBLISHED = {'new_build': 300.0, 'time_shifted_refresh': 300.0, 'derive_cut': 100.0, 'cut_needs_parent': 300.0,
               'subscriber_iq': 500.0, 'cut': 100.0}
 
-__all__ = ['DECISIONS', 'GRID', 'PRICE_MOVED', 'decision_of', 'cuts_of', 'quarters_of', 'price', 'seat', 'for_draft', 'table',
+__all__ = ['DECISIONS', 'GRID', 'PRICE_MOVED', 'SEAT_UNREAD', 'decision_of', 'cuts_of', 'quarters_of', 'price', 'seat', 'for_draft', 'table',
            'table_for_draft', 'from_table', 'draft_usd', 'stale_quote', 'cut_each', 'quarter_each', 'build_usd', 'subiq', 'lock']
 
 
@@ -283,6 +283,8 @@ def draft_usd(draft):
 
 PRICE_MOVED = ("The price on this brief has changed since I drafted it, so I did not start it and nothing was "
                "charged. It now comes to {now}. Ask for it again and I will draft a fresh brief at that price.")
+SEAT_UNREAD = ("I could not check your account just now, so I did not start this and nothing was charged. Send it "
+               "again in a minute.")
 
 
 def stale_quote(host, username, draft, decision=None, money=None):
@@ -296,7 +298,15 @@ def stale_quote(host, username, draft, decision=None, money=None):
     seat whose plan includes the run, an order started without a card),
     and a seat that reads "Included with your plan." has no figure to
     protect; both go ahead. So does a brief whose card priced a different
-    decision than the one the approve step settled on."""
+    decision than the one the approve step settled on.
+
+    Two seats are never told a price here. A seat on a plan allowance
+    reads no price anywhere: one whose allowance cannot cover the run is
+    answered by the funds check, with the plan's own line. And when the
+    seat's record cannot be read at this moment, its own rate is not
+    known (the figure in hand is the published one, which is not what a
+    company on its own rate pays), so nothing starts, nothing is charged
+    and no price is named: the reader sends it again."""
     try:
         shown = draft_usd(draft)
         if shown is None:
@@ -304,11 +314,15 @@ def stale_quote(host, username, draft, decision=None, money=None):
         d = decision_of(draft) if decision is None else decision_of(decision)
         if d == 'existing_match' or d != decision_of(draft):
             return None     # the card priced another decision than the one being approved: not a moved price
-        now = for_draft(host, username, draft, decision=d)
+        user, data = seat(host, username)
+        now = _draft_price(user, data, draft, decision=d)
         if now <= float(shown) + 0.005:
             return None
+        if not user:
+            return {'success': False, 'guidance': True, 'not_started': True, 'error': SEAT_UNREAD}
         from . import plan_allowance as _plan
-        if _plan.seat_reads_included(host, None, now, username):
+        w = _w()
+        if w.is_plan_allowance(w.resolve_billing_subject(user, data)[0]) or _plan.seat_reads_included(host, None, now, username):
             return None
         label = money(now) if callable(money) else (f"${now:,.0f}" if abs(now - round(now)) < 0.009 else f"${now:,.2f}")
         return {'success': False, 'guidance': True, 'not_started': True, 'price_moved': True,

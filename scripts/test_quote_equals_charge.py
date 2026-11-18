@@ -45,6 +45,9 @@ G. The pin table moved on those two things and nothing else.
 H. A brief quoted before the change is never charged more than it was
    quoted: the dashboard's Approve and the app's stored brief both stop
    and ask for a fresh brief; a repeat of an order is still one order.
+   Two seats are never told a price by that stop: a seat whose record
+   cannot be read just then (the figure in hand is the published one,
+   not a company's own rate) and a seat on a plan allowance.
 """
 from __future__ import annotations
 
@@ -1190,6 +1193,63 @@ class H_ABriefQuotedBeforeIsNeverChargedMore(unittest.TestCase):
             self.assertTrue(out.get("success") and out.get("run_id"), out)
             self.assertEqual(w.data["users"]["creds"]["credits"], 40 - 10, f"add-on {addon}")
             self.assertEqual(w.data["users"]["creds"]["credit_usage_history"][0]["credits_used"], 10)
+
+    def test_a_seat_whose_record_cannot_be_read_is_never_told_a_price(self):
+        # The users file cannot be read at the moment of Approve, so the only figure in hand is the published
+        # one. A company on its own rate was told "It now comes to $300" for a build it pays $275 for.
+        class Down:
+            def load_users(self):
+                raise RuntimeError("the users file is unreachable")
+
+        class Empty:
+            def load_users(self):
+                return {"users": {}, "companies": {}}
+
+        desk = Desk()
+        fresh = _draft("new_build", 0)
+        fresh["price_table"] = Q.table_for_draft(desk, "rate", fresh, desk.app["_v1_price_table_for"]("rate"))
+        self.assertEqual(Q.draft_usd(fresh), 275.0)                                 # what the company's card shows
+        self.assertIsNone(Q.stale_quote(desk, "rate", fresh, "new_build", _money))  # and it is what the approval takes
+        for host_down in (Down(), Empty()):
+            reply = Q.stale_quote(host_down, "rate", fresh, "new_build", _money)
+            self.assertEqual(reply, {"success": False, "guidance": True, "not_started": True, "error": Q.SEAT_UNREAD})
+            self.assertNotIn("price_moved", reply)
+        self.assertNotIn("$", Q.SEAT_UNREAD)                                        # no price is named, least of all the published one
+        self.assertIn("nothing was charged", Q.SEAT_UNREAD)
+        self.assertIsNone(DASH_RX.search(Q.SEAT_UNREAD))
+        self.assertIsNone(INTERNAL_RX.search(Q.SEAT_UNREAD), Q.SEAT_UNREAD)
+        # a brief that shows the published price has nothing to protect when the seat cannot be read: the funds
+        # check answers it, as it did before
+        plain = _draft("new_build", 1)
+        plain["price_table"] = desk.app["_v1_price_table_for"]("co")
+        self.assertIsNone(Q.stale_quote(Down(), "co", plain, "new_build", _money))
+        # a brief of before with quarter reads on it is still held when the seat cannot be read, and names no price
+        old = _draft("new_build", 1, quarters=2, price_table=_old_table(desk, "co"))
+        self.assertEqual(Q.stale_quote(Down(), "co", old, "new_build", _money)["error"], Q.SEAT_UNREAD)
+
+    def test_a_plan_allowance_never_reads_a_price_here_either(self):
+        # An allowance that cannot cover the run is answered by the funds check with the plan's own line; a brief
+        # of before with quarter reads on it read "It now comes to $600" to a seat that never reads a price.
+        desk = Desk()
+        desk.data["companies"]["Sony"]["wallet_balance_usd"] = 450.0
+        old = _draft("new_build", 1, quarters=2, price_table=_old_table(desk, "plan"))
+        self.assertFalse(PLAN.seat_reads_included(desk, None, 600.0, "plan"))       # it cannot cover the $600
+        self.assertIsNone(Q.stale_quote(desk, "plan", old, "new_build", _money))
+        verdict = W.pull_funding(desk.data["users"]["plan"], desk.data, W.chat_pull_type("new_build"),
+                                 addon_cuts=1, quarter_reads=2)
+        self.assertEqual((verdict["covered"], verdict["usd"]), (False, 600.0))
+        line = W.funds_refusal_line(verdict)
+        self.assertEqual(line, W.ALLOWANCE_SHORT_LINE)
+        self.assertNotIn("$", line)
+        ok, usd, credits = desk.approve("plan", "new_build", 1, quarters=2)         # so nothing starts and nothing is metered
+        self.assertEqual((ok, usd, credits, desk.balance("plan")), (False, 0.0, 0.0, 450.0))
+        # an allowance with nothing left reads the same way
+        desk = Desk()
+        desk.data["companies"]["Sony"]["wallet_balance_usd"] = 0.0
+        self.assertIsNone(Q.stale_quote(desk, "plan", dict(old), "new_build", _money))
+        # a pay-per-use wallet on the same old brief is still told the price as it stands
+        self.assertIn("$600", Q.stale_quote(Desk(), "co", _draft("new_build", 1, quarters=2,
+                                                                 price_table=_old_table(Desk(), "co")), "new_build", _money)["error"])
 
 
 if __name__ == "__main__":
