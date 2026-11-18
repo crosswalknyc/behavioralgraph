@@ -1331,6 +1331,134 @@ def product_line_expansion(as_written, catalog_name):
     return all(w.rstrip('+') in _PRODUCT_LINE_WORDS for w in extra)
 
 
+# ---------------------------------------------------------------- a plus is part of the name
+# 2026-11-17 (a guest on Jenna's account): "a group who has engaged with
+# Auberge Resorts, Discovery Land Company, Aman Resorts and Nobu Hotels"
+# was read twice on the Discovery+ library profile. The matcher folds
+# punctuation away, so the service "Discovery+" was held as the one word
+# "discovery" and answered to any name that opens with it. The brand
+# identity rule above already keeps the plus (product_line_expansion): the
+# plus is part of the service's name, and the bare word is the service only
+# as readers write it on its own ("Disney viewers", "Paramount subscribers").
+# A longer name that opens with the same word is another name: Discovery
+# Land Company, Disney World, Paramount Pictures.
+_CONTINUES_RX = re.compile(r"[ \t]+(?:&[ \t]+)?([A-Z][\w'&.-]*)")
+_NOT_A_NAME_WORD = _IDENTITY_STOP | _PRODUCT_LINE_WORDS | frozenset((
+    'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november',
+    'december', 'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec', 'monday', 'tuesday',
+    'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'top', 'data', 'demographics', 'demos', 'brands', 'churn',
+    'overlap', 'trends', 'index', 'vs', 'versus', 'or', 'by', 'at', 'is', 'are', 'was', 'were', 'has', 'have', 'had',
+    'do', 'does', 'did', 'will', 'would', 'can', 'could', 'should', 'when', 'where', 'what', 'which', 'how', 'why',
+    'over', 'under', 'between', 'among', 'during', 'after', 'before', 'since', 'than', 'then', 'but', 'so', 'if',
+    'not', 'only', 'also', 'both', 'all', 'any', 'each', 'every', 'more', 'most', 'less', 'their', 'its', 'our',
+    'they', 'them', 'it', 'we', 'i', 'my', 'your', 'usa', 'america', 'american', 'national', 'nationwide'))
+
+
+def _plus_core(name):
+    """The words of a plus-named service up to its plus, bare: 'Discovery+'
+    -> ['discovery'], 'Apple TV+ EST Buyers' -> ['apple', 'tv'],
+    'Disney+/Hulu' -> ['disney']. [] for a name with no plus."""
+    words = re.sub(r"[^a-z0-9+ ]+", ' ', str(name or '').split(' - ')[0].lower()).split()
+    last = max((i for i, w in enumerate(words) if len(w) > 1 and w.endswith('+')), default=-1)
+    return [w.rstrip('+') for w in words[:last + 1]] if last >= 0 else []
+
+
+def _capitals_mean_names(text):
+    """True when the ask is ordinary writing (some plain lowercase words),
+    so a capital marks a name; False for ALL CAPS or Every Word Capped."""
+    return len(re.findall(r"(?<![\w'])[a-z]{4,}(?![\w'])", str(text or ''))) >= 2
+
+
+def plus_name_not_written(name, text, reading=None):
+    """True when `name` is a plus-named service (Discovery+, Disney+,
+    Paramount+) and the ask does not name it: the ask never writes the
+    plus, and wherever it writes the service's bare word that word opens a
+    longer name (Discovery Land Company, Disney World). The bare word on
+    its own is still the service. The Reader's reading, when in hand,
+    settles it first: a subject it wrote as the bare word (or matched to
+    this entry) names the service; a longer written subject that carries
+    the word does not. Never raises; False on any doubt."""
+    try:
+        core = _plus_core(name)
+        t = str(text or '')
+        if not core or not t.strip():
+            return False
+        span = r"[\s-]*".join(re.escape(w) for w in core)
+        if re.search(r"(?<![\w+])" + span + r"(?:\s*\+|[\s-]*plus\b)", t, re.I):
+            return False                                   # written with its plus
+        hits = list(re.finditer(r"(?<![\w+])" + span + r"(?![\w+])", t, re.I))
+        if not hits:
+            return False                                   # the words are not in the ask; nothing to rule on
+        r = reading if isinstance(reading, dict) else _current_reading()
+        longer = False
+        for s in ((r or {}).get('subjects') or []) if isinstance(r, dict) else []:
+            if not isinstance(s, dict):
+                continue
+            if _plus_core(s.get('catalog')) == core:
+                return False                               # the Reader matched a subject to this service
+            aw = re.sub(r"[^a-z0-9+ ]+", ' ', str(s.get('as_written') or '').lower()).split()
+            aw_b = [w.rstrip('+') for w in aw]
+            at = next((i for i in range(len(aw_b) - len(core) + 1) if aw_b[i:i + len(core)] == core), None)
+            if at is None:
+                continue
+            rest = [w for w in aw_b[:at] + aw_b[at + len(core):] if w not in _NOT_A_NAME_WORD and not w.isdigit()]
+            if not rest:
+                return False                               # written as the bare word: the service, as readers write it
+            longer = True
+        if longer:
+            return True
+        if not _capitals_mean_names(t):
+            return False
+        for m in hits:
+            if not t[m.start():m.start() + 1].isupper():
+                return False                               # 'discovery' in plain lowercase: no name to continue
+            nxt = _CONTINUES_RX.match(t, m.end())
+            if not nxt or nxt.group(1).lower().strip(".'") in _NOT_A_NAME_WORD:
+                return False                               # the word stands on its own here
+        return True
+    except Exception:
+        return False
+
+
+def _current_reading():
+    try:
+        from flask import g as _g
+        return getattr(_g, '_pm_reading', None)
+    except Exception:
+        return None
+
+
+def library_named(catalog, text, reading=None, hint=''):
+    """The library as this ask can name it: every entry, less a plus-named
+    service whose bare word the ask only writes inside a longer name
+    (plus_name_not_written). A subject hint that writes the plus counts as
+    the ask's own words. The same list object when nothing drops."""
+    try:
+        t = str(text or '')
+        if '+' in str(hint or ''):
+            t = f"{hint}\n{t}"
+        if not t.strip():
+            return catalog
+        drop = set()
+        seen = {}
+        for i, e in enumerate(catalog or ()):
+            if not isinstance(e, dict):
+                continue
+            nm = str(e.get('subject') or e.get('display_name') or '')
+            if '+' not in nm:
+                continue
+            fam = nm.split(' - ')[0]
+            if fam not in seen:
+                seen[fam] = plus_name_not_written(fam, t, reading)
+            if seen[fam]:
+                drop.add(i)
+        if not drop:
+            return catalog
+        return [e for i, e in enumerate(catalog) if i not in drop]
+    except Exception:
+        return catalog
+
+
 def _listed_category(as_written, catalog, text):
     try:
         from . import cut_list as _cl

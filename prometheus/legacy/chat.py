@@ -11331,7 +11331,7 @@ def _pm_text_names_catalog_subject(text):
     if not toks:
         return False
     try:
-        for entry in _profile_catalog_for_chat():
+        for entry in _subject_rules.library_named(_profile_catalog_for_chat(), text):
             st = [w for w in _H._normalize_for_match(
                       str(entry.get('subject') or '')).split()
                   if w not in _PM_BASE_GENERIC_TOKENS]
@@ -12393,7 +12393,7 @@ def _pm_expand_alias_tokens(toks, raw_text):
 
 def _pm_fuzzy_catalog_subject(text, extra_tokens=None):   # the one library subject the ask nearly names, or None
     try:
-        return _ns_mod.fuzzy_catalog_subject(text, _profile_catalog_for_chat(), normalize=_H._normalize_for_match,
+        return _ns_mod.fuzzy_catalog_subject(text, _subject_rules.library_named(_profile_catalog_for_chat(), text), normalize=_H._normalize_for_match,
                                              typo_eq=_pm_token_typo_eq, expand_alias=_pm_expand_alias_tokens,
                                              generic_tokens=_PM_BASE_GENERIC_TOKENS, extra_tokens=extra_tokens)
     except Exception:
@@ -12432,7 +12432,7 @@ def _pm_two_base_detect(text, ctx=None):
         _bp = None
     found = {}
     try:
-        for entry in _profile_catalog_for_chat():
+        for entry in _subject_rules.library_named(_profile_catalog_for_chat(), t):
             subj = str(entry.get('subject')
                        or entry.get('display_name') or '').strip()
             st = [w for w in _H._normalize_for_match(subj).split()
@@ -12696,7 +12696,7 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     # and Nike sat in that ask as objects); Gen Pop is never a base.
     _norm = _H._normalize_for_match
     try:
-        _cat = _profile_catalog_for_chat()
+        _cat = _subject_rules.library_named(_profile_catalog_for_chat(), text, hint=subject_hint)   # a plus is part of a service's name (2026-11-17)
         _hint_n = _norm(subject_hint)
         _ent = None
         if _hint_n:
@@ -12717,7 +12717,7 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     except Exception:
         traceback.print_exc()
     try:
-        for entry in _profile_catalog_for_chat():
+        for entry in _subject_rules.library_named(_profile_catalog_for_chat(), text, hint=subject_hint):
             if _ns_mod.is_gen_pop(_ns_mod.family_name(entry), _norm):
                 continue
             for field in ('subject', 'display_name'):

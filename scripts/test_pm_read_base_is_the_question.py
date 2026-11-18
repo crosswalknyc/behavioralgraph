@@ -409,6 +409,60 @@ class TheRetiredTurn(unittest.TestCase):
         self.assertNotIn('On it:', hit['reply'])
 
 
+class APlusIsPartOfTheName(unittest.TestCase):
+    """2026-11-17, a guest on Jenna's account: "a group who has engaged with
+    Auberge Resorts, Discovery Land Company, Aman Resorts, and Nobu Hotels"
+    was read on the Discovery+ profile. Discovery Land Company is not
+    Discovery+ (prometheus.subject_rules.plus_name_not_written)."""
+
+    LINES = "Please pull a group who has engaged with Auberge Resorts\nDiscovery Land Company\nAman Resorts\nNobu Hotels"
+    GUEST = ("Please pull a group who has engaged with Auberge Resorts, Discovery Land Company, Aman Resorts, and Nobu Hotels "
+             "over the last 12 months... also make sure to only look at those who have a household income of 250k+. "
+             "So dates are nov 17 2025- nov 17 2026")
+    LIB = CATALOG + [
+        {'s3_key': 'Discovery_Plus_09_14_2026.csv', 'display_name': 'Discovery+', 'subject': 'Discovery+', 'category': 'STREAMING/PLATFORM'},
+        {'s3_key': 'Discovery+ - Avid Fan.csv', 'display_name': 'Discovery+ - Avid Fan', 'subject': 'Discovery+', 'category': 'STREAMING/PLATFORM'},
+        {'s3_key': 'Disney_Plus.csv', 'display_name': 'Disney+', 'subject': 'Disney+', 'category': 'STREAMING/PLATFORM'},
+        {'s3_key': 'Paramount_Plus.csv', 'display_name': 'Paramount+', 'subject': 'Paramount+', 'category': 'STREAMING/PLATFORM'},
+    ]
+
+    def _with_lib(self):
+        return mock.patch.object(C, '_profile_catalog_for_chat', lambda: self.LIB)
+
+    def test_the_guests_sentence_has_no_discovery_plus_base(self):
+        with self._with_lib():
+            for text in (self.GUEST, self.LINES):
+                for hint in ('', 'Discovery Land Company', 'Auberge Resorts', 'Nobu Hotels'):
+                    for prefer in (False, True):
+                        with self.subTest(text=text[:30], hint=hint, prefer=prefer):
+                            self.assertIsNone(_base(hint, text, prefer_catalog=prefer))
+                self.assertFalse(C._pm_text_names_catalog_subject(text))
+
+    def test_an_open_page_does_not_become_its_base_either(self):
+        with self._with_lib():
+            for prefer in (False, True):
+                got = _base('Discovery Land Company', self.GUEST, ctx=DEW, prefer_catalog=prefer)
+                self.assertFalse(got and 'Discovery+' in str(got.get('subject')))
+
+    def test_the_service_still_binds_when_it_is_named(self):
+        with self._with_lib():
+            for text in ('what do Discovery+ viewers buy', 'what do discovery viewers buy', 'what do Discovery viewers buy',
+                         'discovery plus subscribers by age'):
+                with self.subTest(text=text):
+                    self.assertEqual((_base('', text, prefer_catalog=True) or {}).get('s3_key'), 'Discovery_Plus_09_14_2026.csv')
+            self.assertEqual((_base('', 'Disney subscribers top brands', prefer_catalog=True) or {}).get('subject'), 'Disney+')
+            self.assertEqual((_base('Discovery+', 'Discovery+ Avid Fan', prefer_catalog=True, bound=True) or {}).get('subject'), 'Discovery+')
+
+    def test_another_longer_name_on_the_same_word(self):
+        with self._with_lib():
+            self.assertIsNone(_base('', 'how many Paramount Pictures fans stream each week', prefer_catalog=True))
+            self.assertIsNone(_base('', 'what do Disney World visitors buy online', prefer_catalog=True))
+
+    def test_a_plain_base_name_under_a_longer_ask_binds_as_before(self):
+        with self._with_lib():
+            self.assertEqual((_base('', 'what do Costco Wholesale members buy', prefer_catalog=True) or {}).get('subject'), 'Costco')
+
+
 class TheReaderPrompt(unittest.TestCase):
     def test_the_reader_carries_the_rule(self):
         from prometheus import reader as R
