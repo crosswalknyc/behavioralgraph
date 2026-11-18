@@ -51144,7 +51144,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-spine-facts { display: flex; flex-wrap: wrap; gap: 0.3rem 1.4rem; margin-top: 0.4rem; font-size: 0.8rem; color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-spine-facts b { color: var(--dtw-ink); font-weight: 500; font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-spine-actions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; flex-wrap: nowrap; justify-content: flex-end; }
-        #digitalTwinsIQView .dtw-switch { width: 220px; min-width: 140px; text-overflow: ellipsis; }
         #digitalTwinsIQView .dtw-segs { display: flex; gap: 0; margin-top: 0.9rem; flex-wrap: wrap; overflow: visible; scrollbar-width: none; row-gap: 2px; }
         #digitalTwinsIQView .dtw-pi-diag { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 12px; }
         #digitalTwinsIQView .dtw-pi-diag .dtw-card { margin: 0; }
@@ -52168,8 +52167,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         </div>
                     </div>
                     <div class="dtw-spine-actions">
-                        <select id="dtwCompanyFilter" class="dtw-in dtw-switch" aria-label="Company" title="Crosswalk only: see the library as one company sees it" onchange="dtwCompanyFilterChange(this.value)" hidden><option value="">All companies</option></select>
-                        <select id="dtwTwinSwitch" class="dtw-in dtw-switch" aria-label="Switch twin" onchange="dtwSwitchTwin(this.value)"><option value="">No twins yet</option></select>
                         <button type="button" class="dtw-btn" onclick="dtwHowtoOpen(true)">How to</button>
                         <button type="button" class="dtw-btn" onclick="dtwRecordOpen(true)" title="Every call the twins made before its outcome, next to what happened">Track record</button>
                         <button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build a twin</button>
@@ -53146,7 +53143,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 chatFill(line);
                 try { var f = document.getElementById('synthChatFileInput'); if (f) f.click(); } catch (_) {}
             };
-            window.dtwSwitchTwin = function(key) { if (key && key !== S.key) dtwOpen(key, null, null, null, S.tab); };
             window.dtwLoadList = async function(force) {
                 if (S.loaded && !force) return S.runs;
                 // Company scope (2026-11-05): the list is the seat's company's library. Crosswalk staff see every company and can narrow to one.
@@ -53166,7 +53162,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 f.value = S.companyFilter || '';
                 f.hidden = false;
             }
-            window.dtwCompanyFilterChange = function(v) { S.companyFilter = v || ''; S.loaded = false; dtwLoadList(true); };
             function twinCompanyOf(key) { var r = (S.runs || []).filter(function(x) { return x.key === key; })[0]; return (r && r.company) || ''; }
             // The super admin's assign control: the twin, with its tests, rooms and saved setups, moves to the company picked.
             function assignControl(key) {
