@@ -66,6 +66,89 @@ CARRIAGE = ("Carriage paths: direct app and site sessions plus channel "
             "where the title is attributable.")
 BASE_SAMPLE = "measured across 10M US consumers and projected to the US"
 
+# The credit a reader sets, and one line when one line is asked for
+# (2026-11-18, Liz: "viewers credited at 30 seconds ... Close with one
+# methodology line"). Her three reads that morning each closed on the
+# whole counting block, and the block said a view is credited at one
+# second under figures she had asked for at thirty. When the question
+# sets the credit, the read counts at it and the methodology says so,
+# beside our standing one-second view. When the question asks for one
+# methodology line, the read closes on one line that carries what the
+# block carries: who is counted, the credit, once per person, the
+# window, the base, and what the counts are not comparable to.
+CREDIT_RX = re.compile(
+    r"\b(?:credited\s+at|credit(?:ed)?\s+(?:threshold\s+)?of|counted\s+at|viewers?\s+at|views?\s+at)\s+"
+    r"(?:at\s+least\s+)?(?P<n>\d{1,3})\s*(?P<u>seconds?|secs?|minutes?|mins?)\b|"
+    r"\b(?:at\s+least|a\s+minimum\s+of|minimum|threshold\s+of)\s+(?P<n2>\d{1,3})\s*(?P<u2>seconds?|secs?|minutes?|mins?)"
+    r"(?:\s+(?:of\s+)?(?:play|playback|viewing|watch(?:ing)?|view))", re.I)
+ONE_LINE_RX = re.compile(
+    r"\b(?:close|end|finish)\s+with\s+(?:one|a\s+single|a|1)\s+methodology\s+(?:line|sentence|note)\b", re.I)
+STANDING_CREDIT = 'our standing view credits a person at one second'
+
+
+def stated_credit(question):
+    """Seconds of play the question itself sets as the credit for a
+    viewer ("viewers credited at 30 seconds", "at least 2 minutes of
+    viewing"), or 0. Two thresholds asked side by side ("at least 1
+    second, and at least 30 seconds") set none: both are reported."""
+    try:
+        found = []
+        for m in CREDIT_RX.finditer(str(question or '')):
+            n = int(m.group('n') or m.group('n2'))
+            u = (m.group('u') or m.group('u2') or '').lower()
+            found.append(n * (60 if u.startswith('min') else 1))
+        found = sorted(set(found))
+        return found[0] if len(found) == 1 and found[0] > 1 else 0
+    except Exception:
+        return 0
+
+
+def credit_phrase(seconds):
+    s = int(seconds or 0)
+    if s <= 0:
+        return ''
+    if s >= 60 and s % 60 == 0:
+        return f"{s // 60} minute{'s' if s != 60 else ''} or more of play"
+    return f"{s} seconds or more of play"
+
+
+def credit_rule(question):
+    """The prompt line for a read whose question sets the credit, or ''."""
+    ph = credit_phrase(stated_credit(question))
+    if not ph:
+        return ''
+    return (f"- THE READER SET THE CREDIT FOR THIS READ: a person counts as a viewer with {ph}. Every viewer count in "
+            f"the reply uses that credit and its definition says so. It is measured: never answer that the count is "
+            f"not cut at that threshold.\n")
+
+
+def one_line_asked(question):
+    return bool(ONE_LINE_RX.search(str(question or '')))
+
+
+def one_line(noun='viewers', credit_s=0, service='', window='', rows=False, family=None):
+    """The whole counting block as one line, for a read whose question
+    asked for one methodology line. House words only; never a source."""
+    noun = str(noun or 'people').strip() or 'people'
+    fam = canon_counting_family(family) if family else ''
+    viewing = (fam == VIEWING) if fam else (noun in ('viewers', 'listeners', 'players'))
+    on = f" on {service}" if str(service or '').strip() else ''
+    bits = ['US people (persons)' if noun == 'people' else f"US {noun} (persons)"]
+    ph = credit_phrase(credit_s)
+    if viewing and ph:
+        bits.append(f"credited at {ph}{on} ({STANDING_CREDIT})")
+    elif viewing:
+        bits.append(f"credited at one second of play{on}")
+    bits.append('each person counted once in every row' if rows else 'each person counted once inside the window')
+    if str(window or '').strip():
+        bits.append(str(window).strip().rstrip('.'))
+    bits.append(BASE_SAMPLE)
+    line = f"{HEADER} " + ', '.join(bits)
+    if viewing:
+        line += '; not comparable to subscriber counts, TV ratings or play counts'
+    return line + '.'
+
+
 # What we count as a view, for every generated artifact that carries one
 # (Jenna 2026-10-08: "anytime something is generated that includes views
 # we give what we measure as a view from our methodology somewhere
@@ -267,7 +350,15 @@ def ensure_purchase_note(reply):
 
 def carries_definition(text):
     t = str(text or '')
-    return VIEW_HEADER in t or 'Counts are US viewers (persons)' in t or VIEW_NOTE_SHORT in t
+    return VIEW_HEADER in t or 'Counts are US viewers (persons)' in t or VIEW_NOTE_SHORT in t or carries_one_line(t)
+
+
+def carries_one_line(text):
+    """True when the text closes on the one-line form of the counting
+    block (one_line): it says who is counted, the credit and the base, so
+    nothing appends the view paragraph under it (the mail door, a file)."""
+    t = str(text or '')
+    return f"{HEADER} US " in t and '(persons)' in t and 'each person counted once' in t and BASE_SAMPLE in t
 
 
 # A figure that is itself a viewing count (2026-11-11: a book-audience
@@ -703,6 +794,10 @@ def block(window_start=None, window_end=None, window_label='',
             lines.append(f"- {ln}")
         if THRESHOLD_RX.search(str(text or '')):
             lines.append(f"- Threshold: {THRESHOLD}")
+        _cp = credit_phrase(stated_credit(context))
+        if _cp:
+            lines.append(f"- Credit for this read: a person counts with {_cp}, the credit the question set; "
+                         f"{STANDING_CREDIT}.")
         lines.append(f"- {CARRIAGE}")
         lines.append(f"- Sessions: {SESSION}")
         return lines
@@ -916,6 +1011,24 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
             fam = VIEWING
         elif fam != VIEWING and not _ANY_FIGURE_RX.search(text):
             return ensure_purchase_note(reply)
+        if one_line_asked(question):
+            # the reader asked for one methodology line: the read closes on
+            # one, never on the block (2026-11-18)
+            if HEADER in text or carries_definition(text) or carries_family_definition(text, fam):
+                return reply
+            _win = str(res.get('window_label') or '').strip()
+            if not _win and res.get('window_start') and res.get('window_end'):
+                _win = f"{_fmt_date(res.get('window_start'))} to {_fmt_date(res.get('window_end'))}"
+            _svc = 'Peacock' if (fam == VIEWING and names_peacock(question) and not re.search(
+                r"\b(?:netflix|hulu|disney|paramount|max|prime video|apple tv|tubi|youtube)\b", str(question or ''), re.I)) else ''
+            # a table of groups (prometheus.demo_grid) names its own service and counts once per row
+            _gp = (res.get('_grid') or {}).get('plan') if isinstance(res.get('_grid'), dict) else None
+            if isinstance(_gp, dict):
+                _svc = str(_gp.get('service') or '') or _svc
+            return text.rstrip() + '\n\n' + one_line(
+                noun=('viewers' if fam == VIEWING else pool_noun_for(res, question)),
+                credit_s=(stated_credit(question) if fam == VIEWING else 0), service=_svc, window=_win, family=fam,
+                rows=isinstance(_gp, dict))
         ctx = ' '.join([str(question or ''), pool_context(res)])
         if carries_definition(text) or carries_family_definition(text, fam):
             if fam == VIEWING:

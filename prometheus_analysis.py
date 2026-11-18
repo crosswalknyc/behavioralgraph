@@ -6754,6 +6754,27 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
     own, which is how one 2025 total became three."""
     if not isinstance(data, dict):
         raise ValueError('measurement payload is not a dict')
+    # A demographic grid (several named groups, the same measures for
+    # each; prometheus.demo_grid, 2026-11-18, Liz's nine series on
+    # Peacock) has its own contract: one count metric and one row of
+    # cells per group. Whatever shape the pass improvised is read into
+    # it here, so every coherence pass of the read (the first, a
+    # revision, a trim) sees the same table; a grid that cannot be
+    # completed raises (a ValueError the read core answers with a second
+    # pass, then a held read), it is never guessed.
+    _grid_plan = None
+    try:
+        from prometheus import demo_grid as _dg
+        _grid_plan = (data.get('_grid') or {}).get('plan') if isinstance(data.get('_grid'), dict) else None
+        if _grid_plan is None and question:
+            _grid_plan = _dg.plan(question)
+        if _grid_plan:
+            data = _dg.complete(_dg.shape(data, _grid_plan), _grid_plan, subject=str(data.get('subject') or ''))
+    except ValueError:
+        raise
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+        _grid_plan = None
     subj = str(data.get('subject') or 'subject').strip() or 'subject'
     _read_cap = 9 if plan else (7 if (so_what or multi) else 5)
     _read_len = 1200 if plan else 480
@@ -6769,6 +6790,7 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
                   for r in (data.get('reads') or []) if str(r).strip()][:_read_cap],
     }
     metrics, seen = [], set()
+    _metric_cap = (len(_grid_plan.get('groups') or []) + 2) if _grid_plan else 12   # a grid keeps one count per group
     for i, row in enumerate(data.get('metrics') or []):
         if not isinstance(row, dict):
             continue
@@ -6805,7 +6827,7 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
         metrics.append({'name': name, 'label': label or name,
                         'unit': unit or 'count', 'value': value,
                         'definition': definition})
-        if len(metrics) >= 12:
+        if len(metrics) >= max(12, _metric_cap):
             break
     out['cohort'] = _clip_label(data.get('cohort'))
     out['breakdown'] = _coherent_breakdown(
@@ -6832,9 +6854,22 @@ def enforce_metrics_coherence(data, so_what=False, multi=None, plan=False,
             _cd._rewrite_res_prose(out, _moved)
     except Exception as _fx:
         _faults.note('analysis', _fx)
-    if so_what:
+    if _grid_plan and isinstance(data.get('_grid'), dict):
+        # the grid rides the result, and its arithmetic is settled on the
+        # figures the digits pass left (cells sum to pools, a member is
+        # never larger than the service, the combined row sits between
+        # its largest member and their sum)
+        try:
+            from prometheus import demo_grid as _dg
+            out['_grid'] = dict(data['_grid'])
+            out['universe'] = str(data.get('universe') or '').strip()[:220] or _dg.universe_label(_grid_plan)
+            out['cohort'] = _dg.cohort_label(_grid_plan)[:220]     # the same words on every pass, so a stored figure binds
+            _dg.cohere(out, held=held)
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
+    elif so_what:
         out['_so_what'] = True
-    if multi:
+    if multi and not out.get('_grid'):
         out['_multi'] = list(multi)
     # an open end the ask stated ends on yesterday; no read's window ends
     # after today (prometheus.window_scope, 2026-11-10)
@@ -7053,7 +7088,17 @@ def format_generated_metrics_reply(res):
     breakdown IS the reply body (2026-08-27, Jenna: a category ask must
     answer with the category table, not cohort headline stats); the
     cohort context shrinks to a one-line preamble. A so-what ask
-    (res['_so_what'], 2026-10-06) renders as a plan instead of a read."""
+    (res['_so_what'], 2026-10-06) renders as a plan instead of a read.
+    A demographic grid (res['_grid'], 2026-11-18) prints its tables, every
+    figure computed from the same cells (prometheus.demo_grid)."""
+    try:
+        from prometheus import demo_grid as _dg
+        if _dg.is_grid(res):
+            _grid_reply = _dg.format_reply(res)
+            if _grid_reply:
+                return scrub_user_text(_grid_reply)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     if res.get('_multi') and not res.get('breakdown'):
         return format_multi_question_reply(res)
     if res.get('_so_what') and not res.get('breakdown'):
@@ -7194,6 +7239,18 @@ def build_generated_csv(entry):
     subject = scrub_user_text(
         str(entry.get('subject') or 'Data').strip()) or 'Data'
     cohort = scrub_user_text(str(entry.get('cohort') or '').strip())
+    try:   # a demographic grid: every group, every band, one row each (2026-11-18)
+        from prometheus import demo_grid as _dg
+        _grid_rows = _dg.csv_for(entry)
+        if _grid_rows:
+            _gbuf = io.StringIO()
+            _gw = _csv.writer(_gbuf, lineterminator='\n')
+            for _gr in _grid_rows:
+                _gw.writerow([scrub_user_text(str(c)) for c in _gr])
+            _gstem = '_'.join(_csv_slug(b) for b in (subject, 'demographics') if b)[:80].strip('_')
+            return (f"{_gstem or 'crosswalk_data'}.csv", _gbuf.getvalue())
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     bd = entry.get('breakdown') if isinstance(entry.get('breakdown'),
                                               dict) else {}
     rows = [r for r in (bd.get('rows') or [])

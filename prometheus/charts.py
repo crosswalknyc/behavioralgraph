@@ -249,6 +249,8 @@ def chart_for_read(res, question='', force=False):
         rows = [r for r in (bd.get('rows') or []) if isinstance(r, dict)]
         if not rows:
             return None
+        if isinstance(res.get('_grid'), dict) and not force:
+            return None   # a demographic grid is its tables; its rows are cells, not one histogram (2026-11-18)
         if not (force or wants_visual(question) or has_distribution(res)):
             return None
         subject = str(res.get('subject') or '').strip()

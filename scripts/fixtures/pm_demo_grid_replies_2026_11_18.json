@@ -1,0 +1,1204 @@
+{
+ "question": "Nine Dick Wolf series on Peacock, window Nov 17 2025 to Nov 16 2026, viewers credited at 30 seconds. For each of these series and for all nine combined (each person once), give percent women and median age of the people who watched on Peacock: Law & Order: Special Victims Unit; Law & Order; Law & Order: Organized Crime; Law & Order: Criminal Intent; Chicago Fire; Chicago P.D.; Chicago Med; FBI: Most Wanted; FBI: International. Give the same two figures for everyone who used Peacock in the window. For all nine combined and for all Peacock users also give the percent in each age band: 17 and under, 18 to 24, 25 to 34, 35 to 44, 45 to 54, 55 to 64, 65 and over, and the percent who are women aged 35 to 64. RULES: US persons from the 10M panel projected to the US, digital signal only. Each person counts once. Give exact counts. Say plainly if a line cannot be measured instead of estimating. Close with one methodology line.",
+ "replies": {
+  "summary_in_notes": {
+   "action": "answer",
+   "decline_reason": null,
+   "subject": "Dick Wolf series on Peacock",
+   "metric_family": "viewership",
+   "window_label": "Nov 17 2025 to Nov 16 2026",
+   "window_start": "2025-11-17",
+   "window_end": "2026-11-16",
+   "headline": "40,276,849 US people watched at least one of the nine Dick Wolf series on Peacock in the window at the 30 second threshold, 60.1% of them women and median age 52, against 52.6% women and median age 40 for Peacock users overall.",
+   "metrics": [
+    {
+     "name": "nine_series_viewers_30s",
+     "label": "Nine series combined, unique US viewers (30s+)",
+     "value": 40276849,
+     "unit": "viewers",
+     "definition": "distinct US people with at least 30 seconds of play on any of the nine titles on Peacock in the window, each person counted once"
+    },
+    {
+     "name": "nine_series_pct_women",
+     "label": "Nine series combined, percent women",
+     "value": 60.1,
+     "unit": "pct",
+     "definition": "women as a share of the 40,276,849 deduplicated US people who watched any of the nine titles"
+    },
+    {
+     "name": "nine_series_median_age",
+     "label": "Nine series combined, median age",
+     "value": 52,
+     "unit": "years",
+     "definition": "median age of the 40,276,849 deduplicated US people who watched any of the nine titles"
+    },
+    {
+     "name": "peacock_users",
+     "label": "Peacock users, US people in the window",
+     "value": 98472163,
+     "unit": "users",
+     "definition": "distinct US people with at least one Peacock session on app or web in the window, each person counted once"
+    },
+    {
+     "name": "peacock_pct_women",
+     "label": "Peacock users, percent women",
+     "value": 52.6,
+     "unit": "pct",
+     "definition": "women as a share of the 98,472,163 US people who used Peacock in the window"
+    },
+    {
+     "name": "peacock_median_age",
+     "label": "Peacock users, median age",
+     "value": 40,
+     "unit": "years",
+     "definition": "median age of the 98,472,163 US people who used Peacock in the window"
+    }
+   ],
+   "reads": [
+    "Every line asked for is measured; none of the nine titles, the combined line, or the Peacock user line falls outside digital signal. The franchise audience on Peacock runs twelve years older than the service as a whole and nine points more female, and that gap is the whole story of the platform: Peacock's median age of 40 is held down by sports, WWE and next-day broadcast comedy, while the Wolf library is the service's deepest older-skewing engine.",
+    "SVU is the youngest and most female of the nine at 63.8% women and median age 48, a read that leans on binge behavior among women 25 to 44 working through a 500 plus episode library; Chicago Med runs the highest female share at 64.2% but ten years older at median 55, and the two FBI titles are the oldest and the least female of the set.",
+    "Cross-viewing is heavy: the nine titles generate 97,045,421 viewer signals across 40,276,849 people, roughly 2.4 titles per viewer, so counting the series separately and adding them would overstate reach by more than half. Women aged 35 to 64 alone are 13,935,791 people, 34.6% of the combined franchise audience, versus 24.6% of all Peacock users.",
+    "At a one second threshold the nine titles combined reach 44,812,357 US people against 40,276,849 at 30 seconds or more; the 4,535,508 difference reads as browse and bounce off the franchise hub rows rather than intent to watch.",
+    "Methodology: Crosswalk first-party US measurement, 10M person panel projected to the US population, Nov 17 2025 to Nov 16 2026, digital signal only, Peacock direct app and web plus Peacock through channel storefronts, viewers credited at 30 seconds or more, every person counted once on every line."
+   ],
+   "cohort": "Peacock users who watched Dick Wolf series",
+   "breakdown": {
+    "dimension": "Series on Peacock",
+    "share_basis": "share of the nine-series viewer signals (97,045,421 signals; a person who watched more than one title is counted in each title's row). The two TOTAL rows are deduplicated totals and sit outside the share column at 100.",
+    "bucket_label": "age band, percent of the row's people",
+    "rows": [
+     {
+      "label": "Law & Order: Special Victims Unit",
+      "share_pct": 22.1,
+      "penetration_pct": 21.7,
+      "note": "63.8% women, median age 48",
+      "pool": 21384617
+     },
+     {
+      "label": "Chicago Fire",
+      "share_pct": 15.3,
+      "penetration_pct": 15.1,
+      "note": "61.3% women, median age 55",
+      "pool": 14873406
+     },
+     {
+      "label": "Chicago P.D.",
+      "share_pct": 13.6,
+      "penetration_pct": 13.4,
+      "note": "57.9% women, median age 54",
+      "pool": 13219574
+     },
+     {
+      "label": "Law & Order",
+      "share_pct": 13.3,
+      "penetration_pct": 13.1,
+      "note": "56.2% women, median age 54",
+      "pool": 12946882
+     },
+     {
+      "label": "Chicago Med",
+      "share_pct": 11.8,
+      "penetration_pct": 11.6,
+      "note": "64.2% women, median age 55",
+      "pool": 11406238
+     },
+     {
+      "label": "Law & Order: Organized Crime",
+      "share_pct": 7.6,
+      "penetration_pct": 7.4,
+      "note": "57.4% women, median age 50",
+      "pool": 7318455
+     },
+     {
+      "label": "FBI: Most Wanted",
+      "share_pct": 5.9,
+      "penetration_pct": 5.9,
+      "note": "55.8% women, median age 58",
+      "pool": 5836129
+     },
+     {
+      "label": "Law & Order: Criminal Intent",
+      "share_pct": 5.3,
+      "penetration_pct": 5.2,
+      "note": "55.1% women, median age 56",
+      "pool": 5142738
+     },
+     {
+      "label": "FBI: International",
+      "share_pct": 5.1,
+      "penetration_pct": 5.0,
+      "note": "55.2% women, median age 57",
+      "pool": 4917382
+     },
+     {
+      "label": "TOTAL: all nine combined, each person once",
+      "share_pct": 100.0,
+      "penetration_pct": 40.9,
+      "note": "60.1% women, median age 52; women 35 to 64 are 34.6% (13,935,791 people)",
+      "pool": 40276849,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 1288857,
+        "share_pct": 3.2
+       },
+       {
+        "label": "18 to 24",
+        "count": 2054121,
+        "share_pct": 5.1
+       },
+       {
+        "label": "25 to 34",
+        "count": 4994331,
+        "share_pct": 12.4
+       },
+       {
+        "label": "35 to 44",
+        "count": 6363743,
+        "share_pct": 15.8
+       },
+       {
+        "label": "45 to 54",
+        "count": 7370661,
+        "share_pct": 18.3
+       },
+       {
+        "label": "55 to 64",
+        "count": 8699797,
+        "share_pct": 21.6
+       },
+       {
+        "label": "65 and over",
+        "count": 9505339,
+        "share_pct": 23.6
+       }
+      ]
+     },
+     {
+      "label": "TOTAL: all Peacock users, each person once",
+      "share_pct": 100.0,
+      "penetration_pct": 100.0,
+      "note": "52.6% women, median age 40; women 35 to 64 are 24.6% (24,224,153 people)",
+      "pool": 98472163,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 12604437,
+        "share_pct": 12.8
+       },
+       {
+        "label": "18 to 24",
+        "count": 10241103,
+        "share_pct": 10.4
+       },
+       {
+        "label": "25 to 34",
+        "count": 18315821,
+        "share_pct": 18.6
+       },
+       {
+        "label": "35 to 44",
+        "count": 17035687,
+        "share_pct": 17.3
+       },
+       {
+        "label": "45 to 54",
+        "count": 14869293,
+        "share_pct": 15.1
+       },
+       {
+        "label": "55 to 64",
+        "count": 12998329,
+        "share_pct": 13.2
+       },
+       {
+        "label": "65 and over",
+        "count": 12407493,
+        "share_pct": 12.6
+       }
+      ]
+     }
+    ]
+   },
+   "followups": [
+    "How many of the 40,276,849 watch two or more of the nine, and what is the title overlap grid?",
+    "Which of the nine pulls the most viewers who used Peacock for nothing else in the window?",
+    "Hours per viewer and completion by title across the same window",
+    "What share of SVU viewers on Peacock first watched after a social clip in the window?"
+   ]
+  },
+  "empty_bucket_lists": {
+   "action": "answer",
+   "decline_reason": null,
+   "subject": "Dick Wolf series on Peacock",
+   "metric_family": "viewership",
+   "window_label": "Nov 17 2025 to Nov 16 2026",
+   "window_start": "2025-11-17",
+   "window_end": "2026-11-16",
+   "headline": "44,318,207 US people watched at least one of the nine Dick Wolf series on Peacock in the window at 30 seconds or more, and that combined audience is 60.1% women with a median age of 47.3, running 7.1 years older and 7.3 points more female than Peacock's 101,472,836 users overall.",
+   "metrics": [
+    {
+     "name": "nine_series_unique_viewers",
+     "label": "Unique US viewers, all nine combined (each person once)",
+     "value": 44318207,
+     "unit": "viewers",
+     "definition": "distinct US people with 30 seconds or more of play on at least one of the nine series on Peacock, Nov 17 2025 to Nov 16 2026, counted once no matter how many of the nine they watched"
+    },
+    {
+     "name": "nine_series_pct_women",
+     "label": "Percent women, all nine combined",
+     "value": 60.1,
+     "unit": "pct",
+     "definition": "women as a share of the 44,318,207 combined viewers; 26,635,242 women"
+    },
+    {
+     "name": "nine_series_median_age",
+     "label": "Median age, all nine combined",
+     "value": 47.3,
+     "unit": "years",
+     "definition": "age at which half the 44,318,207 combined viewers are younger and half older"
+    },
+    {
+     "name": "nine_series_women_35_64",
+     "label": "Percent women aged 35 to 64, all nine combined",
+     "value": 37.4,
+     "unit": "pct",
+     "definition": "women aged 35 to 64 as a share of the combined viewers; 16,575,009 people"
+    },
+    {
+     "name": "peacock_users_pct_women",
+     "label": "Percent women, all Peacock users",
+     "value": 52.8,
+     "unit": "pct",
+     "definition": "women as a share of the 101,472,836 US people with 30 seconds or more of play on Peacock in the window; 53,577,657 women"
+    },
+    {
+     "name": "peacock_users_median_age",
+     "label": "Median age, all Peacock users",
+     "value": 40.2,
+     "unit": "years",
+     "definition": "age at which half the 101,472,836 Peacock users in the window are younger and half older"
+    }
+   ],
+   "reads": [
+    "Every line asked for is measured and is carried below: nine series, the nine combined once per person, all Peacock users, both age band tables and both women 35 to 64 figures. Percent women aged 35 to 64 among all Peacock users is 25.3%, or 25,672,628 people.",
+    "At the one second threshold the nine combined read 47,936,142 people rather than 44,318,207 at 30 seconds, so roughly 3.6 million are browse level starts that never reach half a minute; the gap is widest on the catalog Law & Order titles, where tile sampling is heaviest.",
+    "The female skew is a franchise property, not a Peacock property: SVU at 62.8% women and Chicago Med at 64.1% are the most female titles on the service's drama shelf, while the two FBI titles lean closest to parity and read as the smallest Peacock footprints of the nine, since their current season home sits elsewhere and Peacock play on them is catalog and sampling behavior.",
+    "The age spread inside the franchise is wide: SVU's Peacock median of 44.6 sits a full generation below its broadcast profile and pulls the 25 to 34 band up, while Criminal Intent and the FBI pair pull the 55 plus bands; One Chicago sits in between and is the most consistently 45 to 64 block of the nine.",
+    "Against all Peacock users the Wolf audience gives up the under 25 end almost entirely (8.7% combined versus 19.9% of Peacock users) and takes it back at 55 plus (36.0% versus 26.8%), which is why the combined median lands 7.1 years older.",
+    "Methodology line: US persons from the 10M panel projected to the US population, digital Peacock signal only, app and web including channel storefront play, credited at 30 seconds or more of a title, each person counted once per row, window Nov 17 2025 to Nov 16 2026."
+   ],
+   "cohort": "People who watched Dick Wolf series on Peacock",
+   "breakdown": {
+    "dimension": "Series on Peacock",
+    "share_basis": "each row's viewers as a percent of the 101,472,836 US people who used Peacock in the window (rows overlap, so they do not sum to 100)",
+    "bucket_label": "age band of the row's viewers",
+    "rows": [
+     {
+      "label": "Law & Order: Special Victims Unit",
+      "share_pct": 26.1,
+      "penetration_pct": 26.1,
+      "note": "26,483,914 viewers, 62.8% women, median age 44.6",
+      "pool": 26483914,
+      "buckets": []
+     },
+     {
+      "label": "Chicago Fire",
+      "share_pct": 17.7,
+      "penetration_pct": 17.7,
+      "note": "17,964,251 viewers, 61.4% women, median age 48.1",
+      "pool": 17964251,
+      "buckets": []
+     },
+     {
+      "label": "Law & Order",
+      "share_pct": 15.5,
+      "penetration_pct": 15.5,
+      "note": "15,742,386 viewers, 56.3% women, median age 49.7",
+      "pool": 15742386,
+      "buckets": []
+     },
+     {
+      "label": "Chicago P.D.",
+      "share_pct": 15.1,
+      "penetration_pct": 15.1,
+      "note": "15,308,679 viewers, 57.2% women, median age 48.9",
+      "pool": 15308679,
+      "buckets": []
+     },
+     {
+      "label": "Chicago Med",
+      "share_pct": 13.5,
+      "penetration_pct": 13.5,
+      "note": "13,671,942 viewers, 64.1% women, median age 49.4",
+      "pool": 13671942,
+      "buckets": []
+     },
+     {
+      "label": "Law & Order: Organized Crime",
+      "share_pct": 9.2,
+      "penetration_pct": 9.2,
+      "note": "9,318,472 viewers, 57.9% women, median age 46.8",
+      "pool": 9318472,
+      "buckets": []
+     },
+     {
+      "label": "Law & Order: Criminal Intent",
+      "share_pct": 6.0,
+      "penetration_pct": 6.0,
+      "note": "6,127,843 viewers, 54.6% women, median age 52.4",
+      "pool": 6127843,
+      "buckets": []
+     },
+     {
+      "label": "FBI: Most Wanted",
+      "share_pct": 1.3,
+      "penetration_pct": 1.3,
+      "note": "1,284,673 viewers, 54.1% women, median age 53.2",
+      "pool": 1284673,
+      "buckets": []
+     },
+     {
+      "label": "FBI: International",
+      "share_pct": 1.0,
+      "penetration_pct": 1.0,
+      "note": "1,042,517 viewers, 53.4% women, median age 52.8",
+      "pool": 1042517,
+      "buckets": []
+     },
+     {
+      "label": "All nine combined (each person once)",
+      "share_pct": 43.7,
+      "penetration_pct": 43.7,
+      "note": "60.1% women, median age 47.3, women 35 to 64 are 37.4%",
+      "pool": 44318207,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 1019319,
+        "share_pct": 2.3
+       },
+       {
+        "label": "18 to 24",
+        "count": 2836365,
+        "share_pct": 6.4
+       },
+       {
+        "label": "25 to 34",
+        "count": 6559095,
+        "share_pct": 14.8
+       },
+       {
+        "label": "35 to 44",
+        "count": 9351142,
+        "share_pct": 21.1
+       },
+       {
+        "label": "45 to 54",
+        "count": 8597732,
+        "share_pct": 19.4
+       },
+       {
+        "label": "55 to 64",
+        "count": 8110232,
+        "share_pct": 18.3
+       },
+       {
+        "label": "65 and over",
+        "count": 7844322,
+        "share_pct": 17.7
+       }
+      ]
+     },
+     {
+      "label": "All Peacock users",
+      "share_pct": 100.0,
+      "penetration_pct": 100.0,
+      "note": "52.8% women, median age 40.2, women 35 to 64 are 25.3%",
+      "pool": 101472836,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 9944338,
+        "share_pct": 9.8
+       },
+       {
+        "label": "18 to 24",
+        "count": 10248756,
+        "share_pct": 10.1
+       },
+       {
+        "label": "25 to 34",
+        "count": 19990149,
+        "share_pct": 19.7
+       },
+       {
+        "label": "35 to 44",
+        "count": 18468056,
+        "share_pct": 18.2
+       },
+       {
+        "label": "45 to 54",
+        "count": 15626817,
+        "share_pct": 15.4
+       },
+       {
+        "label": "55 to 64",
+        "count": 13292942,
+        "share_pct": 13.1
+       },
+       {
+        "label": "65 and over",
+        "count": 13901778,
+        "share_pct": 13.7
+       }
+      ]
+     }
+    ]
+   },
+   "followups": [
+    "How many of the 44,318,207 watch two or more of the nine, and what is the overlap grid between SVU, Chicago Fire and Chicago P.D.?",
+    "What does the nine-series audience look like cut to Gen Z 18 to 24 and Millennials 25 to 44?",
+    "Which other Peacock titles index highest among the 16,575,009 women aged 35 to 64 in the combined audience?",
+    "How did combined nine-series viewers move month by month across the window?"
+   ]
+  },
+  "no_total_rows": {
+   "action": "answer",
+   "decline_reason": null,
+   "subject": "Dick Wolf series on Peacock",
+   "metric_family": "audience",
+   "window_label": "Nov 17 2025 to Nov 16 2026",
+   "window_start": "2025-11-17",
+   "window_end": "2026-11-16",
+   "headline": "The nine Dick Wolf series drew 27,846,513 US people on Peacock in the window at the 30 second credit, 55.7% of them women with a median age of 48.0, against 51.4% women and a median age of 41.2 across all 101,846,337 Peacock users.",
+   "metrics": [
+    {
+     "name": "combined_women_pct",
+     "label": "Women, all nine combined",
+     "value": 55.7,
+     "unit": "pct",
+     "definition": "share of the 27,846,513 US people who watched 30 seconds or more of at least one of the nine series on Peacock in the window, each person counted once, who are women"
+    },
+    {
+     "name": "combined_median_age",
+     "label": "Median age, all nine combined",
+     "value": 48.0,
+     "unit": "years",
+     "definition": "median age of those same 27,846,513 people, each counted once"
+    },
+    {
+     "name": "combined_women_35_64_pct",
+     "label": "Women 35 to 64, all nine combined",
+     "value": 33.7,
+     "unit": "pct",
+     "definition": "share of the combined nine series audience who are women aged 35 to 64, 9,384,274 people"
+    },
+    {
+     "name": "peacock_women_pct",
+     "label": "Women, all Peacock users",
+     "value": 51.4,
+     "unit": "pct",
+     "definition": "share of the 101,846,337 US people with any Peacock viewing or app session in the window who are women, 52,349,017 people"
+    },
+    {
+     "name": "peacock_median_age",
+     "label": "Median age, all Peacock users",
+     "value": 41.2,
+     "unit": "years",
+     "definition": "median age of all 101,846,337 US Peacock users in the window, each counted once"
+    },
+    {
+     "name": "peacock_women_35_64_pct",
+     "label": "Women 35 to 64, all Peacock users",
+     "value": 25.7,
+     "unit": "pct",
+     "definition": "share of all Peacock users who are women aged 35 to 64, 26,174,508 people"
+    }
+   ],
+   "reads": [
+    "Every one of the nine series reads female majority and older than the service it sits on: SVU is the youngest of the nine at a median 44.8 with the heaviest female skew at 58.6% women, while Criminal Intent, Most Wanted and International are the oldest, medians 53.6, 52.7 and 51.8. Combined reach at the one second credit is 29,914,287 people against 27,846,513 at 30 seconds, so roughly 2.07 million people touch a Wolf title and bounce before the half minute.",
+    "All nine combined, each person once, by age band: 17 and under 2.9% (807,549), 18 to 24 6.4% (1,782,177), 25 to 34 14.8% (4,121,284), 35 to 44 19.6% (5,457,917), 45 to 54 20.7% (5,764,228), 55 to 64 18.3% (5,095,912), 65 and over 17.3% (4,817,446). Women 35 to 64 are 33.7% of the combined audience, 9,384,274 people, the single largest demographic block in the Wolf library.",
+    "All Peacock users in the window by age band: 17 and under 9.4% (9,573,556), 18 to 24 10.6% (10,795,712), 25 to 34 18.2% (18,536,033), 35 to 44 18.9% (19,248,958), 45 to 54 16.4% (16,702,799), 55 to 64 13.7% (13,952,948), 65 and over 13.0% (13,036,331). Women 35 to 64 are 25.7% of all Peacock users, 26,174,508 people, so the Wolf block runs about 1.31x the service on that cut and the procedural audience reads as the oldest, most female-leaning large cluster on the platform.",
+    "Methodology line: US persons from the 10M panel projected to the US population, digital signal only, Peacock direct app and site plus Peacock through channel storefronts, viewers credited at 30 seconds of play, window Nov 17 2025 to Nov 16 2026, each person counted once in every total shown."
+   ],
+   "cohort": null,
+   "breakdown": {
+    "dimension": "Series",
+    "share_basis": "share of the 70,351,938 nine series viewing signals (a person counted once per series watched)",
+    "bucket_label": "age band of the series' viewers",
+    "rows": [
+     {
+      "label": "Law & Order: Special Victims Unit",
+      "share_pct": 20.4,
+      "penetration_pct": 51.4,
+      "note": "Women 58.6%, median age 44.8",
+      "pool": 14318462,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 572738,
+        "share_pct": 4.0
+       },
+       {
+        "label": "18 to 24",
+        "count": 1159795,
+        "share_pct": 8.1
+       },
+       {
+        "label": "25 to 34",
+        "count": 2491412,
+        "share_pct": 17.4
+       },
+       {
+        "label": "35 to 44",
+        "count": 2992559,
+        "share_pct": 20.9
+       },
+       {
+        "label": "45 to 54",
+        "count": 2878011,
+        "share_pct": 20.1
+       },
+       {
+        "label": "55 to 64",
+        "count": 2305272,
+        "share_pct": 16.1
+       },
+       {
+        "label": "65 and over",
+        "count": 1918675,
+        "share_pct": 13.4
+       }
+      ]
+     },
+     {
+      "label": "Chicago Fire",
+      "share_pct": 15.1,
+      "penetration_pct": 38.2,
+      "note": "Women 55.9%, median age 47.4",
+      "pool": 10628471,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 329483,
+        "share_pct": 3.1
+       },
+       {
+        "label": "18 to 24",
+        "count": 712108,
+        "share_pct": 6.7
+       },
+       {
+        "label": "25 to 34",
+        "count": 1626156,
+        "share_pct": 15.3
+       },
+       {
+        "label": "35 to 44",
+        "count": 2115066,
+        "share_pct": 19.9
+       },
+       {
+        "label": "45 to 54",
+        "count": 2189465,
+        "share_pct": 20.6
+       },
+       {
+        "label": "55 to 64",
+        "count": 1902496,
+        "share_pct": 17.9
+       },
+       {
+        "label": "65 and over",
+        "count": 1753697,
+        "share_pct": 16.5
+       }
+      ]
+     },
+     {
+      "label": "Chicago P.D.",
+      "share_pct": 14.4,
+      "penetration_pct": 36.3,
+      "note": "Women 51.8%, median age 46.2",
+      "pool": 10114236,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 343887,
+        "share_pct": 3.4
+       },
+       {
+        "label": "18 to 24",
+        "count": 748451,
+        "share_pct": 7.4
+       },
+       {
+        "label": "25 to 34",
+        "count": 1648621,
+        "share_pct": 16.3
+       },
+       {
+        "label": "35 to 44",
+        "count": 2063304,
+        "share_pct": 20.4
+       },
+       {
+        "label": "45 to 54",
+        "count": 2063307,
+        "share_pct": 20.4
+       },
+       {
+        "label": "55 to 64",
+        "count": 1729534,
+        "share_pct": 17.1
+       },
+       {
+        "label": "65 and over",
+        "count": 1517132,
+        "share_pct": 15.0
+       }
+      ]
+     },
+     {
+      "label": "Law & Order",
+      "share_pct": 13.1,
+      "penetration_pct": 33.2,
+      "note": "Women 52.4%, median age 51.3",
+      "pool": 9236804,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 193976,
+        "share_pct": 2.1
+       },
+       {
+        "label": "18 to 24",
+        "count": 443364,
+        "share_pct": 4.8
+       },
+       {
+        "label": "25 to 34",
+        "count": 1126891,
+        "share_pct": 12.2
+       },
+       {
+        "label": "35 to 44",
+        "count": 1644152,
+        "share_pct": 17.8
+       },
+       {
+        "label": "45 to 54",
+        "count": 1921256,
+        "share_pct": 20.8
+       },
+       {
+        "label": "55 to 64",
+        "count": 1875071,
+        "share_pct": 20.3
+       },
+       {
+        "label": "65 and over",
+        "count": 2032094,
+        "share_pct": 22.0
+       }
+      ]
+     },
+     {
+      "label": "Chicago Med",
+      "share_pct": 12.0,
+      "penetration_pct": 30.4,
+      "note": "Women 59.3%, median age 48.1",
+      "pool": 8472915,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 237244,
+        "share_pct": 2.8
+       },
+       {
+        "label": "18 to 24",
+        "count": 542266,
+        "share_pct": 6.4
+       },
+       {
+        "label": "25 to 34",
+        "count": 1253991,
+        "share_pct": 14.8
+       },
+       {
+        "label": "35 to 44",
+        "count": 1660692,
+        "share_pct": 19.6
+       },
+       {
+        "label": "45 to 54",
+        "count": 1753893,
+        "share_pct": 20.7
+       },
+       {
+        "label": "55 to 64",
+        "count": 1550543,
+        "share_pct": 18.3
+       },
+       {
+        "label": "65 and over",
+        "count": 1474286,
+        "share_pct": 17.4
+       }
+      ]
+     },
+     {
+      "label": "Law & Order: Organized Crime",
+      "share_pct": 7.3,
+      "penetration_pct": 18.5,
+      "note": "Women 56.1%, median age 46.9",
+      "pool": 5142387,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 174841,
+        "share_pct": 3.4
+       },
+       {
+        "label": "18 to 24",
+        "count": 359967,
+        "share_pct": 7.0
+       },
+       {
+        "label": "25 to 34",
+        "count": 807355,
+        "share_pct": 15.7
+       },
+       {
+        "label": "35 to 44",
+        "count": 1033619,
+        "share_pct": 20.1
+       },
+       {
+        "label": "45 to 54",
+        "count": 1054189,
+        "share_pct": 20.5
+       },
+       {
+        "label": "55 to 64",
+        "count": 899918,
+        "share_pct": 17.5
+       },
+       {
+        "label": "65 and over",
+        "count": 812498,
+        "share_pct": 15.8
+       }
+      ]
+     },
+     {
+      "label": "FBI: Most Wanted",
+      "share_pct": 7.0,
+      "penetration_pct": 17.6,
+      "note": "Women 53.2%, median age 52.7",
+      "pool": 4906173,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 78502,
+        "share_pct": 1.6
+       },
+       {
+        "label": "18 to 24",
+        "count": 210962,
+        "share_pct": 4.3
+       },
+       {
+        "label": "25 to 34",
+        "count": 544585,
+        "share_pct": 11.1
+       },
+       {
+        "label": "35 to 44",
+        "count": 834049,
+        "share_pct": 17.0
+       },
+       {
+        "label": "45 to 54",
+        "count": 1015578,
+        "share_pct": 20.7
+       },
+       {
+        "label": "55 to 64",
+        "count": 1035203,
+        "share_pct": 21.1
+       },
+       {
+        "label": "65 and over",
+        "count": 1187294,
+        "share_pct": 24.2
+       }
+      ]
+     },
+     {
+      "label": "FBI: International",
+      "share_pct": 5.8,
+      "penetration_pct": 14.8,
+      "note": "Women 52.1%, median age 51.8",
+      "pool": 4113928,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 82277,
+        "share_pct": 2.0
+       },
+       {
+        "label": "18 to 24",
+        "count": 189241,
+        "share_pct": 4.6
+       },
+       {
+        "label": "25 to 34",
+        "count": 485443,
+        "share_pct": 11.8
+       },
+       {
+        "label": "35 to 44",
+        "count": 719938,
+        "share_pct": 17.5
+       },
+       {
+        "label": "45 to 54",
+        "count": 855697,
+        "share_pct": 20.8
+       },
+       {
+        "label": "55 to 64",
+        "count": 847469,
+        "share_pct": 20.6
+       },
+       {
+        "label": "65 and over",
+        "count": 933863,
+        "share_pct": 22.7
+       }
+      ]
+     },
+     {
+      "label": "Law & Order: Criminal Intent",
+      "share_pct": 4.9,
+      "penetration_pct": 12.3,
+      "note": "Women 54.8%, median age 53.6",
+      "pool": 3418562,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 51281,
+        "share_pct": 1.5
+       },
+       {
+        "label": "18 to 24",
+        "count": 133321,
+        "share_pct": 3.9
+       },
+       {
+        "label": "25 to 34",
+        "count": 358949,
+        "share_pct": 10.5
+       },
+       {
+        "label": "35 to 44",
+        "count": 560644,
+        "share_pct": 16.4
+       },
+       {
+        "label": "45 to 54",
+        "count": 704224,
+        "share_pct": 20.6
+       },
+       {
+        "label": "55 to 64",
+        "count": 734991,
+        "share_pct": 21.5
+       },
+       {
+        "label": "65 and over",
+        "count": 875152,
+        "share_pct": 25.6
+       }
+      ]
+     }
+    ]
+   },
+   "followups": [
+    "How many of the 27,846,513 watch more than one of the nine, and what is the overlap grid?",
+    "What share of the nine series audience signed up to Peacock in the window versus arrived already subscribed?",
+    "Women 35 to 64 in the Wolf block: what else do they watch on Peacock?",
+    "Month by month unique viewers for the nine combined across the window"
+   ]
+  },
+  "women_in_penetration": {
+   "action": "answer",
+   "decline_reason": null,
+   "subject": "Dick Wolf series on Peacock",
+   "metric_family": "audience",
+   "window_label": "Nov 17 2025 to Nov 16 2026",
+   "window_start": "2025-11-17",
+   "window_end": "2026-11-16",
+   "universe": "Peacock users (US people)",
+   "headline": "30,847,219 US people watched at least one of the nine Dick Wolf series on Peacock in the Nov 17 2025 to Nov 16 2026 window, 58.4% of them women and median age 51.3, against 52.6% women and median age 41.9 for all 79,214,683 people who used Peacock in the same window.",
+   "metrics": [
+    {
+     "name": "nine_series_unduplicated_viewers",
+     "label": "People who watched at least one of the nine (each person once)",
+     "value": 30847219,
+     "unit": "viewers",
+     "definition": "distinct US people with 30 seconds or more of play on any of the nine named series on Peacock in the window, counted once no matter how many of the nine they watched"
+    },
+    {
+     "name": "nine_series_women_pct",
+     "label": "Women, all nine combined",
+     "value": 58.4,
+     "unit": "pct",
+     "definition": "women as a share of the 30,847,219 people who watched at least one of the nine"
+    },
+    {
+     "name": "nine_series_median_age",
+     "label": "Median age, all nine combined",
+     "value": 51.3,
+     "unit": "years",
+     "definition": "median age of the 30,847,219 people who watched at least one of the nine"
+    },
+    {
+     "name": "peacock_users",
+     "label": "All Peacock users",
+     "value": 79214683,
+     "unit": "users",
+     "definition": "distinct US people with at least one Peacock session on the direct app or site in the window, counted once"
+    },
+    {
+     "name": "peacock_women_pct",
+     "label": "Women, all Peacock users",
+     "value": 52.6,
+     "unit": "pct",
+     "definition": "women as a share of the 79,214,683 people who used Peacock in the window"
+    },
+    {
+     "name": "peacock_median_age",
+     "label": "Median age, all Peacock users",
+     "value": 41.9,
+     "unit": "years",
+     "definition": "median age of the 79,214,683 people who used Peacock in the window"
+    },
+    {
+     "name": "women_35_64_nine_series",
+     "label": "Women aged 35 to 64, all nine combined",
+     "value": 10827374,
+     "unit": "people",
+     "definition": "women aged 35 to 64 among the nine-series viewers, 35.1% of the 30,847,219 base"
+    },
+    {
+     "name": "women_35_64_peacock",
+     "label": "Women aged 35 to 64, all Peacock users",
+     "value": 20754247,
+     "unit": "people",
+     "definition": "women aged 35 to 64 among all Peacock users, 26.2% of the 79,214,683 base"
+    }
+   ],
+   "reads": [
+    "The franchise block skews female and runs roughly nine and a half years older than Peacock as a whole: 58.4% women and median age 51.3 against 52.6% and 41.9 for the service. More than a third of the nine-series base, 35.1%, is a woman aged 35 to 64, versus 26.2% across all Peacock users.",
+    "Within the nine, Chicago Med and SVU carry the strongest female lean at 63.1% and 62.4% women, while the FBI pair leans closest to even and oldest, median ages 56.3 and 55.1. SVU is also the youngest of the nine at 51.3 years less 4.5, median 46.8, which reads as the title doing the recruiting work at the younger end of the procedural audience.",
+    "Overlap is heavy: the nine series sum to 82,199,073 viewer credits against 30,847,219 distinct people, so the typical Dick Wolf viewer on Peacock watched 2.7 of the nine in the window. Chicago Fire, Chicago P.D. and Chicago Med move as a block, and the Law & Order titles cross-feed each other.",
+    "At a one-second credit rather than 30 seconds the combined base reads 34,218,576 people, and composition barely moves: 58.1% women, median age 50.9. The extra 3.4 million are bounce-level starts that skew slightly younger and slightly more male."
+   ],
+   "cohort": null,
+   "breakdown": {
+    "dimension": "Series on Peacock",
+    "share_basis": "each series as a share of the 82,199,073 viewer credits across the nine (a person who watched several series is credited in each); penetration_pct is percent women for that series; the final two rows are the unduplicated combined base and all Peacock users, each carrying its age band split in buckets",
+    "bucket_label": "age band share of that row's people",
+    "rows": [
+     {
+      "label": "Law & Order: Special Victims Unit",
+      "share_pct": 26.2,
+      "penetration_pct": 62.4,
+      "note": "21,463,882 viewers, median age 46.8",
+      "pool": 21463882
+     },
+     {
+      "label": "Chicago Fire",
+      "share_pct": 14.4,
+      "penetration_pct": 58.9,
+      "note": "11,872,463 viewers, median age 50.2",
+      "pool": 11872463
+     },
+     {
+      "label": "Law & Order",
+      "share_pct": 13.7,
+      "penetration_pct": 54.1,
+      "note": "11,284,617 viewers, median age 53.4",
+      "pool": 11284617
+     },
+     {
+      "label": "Chicago P.D.",
+      "share_pct": 13.3,
+      "penetration_pct": 54.8,
+      "note": "10,938,217 viewers, median age 51.1",
+      "pool": 10938217
+     },
+     {
+      "label": "Chicago Med",
+      "share_pct": 11.7,
+      "penetration_pct": 63.1,
+      "note": "9,614,528 viewers, median age 52.4",
+      "pool": 9614528
+     },
+     {
+      "label": "Law & Order: Organized Crime",
+      "share_pct": 8.2,
+      "penetration_pct": 57.3,
+      "note": "6,742,308 viewers, median age 48.9",
+      "pool": 6742308
+     },
+     {
+      "label": "Law & Order: Criminal Intent",
+      "share_pct": 5.0,
+      "penetration_pct": 55.6,
+      "note": "4,118,756 viewers, median age 54.7",
+      "pool": 4118756
+     },
+     {
+      "label": "FBI: Most Wanted",
+      "share_pct": 4.0,
+      "penetration_pct": 53.2,
+      "note": "3,247,869 viewers, median age 56.3",
+      "pool": 3247869
+     },
+     {
+      "label": "FBI: International",
+      "share_pct": 3.5,
+      "penetration_pct": 52.7,
+      "note": "2,916,433 viewers, median age 55.1",
+      "pool": 2916433
+     },
+     {
+      "label": "All nine combined (each person once)",
+      "share_pct": 100.0,
+      "penetration_pct": 58.4,
+      "note": "median age 51.3; 10,827,374 are women aged 35 to 64",
+      "pool": 30847219,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 647792,
+        "share_pct": 2.1
+       },
+       {
+        "label": "18 to 24",
+        "count": 1727444,
+        "share_pct": 5.6
+       },
+       {
+        "label": "25 to 34",
+        "count": 3825055,
+        "share_pct": 12.4
+       },
+       {
+        "label": "35 to 44",
+        "count": 5336569,
+        "share_pct": 17.3
+       },
+       {
+        "label": "45 to 54",
+        "count": 6200291,
+        "share_pct": 20.1
+       },
+       {
+        "label": "55 to 64",
+        "count": 6416222,
+        "share_pct": 20.8
+       },
+       {
+        "label": "65 and over",
+        "count": 6693846,
+        "share_pct": 21.7
+       }
+      ]
+     },
+     {
+      "label": "All Peacock users",
+      "share_pct": 100.0,
+      "penetration_pct": 52.6,
+      "note": "median age 41.9; 20,754,247 are women aged 35 to 64",
+      "pool": 79214683,
+      "buckets": [
+       {
+        "label": "17 and under",
+        "count": 7763039,
+        "share_pct": 9.8
+       },
+       {
+        "label": "18 to 24",
+        "count": 8159112,
+        "share_pct": 10.3
+       },
+       {
+        "label": "25 to 34",
+        "count": 13941784,
+        "share_pct": 17.6
+       },
+       {
+        "label": "35 to 44",
+        "count": 14179428,
+        "share_pct": 17.9
+       },
+       {
+        "label": "45 to 54",
+        "count": 12199061,
+        "share_pct": 15.4
+       },
+       {
+        "label": "55 to 64",
+        "count": 11248485,
+        "share_pct": 14.2
+       },
+       {
+        "label": "65 and over",
+        "count": 11723774,
+        "share_pct": 14.8
+       }
+      ]
+     }
+    ]
+   },
+   "methodology_line": "US people, Nov 17 2025 to Nov 16 2026, Peacock direct app and site, a viewer credited at 30 seconds or more of play on a title, each person counted once per series and once across the nine, digital signal only.",
+   "followups": [
+    "Cross-series overlap grid: how many of the nine each viewer watched",
+    "Women 35 to 64 on the nine series: which other Peacock titles they watch",
+    "Chicago Fire signup cohort retention at 30, 60 and 90 days",
+    "SVU viewers on Peacock: age band shares against all Peacock users"
+   ]
+  },
+  "nothing_measured": {
+   "action": "answer",
+   "subject": "Dick Wolf series on Peacock",
+   "metric_family": "viewership",
+   "window_label": "Nov 17 2025 to Nov 16 2026",
+   "headline": "Of the nine series, only Chicago Fire carries a measured count; the other lines cannot be measured in this read.",
+   "metrics": [
+    {
+     "name": "svu_pct_women",
+     "label": "SVU percent women",
+     "value": null,
+     "unit": "pct",
+     "definition": "cannot be measured"
+    },
+    {
+     "name": "combined",
+     "label": "All nine combined",
+     "value": "not measured",
+     "unit": "viewers"
+    }
+   ],
+   "reads": [
+    "The remaining lines cannot be measured rather than estimated."
+   ],
+   "breakdown": null
+  }
+ }
+}

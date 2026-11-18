@@ -47,7 +47,7 @@ from prometheus import ledger_gate as _ledger_gate, probe_files as _probe_files,
 from prometheus import window_scope as _wscope   # the window is the one the reader asked for; the default is never a frozen pair (2026-11-10)
 from prometheus import named_platforms as _named_platforms   # a platform the client names is the universe's platform, strict (2026-11-10)
 from prometheus import door_words as _door_words   # the word door never reaches a chat read or a file name (2026-11-10)
-from prometheus import promise_truth as _PT   # a progress line never outlives its job; a promise has a record (2026-11-11)
+from prometheus import promise_truth as _PT, read_repair as _read_repair, grid_facts as _grid_facts   # a progress line never outlives its job; a promise has a record (2026-11-11) and ends delivered; a read with no figures is repaired, never thrown (2026-11-18)
 from prometheus import api_threads as _api_threads   # a key-surface job lands in a key thread, never a dashboard chat (2026-11-10)
 from prometheus import order_truth as _order_truth   # what is said about an order follows the artifact (2026-11-10)
 from prometheus import question_first as _question_first   # a question where profiles are built is offered first and answered when a build lands (2026-11-16)
@@ -14557,6 +14557,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                 measured_block, subiq_block,
                                 neighbor_block, examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
+    extra_blocks.extend(_read_repair.ask_blocks(text))   # the credit the reader set, what 'cannot be measured' means, a demographic grid's contract (2026-11-18)
     try:
         from prometheus import methodology as _meth_rules
         if _meth_rules.is_viewership_read(text, None, text):
@@ -14695,7 +14696,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         _faults.note('chat', _fx)
     _ah_ctx['held'] = _on_record
     try:
-        res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series)
+        res, data = _read_repair.coherent(   # a grid is shaped and completed; a reply with no figures is salvaged, then run once more (2026-11-18, Liz)
+            data, question=text, subject=str(base.get('subject') or ''), log=lambda _m: print(f"[pm-loop] read repair: {_m}"),
+            enforce=lambda _d: pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(_d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series),
+            again=lambda _blk: _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT, user_prompt + '\n\n' + _blk, max_tokens=11000, temperature=0.2, usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL]),
+            note=lambda _why: _H._chatbot_error_email('brief-chat/complete', _why, user_email=pm_user, payload={'question': text[:300], 'subject': base.get('subject')}),
+            facts=lambda _gp: _grid_facts.platform_facts(_gp, _H.s3_client, _H.S3_BUCKET, _profile_catalog_for_chat(), pma))   # the comparison row reads the service's own profile and the US baseline
         # a creator-fit read is held to the subject's universe (the catalog's
         # projected US people, the thread's banked figure, Gen Pop) so it can
         # never disagree with the subject's profile (2026-10-20, Mark's
@@ -14750,6 +14756,11 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                     reply = reply.rstrip() + '\n\n' + _hl
             except Exception as _fx:
                 _faults.note('chat', _fx)
+    except _read_repair.EmptyRead as e:   # held: the calm line with the job behind it, a fresh pass from the sweep, the answer emailed when it lands (2026-11-18)
+        _H._chatbot_error_email('brief-chat/analyze', f"generated read carried no usable figures after the repair and a second pass ({e}); held for a fresh pass, the user needs the answer by email",
+                                user_email=pm_user, payload={'question': text[:300], 'subject': base.get('subject')})
+        _pm_ask_hint(outcome='held')
+        return {'success': True, 'action': 'answer', 'reply': _H._CHATBOT_CALM_MESSAGE, 'followups': [], 'offer_deck': False, 'deck_angle': None, '_held': True, '_family': 'audience', '_stages_ms': stages}
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/analyze', e)
@@ -15795,7 +15806,10 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                 # The calm line on a held read promises the answer by email; a retry that lands keeps it
                 # (2026-10-22 audit: Casey's re-run landed six hours later, in the thread only).
                 if not _sent and _rr.promised_email(job_id) and _pm_user_email(pm_user):
-                    _pm_send_output_email('read', _pm_user_email(pm_user), {**payload, 'question': text}, sync=True)
+                    _sent = bool(_pm_send_output_email('read', _pm_user_email(pm_user), {**payload, 'question': text}, sync=True))
+                # an open promise on this question (an earlier copy of it died behind the calm line) is kept: emailed once, the record closed as delivered (2026-11-18)
+                _PT.keep(pm_user, text, job_id=job_id, emailed=_sent, thread_id=str(head.get('thread_id') or ''),
+                         send=lambda: bool(_pm_user_email(pm_user)) and _pm_send_output_email('read', _pm_user_email(pm_user), {**payload, 'question': text}, sync=True))
             else:
                 _pm_notify_delete(job_id)
                 # A held research report never delivered: the charge

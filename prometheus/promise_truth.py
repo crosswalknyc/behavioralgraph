@@ -62,7 +62,8 @@ import time
 from datetime import datetime, timedelta, timezone
 
 __all__ = ['CALM_LINE', 'is_calm', 'promise_kind', 'outcome_line', 'settle_history', 'settle_launch', 'settle_from_status',
-           'hold', 'find_held', 'back_calm', 'back_thread', 'job_failed', 'land_note', 'thread_tail', 'classify_tail', 'WITHDRAWN_TEXT', 'HELD_PREFIX', 'DEAD']
+           'hold', 'find_held', 'back_calm', 'back_thread', 'job_failed', 'land_note', 'thread_tail', 'classify_tail', 'WITHDRAWN_TEXT', 'HELD_PREFIX', 'DEAD',
+           'open_for', 'close', 'keep']
 
 CALM_LINE = "Working on it. Confirmed your task is in progress and I will email you when it completes."
 HELD_PREFIX = 'system/ops/held_replies/'
@@ -378,6 +379,135 @@ def find_held(uname, question, *, within_s=1200, now=None, lister=None, getter=N
     except Exception:
         return ''
     return ''
+
+
+# ------------------------------------------------------------------ 2b. a promise ends delivered
+# 2026-11-18 (Liz's nine series on Peacock): the read job died, the calm
+# line went out with a held record behind it, she asked again, and the
+# record could only ever stay open: nothing closed a promise. A promise
+# now ends one way. The answer reaches the reader (a fresh pass of the
+# same question lands, or a person sends it), the email the calm line
+# promised goes out once, and the record closes as delivered with what
+# delivered it. The ops watch and the digest read 'open' records only,
+# so a kept promise leaves the card.
+KEEP_WITHIN_S = 3 * 86400
+
+
+def _same_question(held_q, asked_q):
+    a, b = _squash(held_q), _squash(asked_q)
+    if not a or not b:
+        return False
+    n = min(len(a), 380)          # a record keeps the first 400 characters of the question
+    return b[:n] == a[:n] and (len(a) >= 380 or len(a) == len(b))
+
+
+def _store(lister=None, getter=None, writer=None):
+    if lister is not None and getter is not None and writer is not None:
+        return lister, getter, writer
+    from .host import host as _h
+    s3, bucket = _h.s3_client, _h.bucket
+
+    def _list(prefix):
+        r = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+        return [str(o.get('Key') or '') for o in (r.get('Contents') or [])]
+
+    def _get(key):
+        return json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read().decode('utf-8'))
+    return lister or _list, getter or _get, writer or _default_writer
+
+
+def open_for(uname, question, *, within_s=KEEP_WITHIN_S, now=None, lister=None, getter=None):
+    """[(key, doc)] of this reader's open held records for this question,
+    opened inside ``within_s``. Never raises."""
+    out = []
+    try:
+        if not uname or not str(question or '').strip():
+            return out
+        lister, getter, _w = _store(lister, getter, writer=(lambda k, d: None))
+        when = now or time.time()
+        days, t = [], when
+        while t >= when - within_s - 86400:
+            days.append(datetime.fromtimestamp(t, timezone.utc).strftime('%Y-%m-%d'))
+            t -= 86400
+        for day in dict.fromkeys(days):
+            for key in sorted(lister(f"{HELD_PREFIX}{day}/") or [], reverse=True)[:400]:
+                try:
+                    doc = getter(key)
+                except Exception:
+                    continue
+                if not isinstance(doc, dict) or str(doc.get('user') or '') != str(uname) \
+                        or str(doc.get('status') or 'open') != 'open' or not _same_question(doc.get('question'), question):
+                    continue
+                try:
+                    opened = datetime.strptime(str(doc.get('opened_at')), '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc).timestamp()
+                except Exception:
+                    opened = 0
+                if opened and -60 <= when - opened <= within_s:
+                    out.append((key, doc))
+    except Exception:
+        return out
+    return out
+
+
+def close(key, *, how='delivered', by='', job_id='', emailed=None, thread_id='', note='', getter=None, writer=None, now=None):
+    """Close one held record as delivered: what delivered it (a read job
+    that landed, a person), whether the promised email went out, and
+    when. An open record only; a closed one is left as it is. Returns
+    the closed document, or None."""
+    try:
+        _l, getter, writer = _store(lister=(lambda p: []), getter=getter, writer=writer)
+        doc = getter(key)
+        if not isinstance(doc, dict) or str(doc.get('status') or 'open') != 'open':
+            return None
+        doc = dict(doc)
+        doc['status'] = 'delivered'
+        doc['delivered_at'] = _iso(now)
+        d = {'how': str(how or 'delivered')[:80]}
+        if by:
+            d['by'] = str(by)[:80]
+        if job_id:
+            d['job_id'] = str(job_id)[:64]
+        if emailed is not None:
+            d['emailed'] = bool(emailed)
+        if thread_id:
+            d['thread_id'] = str(thread_id)[:96]
+        if note:
+            d['note'] = str(note)[:300]
+        doc['delivered'] = d
+        writer(key, doc)
+        return doc
+    except Exception:
+        return None
+
+
+def keep(uname, question, *, job_id='', emailed=False, send=None, thread_id='', within_s=KEEP_WITHIN_S, now=None,
+         lister=None, getter=None, writer=None):
+    """A real answer to ``question`` just landed for ``uname``. Every
+    open promise this reader holds on that question is kept: the answer
+    is emailed once (``send()`` -> truthy when a mail went out) unless
+    it already was (``emailed``), and each record closes as delivered.
+    A probe identity or a test process keeps nothing unless a store is
+    handed in. Returns the keys closed. Never raises."""
+    closed = []
+    try:
+        if writer is None and _writer_for(uname) is None:
+            return closed
+        held = open_for(uname, question, within_s=within_s, now=now, lister=lister, getter=getter)
+        if not held:
+            return closed
+        mailed = bool(emailed)
+        if not mailed and callable(send):
+            try:
+                mailed = bool(send())
+            except Exception:
+                mailed = False
+        for key, _doc in held:
+            if close(key, how='a read of the same question landed', job_id=job_id, emailed=mailed, thread_id=thread_id,
+                     getter=getter, writer=writer, now=now):
+                closed.append(key)
+    except Exception:
+        return closed
+    return closed
 
 
 def _has_artifact(raw):
