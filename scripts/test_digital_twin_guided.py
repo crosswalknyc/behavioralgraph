@@ -35,6 +35,7 @@ import json
 import os
 import re
 import sys
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -305,6 +306,120 @@ class Api(unittest.TestCase):
             self.assertEqual(sess.get('product'), 'predict')
         finally:
             h.close()
+
+
+class Revive(unittest.TestCase):
+    """A run survives the app restarting under it (2026-11-18: the first
+    Prime Video run sat 'running' for three hours after a deploy killed
+    its thread). Stale means: running, not live here, nothing moving on
+    its job document or on any question of its own."""
+
+    def _half_run(self):
+        t = _twin()
+        sess = P.open_session([t], title='Guided', session_id='guided-v')
+        plan = GD.plan(t, 'If we add a holiday boxed set at Target, will more people buy season two?')
+        n = len(plan['questions'])
+        # two answered, then the process died: status still running, nothing live
+        for i in range(2):
+            sess.setdefault('questions', []).append({'id': f"q{i}", 'guided_i': i, 'q': plan['questions'][i]['q'], 'kind': plan['questions'][i]['kind'], 'stage': 'done', 'finished_at': 'now', 'read': 'r',
+                                                     'options': [{'id': 'yes', 'label': 'Yes', 'pct': 55.0, 'people': 1_526_877, 'seats_n': 9}, {'id': 'no', 'label': 'No', 'pct': 45.0, 'people': 1_249_264, 'seats_n': 7}] if plan['questions'][i]['kind'] == 'yes_no' else []})
+        sess['guided'] = {'version': 1, 'job_id': 'gdtestdead01', 'plan': {k: v for k, v in plan.items() if k != 'method'}, 'status': 'running', 'started_at': '2026-11-18T20:27:45Z', 'done': 2, 'total': n, 'error': ''}
+        payload = {'meta': t['meta'], 'panel_sessions': [sess]}
+        return payload, sess, plan
+
+    def test_stale_is_running_not_live_and_quiet(self):
+        payload, sess, plan = self._half_run()
+        self.assertTrue(GD.is_stale(None, sess), 'started hours ago, nothing live, no document: stale')
+        GD._set_live('gdtestdead01', True)
+        try:
+            self.assertFalse(GD.is_stale(None, sess), 'a thread in this process holds it: not stale')
+        finally:
+            GD._set_live('gdtestdead01', False)
+        sess['guided']['status'] = 'done'
+        self.assertFalse(GD.is_stale(None, sess))
+        sess['guided']['status'] = 'running'
+        sess['guided']['started_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        self.assertFalse(GD.is_stale(None, sess), 'just started: not stale yet')
+
+    def test_a_stale_run_is_picked_back_up_at_the_first_unanswered_question(self):
+        payload, sess, plan = self._half_run()
+        n = len(plan['questions'])
+        asked = []
+
+        def fake_ask(sess_, q, **kw):
+            asked.append(q)
+            rec = {'id': f"r{len(asked)}", 'q': q, 'kind': kw.get('kind') or 'open', 'stage': 'done', 'finished_at': 'now', 'read': 'r',
+                   'options': [{'id': 'yes', 'label': 'Yes', 'pct': 61.2, 'people': 1_699_000, 'seats_n': 10}, {'id': 'no', 'label': 'No', 'pct': 38.8, 'people': 1_077_141, 'seats_n': 6}] if (kw.get('kind') or '') == 'yes_no' else []}
+            sess_.setdefault('questions', []).append(rec)
+            return rec
+        ok = GD.resume_if_stale(None, payload, 'k', sess, username='jenna', ask=fake_ask, save=lambda p: None, run_async=False)
+        self.assertTrue(ok)
+        self.assertEqual(asked, [q['q'] for q in plan['questions'][2:]], 'the two answered are not asked again; the rest run in order')
+        self.assertEqual(sess['guided']['status'], 'done')
+        self.assertEqual(sess['guided']['job_id'], 'gdtestdead01', 'the same job')
+        self.assertTrue(sess['guided']['outcome'])
+        self.assertFalse(GD.resume_if_stale(None, payload, 'k', sess, run_async=False), 'a finished run is never restarted')
+
+    def test_an_abandoned_in_flight_record_is_dropped_and_asked_fresh_and_a_failed_one_retried_once(self):
+        payload, sess, plan = self._half_run()
+        n = len(plan['questions'])
+        # the process died mid-question 3: a record in flight with no job document behind it; and question 2 had failed
+        sess['questions'][1]['stage'] = 'failed'
+        sess['questions'][1].pop('finished_at', None); sess['questions'][1].pop('read', None)
+        sess['questions'].append({'id': 'dead3', 'guided_i': 2, 'q': plan['questions'][2]['q'], 'kind': plan['questions'][2]['kind'], 'stage': 'researching', 'job_id': 'nojob', 'started_at': '2026-11-18T20:32:20Z', 'answers': []})
+        asked = []
+
+        def fake_ask(sess_, q, **kw):
+            asked.append(q)
+            rec = {'id': f"r{len(asked)}", 'q': q, 'kind': kw.get('kind') or 'open', 'stage': 'done', 'finished_at': 'now', 'read': 'r', 'options': []}
+            sess_.setdefault('questions', []).append(rec)
+            return rec
+        self.assertTrue(GD.resume_if_stale(None, payload, 'k', sess, ask=fake_ask, save=lambda p: None, run_async=False))
+        self.assertEqual(asked[0], plan['questions'][1]['q'], 'the failed question is asked again first')
+        self.assertEqual(asked[1], plan['questions'][2]['q'], 'then the abandoned one, fresh')
+        ids = [r['id'] for r in sess['questions']]
+        self.assertNotIn('dead3', ids, 'the abandoned record is gone')
+        self.assertNotIn('q1', ids, 'the failed record is gone')
+        retried = [r for r in sess['questions'] if r.get('guided_i') == 1][0]
+        self.assertEqual(retried.get('guided_retry'), 1)
+        self.assertEqual(sorted(r['guided_i'] for r in sess['questions']), list(range(n)))
+        self.assertEqual(sess['guided']['status'], 'done')
+
+    def test_the_sweeper_picks_up_what_the_index_lists_and_forgets_what_is_done(self):
+        payload, sess, plan = self._half_run()
+        payload2 = {'meta': payload['meta'], 'panel_sessions': [{'id': 'gone-done', 'guided': {'status': 'done', 'job_id': 'gddone'}}]}
+        index = {'gdtestdead01': {'key': 'k1', 'session_id': 'guided-v', 'user': 'jenna', 'since': 1.0}, 'gddone': {'key': 'k2', 'session_id': 'gone-done', 'user': 'jenna', 'since': 1.0},
+                 'gdmissing': {'key': 'k3', 'session_id': 'x', 'user': 'jenna', 'since': 1.0}}
+        writes, state = [], dict(index)
+        old_read, old_write = GD._index_read, GD._index_write
+        GD._index_read = lambda s3: dict(state)
+
+        def _w(s3, data):
+            state.clear(); state.update(data); writes.append(dict(data))
+        GD._index_write = _w
+        asked = []
+
+        def fake_ask(sess_, q, **kw):
+            asked.append(q)
+            rec = {'id': f"r{len(asked)}", 'q': q, 'kind': kw.get('kind') or 'open', 'stage': 'done', 'finished_at': 'now', 'read': 'r', 'options': []}
+            sess_.setdefault('questions', []).append(rec)
+            return rec
+        old_start = GD.start_run
+
+        def sync_start(*a, **kw):
+            kw['run_async'] = False
+            kw['ask'] = fake_ask
+            return old_start(*a, **kw)
+        GD.start_run = sync_start
+        try:
+            twins = {'k1': payload, 'k2': payload2}
+            n = GD.sweep(None, load_twin=lambda k: twins.get(k), save_for=lambda k: (lambda p: None), context_for=lambda u: (None, None))
+        finally:
+            GD._index_read, GD._index_write, GD.start_run = old_read, old_write, old_start
+        self.assertEqual(n, 1, 'the one stale run was restarted')
+        self.assertEqual(sess['guided']['status'], 'done')
+        self.assertTrue(writes, 'the index was written')
+        self.assertEqual(state, {}, 'done, missing and finished entries all leave the index')
 
 
 class Faces(unittest.TestCase):

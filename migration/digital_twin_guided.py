@@ -65,6 +65,17 @@ VERSION = 1
 PRODUCT = 'Predictive Analytics'
 MIN_QUESTIONS = 5
 MAX_QUESTIONS = 8
+# A run lives on a thread in the app process; a deploy restarts the process and the thread dies with it (the first Prime
+# Video run, 2026-11-18: question 1 landed at 20:32, the app redeployed, and the room sat 'running' for three hours with
+# nothing running). A run is STALE when its status says running, no thread in this process holds it, its job document
+# has not moved for STALE_S, and no question of its own is still making progress. A stale run is picked back up at the
+# first unanswered question on any read of the room or the report, and by the sweeper every SWEEP_S from the running
+# index; nothing is charged again and nothing finished is asked twice.
+STALE_S = 240.0
+SWEEP_S = 90.0
+RUNNING_KEY = 'system/digital_twins/guided_running.json'
+LIVE: dict = {}        # job_id -> True while a thread in this process runs it
+_LIVE_LOCK = threading.Lock()
 # the reader's words for the three levels of the plan (the wide to the narrow)
 LEVEL_WORDS = {'macro': 'The big picture', 'mid': 'Closer in', 'micro': 'The question itself'}
 CALL_WORDS = {'yes': 'Yes', 'lean yes': 'Leaning yes', 'lean no': 'Leaning no', 'no': 'No', 'split': 'Split'}
@@ -265,6 +276,63 @@ def plan(twin: dict, goal: str, kind: str = '', *, models=None, call: Optional[C
 
 
 # ----------------------------------------------------------------- the run
+def is_live(job_id: str) -> bool:
+    with _LIVE_LOCK:
+        return bool(LIVE.get(str(job_id or '')))
+
+
+def _set_live(job_id: str, on: bool) -> None:
+    with _LIVE_LOCK:
+        if on:
+            LIVE[str(job_id)] = True
+        else:
+            LIVE.pop(str(job_id), None)
+
+
+def _index_read(s3) -> dict:
+    try:
+        from prometheus.digital_twin_job import _s3 as _host_s3
+        s3b, bucket = _host_s3() if s3 is None else (s3, 'dashboard-inputs')
+    except Exception:
+        s3b, bucket = s3, 'dashboard-inputs'
+    if s3b is None:
+        return {}
+    try:
+        return json.loads(s3b.get_object(Bucket=bucket, Key=RUNNING_KEY)['Body'].read().decode('utf-8')) or {}
+    except Exception:
+        return {}
+
+
+def _index_write(s3, data: dict) -> None:
+    try:
+        from prometheus.digital_twin_job import _s3 as _host_s3
+        s3b, bucket = _host_s3() if s3 is None else (s3, 'dashboard-inputs')
+    except Exception:
+        s3b, bucket = s3, 'dashboard-inputs'
+    if s3b is None:
+        return
+    try:
+        s3b.put_object(Bucket=bucket, Key=RUNNING_KEY, Body=json.dumps(data, ensure_ascii=False).encode('utf-8'), ContentType='application/json')
+    except Exception as e:
+        if os.environ.get('REGRESSION_TEST_MODE', '').strip().lower() not in ('1', 'true', 'yes'):
+            print(f"[twin-guided] running index write skipped: {str(e)[:120]}")
+
+
+def _index_add(s3, job_id: str, key: str, sid: str, username: str) -> None:
+    """The running index: every guided run in flight, so a sweeper on a
+    fresh process can find and pick up the ones the old process lost."""
+    data = _index_read(s3)
+    data[str(job_id)] = {'key': key, 'session_id': sid, 'user': username, 'since': time.time()}
+    _index_write(s3, data)
+
+
+def _index_remove(s3, job_id: str) -> None:
+    data = _index_read(s3)
+    if str(job_id) in data:
+        data.pop(str(job_id), None)
+        _index_write(s3, data)
+
+
 def _status_write(job_id: str, rec: dict) -> None:
     try:
         from prometheus import digital_twin_job as J
@@ -308,9 +376,23 @@ def start_run(s3, payload: dict, key: str, sess: dict, plan_doc: dict, *, userna
         except Exception:
             traceback.print_exc()
 
+    _set_live(job_id, True)
+    try:
+        _index_add(s3, job_id, key, str(sess.get('id') or ''), username)
+    except Exception:
+        pass
+
     def _work():
-        _run(s3, payload, key, sess, plan_doc, job_id, username=username, twins_by_key=twins_by_key or {key: payload}, voices_fn=voices_fn,
-             usage_extras=usage_extras, save=save, ask=ask, outcome_call=outcome_call)
+        try:
+            _run(s3, payload, key, sess, plan_doc, job_id, username=username, twins_by_key=twins_by_key or {key: payload}, voices_fn=voices_fn,
+                 usage_extras=usage_extras, save=save, ask=ask, outcome_call=outcome_call)
+        finally:
+            _set_live(job_id, False)
+            if str((sess.get('guided') or {}).get('status') or '') != 'running':
+                try:
+                    _index_remove(s3, job_id)
+                except Exception:
+                    pass
     if run_async:
         th = threading.Thread(target=_work, name=f"twin-guided-{job_id}", daemon=True)
         th.start()
@@ -327,7 +409,19 @@ def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, vo
         from migration import digital_twin_panel as P
         asker = ask or (lambda sess_, q, **kw: P.ask(sess_, twins_by_key, q, run_async=False, asked_by=username, s3=s3, twin_key=key, voices_fn=voices_fn, usage_extras=usage_extras, ask_again=True, **kw))
         for i, pq in enumerate(qs):
-            if _finished(_record_for(sess, i)):
+            prior = _record_for(sess, i)
+            if prior is not None and not _finished(prior):
+                # a record of ours still in flight: another process may be finishing it (the room's own pick-up), so wait for it;
+                # one with no life behind it (the process that asked it is gone) is dropped and asked fresh
+                prior = _await_or_drop(s3, sess, prior, save=save, payload=payload)
+            if prior is not None and str(prior.get('stage') or '') == 'failed' and not prior.get('guided_retry'):
+                # the room did not finish it once (a stall, a restart): ask it again, once; a second failure stands
+                sess['questions'] = [r for r in sess.get('questions') or [] if r is not prior]
+                prior = None
+                retry = True
+            else:
+                retry = False
+            if _finished(prior):
                 continue
             g['status'] = 'running'
             g['stage'] = f"Question {i + 1} of {total}: {pq.get('q')}"
@@ -340,6 +434,8 @@ def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, vo
             if isinstance(rec, dict):
                 rec['guided_i'] = i
                 rec['guided_level'] = pq.get('level')
+                if retry:
+                    rec['guided_retry'] = 1
             g['done'] = sum(1 for j in range(total) if _finished(_record_for(sess, j)))
             if save:
                 try:
@@ -373,6 +469,154 @@ def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, vo
                 pass
         _status_write(job_id, {'job_id': job_id, 'user': username, 'op': 'guided_room', 'status': 'error', 'stage': 'stopped', 'key': key, 'session_id': str(sess.get('id') or ''),
                                'subject': _subject(payload), 'goal': plan_doc.get('goal'), 'done': int(g.get('done') or 0), 'total': total, 'error': g['error']})
+
+
+def _await_or_drop(s3, sess: dict, rec: dict, *, save=None, payload=None, wait_s: float = 900.0) -> Optional[dict]:
+    """A record of ours still in flight when the run reaches it. Its own
+    job document says whether anything is working it: one still moving
+    is waited for (polling the document, up to ``wait_s``) and its
+    finished fields are carried onto the record; one with no movement
+    (no document, or none for the room's stale window) is dropped from
+    the session so the question is asked fresh. Returns the record as
+    it stands, or None when it was dropped."""
+    try:
+        from migration import digital_twin_room as R
+        from migration import digital_twin_room_jobs as RJ
+    except Exception:
+        return rec
+    jid = str(rec.get('job_id') or '')
+    deadline = time.monotonic() + wait_s
+    while True:
+        job = R.job_read(s3, jid) if (s3 is not None and jid) else None
+        if job is None or RJ.is_stale(job) or RJ.is_too_old(job):
+            sess['questions'] = [r for r in sess.get('questions') or [] if r is not rec]
+            if save:
+                try:
+                    save(payload)
+                except Exception:
+                    pass
+            return None
+        jq = job.get('question') if isinstance(job.get('question'), dict) else {}
+        if str(job.get('status') or '') in ('done', 'error') or str(job.get('stage') or '') in ('done', 'failed'):
+            for k, v in jq.items():
+                if k != 'trail':
+                    rec[k] = v
+            if str(job.get('status') or '') == 'error' and str(rec.get('stage') or '') != 'failed':
+                rec['stage'] = 'failed'
+            return rec
+        if time.monotonic() > deadline:
+            sess['questions'] = [r for r in sess.get('questions') or [] if r is not rec]
+            return None
+        time.sleep(15.0)
+
+
+def is_stale(s3, sess: dict, now: Optional[float] = None) -> bool:
+    """A running guided run that nothing is running: not live in this
+    process, its job document unmoved for STALE_S, and no question of
+    its own still making progress on its own job document."""
+    g = (sess or {}).get('guided') or {}
+    if str(g.get('status') or '') != 'running':
+        return False
+    jid = str(g.get('job_id') or '')
+    if not jid or is_live(jid):
+        return False
+    now = now or time.time()
+    try:
+        from prometheus import digital_twin_job as J
+        doc = J.status_read(jid) or {}
+    except Exception:
+        doc = {}
+    moved = float(doc.get('updated_at') or 0) if isinstance(doc, dict) else 0.0
+    if moved and (now - moved) < STALE_S:
+        return False
+    if not moved:
+        try:
+            started = time.mktime(time.strptime(str(g.get('started_at') or ''), '%Y-%m-%dT%H:%M:%SZ')) - time.timezone
+        except Exception:
+            started = 0.0
+        if started and (now - started) < STALE_S:
+            return False
+    # a question of its own still moving means something is running it
+    try:
+        from migration import digital_twin_room as R
+        from migration import digital_twin_room_jobs as RJ
+        for rec in sess.get('questions') or []:
+            if rec.get('guided_i') is None or _finished(rec):
+                continue
+            job = R.job_read(s3, str(rec.get('job_id') or '')) if s3 is not None else None
+            if job is not None and str(job.get('status') or '') == 'running' and not RJ.is_stale(job, now):
+                return False
+    except Exception:
+        pass
+    return True
+
+
+def resume_if_stale(s3, payload: dict, key: str, sess: dict, *, username: str = '', twins_by_key: Optional[dict] = None, voices_fn: Optional[Callable] = None,
+                    usage_extras: Optional[dict] = None, save: Optional[Callable] = None, now: Optional[float] = None, ask: Optional[Callable] = None,
+                    outcome_call: Optional[Callable] = None, run_async: bool = True) -> bool:
+    """Pick a stale run back up at the first unanswered question (on a
+    read of the room or the report, or from the sweeper). Nothing is
+    charged again. Returns True when a run was restarted."""
+    if not is_stale(s3, sess, now):
+        return False
+    g = sess.get('guided') or {}
+    plan_doc = g.get('plan') or {}
+    if not (plan_doc.get('questions') or []):
+        return False
+    try:
+        from prometheus import digital_twin_job as J
+        doc = J.status_read(str(g.get('job_id') or '')) or {}
+    except Exception:
+        doc = {}
+    done = sum(1 for i in range(len(plan_doc['questions'])) if _finished(_record_for(sess, i)))
+    _status_write(str(g.get('job_id') or ''), {'job_id': g.get('job_id'), 'user': username or (doc or {}).get('user') or str(sess.get('created_by') or ''), 'op': 'guided_room', 'status': 'running',
+                                               'stage': f"Picking it back up at question {min(done + 1, len(plan_doc['questions']))} of {len(plan_doc['questions'])}", 'key': key,
+                                               'session_id': str(sess.get('id') or ''), 'subject': _subject(payload), 'goal': plan_doc.get('goal'), 'done': done, 'total': len(plan_doc['questions']),
+                                               'resumes': int((doc or {}).get('resumes') or 0) + 1})
+    print(f"[twin-guided] {g.get('job_id')}: picking it back up at question {done + 1} of {len(plan_doc['questions'])} (the run had gone quiet)")
+    start_run(s3, payload, key, sess, plan_doc, username=username or (doc or {}).get('user') or str(sess.get('created_by') or ''), twins_by_key=twins_by_key or {key: payload},
+              voices_fn=voices_fn, usage_extras=usage_extras, save=save, ask=ask, outcome_call=outcome_call, run_async=run_async)
+    return True
+
+
+def sweep(s3, *, load_twin: Callable, save_for: Callable, context_for: Optional[Callable] = None, now: Optional[float] = None) -> int:
+    """From the running index: every guided run still marked running is
+    loaded and, when stale, picked back up. ``load_twin(key)`` returns
+    the payload; ``save_for(key)`` returns the save callable;
+    ``context_for(username)`` returns (voices_fn, usage_extras) for the
+    seat that opened the room. An entry whose run is done, or whose room
+    is gone, leaves the index. Returns how many runs were restarted."""
+    data = _index_read(s3)
+    if not data:
+        return 0
+    restarted, dropped = 0, []
+    for jid, ent in list(data.items()):
+        key, sid = str((ent or {}).get('key') or ''), str((ent or {}).get('session_id') or '')
+        if is_live(jid):
+            continue
+        try:
+            payload = load_twin(key) if key else None
+        except Exception:
+            payload = None
+        sess = next((x for x in ((payload or {}).get('panel_sessions') or []) if isinstance(x, dict) and str(x.get('id') or '') == sid), None) if isinstance(payload, dict) else None
+        g = (sess or {}).get('guided') or {}
+        if not sess or str(g.get('status') or '') != 'running' or str(g.get('job_id') or '') != str(jid):
+            dropped.append(jid)
+            continue
+        username = str((ent or {}).get('user') or sess.get('created_by') or '')
+        voices_fn, usage_extras = (context_for(username) if context_for else (None, None))
+        try:
+            if resume_if_stale(s3, payload, key, sess, username=username, voices_fn=voices_fn, usage_extras=usage_extras, save=save_for(key), now=now):
+                restarted += 1
+        except Exception:
+            traceback.print_exc()
+    if dropped:
+        # re-read before writing: a run restarted above may already have finished and removed itself
+        cur = _index_read(s3)
+        for jid in dropped:
+            cur.pop(jid, None)
+        _index_write(s3, cur)
+    return restarted
 
 
 # ------------------------------------------------------------- the outcome
@@ -626,5 +870,5 @@ def public_guided(sess: dict) -> Optional[dict]:
             'started_at': g.get('started_at'), 'finished_at': g.get('finished_at')}
 
 
-__all__ = ['VERSION', 'PRODUCT', 'KINDS', 'LEVEL_WORDS', 'MIN_QUESTIONS', 'MAX_QUESTIONS', 'kind_of', 'plan', 'deterministic_plan', 'start_run', 'outcome', 'deterministic_outcome',
-           'outcome_lines', 'public_guided', 'call_word', 'report', 'report_filename', 'build_report_pdf']
+__all__ = ['VERSION', 'PRODUCT', 'KINDS', 'LEVEL_WORDS', 'MIN_QUESTIONS', 'MAX_QUESTIONS', 'STALE_S', 'SWEEP_S', 'RUNNING_KEY', 'kind_of', 'plan', 'deterministic_plan', 'start_run',
+           'is_live', 'is_stale', 'resume_if_stale', 'sweep', 'outcome', 'deterministic_outcome', 'outcome_lines', 'public_guided', 'call_word', 'report', 'report_filename', 'build_report_pdf']

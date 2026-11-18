@@ -108,9 +108,11 @@ pricing'). No email is sent from here.
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 import sys
+import threading
 import time
 import traceback
 import uuid
@@ -1268,6 +1270,7 @@ def dt_panel_get(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'session not found'}), 404
     _attach_portraits(payload, key, sess)
+    _guided_revive(user, payload, key, sess)     # a Predictive Analytics run the last process lost picks back up on this read
     dirty = False
     try:   # an in-flight question whose job stalled is picked back up once, or marked failed with a plain line (never 'researching' forever)
         from migration import digital_twin_room_jobs as RJ
@@ -3143,6 +3146,98 @@ def _guided_start(user, payload, key, sess, plan_doc):
                         save=lambda p: DT.save_twin(_s3(), key, p))
 
 
+def _guided_revive(user, payload, key, sess):
+    """On a read of a room or its report: a Predictive Analytics run that
+    went quiet (the app restarted under it) is picked back up at the
+    first unanswered question. Never raises, never charges."""
+    if not isinstance((sess or {}).get('guided'), dict) or str(sess['guided'].get('status') or '') != 'running':
+        return False
+    try:
+        from migration import digital_twin_guided as GD
+        return GD.resume_if_stale(_s3(), payload, key, sess, username=_uname(user), twins_by_key={key: payload}, voices_fn=_voices_fn(), usage_extras=_usage_extras(user),
+                                  save=lambda p: DT.save_twin(_s3(), key, p))
+    except Exception as e:
+        try:
+            from prometheus import faults as _faults
+            _faults.note('digital_twins_api.guided_revive', e)
+        except Exception:
+            pass
+        return False
+
+
+def _user_record(username):
+    """The users.json record for a username, with the username on it;
+    None when the app or the record is not there."""
+    a = _app()
+    if a is None or not username:
+        return None
+    try:
+        data = a.load_users() or {}
+        rec = (data.get('users') or {}).get(str(username))
+        if not isinstance(rec, dict):
+            return None
+        rec = dict(rec)
+        rec['username'] = str(username)
+        return rec
+    except Exception:
+        return None
+
+
+_SWEEPER = {'thread': None, 'app': None}
+
+
+def _guided_sweep_once():
+    """One pass of the sweeper: every guided run in the running index that
+    nothing is running is picked back up. Runs inside a request context
+    so the seat's usage attribution resolves the way it does on a read."""
+    from migration import digital_twin_guided as GD
+    flask_app = _SWEEPER.get('app')
+    s3 = _s3()
+    if s3 is None:
+        return 0
+
+    def _ctx(username):
+        u = _user_record(username)
+        return _voices_fn(), (_usage_extras(u) if u else None)
+    if flask_app is not None:
+        with flask_app.test_request_context():
+            return GD.sweep(s3, load_twin=lambda k: DT.load_twin(_s3(), k), save_for=lambda k: (lambda p: DT.save_twin(_s3(), k, p)), context_for=_ctx)
+    return GD.sweep(s3, load_twin=lambda k: DT.load_twin(_s3(), k), save_for=lambda k: (lambda p: DT.save_twin(_s3(), k, p)), context_for=_ctx)
+
+
+def _start_guided_sweeper(flask_app):
+    """A daemon thread, started once per process, that picks up the
+    Predictive Analytics runs the last process lost (a deploy restarts
+    the app and its threads die with it). Off in the regression harness
+    and under DTIQ_GUIDED_SWEEP=0."""
+    if _SWEEPER.get('thread') is not None:
+        return
+    if str(os.environ.get('REGRESSION_TEST_MODE') or '').strip().lower() in ('1', 'true', 'yes'):
+        return
+    if str(os.environ.get('DTIQ_GUIDED_SWEEP', '1')).strip().lower() in ('0', 'false', 'off', 'no'):
+        return
+    from migration import digital_twin_guided as GD
+    _SWEEPER['app'] = flask_app
+
+    def _loop():
+        time.sleep(20.0)      # let the process come up before the first pass
+        while True:
+            try:
+                n = _guided_sweep_once()
+                if n:
+                    print(f"[twin-guided] sweeper picked {n} run(s) back up")
+            except Exception as e:
+                try:
+                    from prometheus import faults as _faults
+                    _faults.note('digital_twins_api.guided_sweep', e)
+                except Exception:
+                    pass
+            time.sleep(GD.SWEEP_S)
+    t = threading.Thread(target=_loop, name='twin-guided-sweeper', daemon=True)
+    t.start()
+    _SWEEPER['thread'] = t
+
+
 @bp.route(f'{PREFIX}/<path:key>/guided/run', methods=['POST'])
 def dt_guided_run(key):
     """Open a room for the plan (one group, charged as any room is) and
@@ -3241,6 +3336,7 @@ def dt_guided_report(key, sid):
     if not sess or not isinstance(sess.get('guided'), dict):
         return jsonify({'success': False, 'error': 'No Predictive Analytics run on this room.'}), 404
     from migration import digital_twin_guided as GD
+    _guided_revive(user, payload, key, sess)
     if request.path.endswith('.pdf'):
         PT = _portraits()
         portrait_fn = (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
@@ -3589,6 +3685,10 @@ def register(app):
         _partner.register(app)
     except Exception as e:
         print(f"[twin-api] screenings surface not registered: {e}")
+    try:
+        _start_guided_sweeper(app)
+    except Exception as e:
+        print(f"[twin-api] guided sweeper not started: {e}")
     return bp
 
 
