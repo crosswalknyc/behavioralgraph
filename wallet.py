@@ -1706,6 +1706,13 @@ def pull_type_to_tool_key(pull_type: str) -> str:
         # on the exact decision string.)
         if decision == "derive_cut":
             return "api_profile_iq_cut" if is_v1 else "profile_iq_derived_cut"
+        if decision == "subscriber_iq":
+            # A Subscriber IQ approved through Prometheus is quoted at
+            # the tracker price (_v1_price_usd_for reads
+            # api_subscriber_iq_build, $500); the wallet must debit the
+            # same key, not the Profile IQ build ($300). Found on Naomi
+            # Inoshita's Outlander: Blood of My Blood order, 2026-11-17.
+            return "api_subscriber_iq_build"
         # Dashboard Prometheus and Partner API v1 both charge the
         # live Profile IQ build price. The old dashboard-only key
         # (`chatbot_profile_iq_build`) is retired and returns $0, which
@@ -2049,10 +2056,17 @@ def is_unlimited(user: dict) -> bool:
     path consults it and short-circuits, so a future new charging
     path cannot accidentally bill an unlimited user.
 
-    Company-pool unlimited (pool total == -1) is enforced in
-    consume_credit's pool branch; that state doesn't live on the
-    user record itself so this helper only inspects the personal
-    ``credits`` value.
+    Company records (2026-11-17, Naomi Inoshita at Sony): the wallet
+    paths hand this helper the resolved billing subject, which is the
+    COMPANY row when the seat bills through its company. A company's
+    unlimited state is its own ``unlimited`` flag or an unlimited
+    pool (``credit_pool == -1``, the sentinel check_user_credits
+    reads). ``credits`` is a seat field; a stale ``credits: -1`` left
+    on a company row (Sony Pictures Television carried one next to
+    ``unlimited: False`` and an $11,000 funded wallet) must never read
+    as unlimited, or should_charge_wallet answers "nothing to charge"
+    and the approve preflight refuses a funded wallet with "This run
+    costs $0 ... Top up to keep going."
     """
     if not user:
         return False
@@ -2060,6 +2074,13 @@ def is_unlimited(user: dict) -> bool:
         return True
     if str(user.get("billing_mode") or "").strip().lower() == "unlimited":
         return True
+    if "credit_pool" in user:
+        # A company row: the pool sentinel is the only credits-shaped
+        # unlimited it carries.
+        try:
+            return int(user.get("credit_pool") or 0) == -1
+        except (TypeError, ValueError):
+            return False
     try:
         return int(user.get("credits", 0) or 0) == -1
     except (TypeError, ValueError):
@@ -5440,6 +5461,11 @@ def user_wallet_covers_pull(user: dict, users_data: dict,
         usd, mode = should_charge_wallet(subject, tool_key,
                                          addon_cuts=addon_cuts,
                                          quantity=quantity)
+        if mode == "unlimited":
+            # A paying subject that is never charged covers every pull.
+            # Refusing here read a funded company as "This run costs
+            # $0 ... Top up to keep going" (Sony, 2026-11-17).
+            return True
         if mode != "wallet" or usd <= 0:
             return False
         if kind == "company":
