@@ -1420,6 +1420,85 @@ _SENTENCE_STOP = frozenset(('what', 'which', 'who', 'whom', 'how', 'when', 'wher
                             'many', 'top', 'other', 'same', 'new', 'total', 'unique', 'monthly', 'weekly', 'daily'))
 
 
+_COUNTED_TITLE_RX = re.compile(
+    r"\b(?i:viewers|viewership|readers|readership|listeners|listenership|players|streamers|"
+    r"(?:viewer|viewership|reader|listener)\s+(?:counts?|numbers?|totals?|figures?))\s+(?i:to|for|of)\s+"
+    r"(?P<name>[A-Z0-9][\w&'.:!+-]*(?:\s+(?:[A-Z0-9][\w&'.:!+-]*|of|the|and|&|de|la))*)")
+_COUNTED_LEAD_RX = re.compile(
+    r"\b(?i:total|overall|combined|unique|unduplicated|distinct|number\s+of|count\s+of|how\s+many|need|want|get|give|send|"
+    r"show|tell|pull|report|provide)\b")
+
+
+_COUNTED_NOT_NAME_RX = re.compile(
+    r"^(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|"
+    r"nov(?:ember)?|dec(?:ember)?)\b|q[1-4]\b|h[12]\b|fy\s?\d|cy\s?\d|ytd\b|(?:19|20)\d{2}\b|\d|"
+    r"seasons?\s+\d|episodes?\s+\d|(?:the\s+)?(?:us|u\.s\.|usa|united states|america)\b)", re.I)
+_COUNTED_GENERIC = frozenset(('season', 'seasons', 'episode', 'episodes', 'series', 'show', 'shows', 'title', 'titles',
+                              'film', 'films', 'movie', 'movies', 'platform', 'platforms', 'service', 'services',
+                              'profile', 'profiles', 'audience', 'audiences', 'page', 'data', 'file'))
+
+
+def counted_title(text, casing=None):
+    """The title (or titles) a count of viewers is asked on, as written:
+    'FBI Most Wanted and FBI International' for "I need the Total
+    Viewers to FBI Most Wanted and FBI International, All Seasons on
+    Peacock"; '' when the words carry no such frame. The frame needs a
+    counting or asking word in front of the noun, so a sentence that
+    merely mentions viewers of something is left to the other rules."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return ''
+    for m in _COUNTED_TITLE_RX.finditer(t):
+        noun = t[m.start():m.start('name')]
+        if not re.search(r"(?i)\b(?:counts?|numbers?|totals?|figures?)\b", noun) \
+                and not _COUNTED_LEAD_RX.search(t[max(0, m.start() - 60):m.start()]):
+            continue                                  # "viewer count for X" counts by itself
+        words = m.group('name').strip().split()
+        cut = _sentence_end_in_run(words)
+        if cut:
+            words = words[:cut]                       # the name ends where its sentence does
+        while words and words[-1].lower() in ('of', 'the', 'and', '&', 'de', 'la'):
+            words = words[:-1]
+        raw = ' '.join(words).rstrip('.,;:')
+        low = raw.lower()
+        if not raw or low in _SENTENCE_STOP or low in _NEVER_LABEL or is_metric_phrase(raw):
+            continue
+        if _COUNTED_NOT_NAME_RX.match(raw):
+            continue                                  # a period, a season or a place is not the title
+        if words and words[0].lower() in _SENTENCE_STOP and (
+                len(words) == 1 or words[1].lower().rstrip('.,') in _COUNTED_GENERIC):
+            continue                                  # "viewers of All Seasons" names nothing; "All American" is a title
+        name = clean_display(raw, t, casing) or raw
+        if name and len(name) >= 2:
+            return name
+    return ''
+
+
+_SENTENCE_INSTRUCTION = frozenset(('need', 'needs', 'want', 'wants', 'pull', 'get', 'send', 'provide', 'report',
+                                   'please', 'also', 'include', 'count'))
+_SENTENCE_ABBREV = frozenset(('mr', 'mrs', 'ms', 'dr', 'st', 'jr', 'sr', 'vs', 'vol', 'no', 'pt', 'ep', 'inc', 'co', 'ft'))
+
+
+def _sentence_end_in_run(words):
+    """Index of the first word after the last sentence end inside a
+    capitalised run, or 0 when the run holds none. A word ends a
+    sentence when it closes with one full stop, is not the run's last
+    word, and is not an abbreviation (a short stem, a stem with stops
+    inside it, a known title)."""
+    cut = 0
+    for i, w in enumerate(words[:-1]):
+        if not w.endswith('.') or w.endswith('..'):
+            continue
+        stem = w[:-1]
+        if not stem or '.' in stem:
+            continue                      # S.W.A.T., U.S.
+        if stem.lower() in _SENTENCE_ABBREV:
+            continue
+        if stem[0].isdigit() or len(stem) > 3:
+            cut = i + 1
+    return cut
+
+
 def sentence_audience(text, casing=None):
     """An audience named inside a sentence: 'What did Landman viewers
     watch next', 'the share of Landman viewers'. The name that recurs
@@ -1437,6 +1516,20 @@ def sentence_audience(text, casing=None):
         # Rainmaker viewers buy"); so is one the library spells with it. A sentence's first word is only a word.
         before = t[:m.start('name')].rstrip()
         mid_sentence = bool(before) and before[-1] not in '.?!:'
+        # A name never runs across the end of a sentence (Liz Huszarik 2026-11-17: "The window is Nov 2025-Nov
+        # 2026. Need the viewers for each series ..." bound "Nov 2025-Nov 2026. Need the viewers" as the audience).
+        # The run is kept from the last sentence end inside it; an abbreviation ("Dr. Phil", "S.W.A.T. Exiles",
+        # "U.S. Open") is not an end. What is left opens a sentence, so an instruction word in front of an
+        # article or a counting word ("Need the viewers", "Pull total viewers") is only a word.
+        cut = _sentence_end_in_run(words)
+        if cut:
+            words = words[cut:]
+            mid_sentence = False
+        if not mid_sentence and len(words) > 1 and words[0].lower() in _SENTENCE_INSTRUCTION \
+                and words[1].lower() in _SENTENCE_STOP:
+            words = words[1:]
+        elif not mid_sentence and len(words) == 1 and words[0].lower() in _SENTENCE_INSTRUCTION:
+            words = []
         while words and words[0].lower() in _SENTENCE_STOP:
             if words[0] == 'The' and len(words) > 1 and words[1][:1].isupper() and (
                     mid_sentence or ('the ' + ' '.join(words[1:]).lower()) in (casing or {})):
@@ -1687,6 +1780,14 @@ def _bind_words(text, history=None, page='', reading=None, catalog_names=None, n
         if name:
             quals['verb'] = m.group('verb').lower()
             return Subject('audience', name, f"{name} {quals['verb']}", quals, 'words', 0.8)
+    # 5b2. the title a count of viewers is asked on: "the Total Viewers to
+    # FBI Most Wanted and FBI International, All Seasons on Peacock",
+    # "need the viewers for Landman", "number of viewers of The Bear on
+    # Hulu" (Liz, 2026-11-17: with no reading in hand the read was quoted
+    # on the service, or on a run of words from the next sentence)
+    name = counted_title(t, casing)
+    if name:
+        return Subject('title', name, name, quals, 'words', 0.8)
     # 5c. an audience named inside the sentence: "What did Landman viewers
     # watch next ... the share of Landman viewers" (Liz, 2026-10-21)
     name, verb = sentence_audience(t, casing)

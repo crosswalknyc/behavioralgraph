@@ -186,6 +186,16 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
     # came back", which is what an API caller and the ask log saw)
     draft = (raw.get('draft') or raw.get('drafts') or raw.get('batch')
              or raw.get('spec_draft') or raw.get('spec_drafts'))
+    if draft:
+        # A seat the plan covers never reads a price on a brief (Jenna
+        # 2026-11-08; Liz Huszarik read "(new build, $300)" in the
+        # Prometheus app on 2026-11-17). The mark rides the payload so the
+        # reply text, the key contract and the question copy agree.
+        try:
+            from . import ask_outcome as _ao_inc
+            _ao_inc.stamp_included(raw)
+        except Exception:
+            pass
     text = _text_of(raw)
     if draft and not text:
         try:

@@ -338,6 +338,46 @@
           "required": [
             "action"
           ]
+        },
+        "included": {
+          "type": "boolean",
+          "description": "Present and true on build_required when the seat's plan includes the build: no price applies."
+        },
+        "briefs": {
+          "type": "array",
+          "description": "On build_required: the briefs that were drafted, one row each.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "string"
+              },
+              "decision": {
+                "type": "string"
+              },
+              "window": {
+                "type": "string"
+              },
+              "price_usd": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Null when the seat's plan includes the build or the brief carries no price."
+              },
+              "included": {
+                "type": "boolean"
+              },
+              "order": {
+                "type": "string",
+                "description": "The sentence that orders this build through POST /ask."
+              }
+            },
+            "required": [
+              "subject",
+              "decision"
+            ]
+          }
         }
       },
       "required": [

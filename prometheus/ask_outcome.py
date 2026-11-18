@@ -22,7 +22,10 @@ of these outcomes (the ask log and the alert rule both read it):
     declined    an honest decline (credits, not quantifiable, no context)
     error       the route raised
 
-Pure functions, no network. `classify` never raises.
+Pure functions, no network. `classify` never raises. The one read of
+the world is ``seat_included``: whether the reader a brief was drafted
+for has priced work included with their plan (the shared check in
+``priced_read``), so the brief line never prints a price for them.
 """
 from __future__ import annotations
 
@@ -196,6 +199,11 @@ def reply_text(payload):
     # (2026-10-13 audit: the digest read "No written answer" for every
     # drafted build)
     drafts = payload.get('spec_drafts') or ([payload['spec_draft']] if isinstance(payload.get('spec_draft'), dict) else [])
+    # A seat the plan covers never reads a price (Jenna 2026-11-08, the one
+    # shared check). This line reached Liz Huszarik in the Prometheus app
+    # on 2026-11-17 as "Brief drafted: FBI Most Wanted Viewers (new build,
+    # $300)": it printed the draft's price without asking whose seat it was.
+    included = seat_included(payload)
     lines = []
     for d in drafts if isinstance(drafts, list) else []:
         if not isinstance(d, dict):
@@ -205,10 +213,119 @@ def reply_text(payload):
         dec = dk.replace('_', ' ')
         # money, never credits (Jenna 2026-10-07); this line reached a reader on
         # 2026-10-22 as "Brief drafted: Banana Republic (new build, 5 credits)"
-        usd = draft_price_usd(d)
+        usd = None if included else draft_price_usd(d)
         lines.append(f"Brief drafted: {subj or 'this audience'} ({dec}"
                      + (f", ${usd:,.0f}" if usd is not None else '') + ')')
-    return '; '.join(lines)
+    out = '; '.join(lines)
+    if out and included:
+        out += '. ' + INCLUDED_LINE
+    return out
+
+
+INCLUDED_LINE = 'Included with your plan.'
+INCLUDED_KEY = 'included_with_plan'
+
+
+def _request_username():
+    """The reader the request in flight is for: the identity the door
+    stamped (session or key), else the session's own. '' outside a
+    request."""
+    try:
+        from flask import g, has_request_context, session
+        if not has_request_context():
+            return ''
+        for attr in ('_pm_ask_user', '_pm_api_key_owner'):
+            v = str(getattr(g, attr, '') or '').strip()
+            if v and v.lower() != 'unknown':
+                return v
+        return str(session.get('username') or '').strip()
+    except Exception:
+        return ''
+
+
+def seat_included(payload=None, user=None, username=None):
+    """True when the reader a brief is drafted for has priced work
+    included with their plan, so no price is printed for them: the mark
+    a lane left on the payload or on a draft, else the one shared check
+    (``priced_read.included_with_plan``: an unlimited seat, Crosswalk
+    staff, a funded plan allowance; never a probe) on the given user or
+    the request's own. The answer is kept on the request so the reply,
+    the ask log and the question copy all read the same thing. False
+    when nobody can be named. Never raises."""
+    try:
+        if isinstance(payload, dict):
+            if payload.get(INCLUDED_KEY) is True:
+                return True
+            drafts = payload.get('spec_drafts') or ([payload['spec_draft']] if isinstance(payload.get('spec_draft'), dict) else [])
+            if isinstance(drafts, list) and any(isinstance(d, dict) and d.get(INCLUDED_KEY) is True for d in drafts):
+                return True
+        uname = str(username or '').strip()
+        if not uname and isinstance(user, dict):
+            uname = str(user.get('username') or user.get('email') or '').strip()
+        explicit = bool(uname)
+        if not uname:
+            uname = _request_username()
+        if not uname:
+            return False
+        g = None
+        if not explicit:
+            try:
+                from flask import g as _g, has_request_context
+                g = _g if has_request_context() else None
+                cached = getattr(g, '_pm_seat_included', None) if g is not None else None
+                if isinstance(cached, tuple) and cached[0] == uname:
+                    return bool(cached[1])
+            except Exception:
+                g = None
+        from . import priced_read as _pr
+        hit = bool(_pr.included_with_plan(user if isinstance(user, dict) else None, uname, None))
+        if g is not None:
+            try:
+                g._pm_seat_included = (uname, hit)
+            except Exception:
+                pass
+        return hit
+    except Exception:
+        return False
+
+
+def stamp_included(payload, user=None, username=None):
+    """Mark a drafted brief (or briefs) as included with the reader's
+    plan, in place, so every later reader of the payload (the reply
+    text, the key contract, the question copy) prints no price. Only a
+    payload that carries a draft is touched. Returns the payload."""
+    try:
+        if isinstance(payload, dict) and (isinstance(payload.get('spec_draft'), dict) or payload.get('spec_drafts')) \
+                and payload.get(INCLUDED_KEY) is not True and seat_included(payload, user, username):
+            payload[INCLUDED_KEY] = True
+    except Exception:
+        pass
+    return payload
+
+
+def draft_briefs(payload):
+    """The briefs a reply drafted, as plain rows a client can draw a card
+    from: subject, kind of build, window, and the price (None when the
+    seat's plan includes it or the draft carries no price). [] when the
+    reply drafted nothing."""
+    out = []
+    try:
+        if not isinstance(payload, dict):
+            return out
+        drafts = payload.get('spec_drafts') or ([payload['spec_draft']] if isinstance(payload.get('spec_draft'), dict) else [])
+        included = seat_included(payload)
+        for d in drafts if isinstance(drafts, list) else []:
+            if not isinstance(d, dict):
+                continue
+            subj = ' '.join(str(d.get('subject') or d.get('universe_label') or '').split())
+            win = ' '.join(str(d.get('date_window') or d.get('date_window_label') or d.get('cut_window_label')
+                               or (payload.get('date_window') if len(drafts) == 1 else '') or '').split())
+            usd = None if included else draft_price_usd(d)
+            out.append({'subject': subj[:160], 'decision': str(d.get('decision') or 'new_build'),
+                        'window': win[:120], 'price_usd': usd, 'included': bool(included)})
+    except Exception:
+        return out
+    return out[:24]
 
 
 def draft_price_usd(d):

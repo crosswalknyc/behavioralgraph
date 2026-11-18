@@ -107,6 +107,35 @@ _TIME_SERIES_RX = re.compile(
     r"|\b(?:" + _TIME_WORDS + r")\b[^.?!]{0,24}\b(?:" + _METRIC_WORDS + r")\b",
     re.I)
 
+# A count of the people who watched, streamed, read or listened to a named
+# title is a read, however it is worded (Liz Huszarik 2026-11-17, in the
+# Prometheus app: "I need the Total Viewers to FBI Most Wanted and FBI
+# International, All Seasons on Peacock. The window is Nov 2025-Nov 2026.
+# Need the viewers for each series reported independently." carried no
+# question word, fell to the build default and drew two $300 profile
+# briefs). Three shapes: a counted noun ("total viewers", "number of
+# viewers", "viewer count", "viewership"), a how-many, and the wish form
+# ("need the viewers for X", "pull the viewers to X"). A bare audience name
+# ("Everybody Loves Raymond viewers on Amazon Prime Video, September 2026",
+# "Reba McEntire avid fans") names who to build and stays a build; so does
+# anything that names a profile, a cut, a segment or a brief.
+_COUNT_PEOPLE = r"(?:viewers|readers|listeners|players|streamers)"
+_COUNT_READ_RX = re.compile(
+    r"\b(?:total|overall|combined|unique|unduplicated|distinct)\s+(?:(?:us|u\.s\.|unique|distinct)\s+)?"
+    r"(?:number\s+of\s+)?(?:" + _COUNT_PEOPLE + r"|viewership|readership|listenership)\b"
+    r"|\b(?:number|count|counts|tally|sum)\s+of\s+(?:(?:total|unique|distinct|us|u\.s\.)\s+)*"
+    r"(?:" + _COUNT_PEOPLE + r"|people\s+who\s+(?:watch|stream|view|read|listen|play|tun)\w*)\b"
+    r"|\b(?:viewer|viewership|listener|listenership|reader|readership)\s+(?:counts?|numbers?|totals?|figures?|tally)\b"
+    r"|\b(?:viewership|readership|listenership)\b"
+    r"|\bhow\s+many\s+(?:(?:us|u\.s\.|unique|total|distinct)\s+)*(?:people|persons|individuals|americans|"
+    + _COUNT_PEOPLE + r")\b"
+    r"|\b(?:need|want|get|give\s+(?:me|us)|send\s+(?:me|us)|show\s+(?:me|us)|tell\s+(?:me|us)|pull|report|provide|"
+    r"looking\s+for|after)\s+(?:(?:me|us)\s+)?(?:the\s+)?(?:" + _COUNT_PEOPLE + r")\s+"
+    r"(?:for|to|of|on|across|in|who|that)\b", re.I)
+_COUNT_NOT_RX = re.compile(
+    r"\b(?:a?profiles?|porfiles?|profles?|cuts?|segments?|cohorts?|briefs?|data\s?sets?|"
+    r"subscriber\s+iq|profile\s+iq|journey\s+iq|digital\s+journey)\b", re.I)
+
 _DECK_BUILD_RX = re.compile(
     r'\b(build|make|create|generate|put together|spin up|prepare|draft|'
     r'put|turn|drop|export|convert|render|lay out|package|wrap|compile|'
@@ -270,6 +299,28 @@ def tool_intent(text):
     return None
 
 
+def looks_count_read(text):
+    """True for a count of the people who watched, streamed, read or
+    listened to something, asked as a statement or an instruction ("I
+    need the total viewers to X and Y on Peacock", "need the viewers
+    for X all seasons", "viewer count for X"). Never an order to build
+    a profile, a cut or a brief, and never a bare audience name."""
+    t = ' '.join(str(text or '').split())
+    if not t or len(t) > 1200:
+        return False
+    if not _COUNT_READ_RX.search(t):
+        return False
+    if _COUNT_NOT_RX.search(t) or _BUILD_VERB_RX.search(t):
+        return False
+    try:
+        from . import orders as _ord
+        if _ord.is_profile_order(t):
+            return False
+    except Exception:
+        pass
+    return True
+
+
 def should_analyze(text, has_ctx):
     """Mirror of the widget's final analyze-or-interpret test."""
     t = str(text or '').strip()
@@ -290,6 +341,10 @@ def should_analyze(text, has_ctx):
     if _QUESTION_OPEN_RX.search(t):
         return True
     if _STATEMENT_ASK_RX.search(t) or _TIME_SERIES_RX.search(t):
+        return True
+    # A count of viewers on a named title is a read, never a build
+    # (Liz Huszarik 2026-11-17).
+    if looks_count_read(t):
         return True
     # A question mark or an interrogative on ANY sentence, not only
     # the first or the last (2026-10-02 audit: "58.3% stayed for

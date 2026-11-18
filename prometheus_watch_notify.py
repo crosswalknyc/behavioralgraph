@@ -149,7 +149,18 @@ def answer_text(payload):
         # Money, never credits (Jenna 2026-10-07): price the draft from
         # the table the interpret step stamps on it.
         pt = draft.get('price_table') if isinstance(draft.get('price_table'), dict) else None
-        if pt:
+        # A seat the plan covers was shown no price, so the copy carries
+        # none (Jenna 2026-11-08, the one shared check; 2026-11-17, Liz's
+        # brief copy read "(new build, $300)").
+        _included = False
+        try:
+            from prometheus import ask_outcome as _ao_inc
+            _included = bool(_ao_inc.seat_included(payload))
+        except Exception:
+            _included = False
+        if _included:
+            lines.append('Included with your plan.')
+        elif pt:
             dk = str(draft.get('decision') or 'new_build').lower()
             cuts = len(draft.get('addon_cuts') or []) if isinstance(draft.get('addon_cuts'), list) else 0
             cut = float(pt.get('addon_cut') or 0)

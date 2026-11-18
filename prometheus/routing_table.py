@@ -541,8 +541,24 @@ ROWS = [
         'note': 'A question with no data open. A wish stated as a '
                 'sentence ("we want to understand ...") and a metric '
                 'asked over time ("monthly consumption for ...") are '
-                'questions too (2026-10-08, East Tree Media).',
+                'questions too (2026-10-08, East Tree Media). So is a '
+                'count of the people who watched a named title, however '
+                'it is worded: "I need the Total Viewers to FBI Most '
+                'Wanted and FBI International, All Seasons on Peacock. '
+                'The window is Nov 2025-Nov 2026. Need the viewers for '
+                'each series reported independently." carried no question '
+                'word, fell to the build row and drew two profile briefs '
+                '(Liz Huszarik in the Prometheus app, 2026-11-17). A bare '
+                'audience name ("X viewers on Y") and anything that names '
+                'a profile, a cut or a brief still build '
+                '(understand.looks_count_read).',
         'examples': [
+                     # 2026-11-17 (Liz Huszarik): a viewer count stated as a wish or an instruction
+                     ("I need the Total Viewers to FBI Most Wanted and FBI International, All Seasons on Peacock.  The window is Nov 2025-Nov 2026. Need the viewers for each series reported independently.", False),
+                     ("pull the total viewers to FBI Most Wanted and FBI International independently on Peacock, all seasons across November 2025 - 2026.", False),
+                     ('total viewers for FBI Most Wanted and FBI International, each separately', False),
+                     ('need the viewers for FBI Most Wanted all seasons', False),
+                     ('viewer count for FBI International on Peacock', False),
                      # ask log 2026-10-20 (I9)
                      ("Give me unique US viewers per surface, not just hours, so we can see hours per viewer on television versus phone", False),('who watches love island?', False),
                      # Digital Twins IQ directions (2026-10-26): question-shaped, answered by the twin lane on the analyze surface
@@ -555,7 +571,12 @@ ROWS = [
                       'in the US.', False),
                      ('viewership month by month for Suits in the US',
                       False)],
-        'counter': [('Run a profile for Starz', False)],
+        'counter': [('Run a profile for Starz', False),
+                    # naming who to build is still a build, whatever noun it ends on
+                    ('FBI Most Wanted viewers on Peacock', False),
+                    ('build a profile of FBI Most Wanted viewers', False),
+                    ('I need an audience profile for FBI International viewers', False),
+                    ('I need a profile of the total viewers of FBI Most Wanted', False)],
     },
     {
         'id': 'data_open', 'surface': 'analyze', 'reason': 'data_open',

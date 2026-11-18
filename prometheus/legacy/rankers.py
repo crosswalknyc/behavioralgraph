@@ -252,6 +252,29 @@ _PM_MY_YOY_RE = re.compile(
     r'\byear[- ]over[- ]year\b|\byoy\b|\bannual trend\b', re.I)
 
 
+_PM_MY_MONTH_BEFORE_RE = re.compile(
+    r'\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|'
+    r'oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?,?\s*(?:\d{1,2}(?:st|nd|rd|th)?,?\s*)?$', re.I)
+
+
+def _pm_month_to_month_window(text, span_match):
+    """True when a year span is a month-to-month window of about one
+    year ("November 2025 - 2026", "Nov 2025 to 2026"): the first year
+    follows a month name and the second is the very next year. A span
+    of bare calendar years ("2025 - 2026"), or one that runs past the
+    next year, is still a multi-year ask, and so is any ask that says
+    year over year."""
+    try:
+        a, b = int(span_match.group(1)), int(span_match.group(2))
+        if b != a + 1:
+            return False
+        if _PM_MY_YOY_RE.search(str(text or '')):
+            return False
+        return bool(_PM_MY_MONTH_BEFORE_RE.search(str(text or '')[:span_match.start(1)]))
+    except Exception:
+        return False
+
+
 def _pm_detect_multi_year_ask(text):
     """Calendar years a multi-year trend ask spans (2+ years), newest
     ending this year, capped at 6. None when the ask is not a
@@ -275,6 +298,12 @@ def _pm_detect_multi_year_ask(text):
     this_year = datetime.now().year
     n = None
     m = _PM_MY_SPAN_RE.search(t)
+    if m and _pm_month_to_month_window(t, m):
+        # "November 2025 - 2026" is one window of about a year, month to
+        # month, never a two-year study (Liz Huszarik 2026-11-17: "pull the
+        # total viewers to FBI Most Wanted and FBI International ... across
+        # November 2025 - 2026" drew a package of two year profiles)
+        return None
     if m:
         a, b = int(m.group(1)), int(m.group(2))
         if a > b:
@@ -331,6 +360,14 @@ def _pm_year_package_reply(subject, years, have, missing):
     n = len(missing)
     year_list = ', '.join(str(y) for y in missing[:-1]) + \
         (f' and {missing[-1]}' if n > 1 else str(missing[0]))
+    # A seat the plan covers reads no price on a build (Jenna 2026-11-08,
+    # the one shared check; Liz Huszarik read "Included with your plan."
+    # and then "at $300 each" in the same reply on 2026-11-17).
+    try:
+        from prometheus import ask_outcome as _ao_inc
+        _included = bool(_ao_inc.seat_included())
+    except Exception:
+        _included = False
     lines = [
         f"A {len(years)}-year read of {subject} needs one profile per "
         f"year - each year's audience is measured in its own window, "
@@ -338,7 +375,7 @@ def _pm_year_package_reply(subject, years, have, missing):
         f"not stretch one window across {len(years)} years.",
         '',
         f"The package: {n} year profile{'s' if n != 1 else ''} "
-        f"({year_list}) at {each_usd} each.",
+        f"({year_list})" + (", included with your plan." if _included else f" at {each_usd} each."),
     ]
     if have:
         lines.append(f"Already on the shelf: "

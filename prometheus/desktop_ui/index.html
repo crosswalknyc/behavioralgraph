@@ -153,6 +153,8 @@ const S = { cid: null, convs: [], busy: false, boot: null, log: [] };
 const $ = (id) => document.getElementById(id);
 function api() { return window.pywebview && window.pywebview.api; }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+// a value written inside a double-quoted attribute (a chip's onclick): the quotes are encoded so the attribute is not cut short
+function attr(s) { return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function fmt(v, unit) {
   const n = Number(v);
   if (!isFinite(n)) return esc(v);
@@ -231,7 +233,7 @@ function renderConvs() {
   const el = $('convs');
   const items = [...S.convs];
   if (S.cid && !items.some(c => c.conversation_id === S.cid)) items.unshift({ conversation_id: S.cid, turns: S.log.length, updated: '' });
-  el.innerHTML = items.map(c => '<div class="conv' + (c.conversation_id === S.cid ? ' active' : '') + '" onclick="openConversation(' + JSON.stringify(c.conversation_id) + ')">'
+  el.innerHTML = items.map(c => '<div class="conv' + (c.conversation_id === S.cid ? ' active' : '') + '" onclick="openConversation(' + attr(JSON.stringify(c.conversation_id)) + ')">'
     + esc(c.conversation_id) + '<small>' + esc(c.turns || 0) + ' turns' + (c.updated ? ' · ' + esc(String(c.updated).slice(0, 10)) : '') + '</small></div>').join('');
 }
 async function newConversation() {
@@ -241,7 +243,7 @@ async function newConversation() {
   $('log').innerHTML = '<div class="empty"><h2>Ask Prometheus.</h2>Who an audience is, how big a title is, what a journey looked like, which brands over-index, what a partnership is worth. '
     + 'Products you start here (a Digital Journey, a Profile, a Brand Partnership read) build and land in your dashboard, and come back here with their files.'
     + '<div class="chips">' + ['How big is the Babylon 5 audience on Prime Video?', 'Which streaming services do Babylon 5 viewers pay for besides Prime Video?', 'Where did the first post sit for The Following?']
-      .map(q => '<button class="chip" onclick="sendText(' + JSON.stringify(q) + ')">' + esc(q) + '</button>').join('') + '</div></div>';
+      .map(q => '<button class="chip" onclick="sendText(' + attr(JSON.stringify(q)) + ')">' + esc(q) + '</button>').join('') + '</div></div>';
   renderConvs();
   $('box').focus();
 }
@@ -295,7 +297,7 @@ function render(id, question, doc) {
   } else if (kind === 'clarify') {
     const c = doc.clarify || {};
     b.innerHTML = '<div class="text">' + esc(c.question) + '</div><div class="chips">'
-      + (c.options || []).map((o, i) => '<button class="chip' + (i === 0 ? ' primary' : '') + '" onclick="sendText(' + JSON.stringify(o.send) + ')">' + esc(o.label) + '</button>').join('') + '</div>';
+      + (c.options || []).map((o, i) => '<button class="chip' + (i === 0 ? ' primary' : '') + '" onclick="sendText(' + attr(JSON.stringify(o.send)) + ')">' + esc(o.label) + '</button>').join('') + '</div>';
   } else if (kind === 'job') {
     const j = doc.job || {};
     b.innerHTML = '<div class="job"><span class="pulse"></span>' + esc(j.stage || 'Working on it.') + '<div class="stage">A longer read. It lands in your dashboard thread too; this card updates when it is ready.</div></div>';
@@ -306,8 +308,14 @@ function render(id, question, doc) {
     if (p.job_id) setTimeout(() => pollJob(id, question, p.job_id), Math.min((p.retry_after_seconds || 30) * 1000, 120000));
   } else if (kind === 'declined') {
     const d = doc.declined || {};
+    if (d.reason === 'build_required') {
+      // a drafted build is a brief card in this window, never a trip to the dashboard for a seat that can start it here
+      b.innerHTML = briefHtml(d);
+      S.log.push({ role: 'agent', text: d.text || '' });
+      scrollDown();
+      return;
+    }
     let next = '';
-    if (d.next && d.next.action === 'build') next = '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/\')">Open the dashboard to build it</button></div>';
     if (d.next && d.next.action === 'top_up') next = '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/wallet\')">Add funds</button></div>';
     if (d.reason === 'auth') next = '<div class="chips"><button class="chip" onclick="showKey(\'\')">Open settings</button></div>';
     b.innerHTML = '<div class="text declined">' + esc(d.text || 'Not run.') + '</div>' + next;
@@ -316,6 +324,33 @@ function render(id, question, doc) {
     b.innerHTML = '<div class="text declined">Nothing came back. Try asking it another way.</div>';
   }
   scrollDown();
+}
+
+// A drafted profile build, drawn as a brief card. A seat whose plan includes the build starts it from here: each
+// chip sends the order through this same conversation and the build starts in that turn. A paying seat reads the
+// price; approving a priced build is the one step this window cannot take yet, so that card keeps its way out.
+const BUILD_KIND = { new_build: 'New profile', time_shifted_refresh: 'Refresh for a new window', cut_needs_parent: 'New profile with a cut',
+  derive_cut: 'Cut of a profile you hold', existing_match: 'Already in your library' };
+function briefHtml(d) {
+  const briefs = (d.briefs || []).filter(x => x && x.subject);
+  const included = !!d.included;
+  let html = '<div class="text">' + esc(briefs.length ? (briefs.length === 1 ? 'Here is the brief for that profile.' : 'Here are the briefs for those profiles.') : (d.text || 'This needs a profile build first.')) + '</div>';
+  if (briefs.length) {
+    html += '<table class="facts"><tr><th>Profile</th><th>Build</th><th>Window</th><th style="text-align:right">Cost</th></tr>'
+      + briefs.map(x => '<tr><td>' + esc(x.subject) + '</td><td>' + esc(BUILD_KIND[x.decision] || 'New profile') + '</td><td>' + esc(x.window || '') + '</td><td class="v">'
+        + (x.included ? 'Included with your plan' : (x.price_usd != null ? fmt(x.price_usd, 'usd').replace(/\.00$/, '') : '')) + '</td></tr>').join('') + '</table>';
+  }
+  const startable = briefs.filter(x => x.order && x.decision !== 'existing_match');
+  if (included && startable.length) {
+    html += '<div class="chips">' + startable.slice(0, 8).map((x, i) => '<button class="chip' + (i === 0 ? ' primary' : '') + '" onclick="sendText(' + attr(JSON.stringify(x.order)) + ')">Build ' + esc(x.subject) + '</button>').join('') + '</div>'
+      + '<div class="meta">Included with your plan. Nothing starts until you choose one.</div>';
+  } else if (briefs.length && briefs.every(x => x.decision === 'existing_match')) {
+    html += '<div class="meta">Nothing to build. Ask your question about it here.</div>';
+  } else {
+    html += '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/\')">Review and approve in the dashboard</button></div>'
+      + '<div class="meta">Nothing is charged until you approve. Approving a priced build is not available in this window yet.</div>';
+  }
+  return html;
 }
 
 function answerHtml(question, doc) {
@@ -327,12 +362,12 @@ function answerHtml(question, doc) {
       + facts.slice(0, 24).map(f => '<tr><td>' + esc(f.label) + '</td><td class="v">' + fmt(f.value, f.unit) + '</td><td>' + esc(f.subject || '') + '</td></tr>').join('') + '</table>';
   }
   const payload = JSON.stringify({ question, answer: a, meta: { conversation_id: doc.conversation_id, trace_id: doc.trace_id, asked_at: doc.asked_at } });
-  html += '<div class="files"><button class="fbtn" onclick=\'saveAnswer(this, "csv", ' + JSON.stringify(payload) + ')\'>Save CSV</button>'
-    + '<button class="fbtn" onclick=\'saveAnswer(this, "pdf", ' + JSON.stringify(payload) + ')\'>Save PDF</button>'
-    + (doc.job_id ? '<button class="fbtn" onclick=\'loadFiles(this, ' + JSON.stringify(doc.job_id) + ')\'>Files from this read</button>' : '')
+  html += '<div class="files"><button class="fbtn" onclick=\'saveAnswer(this, "csv", ' + attr(JSON.stringify(payload)) + ')\'>Save CSV</button>'
+    + '<button class="fbtn" onclick=\'saveAnswer(this, "pdf", ' + attr(JSON.stringify(payload)) + ')\'>Save PDF</button>'
+    + (doc.job_id ? '<button class="fbtn" onclick=\'loadFiles(this, ' + attr(JSON.stringify(doc.job_id)) + ')\'>Files from this read</button>' : '')
     + '<span class="saved"></span></div>';
   if (a.followups && a.followups.length) {
-    html += '<div class="chips">' + a.followups.slice(0, 5).map(f => '<button class="chip" onclick="sendText(' + JSON.stringify(f) + ')">' + esc(f) + '</button>').join('') + '</div>';
+    html += '<div class="chips">' + a.followups.slice(0, 5).map(f => '<button class="chip" onclick="sendText(' + attr(JSON.stringify(f)) + ')">' + esc(f) + '</button>').join('') + '</div>';
   }
   const bill = doc.billing || {};
   html += '<div class="meta">' + (bill.charged_usd ? 'Metered $' + Number(bill.charged_usd).toFixed(4) : 'No charge') + (doc.replayed ? ' · replayed' : '') + (doc.trace_id ? ' · ' + esc(doc.trace_id) : '') + '</div>';
@@ -345,7 +380,7 @@ async function saveAnswer(btn, fmtName, payloadJson) {
   const span = btn.parentElement.querySelector('.saved');
   if (r.ok) {
     const name = r.path.split(/[\\/]/).pop();
-    span.innerHTML = 'Saved ' + esc(name) + '<button class="link" onclick=\'api().open_file(' + JSON.stringify(r.path) + ')\'>Open</button><button class="link" onclick=\'api().reveal(' + JSON.stringify(r.path) + ')\'>Show</button>';
+    span.innerHTML = 'Saved ' + esc(name) + '<button class="link" onclick=\'api().open_file(' + attr(JSON.stringify(r.path)) + ')\'>Open</button><button class="link" onclick=\'api().reveal(' + attr(JSON.stringify(r.path)) + ')\'>Show</button>';
   } else {
     span.innerHTML = '<span class="declined">' + esc(r.error || 'Could not save.') + '</span>';
   }
@@ -357,7 +392,7 @@ async function loadFiles(btn, jobId) {
   const r = await api().job_files(jobId);
   const files = (r && r.files) || [];
   if (!files.length) { span.textContent = r.error ? 'Files not available.' : 'No files on this read; the CSV and PDF above carry its numbers.'; return; }
-  span.innerHTML = files.map(f => '<button class="fbtn" onclick=\'dl(this, ' + JSON.stringify(f.url) + ', ' + JSON.stringify(f.name) + ')\'>' + esc(f.name) + '</button>').join(' ');
+  span.innerHTML = files.map(f => '<button class="fbtn" onclick=\'dl(this, ' + attr(JSON.stringify(f.url)) + ', ' + attr(JSON.stringify(f.name)) + ')\'>' + esc(f.name) + '</button>').join(' ');
 }
 async function dl(btn, url, name) {
   btn.disabled = true; btn.textContent = 'Saving ' + name + '...';

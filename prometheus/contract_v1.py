@@ -265,6 +265,19 @@ def _frame(kind: str, trace_id, conversation_id, billing, **blocks) -> dict:
     return out
 
 
+def build_order(subject, window='') -> str:
+    """The sentence that orders the build a brief describes ("Run a
+    profile on FBI Most Wanted Viewers for Nov 1, 2025 to Nov 17, 2026"),
+    or '' when the brief names no subject. An order through the ask door
+    starts in the same turn for a seat the plan covers and comes back as
+    a brief with its price for a paying seat (prometheus.orders)."""
+    name = ' '.join(str(subject or '').split())
+    if not name:
+        return ''
+    win = ' '.join(str(window or '').split(' (')[0].split())
+    return f"Run a profile on {name}" + (f" for {win}" if win else '')
+
+
 def http_status(v1: dict) -> int:
     kind = (v1 or {}).get('kind')
     if kind == 'declined':
@@ -293,8 +306,24 @@ def to_v1(env: dict, raw: dict = None, *, billing: dict = None, conversation_id:
         return job(jobd.get('id'), status=status, stage=text[:120] if text else '', trace_id=trace, conversation_id=conversation_id, billing=billing)
     if kind == 'draft':
         # a build is its own product: the partner runs it on the build endpoint
-        return declined('build_required', text or 'This needs a profile build first.',
-                        next_action={'action': 'build', 'endpoint': BUILD_ENDPOINT}, trace_id=trace, conversation_id=conversation_id, billing=billing)
+        v1 = declined('build_required', text or 'This needs a profile build first.',
+                      next_action={'action': 'build', 'endpoint': BUILD_ENDPOINT}, trace_id=trace, conversation_id=conversation_id, billing=billing)
+        # the briefs themselves, as rows a client can draw a card from and act on in its own window (the Prometheus
+        # app drew one chip, "Open the dashboard to build it", 2026-11-17): the subject, the kind of build, the window
+        # and the price, or `included` and no price for a seat the plan covers. `order` is the sentence that starts
+        # that build through this same door.
+        try:
+            from . import ask_outcome as _ao
+            briefs = _ao.draft_briefs(raw)
+            for b in briefs:
+                b['order'] = build_order(b.get('subject'), b.get('window'))
+            if briefs:
+                v1['declined']['briefs'] = briefs
+                if all(b.get('included') for b in briefs):
+                    v1['declined']['included'] = True
+        except Exception:
+            pass
+        return v1
     # a product confirm card (journey / brand partnership / flywheel /
     # attribution brief with Run and Cancel) is a choice, not an answer
     confirm = any(str(k).endswith('_confirm_payload') for k in raw) or (
