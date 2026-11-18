@@ -1929,8 +1929,10 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _is_order and not body.get('_meta_replay') and not _in_a_wizard(body):
         _bt_raw = None
         try:
+            # the reader's own words this turn, never a question the gate carried forward: "run it" after a note
+            # re-runs the thread's last ask, and when that ask was this question the order is still an order
             from . import brief_terms as _bt
-            _bt_raw = _bt.answer(text, history)
+            _bt_raw = _bt.answer(_typed, history) if _bt.is_term_question(_typed) else None
         except Exception as _fx:
             _faults.note('service.brief_terms', _fx)
             _bt_raw = None

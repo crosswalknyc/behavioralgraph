@@ -795,7 +795,16 @@ def at_interpret(text, history, body=None, ask_hint=None):
         # a question about a word on the thread's own brief is answered, never drafted (Grace Yin 2026-11-18:
         # "wjat does Avid tier: ~3,837 mean" drew a third brief; prometheus.brief_terms)
         from . import brief_terms as _bt
-        bt = _bt.answer(text, history)
+        typed = text
+        try:
+            # what the reader typed this turn (the door keeps it): an order that re-runs the thread's last ask
+            # ("run it") is an order, even when that ask was a question about the brief
+            from flask import g as _g, has_request_context
+            if has_request_context():
+                typed = str(getattr(_g, '_pm_ask_text', '') or text)
+        except Exception:
+            typed = text
+        bt = _bt.answer(typed, history) if _bt.is_term_question(typed) else None
         if bt and bt.get('reply'):
             _hint(ask_hint, route='brief_terms', outcome='answered', subject=bt.get('subject') or None)
             return None, dict(_guidance(bt['reply']), brief_term=bt.get('term'))

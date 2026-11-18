@@ -550,6 +550,19 @@ class Wiring(unittest.TestCase):
         self.assertNotIn('not _armed(body)', lane)
         self.assertIn("route='brief_terms', outcome='answered'", lane)
 
+    def test_an_order_that_reruns_the_last_ask_is_still_an_order(self):
+        # "run it" after a note re-runs the thread's last ask (the turn gate). When that ask was the question about
+        # the brief, the reader still typed an order: the lane and the intake's net both read the typed words.
+        src = _read('prometheus', 'service.py')
+        lane = src[src.index('# lane: brief_terms'):src.index('# lane: product_facts')]
+        self.assertIn('_bt.answer(_typed, history) if _bt.is_term_question(_typed) else None', lane)
+        self.assertLess(src.index('_typed = text'), src.index('# lane: brief_terms'))
+        net = _read('prometheus', 'followup_refine.py')
+        self.assertIn("typed = str(getattr(_g, '_pm_ask_text', '') or text)", net)
+        self.assertIn('bt = _bt.answer(typed, history) if _bt.is_term_question(typed) else None', net)
+        for order in ('run it', 'yes please', 'approve', 'go ahead', 'build it'):
+            self.assertFalse(BT.is_term_question(order), order)
+
     def test_the_which_title_question_sits_at_the_work_gate(self):
         src = _read('prometheus', 'service.py')
         lane = src[src.index('# lane: work_gate'):]
@@ -636,6 +649,10 @@ class ThroughTheDoor(unittest.TestCase):
             {'question': FIRST, 'draft_subject': '', 'history': [], 'surface': 'analyze'},
             {'question': 'build a profile on Severance viewers on Apple TV+', 'draft_subject': 'Severance Viewers on Apple TV+',
              'history': thread()},
+            # the order after her question and its answer: the thread's last ask is the question, the turn is an order
+            {'question': 'run it', 'draft_subject': 'Tony (2026 film) Viewers on Amazon Prime Video',
+             'history': thread() + [{'role': 'user', 'text': HERS},
+                                    {'role': 'agent', 'text': 'I can see Tony on Prime Video now, and your brief is ready to approve.'}]},
         ]
         cls.res = _door(cls.items)
 
@@ -658,6 +675,11 @@ class ThroughTheDoor(unittest.TestCase):
         self.assertIn('Tony viewers on Amazon Prime Video', r['reply'])
         self.assertNotIn('read on Amazon Prime Video.', r['reply'])
         self.assertEqual(r['subject'], 'Tony viewers on Amazon Prime Video')
+
+    def test_run_it_after_her_question_is_not_answered_as_the_question(self):
+        r = self.res[5]
+        self.assertNotEqual(r['route'], 'brief_terms')
+        self.assertFalse(r['reply'].startswith('The Avid tier is'))
 
     def test_a_build_order_in_her_thread_is_still_a_brief(self):
         r = self.res[4]
