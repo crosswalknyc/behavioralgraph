@@ -6475,6 +6475,96 @@ def _synthetic_episode_count_mult(ep_count: int) -> float:
 # Keyed by (show_name_lc | platform_lc). Cleared on process restart.
 _EXTERNAL_RESEARCH_CACHE: dict = {}
 
+# Headline scalars salvaged from a research reply whose JSON never closed
+# (the reply hit max_tokens inside the citation lists). Outlander: Blood
+# of My Blood, 2026-11-18: three runs in a row lost a 2.1M to 4.2M bracket
+# this way and fell to an 80,000-base prior.
+_RESEARCH_SALVAGE_NUM = (
+    'searches_performed', 'reach_us_estimate', 'reach_us_lower',
+    'reach_us_upper', 'conversion_pct', 'pre_existing_pct',
+    'avg_days_to_signup',
+)
+_RESEARCH_SALVAGE_STR = (
+    'reach_method', 'reach_confidence', 'demographics_confidence',
+    'signup_driver_strength', 'overall_confidence',
+)
+
+
+def _parse_research_json(raw: str):
+    """The research reply as a dict, or None.
+
+    Strips a code fence, scans to the brace that closes the first object
+    (braces inside quoted strings do not count), and parses it. When the
+    object never closes or will not parse, the headline scalars are read
+    off the partial text instead and the dict is stamped
+    ``_truncated=True`` with whatever ``reach_sources`` strings were
+    complete, so a cut-off reply still carries the bracket the reach
+    decision needs. Returns None only when there is no object at all or
+    no reach estimate can be read.
+    """
+    s = (raw or '').strip()
+    if not s:
+        return None
+    if s.startswith('```'):
+        s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = s.find('{')
+    if start < 0:
+        return None
+    depth, end, in_str, esc = 0, -1, False, False
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end > start:
+        try:
+            parsed = json.loads(s[start:end])
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception as e:
+            print(f"   ⚠️  Claude external research JSON parse failed: {e}")
+    else:
+        print("   ⚠️  Claude external research reply was cut off before the "
+              "JSON closed (max_tokens); reading the headline fields off "
+              "the partial text")
+    body = s[start:]
+    out: dict = {'_truncated': True}
+    for k in _RESEARCH_SALVAGE_NUM:
+        m = re.search(r'"%s"\s*:\s*(-?\d+(?:\.\d+)?)' % re.escape(k), body)
+        if m:
+            v = float(m.group(1))
+            out[k] = int(v) if v.is_integer() else v
+    for k in _RESEARCH_SALVAGE_STR:
+        m = re.search(r'"%s"\s*:\s*"([^"]*)"' % re.escape(k), body)
+        if m:
+            out[k] = m.group(1)
+    m = re.search(r'"reach_sources"\s*:\s*\[(.*?)(?:\]|$)', body, re.S)
+    if m:
+        out['reach_sources'] = re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))
+    if not out.get('reach_us_estimate'):
+        print(f"   Excerpt: {body[:300]!r}")
+        return None
+    print(f"   🩹 Research salvaged from the partial reply: "
+          f"estimate={out.get('reach_us_estimate'):,} "
+          f"lower={out.get('reach_us_lower') or 0:,} "
+          f"upper={out.get('reach_us_upper') or 0:,} "
+          f"confidence={out.get('reach_confidence') or '?'}")
+    return out
+
 
 def _research_show_externally_with_claude(
     *,
@@ -6763,10 +6853,13 @@ def _research_show_externally_with_claude(
     }]
 
     print(f"   🌐 Claude external research starting (max 12 searches)…")
+    # 8192 (was 4096, 2026-11-18): twelve searches of citations in
+    # all_sources regularly ran the reply past 4096 tokens, the object
+    # never closed, and the whole bracket was lost to the priors.
     raw = claude_messages(
         system=system,
         user=user,
-        max_tokens=4096,
+        max_tokens=8192,
         temperature=0.25,
         tools=tools,
     )
@@ -6774,28 +6867,11 @@ def _research_show_externally_with_claude(
         print(f"   ⚠️  Claude external research returned no text")
         return None
 
-    s = raw.strip()
-    if s.startswith('```'):
-        s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-    start = s.find('{')
-    if start < 0:
-        print(f"   ⚠️  Claude external research: no JSON found in response")
-        print(f"   First 300 chars: {raw[:300]!r}")
-        return None
-    depth, end = 0, start
-    for i in range(start, len(s)):
-        if s[i] == '{':
-            depth += 1
-        elif s[i] == '}':
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    try:
-        result = json.loads(s[start:end])
-    except Exception as e:
-        print(f"   ⚠️  Claude external research JSON parse failed: {e}")
-        print(f"   Excerpt: {s[start:start+300]!r}")
+    result = _parse_research_json(raw)
+    if result is None:
+        if raw.strip().find('{') < 0:
+            print(f"   ⚠️  Claude external research: no JSON found in response")
+            print(f"   First 300 chars: {raw[:300]!r}")
         return None
 
     # Stamp metadata so callers can tell when Claude "searched-and-found-
@@ -7098,9 +7174,14 @@ def _build_synthetic_panel(config: dict) -> dict:
     # The full bracket [lower, estimate, upper] is still persisted in the
     # *.research.json audit file so anyone can see the room above.
     reach_source = 'priors'
-    if (research
-            and research.get('reach_us_estimate')
-            and research.get('reach_confidence') in ('high', 'medium')):
+    _reach_conf = str((research or {}).get('reach_confidence') or '').strip().lower()
+    if research and research.get('reach_us_estimate'):
+        # Any confidence (2026-11-18). A low-confidence bracket used to be
+        # thrown away for the tier prior, which put Outlander: Blood of My
+        # Blood on Starz at 131,927 US viewers (80,000 base) against a
+        # researched 2.1M to 4.2M. The conservative bound of a researched
+        # bracket is always the better low anchor than a platform-tier
+        # constant; low confidence only widens the room above it.
         try:
             est   = int(research.get('reach_us_estimate') or 0)
             lower = int(research.get('reach_us_lower') or 0)
@@ -7114,6 +7195,8 @@ def _build_synthetic_panel(config: dict) -> dict:
             else:
                 headline = int(est * 0.75)
                 anchor_label = 'estimate×0.75 (no lower bound returned)'
+            if _reach_conf not in ('high', 'medium'):
+                anchor_label += f' ({_reach_conf or "unrated"} confidence)'
             reach_us = int(headline * (1 + jitter * 0.4))  # smaller jitter for research numbers
             reach_source = 'claude_external_research'
             print(f"   🎯 Reach (conservative {anchor_label}): {reach_us:,} US")
