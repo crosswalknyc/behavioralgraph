@@ -15811,6 +15811,11 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                 # practice; the user was told it needs another pass).
                 if panel_charge:
                     _pm_panel_refund(panel_charge)
+        elif not probe and _rr.hold_for_fresh_pass(job_id, head, write=_pm_read_status_write, why='the pass came back failed', land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True, started_at=head.get('started_at'))):
+            held = True   # ended without an answer on its first run: held for one fresh pass before a person owes it (2026-11-18)
+            _pm_notify_delete(job_id)
+            if panel_charge:
+                _pm_panel_refund(panel_charge)
         else:
             probe or _PT.job_failed('read', pm_user, job_id, text, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True))
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
@@ -15827,11 +15832,12 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                              user_email=pm_user,
                              payload={'job_id': job_id,
                                       'text': text[:200]})
-        probe or _PT.job_failed('read', pm_user, job_id, text, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True))
-        try:
-            _pm_read_status_write(job_id, {**head, 'status': 'error'})
-        except Exception as _fx:
-            _faults.note('chat', _fx)
+        if probe or not _rr.hold_for_fresh_pass(job_id, head, write=_pm_read_status_write, why=e, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True, started_at=head.get('started_at'))):   # a job that died on its first run is held for one fresh pass (2026-11-18)
+            probe or _PT.job_failed('read', pm_user, job_id, text, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True))
+            try:
+                _pm_read_status_write(job_id, {**head, 'status': 'error'})
+            except Exception as _fx:
+                _faults.note('chat', _fx)
         _pm_notify_delete(job_id)
         if panel_charge:
             _pm_panel_refund(panel_charge)

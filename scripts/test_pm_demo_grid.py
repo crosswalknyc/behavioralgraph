@@ -117,6 +117,9 @@ from prometheus import read_recovery as RR  # noqa: E402
 from prometheus import read_repair as RP  # noqa: E402
 
 import insights_ledger as il  # noqa: E402
+from prometheus import probe_identity as _pid  # noqa: E402
+
+_pid._sandbox_owners = lambda *a, **k: frozenset()   # the sandbox key lookup reads the bucket; never from this suite
 
 C._profile_catalog_for_chat = lambda: []
 il._SYNC_FOR_TESTS = True          # a banked read is on the (in-memory) ledger before the next pass consults it
@@ -671,6 +674,82 @@ class AnEmptyReadIsRepairedNeverThrown(unittest.TestCase):
         # any other failure is still the caller's
         with self.assertRaises(KeyError):
             RP.coherent({'subject': 'X'}, enforce=lambda d: {}['boom'], question='how many')
+
+
+class AJobThatEndsWithNoAnswerGetsAFreshPass(unittest.TestCase):
+    """Her job died on its first pass and ended in an error: the only way
+    to an answer was a person. A first run that ends with no answer is
+    held instead, so the sweep runs it once more and the answer lands
+    under the calm line and in her inbox."""
+
+    HEAD = {'job_id': 'j1', 'user': 'liz', 'question': LIZ[:300], 'started_at': 1.0, 'resume': {'text': LIZ}}
+
+    def test_a_first_run_is_held_and_a_fresh_pass_that_dies_is_not(self):
+        landed, wrote = [], []
+        with mock.patch.object(RR, 'chain_marker', lambda j: {}):
+            ok = RR.hold_for_fresh_pass('j1', dict(self.HEAD), land=lambda p: landed.append(p) or 'filled',
+                                        write=lambda j, d: wrote.append((j, d)), why=ValueError('boom'))
+        self.assertTrue(ok)
+        self.assertEqual(landed[0]['reply'], CALM)
+        self.assertEqual(wrote[0][1]['status'], 'held')
+        self.assertEqual(wrote[0][1]['resume']['text'], LIZ)
+        self.assertTrue(RR.is_retryable_held(dict(wrote[0][1], finished_at=wrote[0][1]['finished_at'] - 400)))   # the sweep picks it up
+        # the fresh pass itself: no second one
+        with mock.patch.object(RR, 'chain_marker', lambda j: {'depth': 1, 'root': 'j1'}):
+            self.assertFalse(RR.hold_for_fresh_pass('j2', dict(self.HEAD), land=lambda p: 'filled', write=lambda j, d: wrote.append((j, d))))
+        # the answer already in the thread: nothing is held, nothing is written
+        with mock.patch.object(RR, 'chain_marker', lambda j: {}):
+            self.assertFalse(RR.hold_for_fresh_pass('j1', dict(self.HEAD), land=lambda p: 'already', write=lambda j, d: wrote.append((j, d))))
+            self.assertFalse(RR.hold_for_fresh_pass('j1', {'job_id': 'j1'}, land=lambda p: 'filled', write=lambda j, d: wrote.append((j, d))))
+        self.assertEqual(len(wrote), 1)
+
+    def _run_job(self, core, depth=0):
+        """The real job body with the read core swapped out: the statuses
+        it wrote, the records it opened, what it landed."""
+        statuses, failed, landed = [], [], []
+        import threading
+        head = dict(self.HEAD)
+        with mock.patch.object(C, '_pm_generate_read_core', core), \
+                mock.patch.object(C, '_pm_read_status_write', lambda j, d: statuses.append(d)), \
+                mock.patch.object(C, '_pm_append_read_to_history', lambda u, j, p, **k: landed.append(p) or 'filled'), \
+                mock.patch.object(C._rr, 'carry_resume', lambda j, h: dict(h, resume=head['resume'])), \
+                mock.patch.object(C._rr, 'start_heartbeat', lambda j, h: threading.Event()), \
+                mock.patch.object(C._rr, 'chain_marker', lambda j: ({'depth': depth} if depth else {})), \
+                mock.patch.object(C._PT, 'job_failed', lambda *a, **k: failed.append(a) or 'key'), \
+                mock.patch.object(C, '_pm_notify_delete', lambda j: None), \
+                mock.patch.object(C, '_pm_watch_notify', lambda *a, **k: None), \
+                mock.patch.object(C, '_pm_flush_notify', lambda *a, **k: False), \
+                mock.patch('prometheus.ride_along.on_read_landed', lambda *a, **k: None), \
+                mock.patch.object(C, '_pm_settle_ask', lambda *a, **k: None):
+            C._pm_run_read_job('j1', 'liz', None, LIZ, [], {}, {'subject': 'Dick Wolf series on Peacock', 'source': 'panel'}, '', '', {})
+        return statuses, failed, landed
+
+    def test_the_job_body_holds_a_first_run_that_died(self):
+        def boom(**k):
+            raise RuntimeError('boom')
+        statuses, failed, landed = self._run_job(boom)
+        self.assertEqual(statuses[-1]['status'], 'held')
+        self.assertEqual(failed, [], 'no record is opened while the job is held for its fresh pass')
+        self.assertEqual(landed[-1]['reply'], CALM)
+        # the fresh pass dies too: the job ends, the record opens, a person is owed the answer
+        statuses, failed, landed = self._run_job(boom, depth=1)
+        self.assertEqual(statuses[-1]['status'], 'error')
+        self.assertEqual(len(failed), 1)
+
+    def test_a_pass_that_came_back_failed_is_held_the_same_way(self):
+        statuses, failed, _l = self._run_job(lambda **k: {'success': False, 'error': CALM})
+        self.assertEqual(statuses[-1]['status'], 'held')
+        self.assertEqual(failed, [])
+        statuses, failed, _l = self._run_job(lambda **k: {'success': False, 'error': CALM}, depth=1)
+        self.assertEqual(statuses[-1]['status'], 'error')
+        self.assertEqual(len(failed), 1)
+
+    def test_a_finished_read_still_lands_done(self):
+        good = {'success': True, 'action': 'answer', 'reply': 'On X:\n\n8,199,994 US viewers watched X in the window. ' + 'More. ' * 30,
+                'metrics': [{'name': 'v', 'label': 'Viewers', 'value': 8199994, 'unit': 'viewers'}], 'followups': []}
+        statuses, failed, landed = self._run_job(lambda **k: dict(good))
+        self.assertEqual(statuses[-1]['status'], 'done')
+        self.assertEqual(failed, [])
 
 
 class APromiseEndsDelivered(unittest.TestCase):

@@ -988,6 +988,40 @@ def held_passes_left(job_id, status=None):
     return max(0, MAX_HELD_PASSES - depth)
 
 
+def hold_for_fresh_pass(job_id, head, *, land, write, why=""):
+    """A read job that ended with no answer (it died, or its pass came
+    back failed) is HELD once, not ended: the calm line lands on its own
+    progress turn with the job behind it, the job reads 'held', and the
+    sweep gives it one fresh pass; the answer then lands under the calm
+    line and is emailed (the calm line promised it). Liz's nine series
+    on Peacock (2026-11-18): the job died on its first pass, ended in an
+    error, and the only way to an answer was a person.
+
+    Only a job on its first run is held this way (a fresh pass that
+    dies ends, and a person is owed the answer: promise_truth.job_failed
+    opens the record). ``land(payload)`` is the job's thread landing; a
+    landing that says 'already' means the answer is in the thread, so
+    nothing is held. ``write(job_id, doc)`` is the job status writer.
+    Returns True when the job was held. Never raises."""
+    try:
+        rr = head.get('resume') if isinstance(head, dict) else None
+        if not isinstance(rr, dict) or not str(rr.get('text') or '').strip():
+            return False                      # nothing to run it again from
+        if int(chain_marker(job_id).get('depth') or 0) > 0:
+            return False                      # this was the fresh pass
+        payload = {'success': True, 'action': 'answer', 'reply': CALM_LINE, 'followups': [], 'offer_deck': False,
+                   'deck_angle': None}
+        if land(payload) == 'already':
+            return False
+        write(job_id, {**head, 'status': 'held', 'finished_at': time.time(), 'payload': payload,
+                       'ended': str(why or 'no answer')[:200]})
+        print(f"[pm-recover] read {job_id} ended without an answer ({str(why or 'no answer')[:80]}); held for one fresh pass")
+        return True
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
 def is_retryable_held(status, now=None, after=HELD_RETRY_AFTER):
     """A read the verifier held, with a resume record, not yet retried:
     one fresh generation often clears the checks (a different draft,
