@@ -283,13 +283,25 @@ def upgrade_title_anchor(title, product, us_viewers, sample_size=None,
         return None
 
 
+SLICE_KEYS_CAP = 40
+
+
 def record_title_anchor(title, product, us_viewers=None, sample_size=None,
-                        demos=None, s3_key=None, window=None, season=None):
+                        demos=None, s3_key=None, window=None, season=None,
+                        slice=False):
     """CAS-guarded write. First writer for a title establishes the
     numeric anchor (us_viewers, sample_size, demos); later writers for
     the same title only append their product's s3 key and metadata -
     the established anchor is never overwritten (whichever comes first
-    wins, by design). Returns the stored entry or None. Never raises."""
+    wins, by design). Returns the stored entry or None. Never raises.
+
+    ``slice=True`` (2026-11-18, Outlander: Blood of My Blood): the file
+    is a NARROWER window than the read that set the anchor (a premiere
+    month inside a season already read in full). Its key lands in
+    ``slice_keys`` and never replaces ``s3_keys[product]``, which the
+    hourly title_anchor_audit treats as the file the universe snaps to.
+    A 30-day slice that re-pointed that key pulled the title from
+    1,599,223 to 131,927 US viewers for every later read."""
     key = title_key(title)
     if not key or product not in ("subscriber_iq", "profile_iq"):
         return None
@@ -318,7 +330,12 @@ def record_title_anchor(title, product, us_viewers=None, sample_size=None,
                 if entry["us_viewers"] <= 0:
                     return None  # nothing countable to anchor - abort
             keys = entry.setdefault("s3_keys", {})
-            if s3_key:
+            if s3_key and slice and entry.get("us_viewers"):
+                slices = entry.setdefault("slice_keys", [])
+                if str(s3_key) not in slices:
+                    slices.append(str(s3_key))
+                    del slices[:-SLICE_KEYS_CAP]
+            elif s3_key:
                 keys[product] = str(s3_key)
             # Backfill demos when the establishing product had none.
             if not entry.get("demos") and isinstance(demos, dict) and demos:
