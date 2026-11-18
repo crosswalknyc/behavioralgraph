@@ -77,6 +77,8 @@ def test_board_lock_serialises_and_inherits():
     from scripts.trends_scrapers.run_guard import BoardLock
     path = f'/tmp/test_board_lock_{os.getpid()}.lock'
     os.environ.pop('TRENDS_BOARD_LOCK_HELD', None)
+    # Host lock only: never wait on or take the shared production lease.
+    os.environ['TRENDS_BOARD_LEASE'] = '0'
     with BoardLock('holder', path=path) as a:
         assert a.acquired and not a.inherited
         assert os.environ.get('TRENDS_BOARD_LOCK_HELD') == str(os.getpid())
@@ -99,8 +101,25 @@ def test_board_lock_serialises_and_inherits():
     print('board lock ok', p.stdout.strip())
 
 
+def test_board_lease_dead_holder_on_this_host_is_broken():
+    # 2026-11-18: a gate killed by its timeout left its lease behind;
+    # the coverage gate waited on a pid that no longer existed.
+    import socket
+    from scripts.trends_scrapers.run_guard import BoardLock
+    here = socket.gethostname()
+    gone = 2 ** 22 - 7
+    assert BoardLock._holder_dead_here({'host': here, 'pid': gone}) is True
+    assert BoardLock._holder_dead_here({'host': here, 'pid': os.getpid()}) is False
+    # Another host's holder is never judged from here; the age rule owns it.
+    assert BoardLock._holder_dead_here({'host': 'other-box', 'pid': gone}) is False
+    assert BoardLock._holder_dead_here({}) is False
+    assert BoardLock._holder_dead_here({'host': here, 'pid': 'x'}) is False
+    print('dead lease holder ok')
+
+
 if __name__ == '__main__':
     test_dip_lifted_not_cascaded()
     test_deep_cut_held()
     test_board_lock_serialises_and_inherits()
+    test_board_lease_dead_holder_on_this_host_is_broken()
     print('ALL OK')

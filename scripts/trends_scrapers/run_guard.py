@@ -457,7 +457,13 @@ class BoardLock:
         """Create the shared lease atomically, waiting for a live holder
         until `deadline` and breaking a dead one. Past the deadline the
         stage goes ahead without it, with a warning, exactly like the
-        file lock: a stuck holder can never stop the board."""
+        file lock: a stuck holder can never stop the board.
+
+        `TRENDS_BOARD_LEASE=0` skips the shared lease (hermetic tests on
+        a machine that carries S3 credentials would otherwise wait on,
+        or take, the production lease)."""
+        if os.environ.get("TRENDS_BOARD_LEASE", "1").strip().lower() in ("0", "false", "no"):
+            return
         try:
             import uuid
             import boto3
@@ -491,13 +497,22 @@ class BoardLock:
                 self.lease_held = True        # ours after all
                 return
             age_h = RunLock._holder_age_hours(holder.get("started"))
-            if holder and (age_h is None or age_h >= BOARD_LEASE_STALE_H):
+            # 2026-11-18: the hourly watch's board gate hit its 2h
+            # timeout and was killed, so __exit__ never ran and its
+            # lease sat for the full stale window while the coverage
+            # gate behind it waited. A holder on THIS host whose pid is
+            # gone is dead now, not in 6h.
+            if holder and (age_h is None or age_h >= BOARD_LEASE_STALE_H
+                           or self._holder_dead_here(holder)):
                 logger.warning("run_guard: breaking a board lease %sh old "
-                               "held by %s pid %s (%s)",
+                               "held by %s pid %s (%s)%s",
                                f"{age_h:.1f}" if age_h is not None else "?",
                                holder.get("host") or "?",
                                holder.get("pid") or "?",
-                               holder.get("label") or "?")
+                               holder.get("label") or "?",
+                               "" if (age_h is None
+                                      or age_h >= BOARD_LEASE_STALE_H)
+                                  else ": its process is gone from this host")
                 try:
                     s3.delete_object(Bucket=BOARD_LEASE_BUCKET,
                                      Key=BOARD_LEASE_KEY)
@@ -523,6 +538,25 @@ class BoardLock:
                 said = True
             time.sleep(5.0)
             self.waited_s += 5.0
+
+    @staticmethod
+    def _holder_dead_here(holder: dict) -> bool:
+        """True only when the lease names THIS host and its pid is not
+        running here. Another host's holder, or anything unreadable,
+        is treated as alive (the age rule still applies)."""
+        try:
+            import socket
+            if str(holder.get("host") or "") != socket.gethostname():
+                return False
+            pid = int(holder.get("pid") or 0)
+            if pid <= 0:
+                return False
+            os.kill(pid, 0)
+            return False
+        except ProcessLookupError:
+            return True
+        except Exception:
+            return False
 
     def _drop_lease(self) -> None:
         """Release the shared lease, only if it is still ours."""
