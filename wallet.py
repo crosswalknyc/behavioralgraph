@@ -2459,7 +2459,7 @@ def wallet_stats(user: dict) -> dict:
 # Wallet writes (in-place, called under _users_cas_mutate)
 # ---------------------------------------------------------------------------
 
-_CREDIT_TXN_KINDS = ("topup", "auto_reload", "refund", "adjustment")
+_CREDIT_TXN_KINDS = ("topup", "auto_reload", "refund", "adjustment", "forfeit")
 
 
 def _append_txn(user: dict, txn: dict, cap: int = 500):
@@ -2681,12 +2681,127 @@ def credit_recurring_wallet_month(subject: dict, grant: dict, *,
     else:
         money = f"${amt:,.2f}"
     desc = reason or f"Monthly wallet credit {money}"
+    mode = str(grant.get("mode") or "add").strip().lower()
+    if mode in ("replace", "reset", "use_it_or_lose_it", "uil"):
+        leftover = round(wallet_balance(subject), 2)
+        if leftover > 0:
+            apply_wallet_forfeit(
+                subject, leftover,
+                description="Unused monthly allowance forfeited",
+                stripe_ref=f"forfeit_{gid}_{yyyymm}",
+            )
     return apply_wallet_topup(
         subject, amt,
         description=desc,
         stripe_ref=ref,
         kind="adjustment",
     )
+
+
+def apply_wallet_forfeit(user: dict, amount_usd, description: str = "",
+                         stripe_ref: str = "") -> dict:
+    """Drop leftover allowance without counting it as spend.
+
+    Use-it-or-lose-it months zero what is left, then the monthly
+    grant writes the new amount. Lifetime spend stays on real pulls.
+    """
+    amt = round(float(amount_usd), 2)
+    if amt <= 0 or not isinstance(user, dict):
+        return {}
+    old = wallet_balance(user)
+    take = round(min(old, amt), 2)
+    if take <= 0:
+        return {}
+    new = round(old - take, 2)
+    user["wallet_balance_usd"] = new
+    txn = {
+        "ts": _now_iso(),
+        "kind": "forfeit",
+        "amount_usd": take,
+        "balance_after_usd": new,
+        "description": description or "Unused monthly allowance forfeited",
+        "job_id": str(stripe_ref or ""),
+        "tool": "",
+        "stripe_ref": stripe_ref,
+    }
+    _append_txn(user, txn)
+    return txn
+
+
+def allowance_is_included(user, users_data=None, amount_usd=None) -> bool:
+    """True while an included_while_funded wallet still covers this pull.
+
+    Unlimited and staff seats are not this path (they are already
+    included via seat_is_free). Remaining dollars must be above zero,
+    and at least the pull's price when one is given, so a $50 leftover
+    does not include a $500 valuation.
+    """
+    rec, _kind, _key = resolve_billing_subject(
+        user if isinstance(user, dict) else {}, users_data or {})
+    if not isinstance(rec, dict):
+        rec = user if isinstance(user, dict) else {}
+    if not rec.get("included_while_funded"):
+        return False
+    if is_unlimited(rec):
+        return False
+    if isinstance(user, dict) and is_unlimited(user):
+        return False
+    bal = wallet_balance(rec)
+    if bal <= 0:
+        return False
+    if amount_usd is None:
+        return True
+    try:
+        need = float(amount_usd)
+    except (TypeError, ValueError):
+        return True
+    if need <= 0:
+        return True
+    return bal + 1e-9 >= need
+
+
+def notify_allowance_exhausted(user, users_data=None, billed_via: str = "",
+                               company_name: str = "") -> bool:
+    """Mail Jenna and Liz once this month when an included allowance
+    cannot cover a pull. No-ops for every other wallet."""
+    rec, kind, key = resolve_billing_subject(
+        user if isinstance(user, dict) else {}, users_data or {})
+    if not isinstance(rec, dict):
+        rec = user if isinstance(user, dict) else {}
+        kind, key = "user", ""
+    if not rec.get("included_while_funded"):
+        return False
+    name = str(company_name or "").strip()
+    if not name:
+        if kind == "company":
+            name = str(key or "").strip()
+        else:
+            name = str(
+                (user or {}).get("company")
+                or rec.get("company")
+                or key
+                or "company"
+            ).strip()
+    amt = rec.get("monthly_allowance_usd") or 0
+    try:
+        from wallet_allowance_notify import send_runout
+        return bool(send_runout(name, amt, billed_via=billed_via))
+    except Exception as e:
+        print(f"[allowance-runout] {e}")
+        return False
+
+
+def maybe_notify_allowance_empty(subject, users_data=None,
+                                 billed_via: str = "",
+                                 company_name: str = "") -> bool:
+    """After a deduct, mail once if the included wallet is now empty."""
+    if not isinstance(subject, dict) or not subject.get("included_while_funded"):
+        return False
+    if wallet_balance(subject) > 0:
+        return False
+    return notify_allowance_exhausted(
+        subject, users_data, billed_via=billed_via,
+        company_name=company_name)
 
 
 def apply_wallet_refund(user: dict, amount_usd: float, *,
@@ -5569,6 +5684,9 @@ __all__ = [
     "existing_wallet_deduct",
     "usage_row_usd", "credit_usage_for_modal",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
+    "apply_wallet_forfeit", "credit_recurring_wallet_month",
+    "allowance_is_included", "notify_allowance_exhausted",
+    "maybe_notify_allowance_empty",
     "existing_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb",     "needs_auto_reload",
     "claim_topup_notice",

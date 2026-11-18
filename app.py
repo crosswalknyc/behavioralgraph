@@ -2597,7 +2597,7 @@ def _undo_consulting_hour_entry(subject, entry_id):
 
 
 def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by,
-                         direction='grant'):
+                         direction='grant', mode='add'):
     """Schedule a recurring monthly grant (or charge) on a subject.
 
     kind: 'credits', 'hours' (minutes/month), or 'wallet' (USD/month).
@@ -2642,6 +2642,7 @@ def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by,
         'created_at': now.isoformat(),
         'created_by': added_by or 'admin',
         'reason': (reason or f'Recurring {kind} {direction}').strip(),
+        'mode': (mode or 'add').strip().lower() or 'add',
         # We record last_applied_at so the tick can decide whether a
         # new calendar month has elapsed. First application happens
         # inline below, so we set it to `now` and decrement one month.
@@ -2986,6 +2987,12 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
                 return False
         can, _reason = _wallet.wallet_can_absorb(subject, usd)
         if not can:
+            try:
+                _wallet.notify_allowance_exhausted(
+                    user, data or {}, billed_via=username or '',
+                    company_name=subject_key if subject_kind == 'company' else '')
+            except Exception:
+                pass
             return False
         # billed_via_username stamps who triggered the pull when the
         # subject is a company (so admins get per-user attribution).
@@ -3001,6 +3008,12 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
             tool_key=tool_key,
             job_id=job_id or '',
             billed_via_username=billed_via)
+        try:
+            _wallet.maybe_notify_allowance_empty(
+                subject, data or {}, billed_via=billed_via,
+                company_name=subject_key if subject_kind == 'company' else '')
+        except Exception:
+            pass
         outcome['ok'] = True
         outcome['wallet_charged_usd'] = usd
         outcome['wallet_tool_key'] = tool_key
@@ -11138,14 +11151,18 @@ def index():
     _uname = session.get('username') or ''
     _, effective_credits = check_user_credits(_uname) if _uname else (False, 0)
     _wallet_snap = _caller_wallet_snapshot(_uname) if _uname else {}
-    # Included with your plan (Jenna 2026-11-08): an unlimited seat (personal
-    # or company pool) or Crosswalk staff reads that on the pricing modal
-    # instead of a price
+    # Included with your plan (Jenna 2026-11-08 / 2026-11-17): unlimited,
+    # staff, or a funded monthly allowance (Sony Television $11k) reads
+    # that on the pricing modal instead of a price
     try:
-        from prometheus import guards as _pm_guards
-        _seat_included = bool(effective_credits == -1 or _pm_guards.is_staff(user))
+        from prometheus.priced_read import included_with_plan as _pm_included
+        _seat_included = bool(_pm_included(user, _uname))
     except Exception:
-        _seat_included = bool(effective_credits == -1)
+        try:
+            from prometheus import guards as _pm_guards
+            _seat_included = bool(effective_credits == -1 or _pm_guards.is_staff(user))
+        except Exception:
+            _seat_included = bool(effective_credits == -1)
     return render_template('index.html', 
                            app_build_version=APP_BUILD_VERSION,
                            seat_included=_seat_included,

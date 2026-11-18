@@ -1172,6 +1172,54 @@ def _host_cap(host, name):
         return None
 
 
+def _consume_fn(consume, host):
+    """The consume_credit door: the injected one, the bound host, or
+    the running app. A caller that forgets host (the no-base panel
+    path) still draws down an included monthly allowance."""
+    if consume is not None:
+        return consume
+    h = host
+    if h is None:
+        try:
+            from .host import host as h
+        except Exception:
+            h = None
+    fn = _host_cap(h, 'consume_credit')
+    if fn is not None:
+        return fn
+    try:
+        import sys as _sys
+        _app = _sys.modules.get('app')
+        return getattr(_app, 'consume_credit', None) if _app is not None else None
+    except Exception:
+        return None
+
+
+def users_doc(host=None):
+    """The live users.json document, or {} when nothing is bound."""
+    load = _host_cap(host, 'load_users')
+    if load is None:
+        try:
+            from .host import host as _gh
+            load = _host_cap(_gh, 'load_users')
+        except Exception:
+            load = None
+    if load is None:
+        try:
+            import sys as _sys
+            _app = _sys.modules.get('app')
+            load = getattr(_app, 'load_users', None) if _app is not None else None
+        except Exception:
+            load = None
+    if not callable(load):
+        return {}
+    try:
+        data = load() or {}
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def live_user(host, username, user=None):
     """The billed seat. Prefer the live users.json row so a thin
     session object cannot hide unlimited / super_admin flags."""
@@ -1287,13 +1335,15 @@ def seat_is_free(user, username=None, host=None):
     return _pool_unlimited(username or u.get('username') or u.get('email'), host)
 
 
-def included_with_plan(user, username=None, host=None):
+def included_with_plan(user, username=None, host=None, amount_usd=None):
     """True when priced reads are included with this seat's plan: an
-    unlimited seat (personal or company pool) or Crosswalk staff. The
-    one check every priced surface asks before it shows a price or an
-    Approve chip (Jenna 2026-11-08). A probe identity (the golden set,
-    the canary, the replay harness, a sandbox key) is never included: it
-    reads the paying seat's shape, which is what gets graded."""
+    unlimited seat (personal or company pool), Crosswalk staff, or a
+    funded monthly allowance (Jenna 2026-11-17: Sony Television's
+    $11k reads as included until it is gone). The one check every
+    priced surface asks before it shows a price or an Approve chip
+    (Jenna 2026-11-08). A probe identity (the golden set, the canary,
+    the replay harness, a sandbox key) is never included: it reads the
+    paying seat's shape, which is what gets graded."""
     try:
         uname = str(username or '').strip()
         if not uname and isinstance(user, dict):
@@ -1305,7 +1355,15 @@ def included_with_plan(user, username=None, host=None):
     except Exception:
         pass
     try:
-        return bool(staff_user(user) or seat_is_free(user, username, host))
+        if staff_user(user) or seat_is_free(user, username, host):
+            return True
+    except Exception:
+        pass
+    try:
+        import wallet as _w
+        u = live_user(host, username, user)
+        return bool(_w.allowance_is_included(
+            u, users_doc(host), amount_usd=amount_usd))
     except Exception:
         return False
 
@@ -1589,6 +1647,10 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     # and starts in the same turn.
     is_staff = staff_user(user)
     included = included_with_plan(user, username, host)
+    try:
+        free_seat = bool(is_staff or seat_is_free(user, username, host))
+    except Exception:
+        free_seat = bool(is_staff)
     if kind not in ('sizing', 'derived') and custom_price(username, history, subj).get('metered'):
         # a follow-up on a subject this thread already paid for (custom or viewership): metered, never quoted (Jenna 2026-10-30)
         return 'charged', {'user': username, 'credits': 0, 'subject': subj, 'kind': kind,
@@ -1608,8 +1670,45 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     else:
         p = custom_price(username, history, subj)
         label, credits, qty, pull_type = p['label'], p['credits'], 1, p['pull_type']
+    if included and not free_seat:
+        # a leftover smaller than this pull is no longer included
+        try:
+            import wallet as _w
+            u = live_user(host, username, user)
+            data = users_doc(host)
+            rec, _, _ = _w.resolve_billing_subject(u, data)
+            tool = _w.pull_type_to_tool_key(pull_type)
+            usd_need, _mode = _w.should_charge_wallet(
+                rec if isinstance(rec, dict) else u, tool,
+                quantity=int(qty or 1))
+            included = _w.allowance_is_included(u, data, amount_usd=usd_need)
+        except Exception:
+            pass
     if included:
-        # no offer step: the caller runs the read now and opens with INCLUDED_LINE
+        # no offer step: the caller runs the read now and opens with
+        # INCLUDED_LINE. Staff / unlimited skip consume. An included
+        # monthly allowance still draws down so the $11k is real.
+        if not free_seat:
+            desc = charge_description(kind, subj, text, dimension=dimension,
+                                      years=int(years or 1))
+            fn = _consume_fn(consume, host)
+            ok = True
+            if username and fn is not None:
+                try:
+                    ok = bool(fn(username, description=desc, pull_type=pull_type,
+                                 credits_used=max(int(credits or 1), 1),
+                                 quantity=int(qty or 1)))
+                except Exception:
+                    ok = False
+            if not ok:
+                try:
+                    import wallet as _w
+                    _w.notify_allowance_exhausted(
+                        live_user(host, username, user), users_doc(host),
+                        billed_via=username)
+                except Exception:
+                    pass
+                return 'error', out_of_credits(subj, label)
         return 'charged', included_charge(username, subj, kind, pull_type, label, staff=is_staff)
     if not isinstance(panel_confirm, dict):
         span = 'one year' if int(years or 1) == 1 else f"{int(years)} years"
@@ -1625,9 +1724,7 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     if isinstance(rc, dict):
         return 'charged', rc
     desc = charge_description(kind, subj, text, dimension=dimension, years=int(years or 1))
-    fn = consume
-    if fn is None and host is not None and hasattr(host, 'consume_credit'):
-        fn = host.consume_credit
+    fn = _consume_fn(consume, host)
     ok = True
     if username and fn is not None:
         try:

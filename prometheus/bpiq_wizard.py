@@ -3254,7 +3254,8 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     # live seat and read by recap_lines / step_prompt through included_seat
     try:
         from flask import g as _g_inc
-        _g_inc._pm_bpiq_included = bool(_seat_is_free(user, uname, g))
+        from prometheus.priced_read import included_with_plan as _pm_inc
+        _g_inc._pm_bpiq_included = bool(_pm_inc(user, uname, (g or {}).get('_H') if g else None))
         # the quote is the seat's own rate, the one the charge takes
         _tab, _sym = seat_prices(uname)
         _g_inc._pm_bpiq_prices = _tab
