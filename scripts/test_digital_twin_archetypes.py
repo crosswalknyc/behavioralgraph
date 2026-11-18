@@ -343,6 +343,22 @@ class Desk(unittest.TestCase):
         self.assertEqual(arch2['method'], 'reasoned')
         self.assertTrue(any(g['label'].startswith('Late kind') for g in t['archetypes']['groups']))
 
+    def test_the_desk_rides_the_strong_chain_on_every_path(self):
+        # 2026-11-17: on the box the direct chain had routed the kinds desk to the persona models (Sonnet) while the dashboard's host
+        # ran it on Opus; the desk names who the audience is made of and belongs on the strong chain everywhere
+        seen = []
+        M = ROOM.Models()
+        M._host_claude = lambda: None
+        M._chain = lambda system, user, max_tokens, temperature, surface, chain, tools=None, stream=False: (seen.append((surface, tuple(chain), stream)) or ({'groups': []}, chain[0]))
+        os.environ['REGRESSION_TEST_MODE'] = '0'
+        try:
+            M.call('archetype', 'sys', '{}', max_tokens=10, stream=True)
+        finally:
+            os.environ['REGRESSION_TEST_MODE'] = '1'
+        self.assertEqual(seen[0][0], 'twin_room_archetype')
+        self.assertEqual(list(seen[0][1]), list(ROOM.MODELS['strong']), 'the strong chain, Opus first')
+        self.assertTrue(seen[0][2], 'streamed')
+
     def test_a_failed_desk_leaves_the_deterministic_kinds(self):
         t = _twin()
 

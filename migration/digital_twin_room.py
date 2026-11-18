@@ -413,8 +413,10 @@ class Models:
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         # the study desk (role 'study') is the research desk with a heavier search budget; the anchor desk (role 'anchor') reasons
-        # on the moderator's model with no tools; both ride the strong chain (Jenna 2026-11-05: model quality is not negotiable)
-        strong_roles = ('research', 'media', 'moderator', 'study', 'anchor')
+        # on the moderator's model with no tools; both ride the strong chain (Jenna 2026-11-05: model quality is not negotiable).
+        # The kinds desk (role 'archetype') names who the audience is made of and writes the reader's copy for each kind: the strong
+        # chain too, on every path (2026-11-17: the direct chain had let it fall to the persona models while the host ran it on Opus)
+        strong_roles = ('research', 'media', 'moderator', 'study', 'anchor', 'archetype')
         want = MODELS.get({'media': 'research', 'study': 'research', 'anchor': 'moderator'}.get(role, role)) if role in strong_roles else None
         search_cap = {'media': MEDIA_MAX_SEARCHES, 'study': STUDY_MAX_SEARCHES}.get(role, RESEARCH_MAX_SEARCHES)
         research_tools = tools if tools is not None else (self._tools(search_cap) if role in ('research', 'media', 'study') else None)
