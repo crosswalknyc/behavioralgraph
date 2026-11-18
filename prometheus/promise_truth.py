@@ -63,7 +63,7 @@ from datetime import datetime, timedelta, timezone
 
 __all__ = ['CALM_LINE', 'is_calm', 'promise_kind', 'outcome_line', 'settle_history', 'settle_launch', 'settle_from_status',
            'hold', 'find_held', 'back_calm', 'back_thread', 'job_failed', 'land_note', 'thread_tail', 'classify_tail', 'WITHDRAWN_TEXT', 'HELD_PREFIX', 'DEAD',
-           'open_for', 'close', 'keep']
+           'open_for', 'close', 'keep', 'owes_follow_up', 'back_refusal', 'follow_ups_open', 'close_follow_ups', 'classify_follow_up', 'GET_BACK_KIND']
 
 CALM_LINE = "Working on it. Confirmed your task is in progress and I will email you when it completes."
 HELD_PREFIX = 'system/ops/held_replies/'
@@ -90,6 +90,13 @@ _PROMISE_RXS = (
     ('email', re.compile(r"\b(?:I am (?:also )?looking at it(?: now)? and will email you|I will email you the (?:read|results))\b", re.I)),
 )
 _JOB_KEYS = ('read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id', 'aiq_job_id', 'tlist_job_id', 'twin_job_id')
+# a refusal that tells the reader a person will come back to them (the engine's own client lines above) is a promise
+# too (2026-11-18, Grace Yin: "We can't see Tony (2026) on Amazon at this time. Notifying Crosswalk and will get back
+# to you soon." stood in her thread for seventeen hours with nothing on record behind it; she had to ask)
+_GET_BACK_RX = re.compile(r"\bNotifying Crosswalk and will get back to you soon\b", re.I)
+GET_BACK_KIND = 'get_back'
+GET_BACK_REASON = ('a build was refused and the reader was told we will get back to them; the answer is owed in the '
+                   'chat it was asked in, and by email')
 _WIDGET_LINE_RX = re.compile(r"^\s*(?P<subj>.{2,200}?)\s*(?:is queued\.|is building\.|:\s*(?:failed|error|cancelled|queued|running)\.)\s*$", re.I | re.S)
 
 
@@ -121,6 +128,12 @@ def promise_kind(text):
         if rx.search(head):
             return kind
     return ''
+
+
+def owes_follow_up(text):
+    """True when the words tell the reader a person will get back to
+    them: the engine's refusal and confirm-the-title lines."""
+    return bool(_GET_BACK_RX.search(str(text or '')))
 
 
 # ------------------------------------------------------------------ 1. the outcome
@@ -235,10 +248,101 @@ def settle_launch(launch, run_doc, *, exists, load, save, ensure=None, relist=No
         doc.setdefault('subject', (launch or {}).get('subject') or '')
         history, how = settle_history(list(load(user, tid) or []), rid, doc, now=now)
         if how in ('settled', 'appended'):
+            back_refusal(user, tid, rid, history, subject=doc.get('subject') or '', now=now)
             save(user, tid, history)
         return how
     except Exception:
         return 'failed'
+
+
+def back_refusal(uname, tid, run_id, history, *, subject='', writer=None, now=None):
+    """Put a held record behind a refusal that says we will get back to
+    the reader. ``history`` is the settled thread: the outcome turn of
+    ``run_id`` is found in it, and when its words owe a follow-up and no
+    record stands behind it yet, one is opened (the task the ops watch
+    and the daily digest read, with its due time) and its key is
+    stamped on the turn (``meta.held_ref``). Mutates the turn in place.
+    Returns the record's key, or '' (no such turn, nothing owed, a
+    record already there, a probe or a test process). Never raises."""
+    try:
+        rid = re.sub(r"[^A-Za-z0-9_.-]", '', str(run_id or ''))[:80]
+        turns = [t for t in (history or []) if isinstance(t, dict)]
+        at = next((i for i, t in enumerate(turns)
+                   if isinstance(_meta(t).get('build_outcome'), dict) and _meta(t)['build_outcome'].get('run_id') == rid), None)
+        if at is None:
+            return ''
+        turn = turns[at]
+        told = _squash(turn.get('text') or '')
+        if not owes_follow_up(told) or _meta(turn).get('held_ref'):
+            return ''
+        # what the reader asked for: their own last words before the build, else the name the build carried
+        question = next((_squash(t.get('text') or '') for t in reversed(turns[:at]) if str(t.get('role') or '') == 'user'), '')
+        name = _squash(subject or _meta(turn).get('subject') or '')
+        question = (f"{name}: {question}" if (name and question) else (question or name or 'a build that was refused'))[:400]
+        base_writer = _writer_for(uname, writer)
+        if base_writer is None:
+            return ''
+        key = hold(uname, question, kind=GET_BACK_KIND, reason=GET_BACK_REASON, told=told, thread_id=tid, job_id=rid,
+                   writer=(lambda k, d: base_writer(k, dict(d, subject=name[:200]))), now=now)   # the build's name rides the record
+        if key:
+            turn['meta'] = dict(_meta(turn), held_ref=key)
+        return key
+    except Exception:
+        return ''
+
+
+def follow_ups_open(uname, thread_id='', *, within_s=14 * 86400, now=None, lister=None, getter=None):
+    """[(key, doc)] of the reader's open follow-up records (a refusal
+    that said we will get back to them), newest first; one thread's when
+    ``thread_id`` is given. Never raises."""
+    out = []
+    try:
+        if not uname:
+            return out
+        lister, getter, _w = _store(lister, getter, writer=(lambda k, d: None))
+        when = now or time.time()
+        days, t = [], when
+        while t >= when - within_s - 86400:
+            days.append(datetime.fromtimestamp(t, timezone.utc).strftime('%Y-%m-%d'))
+            t -= 86400
+        for day in dict.fromkeys(days):
+            for key in sorted(lister(f"{HELD_PREFIX}{day}/") or [], reverse=True)[:400]:
+                try:
+                    doc = getter(key)
+                except Exception:
+                    continue
+                if not isinstance(doc, dict) or str(doc.get('user') or '') != str(uname) \
+                        or str(doc.get('kind') or '') != GET_BACK_KIND or str(doc.get('status') or 'open') != 'open':
+                    continue
+                if thread_id and str(doc.get('thread_id') or '') != str(thread_id):
+                    continue
+                out.append((key, doc))
+    except Exception:
+        return out
+    return out
+
+
+def close_follow_ups(uname, thread_id, *, how, subject='', by='', job_id='', emailed=None, note='', now=None,
+                     lister=None, getter=None, writer=None):
+    """The reader was got back to in ``thread_id``: the open follow-up
+    records of that thread close as delivered, with what delivered it
+    (a build that was run again and finished, a person). With
+    ``subject`` only the records of that build close (another build
+    finishing in the same chat does not answer for it). Returns the keys
+    closed. Never raises."""
+    closed = []
+    try:
+        if not (uname and thread_id):
+            return closed
+        for key, _doc in follow_ups_open(uname, thread_id, now=now, lister=lister, getter=getter):
+            if subject and not _same_subject(_doc.get('subject') or str(_doc.get('question') or '').split(': ', 1)[0], subject):
+                continue
+            if close(key, how=how, by=by, job_id=job_id, emailed=emailed, thread_id=thread_id, note=note,
+                     getter=getter, writer=writer, now=now):
+                closed.append(key)
+    except Exception:
+        return closed
+    return closed
 
 
 def settle_from_status(uname, run_id, run_doc, *, service=None, launch_get=None):
@@ -695,7 +799,22 @@ def thread_tail(history):
             refs['run_id'] = str(tm['run_id'])
             status = status or str(tm.get('status') or '')
     return {'ends_on': 'promise' if kind else 'answer', 'kind': kind, 'text': text[:240], 'ts': last.get('ts'), 'refs': refs,
-            'question': question, 'status': status, 'landed': bool(m.get('landed_at'))}
+            'question': question, 'status': status, 'landed': bool(m.get('landed_at')),
+            # the thread ends on a refusal that says we will get back to the reader: an answer to "what happened to
+            # my build", and a promise still owed (2026-11-18); ``classify_follow_up`` says what stands behind it
+            'follow_up_owed': bool(m.get('build_outcome') and owes_follow_up(text))}
+
+
+def classify_follow_up(tail, *, held=None):
+    """For a thread that ends on a refusal that says we will get back to
+    the reader: ('backed', why) when a held record stands behind it,
+    ('unbacked', why) when none does, ('none', '') for any other tail."""
+    t = tail if isinstance(tail, dict) else {}
+    if not t.get('follow_up_owed'):
+        return 'none', ''
+    if held:
+        return 'backed', 'a held record with a due time'
+    return 'unbacked', 'the reader was told we will get back to them and nothing on record stands behind it'
 
 
 _ALIVE_RUN = ('queued', 'pending', 'running', 'working', 'starting', 'tu_done', 'avid_done', 'addon_cuts', 'cut_done', 'subiq_done')

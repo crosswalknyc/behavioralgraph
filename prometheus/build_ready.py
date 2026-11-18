@@ -170,6 +170,13 @@ def post_ready(launch, run_doc, *, exists, load, save, ensure=None, relist=None,
         if _has_ready(history, rid, name):
             return 'already'
         save(user, tid, history + [ready_turn(rid, name, run_doc, now)])
+        try:
+            # the reader was got back to: a refusal of the same build in this chat that said "will get back to you
+            # soon" has its record closed (2026-11-18, prometheus.promise_truth.back_refusal)
+            from . import promise_truth as _pt
+            _pt.close_follow_ups(user, tid, how='the build was run again and finished', subject=name, job_id=rid, now=now)
+        except Exception:
+            pass
         return 'posted'
     except Exception:
         return 'failed'

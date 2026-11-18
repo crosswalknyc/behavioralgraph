@@ -147,6 +147,15 @@ def sweep(s3, days=14, only_user='', engine=True, now=None):
                 continue
             seen += 1
             tail = PT.thread_tail(hist)
+            if tail.get('follow_up_owed'):
+                # a refusal that says we will get back to the reader (2026-11-18): owed until a record stands behind it
+                fu_verdict, fu_why = PT.classify_follow_up(tail, held=_held_for(held, user, tail, _epoch(tail.get('ts'))))
+                if fu_verdict == 'unbacked':
+                    rows.append({'user': user, 'thread_id': tid, 'title': str(th.get('title') or '')[:70], 'at': tail.get('ts'),
+                                 'kind': PT.GET_BACK_KIND, 'line': ' '.join(str(tail.get('text') or '').split())[:150],
+                                 'question': ' '.join(str(tail.get('question') or '').split())[:150], 'why': fu_why,
+                                 'refs': tail.get('refs') or {}, 'run_status': str(tail.get('status') or ''), 'job_status': ''})
+                continue
             if tail.get('ends_on') != 'promise':
                 continue
             refs = tail.get('refs') or {}
