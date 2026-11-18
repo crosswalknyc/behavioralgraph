@@ -86,8 +86,9 @@ from typing import Callable, Optional
 from migration.digital_twin_engine import clamp, messy_count, natural_count, pct1, unit
 
 ARCHETYPE_VERSION = 1
-MIN_K = 6
+MIN_K = 12                   # a room always seats at least twelve (Jenna 2026-11-17): fewer kinds are split out, by gender then age, for the nuance
 MAX_K = 16
+MERGE_FLOOR = 4              # the slivers may merge this far down before the largest kinds split back up to MIN_K
 MIN_SHARE_PCT = 2.5          # a kind under this share of the audience merges into its nearest neighbor
 MIN_SEGMENT_SHARE_PCT = 3.0  # inside a cohort, a kind under this share of the cohort merges
 DESK_MAX_TOKENS = 12000      # the desk's one answer per twin; streamed, so a stall is bounded by the read timeout, not the whole generation
@@ -152,6 +153,7 @@ Rules:
 - who: two sentences about who they are and how the subject fits their week. relationship: one sentence on where they stand with the subject now. decides: one sentence on how they decide to watch, buy or show up. moves_them: a short phrase. holds_them_back: a short phrase.
 - share_adjust_pct: a relative nudge to the kind's share, between -30 and 30, when the audience's facts argue the skeleton has it too big or too small. The totals are re-fitted afterwards; you shape the mix, not the size of the audience.
 - trait_shifts: up to five of these dials moved by -20 to 20 points for this kind: discovery_social_vs_search, binge_vs_appointment, price_sensitivity, churn_propensity, franchise_loyalty, merch_propensity, second_screen, live_events, creator_follow, ad_tolerance, trial_speed, word_of_mouth.
+- There are at least twelve kinds and the room seats one person per kind; a merge that would leave fewer than twelve is ignored. A kind that reads as two distinct kinds of people can be split (split_label, split_share_pct).
 - profile_lean: who this kind is, when it really skews, as the share (percent, 0 to 100) of the kind on the named rows, by category: gender, sexual_orientation, ethnicity, income, parental, relationship, education. Use the audience's own row labels (the gender rows you were given, for example Female, Male, Non-Binary, Trans Female, Trans Male; the orientation rows, for example LGBTQ+ or Gay or Lesbian). Rows you do not name share what is left in the audience's own proportions. A kind that is gay men: {"gender": {"Male": 95}, "sexual_orientation": {"LGBTQ+": 95}}; a kind that is trans women: {"gender": {"Trans Female": 90}, "sexual_orientation": {"LGBTQ+": 85}}; a kind of young mothers: {"parental": {"Has Children": 92}}. {} when the kind is the audience's own mix. The other kinds are re-fitted so the audience's totals hold, and a kind can never hold more of a row than the audience has (a 7% kind can be 90% trans women only if the audience is at least 6.3% trans women; if the rows do not hold a kind, do not name it), so lean only where the facts argue it.
 - Plain English a high school student follows; third person; no first names; never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data. No em dashes.
 Return JSON only:
@@ -555,42 +557,136 @@ def merge_small(cells: list, min_share: float, k_min: int = MIN_K, k_max: int = 
     return cells
 
 
-def split_largest(cells: list, seed: str) -> list:
-    """The largest kind split in two by gender when its gender rows carry
-    two real sides, else by the age rows inside its band. Both halves
-    keep the copy; the labels gain the side."""
-    if not cells:
-        return cells
-    big = max(cells, key=lambda c: float(c['share_pct']))
-    prof = big.get('profile') or {}
-    g = prof.get('gender') or []
-    sides = sorted(g, key=lambda r: -float(r.get('pct') or 0))
-    out = [c for c in cells if c is not big]
-    if len(sides) >= 2 and float(sides[1].get('pct') or 0) >= 18.0:
+SPLIT_MIN_SIDE = 0.18        # a split needs both sides to carry at least this much of the kind, so no sliver kinds are made
+
+_SPLIT_WORDS = {
+    'gender': {'Female': 'the women', 'Women': 'the women', 'Male': 'the men', 'Men': 'the men'},
+    'parental': {'has': 'with children at home', 'no': 'without children at home'},
+    'relationship': {'married': 'married or partnered', 'single': 'single'},
+    'income': {'hi': 'higher income', 'lo': 'lower income'},
+    'education': {'deg': 'with a degree', 'nodeg': 'without a degree'},
+}
+
+
+def _split_plan(kind: dict) -> Optional[dict]:
+    """The first dimension of a kind's own profile with real spread, so a
+    split reads as nuance: gender (two real sides), age inside the band,
+    children at home, married or single, income halves, a degree or not,
+    then the largest ethnicity against the rest. Each side must carry at
+    least SPLIT_MIN_SIDE of the kind. None when nothing splits."""
+    prof = kind.get('profile') or {}
+
+    def rows_of(cat):
+        return [r for r in (prof.get(cat) or []) if float(r.get('pct') or 0) > 0 and 'prefer' not in str(r.get('label') or '').lower()]
+
+    def two_sides(cat, side_a, side_b, word_a, word_b):
+        tot = sum(float(r.get('pct') or 0) for r in side_a + side_b) or 0.0
+        if tot <= 0:
+            return None
+        fb = sum(float(r.get('pct') or 0) for r in side_b) / tot
+        if fb < SPLIT_MIN_SIDE or fb > 1.0 - SPLIT_MIN_SIDE:
+            return None
+        return {'cat': cat, 'frac_b': fb, 'rows_a': _norm_rows([dict(r) for r in side_a]), 'rows_b': _norm_rows([dict(r) for r in side_b]), 'word_a': word_a, 'word_b': word_b}
+
+    g = rows_of('gender')
+    if len(g) >= 2:
+        sides = sorted(g, key=lambda r: -float(r.get('pct') or 0))
         top, second = sides[0], sides[1]
-        share_b = float(big['share_pct']) * float(second['pct']) / 100.0
-        a, b = _split_kind(big, share_b, f"{big['id']}~a", f"{big['id']}~b")
-        a['profile'] = dict(prof, gender=[{'label': top['label'], 'pct': 100.0}])
-        b['profile'] = dict(prof, gender=[{'label': second['label'], 'pct': 100.0}])
-        wa = {'Female': 'the women', 'Women': 'the women', 'Male': 'the men', 'Men': 'the men'}.get(str(top['label']), str(top['label']).lower())
-        wb = {'Female': 'the women', 'Women': 'the women', 'Male': 'the men', 'Men': 'the men'}.get(str(second['label']), str(second['label']).lower())
-        a['label'], b['label'] = f"{big['label']}: {wa}", f"{big['label']}: {wb}"
-        return out + [a, b]
-    ages = prof.get('age') or []
+        w = _SPLIT_WORDS['gender']
+        plan = two_sides('gender', [top], [second], w.get(str(top['label']), str(top['label']).lower()), w.get(str(second['label']), str(second['label']).lower()))
+        if plan:
+            plan['sep'] = ': '
+            return plan
+    ages = rows_of('age')
     if len(ages) >= 2:
         ages = sorted(ages, key=lambda r: int(re.search(r"\d{2}", str(r.get('label') or '0')).group(0)) if re.search(r"\d{2}", str(r.get('label') or '')) else 0)
-        lo_rows, hi_rows = ages[:len(ages) // 2], ages[len(ages) // 2:]
-        share_b = float(big['share_pct']) * sum(float(r.get('pct') or 0) for r in hi_rows) / 100.0
-        a, b = _split_kind(big, share_b, f"{big['id']}~a", f"{big['id']}~b")
-        a['profile'] = dict(prof, age=_norm_rows(lo_rows))
-        b['profile'] = dict(prof, age=_norm_rows(hi_rows))
-        a['label'], b['label'] = f"{big['label']} (younger)", f"{big['label']} (older)"
-        return out + [a, b]
-    # one more seat with nothing to split on: a near-even halving, the labels marked
+        best = None
+        for cut in range(1, len(ages)):
+            plan = two_sides('age', ages[:cut], ages[cut:], 'younger', 'older')
+            if plan and (best is None or abs(plan['frac_b'] - 0.5) < abs(best['frac_b'] - 0.5)):
+                best = plan
+        if best:
+            best['sep'] = ', '
+            return best
+    par = rows_of('parental')
+    if len(par) >= 2:
+        has = [r for r in par if re.search(r"has|with|parent", str(r.get('label') or ''), re.I)]
+        no = [r for r in par if r not in has]
+        plan = two_sides('parental', has, no, _SPLIT_WORDS['parental']['has'], _SPLIT_WORDS['parental']['no']) if has and no else None
+        if plan:
+            plan['sep'] = ', '
+            return plan
+    rel = rows_of('relationship')
+    if len(rel) >= 2:
+        together = [r for r in rel if re.search(r"married|partner|relationship", str(r.get('label') or ''), re.I)]
+        alone = [r for r in rel if r not in together]
+        plan = two_sides('relationship', together, alone, _SPLIT_WORDS['relationship']['married'], _SPLIT_WORDS['relationship']['single']) if together and alone else None
+        if plan:
+            plan['sep'] = ', '
+            return plan
+    inc = rows_of('income')
+    if len(inc) >= 2:
+        def _lo(r):
+            m = re.search(r"\$?([\d,]{2,})", str(r.get('label') or ''))
+            return int(m.group(1).replace(',', '')) if m else (0 if re.search(r"less|under", str(r.get('label') or ''), re.I) else 10**9)
+        inc = sorted(inc, key=_lo)
+        best = None
+        for cut in range(1, len(inc)):
+            plan = two_sides('income', inc[:cut], inc[cut:], _SPLIT_WORDS['income']['lo'], _SPLIT_WORDS['income']['hi'])
+            if plan and (best is None or abs(plan['frac_b'] - 0.5) < abs(best['frac_b'] - 0.5)):
+                best = plan
+        if best:
+            best['sep'] = ', '
+            return best
+    edu = rows_of('education')
+    if len(edu) >= 2:
+        deg = [r for r in edu if re.search(r"bachelor|graduate|professional|degree", str(r.get('label') or ''), re.I)]
+        nodeg = [r for r in edu if r not in deg]
+        plan = two_sides('education', deg, nodeg, _SPLIT_WORDS['education']['deg'], _SPLIT_WORDS['education']['nodeg']) if deg and nodeg else None
+        if plan:
+            plan['sep'] = ', '
+            return plan
+    eth = rows_of('ethnicity')
+    if len(eth) >= 2:
+        sides = sorted(eth, key=lambda r: -float(r.get('pct') or 0))
+        plan = two_sides('ethnicity', [sides[0]], sides[1:], str(sides[0]['label']), 'the rest')
+        if plan:
+            plan['sep'] = ', '
+            return plan
+    return None
+
+
+def _apply_split(kind: dict, plan: dict) -> tuple:
+    """Two kinds from one along the plan's dimension: each side's profile
+    for that category is its own rows, the labels gain the side."""
+    prof = kind.get('profile') or {}
+    share_b = float(kind['share_pct']) * plan['frac_b']
+    a, b = _split_kind(kind, share_b, f"{kind['id']}~a", f"{kind['id']}~b")
+    a['profile'] = dict(prof, **{plan['cat']: plan['rows_a']})
+    b['profile'] = dict(prof, **{plan['cat']: plan['rows_b']})
+    base = str(kind.get('label') or '')
+    a['label'], b['label'] = f"{base}{plan['sep']}{plan['word_a']}", f"{base}{plan['sep']}{plan['word_b']}"
+    return a, b
+
+
+def split_largest(cells: list, seed: str) -> list:
+    """One more kind: the largest kind with a dimension that really
+    splits it (``_split_plan``) is split along it, both halves keeping
+    the copy and their labels gaining the side. A kind with nothing to
+    split on is passed over for the next largest; only when no kind
+    splits is the largest halved near-evenly, the labels marked."""
+    if not cells:
+        return cells
+    for big in sorted(cells, key=lambda c: -float(c['share_pct'])):
+        plan = _split_plan(big)
+        if plan:
+            a, b = _apply_split(big, plan)
+            return [c for c in cells if c is not big] + [a, b]
+    big = max(cells, key=lambda c: float(c['share_pct']))
     half = float(big['share_pct']) * (0.5 + (unit('split', seed, big['id']) - 0.5) * 0.1)
     a, b = _split_kind(big, half, f"{big['id']}~a", f"{big['id']}~b")
     a['label'], b['label'] = f"{big['label']} (one side)", f"{big['label']} (the other side)"
-    return out + [a, b]
+    return [c for c in cells if c is not big] + [a, b]
 
 
 def fit_count(cells: list, want: int, seed: str = '') -> list:
@@ -998,7 +1094,11 @@ def derive_archetypes(twin: dict, *, call: Optional[Callable] = None, force: boo
         size = 0
     seed = f"arch|{_meta(twin).get('subject') or _meta(twin).get('name')}|{fp}"
     sk = skeleton(twin)
-    cells = merge_small(sk['cells'], MIN_SHARE_PCT)
+    cells = merge_small(sk['cells'], MIN_SHARE_PCT, k_min=MERGE_FLOOR)
+    if len(cells) < MIN_K:
+        # never a question of how many to seat: fewer than twelve kinds split out, the largest first, by gender then by age
+        # inside the band, so the room is always at least twelve and the split reads as nuance (Jenna 2026-11-17)
+        cells = fit_count(cells, MIN_K, f"{seed}|floor")
     method, trail = 'deterministic', {'desk': None}
     if call is not None:
         try:
@@ -1011,6 +1111,8 @@ def derive_archetypes(twin: dict, *, call: Optional[Callable] = None, force: boo
         if isinstance(data, dict) and data.get('groups'):
             cells, t = _apply_desk({'cells': cells}, data)
             cells = merge_small(cells, MIN_SHARE_PCT)
+            if len(cells) < MIN_K:
+                cells = fit_count(cells, MIN_K, f"{seed}|floor|desk")
             trail['desk'] = t
             method = 'reasoned' if t.get('applied') else 'deterministic'
         elif trail['desk'] is None:
@@ -1286,7 +1388,9 @@ def seat_archetypes(twin: dict, arch: dict, f: Optional[dict], people: int, seed
     tot = sum(float(g['share_pct']) for g in keep) or 1.0
     keep = [_scale_kind(g, 100.0 / tot) for g in keep]
     if f:
-        cells = merge_small(keep, MIN_SEGMENT_SHARE_PCT, k_min=min(MIN_K, len(keep)), k_max=min(MAX_K, max_seats))
+        # inside a cohort the slivers fold (a kind under three percent of the cohort), as far down as MERGE_FLOOR; the room
+        # lifts the seats back to at least twelve across its cohorts (digital_twin_panel._kinds_roster)
+        cells = merge_small(keep, MIN_SEGMENT_SHARE_PCT, k_min=min(MERGE_FLOOR, len(keep)), k_max=min(MAX_K, max_seats))
     else:
         cells = merge_small(keep, 0.0, k_min=min(MIN_K, len(keep)), k_max=min(MAX_K, max_seats))
     if want:
@@ -1452,6 +1556,6 @@ def roster_from_kinds(twin: dict, kinds: list, seed: str, start_seat: int = 1) -
     return roster
 
 
-__all__ = ['ARCHETYPE_VERSION', 'MIN_K', 'MAX_K', 'MIN_SHARE_PCT', 'derive_archetypes', 'ensure_archetypes', 'public_groups', 'archetype_lines',
+__all__ = ['ARCHETYPE_VERSION', 'MIN_K', 'MAX_K', 'MERGE_FLOOR', 'MIN_SHARE_PCT', 'derive_archetypes', 'ensure_archetypes', 'public_groups', 'archetype_lines',
            'archetype_summary_line', 'seat_archetypes', 'roster_from_kinds', 'representative', 'fit_count', 'merge_small', 'skeleton', 'margins',
            'fingerprint', 'noun_for', 'scrub_text', 'ARCHETYPE_SYSTEM']

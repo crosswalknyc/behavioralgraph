@@ -40,7 +40,11 @@ Held here:
   * the persona card and bio carry the kind (its label, its people, the
     desk's read) and pass the house scrub;
   * build_twin attaches the kinds; the twin page lines and the summary
-    line read plainly; requested_seats is 0 unless set by hand.
+    line read plainly; requested_seats is always 0;
+  * always twelve: a narrow audience's kinds split out by gender, then
+    age, children, relationship, income, education, ethnicity (never a
+    sliver, never a blind halving while a dimension splits) so a room
+    seats twelve or more; a cohort room too (Jenna 2026-11-17).
 
 Hermetic: REGRESSION_TEST_MODE never calls a model; a fake desk stands
 in where one is needed. No S3.
@@ -562,10 +566,52 @@ class Build(unittest.TestCase):
         arch = twin['archetypes']
         self.assertEqual(sum(g['people'] for g in arch['groups']), int(twin['meta']['size_us']))
         self.assertEqual(twin['meta']['panelists'], 20)
-        self.assertFalse(twin['meta']['panelists_explicit'])
-        self.assertEqual(DT.requested_seats(twin), 0, 'the stored default never forces a count')
+        # no seat count is ever asked for or honored from the twin (Jenna 2026-11-17): the room seats the kinds, twelve or more
+        self.assertEqual(DT.requested_seats(twin), 0)
         twin['meta']['panelists_explicit'] = True
-        self.assertEqual(DT.requested_seats(twin), 20)
+        self.assertEqual(DT.requested_seats(twin), 0, 'a count stored on a twin by an older build never forces a room size')
+
+
+class AlwaysTwelve(unittest.TestCase):
+    # Jenna 2026-11-17: "it should do it automatically based on the number of distinct archetypes within the sample group. if
+    # there are less than 12 archetypes it can split them out to be more nuanced so we always have 12."
+
+    def _narrow(self):
+        t = _twin()
+        t['lifecycle'] = {'discovering_pct': 1.0, 'trying_pct': 1.0, 'habit_pct': 96.0, 'lapsing_pct': 1.0, 'returning_pct': 1.0}
+        t['identity']['demographics']['age'] = [{'label': '18-24', 'pct': 1.0}, {'label': '25-34', 'pct': 2.0}, {'label': '35-44', 'pct': 94.0},
+                                                {'label': '45-54', 'pct': 1.0}, {'label': '55-64', 'pct': 1.0}, {'label': '65+', 'pct': 1.0}]
+        return t
+
+    def test_a_narrow_audience_still_has_twelve_kinds_split_out_with_nuance(self):
+        self.assertEqual(A.MIN_K, 12)
+        t = self._narrow()
+        arch = A.derive_archetypes(t)
+        self.assertEqual(arch['k'], 12)
+        self.assertEqual(sum(g['people'] for g in arch['groups']), 1_000_000)
+        self.assertGreaterEqual(min(g['share_pct'] for g in arch['groups']), 1.0, 'a split never makes a sliver')
+        labels = [g['label'] for g in arch['groups']]
+        self.assertTrue(any('the women' in l for l in labels) and any('the men' in l for l in labels), 'the first split is by gender')
+        self.assertTrue(any('children at home' in l for l in labels), 'then by who has children at home')
+        self.assertFalse(any('(one side)' in l or '(the other side)' in l for l in labels), 'never a blind halving while a dimension still splits')
+        self.assertFalse(any(l.count('(older)') > 1 or l.count('(younger)') > 1 for l in labels), 'no label piles the same side up')
+        for g in arch['groups']:
+            for cat, rows in g['profile'].items():
+                self.assertAlmostEqual(sum(r['pct'] for r in rows), 100.0, places=2, msg=f"{g['id']} {cat}")
+        g = P.build_group([t], seed='x')
+        self.assertEqual(len(g['roster']), 12)
+        self.assertEqual(g['seating'], 'kinds')
+
+    def test_a_cohort_room_seats_at_least_twelve(self):
+        t = _twin()
+        A.derive_archetypes(t)
+        g = P.build_group([t], segments=[{'label': 'women 18 to 24', 'filter': {'gender': 'F', 'age': (18, 24)}}], seed='y')
+        self.assertGreaterEqual(len(g['roster']), 12)
+        self.assertEqual(sum(r['people'] for r in g['roster']), g['segments'][0]['people'])
+        self.assertTrue(all(r['gender'] == 'F' and 18 <= r['age'] <= 24 for r in g['roster']))
+        whole = P.build_group([t], seed='z')
+        self.assertEqual(len(whole['roster']), t['archetypes']['k'], 'a whole-twin room seats every kind')
+        self.assertGreaterEqual(len(whole['roster']), 12)
 
 
 if __name__ == '__main__':

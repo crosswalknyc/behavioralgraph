@@ -98,7 +98,8 @@ assert.strictEqual(st('age').line, '18-24 33.3%, 25-34 20%. The other 46.7% goes
 assert.strictEqual(bwSharesWords(), 'Age: 18-24 33.3%, 25-34 20%.');
 assert.strictEqual(bwAudienceLabel(), 'US adults, 33.3% 18-24, 20% 25-34, 46.7% 35-44');
 S.bw.shares = { age: { '18-24': '33.3' } }; assert.strictEqual(bwAudienceLabel(), 'US adults, 33.3% 18-24, 25-34, 35-44'); S.bw.shares = { age: { '18-24': '33.3', '25-34': '20' } };
-assert.ok(/18-24 33.3% is about 4 seats, 25-34 20% is about 2 seats/.test(bwShareSeats(12)));
+// the wizard no longer asks how many to seat (2026-11-17): a room seats one person per kind, twelve or more, so no seat arithmetic rides on a share
+assert.strictEqual(typeof bwShareSeats, 'undefined');
 // clearing a pick clears its share
 window.dtwBwPick('age', { getAttribute: function() { return '18-24'; } });
 assert.deepStrictEqual(S.bw.demo.age, ['25-34', '35-44']); assert.deepStrictEqual(bwSharesBody(), { age: { '25-34': 20 } });
@@ -514,9 +515,9 @@ class ThePage(unittest.TestCase):
 
     def test_a_percent_field_per_pick_and_the_rules(self):
         h = self.html
-        for needle in ('function bwShareRow(cat)', 'oninput="dtwBwShare(this)"', 'window.dtwBwShare = function(inp)', 'class="dtw-bw-shareline',
+        for needle in ('function bwShareInput(cat, v)', 'function bwShareLine(cat)', 'oninput="dtwBwShare(this)"', 'window.dtwBwShare = function(inp)', 'class="dtw-bw-shareline',
                        'The shares in one group can total at most 100%.', "follows the audience\\'s natural mix.", 'body.demographics.shares = bsh',
-                       "bwDemoPicked() && bwSharesOk()", 'Shares set for this twin.', 'function bwShareSeats(n)', "shares: {}, markets: ''"):
+                       "bwDemoPicked() && bwSharesOk()", 'Shares set for this twin.', "shares: {}, markets: ''"):
             self.assertEqual(h.count(needle) >= 1, True, needle)
         self.assertEqual(h.count('function bwShareState(cat)'), 1)
 

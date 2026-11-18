@@ -722,9 +722,9 @@ def _kinds_roster(twins: list, segs: list, by_key: dict, in_room: int, seed: str
     the room never exceeds MAX_IN_ROOM seats."""
     from migration import digital_twin_archetypes as A
     total = sum(int(s.get('people') or 0) for s in segs) or 1
-    wants = [None] * len(segs)
-    if in_room and in_room > 0:
-        n = int(clamp(int(in_room), max(2, len(segs)), MAX_IN_ROOM))
+
+    def _wants(n):
+        n = int(clamp(int(n), max(2, len(segs)), MAX_IN_ROOM))
         raw = [int(s.get('people') or 0) / total * n for s in segs]
         got = [max(1, int(r)) for r in raw]
         while sum(got) < n:
@@ -733,13 +733,21 @@ def _kinds_roster(twins: list, segs: list, by_key: dict, in_room: int, seed: str
         while sum(got) > n:
             k = max(range(len(segs)), key=lambda i: got[i] if got[i] > 1 else -1)
             got[k] -= 1
-        wants = got
-    kinds_by_seg = []
-    for s, want in zip(segs, wants):
-        t = by_key.get(s['twin']) or {}
-        arch = (t.get('archetypes') or {})
-        kinds = A.seat_archetypes(t, arch, s.get('_filter') or s.get('filter') or {}, int(s.get('people') or 0), f"{seed}|{s['label']}", want=want, max_seats=MAX_IN_ROOM)
-        kinds_by_seg.append(kinds)
+        return got
+
+    def _seat(wants):
+        out = []
+        for s, want in zip(segs, wants):
+            t = by_key.get(s['twin']) or {}
+            arch = (t.get('archetypes') or {})
+            out.append(A.seat_archetypes(t, arch, s.get('_filter') or s.get('filter') or {}, int(s.get('people') or 0), f"{seed}|{s['label']}", want=want, max_seats=MAX_IN_ROOM))
+        return out
+
+    kinds_by_seg = _seat(_wants(in_room) if in_room and in_room > 0 else [None] * len(segs))
+    if not (in_room and in_room > 0) and sum(len(k) for k in kinds_by_seg) < A.MIN_K:
+        # a room is never smaller than twelve (Jenna 2026-11-17): a cohort whose kinds fold below that splits its largest kinds,
+        # by gender then age, across the cohorts by their people
+        kinds_by_seg = _seat(_wants(A.MIN_K))
     # the room holds at most MAX_IN_ROOM seats: the biggest segments give up their smallest kinds first
     while sum(len(k) for k in kinds_by_seg) > MAX_IN_ROOM:
         i = max(range(len(kinds_by_seg)), key=lambda j: len(kinds_by_seg[j]))

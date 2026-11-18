@@ -725,7 +725,7 @@ def dt_build():
               'format': str(body.get('format') or ''), 'platform_home': str(body.get('platform_home') or ''), 'name': str(body.get('name') or '')[:120],
               'window': body.get('window') if isinstance(body.get('window'), dict) else None, 'ask_text': str(body.get('ask_text') or '')[:400], 'op': 'build',
               'source': source if source in ('profile', 'demographics') else '', 'profile_key': profile_key, 'profile_name': profile_name,
-              'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists, 'panelists_explicit': bool(int(body.get('panelists') or 0)), 'via': 'dashboard'}
+              'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists, 'via': 'dashboard'}   # no seat count is asked for; the room seats the kinds (2026-11-17)
     from prometheus import digital_twin_job as J
     from prometheus import twin_named_pull as TNP
     uname = _uname(user)

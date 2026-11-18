@@ -125,19 +125,12 @@ def panelists_for(payload: dict) -> int:
 
 
 def requested_seats(payload: dict) -> int:
-    """The seat count a room on this twin must meet, or 0 when the room
-    seats by the kinds of people in the audience (Jenna 2026-11-17: one
-    seat per kind, each sized by the people it stands for). Only a count
-    the builder set by hand on the twin (``meta.panelists_explicit``)
-    forces a number; the stored default of twelve does not."""
-    meta = (payload or {}).get('meta') or {}
-    if not meta.get('panelists_explicit'):
-        return 0
-    try:
-        n = int(meta.get('panelists') or 0)
-    except (TypeError, ValueError):
-        n = 0
-    return max(2, min(n, PANEL_SEATS_MAX)) if n else 0
+    """Always 0: a room seats one person per kind of people in the
+    audience, at least twelve (Jenna 2026-11-17: "it shouldnt ask you
+    how many twins to seat, it should do it automatically based on the
+    number of distinct archetypes"). The twin carries no seat count of
+    its own; ``meta.panelists`` is a legacy field no surface asks for."""
+    return 0
 
 
 # ------------------------------------------------------------- the index
