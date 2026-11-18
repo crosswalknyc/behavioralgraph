@@ -10,6 +10,7 @@ A partner codes against five kinds and a fixed shape::
      "job":      {"id", "status", "poll", "eta_seconds", "stage"},
      "pending":  {"retry_after_seconds", "text"},
      "declined": {"reason", "text", "next": {"action", "endpoint"}},
+     "brief":    {"id", "state", "closed"},     only on a reply to an approval or dismissal in the Prometheus app
      "billing":  {"charged_usd", "balance_after_usd", "basis"},
      "replayed": false}
 
@@ -321,6 +322,10 @@ def to_v1(env: dict, raw: dict = None, *, billing: dict = None, conversation_id:
                 v1['declined']['briefs'] = briefs
                 if all(b.get('included') for b in briefs):
                     v1['declined']['included'] = True
+                # a brief the Prometheus app holds on the server carries its id and the words that approve or
+                # dismiss it through this door (prometheus.pending_briefs, Jenna 2026-11-17)
+                from . import pending_briefs as _pb
+                _pb.onto_rows(v1['declined'], raw)
         except Exception:
             pass
         return v1

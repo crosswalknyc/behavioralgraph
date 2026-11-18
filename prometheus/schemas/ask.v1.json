@@ -371,6 +371,26 @@
               "order": {
                 "type": "string",
                 "description": "The sentence that orders this build through POST /ask."
+              },
+              "id": {
+                "type": "string",
+                "description": "Prometheus app only: the id of a brief held for this conversation. Absent when the brief cannot be approved in the app."
+              },
+              "approve": {
+                "type": "string",
+                "description": "Prometheus app only: the text that approves this brief through POST /ask in the same conversation."
+              },
+              "dismiss": {
+                "type": "string",
+                "description": "Prometheus app only: the text that dismisses this brief."
+              },
+              "expires_at": {
+                "type": "string",
+                "description": "Prometheus app only: when the held brief stops being approvable (UTC, 24 hours after it was drafted)."
+              },
+              "price_label": {
+                "type": "string",
+                "description": "The price as the seat reads it, with its currency sign."
               }
             },
             "required": [
@@ -390,6 +410,50 @@
     },
     "job_id": {
       "type": "string"
+    },
+    "brief": {
+      "type": "object",
+      "description": "Prometheus app only: present on the reply to an approval or a dismissal of a held brief.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "started",
+            "already_running",
+            "already_delivered",
+            "dismissed",
+            "expired",
+            "out_of_date",
+            "unknown",
+            "open",
+            "approving"
+          ]
+        },
+        "closed": {
+          "type": "boolean",
+          "description": "True when the brief can no longer be approved."
+        },
+        "subject": {
+          "type": "string"
+        },
+        "included": {
+          "type": "boolean"
+        },
+        "price_usd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "state",
+        "closed"
+      ]
     }
   },
   "required": [

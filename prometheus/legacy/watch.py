@@ -434,7 +434,9 @@ def _pm_price_table():
     brief card prints money, never credits (Jenna 2026-10-07). None
     when the host cannot price (the widget then prints nothing)."""
     try:
-        tab = _H._v1_price_table_for(session.get('username'))
+        # a Prometheus app user has no session: the reader the ask door stamped, so a company rate prints the
+        # figure that will be charged (2026-11-17, with prometheus.pending_briefs)
+        tab = _H._v1_price_table_for(__import__('prometheus.ask_outcome', fromlist=['seat_username']).seat_username(None))
         if not isinstance(tab, dict):
             return None
         out = {str(k): float(v) for k, v in tab.items()

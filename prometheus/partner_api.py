@@ -250,6 +250,22 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
             replay = dict(hit[0])
             replay['replayed'] = True
             return replay, int(hit[1] or 200), {}
+    # A brief the Prometheus app holds is approved or dismissed through this same door (Jenna 2026-11-17,
+    # prometheus.pending_briefs): the card's own words, or a typed "approve" when one brief is waiting. Read
+    # before the question reaches a model and before the repeat replay (a second "approve" in a conversation is
+    # a second approval, never the first one's reply again). The order and its price are the stored ones; the
+    # reader is the one this door gated. Nothing in the body is read for either.
+    from . import pending_briefs as _pb
+    if _pb.wants(text, headers):
+        _lim = K.limits(user)
+        _rate = api_meter.check_rate(kid, 'ask', _lim['ask_per_minute'], _lim['ask_per_day'])
+        if not _rate['allowed']:
+            return _out(C.declined('rate_limit', 'Over the limit for this key. Try again shortly.',
+                                   retry_after=_rate['retry_after'], conversation_id=cid))
+        _brief = _pb.turn(user, cid, text, headers, thread_id=(conversation_thread_id(user, cid) if cid else ''))
+        if _brief is not None:
+            return _finish(_brief, key_id=kid, owner=owner, endpoint='ask', t0=t0, idem=idem, conversation_id=cid,
+                           trace_id=trace_id)
     # Loop safeties (Jenna 2026-10-14: "build in safeties to keep those dead
     # loops from draining a wallet"). The same question again inside ten
     # minutes replays the first answer free; the same question hammering
@@ -358,6 +374,10 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
                         conversation_id=cid, billing=_billing(user, request_id, sandbox, kid))
         return _out(v1, request_id)
     billing = _billing(user, request_id, sandbox, kid)
+    if isinstance(raw, dict) and isinstance(env, dict) and env.get('kind') == 'draft':
+        # a brief drafted for a reader in the Prometheus app goes on record, so its card can be approved there
+        _pb.stash(user, str(body.get('conversation_id') or '').strip(), raw, headers, thread_id=str(req.get('thread_id') or ''),
+                  question=text)
     v1 = C.to_v1(env, raw, billing=billing, conversation_id=cid, subject=subject, window=win)
     if _ride_kinds:
         _ride_subject = subject or str((raw or {}).get('subject') or (raw or {}).get('profile') or '') if isinstance(raw, dict) else subject

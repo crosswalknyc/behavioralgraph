@@ -272,25 +272,39 @@ function addMessage(role, html, opts) {
 }
 function bubble(id) { const m = $(id); return m ? m.querySelector('.bubble') : null; }
 
-function sendText(t) { $('box').value = t; send(); }
-async function send() {
+// `shown` is what the reader sees in their own bubble when the words sent are a card's (an approval carries an id)
+function sendText(t, shown) { $('box').value = t; return send(shown); }
+async function send(shown) {
   const text = $('box').value.trim();
-  if (!text || S.busy) return;
+  if (!text || S.busy) return null;
   $('box').value = ''; autosize($('box'));
   if (!S.cid) await newConversation();
-  S.log.push({ role: 'user', text });
-  addMessage('user', '<div class="text">' + esc(text) + '</div>');
+  const said = (typeof shown === 'string' && shown) ? shown : text;
+  S.log.push({ role: 'user', text: said });
+  addMessage('user', '<div class="text">' + esc(said) + '</div>');
   S.busy = true; $('sendbtn').disabled = true;
   const wait = addMessage('agent', '<div class="job"><span class="pulse"></span>Reading...</div>');
   const doc = await api().ask(text, S.cid);
   S.busy = false; $('sendbtn').disabled = false;
   render(wait, text, doc);
   renderConvs();
+  return doc;
 }
 
 function render(id, question, doc) {
   const b = bubble(id); if (!b) return;
   const kind = doc.kind;
+  if (doc.brief && doc.brief.id) {
+    // the reply to an approval or a dismissal: one plain line, and the card it came from closes when the brief has
+    noteBrief(doc.brief);
+    const d = doc.declined || {};
+    const line = (doc.answer && doc.answer.text) || d.text || 'Nothing came back. Try again.';
+    const funds = (d.next && d.next.action === 'top_up') ? '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/wallet\')">Add funds</button></div>' : '';
+    b.innerHTML = '<div class="text' + (kind === 'declined' ? ' declined' : '') + '">' + esc(line) + '</div>' + funds;
+    S.log.push({ role: 'agent', text: line });
+    scrollDown();
+    return;
+  }
   if (kind === 'answer') {
     b.innerHTML = answerHtml(question, doc);
     S.log.push({ role: 'agent', text: doc.answer.text });
@@ -326,30 +340,75 @@ function render(id, question, doc) {
   scrollDown();
 }
 
-// A drafted profile build, drawn as a brief card. A seat whose plan includes the build starts it from here: each
-// chip sends the order through this same conversation and the build starts in that turn. A paying seat reads the
-// price; approving a priced build is the one step this window cannot take yet, so that card keeps its way out.
+// A drafted build, drawn as a brief card. A brief the server holds for this conversation carries an id: its card
+// has Approve (Build, when the plan includes it) and Dismiss, and both go through this same conversation. The
+// order and the price stay on the server; the card sends only the id. A brief with no id is one this window cannot
+// approve (it still has a question open, which the dashboard's card asks), so that one keeps its way out.
 const BUILD_KIND = { new_build: 'New profile', time_shifted_refresh: 'Refresh for a new window', cut_needs_parent: 'New profile with a cut',
-  derive_cut: 'Cut of a profile you hold', existing_match: 'Already in your library' };
+  derive_cut: 'Cut of a profile you hold', subscriber_iq: 'Subscriber IQ', existing_match: 'Already in your library' };
+const BRIEF_END = { started: 'Approved. Building now.', already_running: 'Already running.', already_delivered: 'Already delivered.',
+  dismissed: 'Dismissed.', expired: 'Expired. Ask again for a fresh brief.', out_of_date: 'Out of date. Ask again for a fresh brief.', unknown: 'Closed.' };
+S.briefs = {};
+function briefSlot(id) { return 'brief-' + String(id).replace(/[^A-Za-z0-9-]/g, ''); }
+function holdBrief(x) {
+  if (S.briefs[x.id]) { S.briefs[x.id].row = x; return; }
+  const st = S.briefs[x.id] = { row: x };
+  const ms = Date.parse(x.expires_at || '') - Date.now();
+  if (ms <= 0) { st.closed = true; st.state = 'expired'; }
+  else if (ms < 2147483647) st.timer = setTimeout(() => noteBrief({ id: x.id, state: 'expired', closed: true }), ms);
+}
+function briefButtons(x) {
+  const st = S.briefs[x.id] || {};
+  if (st.closed) return '<span class="meta">' + esc(BRIEF_END[st.state] || 'Closed.') + '</span>';
+  const off = st.busy ? ' disabled' : '';
+  return '<button class="chip primary"' + off + ' onclick="approveBrief(' + attr(JSON.stringify(x.id)) + ')">' + esc((x.included ? 'Build ' : 'Approve ') + x.subject) + '</button>'
+    + '<button class="chip"' + off + ' onclick="dismissBrief(' + attr(JSON.stringify(x.id)) + ')">Dismiss</button>';
+}
+function drawBrief(id) { const el = $(briefSlot(id)); const st = S.briefs[id]; if (el && st) el.innerHTML = briefButtons(st.row); }
+// what the server said about a brief: a closed one stays closed and its buttons are gone for good
+function noteBrief(br) {
+  const st = S.briefs[br.id] || (S.briefs[br.id] = { row: { id: br.id, subject: br.subject || '' } });
+  st.busy = false;
+  if (br.closed) { st.closed = true; st.state = br.state; if (st.timer) clearTimeout(st.timer); }
+  drawBrief(br.id);
+}
+async function actOnBrief(id, verb) {
+  const st = S.briefs[id];
+  if (!st || st.closed || st.busy || S.busy) return null;
+  st.busy = true; drawBrief(id);           // one click, one approval: the buttons are off until the reply is in
+  const row = st.row;
+  const doc = await sendText(verb === 'dismiss' ? row.dismiss : row.approve, (verb === 'dismiss' ? 'Dismiss: ' : (row.included ? 'Build: ' : 'Approve: ')) + row.subject);
+  if (!doc || !doc.brief || doc.brief.id !== id) { st.busy = false; drawBrief(id); }
+  return doc;
+}
+function approveBrief(id) { return actOnBrief(id, 'approve'); }
+function dismissBrief(id) { return actOnBrief(id, 'dismiss'); }
 function briefHtml(d) {
   const briefs = (d.briefs || []).filter(x => x && x.subject);
-  const included = !!d.included;
+  briefs.forEach(x => { if (x.id && x.approve) holdBrief(x); });
   let html = '<div class="text">' + esc(briefs.length ? (briefs.length === 1 ? 'Here is the brief for that profile.' : 'Here are the briefs for those profiles.') : (d.text || 'This needs a profile build first.')) + '</div>';
   if (briefs.length) {
     html += '<table class="facts"><tr><th>Profile</th><th>Build</th><th>Window</th><th style="text-align:right">Cost</th></tr>'
       + briefs.map(x => '<tr><td>' + esc(x.subject) + '</td><td>' + esc(BUILD_KIND[x.decision] || 'New profile') + '</td><td>' + esc(x.window || '') + '</td><td class="v">'
-        + (x.included ? 'Included with your plan' : (x.price_usd != null ? fmt(x.price_usd, 'usd').replace(/\.00$/, '') : '')) + '</td></tr>').join('') + '</table>';
+        + (x.included ? 'Included with your plan' : (x.price_label ? esc(x.price_label) : (x.price_usd != null ? fmt(x.price_usd, 'usd').replace(/\.00$/, '') : ''))) + '</td></tr>').join('') + '</table>';
   }
-  const startable = briefs.filter(x => x.order && x.decision !== 'existing_match');
-  if (included && startable.length) {
+  const todo = briefs.filter(x => x.decision !== 'existing_match');
+  const held = todo.filter(x => x.id && x.approve);
+  const startable = todo.filter(x => !(x.id && x.approve) && x.included && x.order);
+  const elsewhere = todo.filter(x => !(x.id && x.approve) && !(x.included && x.order));
+  if (held.length) {
+    html += held.slice(0, 8).map(x => '<div class="chips" id="' + briefSlot(x.id) + '">' + briefButtons(x) + '</div>').join('')
+      + '<div class="meta">' + (held.every(x => x.included) ? 'Included with your plan. Nothing starts until you choose one.' : 'Nothing is charged until you approve. The price is the one on the brief.') + '</div>';
+  }
+  if (startable.length) {
     html += '<div class="chips">' + startable.slice(0, 8).map((x, i) => '<button class="chip' + (i === 0 ? ' primary' : '') + '" onclick="sendText(' + attr(JSON.stringify(x.order)) + ')">Build ' + esc(x.subject) + '</button>').join('') + '</div>'
       + '<div class="meta">Included with your plan. Nothing starts until you choose one.</div>';
-  } else if (briefs.length && briefs.every(x => x.decision === 'existing_match')) {
-    html += '<div class="meta">Nothing to build. Ask your question about it here.</div>';
-  } else {
-    html += '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/\')">Review and approve in the dashboard</button></div>'
-      + '<div class="meta">Nothing is charged until you approve. Approving a priced build is not available in this window yet.</div>';
   }
+  if (elsewhere.length) {
+    html += '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/\')">Review and approve in the dashboard</button></div>'
+      + '<div class="meta">Nothing is charged until you approve. ' + (held.length ? 'One of these has' : (elsewhere.length === 1 ? 'This brief has' : 'These briefs have')) + ' a step that is finished in the dashboard.</div>';
+  }
+  if (briefs.length && !todo.length) html += '<div class="meta">Nothing to build. Ask your question about it here.</div>';
   return html;
 }
 
