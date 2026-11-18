@@ -51382,6 +51382,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-stream { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 8px; scrollbar-width: thin; overscroll-behavior: contain; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-composer { position: relative; bottom: auto; z-index: 2; flex: 0 0 auto; padding: 10px 0 2px; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { position: static; align-self: stretch; max-height: var(--dtw-main-h, 58vh); overflow: hidden; }
+        /* the room redesign (Jenna 2026-11-18): the chat is the page, the split stays beside it, Responses and What the room knew fold under
+           the split, the sixteen faces sit below them; the strip above the thread steps aside so the faces live in one place */
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero .dtw-fg-seatrow { display: none; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { padding-bottom: 0; }
+        #digitalTwinsIQView .dtw-fg-fold { border-top: 1px solid var(--dtw-rule); margin-top: 12px; padding-top: 6px; }
+        #digitalTwinsIQView .dtw-fg-foldh { appearance: none; background: transparent; border: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 0; margin: 0; color: var(--dtw-ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+        #digitalTwinsIQView .dtw-fg-foldh .n { font-size: 11px; color: var(--dtw-clabel); font-weight: 400; margin-left: 8px; }
+        #digitalTwinsIQView .dtw-fg-foldh .chev { width: 7px; height: 7px; border-right: 1.5px solid var(--dtw-mute); border-bottom: 1.5px solid var(--dtw-mute); transform: rotate(-45deg); transition: transform .15s; flex: none; margin-right: 3px; }
+        #digitalTwinsIQView .dtw-fg-fold.open .dtw-fg-foldh .chev { transform: rotate(45deg); }
+        #digitalTwinsIQView .dtw-fg-foldb { padding: 2px 0 6px; }
+        #digitalTwinsIQView .dtw-fg-foldb .dtw-fg-sec { margin-top: 6px; }
+        #digitalTwinsIQView .dtw-fg-roomsec { border-top: 1px solid var(--dtw-rule); margin-top: 12px; padding-top: 12px; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini { --seat-pitch: 54; --circ: 38px; gap: 6px 2px; margin-top: 8px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-seat { padding: 4px 0 0; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-circ .ini { font-size: 12px; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-seat .nm { font-size: 10.5px; line-height: 13px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-seat .ag { display: none; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-field { min-height: 60px; border-radius: 10px; border-color: var(--dtw-accent); padding-left: 18px; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-field input { font-size: 15px; padding: 14px 0; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-composer { padding-top: 12px; }
         #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; min-width: 0; width: 100%; gap: 10px; }
         #digitalTwinsIQView .dtw-fg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-height: 24px; flex: 0 0 auto; }
         #digitalTwinsIQView .dtw-fg-top .dtw-eyebrow { color: var(--dtw-body); font-weight: 400; letter-spacing: 0.25em; font-size: 10px; min-width: 0; overflow-wrap: anywhere; }
@@ -53983,10 +54003,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (a && !used[seat]) { used[seat] = 1; ans.push(a); }
                 });
                 bySeat.forEach(function(a) { if (!used[Number(a.seat)]) ans.push(a); });
-                var rest = ans.length - 4, fold = rest > 0 && !S.fg.earlier[q.id], shown = fold ? ans.slice(0, 4) : ans;
-                var out = bubblesHtml(shown.map(function(a) { return answerMsg(q, rk, a, roster); }));
-                if (fold) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', true)">Show ' + rest + ' more ' + (rest === 1 ? 'answer' : 'answers') + '</button>';
-                else if (rest > 0) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', false)">Hide ' + rest + ' ' + (rest === 1 ? 'answer' : 'answers') + '</button>';
+                if (!ans.length) return '';
+                var fold = !S.fg.earlier[q.id], shown = fold ? [] : ans;
+                var out = fold ? '' : bubblesHtml(shown.map(function(a) { return answerMsg(q, rk, a, roster); }));
+                if (fold) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', true)">Show the ' + ans.length + ' ' + (ans.length === 1 ? 'answer' : 'answers') + '</button>';
+                else out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', false)">Hide the answers</button>';
                 return out;
             }
             function probesHtml(q) {
@@ -54157,8 +54178,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function fullBlock(q, i, roster, isLast, fly, noHead) {
                 var out = noHead ? ((q.framing && normQ(q.framing) !== normQ(q.q)) || q.note ? '<div class="dtw-fg-qmsg" data-q="' + esc(q.id || '') + '"><span class="dtw-fg-modav" style="visibility:hidden"></span><div class="dtw-fg-qt">' + (q.framing && normQ(q.framing) !== normQ(q.q) ? '<div class="fr" style="margin-top:0">' + esc(q.framing) + '</div>' : '') + (q.note ? '<div class="nt">' + esc(q.note) + '</div>' : '') + '</div></div>' : '') : qMsg(q, i, roster);
                 if (qFailed(q)) return out + failedMsg(q, isLast && !fly);
-                out += answersHtml(q, roster);
+                // the read first, then the answers behind one line (Jenna 2026-11-18: the chat is the page; the answers fold)
                 if (q.read) out += readMsg(q);
+                out += answersHtml(q, roster);
                 if (isLast && !fly) out += probesHtml(q);
                 return out;
             }
@@ -54218,6 +54240,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var f = ((q || {}).facts_used || []).filter(Boolean); if (!f.length) return '';
                 return '<div class="dtw-fg-sec"><div class="dtw-fg-th">What the room knew.</div>' + f.map(function(x, i) { return '<div class="dtw-fg-fact"><span class="num">' + (i < 9 ? '0' : '') + (i + 1) + '</span><span>' + esc(x) + '</span></div>'; }).join('') + '</div>';
             }
+            // the folded sections under the split (Jenna 2026-11-18): Responses and What the room knew open in place; closed by default
+            function foldSec(key, title, count, body) {
+                var open = !!(S.fg.fold || {})[key];
+                return '<div class="dtw-fg-fold' + (open ? ' open' : '') + '"><button type="button" class="dtw-fg-foldh" aria-expanded="' + (open ? 'true' : 'false') + '" onclick="dtwFgFold(\'' + key + '\')"><span>' + title + '<span class="n">' + count + '</span></span><span class="chev"></span></button>' + (open ? '<div class="dtw-fg-foldb">' + body + '</div>' : '') + '</div>';
+            }
+            window.dtwFgFold = function(key) { S.fg.fold = S.fg.fold || {}; S.fg.fold[key] = !S.fg.fold[key]; dtwFgTallyQ(S.fg.tallyQ); };
+            // the room's faces under the split: the same seats as the strip, ringed in the color of each one's answer; tap one for who
+            // they are and an Ask line that puts their name in the box
+            function roomSeatsSec(g, roster, fq, fly) {
+                if (!roster.length) return '';
+                var rk = fq ? rankMap(fq) : {}, bySeat = {}, flyBySeat = {};
+                if (fq) (fq.answers || []).forEach(function(a) { bySeat[String(a.seat)] = a; });
+                if (fly) (fly.answers || []).forEach(function(a) { flyBySeat[String(a.seat)] = a; });
+                var seats = roster.map(function(r, i) {
+                    var a = bySeat[String(r.seat)], landed = !!flyBySeat[String(r.seat)];
+                    return seatCircle(r, i, { edge: a ? edgeOf(rk, answerOptId(fq, a)) : '', mark: fly ? (landed ? '<span class="mark"></span>' : '<span class="mark wait"></span>') : '', pending: !!fly && !landed });
+                }).join('');
+                return '<div class="dtw-fg-sec dtw-fg-roomsec"><div class="dtw-fg-th">The room.<span>' + fmtN((g || {}).in_room || roster.length) + ' twins standing for ' + fmtN((g || {}).size_people) + ' people' + SEP + 'tap one to ask them</span></div><div class="dtw-fg-seatrow mini" role="list">' + seats + '</div></div>';
+            }
+            window.dtwFgAskSeat = function(seatNo) {
+                var r = ((S.session || {}).group || {}).roster || [], seat = r.filter(function(x) { return Number(x.seat) === Number(seatNo); })[0]; if (!seat) return;
+                var inp = el('dtwPnQ'); if (!inp) return;
+                var tag = '@' + titleCase(seat.name || '') + ', ', cur = String(inp.value || '');
+                if (cur.indexOf(tag) < 0) inp.value = tag + cur.replace(/^@[^,]+,\s*/, '');
+                dtwSeatOpen(null);
+                try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (_) {}
+            };
             // What people were saying (2026-11-04): the lines the audience itself used, from the media desk, under the facts.
             function talkSec(q) {
                 var t = ((q || {}).talk || []).filter(Boolean); if (!t.length) return '';
@@ -54250,8 +54299,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function tallyHtml(s, g, roster, fq) {
                 var body;
-                if (!fq) body = '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">Ask the first question and the split lands here: one bar, the people behind each answer, what the room knew and the voices.</div>' + roomFacts(g);
-                else if (qFailed(fq)) body = '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">' + esc(fq.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</div>' + factsSec(fq);
+                var fly0 = flyQ();
+                if (!fq) body = '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">Ask the first question and the split lands here: one bar, the people behind each answer, what the room knew and the voices.</div>' + roomFacts(g) + roomSeatsSec(g, roster, null, fly0);
+                else if (qFailed(fq)) body = '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">' + esc(fq.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</div>' + factsSec(fq) + roomSeatsSec(g, roster, fq, fly0);
                 else {
                     var live = qInFlight(fq), opts = optsOf(fq), rk = rankMap(fq), seats = seatsTotal(fq), counts = live ? liveCounts(fq) : null, nA = (fq.answers || []).length;
                     body = '<div class="dtw-fg-th">' + (live ? 'The split so far.' : 'The split.') + '<span>' + (live ? nA + (seats ? ' of ' + seats : '') + ' answered' : 'Share of the room, by answer') + '</span></div>';
@@ -54267,11 +54317,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
                         }).join('');
                     }
-                    body += factsSec(fq) + talkSec(fq);
-                    var voices = voicesAll(fq, roster), vn = Math.min(voices.length, S.fg.vShown[qId(fq, (s.questions || []).indexOf(fq))] || 2);
-                    S.fg.vctx = { q: fq, roster: roster, list: voices, key: qId(fq, (s.questions || []).indexOf(fq)) };
-                    if (voices.length) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The voices.<span id="dtwFgVoicesN">' + vn + ' of ' + voices.length + '</span></div><div class="dtw-fg-vtwo" id="dtwFgVoices">' + voices.slice(0, vn).map(function(v) { return voiceMini(v, roster, fq); }).join('') + '</div></div>';
+                    // under the split: Responses and What the room knew fold (Jenna 2026-11-18), then the cohorts, then the room's faces
+                    var voices = voicesAll(fq, roster), vkey = qId(fq, (s.questions || []).indexOf(fq));
+                    S.fg.vctx = { q: fq, roster: roster, list: voices, key: vkey };
+                    S.fg.vShown[vkey] = voices.length;
+                    if (voices.length) body += foldSec('resp', 'Responses', esc(voices.length + (voices.length === 1 ? ' answer' : ' answers')), '<div class="dtw-fg-vtwo" id="dtwFgVoices">' + voices.map(function(v) { return voiceMini(v, roster, fq); }).join('') + '</div>');
+                    var facts = ((fq || {}).facts_used || []).filter(Boolean), talk = ((fq || {}).talk || []).filter(Boolean);
+                    if (facts.length || talk.length) body += foldSec('facts', 'What the room knew', esc(facts.length + (facts.length === 1 ? ' fact' : ' facts')) + (talk.length ? SEP + esc(talk.length + ' said') : ''), (factsSec(fq) + talkSec(fq)).replace(/<div class="dtw-fg-th">What the room knew\.<\/div>/, ''));
                     body += segmentsSec(fq, rk);
+                    body += roomSeatsSec(g, roster, fq, fly0);
                 }
                 return qPickHtml(s, fq) + '<div class="dtw-fg-tally-in" id="dtwFgTallyIn">' + body + '</div>';
             }
@@ -54281,6 +54335,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), fly = flyQ();
                 if (!paintFgDock(s, g, roster, fq, fly)) { fgRefresh(); return; }
                 h.innerHTML = tallyHtml(s, g, roster, fq);
+                fgLayoutSeats();
                 var inn = el('dtwFgTallyIn'); if (inn) inn.scrollTop = 0;
             };
             // ---- the composer, under the thread, as the Prometheus chat: the kind chips, the field, Ask the room as the one Signal Green button.
@@ -54384,7 +54439,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 paintFgDock(s, g, roster, fq, fly);
                 var tr = el('dtwPnTranscript');
                 if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, latest, fly); if (atEnd) fgScrollEnd(); }
-                var ta = el('dtwFgTally'); if (ta) ta.innerHTML = tallyHtml(s, g, roster, fq);
+                var ta = el('dtwFgTally'); if (ta) { ta.innerHTML = tallyHtml(s, g, roster, fq); fgLayoutSeats(); }
                 syncFgActs();
                 setAskEnabled(true);
                 if (S.fg.seat != null) placePop();
@@ -54697,7 +54752,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<h5>What they said in this room <span>&middot; ' + said.length + (said.length === 1 ? ' answer' : ' answers') + '</span></h5>';
                 if (!said.length) out += '<p>Nothing yet. Ask the room a question and ' + esc(nm) + ' answers in character.</p>';
                 else out += said.map(function(x) { var rk = rankMap(x.q), optId = answerOptId(x.q, x.a); return '<div class="said"><div class="q">' + ((x.i < 9 ? '0' : '') + (x.i + 1)) + ' &middot; ' + esc(x.q.q) + '</div>' + optTag(x.q, rk, optId, x.a.option_label || '') + '<div class="line">' + esc(x.a.line || '') + '</div>' + (x.a.reason ? '<div class="why">' + esc(x.a.reason) + '</div>' : '') + '</div>'; }).join('');
-                out += '<div class="pacts"><button type="button" class="dtw-fg-act" onclick="dtwSeatOpen(null)">Close</button></div>';
+                out += '<div class="pacts"><button type="button" class="dtw-fg-act" onclick="dtwFgAskSeat(' + Number(r.seat) + ')">Ask ' + esc(nm) + '</button><button type="button" class="dtw-fg-act" onclick="dtwSeatOpen(null)">Close</button></div>';
                 h.innerHTML = out;
             }
             // Portraits finish after the room is seated: re-read the session once or twice and redraw the band, the thread and the voices, nothing else.
