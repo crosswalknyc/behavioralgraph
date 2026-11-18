@@ -34,6 +34,15 @@ the universe lifts above the figure under its own dated filename, its
 cuts follow, the catalog re-indexes) and the mail carries only what the
 sweep could not settle itself (2026-10-20, Jenna: "have the system
 realize that so no need for the email").
+
+Two other products are compared on ONE MEASURE at a time (2026-11-18,
+Jenna, the Coach x WNBA note: a journey's 171,621 buyers were paired
+with the valuation's 3,781,941 reach and mailed as a disagreement). A
+journey's end point is the people who finished the path and compares
+with a valuation's converters; its first row compares with the reach;
+buyers below reach is the shape of a funnel and never a finding. A
+journey built to hold a valuation's counts is checked against them
+count for count. See audit_facts and corpus_catalog.typed_measure.
 """
 from __future__ import annotations
 
@@ -389,25 +398,52 @@ def audit_facts(facts, subject=''):
     journey's steps inside its own base, a title's watchers inside a
     universe that is larger.
 
+    And a fourth (2026-11-18, Jenna, after the Coach x WNBA journey's
+    buyers were paired with the valuation's reach): the two figures are
+    the SAME MEASURE. A journey's end point is the people who finished
+    the path; it compares with a valuation's converters, never with its
+    reach. A journey's first row is what compares with the reach. A
+    later step below an earlier one (buyers below reach) is the shape
+    of a funnel, never a finding.
+
       universe_below_subset   Profile IQ universe (a parent file) below
                               another product's total on a window
                               inside the profile's. Fixable: the
                               universe lifts in place.
-      sub_window_exceeds      two other products, like steps, the one
+      sub_window_exceeds      two other products, one measure, the one
                               on the contained window above the one on
                               the containing window.
-      same_window_disagree    two other products, like steps, identical
+      same_window_disagree    two other products, one measure, identical
                               windows, apart by more than 35%.
+      held_count_differs      a journey built to hold a valuation's
+                              counts (it names the file) and one of the
+                              shared counts is not the valuation's,
+                              to the person.
+      later_step_exceeds      two measures of one funnel, the later
+                              step (converted) above the earlier one
+                              (reached) on a window inside it.
 
     Returns findings; each carries the two facts (``profile`` / ``other``
-    for the universe rule, ``inner`` / ``outer`` for the rest)."""
+    for the universe rule, ``inner`` / ``outer`` for the rest), the
+    measure on each side (``measure_a`` / ``measure_b``) and ``what``,
+    the plain sentence the notice prints."""
     facts = _attach_samples([f for f in (facts or []) if isinstance(f, dict)])
-    sizes = [f for f in facts if f.get('kind') in ('audience_size', 'stage_count')
+    sizes = [f for f in facts
+             if (f.get('kind') in ('audience_size', 'stage_count', 'funnel_count')
+                 or cc.typed_measure(f) == cc.MEASURE_ADDED)
              and f.get('unit') == 'people' and f.get('product') != 'chat'
              and not (f.get('product') == 'profile' and f.get('cut')) and _val(f) > 0]
     universes = [f for f in sizes if f.get('product') == 'profile' and f.get('kind') == 'audience_size']
     others = [f for f in sizes if f.get('product') != 'profile']
     findings = []
+
+    def _found(kind, first, second, ma, mb, **extra):
+        f = {'subject': subject, 'kind': kind, 'a': _fact_line(first), 'b': _fact_line(second),
+             'measure_a': ma, 'measure_b': mb}
+        f.update(extra)
+        f['what'] = _what(f, first, second)
+        findings.append(f)
+
     # Rule 1: a Profile IQ universe holds everything another product
     # measured on a window inside the profile's own. Above it: fine,
     # whatever the windows (a universe is the superset). Below it: a
@@ -419,20 +455,40 @@ def audit_facts(facts, subject=''):
             if not cc.window_within(o.get('window') or {}, p.get('window') or {}):
                 continue
             if _val(o) > _val(p) * 1.05:
-                findings.append({'subject': subject, 'kind': 'universe_below_subset',
-                                 'a': _fact_line(o), 'b': _fact_line(p), 'profile': p, 'other': o})
-    # Rules 2 and 3: between two other products, like with like only.
+                _found('universe_below_subset', o, p, cc.typed_measure(o), cc.MEASURE_TOTAL,
+                       profile=p, other=o)
+    # The rest: between two other products, one measure at a time.
     for i, a in enumerate(others):
         for b in others[i + 1:]:
-            if a.get('product') == b.get('product') or not _comparable(a, b):
+            if a.get('product') == b.get('product'):
+                continue
+            ma, mb = _pair_measures(a, b)
+            if not ma or not mb:
                 continue
             wa, wb = a.get('window') or {}, b.get('window') or {}
             va, vb = _val(a), _val(b)
+            if ma != mb:
+                # Two different steps of one funnel. The only thing that
+                # can be said is the order: the later step never holds
+                # more people than the earlier one on a window inside it.
+                if ma not in cc.FUNNEL_ORDER or mb not in cc.FUNNEL_ORDER:
+                    continue
+                up, down, mu, md = (a, b, ma, mb) if cc.FUNNEL_ORDER.index(ma) < cc.FUNNEL_ORDER.index(mb) \
+                    else (b, a, mb, ma)
+                if cc.window_within(down.get('window') or {}, up.get('window') or {}) \
+                        and _val(down) > _val(up) * 1.05:
+                    _found('later_step_exceeds', down, up, md, mu, inner=down, outer=up)
+                continue
+            if _holds(a, b) or _holds(b, a):
+                # built to hold the other's count: equal to the person, or a finding
+                if int(round(va)) != int(round(vb)):
+                    j, v = (a, b) if _holds(a, b) else (b, a)
+                    _found('held_count_differs', j, v, ma, mb, inner=j, outer=v)
+                continue
             if cc.same_window(wa, wb):
                 if max(va, vb) / min(va, vb) > 1.35:
                     small, big = (a, b) if va < vb else (b, a)
-                    findings.append({'subject': subject, 'kind': 'same_window_disagree',
-                                     'a': _fact_line(small), 'b': _fact_line(big), 'inner': small, 'outer': big})
+                    _found('same_window_disagree', small, big, ma, mb, inner=small, outer=big)
                 continue
             if cc.window_within(wa, wb):
                 inner, outer = a, b
@@ -441,8 +497,7 @@ def audit_facts(facts, subject=''):
             else:
                 continue        # overlap without containment is never a sub-window case
             if _val(inner) > _val(outer) * 1.05:
-                findings.append({'subject': subject, 'kind': 'sub_window_exceeds',
-                                 'a': _fact_line(inner), 'b': _fact_line(outer), 'inner': inner, 'outer': outer})
+                _found('sub_window_exceeds', inner, outer, ma, mb, inner=inner, outer=outer)
     return findings
 
 
@@ -500,44 +555,93 @@ def reconcile(findings, dry_run=False, s3=None):
     return fixed, unresolved
 
 
-# Order matters: a label is classed by the first family that names it.
-# A showtimes page and a ticketing-site visit are two different steps
-# (film ladder per no-box-office-prediction.mdc, settled 2026-10-06):
-# 'Looked up showtimes' compares with 'reached a showtimes page', never
-# with 'went to a ticketing site or app for a ticket'.
-_STAGE_CLASSES = (
-    ('checkout', ('checkout', 'cart', 'paid', 'bought', 'purchase', 'end point',
-                  'final ticket step')),
-    ('showtimes', ('showtime',)),
-    ('ticketing', ('ticketing site', 'ticketing-site', 'ticketing page', 'for a ticket')),
-    ('infoseek', ('looked', 'search', 'info', 'research', 'trailer', 'review')),
-    ('exposed', ('saw', 'exposed', 'reached by', 'tracked campaign')),
-    ('acted', ('acted', 'engaged', 'clicked')),
-)
+# The step classes live with the measures in corpus_catalog (the journey
+# reader types a first row with them); the names here are kept for the
+# callers and tests that reach them through this module.
+_STAGE_CLASSES = cc.STAGE_CLASSES
+_stage_class = cc.stage_class
 
 
-def _stage_class(label):
-    low = str(label or '').lower()
-    for name, toks in _STAGE_CLASSES:
-        if any(t in low for t in toks):
-            return name
-    return 'other'
+def _pair_measures(a, b):
+    """The measure each of two facts stands for when the pair is
+    compared, or '' for a fact that has no place in the comparison.
+
+    Two path rows (a journey step against a campaign step) are read off
+    their labels, as they always were: the same step compares (saw with
+    saw, looked-up with looked-up, showtimes with showtimes), and a
+    bottom-of-path or unnamed step never enters. Any other pair is
+    compared BY TYPE (cc.typed_measure): a valuation's reach, engaged,
+    added and converted people; a journey's end point (converted), its
+    first row next to a valuation (reached), the rows a held journey
+    shares with its valuation. A row with no type has no place next to
+    a typed count, so a label is never guessed into a measure there."""
+    if a.get('kind') == 'stage_count' and b.get('kind') == 'stage_count':
+        ca, cb = _stage_class(a.get('label')), _stage_class(b.get('label'))
+        return ('' if ca in ('checkout', 'other') else ca,
+                '' if cb in ('checkout', 'other') else cb)
+    return cc.typed_measure(a, b), cc.typed_measure(b, a)
 
 
 def _comparable(a, b):
-    """Only compare like with like. Two total audiences compare. Two
-    path stages compare only when they are the same step (exposed with
-    exposed, looked-up with looked-up). A total never compares with a
-    stage, and bottom-of-path steps never enter the audit at all."""
-    ka, kb = a.get('kind'), b.get('kind')
-    if ka != kb:
-        return False
-    if ka == 'audience_size':
-        return True
-    ca, cb = _stage_class(a.get('label')), _stage_class(b.get('label'))
-    if ca in ('checkout', 'other') or cb in ('checkout', 'other'):
-        return False
-    return ca == cb
+    """Only compare like with like: the two facts stand for the same
+    measure. A journey's end point (the people who finished the path)
+    never compares with a valuation's reach; a total never compares
+    with a path step; bottom-of-path steps read off a label never enter
+    the audit at all."""
+    ma, mb = _pair_measures(a, b)
+    return bool(ma) and ma == mb
+
+
+def _holds(j, v):
+    """True when fact ``j`` comes from a journey built to hold the
+    counts of the valuation file fact ``v`` comes from."""
+    anchor = str(j.get('anchor') or '')
+    return bool(anchor) and anchor == str((v.get('source') or {}).get('key') or '')
+
+
+_PRODUCT_NAMES = {'profile': 'Profile IQ', 'journey': 'Digital Journey IQ',
+                  'attribution': 'Attribution IQ', 'bpiq': 'Brand Partnership IQ'}
+_MEASURE_WORDS = {
+    'reached': 'people reached',
+    'engaged': 'people who engaged',
+    'added': 'people added in the window',
+    'converted': 'people who finished the path (bought, subscribed or converted)',
+    'total': 'total audience',
+    'exposed': 'people who saw the content',
+    'acted': 'people who acted on the content',
+    'infoseek': 'people who looked it up',
+    'showtimes': 'people who reached a showtimes page',
+    'ticketing': 'people who went to a ticketing site for a ticket',
+}
+
+
+def _measure_words(m):
+    return _MEASURE_WORDS.get(str(m or ''), str(m or 'people'))
+
+
+def _product_name(f):
+    return _PRODUCT_NAMES.get(str((f or {}).get('product') or ''), str((f or {}).get('product') or ''))
+
+
+def _what(finding, first, second):
+    """One plain sentence for a finding: which measure is compared in
+    which product, and how the two figures should relate. ``first`` and
+    ``second`` are the facts behind the finding's two lines, in order."""
+    kind = finding.get('kind')
+    wa, wb = _measure_words(finding.get('measure_a')), _measure_words(finding.get('measure_b'))
+    pa, pb = _product_name(first), _product_name(second)
+    if kind == 'universe_below_subset':
+        return (f"Compared: {wa} in {pa} (first line) with the {pb} universe (second line). "
+                f"The universe should hold everyone counted on a window inside its own; the first figure sits above it.")
+    if kind == 'later_step_exceeds':
+        return (f"Compared: {wa} in {pa} (first line) with {wb} in {pb} (second line). "
+                f"The first is a later step of the same path and should sit at or below the second; it sits above.")
+    both = f"Compared: {wa} in both products ({pa} first, {pb} second)."
+    if kind == 'held_count_differs':
+        return f"{both} The journey was built to hold the valuation's count to the person; the two differ."
+    if kind == 'sub_window_exceeds':
+        return f"{both} The first figure is on the shorter window and should sit at or below the second; it sits above."
+    return f"{both} Same window: the two should agree and are more than 35% apart."
 
 
 def _fact_line(f):
@@ -555,15 +659,13 @@ def _fact_line(f):
             f"{cc._fmt_window(f.get('window'))}")
 
 
-def send_audit_email(findings, n_multi, stats, fixed=()):
-    """The sweep mails ONLY what it could not settle itself. Both sides
-    of every line are projected US people. Nothing left to look at means
-    no mail at all, never an empty one (2026-10-21, Jenna: 'getting so
-    many of these')."""
-    if not findings:
-        print('[audit] nothing to mail')
-        return ''
-    import boto3
+def audit_email_text(findings, n_multi, stats, fixed=()):
+    """(subject, body) of the audit notice. Pure text, no send. Every
+    flagged pair says which measure is compared in which product and
+    how the two figures should relate (2026-11-18: the old header said
+    'the first line is the figure that sits above, the second the one
+    it had to sit under' over every pair, which was never true of a
+    same-window pair, where the smaller figure printed first)."""
     lines = [f"Corpus catalog sweep {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
              '',
              f"Profiles indexed this run: {stats.get('profiles', 0)}; journeys: {stats.get('journeys', 0)}; "
@@ -574,15 +676,28 @@ def send_audit_email(findings, n_multi, stats, fixed=()):
     if fixed:
         lines.append(f"{len(fixed)} universe(s) brought into line in place this run (no action needed).")
         lines.append('')
-    lines.append(f"{len(findings)} cross-product disagreement(s) to look at (every figure is projected US people; "
-                 f"the first line is the figure that sits above, the second the one it had to sit under):")
+    lines.append(f"{len(findings)} cross-product disagreement(s) to look at. Every figure is projected US people. "
+                 f"Each pair says which measure is compared in which product and how the two figures should relate:")
     lines.append('')
     for f in findings[:60]:
         lines.append(f"- {f['subject']} ({f['kind'].replace('_', ' ')})")
+        if f.get('what'):
+            lines.append(f"    {f['what']}")
         lines.append(f"    {f['a']}")
         lines.append(f"    {f['b']}")
-    body = '\n'.join(lines)
-    subj = f"Corpus catalog: {len(findings)} cross-product disagreement(s)"
+    return f"Corpus catalog: {len(findings)} cross-product disagreement(s)", '\n'.join(lines)
+
+
+def send_audit_email(findings, n_multi, stats, fixed=()):
+    """The sweep mails ONLY what it could not settle itself. Both sides
+    of every line are projected US people. Nothing left to look at means
+    no mail at all, never an empty one (2026-10-21, Jenna: 'getting so
+    many of these')."""
+    if not findings:
+        print('[audit] nothing to mail')
+        return ''
+    import boto3
+    subj, body = audit_email_text(findings, n_multi, stats, fixed=fixed)
     try:
         ses = boto3.client('ses', region_name='us-east-2')
         ses.send_email(Source=SENDER, Destination={'ToAddresses': ALERT_TO},
@@ -610,6 +725,9 @@ def main(argv=None):
     ap.add_argument('--force-journeys', action='store_true',
                     help='re-read every journey payload regardless of its stored ETag (after a change '
                          'to the journey identity reader)')
+    ap.add_argument('--force-bpiq', action='store_true',
+                    help='re-read every brand partnership read regardless of its stored ETag (after a change '
+                         'to the valuation reader)')
     ap.add_argument('--no-reconcile', action='store_true',
                     help='report disagreements without correcting the fixable ones in place')
     args = ap.parse_args(argv)
@@ -643,6 +761,9 @@ def main(argv=None):
             # from Hulu to Nip/Tuck) leaves its old page inside bulk_upsert
             sources = {k: v for k, v in sources.items() if (v or {}).get('product') != 'journey'}
             print('[sync] --force-journeys: every journey payload will be re-read')
+        if args.force_bpiq:
+            sources = {k: v for k, v in sources.items() if (v or {}).get('product') != 'bpiq'}
+            print('[sync] --force-bpiq: every brand partnership read will be re-read')
         present = set()
         n, seen = sweep_profiles(sources, dry_run=args.dry_run, workers=args.workers)
         stats['profiles'] = n
@@ -671,7 +792,7 @@ def main(argv=None):
     if not args.no_audit:
         findings, n_multi = audit()
         for f in findings[:40]:
-            print(f"[audit] {f['subject']} | {f['kind']} | {f['a']} || {f['b']}")
+            print(f"[audit] {f['subject']} | {f['kind']} | {f.get('what') or ''} | {f['a']} || {f['b']}")
         if findings and not args.no_reconcile:
             # the fixable shape is corrected in place and silently; the
             # catalog re-indexes as each universe lifts, so a second audit

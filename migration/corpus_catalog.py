@@ -35,8 +35,14 @@ Shape
 
     product: profile | journey | attribution | bpiq | chat | deck
     kind:    sample_size | audience_size | platform_count | stage_count |
-             conversion_pct | ticketing_partition | valuation |
-             stated_number
+             funnel_count | conversion_pct | ticketing_partition |
+             valuation | stated_number
+
+    A people count may also say what it MEASURES (2026-11-18): "measure"
+    is reached | engaged | added | converted, "entry" marks a journey's
+    first row, and "anchor" names the valuation file a journey was built
+    to hold. The sweep's audit compares two products on the same measure
+    only (see MEASURES below).
 
 Index is small (one line per subject and per source) and cached in
 process (TTL 300s, ETag-checked), so a lookup is a dict hit. Subject
@@ -257,7 +263,7 @@ def _fact_id(product, source_key, kind, label, window):
 
 
 def make_fact(product, kind, label, value, unit, *, window=None, as_of=None,
-              source_key='', source_user='', note=''):
+              source_key='', source_user='', note='', measure='', anchor=''):
     try:
         v = float(value)
     except (TypeError, ValueError):
@@ -268,13 +274,98 @@ def make_fact(product, kind, label, value, unit, *, window=None, as_of=None,
     if isinstance(window, dict) and (window.get('start') or window.get('end')):
         win = {'start': str(window.get('start') or '')[:10],
                'end': str(window.get('end') or '')[:10]}
-    return {'id': _fact_id(product, source_key, kind, label, win),
+    fact = {'id': _fact_id(product, source_key, kind, label, win),
             'product': product, 'kind': kind, 'label': str(label)[:160],
             'value': (int(v) if unit in ('people', 'individuals') and abs(v - round(v)) < 1e-6
                       else round(v, 4)),
             'unit': unit, 'window': win, 'as_of': (as_of or _now_iso())[:19],
             'source': {'key': source_key, 'user': source_user},
             'note': str(note or '')[:240]}
+    if measure:
+        fact['measure'] = str(measure)
+    if anchor:
+        fact['anchor'] = str(anchor)
+    return fact
+
+
+# ------------------------------------------------------------- measures
+# What a people count MEASURES (2026-11-18, Jenna). The sweep paired the
+# Coach x WNBA journey's buyers (171,621, its end point) with the
+# valuation's reach (3,781,941) and mailed it as a disagreement. Both
+# were filed as kind 'audience_size'; nothing said one was the bottom of
+# a path and the other the top of it. A count now says what it is, and
+# two products are compared on the same measure only.
+#
+#   reached     the people the subject reached: a valuation's reach, a
+#               journey's first row
+#   engaged     the people who engaged with the brand's content
+#   added       the people added to the brand's audience in the window
+#   converted   the people who finished the path (bought, subscribed,
+#               watched): a journey's end point, a valuation's converters
+#
+# FUNNEL_ORDER runs upstream to downstream. On one subject a later step
+# sitting below an earlier one (buyers below reach) is the expected
+# shape, never a finding; only a later step ABOVE an earlier one is.
+MEASURE_REACHED = 'reached'
+MEASURE_ENGAGED = 'engaged'
+MEASURE_ADDED = 'added'
+MEASURE_CONVERTED = 'converted'
+MEASURE_TOTAL = 'total'
+FUNNEL_ORDER = (MEASURE_REACHED, MEASURE_ENGAGED, MEASURE_CONVERTED)
+
+# Order matters: a label is classed by the first family that names it.
+# A showtimes page and a ticketing-site visit are two different steps
+# (film ladder per no-box-office-prediction.mdc, settled 2026-10-06):
+# 'Looked up showtimes' compares with 'reached a showtimes page', never
+# with 'went to a ticketing site or app for a ticket'.
+STAGE_CLASSES = (
+    ('checkout', ('checkout', 'cart', 'paid', 'bought', 'purchase', 'end point',
+                  'final ticket step')),
+    ('showtimes', ('showtime',)),
+    ('ticketing', ('ticketing site', 'ticketing-site', 'ticketing page', 'for a ticket')),
+    ('infoseek', ('looked', 'search', 'info', 'research', 'trailer', 'review')),
+    ('exposed', ('saw', 'exposed', 'reached by', 'tracked campaign')),
+    ('acted', ('acted', 'engaged', 'clicked')),
+)
+
+
+def stage_class(label):
+    """The step a path row's label names, or 'other'."""
+    low = str(label or '').lower()
+    for name, toks in STAGE_CLASSES:
+        if any(t in low for t in toks):
+            return name
+    return 'other'
+
+
+def typed_measure(f, other=None):
+    """The measure a fact carries BY TYPE (never read off a label), or
+    ''. ``other`` is the fact it is being compared with.
+
+    A fact indexed before the measures existed still resolves: a
+    valuation's 'audience_size' is its reach, a journey's is its end
+    point, a valuation's people-valued 'valuation' fact is the people it
+    added. A journey's first row is its entry audience; next to a
+    valuation, which defines who entered, that is the reach."""
+    if not isinstance(f, dict):
+        return ''
+    m = str(f.get('measure') or '').strip()
+    if m:
+        return m
+    kind, product = f.get('kind'), f.get('product')
+    if kind == 'audience_size':
+        if product == 'bpiq':
+            return MEASURE_REACHED
+        if product == 'journey':
+            return MEASURE_CONVERTED
+        return MEASURE_TOTAL
+    if kind == 'valuation' and product == 'bpiq' and f.get('unit') == 'people':
+        return MEASURE_ADDED
+    if (kind == 'stage_count' and product == 'journey' and f.get('entry')
+            and isinstance(other, dict) and other.get('product') == 'bpiq'):
+        return {'exposed': MEASURE_REACHED, 'other': MEASURE_REACHED,
+                'acted': MEASURE_ENGAGED}.get(stage_class(f.get('label')), '')
+    return ''
 
 
 # ---------------------------------------------------------- extractors
@@ -433,21 +524,35 @@ def facts_from_journey(key, payload, user=''):
               'end': meta.get('end_date') or meta.get('window_end')}
     as_of = str(meta.get('created_at') or meta.get('generated_at') or '')[:19] or None
     note = f"Digital Journey IQ: {meta.get('project_name') or subject}"
+    # A journey built on a valued partnership carries the valuation it
+    # holds to (journey_bpiq_anchor stamps meta.valuation_anchor). Its
+    # shared counts are typed and name that file, so the audit can check
+    # them against the valuation count for count.
+    held = meta.get('valuation_anchor') if isinstance(meta.get('valuation_anchor'), dict) else {}
+    held_key = str(held.get('key') or '').strip()
     facts = []
     spine = body.get('spine') or []
     if isinstance(spine, dict):
         spine = spine.get('stages') or []
+    entry_seen = False
     for st in spine:
         if not isinstance(st, dict):
             continue
         label = str(st.get('label') or st.get('name') or st.get('id') or '').strip()
         cnt = _num(st.get('accounts') if st.get('accounts') is not None
                    else (st.get('count') if st.get('count') is not None else st.get('users')))
-        if str(st.get('id') or '').lower() == 'tam' or cnt == 329_900_000:
+        sid = str(st.get('id') or '').lower()
+        if sid == 'tam' or cnt == 329_900_000:
             continue
+        is_entry, entry_seen = (not entry_seen), True
         if label and cnt:
-            facts.append(make_fact('journey', 'stage_count', label, cnt, 'people', window=window,
-                                   as_of=as_of, source_key=key, source_user=user, note=note))
+            shared = sid if (held_key and sid in (MEASURE_REACHED, MEASURE_ENGAGED)) else ''
+            f = make_fact('journey', 'stage_count', label, cnt, 'people', window=window,
+                          as_of=as_of, source_key=key, source_user=user, note=note,
+                          measure=shared, anchor=held_key if shared else '')
+            if f and is_entry:
+                f['entry'] = True       # the first row: the journey's entry audience
+            facts.append(f)
     if not facts and isinstance(kpis, dict):
         # Story-mode payloads (subscriber lifecycle, flywheel) carry
         # their headline figures in kpis; bank the integer ones.
@@ -458,9 +563,14 @@ def facts_from_journey(key, payload, user=''):
                                        window=window, as_of=as_of, source_key=key,
                                        source_user=user, note=note))
     if kpis.get('total_users'):
+        # The end point is the people who FINISHED the path (buyers,
+        # subscribers, viewers who converted): the bottom of a funnel,
+        # never its top. It keeps kind 'audience_size' for the readers
+        # that floor a universe on it; the measure says what it is.
         facts.append(make_fact('journey', 'audience_size', 'journey end point, US people',
                                kpis['total_users'], 'people', window=window, as_of=as_of,
-                               source_key=key, source_user=user, note=note))
+                               source_key=key, source_user=user, note=note,
+                               measure=MEASURE_CONVERTED, anchor=held_key))
     if kpis.get('conversion_pct') is not None:
         facts.append(make_fact('journey', 'conversion_pct', 'share reaching the end point',
                                kpis['conversion_pct'], 'pct', window=window, as_of=as_of,
@@ -477,6 +587,24 @@ def facts_from_journey(key, payload, user=''):
                     facts.append(f)
                 if len(facts) >= 40:
                     break
+    if held_key:
+        # The fourth count a held journey shares with its valuation: the
+        # people added to the brand's audience in the window. The row the
+        # journey shows wins; the anchor block is the fallback.
+        added = None
+        for det in (body.get('detours') or []):
+            if not isinstance(det, dict) or str(det.get('source') or '') != 'valuation':
+                continue
+            for row in (det.get('rows') or []):
+                if isinstance(row, dict) and str(row.get('label') or '').strip().lower() == 'added in the window':
+                    added = _num(row.get('accounts'))
+        if added is None:
+            added = _num(held.get('added'))
+        if added:
+            brand = str(held.get('brand') or '').strip() or 'brand'
+            facts.append(make_fact('journey', 'funnel_count', f"added to the {brand} audience in the window",
+                                   added, 'people', window=window, as_of=as_of, source_key=key,
+                                   source_user=user, note=note, measure=MEASURE_ADDED, anchor=held_key))
     for det in (body.get('detours') or []):
         if not isinstance(det, dict):
             continue
@@ -576,11 +704,26 @@ def facts_from_bpiq(key, payload, user=''):
     if p.get('projected_audience_size'):
         facts.append(make_fact('bpiq', 'audience_size', 'US audience reached by the partnership',
                                p['projected_audience_size'], 'people', window=window, as_of=as_of,
-                               source_key=key, source_user=user, note=note))
+                               source_key=key, source_user=user, note=note, measure=MEASURE_REACHED))
     if p.get('audience_size'):
         facts.append(make_fact('bpiq', 'sample_size', 'viewers inside the 10 million sample',
                                p['audience_size'], 'individuals', window=window, as_of=as_of,
                                source_key=key, source_user=user, note=note))
+    # The valuation's own funnel below its reach (2026-11-18): the people
+    # who engaged with the brand and the people who converted, so a
+    # journey on the partnership is compared with the valuation step for
+    # step and never end point against reach.
+    brand = str(p.get('brand_partner') or '').strip() or 'the brand'
+    tot = p.get('totals') if isinstance(p.get('totals'), dict) else {}
+    conv = p.get('conversions') if isinstance(p.get('conversions'), dict) else {}
+    if _num(tot.get('post_users_projected')):
+        facts.append(make_fact('bpiq', 'funnel_count', f"US people who engaged with {brand} in the window",
+                               tot['post_users_projected'], 'people', window=window, as_of=as_of,
+                               source_key=key, source_user=user, note=note, measure=MEASURE_ENGAGED))
+    if conv.get('enabled') is not False and _num(conv.get('post_users_projected')):
+        facts.append(make_fact('bpiq', 'funnel_count', 'US people who converted in the window',
+                               conv['post_users_projected'], 'people', window=window, as_of=as_of,
+                               source_key=key, source_user=user, note=note, measure=MEASURE_CONVERTED))
     val = p.get('valuation') or {}
     for k, lbl in (('total_brand_value', 'total brand value, USD'),
                    ('attributable_to_partnership', 'value attributable to the partnership, USD'),
@@ -589,7 +732,8 @@ def facts_from_bpiq(key, payload, user=''):
             facts.append(make_fact('bpiq', 'valuation', lbl, val[k],
                                    'people' if k == 'incremental_users' else 'usd',
                                    window=window, as_of=as_of, source_key=key,
-                                   source_user=user, note=note))
+                                   source_user=user, note=note,
+                                   measure=MEASURE_ADDED if k == 'incremental_users' else ''))
     return subject, [f for f in facts if f]
 
 
