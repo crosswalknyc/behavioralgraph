@@ -226,19 +226,57 @@ INCLUDED_LINE = 'Included with your plan.'
 INCLUDED_KEY = 'included_with_plan'
 
 
+def door_username():
+    """The reader the ask door stamped on the request in flight: the
+    user the gate resolved from the session or from a validated key
+    (``blueprint._auth`` sets ``g._pm_ask_user``; the key gate sets
+    ``g._pm_api_key_owner``). A Prometheus app user has no browser
+    session, so this is the only server-side name for them (Liz
+    Huszarik 2026-11-17: the price helpers read the session alone and
+    would have printed a price to her covered seat in the app). Never
+    read from the request body. '' outside a request, or when the door
+    named nobody."""
+    try:
+        from flask import g, has_request_context
+        if not has_request_context():
+            return ''
+        for attr in ('_pm_ask_user', '_pm_api_key_owner'):
+            v = str(getattr(g, attr, '') or '').strip()
+            if v and v.lower() not in ('unknown', 'anon'):
+                return v
+    except Exception:
+        pass
+    return ''
+
+
+def seat_username(username=None):
+    """The reader a price line is for, in the order the price helpers
+    have always read it and one step further: the name the caller
+    passes (a job names its own user), else the browser session's, else
+    the one the ask door stamped on the request (``door_username``: a
+    Prometheus app user has no session). Never a field of the request
+    body. '' when nobody can be named. Never raises."""
+    uname = str(username or '').strip()
+    if uname:
+        return uname
+    try:
+        from flask import has_request_context, session
+        if has_request_context():
+            uname = str(session.get('username') or '').strip()
+    except Exception:
+        uname = ''
+    return uname or door_username()
+
+
 def _request_username():
     """The reader the request in flight is for: the identity the door
     stamped (session or key), else the session's own. '' outside a
     request."""
     try:
-        from flask import g, has_request_context, session
+        from flask import has_request_context, session
         if not has_request_context():
             return ''
-        for attr in ('_pm_ask_user', '_pm_api_key_owner'):
-            v = str(getattr(g, attr, '') or '').strip()
-            if v and v.lower() != 'unknown':
-                return v
-        return str(session.get('username') or '').strip()
+        return door_username() or str(session.get('username') or '').strip()
     except Exception:
         return ''
 

@@ -184,16 +184,22 @@ def read_windows(text, today=None):
 
     [{'start', 'end', 'open': bool, 'phrase'}], in the order written;
     [] when the ask states none or no open end is involved (a closed
-    window is the model's to read as before). 'compare 2025 vs 2026 to
+    window is the model's to read as before). A range written with
+    both ends that runs past the last full day ('Nov 2025-Nov 2026'
+    asked in mid November 2026, 'November 2025 - 2026') is open in
+    effect: it ends on yesterday too. 'compare 2025 vs 2026 to
     date' is calendar 2025 and Jan 1 2026 through yesterday; '1/1/2025
     - 12/30/2025 vs 1/1/2026 - to most recent date there is data' is the
     first range as written and Jan 1 2026 through yesterday."""
     t = str(text or '')
-    if not t.strip() or not _idw.open_end_phrase(t):
+    if not t.strip():
         return []
     td = _today(today)
     yday = _idw.yesterday(td)
     wins = _idw.all_windows(t, today=td)
+    if not _idw.open_end_phrase(t) and not any(
+            w.get('kind') == 'range' and w['start'] <= yday.isoformat() < w['end'] for w in wins):
+        return []         # no open end, and no range that runs past the last full day
     out = []
     for w in wins:
         out.append({'start': w['start'], 'end': w['end'], 'open': w.get('kind') == 'since',
@@ -235,11 +241,13 @@ def read_window_note(text, today=None):
             pass
         return ''
     yday = yesterday_iso(today)
+    _open = _idw.open_end_phrase(text)
     lines = [
         "STATED WINDOW (HARD RULE)",
         "=========================",
-        f"The ask leaves its range open ('{_idw.open_end_phrase(text)}'). An open end is the last full day, "
-        f"{yday} ({_lbl(yday)}): never today, never a later date, never an earlier date of your choosing.",
+        (f"The ask leaves its range open ('{_open}'). An open end is the last full day, " if _open else
+         "The range the ask states runs past the last full day, so it ends there. The last full day is ")
+        + f"{yday} ({_lbl(yday)}): never today, never a later date, never an earlier date of your choosing.",
     ]
     for i, w in enumerate(wins, 1):
         lines.append(f"Window {i}: {w['start']} to {w['end']} ({_lbl(w['start'])} to {_lbl(w['end'])})"

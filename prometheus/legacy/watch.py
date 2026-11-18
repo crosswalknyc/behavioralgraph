@@ -624,6 +624,11 @@ def _pm_window_years(text):
         months = int(m.group(1))
         return max(1, min(-(-months // 12), 10))
     m = re.search(r"\b(20\d\d)\s*(?:to|through|thru|-|until|and)\s*(20\d\d)\b", t)
+    if m and int(m.group(2)) == int(m.group(1)) + 1 and re.search(
+            r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|"
+            r"nov(?:ember)?|dec(?:ember)?)\.?,?\s*(?:\d{1,2}(?:st|nd|rd|th)?,?\s*)?$", t[:m.start(1)]):
+        # "November 2025 - 2026" is one window, month to month: one year (2026-11-17, with prometheus.inline_dates)
+        return 1
     if m:
         lo, hi = int(m.group(1)), int(m.group(2))
         if hi >= lo:

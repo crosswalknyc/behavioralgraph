@@ -13,6 +13,9 @@ the ask and returns the explicit window it states, as ISO dates:
 
 * two dates joined by a range word or a dash: 'from A to B', 'from A
   and B', 'between A and B', 'A through B', 'A - B', 'A until B'.
+  A month with its year and then a later year alone ('November 2025 -
+  2026', 'Nov 2025 to 2026') is that month through the same month of
+  the later year, like 'Nov 2025-Nov 2026' written out.
   Month-name or numeric dates, a day of month that may carry its year
   or not; a day range inside one month ('January 19-21, 2024'); a
   month range ('April to June 2024'); a year range with a range word
@@ -255,7 +258,9 @@ _OPEN_WORDS = (r"(?:date(?!\s+(?:range|ranges|of|night|window)\b)|today|now|pres
                r"(?:\s+(?:there\s+is|you\s+have|we\s+have|available|on\s+file|with)\s*(?:data)?)?)")
 _OPEN_END_RX = re.compile(
     r"^\s*(?:,?\s*(?:-|\u2013|\u2014)?\s*(?:(?:up\s+)?to|through|thru|until|till)\s+" + _OPEN_WORDS + r"\b"
-    r"|,?\s+so\s+far\b|\s+ytd\b|\s+year\s+to\s+date\b|\s+onwards?|\s+on(?:ward)?\b)", re.I)
+    # a bare "on" leaves the range open only where it ends the clause ("from March 2025 on"); "November 2025 on
+    # Peacock" names where, and the month is the window (2026-11-17: it read as November 2025 through yesterday)
+    r"|,?\s+so\s+far\b|\s+ytd\b|\s+year\s+to\s+date\b|\s+onwards?\b|\s+on\b(?=\s*(?:[.,;:!?)]|$)))", re.I)
 _TODAY_RX = re.compile(r"^\s*(?:to|through|thru|until|till)\s+(?:date|today|now|present|the\s+present)\b", re.I)
 # an open end with no date in front of it: the current year through yesterday
 _THIS_YEAR_OPEN_RX = re.compile(
@@ -388,6 +393,16 @@ def _resolve_pair(a, b, today):
     missing year on either side from the other, or both from today."""
     if a.grain() == 'year' or b.grain() == 'year':
         if a.grain() != 'year' or b.grain() != 'year':
+            # 'November 2025 - 2026', 'Nov 2025 to 2026', 'Nov 15, 2025 - 2026': the month (or the day) with its
+            # year, then a later year alone. One window, from the start of that month to the end of the same
+            # month in the later year (Liz Huszarik 2026-11-17: "across November 2025 - 2026" read as November
+            # 2025 alone). A consumer that needs a past end pulls a future one back by its own rule.
+            if b.grain() == 'year' and a.grain() in ('month', 'day') and a.kind != 'mon' and a.year is not None \
+                    and a.month is not None and b.year is not None and b.year > a.year:
+                try:
+                    return _span(a)[0].isoformat(), _span(a, b.year)[1].isoformat()
+                except ValueError:
+                    return None
             return None       # 'from 2023 to March 2024' is not a shape we read
         if a.year > b.year:
             return None

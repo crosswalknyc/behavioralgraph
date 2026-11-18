@@ -256,6 +256,121 @@ _LABEL_LOWER = frozenset(('potential', 'prospective', 'likely', 'future', 'would
                           'films', 'movie', 'movies', 'show', 'shows', 'series', 'title', 'titles', 'episode', 'episodes',
                           'book', 'books', 'game', 'games', 'song', 'songs', 'album', 'albums', 'podcast', 'podcasts'))
 _ACRONYM_RX = re.compile(r"^[A-Z0-9&+.'-]{2,6}$")
+_QUAL_WORDS = frozenset(('potential', 'prospective', 'likely', 'future', 'would-be', 'possible', 'probable', 'new', 'current',
+                         'existing', 'lapsed', 'recent', 'frequent', 'heavy', 'light', 'first-time', 'repeat', 'loyal', 'active'))
+
+# A title that carries a quantifier-like word keeps its whole name (Liz
+# Huszarik 2026-11-17: "FBI Most Wanted viewers" was read as "most" of the
+# "Wanted viewers", and the read in her thread opened "On Wanted viewers:").
+# The brand rule above never lets a function word into a name, which is
+# right for "most Landman viewers" and wrong for "FBI Most Wanted", "All
+# American", "Most Dangerous Game", "Everybody Loves Raymond", "The Last of
+# Us", "No Time to Die". Decided the way prometheus.sizing_lane.keeps_lead
+# decides it, by the words and the library, never by a list of titles: the
+# reader wrote the word with a capital, inside the sentence, in a run of
+# capitalised words in front of the audience noun; or the library holds a
+# title that starts with those words. A quantifier in lower case ("most
+# viewers of X", "all Peacock viewers") is still a quantifier, and so is a
+# capitalised one that only opens the sentence ("Most Landman viewers ...").
+_TITLE_QUANT = frozenset((
+    'most', 'all', 'every', 'any', 'some', 'more', 'many', 'few', 'best', 'top', 'first', 'last', 'next', 'no', 'not',
+    'only', 'each', 'both', 'other', 'same', 'new', 'old', 'own', 'everybody', 'everyone', 'everything', 'nobody',
+    'nothing', 'anybody', 'anyone', 'anything', 'somebody', 'someone', 'something'))
+_TITLE_TOK = r"[A-Z0-9][\w&'+.!-]*:?"
+_TITLE_RUN_RX = re.compile(
+    r"(?<![\w'])(?P<run>" + _TITLE_TOK + r"(?:\s+(?:(?:of|the|to)\s+){0,2}" + _TITLE_TOK + r"){0,6}?)\s+"
+    r"(?P<noun>(?i:" + _CONSUMER_NOUN + r"))\b")
+_TITLE_CONNECT = frozenset(('of', 'the', 'to'))
+# a word with a colon that opens a message is the reader's own label ("Question: ..."), not a title ("Dexter: New Blood")
+_LEAD_LABELS = frozenset(('question', 'q', 'note', 'ask', 'request', 'subject', 're', 'fwd', 'fw', 'title', 'brief', 'context',
+                          'follow-up', 'followup', 'prompt', 'answer', 'update', 'reminder', 'ps', 'also', 'next', 'task'))
+# "compare X to Y viewers", "from X to Y": the "to" joins two names, it is not inside one
+_TITLE_COMPARE_RX = re.compile(r"\b(?:compar\w+|from|versus|vs\.?|against|relative|switch\w*|mov\w+|went|go(?:es|ing)?)\b", re.I)
+
+
+def _title_cased(t):
+    """True when the words are typed with a capital on every word ("What
+    Do Most Landman Viewers Buy"): the capitals then say nothing about
+    which words are a name."""
+    ws = [w for w in re.findall(r"[A-Za-z][A-Za-z'’]*", t) if len(w) >= 3]
+    return len(ws) >= 5 and all(w[:1].isupper() for w in ws)
+
+
+def _on_record(name):
+    """True when the library holds a title that starts with these words
+    (prometheus.sizing_lane.on_record_title). Never raises."""
+    try:
+        from . import sizing_lane as _sz
+        return bool(_sz.on_record_title(name))
+    except Exception:
+        return False
+
+
+def _quant_word(w):
+    """True for a quantifier-like word as it appears inside a title:
+    "Most", "All", "No", "Last" ..., and "Us" (never "US")."""
+    w = str(w or '').rstrip(':')
+    return bare_word(w) in _TITLE_QUANT or w == 'Us'
+
+
+def _title_runs(t, known=None):
+    """(start, phrase) for every audience named as a capitalised title
+    run that carries a quantifier-like word, in front of an audience
+    noun: (8, 'FBI Most Wanted viewers') for "What do FBI Most Wanted
+    viewers buy". `known(name)` says whether the library holds the title
+    (asked only where the words alone cannot tell: a quantifier that
+    opens the sentence, words typed with a capital on every word, a
+    "to" beside a comparison)."""
+    known = known if callable(known) else _on_record
+    out = []
+    shouted = _title_cased(t)
+    for m in _TITLE_RUN_RX.finditer(t):
+        toks = m.group('run').split()
+        start = m.start('run')
+        noun = m.group('noun')
+        if not any(_quant_word(w) for w in toks):
+            continue                                    # nothing here the brand rule would drop
+        # a "to" between two names that are being compared joins nothing ("compare Landman to All American viewers")
+        if 'to' in toks and _TITLE_COMPARE_RX.search(t[max(0, start - 60):m.end('run')]) and not known(' '.join(toks)):
+            cut = max(i for i, w in enumerate(toks) if w == 'to')
+            start += len(' '.join(toks[:cut + 1])) + 1
+            toks = toks[cut + 1:]
+        # the sentence's (or the clause's) own first word is only a word, unless the library says otherwise
+        before = t[:start].rstrip()
+        last = before.split()[-1] if before else ''
+        opens = (not before) or before[-1] in '.?!,;(' or (
+            before[-1] == ':' and not _ACRONYM_RX.match(last.rstrip(':')) and not last[:1].isupper())
+        while toks and opens:
+            head = toks[0].rstrip(':')
+            w = bare_word(head)
+            if _ACRONYM_RX.match(head) and not _quant_word(head):
+                break
+            if not (_quant_word(head) or w in _LABEL_LOWER or ordinary_word(w)
+                    or (toks[0].endswith(':') and w in _LEAD_LABELS)):
+                break
+            if toks[0] == 'The' and len(toks) > 1:
+                break                                   # "The Last of Us viewers ..." opens with its own title
+            if known(' '.join(toks)):
+                break
+            opens = toks[0].endswith(':')               # "Question: Most Landman viewers": the next word opens a clause too
+            start += len(toks[0]) + 1
+            toks = toks[1:]
+            while toks and toks[0] in _TITLE_CONNECT:   # a small word left at the front belongs to nothing
+                start += len(toks[0]) + 1
+                toks = toks[1:]
+        if shouted:
+            # every word carries a capital, so the run starts wherever the sentence does: the name is the longest
+            # tail of it the library holds, or nothing
+            held = next((toks[k:] for k in range(len(toks) - 1)
+                         if any(_quant_word(w) for w in toks[k:]) and known(' '.join(toks[k:]))), None)
+            if not held:
+                continue
+            start += len(' '.join(toks[:len(toks) - len(held)])) + (1 if len(held) < len(toks) else 0)
+            toks = held
+        if len(toks) < 2 or not any(_quant_word(w) for w in toks):
+            continue
+        out.append((start, f"{' '.join(toks)} {noun}"))
+    return out
 
 
 def _clean_phrase(p):
@@ -274,17 +389,49 @@ def _display(p):
     as names, ordinary words left as they are ('potential paw patrol
     consumers' -> 'potential Paw Patrol consumers')."""
     out = []
-    for w in _clean_phrase(p).split():
+    words = _clean_phrase(p).split()
+    # a capitalised name that carries a quantifier-like word is a title: every word in it stays as written
+    titled = any(_quant_word(x.strip("'\".,;:!?()")) and x.strip("'\".,;:!?()")[:1].isupper() and _title_word(words, j)
+                 for j, x in enumerate(words[:-1]))
+    for i, w in enumerate(words):
         bare = w.strip("'\".,;:!?()")
         if not bare:
             continue
         if _ACRONYM_RX.match(bare) or any(c.isupper() for c in bare[1:]):
             out.append(w)                       # NFL, iPhone, HBO Max: as written
+        elif (_quant_word(bare) and bare[:1].isupper() and _title_word(words, i)) or (
+                bare == 'The' and i == 0 and len(words) > 2 and _quant_word(words[1].strip("'\".,;:!?()"))
+                and words[1][:1].isupper()):
+            out.append(w)                       # "FBI Most Wanted", "All American", "The Last of Us": the title's own word, as written
+        elif titled and 0 < i < len(words) - 1 and bare[:1].isupper() and bare.lower() not in _QUAL_WORDS and _title_word(words, i):
+            out.append(w)                       # "Most Dangerous Game": the rest of that title, as written
         elif bare.lower() in _LABEL_LOWER or re.fullmatch(r"[\d.,%$+-]+", bare):
             out.append(w.lower() if bare.lower() in _LABEL_LOWER else w)
         else:
             out.append(w[:1].upper() + w[1:])
     return ' '.join(out)
+
+
+def _title_word(words, i):
+    """True when the word at `i` sits inside a capitalised name: the
+    word after it (past a small joining word) is written with a capital
+    and is not the phrase's last word (the audience noun), or the word
+    before it is a capitalised name word."""
+    def _bare(j):
+        return words[j].strip("'\".,;:!?()")
+    for j in range(i + 1, len(words) - 1):
+        nxt = _bare(j)
+        if nxt.lower() in _TITLE_CONNECT and nxt.islower():
+            continue
+        if nxt[:1].isupper() or nxt[:1].isdigit():
+            return True
+        break
+    for j in range(i - 1, -1, -1):
+        prv = _bare(j)
+        if prv.lower() in _TITLE_CONNECT and prv.islower():
+            continue
+        return (prv[:1].isupper() or prv[:1].isdigit()) and i < len(words) - 1 and prv.lower() not in _QUAL_WORDS
+    return False
 
 
 def _is_population(phrase):
@@ -303,14 +450,17 @@ def _population_label(phrase):
     return US_PEOPLE
 
 
-def named_universe(text):
+def named_universe(text, known=None):
     """The universe phrases the words name on their own, in order of
     appearance: 'people who watched Fightland on Starz', 'potential Paw
     Patrol consumers', 'Costco members', 'US households', 'parents of
     kids 2 to 6', a population behavior ('people start christmas holiday
     toy shopping'). Each item is (phrase, population) where population
     is True when the phrase means US people at large (or a slice of
-    them, such as parents) rather than a named brand's audience."""
+    them, such as parents) rather than a named brand's audience.
+    `known(name)` says whether the library holds a title by that name
+    (default: prometheus.sizing_lane.on_record_title); it is asked only
+    where the words alone cannot tell a title from a quantifier."""
     t = _squash(text)
     if not t or len(t) > 1200:
         return []
@@ -327,6 +477,10 @@ def named_universe(text):
 
     for m in _QUAL_BRAND_RX.finditer(t):
         _add(m.start(), m.group('p'), False)
+    # a capitalised title that carries a quantifier-like word, whole ("FBI Most Wanted viewers"); the brand rule
+    # below reads the same words as "Wanted viewers", which this phrase then carries
+    for _ts, _tp in _title_runs(t, known):
+        _add(_ts, _tp, False)
     for m in _NOUN_OF_BRAND_RX.finditer(t):
         b = _clean_phrase(m.group('brand'))
         if b and not re.fullmatch(r"(?:the|this|that|these|those|them|it|us|our|your|their|my|his|her)", b, re.I):

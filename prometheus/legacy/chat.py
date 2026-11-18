@@ -18253,12 +18253,9 @@ def _pm_price_sentence(tool_key, fallback, username=None):
     one check every priced surface asks; the journey card printed $500 to
     Jenna's unlimited seat on 2026-11-10). Never raises."""
     try:
-        uname = (username or '').strip()
-        if not uname:
-            try:
-                uname = (session.get('username') or '').strip()
-            except Exception:
-                uname = ''
+        # the reader named, else the session's, else the one the ask door stamped (a Prometheus app user has no
+        # session); never a field of the request body (prometheus.ask_outcome.seat_username, 2026-11-17)
+        uname = __import__('prometheus.ask_outcome', fromlist=['seat_username']).seat_username(username)
         if uname:
             data = _H.load_users()
             user = (data.get('users') or {}).get(uname) or {}
@@ -18287,12 +18284,9 @@ def _pm_tool_price_label(tool_key, fallback, username=None):
     try:
         import wallet as _w
         subject = None
-        uname = (username or '').strip()
-        if not uname:
-            try:
-                uname = (session.get('username') or '').strip()
-            except Exception:
-                uname = ''
+        # the reader named, else the session's, else the one the ask door stamped (a Prometheus app user has no
+        # session); never a field of the request body (prometheus.ask_outcome.seat_username, 2026-11-17)
+        uname = __import__('prometheus.ask_outcome', fromlist=['seat_username']).seat_username(username)
         if uname:
             try:
                 data = _H.load_users()

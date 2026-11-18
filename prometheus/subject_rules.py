@@ -1499,6 +1499,9 @@ def _sentence_end_in_run(words):
     return cut
 
 
+_SENTENCE_TITLE_QUANT = frozenset(('all', 'every', 'any', 'some', 'most', 'many', 'top', 'other', 'same', 'new'))
+
+
 def sentence_audience(text, casing=None):
     """An audience named inside a sentence: 'What did Landman viewers
     watch next', 'the share of Landman viewers'. The name that recurs
@@ -1530,11 +1533,20 @@ def sentence_audience(text, casing=None):
             words = words[1:]
         elif not mid_sentence and len(words) == 1 and words[0].lower() in _SENTENCE_INSTRUCTION:
             words = []
+        _stripped_lead = False
         while words and words[0].lower() in _SENTENCE_STOP:
             if words[0] == 'The' and len(words) > 1 and words[1][:1].isupper() and (
                     mid_sentence or ('the ' + ' '.join(words[1:]).lower()) in (casing or {})):
                 break
+            # a quantifier-like word written with a capital, inside the sentence, in front of a capitalised name is
+            # the title's own ("What do Most Dangerous Game viewers buy", "the share of All American viewers"); so is
+            # one the library spells that way. In lower case, or opening the sentence, it is only a quantifier
+            # ("most Landman viewers", "All Peacock viewers skew older"). Liz Huszarik 2026-11-17.
+            if words[0][:1].isupper() and words[0].lower() in _SENTENCE_TITLE_QUANT and len(words) > 1 \
+                    and words[1][:1].isupper() and (mid_sentence or _stripped_lead or ' '.join(words).lower() in (casing or {})):
+                break
             words = words[1:]
+            _stripped_lead = True
         if not words:
             continue
         raw = ' '.join(words)
