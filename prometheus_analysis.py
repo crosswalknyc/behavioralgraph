@@ -2313,16 +2313,139 @@ def _subiq_title_aliases(show):
     return out
 
 
-def find_subiq_titles_in_text(s3_client, subiq_bucket, text, limit=3):
-    """Every library title the message names (season-aware, whitespace
-    and punctuation tolerant), longest name first, one entry per show.
-    Used to answer compare / which-title questions from the library
-    instead of drafting a new build.
+_SUBIQ_HEAD_TTL_S = 1800
+_subiq_head_cache = {}
+_SUBIQ_HEAD_RANGE_RX = re.compile(
+    r'Analysis Date Range[^\n]*?(\d{4}-\d{2}-\d{2})\s*to\s*(\d{4}-\d{2}-\d{2})')
+_SUBIQ_HEAD_PLATFORM_RX = re.compile(r'Platform Tracked,[^\n]*?,([^,\n]+?),')
 
-    A message that names the base title without a season ("SWAT
-    Exiles") resolves to that title's files; when the message names a
-    season, only the matching season counts. House initialisms
-    ("Outlander BOMB") resolve through _subiq_title_aliases."""
+
+def _subiq_head(s3_client, subiq_bucket, key):
+    """{'start', 'end', 'platform'} from the top of one tracker (its
+    window and the service it was read on). One small ranged read,
+    cached; {} when the file cannot be read."""
+    now = time.time()
+    with _xmod_lock:
+        c = _subiq_head_cache.get(key)
+    if c and now - c['ts'] < _SUBIQ_HEAD_TTL_S:
+        return c['head']
+    head = {}
+    try:
+        resp = s3_client.get_object(Bucket=subiq_bucket, Key=key,
+                                    Range='bytes=0-2047')
+        top = resp['Body'].read()[:2048].decode('utf-8', 'replace')
+        m = _SUBIQ_HEAD_RANGE_RX.search(top)
+        if m:
+            head['start'], head['end'] = m.group(1), m.group(2)
+        m = _SUBIQ_HEAD_PLATFORM_RX.search(top)
+        head['platform'] = (m.group(1).strip() if m else '')
+    except Exception:
+        return (c or {}).get('head') or {}
+    with _xmod_lock:
+        _subiq_head_cache[key] = {'ts': now, 'head': head}
+        if len(_subiq_head_cache) > 400:
+            for k, _ in sorted(_subiq_head_cache.items(),
+                               key=lambda kv: kv[1]['ts'])[:100]:
+                _subiq_head_cache.pop(k, None)
+    return head
+
+
+def subiq_title_files(s3_client, subiq_bucket, base):
+    """Every live library file of one title (``base`` is
+    season_window.title_base of any of its files), each with its window
+    and service: [{'show', 'key', 'lm', 'start', 'end', 'platform'}].
+    The windows are only read when the title holds more than one file."""
+    from prometheus import season_window as _sw
+    rows = [(show, key, lm)
+            for show, key, lm in list_subiq_shows(s3_client, subiq_bucket)
+            if _sw.title_base(show) == base]
+    out = []
+    for show, key, lm in rows:
+        head = _subiq_head(s3_client, subiq_bucket, key) \
+            if len(rows) > 1 else {}
+        out.append({'show': show, 'key': key, 'lm': lm,
+                    'start': head.get('start'), 'end': head.get('end'),
+                    'platform': head.get('platform') or ''})
+    return out
+
+
+def _subiq_asked_seasons(t, aliases):
+    """Seasons named right after one title in the normalized message
+    ("Outlander BOMB Season 2", "... Season 1 vs Season 2")."""
+    asked = []
+    for alias in aliases:
+        for m in re.finditer(
+                r'\b' + re.escape(alias) + r' season (\d{1,2})\b'
+                r'(?:(?:\s+\w+){0,3}?\s+(?:vs|versus|and|to|against|with|'
+                r'compared (?:to|with))\s+season (\d{1,2})\b)?', t):
+            for g in m.groups():
+                if g and int(g) not in asked:
+                    asked.append(int(g))
+    return asked
+
+
+def _subiq_window_rule(s3_client, subiq_bucket, text, hits, can_open):
+    """One file per title and season (Jenna 2026-11-18): a title held
+    on several windows of a season answers from the widest window the
+    reader may open, the file held first on a near tie, or the window
+    the question names. ``hits`` are (score, show, key, lm) for every
+    file the message names; the return has the same shape plus the
+    choice made ({} when the rule did not touch the file). Titles held
+    on one file per season, and titles not held by season, pass through
+    untouched."""
+    from prometheus import season_window as _sw
+    intent = _sw.ask(text)
+    if intent.get('kind') == 'other':
+        return [(sc, show, key, lm, {}) for sc, show, key, lm in hits]
+    t = ' ' + _subiq_norm(text) + ' '
+    groups, order = {}, []
+    for h in hits:
+        b = _sw.title_base(h[1])
+        if b not in groups:
+            groups[b] = []
+            order.append(b)
+        groups[b].append(h)
+    out = []
+    for b in order:
+        group = groups[b]
+        passthrough = [(sc, show, key, lm, {}) for sc, show, key, lm in group]
+        try:
+            files = subiq_title_files(s3_client, subiq_bucket, b)
+        except Exception:
+            files = []
+        if len(files) < 2:
+            out.extend(passthrough)
+            continue
+        if can_open == 'reader':
+            # read once, and only for a title held on several files
+            can_open = _sw.reader_can_open()
+        aliases = {b}
+        for _sc, show, _k, _lm in group:
+            aliases.update(a for a, kind in _subiq_title_aliases(show)
+                           if kind != 'full')
+        asked = _subiq_asked_seasons(t, sorted(aliases, key=len, reverse=True))
+        if not asked and len(order) == 1:
+            asked = list(intent.get('seasons') or [])
+        # a file the reader named in full, tail and all ("Season 2 to
+        # date", "Season 4 Part 2"), answers for its own season
+        named = _sw.files_named(files, text)
+        picks = _sw.picks_for_title(files, dict(intent, seasons=asked),
+                                    can_open=can_open, named_keys=named)
+        if picks is None:
+            out.extend(passthrough)
+            continue
+        best = max(h[0] for h in group)
+        for i, p in enumerate(picks):
+            out.append(((best[0], best[1], -i), p['show'], p['key'],
+                        p.get('lm') or '', p))
+    return out
+
+
+def _subiq_named_in_text(s3_client, subiq_bucket, text, limit=3,
+                         can_open='reader'):
+    """find_subiq_titles_in_text with the choice behind each entry:
+    [(show, key, lm, pick)]; ``pick`` is {} when the season-window rule
+    did not touch the file."""
     t = ' ' + _subiq_norm(text) + ' '
     if len(t) < 6:
         return []
@@ -2352,18 +2475,48 @@ def find_subiq_titles_in_text(s3_client, subiq_bucket, text, limit=3):
                 best = score
         if best is not None:
             hits.append((best, show, key, lm))
+    try:
+        ruled = _subiq_window_rule(s3_client, subiq_bucket, text, hits,
+                                   can_open)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+        ruled = [(sc, show, key, lm, {}) for sc, show, key, lm in hits]
     # Longest alias first, full-name hits ahead of base hits, newest
-    # file first on ties.
-    hits.sort(key=lambda h: (h[0][0], h[0][1], h[3] or ''), reverse=True)
+    # file first on ties (a title's own picks keep their order).
+    ruled.sort(key=lambda h: (h[0][0], h[0][1],
+                              h[0][2] if len(h[0]) > 2 else 0,
+                              h[3] or ''), reverse=True)
     out, seen = [], set()
-    for _sc, show, key, lm in hits:
-        if show in seen:
+    for _sc, show, key, lm, pick in ruled:
+        if key in seen or (not pick and show in seen):
             continue
+        seen.add(key)
         seen.add(show)
-        out.append((show, key, lm))
+        out.append((show, key, lm, pick))
         if len(out) >= limit:
             break
     return out
+
+
+def find_subiq_titles_in_text(s3_client, subiq_bucket, text, limit=3,
+                              can_open='reader'):
+    """Every library title the message names (season-aware, whitespace
+    and punctuation tolerant), longest name first, one entry per show.
+    Used to answer compare / which-title questions from the library
+    instead of drafting a new build.
+
+    A message that names the base title without a season ("SWAT
+    Exiles") resolves to that title's files; when the message names a
+    season, only the matching season counts. House initialisms
+    ("Outlander BOMB") resolve through _subiq_title_aliases.
+
+    A title held on several windows of one season resolves to one file
+    per season (prometheus.season_window, 2026-11-18): the widest window
+    the reader may open when the message names none, the window it
+    names otherwise."""
+    return [(show, key, lm) for show, key, lm, _p in
+            _subiq_named_in_text(s3_client, subiq_bucket, text,
+                                 limit=limit, can_open=can_open)]
 
 
 _deliv_index_cache = {'ts': 0.0, 'data': None}
@@ -3250,9 +3403,54 @@ def _subiq_payload_cached(s3_client, subiq_bucket, key, parser):
 
 
 def find_subiq_title(s3_client, subiq_bucket, text, subject_hint='',
-                     prefer_text=False):
+                     prefer_text=False, can_open='reader'):
     """(show, s3_key) when the subject hint or the ask names a title in
-    the Subscriber IQ index; (None, None) otherwise.
+    the Subscriber IQ index; (None, None) otherwise. See
+    _find_subiq_title_pick."""
+    show, key, _pick = _find_subiq_title_pick(
+        s3_client, subiq_bucket, text, subject_hint=subject_hint,
+        prefer_text=prefer_text, can_open=can_open)
+    return show, key
+
+
+def _subiq_hint_pick(s3_client, subiq_bucket, hit, text, subject_hint,
+                     can_open):
+    """The hinted title's file for THIS question. The index keeps one
+    file per title (the last one written), which is right for knowing a
+    title is held and wrong for a title held on several windows: the
+    season and the window come from the question first, the hint
+    second."""
+    from prometheus import season_window as _sw
+    show, _key = hit
+    files = subiq_title_files(s3_client, subiq_bucket,
+                              _sw.title_base(show))
+    if len(files) < 2:
+        return None
+    intent = _sw.ask(text)
+    if intent.get('kind') == 'other':
+        return None
+    h_intent = _sw.ask(subject_hint)
+    if not intent.get('seasons'):
+        intent['seasons'] = list(h_intent.get('seasons') or [])
+    if intent.get('kind') is None and h_intent.get('kind') not in (None, 'other'):
+        intent.update(kind=h_intent['kind'], days=h_intent.get('days'),
+                      dates=h_intent.get('dates'))
+    named = _sw.files_named(files, f"{text} {subject_hint}")
+    if can_open == 'reader':
+        can_open = _sw.reader_can_open()
+    picks = _sw.picks_for_title(files, intent, can_open=can_open,
+                                named_keys=named)
+    if not picks:
+        return None
+    seasoned = [p for p in picks if p.get('season') is not None]
+    p = (seasoned or picks)[0]
+    return p['show'], p['key'], p
+
+
+def _find_subiq_title_pick(s3_client, subiq_bucket, text, subject_hint='',
+                           prefer_text=False, can_open='reader'):
+    """(show, s3_key, pick) when the subject hint or the ask names a
+    title in the Subscriber IQ index; (None, None, {}) otherwise.
 
     The hint wins by default (generated reads pass the resolved base
     subject). On the screen path the hint is the OPEN profile, so a
@@ -3261,26 +3459,37 @@ def find_subiq_title(s3_client, subiq_bucket, text, subject_hint='',
     Tulsa King's acquisition read, not Landman's again."""
     index = _load_subiq_index(s3_client, subiq_bucket)
     if not index:
-        return None, None
+        return None, None, {}
+
+    def _ruled(hit):
+        if not hit:
+            return None
+        try:
+            better = _subiq_hint_pick(s3_client, subiq_bucket, hit, text,
+                                      subject_hint, can_open)
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
+            better = None
+        return better or (hit[0], hit[1], {})
 
     def _from_hint():
         tk = _xmod_title_key(subject_hint)
-        return index.get(tk) if tk else None
+        return _ruled(index.get(tk) if tk else None)
 
     def _from_text():
         # Base-name / initialism aware first (2026-10-02): "Analyze
         # SWAT Exiles" resolves to the SWAT Exiles Season 1 file.
         try:
-            hits = find_subiq_titles_in_text(s3_client, subiq_bucket,
-                                             text, limit=1)
+            hits = _subiq_named_in_text(s3_client, subiq_bucket, text,
+                                        limit=1, can_open=can_open)
         except Exception:
             hits = []
         if hits:
-            show, key, _lm = hits[0]
-            return (show, key)
+            show, key, _lm, pick = hits[0]
+            return (show, key, pick)
         shows = {show for show, _k in index.values()}
         tk = _xmod_title_key(_xmod_subject_from_text(text, shows))
-        return index.get(tk) if tk else None
+        return _ruled(index.get(tk) if tk else None)
 
     order = (_from_text, _from_hint) if prefer_text \
         else (_from_hint, _from_text)
@@ -3288,7 +3497,7 @@ def find_subiq_title(s3_client, subiq_bucket, text, subject_hint='',
         hit = fn()
         if hit:
             return hit
-    return None, None
+    return None, None, {}
 
 
 def render_subiq_evidence(parsed, show):
@@ -3528,9 +3737,26 @@ def render_subiq_evidence(parsed, show):
     return _assemble(keep).strip()
 
 
+def _subiq_block_with_window(block, pick):
+    """The evidence block with its window line under the header when the
+    file was chosen among several windows of its season, so the answer
+    says which window it is reading."""
+    if not block or not pick:
+        return block
+    try:
+        from prometheus import season_window as _sw
+        line = _sw.window_line(pick)
+    except Exception:
+        line = ''
+    if not line:
+        return block
+    head, sep, rest = block.partition('\n')
+    return head + '\n' + line + (sep + rest if sep else '')
+
+
 def build_subiq_evidence_block(s3_client, subiq_bucket, parser, text,
                                subject_hint='', prefer_text=False,
-                               skip_show=''):
+                               skip_show='', can_open='reader'):
     """The full Subscriber IQ evidence block for a generated read or a
     screen ask. Returns (block, show); ('' , None) when no Subscriber
     IQ title matches the ask or its base subject, the matched title is
@@ -3543,21 +3769,24 @@ def build_subiq_evidence_block(s3_client, subiq_bucket, parser, text,
         # three days of X to Y", 2026-10-02): every named read rides
         # the prompt so the comparison is answered from the data, on
         # the screen path and the no-screen generated-read path alike.
-        named = find_subiq_titles_in_text(s3_client, subiq_bucket, text)
+        named = _subiq_named_in_text(s3_client, subiq_bucket, text,
+                                     can_open=can_open)
         if len(named) >= 2:
             blocks, shows = [], []
-            for show, key, _lm in named:
+            for show, key, _lm, pick in named:
                 if skip_show and _subiq_norm(skip_show) == _subiq_norm(show):
                     continue
                 parsed = _subiq_payload_cached(s3_client, subiq_bucket,
                                                key, parser)
                 if parsed:
-                    blocks.append(render_subiq_evidence(parsed, show))
+                    blocks.append(_subiq_block_with_window(
+                        render_subiq_evidence(parsed, show), pick))
                     shows.append(show)
             if blocks:
                 return '\n\n'.join(blocks), shows[0]
-        show, key = find_subiq_title(s3_client, subiq_bucket, text,
-                                     subject_hint, prefer_text=prefer_text)
+        show, key, pick = _find_subiq_title_pick(
+            s3_client, subiq_bucket, text, subject_hint,
+            prefer_text=prefer_text, can_open=can_open)
         if not key:
             return '', None
         if skip_show and _xmod_title_key(skip_show) == _xmod_title_key(show):
@@ -3566,7 +3795,8 @@ def build_subiq_evidence_block(s3_client, subiq_bucket, parser, text,
                                        parser)
         if not parsed:
             return '', None
-        return render_subiq_evidence(parsed, show), show
+        return _subiq_block_with_window(
+            render_subiq_evidence(parsed, show), pick), show
     except Exception:
         return '', None
 

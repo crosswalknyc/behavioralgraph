@@ -3400,6 +3400,28 @@ def consult(subject=None, question=None, metric_family=None,
                     skey = _hk
         except Exception:
             _ssm, _svc_refuse = None, False
+        # A title held on several windows of one season (2026-11-18,
+        # Outlander: Blood of My Blood): the stored figures follow the
+        # file the library lookup reads for this question. A season
+        # question that names no window goes to the widest window held
+        # (the file held first on a near tie), a question that names a
+        # window to that window, and a figure stored for another window
+        # of the same season is left out: a 30-day figure is not the
+        # answer to a question about the season. Only an ask with words
+        # of its own; a subject-only lookup is unchanged.
+        _win, _win_other = None, frozenset()
+        if str(question or '').strip():
+            try:
+                from prometheus import season_window as _swm
+                _win = _swm.stored_scope(doc, skey, question, subject=subject, live=_has_live_entries)
+            except Exception:
+                _win = None
+            if _win:
+                _win_other = frozenset(_win.get('family') or ()) - frozenset(_win.get('keep') or ())
+                if _win.get('key') in subjects and _win['key'] != skey:
+                    print(f"[insights-ledger] {(subjects.get(skey) or {}).get('subject') or 'the title named'!r} is held on several windows: "
+                          f"consulting {(subjects.get(_win['key']) or {}).get('subject')!r}")
+                    skey = _win['key']
         if not skey:
             # Exact-ask replay must not depend on subject resolution:
             # scan all buckets for this normalized question.
@@ -3425,6 +3447,8 @@ def consult(subject=None, question=None, metric_family=None,
         bucket = subjects.get(skey) or {}
         entries = [e for e in (bucket.get('entries') or [])
                    if isinstance(e, dict) and not e.get('retired')]
+        if _win_other:
+            entries = [e for e in entries if _swm.tracker_file_of(e) not in _win_other]
         if not entries:
             return empty
         key = None
