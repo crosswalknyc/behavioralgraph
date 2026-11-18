@@ -803,6 +803,15 @@ def _asks_for_input(ans):
     return bool(parts) and bool(_ASKS_INPUT_RX.search(parts[-1]))
 
 
+def _set_aside(ans):
+    """True when the ledger holds these words on a row that was set aside."""
+    try:
+        import insights_ledger as _il
+        return bool(_il.reply_set_aside(ans))
+    except Exception:
+        return False
+
+
 def thread_replay(text, history):
     """The earlier answer to this exact question in this thread, with when
     it was given, or None. Never a promise line, never a read that was
@@ -841,6 +850,10 @@ def thread_replay(text, history):
             # a read that was retired or corrected in place is never handed
             # back as the earlier answer; the question runs again
             if meta.get('corrected_at') or meta.get('retired'):
+                continue
+            # nor one whose stored row was set aside (2026-11-18, Dark Matter
+            # Season 2): the conversation keeps its words, the question runs again
+            if _set_aside(ans):
                 continue
             # a quote is not a read: sent again, the question draws the same
             # quote from the place quotes are made, never "Same read as

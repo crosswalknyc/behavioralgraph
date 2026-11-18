@@ -1322,6 +1322,46 @@ def retire_entries(keys=None, questions=None, by='operator', note=''):
     return done['n']
 
 
+_set_aside_cache = {'doc': None, 'ts': 0.0, 'sigs': frozenset()}
+
+
+def _reply_sig(text):
+    t = ' '.join(str(text or '').split())
+    return hashlib.sha1(t.encode('utf-8')).hexdigest() if len(t) >= 40 else ''
+
+
+def reply_set_aside(text):
+    """True when these exact words sit on a row that was set aside
+    (stamped retired) and on no live row (2026-11-18, Dark Matter Season
+    2). The row left replay and the published block; the shortcuts that
+    read a conversation instead of the ledger (the same question asked
+    again in a thread, a base held from the thread's earlier reads) ask
+    here so they do not hand the same words back. The conversation
+    itself is never changed. Never raises."""
+    try:
+        sig = _reply_sig(text)
+        if not sig:
+            return False
+        doc = _load_index()
+        now = time.time()
+        with _cache_lock:
+            fresh = _set_aside_cache['doc'] is doc and now - _set_aside_cache['ts'] < _INDEX_TTL_S
+            sigs = _set_aside_cache['sigs']
+        if not fresh:
+            gone, live = set(), set()
+            for sub in (doc.get('subjects') or {}).values():
+                for e in (sub.get('entries') or []):
+                    if not isinstance(e, dict) or not e.get('reply'):
+                        continue
+                    (gone if e.get('retired') else live).add(_reply_sig(e.get('reply')))
+            sigs = frozenset(gone - live - {''})
+            with _cache_lock:
+                _set_aside_cache.update(doc=doc, ts=now, sigs=sigs)
+        return sig in sigs
+    except Exception:
+        return False
+
+
 def retire_entries_for_record(subject, metric_family, exclude_routes=()):
     """Every non-record entry in the subject's bucket with this family is
     stamped retired: the record is the only figure that answers there."""
@@ -3659,7 +3699,7 @@ def metrics_from_study(study):
 
 
 __all__ = ['consult', 'persist', 'make_entry', 'render_block',
-           'find_exact', 'find_semantic', 'is_offer_reply', 'is_retired_surface_reply', 'metrics_from_study',
+           'find_exact', 'find_semantic', 'is_offer_reply', 'is_retired_surface_reply', 'reply_set_aside', 'metrics_from_study',
            'replay_eligible', 'fresh_run_requested',
            'entry_key', 'canon_family', 'subject_key',
            'normalize_question', 'normalize_subject',

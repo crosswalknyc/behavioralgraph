@@ -90,6 +90,7 @@ except Exception:  # pragma: no cover - import guard for hermetic tests
 S3_BUCKET = os.environ.get('CORPUS_CATALOG_BUCKET', 'dashboard-inputs')
 INDEX_KEY = 'system/corpus_catalog/index.json'        # subjects only (hot path)
 SOURCES_KEY = 'system/corpus_catalog/sources.json'    # s3_key -> etag (sweep only)
+RETIRED_KEY = 'system/corpus_catalog/retired_sources.json'   # replies set aside: source key -> {ts, by}
 SUBJECT_PREFIX = 'system/corpus_catalog/subjects/'
 VERSION = 1
 
@@ -97,7 +98,7 @@ _INDEX_TTL_S = 300
 _PAGE_TTL_S = 300
 _lock = threading.Lock()
 _state = {'client': None, 'index': None, 'index_etag': None, 'index_ts': 0.0,
-          'pages': {}}
+          'pages': {}, 'retired': None, 'retired_ts': 0.0}
 _SUPPORTS_CONDITIONAL_PUT = True
 
 
@@ -124,6 +125,8 @@ def set_client(cl):
         _state['index_etag'] = None
         _state['index_ts'] = 0.0
         _state['pages'] = {}
+        _state['retired'] = None
+        _state['retired_ts'] = 0.0
 
 
 def _test_without_a_store():
@@ -1617,6 +1620,8 @@ def record_answer(subject, text, user='', thread_id='', product='chat'):
         if not facts:
             return ''
         key = f"thread/{user}/{thread_id}/{hashlib.sha1(str(text).encode('utf-8')).hexdigest()[:10]}"
+        if is_retired_source(key):
+            return ''       # a reply that was set aside is never banked again (the sweep re-reads its thread)
         for f in facts:
             f['source']['key'] = key
         return upsert_source(product, key, subject, facts)
@@ -1625,14 +1630,68 @@ def record_answer(subject, text, user='', thread_id='', product='chat'):
         return ''
 
 
-def retire_answer(user, thread_id, text, subject=None):
-    """A reply the user rejected (2026-10-06, the learning loop): its
-    banked figures leave the catalog so the next answer cannot lean on
-    them. Returns the number of facts removed."""
+def retired_sources(force=False):
+    """{source key: {'ts', 'by'}} for every reply that was set aside.
+    Small, cached in process like the index. {} on any trouble."""
+    if not enabled():
+        return {}
+    now = time.time()
+    with _lock:
+        cached = _state.get('retired')
+        if cached is not None and not force and now - _state.get('retired_ts', 0.0) < _INDEX_TTL_S:
+            return cached
+    try:
+        doc, _ = _read_json_with_etag(RETIRED_KEY)
+    except Exception as e:
+        print(f"[corpus-catalog] retired sources load failed: {e}")
+        with _lock:
+            return _state.get('retired') or {}
+    doc = doc if isinstance(doc, dict) else {}
+    with _lock:
+        _state['retired'] = doc
+        _state['retired_ts'] = now
+    return doc
+
+
+def is_retired_source(key):
+    try:
+        return bool(key) and str(key) in retired_sources()
+    except Exception:
+        return False
+
+
+def _note_retired(key, by='reader'):
+    """Remember that a reply was set aside, so neither the write hook
+    nor the sweep (which re-reads a thread whenever it changes) banks
+    its figures again. The thread itself is never touched."""
+    stamp = {'ts': _now_iso(), 'by': str(by or 'reader')[:40]}
+
+    def _mut(doc):
+        if key in doc:
+            return None
+        doc[key] = stamp
+        return doc
+
+    try:
+        _update_json(RETIRED_KEY, _mut)
+    except Exception as e:
+        print(f"[corpus-catalog] retired source not noted {key}: {e}")
+    with _lock:
+        _state['retired'] = None
+        _state['retired_ts'] = 0.0
+
+
+def retire_answer(user, thread_id, text, subject=None, by='reader'):
+    """A reply that was set aside (2026-10-06, the learning loop: one the
+    user rejected; 2026-11-18: one an operator set aside): its banked
+    figures leave the catalog so the next answer cannot lean on them,
+    and it stays out (the sweep re-reads its thread on every change and
+    would bank it again). Returns the number of facts removed."""
     if not enabled() or not str(text or '').strip():
         return 0
     try:
         key = f"thread/{user}/{thread_id}/{hashlib.sha1(str(text).encode('utf-8')).hexdigest()[:10]}"
+        _note_retired(key, by=by)
         idx = load_index(force=True)
         keys = [subject_key(subject)] if subject else list((idx.get('subjects') or {}).keys())
         removed = 0
@@ -1645,20 +1704,41 @@ def retire_answer(user, thread_id, text, subject=None):
             if not hit:
                 continue
 
-            def _mut(doc, _key=key):
+            left = {'facts': None}
+
+            def _mut(doc, _key=key, _left=left):
                 doc['facts'] = [f for f in (doc.get('facts') or [])
                                 if (f.get('source') or {}).get('key') != _key]
                 doc['updated'] = _now_iso()
+                _left['facts'] = list(doc['facts'])
                 return doc
 
             _update_json(_subject_page_key(skey), _mut)
+            if left['facts'] is not None:
+                # the index line follows the page, as it does when a source is forgotten
+                def _mut_index(doc, _skey=skey, _facts=left['facts']):
+                    ent = (doc.get('subjects') or {}).get(_skey)
+                    if not isinstance(ent, dict):
+                        return None
+                    if not _facts:
+                        doc['subjects'].pop(_skey, None)
+                    else:
+                        ent['products'] = sorted({str(f.get('product')) for f in _facts if f.get('product')})
+                        ent['n_facts'] = len(_facts)
+                        ent['updated'] = _now_iso()
+                    doc['updated'] = _now_iso()
+                    return doc
+
+                _update_json(INDEX_KEY, _mut_index)
+                with _lock:
+                    _state['index_ts'] = 0.0
             removed += len(hit)
             with _lock:
                 _state['pages'].pop(skey, None)
             if subject:
                 break
         if removed:
-            print(f"[corpus-catalog] retired {removed} fact(s) from a rejected reply ({user}/{thread_id})")
+            print(f"[corpus-catalog] retired {removed} fact(s) from a reply that was set aside ({user}/{thread_id})")
         return removed
     except Exception as e:
         print(f"[corpus-catalog] retire_answer failed: {e}")

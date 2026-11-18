@@ -139,6 +139,15 @@ def ask_names_window(text):
     return False
 
 
+def _set_aside(reply):
+    """True when the ledger holds these words on a row that was set aside."""
+    try:
+        import insights_ledger as _il
+        return bool(_il.reply_set_aside(reply))
+    except Exception:
+        return False
+
+
 def thread_reads(history, load_job=None, limit=MAX_READS):
     """The thread's earlier landed reads, oldest first: {'reply',
     'metrics', 'ts', 'job_id'}. A landed read turn carries its text; a
@@ -157,6 +166,8 @@ def thread_reads(history, load_job=None, limit=MAX_READS):
         promise = bool(_PROMISE_RX.search(text[:400]))
         landed = not promise and (str(meta.get('kind') or '') == 'read'
                                   or (text.startswith('On ') and ':' in text[:160]))
+        if landed and text and _set_aside(text):
+            continue        # a read whose stored row was set aside holds nothing (2026-11-18)
         if landed and text and (jid or text) not in seen:
             seen.add(jid or text)
             out.append({'reply': text, 'metrics': list(meta.get('metrics') or []), 'ts': str(t.get('ts') or ''), 'job_id': jid})
@@ -172,7 +183,7 @@ def thread_reads(history, load_job=None, limit=MAX_READS):
                 continue
             payload = doc.get('payload') if isinstance(doc.get('payload'), dict) else {}
             reply = str(payload.get('reply') or '').strip()
-            if not reply:
+            if not reply or _set_aside(reply):
                 continue
             seen.add(jid)
             out.append({'reply': reply, 'metrics': list(payload.get('metrics') or []),
