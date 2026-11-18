@@ -54750,6 +54750,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function renderPredict() {
                 var h = el('dtwPaConsole'); if (!h) return;
                 var p = pa();
+                // the wizard's audience is the page's open twin (Jenna 2026-11-18: the header must say the twin you picked); a twin
+                // switched anywhere else brings the wizard back to the audience step on that twin
+                if (S.key && p.key && p.key !== S.key) { paClearPoll(); S.pa = paFresh(); p = S.pa; }
                 if (!p.key && S.key) p.key = S.key;
                 if (p.step === 0 && p.key && p.runsKey !== p.key) paLoadRuns(p.key);
                 var out = paHero() + paRail();
@@ -54764,6 +54767,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function paLoadRuns(key) {
                 var p = pa(); p.runs = null; p.runsKey = key;
+                if (S.key === key && S.twin) {    // the open twin is already here; no second fetch
+                    var have = (S.twin.panel_sessions || []).filter(function(s) { return s && s.guided; });
+                    have.sort(function(a, b) { return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')); });
+                    p.runs = have; return;
+                }
                 api('/' + key).then(function(d) {
                     if (pa().runsKey !== key) return;
                     var ss = ((d.twin || {}).panel_sessions || []).filter(function(s) { return s && s.guided; });
@@ -54790,7 +54798,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }, 4000);
             }
             window.dtwPaGo = function(i) { var p = pa(); if (p.busy) return; if (p.step >= 3 && i >= 2) return; p.step = Math.max(0, Math.min(PA_STEPS.length - 1, i)); p.err = ''; paClearPoll(); renderPredict(); };
-            window.dtwPaPickTwin = function(key) { var p = pa(); p.key = key; p.err = ''; renderPredict(); };
+            window.dtwPaPickTwin = async function(key) {
+                var p = pa(); p.key = key; p.err = ''; p.runs = null; p.runsKey = '';
+                // the page opens the twin, so the header and every tab follow; dtwOpen lands back here and redraws the step
+                if (S.key !== key) { try { await dtwOpen(key, null, null, null, 'predict'); } catch (_) {} if (pa().key !== key) { pa().key = key; } }
+                renderPredict();
+            };
             window.dtwPaKind = function(k) { var p = pa(); p.kind = p.kind === k ? '' : k; var ta = el('dtwPaGoal'); if (ta) p.goal = ta.value; renderPredict(); };
             window.dtwPaGoalInput = function(v) { pa().goal = v; var b = document.querySelector('#dtwPaConsole .dtw-bw-nav .dtw-btn-primary'); if (b) b.disabled = !(v || '').trim(); };
             window.dtwPaEditPlan = function(k, v) { var p = pa(); if (p.plan) p.plan[k] = v; };
