@@ -736,6 +736,22 @@ def ask(user, body, *, via='session'):
     ctx = body.get('context')
     if ctx is None:
         ctx = body.get('page_context')
+    # Every storage key the page context carries is the sender's word:
+    # each is checked against what this reader can open, once, here, and
+    # a key that fails is dropped as if nothing were open. Every lane
+    # below, and the cores that read the body again, see the checked
+    # copy (prometheus.key_scope, 2026-11-18).
+    if isinstance(ctx, dict):
+        try:
+            from . import key_scope as _ks0
+            ctx = _ks0.page_context(ctx, user, uname, host)
+        except Exception as _fx:
+            _faults.note('service.key_scope', _fx)
+            ctx = None
+        if isinstance(body.get('context'), dict):
+            body['context'] = ctx
+        if isinstance(body.get('page_context'), dict):
+            body['page_context'] = ctx
     has_ctx = bool(ctx)
     open_tabs = 0
     try:

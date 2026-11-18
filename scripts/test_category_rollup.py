@@ -235,7 +235,7 @@ class OneFigureEverywhere(unittest.TestCase):
         src = Path(ROOT, 'app.py').read_text(encoding='utf-8')
         i = src.index("@app.route('/api/profile-iq/category-reach/<path:s3_key>')")
         body = src[i:src.index("@app.route('/api/profile-run-metadata/<path:s3_key>')", i)]
-        self.assertIn('_require_profile_run_access(s3_key)', body)
+        self.assertRegex(body, r"_require_profile_run_access\(\s*s3_key\b")   # the gate takes the route's own not-found body (2026-11-18)
         self.assertIn('_cr.category_rollups(df, gp)', body)
         self.assertIn('_cr.public(r)', body)
         self.assertNotIn('request.args', body)          # no behavior flags on the route

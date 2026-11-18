@@ -365,7 +365,7 @@ def mail_safe(text):
     return txt
 
 
-def _thread_file(last, host):
+def _thread_file(last, host, allowed=None):
     """(bytes, filename, mime) for the last thing in the thread when it is
     a file or a read with a table; None otherwise."""
     from . import last_thing as _lt
@@ -379,7 +379,7 @@ def _thread_file(last, host):
             except Exception:
                 pass
             extra.append('svod-acquisition')
-            blob = _lt.file_bytes(f, host.s3_client, bucket=_bucket(host), extra_buckets=tuple(extra))
+            blob = _lt.file_bytes(f, host.s3_client, bucket=_bucket(host), extra_buckets=tuple(extra), allowed=allowed)
             if blob is None:
                 return None
             return blob, str(f.get('filename') or 'file'), str(f.get('mime') or 'application/octet-stream')
@@ -424,6 +424,13 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
         return {'success': True, 'action': 'answer',
                 'reply': 'I do not have an email address on your seat. Ask your admin to add one and I will send it.',
                 'followups': [], 'offer_deck': False, 'deck_angle': None}
+    # Every key the page context carries is the sender's word: it is
+    # checked against what this reader can open before anything reads
+    # it, and a key that fails is treated as nothing open
+    # (prometheus.key_scope, 2026-11-18).
+    from . import key_scope as _ks
+    _allowed = _ks.allowed_for(user, uname, host)
+    ctx = _ks.page_context(ctx, user, uname, host)
     primary = (ctx or {}).get('primary') if isinstance(ctx, dict) else None
     attachments = []   # (bytes, filename, mime)
     subject_name = ''
@@ -441,6 +448,8 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
         hits = match_journeys(named, journeys)
         if not (wants_journey and hits):
             lib_name, lib_key = _named_library_file(named, host)
+            if lib_key and not _allowed('profile', lib_key):
+                lib_name, lib_key = '', ''     # a library file this reader cannot open is not sent
         if len(hits) > 1 and not lib_key:
             open_key = open_journey_key(ctx, uname, host)
             on_screen = [j for j in hits if j['key'] == open_key]
@@ -465,6 +474,8 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
                 break
             if not h2:
                 lib_name, lib_key = _named_library_file(sname, host)
+                if lib_key and not _allowed('profile', lib_key):
+                    lib_name, lib_key = '', ''
                 if lib_key:
                     named = named or str(sname)
                     break
@@ -485,7 +496,7 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
             print(f"[send-file] last-thing resolve failed: {ex}")
             last = None
         if last and last.get('kind') in ('file', 'read'):
-            tf = _thread_file(last, host)
+            tf = _thread_file(last, host, _allowed)
             if tf is not None:
                 attachments.append(tf)
                 subject_name = str(last.get('subject') or tf[1].rsplit('.', 1)[0].replace('_', ' ')).strip()
@@ -500,6 +511,8 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
                 ctx = dict(ctx or {}, primary=None, cuts=[])
     if not named and not journey_key and not attachments and not (isinstance(primary, dict) and primary.get('s3_key')):
         journey_key = open_journey_key(ctx, uname, host)      # "email me this file" with a Digital Journey open
+        if journey_key and not _allowed('journey', journey_key):
+            journey_key = ''                                  # only a journey this reader's own list shows
     if journey_key:
         wb = journey_workbook(journey_key, host)
         if wb:
@@ -517,6 +530,8 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
         # reads on it as a plain summary; never the open page, never a build
         if not lib_key:
             lib_name, lib_key = _named_library_file(named, host)
+            if lib_key and not _allowed('profile', lib_key):
+                lib_name, lib_key = '', ''
         if lib_key:
             primary = {'name': lib_name, 's3_key': lib_key}
             ctx = dict(ctx or {}, primary=primary, cuts=[])
@@ -533,6 +548,8 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
                         'reply': (f"I do not have a file on {named}. Open the profile you mean and ask again, or tell me "
                                   f"to build one and I will price it."),
                         'followups': [], 'offer_deck': False, 'deck_angle': None, 'subject': named}
+    if isinstance(primary, dict) and primary.get('s3_key') and not _allowed('profile', str(primary.get('s3_key'))):
+        primary = None                 # checked again at the point of reading: only a profile file this reader can open
     if isinstance(primary, dict) and primary.get('s3_key'):
         key = str(primary.get('s3_key'))
         subject_name = str(primary.get('name') or key.rsplit('.', 1)[0]).strip()
@@ -545,7 +562,7 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
         try:
             for c in (ctx.get('cuts') or []):
                 ck = str((c or {}).get('s3_key') or '')
-                if ck and ck != key:
+                if ck and ck != key and _allowed('profile', ck):
                     cb = host.s3_client.get_object(Bucket=host.bucket, Key=ck)['Body'].read()
                     attachments.append((cb, f"{_clean_name((c or {}).get('name') or ck.rsplit('.', 1)[0])}.csv", 'text/csv'))
         except Exception:

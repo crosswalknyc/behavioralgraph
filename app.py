@@ -642,6 +642,7 @@ SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 # _backups/ and friends) are never listed, opened or downloaded by any
 # seat. One predicate for every product (2026-11-17).
 import internal_copies as _internal_copies
+import file_access as _file_access   # every door that takes a key from a request asks here first (2026-11-18)
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Fin IQ ticker data
@@ -10254,8 +10255,10 @@ def archive_content():
         archived_count = 0
         
         for key in keys:
-            # Skip if already in historic
-            if key.startswith('historic/'):
+            # Only a profile file at the top of the bucket is archived
+            # from here; any other key is skipped (file_access, 2026-11-18).
+            if _file_access.servable('profile', key) is None:
+                _file_access.refuse('admin_archive', key, _key_refusal_username())
                 continue
             
             try:
@@ -10315,8 +10318,11 @@ def restore_content():
         restored_count = 0
         
         for key in keys:
-            # Only restore from historic
-            if not key.startswith('historic/'):
+            # Only an archived profile file is restored, and only to a
+            # profile file name at the top of the bucket (file_access).
+            if (_file_access.servable('archived_profile', key) is None
+                    or _file_access.servable('profile', key[len('historic/'):]) is None):
+                _file_access.refuse('admin_restore', key, _key_refusal_username())
                 continue
             
             try:
@@ -10373,6 +10379,12 @@ def delete_content():
         deleted_count = 0
         
         for key in keys:
+            # Only a profile file or an archived profile file is deleted
+            # from here; any other key is skipped (file_access, 2026-11-18).
+            if (_file_access.servable('profile', key) is None
+                    and _file_access.servable('archived_profile', key) is None):
+                _file_access.refuse('admin_delete', key, _key_refusal_username())
+                continue
             try:
                 s3.delete_object(Bucket=bucket_name, Key=key)
                 
@@ -11658,8 +11670,10 @@ def _stamp_csv_bytes(content, study_range=''):
 @app.route('/api/download-cached/<path:s3_key>')
 @requires_auth
 def download_cached(s3_key):
-    """Download a cached file from S3."""
-    ok, err = _require_profile_run_access(s3_key)
+    """Download a profile file. Only a profile file: the gate refuses
+    every other key as not found (file_access)."""
+    _nf = {'error': _file_access.NOT_FOUND}
+    ok, err = _require_profile_run_access(s3_key, missing=_nf)
     if not ok:
         return err
     if not s3_client:
@@ -11676,7 +11690,10 @@ def download_cached(s3_key):
             headers={'Content-Disposition': f'attachment; filename={s3_key}'}
         )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        if _is_missing_key_error(e):
+            return jsonify(_nf), 404
+        traceback.print_exc()
+        return jsonify({'error': 'Download failed. Try again in a moment.'}), 500
 
 
 # ============================================================================
@@ -12392,7 +12409,8 @@ def api_marketing_plan(s3_key):
     reasoned plan lands. Admins may pass ?refresh=1 to rebuild."""
     if s3_key and 'gen_pop' in s3_key.lower() and not re.match(r'^Gen_Pop_\d{4}\.csv$', s3_key, re.IGNORECASE):
         s3_key = GEN_POP_CANONICAL_KEY
-    ok, err = _require_profile_run_access(s3_key)
+    ok, err = _require_profile_run_access(
+        s3_key, missing={'success': False, 'error': 'Profile not found.'})
     if not ok:
         return err
     if not s3_client:
@@ -16776,7 +16794,10 @@ def get_csv_data(s3_key):
     # Enforce per-file Profile IQ access. Gen Pop files are always
     # allowed, admin/super_admin bypass, cloaked admin bypass, otherwise
     # allowed_runs / allowed_categories must grant.
-    ok, err = _require_profile_run_access(s3_key)
+    ok, err = _require_profile_run_access(s3_key, missing={
+        'success': False,
+        'error': 'Profile not found. Click ↻ to refresh the profile list.',
+        's3_key': s3_key})
     if not ok:
         return err
     if not s3_client:
@@ -16888,7 +16909,8 @@ def get_csv_data(s3_key):
 @app.route('/api/profile-iq/cross-behaviors/<path:s3_key>', methods=['GET', 'POST'])
 @requires_auth
 def profile_cross_behaviors(s3_key):
-    ok, err = _require_profile_run_access(s3_key)
+    ok, err = _require_profile_run_access(
+        s3_key, missing={'success': False, 'message': 'Profile not found'})
     if not ok:
         return err
     if not s3_client:
@@ -16927,7 +16949,8 @@ _CATEGORY_REACH_CACHE = {}
 @app.route('/api/profile-iq/category-reach/<path:s3_key>')
 @requires_auth
 def profile_category_reach(s3_key):
-    ok, err = _require_profile_run_access(s3_key)
+    ok, err = _require_profile_run_access(
+        s3_key, missing={'success': False, 'error': 'Profile not found'})
     if not ok:
         return err
     if not s3_client:
@@ -16961,7 +16984,8 @@ def profile_category_reach(s3_key):
 @requires_auth
 def get_profile_run_metadata(s3_key):
     """Get run parameters from a profile CSV (brand, dates, sample size, demographics) for rerun-with-different-dates."""
-    ok, err = _require_profile_run_access(s3_key)
+    ok, err = _require_profile_run_access(
+        s3_key, missing={'success': False, 'error': 'Profile not found'})
     if not ok:
         return err
     if not s3_client:
@@ -17050,6 +17074,12 @@ def submit_rerun():
             behavior_end = datetime.strptime(behavior_end, '%Y-%m-%d').strftime('%Y-%m-%d')
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        # The profile to rerun is a profile file this seat can open,
+        # never any other key (file_access, 2026-11-18).
+        ok, err = _require_profile_run_access(s3_key, missing={
+            'error': 'Profile not found. Click ↻ to refresh the profile list.'})
+        if not ok:
+            return err
         try:
             response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
             csv_content = response['Body'].read().decode('utf-8')
@@ -17155,9 +17185,20 @@ def get_segment_data():
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not configured'}), 500
         
+        # The profile is a profile file this seat can open, never any
+        # other key (file_access, 2026-11-18).
+        _seg_nf = {'success': False, 'error': 'Profile not found'}
+        ok, err = _require_profile_run_access(s3_key, missing=_seg_nf)
+        if not ok:
+            return err
         # Get the CSV to extract metadata (brand name, date ranges)
         print(f"📥 Getting segment data for: {s3_key}")
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        except Exception as _seg_e:
+            if _is_missing_key_error(_seg_e):
+                return jsonify(_seg_nf), 404
+            raise
         csv_content = response['Body'].read().decode('utf-8')
         df = pd.read_csv(io.StringIO(csv_content))
         
@@ -18576,6 +18617,12 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
     """
     if not user:
         return False
+    # Only a profile file is a profile run: a .csv at the top of the
+    # bucket, never an account or state object, an index, an internal
+    # copy or an odd key (file_access, 2026-11-18). Same answer for
+    # every seat, staff included.
+    if _file_access.servable('profile', s3_key) is None:
+        return False
     _uname = ''
     try:
         _uname = session.get('username') or ''
@@ -18618,23 +18665,69 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
     return False
 
 
-def _require_profile_run_access(s3_key: str):
+def _key_refusal_username():
+    try:
+        return str(session.get('username') or '')
+    except Exception:
+        return ''
+
+
+def _key_not_found(door, key, missing=None, why=''):
+    """The reply for a key a door will not serve: plain not found, the
+    same body the route gives for a file that is not there. The refusal
+    is written to the server log with who asked (file_access.refuse);
+    the reader is told nothing about why."""
+    _file_access.refuse(door, key, _key_refusal_username(), why)
+    body = missing if isinstance(missing, dict) else {
+        'success': False, 'error': _file_access.NOT_FOUND}
+    return jsonify(body), 404
+
+
+def _door_key(door, raw, missing=None, staff=False):
+    """(clean_key, None) when `door` may serve `raw`, else
+    (None, the not-found reply). One call per door (file_access)."""
+    k = _file_access.servable(door, raw, staff=staff)
+    if k is None:
+        return None, _key_not_found(door, raw, missing)
+    return k, None
+
+
+def _is_missing_key_error(exc) -> bool:
+    """True when a storage error means the object is not there."""
+    try:
+        code = ''
+        try:
+            code = str(((getattr(exc, 'response', None) or {}).get('Error') or {}).get('Code') or '')
+        except Exception:
+            code = ''
+        msg = str(exc)
+        return (code in ('NoSuchKey', '404', 'NotFound')
+                or type(exc).__name__ == 'NoSuchKey'
+                or 'NoSuchKey' in msg or '(404)' in msg)
+    except Exception:
+        return False
+
+
+def _require_profile_run_access(s3_key: str, missing=None):
     """Gate a Profile IQ read route on per-file `allowed_runs` +
     `allowed_categories`. Also enforces the umbrella `has_profile_iq_access`
-    flag when a user has it explicitly turned off (default is on)."""
+    flag when a user has it explicitly turned off (default is on).
+
+    `missing` is the body the calling route gives for a file that is
+    not there; a key that is not a profile file gets exactly that."""
     user = get_current_user()
     if not user:
         return False, (jsonify({
             'success': False,
             'error': 'Not authenticated',
         }), 401)
-    # An internal copy (the state of a file before a correction) is
-    # never opened or downloaded through a profile route, by any seat.
-    if _internal_copies.is_internal_copy_key(s3_key):
-        return False, (jsonify({
-            'success': False,
-            'error': _internal_copies.NOT_FOUND,
-        }), 404)
+    # Only a profile file is opened or downloaded through a profile
+    # route, by any seat: a .csv at the top of the bucket. An account or
+    # state object, an index, an internal copy (the state of a file
+    # before a correction) or an odd key reads as not found
+    # (file_access, 2026-11-18).
+    if _file_access.servable('profile', s3_key) is None:
+        return False, _key_not_found('profile', s3_key, missing)
     role = _normalize_role(user.get('role', 'user'))
     if role in ('admin', 'super_admin'):
         return True, None
@@ -18683,6 +18776,9 @@ def _pm_can_open_profile(user, s3_key):
     _require_profile_run_access; an admin opens every file; any other
     caller (a key with no session) is a no and keeps the standing quote."""
     try:
+        # a key that is not a profile file is not opened for anyone
+        if _file_access.servable('profile', s3_key) is None:
+            return False
         role = _normalize_role((user or {}).get('role', 'user'))
         if role in ('admin', 'super_admin'):
             return True
@@ -20396,9 +20492,9 @@ def get_subscriber_iq_data(s3_key):
         print("❌ S3 client not configured")
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     # A key the list never shows reads as not found, whoever asks.
-    if not _internal_copies.subscriber_iq_key_servable(s3_key):
-        return jsonify({'success': False,
-                        'error': _internal_copies.SUBIQ_NOT_FOUND}), 404
+    if _file_access.servable('subscriber', s3_key) is None:
+        return _key_not_found('subscriber', s3_key, {
+            'success': False, 'error': _internal_copies.SUBIQ_NOT_FOUND})
     user = get_current_user()
     if not _user_can_open_subscriber(user, s3_key):
         return jsonify({'success': False,
@@ -20406,7 +20502,13 @@ def get_subscriber_iq_data(s3_key):
     
     try:
         print(f"📂 Fetching from S3: {SUBSCRIBER_S3_BUCKET}/{s3_key}")
-        response = s3_client.get_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=s3_key)
+        _nf_body = {'success': False, 'error': _internal_copies.SUBIQ_NOT_FOUND}
+        try:
+            response = s3_client.get_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         csv_content = response['Body'].read().decode('utf-8')
         print(f"✅ Got CSV content: {len(csv_content)} bytes")
         
@@ -20944,7 +21046,16 @@ def get_ticket_sales_iq_data(s3_key):
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     
     try:
-        response = s3_client.get_object(Bucket=TICKET_SALES_S3_BUCKET, Key=s3_key)
+        _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+        s3_key, _refused = _door_key('ticket_sales', s3_key, _nf_body)
+        if _refused is not None:
+            return _refused
+        try:
+            response = s3_client.get_object(Bucket=TICKET_SALES_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         csv_content = response['Body'].read().decode('utf-8')
         parsed = parse_ticket_sales_iq_csv(csv_content)
         
@@ -21276,7 +21387,16 @@ def download_ticket_sales_tracker(s3_key):
     if not s3_client or s3_key.startswith(S3_PURGATORY_PREFIX):
         return jsonify({'error': 'Download not available'}), 403
     try:
-        response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
+        _nf_body = {'error': _file_access.NOT_FOUND}
+        s3_key, _refused = _door_key('ticket_sales_tracker', s3_key, _nf_body)
+        if _refused is not None:
+            return _refused
+        try:
+            response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         csv_content = _stamp_csv_bytes(response['Body'].read())
         return Response(csv_content, mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename={s3_key.split("/")[-1]}'})
     except Exception as e:
@@ -21295,7 +21415,16 @@ def get_ticket_sales_tracker_data(s3_key):
     if s3_key.startswith(S3_PURGATORY_PREFIX):
         return jsonify({'success': False, 'error': 'Cannot load purgatory files'}), 403
     try:
-        response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
+        _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+        s3_key, _refused = _door_key('ticket_sales_tracker', s3_key, _nf_body)
+        if _refused is not None:
+            return _refused
+        try:
+            response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         csv_content = response['Body'].read().decode('utf-8')
         parsed = parse_ticket_sales_tracker_csv(csv_content)
         base = s3_key.split('/')[-1].replace('.csv', '')
@@ -23171,6 +23300,10 @@ def delete_hedge_fund_ticker():
         if not s3_key:
             return jsonify({'success': False, 'error': 's3_key is required'}), 400
 
+        # Only a ticker file at the top of its bucket (file_access, 2026-11-18).
+        if _file_access.servable('fin', s3_key) is None:
+            _file_access.refuse('fin_delete', s3_key, _key_refusal_username())
+            return jsonify({'success': False, 'error': 'Invalid s3_key'}), 400
         ticker_symbol = _ticker_symbol_from_s3_key(s3_key)
         if not ticker_symbol:
             return jsonify({'success': False, 'error': 'Invalid s3_key'}), 400
@@ -23229,6 +23362,10 @@ def get_hedge_fund_ticker_data(s3_key):
     """Get ticker CSV data and calculate day-over-day metrics.
     Cache: First request of the day (or first after 1h TTL) fetches from S3 and caches; others get cache.
     So the first user each day/hour effectively refreshes data for everyone. Use ?refresh=1 to force fresh data anytime."""
+    _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+    s3_key, _refused = _door_key('fin', s3_key, _nf_body)
+    if _refused is not None:
+        return _refused
     print(f"📥 get_hedge_fund_ticker_data called for: {s3_key}")
     
     # Check daily cache first unless refresh or date/quarter filter requested
@@ -23251,7 +23388,13 @@ def get_hedge_fund_ticker_data(s3_key):
     
     try:
         print(f"📂 Fetching from S3: {HEDGE_FUND_S3_BUCKET}/{s3_key} (region: {S3_REGION})")
-        response = hedge_fund_s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
+        _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+        try:
+            response = hedge_fund_s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         csv_content = response['Body'].read().decode('utf-8')
         print(f"✅ Got CSV content: {len(csv_content)} bytes")
         
@@ -24167,6 +24310,10 @@ def backfill_search_queries():
     s3_key = (data.get('s3_key') or '').strip()
     if not s3_key:
         return jsonify({'success': False, 'error': 's3_key required'}), 400
+    # Reads and rewrites a profile file, never any other key
+    # (file_access, 2026-11-18).
+    if _file_access.servable('profile', s3_key) is None:
+        return _key_not_found('backfill_search', s3_key)
 
     try:
         # 1. Download CSV
@@ -24791,8 +24938,14 @@ def analyze_ecosystem_with_ai():
                 'fallback': True
             }), 503
         
-        # If we have s3_key but no csv_data, fetch it
+        # If we have s3_key but no csv_data, fetch it. The key is a
+        # profile file this seat can open, never any other key
+        # (file_access, 2026-11-18).
         if s3_key and not csv_data:
+            _eco_nf = {'success': False, 'error': 'Profile not found'}
+            ok, err = _require_profile_run_access(s3_key, missing=_eco_nf)
+            if not ok:
+                return err
             try:
                 response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
                 csv_content = response['Body'].read().decode('utf-8')
@@ -24801,9 +24954,11 @@ def analyze_ecosystem_with_ai():
                 csv_data = df.to_dict('records')
             except Exception as e:
                 print(f"⚠️ Could not fetch CSV from S3: {e}")
+                if _is_missing_key_error(e):
+                    return jsonify(_eco_nf), 404
                 return jsonify({
                     'success': False,
-                    'error': f'Could not fetch CSV data: {str(e)}'
+                    'error': 'Could not read this profile right now.'
                 }), 500
         
         # Prepare data summary for AI (limit to avoid token limits)
@@ -25356,6 +25511,11 @@ def refresh_metadata_cache():
         data = request.get_json() or {}
         filename = data.get('filename')  # Optional: refresh specific file
         
+        if filename and (_file_access.clean_key(filename) is None
+                         or not str(filename).startswith('metadata/')
+                         or not str(filename).lower().endswith('.json')):
+            # Only one of the metadata files this cache holds.
+            return _key_not_found('admin_refresh_cache', filename)
         if filename:
             # Invalidate specific file and reload
             invalidate_cache(filename)
@@ -25473,7 +25633,9 @@ def get_profile_data(filename):
         # Same per-file access enforcement as /api/get-csv-data. The two
         # routes serve overlapping (but distinct) surfaces and both need
         # to gate on allowed_runs.
-        ok, err = _require_profile_run_access(filename)
+        ok, err = _require_profile_run_access(filename, missing={
+            'success': False,
+            'error': 'Profile not found. Click ↻ to refresh the profile list.'})
         if not ok:
             return err
         
@@ -25631,6 +25793,10 @@ def remove_ticker_image():
 @requires_auth
 def serve_ticker_image(s3_key):
     """Proxy endpoint to serve ticker images from S3."""
+    # Only an image under an image folder (file_access, 2026-11-18).
+    if _file_access.servable('image', s3_key) is None:
+        _file_access.refuse('image', s3_key, _key_refusal_username())
+        return '', 404
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=s3_key)
         image_data = response['Body'].read()
@@ -26813,12 +26979,16 @@ def get_profile_image_info(name):
 @requires_auth
 def serve_profile_image(s3_key):
     """Proxy endpoint to serve profile images from S3 (avoids public access issues)."""
+    # Only an image under an image folder (file_access, 2026-11-18): this
+    # route used to read whatever key it was handed.
+    if _file_access.servable('image', s3_key) is None:
+        _file_access.refuse('image', s3_key, _key_refusal_username())
+        return '', 404
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         content_type = response.get('ContentType', 'image/jpeg')
         image_data = response['Body'].read()
         
-        from flask import Response
         return Response(
             image_data,
             mimetype=content_type,
@@ -26829,8 +26999,10 @@ def serve_profile_image(s3_key):
         )
     except Exception as e:
         print(f"Error serving profile image {s3_key}: {e}")
-        # Return a 1x1 transparent pixel as fallback
-        return Response(status=404)
+        # A missing image is a plain 404, the same reply a refused key
+        # gets. (This path used to fail on the name Response, which a
+        # later import in this function made local.)
+        return '', 404
 
 
 @app.route('/api/admin/profile-image', methods=['POST'])
@@ -27467,6 +27639,8 @@ def rename_file():
         
         if not old_key or not new_name:
             return jsonify({'success': False, 'error': 'Old key and new name required'})
+        if not isinstance(old_key, str) or not isinstance(new_name, str):
+            return jsonify({'success': False, 'error': 'Old key and new name required'})
         
         # Ticket Sales: only update display_name in metadata (don't rename S3 file)
         if old_key.startswith('ticket-sales-iq/'):
@@ -27505,6 +27679,13 @@ def rename_file():
         # "svod-acquisition/"; strip it to get the bare key in the SVOD bucket.
         # (Previously this fell through to the generic path below, which copied
         # within the wrong bucket and raised NoSuchKey on CopyObject.)
+        # From here on the file itself is renamed, so the new name is a
+        # file name, never a path or an internal name (file_access,
+        # 2026-11-18).
+        if _file_access.safe_name(new_name) is None:
+            _file_access.refuse('admin_rename', f'{old_key} -> {new_name}', _key_refusal_username(), 'name')
+            return jsonify({'success': False, 'error': 'That name cannot be used. Use letters, numbers, spaces, dashes and underscores.'})
+        new_name = _file_access.safe_name(new_name)
         if old_key.startswith('svod-acquisition/'):
             bare_old = resolve_subscriber_iq_s3_key(old_key)
             # An internal copy is never renamed or moved from here.
@@ -27516,6 +27697,9 @@ def rename_file():
             if '.' in old_filename:
                 extension = '.' + old_filename.rsplit('.', 1)[-1]
             bare_new = f"{folder}/{new_name}{extension}" if folder else f"{new_name}{extension}"
+            if not _internal_copies.subscriber_iq_key_servable(bare_new) or _file_access.clean_key(bare_new) is None:
+                _file_access.refuse('admin_rename', bare_new, _key_refusal_username(), 'target')
+                return jsonify({'success': False, 'error': _internal_copies.SUBIQ_NOT_FOUND}), 404
 
             # Verify the source object actually exists in the SVOD bucket.
             try:
@@ -27560,6 +27744,12 @@ def rename_file():
                 'message': 'File renamed successfully'
             })
 
+        # Only a profile file at the top of the bucket is renamed from
+        # here, to another profile file name there. An account or state
+        # object, an index or an internal copy reads as not found
+        # (file_access, 2026-11-18).
+        if _file_access.servable('profile', old_key) is None:
+            return _key_not_found('admin_rename', old_key)
         # Get the folder path and extension from old key
         folder = '/'.join(old_key.split('/')[:-1])
         old_filename = old_key.split('/')[-1]
@@ -27569,6 +27759,9 @@ def rename_file():
         
         # Build new key
         new_key = f"{folder}/{new_name}{extension}" if folder else f"{new_name}{extension}"
+        if _file_access.servable('profile', new_key) is None:
+            _file_access.refuse('admin_rename', new_key, _key_refusal_username(), 'target')
+            return jsonify({'success': False, 'error': 'That name cannot be used. Use letters, numbers, spaces, dashes and underscores.'})
         
         # Only check for existing file if it's a truly different key (not just case change)
         if old_key != new_key:
@@ -28599,7 +28792,11 @@ def change_file_category():
                 'message': f'Category updated to {new_category} (grouped under SVOD ACQUISITION master category)'
             })
         
-        # Regular file - update BRAND CATEGORY in CSV
+        # Regular file - update BRAND CATEGORY in CSV. Only a profile
+        # file at the top of the bucket is read and rewritten from here
+        # (file_access, 2026-11-18).
+        if _file_access.servable('profile', file_key) is None:
+            return _key_not_found('admin_category', file_key)
         # Download the file from S3
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=file_key)
         content = response['Body'].read().decode('utf-8', errors='ignore')
@@ -32704,7 +32901,9 @@ def export_deck_to_canva():
     
     try:
         data = request.get_json()
-        deck_id = data.get('deck_id')
+        deck_id = _file_access.safe_id(data.get('deck_id'))
+        if not deck_id:
+            return jsonify({'success': False, 'error': 'Deck not found'})
         
         # Get deck data
         s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
@@ -33877,6 +34076,9 @@ def talent_fit_get_result(key):
         
         # Don't add purgatory prefix - we're fetching released files from root
         
+        key, _refused = _door_key('talent_fit', key, {'error': 'Result not found'})
+        if _refused is not None:
+            return _refused
         try:
             response = s3_client.get_object(Bucket=TALENT_FIT_S3_BUCKET, Key=key)
             content = response['Body'].read().decode('utf-8')
@@ -33885,10 +34087,14 @@ def talent_fit_get_result(key):
         except s3_client.exceptions.NoSuchKey:
             return jsonify({'error': 'Result not found'}), 404
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            if _is_missing_key_error(e):
+                return jsonify({'error': 'Result not found'}), 404
+            traceback.print_exc()
+            return jsonify({'error': 'Could not read this result right now.'}), 500
         
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'error': 'Could not read this result right now.'}), 500
 
 
 @app.route('/api/admin/fix-csv-genpop', methods=['POST'])
@@ -36755,7 +36961,7 @@ def list_sf_lf_conversion_results():
             response = s3_client.list_objects_v2(Bucket=SF_LF_CONV_S3_BUCKET, Prefix='')
             for obj in response.get('Contents', []):
                 key = obj['Key']
-                if key.endswith('.csv'):
+                if key.endswith('.csv') and _file_access.servable('sf_conversion', key):
                     is_purgatory = key.startswith(S3_PURGATORY_PREFIX)
                     bare_key = key.replace(S3_PURGATORY_PREFIX, '')
                     # Journey id = bare filename without the .csv suffix
@@ -36812,7 +37018,16 @@ def download_sf_lf_conversion(s3_key):
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
-        response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
+        _nf_body = {'error': _file_access.NOT_FOUND}
+        s3_key, _refused = _door_key('sf_conversion', s3_key, _nf_body)
+        if _refused is not None:
+            return _refused
+        try:
+            response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         content = _stamp_csv_bytes(response['Body'].read())
         filename = os.path.basename(s3_key)
         return Response(
@@ -36840,7 +37055,16 @@ def get_sf_lf_conversion_data(s3_key):
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
-        response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
+        _nf_body = {'error': _file_access.NOT_FOUND}
+        s3_key, _refused = _door_key('sf_conversion', s3_key, _nf_body)
+        if _refused is not None:
+            return _refused
+        try:
+            response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         content = response['Body'].read().decode('utf-8')
         
         import csv
@@ -37076,7 +37300,13 @@ def sf_lf_performance_analysis():
         if analysis is None:
             return jsonify({'error': 'OpenAI not configured or analysis failed'}), 500
         
-        # If s3_key provided, save analysis back to CSV
+        # If s3_key provided, save analysis back to CSV. Only to a
+        # conversion file this seat can open, never any other key
+        # (file_access, 2026-11-18).
+        if s3_key and (_file_access.servable('sf_conversion', s3_key) is None
+                       or _require_sf_conversion_journey(s3_key) is not None):
+            _file_access.refuse('sf_conversion', s3_key, _key_refusal_username(), 'write-back')
+            s3_key = ''
         if s3_key:
             try:
                 save_analysis_to_csv(s3_key, analysis)
@@ -38095,7 +38325,7 @@ def list_flywheel_results():
             response = s3_client.list_objects_v2(Bucket=FLYWHEEL_S3_BUCKET, Prefix='')
             for obj in response.get('Contents', []):
                 key = obj['Key']
-                if key.endswith('.csv'):
+                if key.endswith('.csv') and _file_access.servable('flywheel_conversion', key):
                     is_purgatory = key.startswith(S3_PURGATORY_PREFIX)
                     results.append({
                         's3_key': key,
@@ -38127,7 +38357,16 @@ def get_flywheel_data(s3_key):
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not available'}), 500
         
-        response = s3_client.get_object(Bucket=FLYWHEEL_S3_BUCKET, Key=s3_key)
+        _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+        s3_key, _refused = _door_key('flywheel_conversion', s3_key, _nf_body)
+        if _refused is not None:
+            return _refused
+        try:
+            response = s3_client.get_object(Bucket=FLYWHEEL_S3_BUCKET, Key=s3_key)
+        except Exception as _key_e:
+            if _is_missing_key_error(_key_e):
+                return jsonify(_nf_body), 404
+            raise
         csv_content = response['Body'].read().decode('utf-8')
         
         reader = csv.DictReader(io.StringIO(csv_content))
@@ -39937,12 +40176,17 @@ def get_roas_iq_result(s3_key):
     if not ok:
         return err
     try:
-        full_key = s3_key if s3_key.startswith(ROAS_IQ_S3_PREFIX) else ROAS_IQ_S3_PREFIX + s3_key
+        _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+        full_key = _file_access.under_prefix(ROAS_IQ_S3_PREFIX, s3_key, ('.json',))
+        if full_key is None or _file_access.servable('roas', full_key) is None:
+            return _key_not_found('roas', s3_key, _nf_body)
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         return jsonify({'success': True, 'data': data})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 404
+        if not _is_missing_key_error(e):
+            traceback.print_exc()
+        return jsonify({'success': False, 'error': _file_access.NOT_FOUND}), 404
 
 
 @app.route('/api/roas-iq/list')
@@ -40139,12 +40383,17 @@ def get_ecommerce_iq_result(s3_key):
     if not ok:
         return err
     try:
-        full_key = s3_key if s3_key.startswith(ECOMMERCE_IQ_S3_PREFIX) else ECOMMERCE_IQ_S3_PREFIX + s3_key
+        _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+        full_key = _file_access.under_prefix(ECOMMERCE_IQ_S3_PREFIX, s3_key, ('.json',))
+        if full_key is None or _file_access.servable('ecommerce', full_key) is None:
+            return _key_not_found('ecommerce', s3_key, _nf_body)
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         return jsonify({'success': True, 'data': data})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 404
+        if not _is_missing_key_error(e):
+            traceback.print_exc()
+        return jsonify({'success': False, 'error': _file_access.NOT_FOUND}), 404
 
 
 @app.route('/api/ecommerce-iq/list')
@@ -41802,12 +42051,16 @@ def get_brand_partnership_iq_result(s3_key):
     if not ok:
         return err
     try:
-        full_key = s3_key if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX) \
-                   else BRAND_PARTNERSHIP_IQ_S3_PREFIX + s3_key
+        _nf_body = {'success': False, 'error': _file_access.NOT_FOUND}
+        # Only a result file under the product's own folder; an internal
+        # `_backups/` snapshot or any other key reads as not found
+        # (file_access, 2026-11-18).
+        full_key = _file_access.under_prefix(BRAND_PARTNERSHIP_IQ_S3_PREFIX, s3_key, ('.json',))
+        if full_key is None or _file_access.servable('brand_partnership', full_key) is None:
+            return _key_not_found('brand_partnership', s3_key, _nf_body)
         bare_key = full_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
-        # Never serve internal `_backups/` snapshots as browseable results.
         if _bpiq_is_backup_key(full_key) or _bpiq_is_backup_key(bare_key):
-            return jsonify({'success': False, 'error': 'not found'}), 404
+            return _key_not_found('brand_partnership', s3_key, _nf_body)
         # 2026-09-03: Per-journey access gate. Journey id = bare filename
         # without the .json suffix (matches list_brand_partnership_iq).
         _bp_journey_id = bare_key[:-5] if bare_key.endswith('.json') else bare_key
@@ -41834,7 +42087,9 @@ def get_brand_partnership_iq_result(s3_key):
             'category':     (meta.get('category') or '').strip() or None,
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 404
+        if not _is_missing_key_error(e):
+            traceback.print_exc()
+        return jsonify({'success': False, 'error': _file_access.NOT_FOUND}), 404
 
 
 @app.route('/api/brand-partnership-iq/list')
@@ -42679,6 +42934,35 @@ def _jiq_item_allowed(user, key='', demo_id='', project_name=''):
         return False
 
 
+def _pm_can_open_journey(user, full_key):
+    """True when this reader's Digital Journey list would show the run:
+    the same rules the results route applies (the product on, the
+    seat's run list, archived runs for staff only), for a key that is a
+    run file at all (file_access). Prometheus asks it before it reads a
+    journey a chat message names (2026-11-18)."""
+    try:
+        from migration import journey_iq as _jiq
+        if _file_access.servable('journey', full_key) is None:
+            return False
+        if not user_can_run_analysis_module(user, 'journey_iq'):
+            return False
+        is_admin, allow_all, _allowed = _user_jiq_run_access(user)
+        if _jiq.is_archive_key(full_key):
+            return bool(is_admin)
+        if is_admin or allow_all:
+            return True
+        demo_id = ''
+        if full_key.startswith(_jiq.S3_PREFIX + 'demos/'):
+            demo_id = full_key.rsplit('/', 1)[-1]
+            for suffix in ('.json.gz', '.json'):
+                if demo_id.endswith(suffix):
+                    demo_id = demo_id[:-len(suffix)]
+                    break
+        return bool(_jiq_item_allowed(user, full_key, demo_id, demo_id))
+    except Exception:
+        return False
+
+
 def _filter_jiq_runs_for_user(runs, user):
     """Apply the per-user allow-list to a list of run-summary dicts."""
     is_admin, allow_all, _allowed = _user_jiq_run_access(user)
@@ -42885,11 +43169,12 @@ def get_journey_iq_result(s3_key):
         else:
             full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) \
                 else _jiq.S3_PREFIX + s3_key
-            # Internal copies and the tab's own index files are never a
-            # run a reader can open by key.
-            if _internal_copies.is_internal_copy_key(full_key):
-                return jsonify({'success': False,
-                                'error': 'Run not found'}), 404
+        # Only a run under the product's own folder: internal copies,
+        # the tab's own index files, its caches and any other key read
+        # as not found (file_access, 2026-11-18).
+        if _file_access.servable('journey', full_key) is None:
+            return _key_not_found('journey', s3_key,
+                                  {'success': False, 'error': 'Run not found'})
 
         user = get_current_user()
         # Access guard #1: anyone with Digital Journey IQ access can load any
@@ -42932,7 +43217,10 @@ def get_journey_iq_result(s3_key):
         return jsonify({'success': True, 'data': data, 's3_key': full_key,
                         'archived': _jiq.is_archive_key(full_key)})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        if _is_missing_key_error(e):
+            return jsonify({'success': False, 'error': 'Run not found'}), 404
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'Could not open this run right now.'}), 500
 
 
 # ── Journey IQ: Admin delete + annotations ────────────────────────────
@@ -42969,7 +43257,12 @@ def admin_delete_journey_iq():
     s3_key = data.get('s3_key', '')
     if not s3_key:
         return jsonify({'success': False, 'error': 'Missing s3_key'}), 400
-    full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
+    full_key = s3_key if (isinstance(s3_key, str) and s3_key.startswith(_jiq.S3_PREFIX)) else _jiq.S3_PREFIX + str(s3_key)
+    # Only a run file: never the tab's index, a cache or an internal
+    # copy (file_access, 2026-11-18).
+    if _file_access.servable('journey', full_key) is None:
+        return _key_not_found('journey_delete', s3_key,
+                              {'success': False, 'error': 'Run not found'})
     try:
         s3_client.delete_object(Bucket=S3_BUCKET, Key=full_key)
         # Remove from index
@@ -45173,6 +45466,9 @@ def api_helm_iq_financials(key):
     """Fetch financial data for a specific movie."""
     try:
         bucket = 'helm-iq-financials'
+        key, _refused = _door_key('helm', key, {'success': False, 'error': 'Movie not found'})
+        if _refused is not None:
+            return _refused
         obj = s3.get_object(Bucket=bucket, Key=key)
         import io
         df = pd.read_csv(io.BytesIO(obj['Body'].read()))

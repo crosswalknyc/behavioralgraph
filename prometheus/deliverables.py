@@ -221,6 +221,11 @@ def _fresh_link(url, s3, bucket):
         p = urlparse(u)
         if bucket and bucket in p.netloc and 'amazonaws.com' in p.netloc:
             key = unquote(p.path.lstrip('/'))
+            # only a file Prometheus wrote for readers is signed again (file_access, 2026-11-18)
+            import file_access as _fa
+            if key and not any(t[2] in ('delivered', 'chart') for t in _fa.link_targets({'s3_key': key, 'bucket': bucket}, bucket=bucket)):
+                _fa.refuse('chat_link', key)
+                return ''
             if key:
                 return s3.generate_presigned_url(
                     'get_object', Params={'Bucket': bucket, 'Key': key},

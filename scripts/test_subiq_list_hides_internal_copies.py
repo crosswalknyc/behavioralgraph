@@ -42,6 +42,7 @@ import flask  # noqa: E402
 from flask import jsonify  # noqa: E402
 
 import internal_copies as IC  # noqa: E402
+import file_access as FA  # noqa: E402   (the shared gate the lifted routes call, 2026-11-18)
 import wallet  # noqa: E402
 
 PASS = FAIL = 0
@@ -209,7 +210,7 @@ def _ns(s3):
         '__name__': 'app_lifted', 're': __import__('re'), 'json': __import__('json'),
         'jsonify': jsonify, 'request': flask.request, 'session': {},
         's3_client': s3, 'SUBSCRIBER_S3_BUCKET': 'svod-acquisition', 'S3_BUCKET': 'dashboard-inputs',
-        'S3_PURGATORY_PREFIX': 'purgatory/', '_internal_copies': IC,
+        'S3_PURGATORY_PREFIX': 'purgatory/', '_internal_copies': IC, '_file_access': FA,
         '_require_module_access': lambda *a, **k: (True, None),
         'load_svod_metadata': lambda: {LIVE[0]: {'category': 'SERIES - SONY'}},
         'normalize_subscriber_iq_category': lambda c: c,
@@ -223,7 +224,8 @@ def _ns(s3):
     }
     lift({'_normalize_role', '_user_can_open_subscriber', 'list_subscriber_iq_files',
           'get_subscriber_iq_data', 'resolve_subscriber_iq_s3_key', '_bpiq_is_backup_key',
-          '_is_root_csv_key', '_require_profile_run_access', 'get_journey_iq_result'}, ns)
+          '_is_root_csv_key', '_require_profile_run_access', 'get_journey_iq_result',
+          '_key_refusal_username', '_key_not_found', '_door_key', '_is_missing_key_error'}, ns)
     return ns
 
 
@@ -393,8 +395,11 @@ for label, user in (('a client', SONY), ('staff', STAFF), ('an admin', ADMIN)):
     check(f'Profile IQ gate: a root copy is not found for {label}', ok is False and code == 404)
     ok, code, body = gate_call('Reba_McEntire_08_10_2026_12_00.csv', user)
     check(f'Profile IQ gate: a profile still opens for {label}', ok is True)
+# A data file Prometheus wrote goes out on its own signed link, never through a
+# profile route: the profile gate serves profile files only (file_access, 2026-11-18).
 ok, code, body = gate_call('generated_data/ab12cd34ef56/Nike_reach.csv', SONY)
-check('Profile IQ gate: a delivered data file still downloads', ok is True)
+check('Profile IQ gate: a delivered data file is not a profile file (it rides its own link)',
+      ok is False and code == 404 and body.get('error') == IC.NOT_FOUND)
 
 # Brand Partnership IQ
 bp = ns['_bpiq_is_backup_key']
@@ -508,8 +513,11 @@ for k in (INTERNAL[0], INTERNAL[4], '_backups/Reba.csv.pre_x.csv'):
     check(f'email / download this file never hands over a copy: {k[:40]}', blob is None and url == '')
 check('and storage was not read for them', len(s3p.gets) == n0)
 f = {'s3_key': LIVE[0], 'filename': LIVE[0], 'bucket': 'dashboard-inputs', 'mime': 'text/csv'}
-check('a live tracker is still handed over',
-      last_thing.file_bytes(f, s3p, bucket='dashboard-inputs', extra_buckets=('svod-acquisition',)) == TRACKER)
+check('a live tracker is still handed over to a reader who can open it',
+      last_thing.file_bytes(f, s3p, bucket='dashboard-inputs', extra_buckets=('svod-acquisition',),
+                            allowed=lambda kind, key: kind == 'subscriber') == TRACKER)
+check('and never without the reader\'s own access check (file_access, 2026-11-18)',
+      last_thing.file_bytes(f, s3p, bucket='dashboard-inputs', extra_buckets=('svod-acquisition',)) is None)
 f = {'s3_key': 'generated_data/ab12cd34ef56/Nike_reach.csv', 'filename': 'Nike_reach.csv', 'bucket': 'dashboard-inputs'}
 check('a delivered data file is still handed over and linked',
       last_thing.file_bytes(f, s3p, bucket='dashboard-inputs') == TRACKER

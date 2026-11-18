@@ -34,6 +34,7 @@ tests run with no network.
 from __future__ import annotations
 from . import file_names as _file_names   # a download's name is one a link can carry (2026-11-16)
 import internal_copies as _internal_copies   # an internal copy is never handed over (2026-11-17)
+import file_access as _file_access           # a link a turn carries is checked before it is read or signed (2026-11-18)
 
 import csv
 import io
@@ -483,42 +484,68 @@ def text_csv(text, *, subject='', question='', downloaded=''):
     return f"{name}.csv", buf.getvalue()
 
 
-def file_bytes(file, s3, *, bucket='dashboard-inputs', extra_buckets=()):
+def _link_targets(file, bucket, extra_buckets, allowed):
+    """The (bucket, key) pairs a resolved file may be read from. The
+    turn that carried the link can come from the request, so the link
+    is checked, never trusted: only a file Prometheus writes for
+    readers, a profile file or a live tracker, and for the last two
+    only when ``allowed(kind, key)`` says this reader can open it
+    (file_access, 2026-11-18)."""
+    out = []
+    for b, k, kind in _file_access.link_targets(file, bucket=bucket, extra_buckets=extra_buckets):
+        if kind in ('profile', 'subscriber'):
+            try:
+                if allowed is None or not allowed(kind, k):
+                    continue
+            except Exception:
+                continue
+        out.append((b, k))
+    if not out and isinstance(file, dict) and file.get('s3_key'):
+        _file_access.refuse('chat_link', f"{file.get('bucket') or bucket}/{file.get('s3_key')}")
+    return out
+
+
+def file_bytes(file, s3, *, bucket='dashboard-inputs', extra_buckets=(), allowed=None):
     """The bytes of a resolved file from S3 (its own bucket first, then
-    the dashboard bucket, then any extra), or None."""
+    the dashboard bucket, then any extra), or None. ``allowed`` is the
+    reader's access check ``(kind, key) -> bool`` for a profile file or
+    a tracker; without it those are not read."""
     if not isinstance(file, dict) or not file.get('s3_key') or s3 is None:
         return None
     if _internal_copies.is_internal_copy_key(file.get('s3_key')):
         return None   # an internal copy is never handed over, whoever names it (2026-11-17)
-    tried = []
-    for b in [file.get('bucket'), bucket, *extra_buckets]:
-        if not b or b in tried:
-            continue
-        tried.append(b)
+    for b, k in _link_targets(file, bucket, extra_buckets, allowed):
         try:
-            return s3.get_object(Bucket=b, Key=file['s3_key'])['Body'].read()
+            return s3.get_object(Bucket=b, Key=k)['Body'].read()
         except Exception:
             continue
     return None
 
 
-def fresh_url(file, s3, *, bucket='dashboard-inputs', expires=7 * 24 * 3600):
+def fresh_url(file, s3, *, bucket='dashboard-inputs', expires=7 * 24 * 3600, allowed=None):
     """A link that opens now: a fresh presigned URL for an S3 file, or
-    the same-origin link as it is."""
+    the same-origin link as it is (that route checks the reader
+    itself). A link to anything else is not signed."""
     if not isinstance(file, dict):
         return ''
     if _internal_copies.is_internal_copy_key(file.get('s3_key')):
         return ''   # no link is minted for an internal copy (2026-11-17)
-    if file.get('same_origin') or not file.get('s3_key') or s3 is None:
-        return str(file.get('url') or '')
+    if file.get('same_origin'):
+        return str(file.get('url') or '') if _file_access.servable('profile', file.get('s3_key')) else ''
+    if not file.get('s3_key') or s3 is None:
+        return ''
+    own = str(file.get('bucket') or bucket)
+    targets = [t for t in _link_targets(file, bucket, (), allowed) if t[0] == own]
+    if not targets:
+        return ''
     try:
         return s3.generate_presigned_url(
             'get_object',
-            Params={'Bucket': file.get('bucket') or bucket, 'Key': file['s3_key'],
+            Params={'Bucket': targets[0][0], 'Key': targets[0][1],
                     'ResponseContentDisposition': _file_names.disposition(file.get("filename") or "file")},
             ExpiresIn=expires)
     except Exception:
-        return str(file.get('url') or '')
+        return ''
 
 
 def now_label():

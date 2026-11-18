@@ -95,10 +95,12 @@ _APP_BINDINGS = {
     'twins_locked': '_digital_twins_menu_locked',       # (user) -> bool; the company lock on Digital Twins IQ
     # the cross of behaviors is free on a profile the reader can open (Jenna 2026-11-11)
     'can_open_profile': '_pm_can_open_profile',         # (user, s3_key) -> bool; the profile page's own gate
+    'can_open_journey': '_pm_can_open_journey',         # (user, full_key) -> bool; the Digital Journey list's own rule (2026-11-18)
+    'partner_key_ok': '_partner_download_key_allowed',  # (s3_key) -> bool; the key surface's own catalog rule (2026-11-18)
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'queue_url', 'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate', 'price_table_for',
+_OPTIONAL = {'can_open_journey', 'partner_key_ok', 'queue_url', 'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate', 'price_table_for',
              'load_users', 'check_user_credits', 'product_access', 'live_features', 'twins_locked', 'can_open_profile',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}

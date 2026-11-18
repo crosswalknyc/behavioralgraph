@@ -104,8 +104,9 @@ class CrossBehaviorsPage(unittest.TestCase):
         i = app.index("@app.route('/api/profile-iq/cross-behaviors/<path:s3_key>', methods=['GET', 'POST'])")
         body = app[i:app.index('\n@app.route(', i + 10)]
         self.assertIn('@requires_auth', body)
-        self.assertIn('ok, err = _require_profile_run_access(s3_key)', body)
-        self.assertLess(body.index('_require_profile_run_access(s3_key)'), body.index('from prometheus import crosstab'))
+        # the gate takes the route's own not-found body since 2026-11-18 (file_access): same gate, same place
+        self.assertRegex(body, r"ok, err = _require_profile_run_access\(\s*s3_key\b")
+        self.assertLess(body.index('_require_profile_run_access('), body.index('from prometheus import crosstab'))
         self.assertIn('_xt.page_options(s3_key', body)
         self.assertIn('_xt.page_read(s3_key, picks', body)
         route = body.split('def profile_cross_behaviors', 1)[1].split('\n\n\n', 1)[0]

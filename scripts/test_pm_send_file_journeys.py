@@ -74,7 +74,10 @@ class FakeHost:
         self.s3_client = FakeS3(objs)
 
     def has(self, name):
-        return name in ('s3_json', 'load_threads_index', 'load_users', 's3_client', 'bucket')
+        return name in ('s3_json', 'load_threads_index', 'load_users', 's3_client', 'bucket', 'can_open_profile')
+
+    def can_open_profile(self, user, key):
+        return True     # the reader's own profile; what a key may be at all is file_access (2026-11-18)
 
     def s3_json(self, key, default):
         return self._index if key == sf.JOURNEY_INDEX_KEY else default

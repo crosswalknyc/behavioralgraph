@@ -1212,6 +1212,22 @@ def _s3_client():
         return None
 
 
+def _image_key_ok(key) -> bool:
+    """Only an image under an image folder is read from the private
+    bucket for a cover (file_access, 2026-11-18): the path can ride in
+    on a request, so it is checked like any other key."""
+    try:
+        import file_access as _fa
+        return _fa.image_key(key) is not None
+    except ImportError:
+        return bool(re.match(
+            r'^(?:profile-images|ticker-images|ticket-sales-images|ticket-sales-tracker-images|'
+            r'brand-partnership-iq-images|journey-iq-images|digital-twins/covers|digital-twins/portraits)'
+            r'/[A-Za-z0-9][A-Za-z0-9.\-]*\.(?:jpe?g|png|webp|gif)$', str(key or ''), re.I))
+    except Exception:
+        return False
+
+
 def _proxy_key(url: str) -> Optional[str]:
     """The S3 key behind a dashboard image path. The admin upload stores
     the photo in the private bucket and the sidecar records it as
@@ -1223,7 +1239,7 @@ def _proxy_key(url: str) -> Optional[str]:
             path = urllib.parse.urlsplit(url).path or ""
         if path.startswith(_IMAGE_PROXY_PREFIX):
             key = urllib.parse.unquote(path[len(_IMAGE_PROXY_PREFIX):]).strip("/")
-            return key or None
+            return key if (key and _image_key_ok(key)) else None
     except Exception:
         pass
     return None

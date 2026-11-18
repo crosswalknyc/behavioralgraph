@@ -788,7 +788,7 @@ class ABuildIsReadFromTheFile(unittest.TestCase):
 
     def test_the_lane_answers_before_any_core(self):
         self.w.s3.objs[self.key] = _csv()
-        host.bind(s3_client=self.w.s3)
+        host.bind(s3_client=self.w.s3, can_open_profile=lambda user, key: True)   # the page's profile is the reader's own (key_scope, 2026-11-18)
         env, _st, _g = self.w.ask(JW['was_it_run'], thread_id=self.w.new_thread(), history=[], page=PAGE, surface='analyze')
         self.assertEqual(self.w.calls, [])
         self.assertEqual(env['decision']['reason'], 'build_facts')

@@ -12969,9 +12969,11 @@ def _pm_email_file_response(user, text, history=None):
             f = last['file']
             fname = str(f.get('filename') or 'file')
             mime = str(f.get('mime') or 'application/octet-stream')
-            fbytes = _lt.file_bytes(f, _H.s3_client, bucket=_H.S3_BUCKET, extra_buckets=('svod-acquisition',))
-            if fbytes is None:
-                raise RuntimeError(f"file not readable: {f.get('s3_key')}")
+            from prometheus import key_scope as _ks   # a link a turn or the page carries is checked for this reader first (2026-11-18)
+            fbytes = _lt.file_bytes(f, _H.s3_client, bucket=_H.S3_BUCKET, extra_buckets=('svod-acquisition',), allowed=_ks.allowed_here(user, uname))
+            if fbytes is None:   # nothing this reader can open sits behind that link: a plain no, never an alert
+                return jsonify({'success': True, 'action': 'answer', 'followups': [], 'offer_deck': False, 'deck_angle': None,
+                                'reply': 'I do not have a file to send for that. Open the profile you mean and ask again.'})
         elif last['kind'] == 'read':
             fname, csv_text = _pm_entry_csv(last['entry'], question=last.get('question'))
             fbytes = csv_text.encode('utf-8')
@@ -13147,7 +13149,8 @@ def _pm_csv_download_response(user, text, history=None):
             # presigned link is re-signed; a same-origin link stays)
             f = last['file']
             fname = str(f.get('filename') or 'file')
-            url = _lt.fresh_url(f, _H.s3_client, bucket=_H.S3_BUCKET)
+            from prometheus import key_scope as _ks   # only a file this reader can open is signed (2026-11-18)
+            url = _lt.fresh_url(f, _H.s3_client, bucket=_H.S3_BUCKET, allowed=_ks.allowed_here(user, uname))
             s3_key = str(f.get('s3_key') or '')
         elif last['kind'] == 'read':
             fname, csv_text = _pm_entry_csv(last['entry'], question=last.get('question'))
@@ -13162,6 +13165,9 @@ def _pm_csv_download_response(user, text, history=None):
         _H._chatbot_error_email('brief-chat/analyze', e)
         _pm_ask_hint(outcome='error')
         return jsonify(_H._chatbot_calm_payload())
+    if not url:   # nothing this reader can open sits behind that link (file_access, 2026-11-18)
+        return jsonify({'success': True, 'action': 'answer', 'followups': [], 'offer_deck': False, 'deck_angle': None,
+                        'reply': 'I do not have a file to hand over for that. Open the profile you mean and ask again.'})
     if s3_key and not (last['kind'] == 'file' and last['file'].get('page')):
         _pm_file_stash_write(uname, url, fname, s3_key,
                              subject=last.get('subject'), question=last.get('question') or text)

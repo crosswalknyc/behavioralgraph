@@ -1767,6 +1767,22 @@ _S3_BUCKET_NAME = "dashboard-inputs"
 _S3_REGION = "us-east-2"
 
 
+def _image_key_ok(key) -> bool:
+    """Only an image under an image folder is read from the private
+    bucket for a cover (file_access, 2026-11-18): the path can ride in
+    on a request, so it is checked like any other key."""
+    try:
+        import file_access as _fa
+        return _fa.image_key(key) is not None
+    except ImportError:
+        return bool(re.match(
+            r'^(?:profile-images|ticker-images|ticket-sales-images|ticket-sales-tracker-images|'
+            r'brand-partnership-iq-images|journey-iq-images|digital-twins/covers|digital-twins/portraits)'
+            r'/[A-Za-z0-9][A-Za-z0-9.\-]*\.(?:jpe?g|png|webp|gif)$', str(key or ''), re.I))
+    except Exception:
+        return False
+
+
 def _fetch_via_s3(s3_key: str) -> Optional[bytes]:
     """Fetch an S3 object using the app's IAM credentials.
 
@@ -1776,6 +1792,8 @@ def _fetch_via_s3(s3_key: str) -> Optional[bytes]:
     we must go through boto3 with the same credentials the Flask app already
     uses. Imported lazily so environments without boto3 still let the deck
     build (falls back to placeholder cover for those images)."""
+    if not _image_key_ok(s3_key):
+        return None
     try:
         import boto3  # deferred to avoid hard dep at module import time
         from botocore.config import Config as _BotoConfig

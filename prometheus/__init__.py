@@ -56,6 +56,13 @@ def init_app(app, host_module):
     except Exception as e:  # pragma: no cover - defensive at boot
         print(f"[prometheus] blueprint registration failed: {e}")
         return False
+    # A key a chat message carries is checked before any handler reads it
+    # (prometheus.key_scope, 2026-11-18).
+    try:
+        from . import key_scope as _ks
+        _ks.install(app, host_module)
+    except Exception as e:  # pragma: no cover - defensive at boot
+        print(f"[prometheus] key scope hook not installed: {e}")
     # Offers (2026-10-07, Jenna): a proposed build the user accepts
     # with one tap from the chat or an email; the signed yes / no
     # links land here.

@@ -172,7 +172,10 @@ class FakeHost:
         self.s3_client = FakeS3(objs)
 
     def has(self, name):
-        return name in ('s3_client', 'bucket', 'load_users')
+        return name in ('s3_client', 'bucket', 'load_users', 'can_open_profile')
+
+    def can_open_profile(self, user, key):
+        return True     # the reader's own profile; what a key may be at all is file_access (2026-11-18)
 
     def load_users(self):
         return {'users': {'bria': {'email': 'bria@crosswalknyc.com'}}}
