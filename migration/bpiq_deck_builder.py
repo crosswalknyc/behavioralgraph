@@ -29,6 +29,22 @@ correct going forward"). What that means here:
     claim line. DRAFT prints only when the valuation says it is one
     (`is_draft`).
 
+Three more, from a deck a client read closely (2026-11-18, Coach x WNBA;
+Jenna: "Fix the builder"). No number was wrong; the words, the dates and
+one figure were:
+  - Everyone the valuation names is named. One name is said as it always
+    was; two or three are named together; four or more, and a property
+    (a league, a team, a show), are the partnership by its own name. A
+    total is never credited to one name out of several (`_partner_names`).
+  - Every date and day count on every page is the window the valuation's
+    after counts cover (`_after_window`), the cover included. A window
+    that only sits beside the counts (the days from a campaign's end to
+    the day the valuation was made) is never printed.
+  - The matched group's gain is read from the valuation's own field on
+    every page (`_lift_counts`). A valuation that priced the whole rise
+    shows that count; it never shows a matched gain of 0 beside a page
+    that prints the gain the valuation holds.
+
 Usage:
 
     from migration.bpiq_deck_builder import build_deck
@@ -48,6 +64,7 @@ that introduced this note.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import io
 import os
 import re
@@ -1374,10 +1391,10 @@ def _safe_prose(text: Any, *, brand: str = "", talent: str = "") -> str:
     if not s:
         return ""
     if talent:
-        s = re.sub(r"\bthe talent's\b", f"{talent}'s", s)
+        s = re.sub(r"\bthe talent's\b", _poss(talent), s)
         s = re.sub(r"\bthe talent\b", talent, s)
     if brand:
-        s = re.sub(r"\bthe brand's\b", f"{brand}'s", s)
+        s = re.sub(r"\bthe brand's\b", _poss(brand), s)
     # a sentence past thirty words is not plain English; it goes too
     kept = [x for x in _sentences(s) if not reader_blocked(x) and len(x.split()) <= 30]
     return " ".join(kept).strip()
@@ -1407,13 +1424,140 @@ def _basis_sentences(text: Any, *, brand: str, talent: str, has_control: bool) -
 NO_BRAND = "the brand"          # what the copy says when the valuation names no brand
 
 
+# ─────────────────────────────────────────────────────────────────────
+#  Who the partnership is with (2026-11-18, Coach x WNBA).
+#
+#  The valuation named three players and its counts covered all three.
+#  The copy was written around one name and took the first on the list,
+#  so five places credited the whole partnership to one person. The
+#  rule, in one place:
+#
+#    one name          the copy names them, as it always did
+#    two or three      the copy names all of them ('A, B and C'; 'or'
+#                      where the sentence is about engaging with any one)
+#    four or more      the copy speaks of the partnership by its own
+#                      name ('The Coach x WNBA partnership')
+#    a property        (a league, a team, a show, an event) the same:
+#                      the partnership by its own name
+#
+#  A total is never credited to one name out of several.
+# ─────────────────────────────────────────────────────────────────────
+MAX_NAMED = 3
+_PEOPLE_TYPES = {"talent", "talents", "artist", "artists", "athlete", "athletes", "creator", "creators",
+                 "influencer", "influencers", "person", "people", "celebrity", "musician", "actor", "host",
+                 "comedian", "player", "players", "roster"}
+_PROPERTY_TYPES = {"tv", "show", "series", "movie", "film", "franchise", "movie franchise", "event", "sport",
+                   "sports", "league", "team", "property", "podcast", "game", "tour", "festival", "social_post"}
+_SPORTS_WORDS = {"sport", "sports", "athlete", "athletes", "league", "team", "nba", "wnba", "nfl", "mlb", "milb",
+                 "nhl", "mls", "sports organization", "sports organizations"}
+_NOT_A_PAIRING = {"endorsement", "valuation", "counterfactual", "portfolio", "partnership", "sampling"}
+
+
+def _poss(name: Any) -> str:
+    """A name as a possessive: 'Mara Vale's', 'Paige Bueckers's'. A name
+    that already ends in an apostrophe and an s ('Lowe's', 'Goody's')
+    is its own possessive; it never takes a second one."""
+    n = str(name or "").strip()
+    if not n:
+        return ""
+    return n if re.search(r"['\u2019]s$", n, re.I) else f"{n}'s"
+
+
+def _poss_brand(brand: Any) -> str:
+    """The brand as a possessive on the engagers page: 'Gap's', 'Adidas''
+    (as it has always printed there), and 'Lowe's' as it is."""
+    b = str(brand or "").strip()
+    if re.search(r"['\u2019]s$", b, re.I):
+        return b
+    return f"{b}'" if b.lower().endswith("s") else f"{b}'s"
+
+
+def _name_list(names: list, conj: str = "and") -> str:
+    """'A', 'A and B', 'A, B and C'."""
+    names = [str(n) for n in names if str(n or "").strip()]
+    if len(names) <= 1:
+        return names[0] if names else ""
+    return f"{', '.join(names[:-1])} {conj} {names[-1]}"
+
+
+def _joint_poss(names: list) -> str:
+    """Something several people hold together takes one possessive, on
+    the last name: 'A, B and C's partnership'."""
+    names = [str(n) for n in names if str(n or "").strip()]
+    if len(names) <= 1:
+        return _poss(names[0]) if names else ""
+    return f"{', '.join(names[:-1])} and {_poss(names[-1])}"
+
+
+def _display_name(text: Any) -> bool:
+    """A name a reader would say, not a search term: no link, no path,
+    no handle and no slug ('azzi35', 'emily-in-paris-season-5')."""
+    s = str(text or "").strip()
+    if not s or "/" in s or "@" in s or re.search(r"\.(com|co|net|org|io|tv)\b", s, re.I):
+        return False
+    return not (" " not in s and s == s.lower())
+
+
+def _partner_names(data: dict) -> tuple:
+    """(names, kind) for who the brand partnered with, read from the
+    valuation's own list. `kind` is 'person' (one name, said as it
+    always was), 'people' (two or three, all named), 'many' (four or
+    more, or several names the valuation does not mark as people: no
+    one name is said alone), 'property' (a show, a league, a team, an
+    event: the first name is the property, the rest are the terms it
+    was found by) or 'none'."""
+    data = _dict(data)
+    q = data.get("qualifier_value")
+    raw = [str(v).strip() for v in q] if isinstance(q, (list, tuple)) else [str(q or "").strip()]
+    raw = [r for r in raw if r]
+    qtype = " ".join(str(data.get("qualifier_type") or "").lower().replace("-", " ").split())
+    if not raw:
+        return [], "none"
+    if qtype in _PROPERTY_TYPES or any(w in _PROPERTY_TYPES for w in qtype.split()):
+        return raw[:1], "property"
+    if len(raw) == 1:
+        return raw, "person"
+    seen, names = set(), []
+    for r in raw:
+        fold = re.sub(r"[^a-z0-9]", "", r.lower())
+        if not _display_name(r) or not fold or fold in seen:
+            continue
+        seen.add(fold)
+        names.append(r)
+    # a longer entry that only adds words to an earlier one is a search term for it
+    # ('Darlington Raceway tickets' beside 'Darlington Raceway')
+    names = [n for n in names
+             if not any(o is not n and n.lower().startswith(o.lower() + " ") for o in names)]
+    if len(names) <= 1:
+        return (names or raw[:1]), "person"
+    if qtype in _PEOPLE_TYPES and len(names) <= MAX_NAMED:
+        return names, "people"
+    return names, "many"
+
+
+def _pairing(project: str) -> str:
+    """The partnership's own name, when the valuation's title is a plain
+    pairing a sentence can carry ('Coach x WNBA'). '' for a longer title
+    (a cut, a note in brackets): the copy then says 'the partnership'."""
+    p = " ".join(str(project or "").split())
+    if not re.fullmatch(r"[^(),:;]+ [x\u00d7] [^(),:;]+", p, re.I) or len(p.split()) > 5:
+        return ""
+    if any(w.lower().strip(".") in _NOT_A_PAIRING for w in p.split()):
+        return ""
+    return p
+
+
 @dataclass
 class DeckCtx:
     """All the derived numbers the slide builders need, computed once
     so individual slides stay readable."""
     project:        str
     brand:          str
-    talent:         str
+    talent:         str             # the one name the copy may say alone ('' with several names)
+    names:          list            # everyone the valuation names, in its own order
+    kind:           str             # 'person', 'people', 'many', 'property' or 'none'
+    pairing:        str             # the partnership's own name ('Coach x WNBA'), or ''
+    sports:         bool            # sports work: the copy says fans, not audience
     category_label: str
     is_auto:        bool
     cover_bg:       Optional[bytes]
@@ -1442,6 +1586,8 @@ class DeckCtx:
     post_days:      int
     pre_range:      str
     post_range:     str
+    post_start:     str             # the after window's first and last day (YYYY-MM-DD), or ''
+    post_end:       str
     after_word:     str
     before_word:    str
     has_conversions:bool
@@ -1475,6 +1621,35 @@ class DeckCtx:
         """The brand before a noun: 'Gap engagers', or 'brand engagers'
         for a long name."""
         return "brand" if self.long_brand else self.brand
+
+    @property
+    def named(self) -> bool:
+        """The copy may say who the partnership is with by name: one
+        person, or two or three people named together."""
+        return self.kind in ("person", "people") and bool(self.names)
+
+    @property
+    def who_and(self) -> str:
+        """Everyone named, as the subject of a sentence: 'A, B and C'."""
+        return _name_list(self.names, "and") if self.named else ""
+
+    @property
+    def who_or(self) -> str:
+        """Everyone named, where the sentence is about any one of them:
+        'people who engaged with A, B or C'."""
+        return _name_list(self.names, "or") if self.named else ""
+
+    @property
+    def whose(self) -> str:
+        """Everyone named, as a possessive: 'A's', 'A, B and C's'."""
+        return _joint_poss(self.names) if self.named else ""
+
+    @property
+    def partnership(self) -> str:
+        """The partnership as the subject of a sentence, by its own name
+        when the valuation's title is a plain pairing: 'The Coach x WNBA
+        partnership', otherwise 'The partnership'."""
+        return f"The {self.pairing} partnership" if self.pairing else "The partnership"
 
     def titles(self, options) -> tuple:
         """`_pick_title`, without the options that carry a brand name of
@@ -1710,6 +1885,42 @@ def _control_people(cg: dict, projected: int) -> int:
     return int(round(size * _num(cg.get("control_delta_pp")) / 100.0))
 
 
+def _lift_counts(ctx) -> dict:
+    """The counts behind brand lift, read in one place so every page
+    that speaks of the matched group's gain reads the same field
+    (2026-11-18, Coach x WNBA: the engagement page printed the matched
+    group's gain from the valuation, +2.1 points, and the brand lift
+    page printed 0, a figure worked back from the lift count).
+
+    `gain` is the rise in brand engagers among the people reached,
+    `base` the count the valuation priced, `held` the matched group's
+    gain as the valuation holds it (`control_group`), in people.
+    `whole` is True when a matched group is in the valuation and the
+    count it priced is still the whole rise: nothing was taken off for
+    the matched group, though the valuation says that group moved. The
+    lift page then shows no subtraction (it would print a matched gain
+    of 0 against the engagement page's figure) and states the matched
+    group's move in points, from the same field the engagement page
+    prints. No figure changes either way."""
+    rate = _rate(ctx, "blv_per_incr_user")
+    base = _base_for(ctx.blv, rate, ctx.incr_users)
+    gain = ctx.post_users_proj - ctx.pre_users_proj
+    cg = _dict(_dict(ctx.data).get("control_group"))
+    held = _control_people(cg, ctx.audience_proj) if ctx.has_control else 0
+    whole = bool(ctx.has_control and base > 0 and gain > 0 and abs(gain - base) <= 9
+                 and abs(ctx.c_delta_pp) >= 0.05)
+    return {"rate": rate, "base": base, "gain": gain, "held": held, "whole": whole}
+
+
+def _matched_move(ctx) -> str:
+    """The matched group's own move, in the points the engagement page
+    prints: 'gained 2.1 points', 'lost 0.4 points', 'did not move'."""
+    c = ctx.c_delta_pp
+    if abs(c) < 0.05:
+        return "did not move"
+    return f"{'gained' if c > 0 else 'lost'} {abs(c):.1f} points"
+
+
 def _emv_rows(data: dict, brand: str) -> list:
     """The earned-media table: every channel the valuation priced, in
     value order. Nothing is left off, so the rows add up to the earned
@@ -1734,6 +1945,101 @@ def _emv_rows(data: dict, brand: str) -> list:
     return rows
 
 
+def _span_days(start: Any, end: Any) -> int:
+    """The days from `start` to `end`, both counted; 0 when either is
+    not a date or the range runs backwards."""
+    a, b = _ymd(start), _ymd(end)
+    if a is None or b is None:
+        return 0
+    try:
+        n = (_dt.date(*b) - _dt.date(*a)).days + 1
+    except ValueError:
+        return 0
+    return n if n > 0 else 0
+
+
+def _day_after(iso: Any) -> str:
+    p = _ymd(iso)
+    if p is None:
+        return ""
+    try:
+        return (_dt.date(*p) + _dt.timedelta(days=1)).isoformat()
+    except ValueError:
+        return ""
+
+
+def _after_window(data: dict) -> dict:
+    """The window the valuation's after counts cover, as {'start',
+    'end', 'days', 'basis'}: the one window every date and day count in
+    the deck is read from (2026-11-18, Coach x WNBA: the counts were for
+    the season, May 8 to Oct 31, 177 days, and every page but the cover
+    labeled them '17 days, Nov 1 to Nov 17', the days from the season's
+    end to the day the valuation was made).
+
+    A valuation carries the campaign's own dates (`event_period`) and a
+    second window (`post_period`). Which one the counts cover depends on
+    how the valuation was made, so it is read from the valuation itself:
+
+      * no second window, or one of no length: the campaign's dates;
+      * a second window that runs from the campaign's first day (the
+        attribution window an order confirms: the campaign plus the
+        days after it): that window;
+      * a second window that starts later: the valuation's own daily
+        rate (`totals.post_hits` over `post_hits_per_day`) says how many
+        days the after counts cover. They cover that later window (a
+        read of the days after an airing), the campaign's dates (the
+        later window is only the days up to when the valuation was
+        made), or the campaign and the later window together (the live
+        pull). With no daily rate to read, a valuation whose stated
+        length is the two together reads as the two together, and any
+        other reads as the later window.
+
+    Never raises; a valuation with no dates gives its stated length."""
+    data = _dict(data)
+    ev, po = _dict(data.get("event_period")), _dict(data.get("post_period"))
+    ev_s = str(ev.get("start") or data.get("start_date") or "")[:10]
+    ev_e = str(ev.get("end") or data.get("end_date") or "")[:10]
+    po_s, po_e = str(po.get("start") or "")[:10], str(po.get("end") or "")[:10]
+    has_event = bool(_ymd(ev_s) and _ymd(ev_e))
+    has_post = bool(_ymd(po_s) and _ymd(po_e))
+    stated = _count(data.get("post_period_days")) or _count(data.get("attribution_window_days"))
+    ev_days = _count(ev.get("days")) or _span_days(ev_s, ev_e)
+    po_days = _count(po.get("days")) if po.get("days") is not None else _span_days(po_s, po_e)
+    event = {"start": ev_s, "end": ev_e, "days": ev_days or stated, "basis": "event"}
+    post = {"start": po_s, "end": po_e, "days": po_days or stated, "basis": "post"}
+    if not has_post:
+        if has_event:
+            return event
+        return {"start": "", "end": "", "days": _count(po.get("days")) or stated, "basis": "stated"}
+    if not has_event:
+        return post
+    if po_days <= 0:
+        return event
+    if po_s <= ev_s:
+        return post
+    joined = po_s <= _day_after(ev_e)
+    both = {"start": ev_s, "end": po_e, "days": _span_days(ev_s, po_e), "basis": "event and post"}
+    # the two together are a third reading only when they are not the campaign's dates again
+    # (a second window that ends where the campaign ends adds no days to it)
+    options = [post, event] + ([both] if joined and both["end"] != event["end"] else [])
+    totals = _dict(data.get("totals"))
+    hits, rate = _num(totals.get("post_hits")), _num(totals.get("post_hits_per_day"))
+    if hits > 0 and rate > 0:
+        fits = [w for w in options if w["days"] > 0 and abs(round(hits / w["days"], 2) - rate) <= 0.011]
+        lengths = {w["days"] for w in fits}
+        if len(lengths) == 1 and len(fits) == 1:
+            return fits[0]
+        if len(lengths) == 1 and {w["basis"] for w in fits} == {"post", "event"}:
+            # the two windows are the same length: a valuation the engine wrote counts the campaign's dates
+            diag = _dict(data.get("diagnostics"))
+            engine = bool(diag.get("run_key")) or "post_window_clipped_to_today" in diag \
+                or bool(_dict(data.get("windows")).get("matched_pre_window"))
+            return event if engine else post
+    if joined and _count(data.get("post_period_days")) == ev_days + po_days and ev_days > 0:
+        return both
+    return post
+
+
 def _window_open(data: dict, post_p: dict) -> bool:
     """Is the valuation's window still open: the campaign was still
     running when it was valued (the order said so, or it runs on a
@@ -1741,7 +2047,8 @@ def _window_open(data: dict, post_p: dict) -> bool:
     the valuation was made. The opening line then says the value is the
     value so far (2026-11-11); a window that closed before the
     valuation was made keeps 'delivered'. Read from the valuation's own
-    fields, so the deck is the same deck on whatever day it is built."""
+    fields, so the deck is the same deck on whatever day it is built.
+    `post_p` is the after window the deck prints (`_after_window`)."""
     data = _dict(data)
     if _dict(data.get("windows")).get("open") is True:
         return True
@@ -1764,10 +2071,12 @@ def _derive_context(data: dict, image_url: Optional[str],
 
     project = _normalize_project_label(str(data.get("project_name") or "Brand Partnership Valuation"))
     brand   = str(data.get("brand_partner") or "").strip() or NO_BRAND
-    q = data.get("qualifier_value")
-    names = [str(v).strip() for v in q if str(v).strip()] if isinstance(q, (list, tuple)) else [str(q or "").strip()]
-    talent = names[0] if names and names[0] else ""
+    # who the partnership is with: one name is said alone; with several, no one of them ever is
+    names, kind = _partner_names(data)
+    talent = names[0] if kind in ("person", "property") and names else ""
     cat_lbl = (category or "").strip().title() or "Brand Partnership"
+    qtype = " ".join(str(data.get("qualifier_type") or "").lower().split())
+    sports = str(category or "").strip().lower() in _SPORTS_WORDS or qtype in _SPORTS_WORDS
 
     pre_pen  = _num(totals.get("audience_pen_pre_pct"))
     post_pen = _num(totals.get("audience_pen_post_pct"))
@@ -1811,11 +2120,17 @@ def _derive_context(data: dict, image_url: Optional[str],
     else:
         lift_pp = delta_pp
 
-    pre_p, post_p, ev_p = _dict(data.get("pre_period")), _dict(data.get("post_period")), _dict(data.get("event_period"))
-    if not post_p:
-        post_p = ev_p or {"start": data.get("start_date"), "end": data.get("end_date")}
-    pre_days = _count(pre_p.get("days")) or _count(data.get("pre_period_days"))
-    post_days = _count(post_p.get("days")) or _count(data.get("post_period_days")) or _count(data.get("attribution_window_days"))
+    # ── the two windows ──────────────────────────────────────────────
+    # Every date and day count in the deck comes from here. The after
+    # window is the one the valuation's after counts cover
+    # (`_after_window`), never a window that only sits beside them
+    # (2026-11-18: a season's counts labeled with the 17 days between
+    # the season's end and the day the valuation was made).
+    pre_p, ev_p = _dict(data.get("pre_period")), _dict(data.get("event_period"))
+    post_p = _after_window(data)
+    pre_days = _count(pre_p.get("days")) or _count(data.get("pre_period_days")) \
+        or _span_days(pre_p.get("start"), pre_p.get("end"))
+    post_days = _count(post_p.get("days"))
     pre_range = _fmt_range(pre_p.get("start"), pre_p.get("end")) if pre_p.get("start") and pre_p.get("end") else ""
     post_range = _fmt_range(post_p.get("start"), post_p.get("end")) if post_p.get("start") and post_p.get("end") else ""
     ev_start = str(ev_p.get("start") or data.get("start_date") or "")
@@ -1841,6 +2156,10 @@ def _derive_context(data: dict, image_url: Optional[str],
         project=project,
         brand=brand,
         talent=talent,
+        names=names,
+        kind=kind,
+        pairing=_pairing(project),
+        sports=sports,
         category_label=cat_lbl,
         is_auto=is_auto,
         cover_bg=_cover_photo_background(image_url, s3_client=s3_client) if image_url else None,
@@ -1869,6 +2188,8 @@ def _derive_context(data: dict, image_url: Optional[str],
         post_days=post_days,
         pre_range=pre_range,
         post_range=post_range,
+        post_start=str(post_p.get("start") or "")[:10],
+        post_end=str(post_p.get("end") or "")[:10],
         after_word=after_word,
         before_word=before_word,
         has_conversions=has_conv,
@@ -1964,7 +2285,7 @@ def _next_step(ctx: DeckCtx) -> tuple:
     top = ctx.emv_rows[0] if ctx.emv_rows else None
     channel = _channel_in_sentence(top["name"], ctx.brand, ctx.site) if top else "the earned channels"
     own = next((r["name"] for r in _touchpoints(ctx, 0) if r["new"]), "")
-    where = own or f"{ctx.b}'s product pages"
+    where = own or f"{_poss(ctx.b)} product pages"
     if not _moved(ctx):
         return (
             f"Change the creative or the channel mix before the next flight. {_cap(ctx.ba)} engagement did not move in this window.",
@@ -1984,24 +2305,45 @@ def _next_step(ctx: DeckCtx) -> tuple:
 
 def _final_statement(ctx: DeckCtx) -> str:
     """The one sentence the closing page states: twelve words or fewer,
-    with the names in full when they fit and in short when they do not."""
-    who = ctx.talent or "The partnership"
+    with the names in full when they fit and in short when they do not.
+    Two or three names are the subject together, or the partnership is,
+    by its own name; one name out of several never is."""
+    # the subject, most specific first: the one name; two or three names together; then the
+    # partnership by its own name. A total is never credited to one name out of several.
+    if ctx.kind == "person":
+        subjects = [ctx.talent]
+    elif ctx.kind == "people":
+        subjects = [ctx.who_and, ctx.partnership]
+    elif ctx.kind == "none":
+        subjects = ["The partnership"]
+    else:
+        subjects = [ctx.partnership]
     if ctx.total_value <= 0:
         options = [f"{ctx.brand} engagement did not move in this window.", "Brand engagement did not move in this window."]
     elif _is_counterfactual(ctx):
         options = [f"{ctx.brand} was not in the partnership, and its engagement barely moved.",
                    "This brand was not in the partnership, and its engagement barely moved."]
     elif ctx.has_control and ctx.lift_pp > 0:
-        options = [f"{who} moved {ctx.brand} engagement past a matched group.",
-                   f"{who} moved {ctx.ba} engagement past a matched group.",
-                   "The partnership moved brand engagement past a matched group."]
+        options = []
+        for who in subjects:
+            if who.startswith("The ") and ctx.pairing and ctx.pairing in who:
+                options.append(f"{who} moved brand engagement past a matched group.")
+            else:
+                options += [f"{who} moved {ctx.brand} engagement past a matched group.",
+                            f"{who} moved {ctx.ba} engagement past a matched group."]
+        options.append("The partnership moved brand engagement past a matched group.")
     elif ctx.has_control:
         options = [f"{ctx.brand} engagement moved no more than the matched group.",
                    "Brand engagement moved no more than the matched group."]
     elif ctx.delta_pp > 0:
-        options = [f"{who} got more people engaging with {ctx.brand}.",
-                   f"{who} got more people engaging with {ctx.b}.",
-                   "The partnership got more people engaging with the brand."]
+        options = []
+        for who in subjects:
+            if who.startswith("The ") and ctx.pairing and ctx.pairing in who:
+                options.append(f"{who} got more people engaging with the brand.")
+            else:
+                options += [f"{who} got more people engaging with {ctx.brand}.",
+                            f"{who} got more people engaging with {ctx.b}."]
+        options.append("The partnership got more people engaging with the brand.")
     else:
         options = [f"{ctx.brand} engagement did not rise in this window.", "Brand engagement did not rise in this window."]
     if len(ctx.brand.split()) >= 5 or ctx.brand == NO_BRAND:
@@ -2137,16 +2479,23 @@ def _base_for(value: float, rate: float, stated: int) -> int:
 def _cover_claim(ctx: DeckCtx, width_in: float = 9.6) -> str:
     """The claim line under the pairing: what the deck is about, in
     plain words. The first wording that holds two lines is taken, so a
-    long pairing gets the shorter claim rather than a cut one."""
+    long pairing gets the shorter claim rather than a cut one. With two
+    or three names the claim names all of them; a property or a longer
+    list is 'the partnership'."""
     options = []
     if _is_counterfactual(ctx):
         options.append(f"A control read of {ctx.brand}, a brand outside the partnership.")
         options.append("A control read of a brand outside the partnership.")
     else:
-        if ctx.talent and ctx.post_days:
-            options.append(f"A look at the value {ctx.talent} brought to {ctx.brand} in {_days_phrase(ctx.post_days)}.")
-        if ctx.talent:
-            options.append(f"A look at the value {ctx.talent} brought to {ctx.brand}.")
+        # one name, or two or three named together; a property or a longer list is the partnership
+        who = ctx.who_and
+        if who and ctx.post_days:
+            options.append(f"A look at the value {who} brought to {ctx.brand} in {_days_phrase(ctx.post_days)}.")
+        if who:
+            options.append(f"A look at the value {who} brought to {ctx.brand}.")
+        if ctx.brand != NO_BRAND and ctx.kind != "none" and not who and ctx.post_days:
+            # a property or a longer list: the partnership, over the same days
+            options.append(f"A look at what the partnership was worth to {ctx.brand} in {_days_phrase(ctx.post_days)}.")
         if ctx.brand != NO_BRAND:
             options.append(f"A look at what the partnership was worth to {ctx.brand}.")
         options.append("A look at what the partnership was worth.")
@@ -2203,8 +2552,8 @@ def _slide_cover(prs, ctx: DeckCtx, idx: int, total: int):
     _shape, c_h = BODY(s, M, y, 9.6, _cover_claim(ctx), max_h=max(0.4, 5.1 - y - 0.4), size=20, floor=16,
                        spacing=1.15, weight="Light", color=surf.title)
     y += c_h + 0.12
-    window = _fmt_range(ctx.data.get("start_date"), ctx.data.get("end_date"), long=True) \
-        if ctx.data.get("start_date") and ctx.data.get("end_date") else ctx.post_range
+    window = _fmt_range(ctx.post_start, ctx.post_end, long=True) \
+        if ctx.post_start and ctx.post_end else ctx.post_range
     if window and y < 5.0:
         T(s, M, y, 9.6, 0.28, window + ".", size=13, color=body)
     _rule(s, M, 5.318, BAND, surf.rule)
@@ -2227,14 +2576,42 @@ def _slide_cover(prs, ctx: DeckCtx, idx: int, total: int):
     return s
 
 
+def _engaged_with(ctx: DeckCtx) -> str:
+    """Who 'people who engaged with ...' names: the one name, any of the
+    two or three ('A, B or C'), or the partnership for a longer list.
+    '' when the valuation names no one."""
+    if ctx.kind == "people":
+        return ctx.who_or
+    if ctx.kind == "many":
+        return "the partnership"
+    return ctx.talent
+
+
+def _partnership_titles(ctx: DeckCtx, verb: str, close: str, short_close: str) -> list:
+    """The headline options that open on the partnership: (bold claim,
+    light close) pairs, first the names when they fit, then the
+    partnership by its own name, then the plain fallback. With one
+    name the options are the ones the deck has always offered."""
+    plain = ("The partnership " + verb, short_close)
+    if ctx.kind == "person":
+        return [(f"{ctx.whose} partnership {verb}", close), plain]
+    if ctx.kind == "none":
+        return [("The partnership " + verb, close), plain]
+    opts = [(f"{ctx.whose} partnership {verb}", close)] if ctx.kind == "people" else []
+    # the pairing already names the brand, so its close does not say it twice
+    opts.append((f"{ctx.partnership} {verb}", short_close) if ctx.pairing else ("The partnership " + verb, close))
+    return opts + [plain]
+
+
 def _reach_sentence(ctx: DeckCtx) -> str:
     """Who the read follows, in one sentence."""
     basis = str(_dict(ctx.data.get("campaign")).get("audience_basis") or "")
     n = fmt_num(ctx.audience_proj)
     if basis == "campaign reach":
         return f"The campaign reached {n} people in the US in {_days_phrase(ctx.post_days)}."
-    if ctx.talent:
-        return f"The read follows {n} people in the US who engaged with {ctx.talent}."
+    who = _engaged_with(ctx)
+    if who:
+        return f"The read follows {n} people in the US who engaged with {who}."
     return f"The read follows {n} people in the US."
 
 
@@ -2259,7 +2636,7 @@ def _tldr_rows(ctx: DeckCtx) -> list:
             where += f" {_cap(_channel_in_sentence(top['name'], ctx.brand, ctx.site))} alone accounts for {fmt_money(top['value'])}."
         rows.append(("Where the value sits", where))
     if ctx.blv > 0:
-        if ctx.has_control:
+        if ctx.has_control and not _lift_counts(ctx)["whole"]:
             new = f"Brand lift is worth {fmt_money(ctx.blv)}. It is the gain the matched group did not make."
         else:
             # (2026-11-11: "the part of the total the partnership added" read as a second
@@ -2287,19 +2664,14 @@ def _slide_tldr(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     surf = S_LIGHT
     _ground(s, surf)
-    who = f"{ctx.talent}'s partnership" if ctx.talent else "The partnership"
     if ctx.total_value > 0 and ctx.open_window:
         # the campaign is still running, or the window ends the day it was valued: the value so far
         # (2026-11-11: "delivered" read as a closed account of a partnership that was still running)
-        title = ctx.titles([
-            (f"{who} is worth {fmt_money(ctx.total_value)}", f" to {ctx.brand} so far."),
-            (f"The partnership is worth {fmt_money(ctx.total_value)}", " so far."),
-        ])
+        title = ctx.titles(_partnership_titles(
+            ctx, f"is worth {fmt_money(ctx.total_value)}", f" to {ctx.brand} so far.", " so far."))
     elif ctx.total_value > 0:
-        title = ctx.titles([
-            (f"{who} delivered {fmt_money(ctx.total_value)}", f" in brand value for {ctx.brand}."),
-            (f"The partnership delivered {fmt_money(ctx.total_value)}", " in brand value."),
-        ])
+        title = ctx.titles(_partnership_titles(
+            ctx, f"delivered {fmt_money(ctx.total_value)}", f" in brand value for {ctx.brand}.", " in brand value."))
     else:
         title = ("The partnership ran", " and the value did not move.")
     sub = f"The short version of {_days_phrase(ctx.post_days)}" + (f", {ctx.post_range}." if ctx.post_range else ".")
@@ -2324,6 +2696,22 @@ def _slide_tldr(prs, ctx: DeckCtx, idx: int, total: int):
             _rule(s, M, y + gap / 2 - 0.005, BAND, surf.rule)
         y += gap
     return s
+
+
+def _own_audience_line(ctx: DeckCtx, held: int) -> str:
+    """The partner's own following beside the campaign's reach. One name
+    takes a singular verb and several a plural one; in sports work the
+    people are fans, not an audience."""
+    n = fmt_num(held)
+    several = ctx.kind in ("people", "many")
+    who = ctx.who_and if ctx.kind == "people" else ("The people in the partnership" if ctx.kind == "many" else ctx.talent)
+    if ctx.sports:
+        if several:
+            return f"{who} have {n} projected US fans between them. The campaign reached a part of them."
+        return f"{who} has {n} projected US fans. The campaign reached a part of them."
+    if several:
+        return f"{who} have a combined projected US audience of {n}. The campaign reached a part of it."
+    return f"{_poss(who)} projected US audience is {n}. The campaign reached a part of it."
 
 
 def _campaign_account(ctx: DeckCtx) -> str:
@@ -2356,8 +2744,8 @@ def _campaign_account(ctx: DeckCtx) -> str:
     # naming both once keeps the deck and the read it follows from
     # looking like two answers to one question.
     held = _count(camp.get("talent_audience_held"))
-    if held > ctx.audience_proj > 0 and ctx.talent:
-        out.append(f"{ctx.talent}'s projected US audience is {fmt_num(held)}. The campaign reached a part of it.")
+    if held > ctx.audience_proj > 0 and ctx.kind != "none":
+        out.append(_own_audience_line(ctx, held))
     band = _dict(camp.get("price_band"))
     lo, hi = _num(band.get("low_usd")), _num(band.get("high_usd"))
 
@@ -2395,8 +2783,8 @@ def _slide_measured(prs, ctx: DeckCtx, idx: int, total: int):
            f"and {_days_phrase(ctx.post_days)} after.")
     top = _head(s, surf, idx, "Who and when", title, sub, ctx.logo(surf), source=ctx.sources_line)
     basis = str(_dict(ctx.data.get("campaign")).get("audience_basis") or "")
-    who = "the people the campaign reached" if basis == "campaign reach" or not ctx.talent \
-        else f"people who engaged with {ctx.talent}"
+    who = "the people the campaign reached" if basis == "campaign reach" or not _engaged_with(ctx) \
+        else f"people who engaged with {_engaged_with(ctx)}"
     para1 = ("Crosswalk sees the full digital life of 30M+ opted-in US consumers. "
              f"For this read we followed {who} through two windows. "
              f"We counted what they did: the sites they visited, the apps they used, "
@@ -2414,7 +2802,8 @@ def _slide_measured(prs, ctx: DeckCtx, idx: int, total: int):
     if ctx.has_control:
         cg = _dict(ctx.data.get("control_group"))
         size = _count(cg.get("projected_control_size")) or ctx.audience_proj
-        cards.append(("Matched group", fmt_num(size), "Same size, never reached"))
+        cards.append(("Matched group", fmt_num(size),
+                      "Same size, never reached" if _same_size(ctx) else "Never reached by the campaign"))
     if ctx.pre_range:
         cards.append((ctx.before_word, ctx.pre_range, _days_phrase(ctx.pre_days)))
     if ctx.post_range:
@@ -2632,7 +3021,7 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
         attributable = ctx.blv
     val = _dict(ctx.data.get("valuation"))
     share = val.get("talent_share")
-    has_share = share is not None and _num(share) > 0 and bool(ctx.talent)
+    has_share = share is not None and _num(share) > 0 and ctx.kind != "none"
     col_w = COL2 if has_share else BAND
     note_h = tiles_y - 0.14 - (y2 + 0.74)
     since = "since the campaign began"
@@ -2651,7 +3040,12 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
     if has_share:
         x2 = M + COL2 + GUT
         t_usd = round(ctx.total_value * _num(share), 2)
-        _label(s, x2, y2, COL2, f"Of which {ctx.talent}'s share", surf.title)
+        # one name, or two or three together when the label holds them on its line
+        share_label = f"Of which {ctx.whose} share" if ctx.named else ""
+        if not share_label or (ctx.kind == "people" and _one_line(
+                share_label.upper(), 9.5, COL2, tracking=1.0, bold=True) != share_label.upper()):
+            share_label = f"Of which {_poss(ctx.talent)} share" if ctx.talent else "Of which the talent's share"
+        _label(s, x2, y2, COL2, share_label, surf.title)
         s_txt = f"{fmt_money(t_usd)} ({_num(share) * 100:.0f}%)"
         T(s, x2, y2 + 0.24, COL2, 0.44, s_txt, size=_fit_stat(s_txt, COL2, 26, floor=16), weight="Bold", color=surf.title)
         basis = _basis_sentences(val.get("talent_share_basis"), brand=ctx.brand, talent=ctx.talent,
@@ -2770,23 +3164,30 @@ def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
 def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     """Brand lift value: only the people who are new. With no matched
     group it is a before and after count; with one, the gain among the
-    people reached less the matched group's gain over the same days. No
-    test statistic appears: the lift is a figure with a plain reading."""
-    rate = _rate(ctx, "blv_per_incr_user")
-    base = _base_for(ctx.blv, rate, ctx.incr_users)
-    gain = ctx.post_users_proj - ctx.pre_users_proj
+    people reached less the matched group's gain over the same days,
+    when that is the count the valuation priced. A valuation that
+    priced the whole rise shows that count, and the note states the
+    matched group's move in the points the engagement page prints
+    (`_lift_counts`). No test statistic appears: the lift is a figure
+    with a plain reading."""
+    counts = _lift_counts(ctx)
+    rate, base, gain, whole = counts["rate"], counts["base"], counts["gain"], counts["whole"]
     cg = _dict(ctx.data.get("control_group"))
     since = "since the campaign began"
+    # `net`: the count the valuation priced is the rise beyond the matched group, so the page
+    # shows the subtraction. `whole`: it priced the whole rise, so the page shows that count and
+    # says what the matched group did, in the points the engagement page prints.
+    net = ctx.has_control and not whole
     if ctx.blv <= 0:
         title = ("No new engagement", " to price in this window.")
-    elif ctx.has_control:
+    elif net:
         title = ("The lift over the matched group", f" is worth {fmt_money(ctx.blv)}.")
     else:
         title = ctx.titles([(f"New {ctx.brand} engagers {since}", f" are worth {fmt_money(ctx.blv)}."),
                              (f"New engagers {since}", f" are worth {fmt_money(ctx.blv)}.")])
     rows = []
-    if ctx.has_control:
-        matched = gain - base if (base > 0 and gain - base >= 0) else max(_control_people(cg, ctx.audience_proj), 0)
+    if net:
+        matched = gain - base if (base > 0 and gain - base >= 0) else max(counts["held"], 0)
         rows.append((f"More {ctx.ba} engagers among those reached", fmt_num(max(gain, 0))))
         rows.append(("Less the same gain in the matched group", fmt_num(matched)))
         rows.append(("New people beyond the matched group", fmt_num(base)))
@@ -2795,8 +3196,13 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     if rate > 0:
         rows.append(("x our 2026 value per new engaged person", f"${rate:,.2f}"))
     if ctx.has_control:
-        note = (f"Brand lift counts the gain in {ctx.ba} engagers beyond what a matched group gained over "
-                "the same days.")
+        if whole:
+            note = (f"Brand lift counts everyone who began engaging with {ctx.b} {ctx.after_word}. "
+                    f"A matched group {_matched_move(ctx)} over the same days, against "
+                    f"{ctx.delta_pp:.1f} points for the people reached.")
+        else:
+            note = (f"Brand lift counts the gain in {ctx.ba} engagers beyond what a matched group gained over "
+                    "the same days.")
         # the two groups side by side: the projected counts and the one
         # decimal every other page of the deck uses
         matched_n = _count(cg.get("projected_control_size")) or ctx.audience_proj
@@ -2903,7 +3309,7 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     cats = [(lab, items) for lab, items in cats if items]
     note = _safe_prose(re.sub(r"^\s*Source:[^.]*\.\s*", "", str(demo_block.get("source_note") or "")),
                        brand=ctx.brand, talent=ctx.talent)
-    own = f"{ctx.brand}'s" if not ctx.brand.lower().endswith("s") else f"{ctx.brand}'"
+    own = _poss_brand(ctx.brand)
     title = None
     gender = dict(cats).get("Gender") or []
     if gender and not note:
@@ -3149,7 +3555,13 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
         windows.append(f"Both windows run {_days_phrase(ctx.post_days)}, so before and after compare like for like.")
     elif ctx.pre_days and ctx.post_days:
         windows.append(f"The first runs {_days_phrase(ctx.pre_days)} and the second {_days_phrase(ctx.post_days)}.")
-    if ctx.has_control:
+    if ctx.has_control and _lift_counts(ctx)["whole"]:
+        # the valuation priced everyone newly engaging; the matched group is the comparison beside it
+        lift = (f"Brand lift value counts everyone who began engaging with {ctx.b} {ctx.after_word}. The lift "
+                "over the matched group is the gain among the people reached minus that group's gain over the "
+                f"same days. That group {'is the same size, ' if _same_size(ctx) else ''}started at about the "
+                f"same {ctx.ba} engagement{',' if _same_size(ctx) else ''} and had no exposure to the campaign.")
+    elif ctx.has_control:
         lift = ("Brand lift is the gain among the people reached minus the gain in a matched group over the same "
                 f"days. That group {'is the same size, ' if _same_size(ctx) else ''}started at about the same "
                 f"{ctx.ba} engagement{',' if _same_size(ctx) else ''} and had no exposure to the campaign.")
