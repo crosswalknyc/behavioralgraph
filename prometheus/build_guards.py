@@ -158,6 +158,18 @@ def resolve_build_entity(spec_draft, text, catalog, body, deps):
             deps['ask_hint'](outcome='asked_which_entity', subject=res['core'])
             return spec_draft, ({'success': False, 'guidance': True, 'error': q,
                                  'followups': [c[0] for c in res['candidates'][:3]]}, 400)
+    _title = ''
+    try:
+        # a title in front of a service's name is the title: the library's answer for the service alone is not
+        # taken ("build entity 'Tony - Amazon Prime Video Viewers' -> 'Amazon Prime Video' (catalog)", Grace Yin's
+        # thread 2026-11-18; the brief came back for everyone who uses the service). prometheus.title_on_service
+        from . import title_on_service as _tos
+        if res['display'] and res['source'] != 'titles':
+            _title = _tos.title_beside_service(drafted or explicit, res['display'], spec_draft)
+            if _title:
+                res = dict(res, display='', source='')
+    except Exception:
+        _title = ''
     before = drafted
     if res['display']:
         name = res['display']
@@ -176,10 +188,10 @@ def resolve_build_entity(spec_draft, text, catalog, body, deps):
                     spec_draft['content_show'] = sp
                     break
             name = _be.strip_credit(name) or name
-    elif drafted:
+    elif drafted or _title:
         # nothing in the library: the model's reading of the name stands
         # (its typo correction included), with the scope and credit off
-        name = _be.strip_credit(_be.split_scope(drafted)[0]) or drafted
+        name = _be.strip_credit(_be.split_scope(_title or drafted)[0]) or drafted or _title
     else:
         name = res['core'] or explicit
     if name and _norm(name) != _norm(before):

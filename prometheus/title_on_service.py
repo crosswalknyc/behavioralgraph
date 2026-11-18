@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['service_of', 'role_in', 'service_is_scope', 'describes_a_title', 'scoped_label', 'which_title', 'unnamed_title',
+__all__ = ['service_of', 'role_in', 'service_is_scope', 'describes_a_title', 'scoped_label', 'which_title', 'unnamed_title', 'title_beside_service',
            'WHICH_TITLE']
 
 WHICH_TITLE = ("Which title do you mean? Give me its name and I will read its viewers on {service}, "
@@ -216,6 +216,57 @@ def unnamed_title(text, history=None, ctx=None, reading=None):
         return which_title(t, ps[0])
     except Exception:
         return None
+
+
+_HEAD_TAIL_RX = re.compile(r"\s*(?:[-:,(]\s*)?(?:(?:viewers?|watchers|streamers|audience|fans)\s*)?(?:only\s+)?(?:(?:on|via|from|at|in)\s*)?$", re.I)
+_NOT_A_TITLE = frozenset("""
+new lapsed churned former current active heavy light casual avid potential likely us american total all the a an of
+women men female male adults adult kids teens young older gen z millennials boomers parents moms dads hispanic black
+asian white latino latina households people users customers subscribers members viewers audience fans only and or
+""".split())
+_CONTENT_CATS = ('MOVIE', 'SERIES', 'PODCAST', 'GAMES', 'VERTICAL SHORTS', 'FRANCHISE')
+
+
+def title_beside_service(name, service, draft=None):
+    """The title in a drafted name that also carries a service, when the
+    library answered with the service alone: 'Tony' for "Tony - Amazon
+    Prime Video Viewers" against the library's Amazon Prime Video. '' when
+    the name is the service's own audience ("Amazon Prime Video
+    Viewers", "Amazon Prime Video Sports Viewers", "Women 25-44 Amazon
+    Prime Video Viewers") or the draft is not a title's audience.
+
+    The build intake resolves the entity behind a build order against
+    the library; a short title in front of a service name was read as
+    the service ("build entity 'Tony - Amazon Prime Video Viewers' ->
+    'Amazon Prime Video' (catalog)", 2026-11-18), and the brief came
+    back for everyone who uses the service."""
+    try:
+        svc = service_of(service)
+        n = _squash(name)
+        if not svc or not n:
+            return ''
+        from . import platform_scope as _ps
+        names = sorted({svc.lower(), _squash(service).lower(), *(_ps.PLATFORMS.get(svc) or ())}, key=len, reverse=True)
+        m = re.search(r"(?<![\w+])(?:" + '|'.join(re.escape(x) for x in names) + r")(?![\w+])", n, re.I)
+        if not m:
+            return ''
+        tail = re.sub(r"\b(?:viewers?|watchers|streamers|audience|fans|only|subscribers|users|members|customers)\b|[^A-Za-z0-9]+", ' ',
+                      n[m.end():], flags=re.I).split()
+        if tail:
+            return ''                    # the service leads the name: its own audience, or a product of its own
+        head = _HEAD_TAIL_RX.sub('', n[:m.start()]).strip(" -:,(")
+        toks = re.findall(r"[A-Za-z0-9']+", head)
+        if not toks or all(t.lower() in _NOT_A_TITLE or re.fullmatch(r"\d{1,2}", t) for t in toks):
+            return ''
+        d = draft if isinstance(draft, dict) else {}
+        show = _squash(d.get('content_show') or d.get('resolved_title') or '')
+        cat = str(d.get('brand_category') or '').strip().upper()
+        is_title = bool(d.get('is_ip_content')) or cat.startswith(_CONTENT_CATS) or bool(show and service_of(show) != svc)
+        if draft is not None and not is_title:
+            return ''
+        return head
+    except Exception:
+        return ''
 
 
 def _as_typed(name, text):

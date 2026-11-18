@@ -174,6 +174,64 @@ class TheTitleIsTheSubject(unittest.TestCase):
         self.assertIsNone(TS.unnamed_title('how does this show do on Prime Video', [], ctx, reading(SERVICE)))
 
 
+class TheBuildOrderKeepsTheTitle(unittest.TestCase):
+    """The same rule on the build path. Probing a build order in her
+    thread on the deployed code, the model named the draft "Tony -
+    Amazon Prime Video Viewers" and the entity step answered with the
+    library's Amazon Prime Video: the brief came back as "Amazon Prime
+    Video Viewers"."""
+
+    @classmethod
+    def setUpClass(cls):
+        from prometheus import build_guards as BG, subject_rules as SR
+        cls.BG = BG
+        cls._titles = BG.content_map_titles
+        BG.content_map_titles = lambda *a, **k: ['Fallout', 'Reacher']          # no warehouse in a test
+        cls.catalog = [{'display_name': n} for n in ('Amazon Prime Video', 'AMAZON PRIME VIDEO - TVOD Renters', 'Netflix', 'Hulu',
+                                                     'Tony Danza', 'Paramount+')]
+        cls.deps = {'explicit_build_subject': SR.explicit_build_subject, 'ask_hint': lambda **k: None}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.BG.content_map_titles = cls._titles
+
+    def go(self, drafted, text, **extra):
+        d = dict({'subject': drafted, 'name': drafted, 'decision': 'new_build'}, **extra)
+        d, resp = self.BG.resolve_build_entity(d, text, self.catalog, {}, self.deps)
+        self.assertIsNone(resp)
+        NP.bind(d, text, [])
+        return d.get('subject')
+
+    def test_a_title_in_front_of_a_service_stays_the_title(self):
+        film = dict(brand_category='MOVIE', is_ip_content=True, content_show='Tony', ip_scope='consumers', consumer_verb='viewers')
+        self.assertEqual(self.go('Tony - Amazon Prime Video Viewers', 'Run a profile on Tony viewers on Amazon Prime Video', **film),
+                         'Tony Viewers on Amazon Prime Video')
+        self.assertEqual(self.go('Fallout - Amazon Prime Video Viewers', 'build a profile of Fallout viewers on Prime Video',
+                                 brand_category='SERIES - DRAMA', is_ip_content=True, ip_scope='consumers', consumer_verb='viewers'),
+                         'Fallout Viewers on Amazon Prime Video')
+
+    def test_the_services_own_audience_is_still_the_service(self):
+        for drafted, text in (('Amazon Prime Video Viewers', 'build a profile of Amazon Prime Video viewers'),
+                              ('Amazon Prime Video Sports Viewers', 'build a profile of Amazon Prime Video sports viewers'),
+                              ('Hulu subscribers', 'run a profile on Hulu subscribers')):
+            got = self.go(drafted, text, brand_category='STREAMING/PLATFORM')
+            self.assertIn(got, ('Amazon Prime Video', 'Hulu'), drafted)
+
+    def test_what_counts_as_a_title_beside_a_service(self):
+        for name, svc, want in (('Tony - Amazon Prime Video Viewers', 'Amazon Prime Video', 'Tony'),
+                                ('Tony Viewers on Prime Video', 'Amazon Prime Video', 'Tony'),
+                                ('The Bear: Hulu Viewers', 'Hulu', 'The Bear'),
+                                ('Amazon Prime Video Viewers', 'Amazon Prime Video', ''),
+                                ('New Hulu Subscribers', 'Hulu', ''),
+                                ('Women 25-44 Amazon Prime Video Viewers', 'Amazon Prime Video', ''),
+                                ('Amazon Prime Video Sports Viewers', 'Amazon Prime Video', ''),
+                                ('Nike', 'Hulu', ''), ('Tony - Amazon Prime Video Viewers', 'Tony Danza', '')):
+            self.assertEqual(TS.title_beside_service(name, svc), want, name)
+        # a draft that is not a title's audience keeps the library's answer
+        self.assertEqual(TS.title_beside_service('Prime - Amazon Prime Video Viewers', 'Amazon Prime Video',
+                                                 {'brand_category': 'STREAMING/PLATFORM'}), '')
+
+
 # ============================================================================ b
 class ATermOnTheBriefIsAnswered(unittest.TestCase):
     def test_her_question(self):
