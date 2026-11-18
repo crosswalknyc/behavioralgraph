@@ -51374,12 +51374,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { grid-column: 2; grid-row: 1; display: flex; justify-content: flex-end; padding: 0; margin-bottom: -7px; }
         #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 8px; overflow: visible; z-index: 1; }
         #digitalTwinsIQView.is-fg-room .dtw-fg-htext { margin-top: 0; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { height: var(--dtw-main-h, 58vh); min-height: 240px; overflow: hidden; align-items: stretch; }
+        /* the room block sizes to its text and stops at the full height (Jenna 2026-11-17: on first open the ask bar is in the screen, right under
+           the seated line; the block only drops to the full-height column once the thread outgrows it, and then the thread scrolls) */
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { max-height: var(--dtw-main-h, 58vh); overflow: hidden; align-items: stretch; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main > * { min-height: 0; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { height: 100%; overflow: hidden; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { max-height: var(--dtw-main-h, 58vh); overflow: hidden; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-stream { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 8px; scrollbar-width: thin; overscroll-behavior: contain; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-composer { position: relative; bottom: auto; z-index: 2; flex: 0 0 auto; padding: 10px 0 2px; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { position: static; align-self: stretch; height: 100%; max-height: 100%; overflow: hidden; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { position: static; align-self: stretch; max-height: var(--dtw-main-h, 58vh); overflow: hidden; }
         #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; min-width: 0; width: 100%; gap: 10px; }
         #digitalTwinsIQView .dtw-fg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-height: 24px; flex: 0 0 auto; }
         #digitalTwinsIQView .dtw-fg-top .dtw-eyebrow { color: var(--dtw-body); font-weight: 400; letter-spacing: 0.25em; font-size: 10px; min-width: 0; overflow-wrap: anywhere; }
