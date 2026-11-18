@@ -558,8 +558,9 @@ class Wiring(unittest.TestCase):
         self.assertIn('_bt.answer(_typed, history) if _bt.is_term_question(_typed) else None', lane)
         self.assertLess(src.index('_typed = text'), src.index('# lane: brief_terms'))
         net = _read('prometheus', 'followup_refine.py')
-        self.assertIn("typed = str(getattr(_g, '_pm_ask_text', '') or text)", net)
+        self.assertIn('typed = _bt.typed_this_turn(text)', net)
         self.assertIn('bt = _bt.answer(typed, history) if _bt.is_term_question(typed) else None', net)
+        self.assertEqual(BT.typed_this_turn('run it'), 'run it')        # outside a request: the text as given
         for order in ('run it', 'yes please', 'approve', 'go ahead', 'build it'):
             self.assertFalse(BT.is_term_question(order), order)
 

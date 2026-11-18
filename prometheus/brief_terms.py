@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['brief_in_thread', 'parse_brief', 'is_term_question', 'term_of', 'answer', 'TERMS']
+__all__ = ['brief_in_thread', 'parse_brief', 'is_term_question', 'typed_this_turn', 'term_of', 'answer', 'TERMS']
 
 # the card the build flow draws (templates/index.html): a lead, then labeled lines
 _LEAD_RX = re.compile(
@@ -164,6 +164,21 @@ def _question_term(text):
             if term and len(term.split()) <= 9:
                 return term
     return None
+
+
+def typed_this_turn(text):
+    """The words the reader typed this turn. The door keeps them on the
+    request it is serving (server side; never a field of the request
+    body), so a question the turn gate carried forward from earlier in
+    the thread is told apart from one the reader just asked. Outside a
+    request, the text as given."""
+    try:
+        from flask import g as _g, has_request_context
+        if has_request_context():
+            return str(getattr(_g, '_pm_ask_text', '') or text or '')
+    except Exception:
+        pass
+    return str(text or '')
 
 
 def is_term_question(text):
