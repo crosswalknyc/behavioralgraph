@@ -1939,6 +1939,19 @@ def access_window_expired(user: dict, today=None) -> bool:
     return now > exp
 
 
+def unlimited_window_expired(user: dict, today=None) -> bool:
+    """True when unlimited_until has passed.
+
+    Same calendar rule as access_expires: a date-only value is the
+    last UTC day the unlimited grant holds. Missing / unreadable
+    dates never expire (Amazon-style unlimited with no end).
+    """
+    until = (user or {}).get("unlimited_until")
+    if not str(until or "").strip():
+        return False
+    return access_window_expired({"access_expires": until}, today=today)
+
+
 def _opening_need_usd(user: dict = None, users_data: dict = None) -> float:
     """Seat opening amount, or the $500 house floor when unset."""
     need = float(OPENING_TOPUP_MIN_USD)
@@ -2041,7 +2054,7 @@ def is_paying_customer(user: dict) -> bool:
     return bool(user.get("paying_customer"))
 
 
-def is_unlimited(user: dict) -> bool:
+def is_unlimited(user: dict, today=None) -> bool:
     """True when the user carries the unlimited-credits sentinel
     (``credits == -1``).
 
@@ -2067,8 +2080,16 @@ def is_unlimited(user: dict) -> bool:
     as unlimited, or should_charge_wallet answers "nothing to charge"
     and the approve preflight refuses a funded wallet with "This run
     costs $0 ... Top up to keep going."
+
+    ``unlimited_until`` (Jenna 2026-11-19, CAA Kate Coke / Samantha
+    Kolton): a date on the seat or company is the last UTC day the
+    grant holds. After that day this returns False even if the flag
+    or ``credits == -1`` is still on the row, so the runway cannot
+    stay open by forgetting to flip the flag.
     """
     if not user:
+        return False
+    if unlimited_window_expired(user, today=today):
         return False
     if bool(user.get("unlimited")) or bool(user.get("no_cap")):
         return True
@@ -2910,6 +2931,11 @@ def pull_funding(user, users_data=None, pull_type=None, addon_cuts: int = 0,
             "allowance": is_plan_allowance(subject),
             "balance_usd": round(wallet_balance(subject), 2),
         })
+        if is_unlimited(user) or is_unlimited(subject):
+            out["covered"] = True
+            out["reason"] = "unlimited"
+            out["usd"] = 0.0
+            return out
         if not out["paying"]:
             out["reason"] = "not_paying"
             return out
@@ -6161,6 +6187,7 @@ __all__ = [
     "OPENING_TOPUP_MIN_USD", "opening_topup_usd",
     "requires_card_to_view", "dashboard_view_locked",
     "opening_funding_unmet", "access_window_expired",
+    "unlimited_window_expired",
     "has_complimentary_grant", "complimentary_view_unlocked",
     "opening_checkout_allowed", "opening_funds_copy",
     "opening_pack_sizes",

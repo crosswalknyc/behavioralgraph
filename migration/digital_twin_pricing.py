@@ -487,15 +487,22 @@ def _plainly_free(user) -> bool:
     if not isinstance(user, dict):
         return False
     role = str(user.get('role') or '').strip().lower().replace(' ', '_')
-    if role in ('super_admin', 'superadmin') or bool(user.get('is_super_admin')) or bool(user.get('unlimited')) or bool(user.get('no_cap')):
-        return True
-    if str(user.get('billing_mode') or '').strip().lower() == 'unlimited':
+    if role in ('super_admin', 'superadmin') or bool(user.get('is_super_admin')):
         return True
     try:
-        if int(user.get('credits', 0) or 0) == -1:
+        import wallet as _w
+        if _w.is_unlimited(user):
             return True
-    except (TypeError, ValueError):
-        pass
+    except Exception:
+        if bool(user.get('unlimited')) or bool(user.get('no_cap')):
+            return True
+        if str(user.get('billing_mode') or '').strip().lower() == 'unlimited':
+            return True
+        try:
+            if int(user.get('credits', 0) or 0) == -1:
+                return True
+        except (TypeError, ValueError):
+            pass
     return str(user.get('email') or '').strip().lower().endswith('@crosswalknyc.com')
 
 

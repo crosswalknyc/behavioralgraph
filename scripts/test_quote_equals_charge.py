@@ -132,7 +132,8 @@ def _lift(src, names, assigns=()):
 
 APP_CODE = compile(_lift(
     APP_SRC,
-    ("_get_company_pool", "_numeric_credits_balance", "_credit_num", "check_user_credits", "_usd_label",
+    ("_get_company_pool", "_numeric_credits_balance", "_credit_num", "_seat_is_unlimited",
+     "check_user_credits", "_usd_label",
      "has_credits_for", "_try_wallet_fallback", "_credit_history_ts", "_record_wallet_fallback_usage",
      "consume_credit", "_v1_tool_price_usd", "_v1_price_usd_for", "_v1_price_table_for"),
     ("_V1_USD_FALLBACK", "_V1_USD_ADDON_CUT_FALLBACK", "CREDITS_PROFILE_ANALYSIS", "CREDITS_SVOD",

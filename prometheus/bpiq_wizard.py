@@ -2582,9 +2582,7 @@ def _seat_is_free(user, uname=None, g=None):
     role = str(user.get('role') or '').strip().lower().replace(' ', '_')
     if role in ('super_admin', 'superadmin'):
         return True
-    if bool(user.get('unlimited')) or bool(user.get('is_super_admin')) or bool(user.get('no_cap')):
-        return True
-    if str(user.get('billing_mode') or '').strip().lower() == 'unlimited':
+    if bool(user.get('is_super_admin')):
         return True
     try:
         import wallet as _w

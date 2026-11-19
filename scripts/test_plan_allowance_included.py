@@ -85,6 +85,7 @@ def _lift(src, names):
 
 
 APP_FUNCS = ("_get_company_pool", "_numeric_credits_balance", "_credit_num",
+             "_seat_is_unlimited",
              "check_user_credits", "_usd_label", "_funds_short_error",
              "has_credits_for", "_funds_refusal_copy", "_try_wallet_fallback",
              "_credit_history_ts", "_record_wallet_fallback_usage",

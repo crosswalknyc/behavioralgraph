@@ -2807,6 +2807,25 @@ def _credit_num(value, default):
         return default
 
 
+def _seat_is_unlimited(user):
+    """True when this seat is on unlimited credits, including a dated
+    grant that has not yet ended. Wallet.is_unlimited is the one check
+    so ``unlimited_until`` cannot be skipped here.
+    """
+    if not user:
+        return False
+    try:
+        import wallet as _w
+        return bool(_w.is_unlimited(user))
+    except Exception:
+        return (
+            _numeric_credits_balance(user) == -1
+            or bool(user.get('unlimited'))
+            or bool(user.get('no_cap'))
+            or str(user.get('billing_mode') or '').strip().lower() == 'unlimited'
+        )
+
+
 def check_user_credits(username):
     """Check if user has credits remaining.  Returns (has_credits, credits_left).
 
@@ -2825,12 +2844,7 @@ def check_user_credits(username):
         return False, 0
 
     user_credits = _numeric_credits_balance(user)
-    user_unlimited = (
-        user_credits == -1
-        or bool(user.get('unlimited'))
-        or bool(user.get('no_cap'))
-        or str(user.get('billing_mode') or '').strip().lower() == 'unlimited'
-    )
+    user_unlimited = _seat_is_unlimited(user)
 
     company = (user.get('company') or '').strip()
     pool = _get_company_pool(data, company)
@@ -3205,12 +3219,7 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         if not user:
             return None
 
-        user_unlimited = (
-            _numeric_credits_balance(user) == -1
-            or bool(user.get('unlimited'))
-            or bool(user.get('no_cap'))
-            or str(user.get('billing_mode') or '').strip().lower() == 'unlimited'
-        )
+        user_unlimited = _seat_is_unlimited(user)
 
         company = (user.get('company') or '').strip()
         pool = _get_company_pool(data, company)

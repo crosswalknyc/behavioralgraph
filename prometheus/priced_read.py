@@ -1324,15 +1324,17 @@ def seat_is_free(user, username=None, host=None):
     role = str(u.get('role') or '').strip().lower().replace(' ', '_')
     if role in ('super_admin', 'superadmin'):
         return True
-    if bool(u.get('is_super_admin')) or bool(u.get('unlimited')) or bool(u.get('no_cap')):
-        return True
-    if str(u.get('billing_mode') or '').strip().lower() == 'unlimited':
+    if bool(u.get('is_super_admin')):
         return True
     try:
         import wallet as _w
         if _w.is_unlimited(u):
             return True
     except Exception:
+        if bool(u.get('unlimited')) or bool(u.get('no_cap')):
+            return True
+        if str(u.get('billing_mode') or '').strip().lower() == 'unlimited':
+            return True
         try:
             if int(u.get('credits', 0) or 0) == -1:
                 return True

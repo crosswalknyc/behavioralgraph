@@ -11409,7 +11409,7 @@ def _pm_has_funding(user, username, data=None):
         traceback.print_exc()
         return False, 'wallet_unavailable'
     try:
-        if _w.is_unlimited(user) or bool(user.get('unlimited')):
+        if _w.is_unlimited(user):
             return True, 'unlimited'
     except Exception as _fx:
         _faults.note('chat', _fx)
