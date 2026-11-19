@@ -483,12 +483,13 @@ class OneRunner(unittest.TestCase):
         done = lambda qid, i, q, tagged=True: dict({'id': qid, 'q': q, 'kind': 'open', 'stage': 'done', 'finished_at': 'now', 'read': 'r', 'options': []}, **({'guided_i': i} if tagged else {}))
         sess['questions'] = [done('a', 0, qs[0]['q']), done('b', None, qs[1]['q'], tagged=False), done('b2', None, qs[1]['q'], tagged=False),
                              {'id': 'fly', 'q': qs[2]['q'], 'kind': 'open', 'stage': 'researching', 'job_id': 'x', 'answers': []},
+                             done('c-untagged', None, qs[3]['q'], tagged=False), done('c', 3, qs[3]['q']),
                              done('mine', None, 'Would you watch it with your kids?', tagged=False)]
         removed = GD.reconcile_records(None, sess, plan)
-        self.assertEqual(removed, 2, 'the duplicate and the dead in-flight record go')
+        self.assertEqual(removed, 3, 'the duplicate, the dead in-flight record and the untagged copy of a tagged question go')
         ids = [r['id'] for r in sess['questions']]
-        self.assertEqual(ids, ['a', 'b', 'mine'])
-        self.assertEqual([r.get('guided_i') for r in sess['questions']], [0, 1, None], 'the match by words is tagged; the owner\'s own question is left alone')
+        self.assertEqual(ids, ['a', 'b', 'c', 'mine'], 'the record the run tagged wins over an earlier untagged copy')
+        self.assertEqual([r.get('guided_i') for r in sess['questions']], [0, 1, 3, None], 'the match by words is tagged; the owner\'s own question is left alone')
 
 
 class Faces(unittest.TestCase):

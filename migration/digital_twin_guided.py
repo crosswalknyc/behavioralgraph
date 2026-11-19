@@ -650,14 +650,20 @@ def reconcile_records(s3, sess: dict, plan_doc: dict) -> int:
     for i, pq in enumerate(qs):
         plan_by_norm.setdefault(_norm_q(pq.get('q')), i)
     recs = list(sess.get('questions') or [])
+    # a record the run tagged itself is the one the outcome was read from: it always wins over an untagged copy
+    tagged = {rec.get('guided_i') for rec in recs if isinstance(rec, dict) and rec.get('guided_i') is not None and _finished(rec)}
     keep, seen, removed = [], {}, 0
     for rec in recs:
         if not isinstance(rec, dict):
             keep.append(rec)
             continue
         i = rec.get('guided_i')
+        was_tagged = i is not None
         if i is None and _norm_q(rec.get('q')) in plan_by_norm:
             i = plan_by_norm[_norm_q(rec.get('q'))]
+            if i in tagged:
+                removed += 1      # an untagged copy of a question the run already holds
+                continue
             rec['guided_i'] = i
             rec['guided_level'] = (qs[i] or {}).get('level')
         if i is None:
