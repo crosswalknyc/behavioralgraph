@@ -51562,40 +51562,66 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-popout .dtw-fg-addc { margin: 8px 0; }
         /* the composer: the kind chips above the field, Ask the room as the one Signal Green button */
         #digitalTwinsIQView .dtw-fg-composer { position: sticky; bottom: -1rem; z-index: 6; padding: 10px 0 calc(1rem + 2px); background: var(--dtw-page); border-top: 1px solid var(--dtw-rule); }
-        /* ---- theater (2026-11-18): a Predictive Analytics room running for you is watched, not steered ---- */
+        /* ---- theater (2026-11-18, the approved design): the run over the table while a Predictive Analytics room runs for you ---- */
         #digitalTwinsIQView.is-theater .dtw-spine { opacity: .55; transition: opacity .35s ease; }
         #digitalTwinsIQView.is-theater .dtw-spine:hover, #digitalTwinsIQView.is-theater .dtw-spine:focus-within { opacity: 1; }
-        #digitalTwinsIQView.is-theater.is-fg-room .dtw-fg-hero .dtw-fg-seatrow { display: grid; --circ: 76px; --seat-pitch: 120; padding: 8px 0 2px; }
-        #digitalTwinsIQView.is-theater.is-fg-room .dtw-fg-hero { padding-bottom: 6px; }
-        #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .dtw-fg-circ img, #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .dtw-fg-circ .ini { opacity: .3; }
-        #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .nm, #digitalTwinsIQView.is-theater .dtw-fg-seat.pending .ag { opacity: .5; }
-        #digitalTwinsIQView.is-theater .dtw-fg-roomsec { display: none; }
-        #digitalTwinsIQView .dtw-fg-theater { position: sticky; bottom: -1rem; z-index: 6; padding: 14px 0 calc(1rem + 2px); background: linear-gradient(180deg, rgba(0,0,0,0) 0%, var(--dtw-page) 22%); }
-        #digitalTwinsIQView .dtw-fg-theater .in { border: 1px solid var(--dtw-accent); border-radius: 14px; background: var(--dtw-raised); padding: 12px 16px 12px; box-shadow: 0 0 0 1px rgba(199,242,62,0.08), 0 -14px 40px rgba(0,0,0,0.25); }
-        #digitalTwinsIQView .dtw-fg-theater .row1 { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; font-size: 12px; color: var(--dtw-body); }
-        #digitalTwinsIQView .dtw-fg-theater .badge { display: inline-flex; align-items: center; gap: 7px; min-height: 24px; padding: 0 11px 0 9px; border-radius: 999px; background: var(--dtw-accent); color: var(--dtw-accent-ink); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
-        #digitalTwinsIQView .dtw-fg-theater .badge .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; background: var(--dtw-accent-ink); box-shadow: 0 0 0 2px rgba(12,22,24,0.25); }
-        #digitalTwinsIQView .dtw-fg-theater .prog { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
-        #digitalTwinsIQView .dtw-fg-theater .prog b { color: var(--dtw-ink); font-weight: 600; }
-        #digitalTwinsIQView .dtw-fg-theater .prog .t { width: 120px; height: 5px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; }
-        #digitalTwinsIQView .dtw-fg-theater .prog .f { display: block; height: 100%; background: var(--dtw-accent); border-radius: 999px; transition: width .4s ease; }
-        #digitalTwinsIQView .dtw-fg-theater .stage { display: inline-flex; align-items: center; gap: 2px; color: var(--dtw-ink); font-variant-numeric: tabular-nums; }
-        #digitalTwinsIQView .dtw-fg-theater .stage .dtw-fg-pulse { margin-right: 8px; }
-        #digitalTwinsIQView .dtw-fg-theater .acts { margin-left: auto; display: inline-flex; gap: 6px; }
-        #digitalTwinsIQView .dtw-fg-theater .cur { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
-        #digitalTwinsIQView .dtw-fg-theater .cur .k { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-accent); }
-        #digitalTwinsIQView .dtw-fg-theater .cur .qt { font-size: 16px; line-height: 22px; font-weight: 600; color: var(--dtw-ink); overflow-wrap: anywhere; }
-        #digitalTwinsIQView .dtw-fg-theater .note { margin-top: 8px; font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); }
-        #digitalTwinsIQView .dtw-fg-theater .plan { margin-top: 10px; border-top: 1px solid var(--dtw-hair); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow: auto; scrollbar-width: thin; }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 12px; line-height: 16px; color: var(--dtw-body); }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r .n { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--dtw-rule); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: var(--dtw-mute); align-self: center; }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r.done .n { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r.now { color: var(--dtw-ink); }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r.now .n { border-color: var(--dtw-accent); color: var(--dtw-accent); }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r.wait { opacity: .6; }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r .q { overflow-wrap: anywhere; }
-        #digitalTwinsIQView .dtw-fg-theater .plan .r .lv { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); white-space: nowrap; }
-        @media (max-width: 760px) { #digitalTwinsIQView .dtw-fg-theater .prog .t { width: 70px; } #digitalTwinsIQView .dtw-fg-theater .acts { margin-left: 0; } }
+        #digitalTwinsIQView .dtw-th { position: relative; padding: 6px 0 8px; }
+        #digitalTwinsIQView .dtw-th-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-th-head b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-th-badge { display: inline-flex; align-items: center; gap: 7px; min-height: 24px; padding: 0 11px 0 9px; border-radius: 999px; background: var(--dtw-accent); color: var(--dtw-accent-ink); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+        #digitalTwinsIQView .dtw-th-badge .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; background: var(--dtw-accent-ink); box-shadow: 0 0 0 2px rgba(12,22,24,0.25); }
+        #digitalTwinsIQView .dtw-th-stage { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--dtw-ink); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-th-stage .dtw-fg-pulse { margin-right: 8px; }
+        #digitalTwinsIQView .dtw-th-tl { display: flex; gap: 12px; margin-top: 14px; }
+        #digitalTwinsIQView .dtw-th-q { flex: 1 1 0; min-width: 0; }
+        #digitalTwinsIQView .dtw-th-q.wait { opacity: .45; }
+        #digitalTwinsIQView .dtw-th-q .ln { display: flex; align-items: center; gap: 8px; }
+        #digitalTwinsIQView .dtw-th-q .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--dtw-s5); flex: none; }
+        #digitalTwinsIQView .dtw-th-q.done .dot { background: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-q.now .dot { background: var(--dtw-ink); box-shadow: 0 0 0 4px var(--dtw-track); animation: dtwPulse 1.6s ease-in-out infinite; }
+        #digitalTwinsIQView .dtw-th-q .bar { flex: 1; height: 2px; background: var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-th-q.done .bar { background: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-q .lv { margin-top: 7px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-q.wait .lv { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-th-q .qt { margin-top: 3px; font-size: 11px; line-height: 14px; color: var(--dtw-ink); max-height: 42px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-th-q.wait .qt { color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-th-q .ld { margin-top: 3px; font-size: 10.5px; line-height: 14px; color: var(--dtw-body); display: flex; align-items: center; gap: 6px; min-height: 14px; }
+        #digitalTwinsIQView .dtw-th-q .ld .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; }
+        #digitalTwinsIQView .dtw-th-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; margin-top: 18px; align-items: start; }
+        #digitalTwinsIQView .dtw-th-side { display: flex; flex-direction: column; gap: 14px; padding-top: 6px; }
+        #digitalTwinsIQView .dtw-th-split .k, #digitalTwinsIQView .dtw-th-justin .k { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-th-srow { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--dtw-body); margin-top: 6px; }
+        #digitalTwinsIQView .dtw-th-srow .l { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-th-srow b { color: var(--dtw-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-th-srow .dtw-fg-rowspin { width: 9px; height: 9px; }
+        #digitalTwinsIQView .dtw-th-note { margin-top: 8px; font-size: 10.5px; line-height: 15px; color: var(--dtw-mute); display: flex; align-items: center; gap: 6px; }
+        #digitalTwinsIQView .dtw-th-note .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; }
+        #digitalTwinsIQView .dtw-th-justin { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px; }
+        #digitalTwinsIQView .dtw-th-justin .row { display: flex; gap: 10px; align-items: flex-start; }
+        #digitalTwinsIQView .dtw-th-justin .who { font-size: 11.5px; font-weight: 600; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-th-justin .tx { font-size: 11.5px; line-height: 16px; color: var(--dtw-body); margin-top: 3px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-th-face { position: relative; width: 58px; height: 58px; border-radius: 50%; overflow: hidden; background: var(--hue, #3358FF); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex: none; }
+        #digitalTwinsIQView .dtw-th-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
+        #digitalTwinsIQView .dtw-th-face.s { width: 34px; height: 34px; font-size: 12px; box-shadow: 0 0 0 2px var(--ring, var(--dtw-accent)); }
+        #digitalTwinsIQView .dtw-th-stagewrap { position: relative; width: 100%; aspect-ratio: 1.55 / 1; min-height: 480px; max-height: 680px; }
+        #digitalTwinsIQView .dtw-th-table { position: absolute; left: 17%; right: 17%; top: 23%; bottom: 23%; border-radius: 50%; background: var(--dtw-tile); border: 1px solid var(--dtw-rule); box-shadow: inset 0 0 70px rgba(0,0,0,0.35); }
+        #digitalTwinsIQView .dtw-th-tcopy { position: absolute; left: 27%; right: 27%; top: 50%; transform: translateY(-50%); text-align: center; }
+        #digitalTwinsIQView .dtw-th-tcopy .k { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-tcopy .q { margin-top: 6px; font-size: 14.5px; line-height: 20px; font-weight: 500; color: var(--dtw-ink); overflow-wrap: anywhere; max-height: 100px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-th-tcopy .n { margin-top: 8px; font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-th-mod { position: absolute; left: 50%; top: 9%; transform: translate(-50%, -50%); width: 34px; height: 34px; border-radius: 50%; background: var(--dtw-ink); color: var(--dtw-page); display: flex; align-items: center; justify-content: center; z-index: 3; }
+        #digitalTwinsIQView .dtw-th-mod svg { width: 14px; height: 14px; fill: currentColor; display: block; }
+        #digitalTwinsIQView .dtw-th-seat { position: absolute; transform: translate(-50%, -50%); width: 92px; text-align: center; cursor: pointer; z-index: 2; }
+        #digitalTwinsIQView .dtw-th-seat:focus-visible { outline: none; }
+        #digitalTwinsIQView .dtw-th-seat .dtw-th-face { margin: 0 auto; filter: grayscale(.6) brightness(.55); transition: filter .3s ease, box-shadow .3s ease; }
+        #digitalTwinsIQView .dtw-th-seat.on .dtw-th-face { filter: none; box-shadow: 0 0 0 3px var(--dtw-page), 0 0 0 6px var(--ring); }
+        #digitalTwinsIQView .dtw-th-seat.sel .dtw-th-face, #digitalTwinsIQView .dtw-th-seat:focus-visible .dtw-th-face { box-shadow: 0 0 0 3px var(--dtw-page), 0 0 0 5px var(--dtw-ink); filter: none; }
+        #digitalTwinsIQView .dtw-th-seat b { display: block; margin-top: 7px; font-size: 12px; line-height: 15px; font-weight: 600; color: var(--dtw-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-th-seat.on b { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-th-seat .ag { display: block; font-size: 10px; line-height: 13px; color: var(--dtw-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .8; }
+        #digitalTwinsIQView .dtw-th-seat .chip { position: absolute; left: 50%; top: -11px; transform: translateX(-50%); background: var(--ring); color: var(--dtw-accent-ink); font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; z-index: 3; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-th-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); }
+        @media (max-width: 980px) { #digitalTwinsIQView .dtw-th-body { grid-template-columns: 1fr; } #digitalTwinsIQView .dtw-th-stagewrap { aspect-ratio: 1.2 / 1; } #digitalTwinsIQView .dtw-th-tl { flex-wrap: wrap; } #digitalTwinsIQView .dtw-th-q { flex: 1 1 140px; } }
         #digitalTwinsIQView .dtw-fg-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
         #digitalTwinsIQView .dtw-fg-kinds .dtw-fg-chip { min-height: 20px; font-size: 10.5px; padding: 1px 8px; }
         #digitalTwinsIQView .dtw-fg-opts { display: block; margin-bottom: 8px; min-height: 48px; }
@@ -54522,29 +54548,73 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<div class="dtw-fg-live" id="dtwPnLive"></div></div>';
                 return out;
             }
-            // The theater bar (Jenna 2026-11-18: "a theater style view where you really feel like you're watching because you cant
-            // really inject into the process because it's running for you"). Stands where the composer would while a Predictive
-            // Analytics room runs its planned questions: Watching, the progress, what is on the floor now with the stage words and
-            // the clock, the plan on a toggle, Leave. The composer returns when the outcome lands.
-            function theaterBarHtml(s) {
-                var g = (s || {}).guided || {}, plan = g.plan || {}, qs = plan.questions || [], done = Number(g.done || 0), total = Number(g.total || qs.length || 0), fly = flyQ();
-                var now = fly ? '<span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(fly))) + SEP + '<span id="dtwFgTheaterEl">' + qElapsedS(fly) + '</span>s</span>' : '<span class="dtw-fg-pulse"></span><span>The next question is on its way</span>';
-                var at = fly ? Math.max(0, Math.min(qs.length - 1, done)) : done, cur = fly ? String(fly.q || '') : String((qs[at] || {}).q || ''), lvl = (qs[at] || {}).level;
-                var list = qs.map(function(q, i) {
-                    var st = i < done ? 'done' : (i === done ? 'now' : 'wait');
-                    return '<div class="r ' + st + '"><span class="n">' + (st === 'done' ? '&#10003;' : (i + 1)) + '</span><span class="q">' + esc(q.q || '') + '</span><span class="lv">' + esc(PA_LEVELS[q.level] || '') + '</span></div>';
-                }).join('');
-                return '<div class="dtw-fg-theater" id="dtwFgTheater"><div class="in">'
-                    + '<div class="row1"><span class="badge"><span class="dtw-fg-pulse"></span>Watching</span>'
-                    + '<span class="prog"><span class="t"><span class="f" style="width:' + (total ? Math.round(done / total * 100) : 0) + '%"></span></span><b>' + done + ' of ' + total + '</b> answered</span>'
-                    + '<span class="stage">' + now + '</span>'
-                    + '<span class="acts"><button type="button" class="dtw-fg-act" onclick="dtwFgTheaterPlan()">' + (S.fg.theaterPlan ? 'Hide the plan' : 'The plan') + '</button><button type="button" class="dtw-fg-act" onclick="dtwPanelClose()">Leave</button></span></div>'
-                    + (cur ? '<div class="cur"><span class="k">' + (fly ? 'On the floor now' : 'Up next') + (lvl && PA_LEVELS[lvl] ? SEP + esc(PA_LEVELS[lvl]) : '') + '</span><span class="qt">' + esc(cur) + '</span></div>' : '')
-                    + '<div class="note">Prometheus is running the planned questions for you. The outcome and the report land with the last one; you can ask your own then.</div>'
-                    + (S.fg.theaterPlan && list ? '<div class="plan">' + list + '</div>' : '')
-                    + '</div></div>';
+            // ---- the theater (Jenna 2026-11-18, the approved design: 'the run over the table'). While a Predictive Analytics room
+            // runs its planned questions the room is watched, not steered: the plan as a timeline across the top, the people around
+            // a table with their faces (an answered seat lit with its answer on a chip, the rest dimmed), Prometheus at the head, the
+            // question on the table, the live split and the latest answer at left, Leave at the foot. The composer is gone until
+            // the outcome lands; then the room comes back with the outcome closing the thread.
+            function shortCity(c) { return String(c || '').split(/ (?=St |Ft |Fort |Oakland|Sarasota|Jose|Worth|Petersburg|Tacoma)/)[0].trim(); }
+            function stadiumSpots(n) {
+                // seats around the table: a row across the head (Prometheus takes its center), more across the foot, the rest down the sides
+                n = Math.max(0, Number(n) || 0); if (!n) return [];
+                var side = Math.max(1, Math.round(n / 5.5)), rest = Math.max(0, n - 2 * side), top = Math.max(1, Math.floor(rest / 2) - (rest % 2 === 0 ? 1 : 0)), bottom = Math.max(0, rest - top);
+                if (n <= 4) { side = 0; top = Math.ceil(n / 2); bottom = n - top; }
+                var spots = [], i;
+                for (i = 0; i < top; i++) spots.push([top === 1 ? 50 : 14 + (72 * i / (top - 1)), 9]);
+                for (i = 0; i < side; i++) spots.push([97, side === 1 ? 50 : 24 + (52 * i / (side - 1))]);
+                for (i = 0; i < bottom; i++) spots.push([bottom === 1 ? 50 : 86 - (72 * i / (bottom - 1)), 91]);
+                for (i = 0; i < side; i++) spots.push([3, side === 1 ? 50 : 76 - (52 * i / (side - 1))]);
+                return spots;
             }
-            window.dtwFgTheaterPlan = function() { S.fg.theaterPlan = !S.fg.theaterPlan; var th = el('dtwFgTheater'); if (th && S.session) th.outerHTML = theaterBarHtml(S.session); };
+            function theaterHtml(s) {
+                var g = s.guided || {}, plan = g.plan || {}, qs = plan.questions || [], done = Number(g.done || 0), total = Number(g.total || qs.length || 0);
+                var roster = (s.group || {}).roster || [], fly = flyQ(), byI = {};
+                (s.questions || []).forEach(function(q) { if (q && q.guided_i != null && !(byI[q.guided_i] && !qInFlight(byI[q.guided_i]) && qInFlight(q))) byI[q.guided_i] = q; });
+                var nowI = fly && fly.guided_i != null ? Number(fly.guided_i) : Math.min(done, Math.max(0, qs.length - 1));
+                // the timeline
+                var tl = qs.map(function(q, i) {
+                    var rec = byI[i], fin = rec && !qInFlight(rec) && !qFailed(rec), st = fin ? 'done' : (i === nowI ? 'now' : 'wait');
+                    var lead = '';
+                    if (fin) { var top = (rec.distribution || []).slice().sort(function(a, b) { return Number(b.pct || 0) - Number(a.pct || 0); })[0]; lead = top ? esc(top.label) + ' ' + pct(top.pct, 1) : (rec.read ? 'Answered' : ''); }
+                    else if (rec && qFailed(rec)) { st = 'done'; lead = 'Did not finish'; }
+                    return '<div class="dtw-th-q ' + st + '"><div class="ln"><span class="dot"></span><span class="bar"></span></div><div class="lv">' + esc(PA_LEVELS[q.level] || '') + '</div><div class="qt">' + esc(q.q || '') + '</div><div class="ld">' + (st === 'now' ? '<span class="dtw-fg-pulse"></span>on the floor' : lead) + '</div></div>';
+                }).join('');
+                // the split so far (the question on the floor), in motion
+                var split, rk = fly ? rankMap(fly) : {}, opts = fly ? optsOf(fly) : [], counts = fly ? liveCounts(fly) : {};
+                if (fly && opts.length) split = opts.map(function(o) { return '<div class="dtw-th-srow"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><span class="l">' + esc(o.label) + '</span><b>' + (counts[String(o.id)] || 0) + '</b><span class="dtw-fg-rowspin" aria-hidden="true"></span></div>'; }).join('') + '<div class="dtw-th-note">Shares land when the last answer does.</div>';
+                else if (fly) split = '<div class="dtw-th-note">An open question: the voices carry it.</div>';
+                else split = '<div class="dtw-th-note"><span class="dtw-fg-pulse"></span>The next question is on its way.</div>';
+                // just in: the latest answer that landed
+                var srcQ = (fly && (fly.answers || []).length) ? fly : null;
+                if (!srcQ) { for (var k = qs.length - 1; k >= 0 && !srcQ; k--) { if (byI[k] && (byI[k].answers || []).length && !qInFlight(byI[k])) srcQ = byI[k]; } }
+                var justin = '';
+                if (srcQ) {
+                    var a = (srcQ.answers || []).slice(-1)[0], seat = roster.filter(function(r) { return Number(r.seat) === Number(a.seat); })[0] || { name: a.name, seat: a.seat };
+                    var srk = rankMap(srcQ), oid = answerOptId(srcQ, a), lab = a.option_label || optionLabelOf(srcQ, oid), col = oid ? seriesOf(srk, oid) : 'var(--dtw-accent)';
+                    var idx = seat.seat != null ? Number(seat.seat) - 1 : 0, url = seat.portrait_url ? thumb(seat.portrait_url) : '';
+                    justin = '<div class="dtw-th-justin"><div class="k">Just in</div><div class="row"><span class="dtw-th-face s" style="--hue:' + seatHue(seat, idx) + ';--ring:' + col + '">' + (url ? '<img src="' + esc(url) + '" alt="">' : esc(initials(seat.name || ''))) + '</span><div><div class="who">' + esc(titleCase(seat.name || '')) + (lab ? ' <span style="color:' + col + '">' + SEP + esc(lab) + '</span>' : '') + '</div>' + (a.line ? '<div class="tx">' + esc(a.line) + '</div>' : '') + '</div></div></div>';
+                }
+                // the table: what is on it now, or up next
+                var onQ = fly ? String(fly.q || '') : String((qs[nowI] || {}).q || ''), onLvl = PA_LEVELS[(qs[nowI] || {}).level] || '', nA = fly ? (fly.answers || []).length : 0, seats = roster.length;
+                var table = '<div class="dtw-th-table"></div><div class="dtw-th-tcopy"><div class="k">' + (fly ? 'On the table' : 'Up next') + (onLvl ? SEP + esc(onLvl) : '') + '</div><div class="q">' + esc(onQ) + '</div><div class="n">' + (fly ? nA + ' of ' + seats + ' have answered' : (done ? done + ' of ' + total + ' answered so far' : 'The room is seated')) + '</div></div>';
+                // the people around it
+                var bySeat = {}; if (fly) (fly.answers || []).forEach(function(x) { bySeat[String(x.seat)] = x; });
+                var spots = stadiumSpots(roster.length);
+                var people = roster.map(function(r, i) {
+                    var a2 = bySeat[String(r.seat)], oid2 = a2 ? answerOptId(fly, a2) : '', col2 = oid2 ? seriesOf(rk, oid2) : (a2 ? 'var(--dtw-accent)' : ''), lab2 = a2 ? (a2.option_label || optionLabelOf(fly, oid2)) : '';
+                    var sp = spots[i] || [50, 50], url2 = r.portrait_url ? thumb(r.portrait_url) : '';
+                    return '<div class="dtw-th-seat' + (a2 ? ' on' : '') + (S.fg.seat === Number(r.seat) ? ' sel' : '') + '" style="left:' + sp[0] + '%;top:' + sp[1] + '%;--hue:' + seatHue(r, i) + ';--ring:' + (col2 || 'transparent') + '" data-fg-seat="' + Number(r.seat) + '" role="button" tabindex="0" title="Who ' + esc(titleCase(r.name || '')) + ' is" onclick="dtwSeatOpen(' + Number(r.seat) + ', this)" onkeydown="if(event.key===\'Enter\'){dtwSeatOpen(' + Number(r.seat) + ', this)}">'
+                        + (lab2 ? '<span class="chip">' + esc(lab2) + '</span>' : '') + '<span class="dtw-th-face">' + (url2 ? '<img src="' + esc(url2) + '" alt="" onerror="this.remove()">' : esc(initials(r.name || ''))) + '</span><b>' + esc(titleCase(r.name || '')) + '</b><span class="ag">' + esc(r.age != null ? r.age : '') + (r.city ? ', ' + esc(titleCase(shortCity(r.city))) : '') + '</span></div>';
+                }).join('');
+                var stageLine = fly ? '<span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(fly))) + SEP + '<span id="dtwFgTheaterEl">' + qElapsedS(fly) + '</span>s</span>' : '<span class="dtw-fg-pulse"></span><span>Between questions</span>';
+                return '<div class="dtw-th" id="dtwFgTheater">'
+                    + '<div class="dtw-th-head"><span class="dtw-th-badge"><span class="dtw-fg-pulse"></span>Watching</span><span class="dtw-th-run">The run' + SEP + '<b>' + done + ' of ' + total + '</b> answered' + SEP + 'question ' + (nowI + 1) + ' on the floor</span><span class="dtw-th-stage">' + stageLine + '</span></div>'
+                    + '<div class="dtw-th-tl">' + tl + '</div>'
+                    + '<div class="dtw-th-body"><div class="dtw-th-side"><div class="dtw-th-split"><div class="k">The split so far</div>' + split + '</div>' + justin + '</div>'
+                    + '<div class="dtw-th-stagewrap"><div class="dtw-th-mod" title="Prometheus">' + MARK_SVG + '</div>' + table + people + '</div></div>'
+                    + '<div class="dtw-th-foot"><span>Prometheus is running the planned questions for you. The outcome and the report land with question ' + total + '; you can ask your own then.</span><button type="button" class="dtw-fg-act" onclick="dtwPanelClose()">Leave</button></div>'
+                    + '</div>';
+            }
             function actsHtml(s) {
                 var n = ((S.twin || {}).panel_sessions || []).length;
                 var acts = '<span class="dtw-fg-saved" id="dtwPnSaved"></span><button type="button" class="dtw-fg-act" onclick="dtwRoomsOpen(true)">Rooms<b id="dtwFgRoomsN">' + n + '</b></button><button type="button" class="dtw-fg-act" onclick="dtwNewRoomOpen(true)">New room</button>';
@@ -54613,10 +54683,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var fresh = S.fg.sid !== s.id;
                 fgReset(s.id);
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
+                if (paRunning(s)) {
+                    // theater (Jenna 2026-11-18): a Predictive Analytics room running for you is watched, not steered
+                    h.innerHTML = theaterHtml(s) + popHtml();
+                    syncFgActs();
+                    if (fresh) fgScrollTop();
+                    if (S.fg.seat != null) { renderSeatPanel(); placePop(); }
+                    schedulePortraitRefresh();
+                    scheduleRoomPoll();
+                    return;
+                }
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
                 var out = '<div class="dtw-fg-hero" id="dtwFgHero">' + heroHtml(s, g, roster, fq, fly) + '</div>';
                 out += '<div class="dtw-fg-dock" id="dtwFgDock">' + dockHtml(s, g, roster, fq, fly) + '</div>';
-                out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, latest, fly) + '</div>' + (paRunning(s) ? theaterBarHtml(s) : composerHtml(typed, typedOpts)) + '</div>';
+                out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, latest, fly) + '</div>' + composerHtml(typed, typedOpts) + '</div>';
                 out += '<aside class="dtw-fg-tally" id="dtwFgTally" aria-label="The split">' + tallyHtml(s, g, roster, fq) + '</aside></div>';
                 out += popHtml();
                 h.innerHTML = out;
@@ -54631,12 +54711,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // A refresh while the room works or a portrait lands: the band, the thread and the tally redraw; the composer keeps what was typed.
             function fgRefresh() {
-                var s = S.session, h = el('dtwPnConsole'); if (!s || !h || !el('dtwFgHero') || !el('dtwFgDock')) { renderPanelConsole(); return; }
-                // the theater bar and the composer trade places when a Predictive Analytics run starts or lands (2026-11-18)
+                var s = S.session, h = el('dtwPnConsole'); if (!s || !h) { renderPanelConsole(); return; }
+                // the stage and the room trade places when a Predictive Analytics run starts or lands (2026-11-18)
                 if (!!el('dtwFgTheater') !== paRunning(s)) { renderPanelConsole(); return; }
+                if (paRunning(s)) {
+                    var stage = el('dtwFgTheater'); if (stage) stage.outerHTML = theaterHtml(s);
+                    syncFgActs();
+                    if (S.fg.seat != null) { renderSeatPanel(); placePop(); }
+                    return;
+                }
+                if (!el('dtwFgHero') || !el('dtwFgDock')) { renderPanelConsole(); return; }
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
                 paintFgDock(s, g, roster, fq, fly);
-                var thb = el('dtwFgTheater'); if (thb) thb.outerHTML = theaterBarHtml(s);
                 var tr = el('dtwPnTranscript');
                 if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, latest, fly); if (atEnd) fgScrollEnd(); }
                 var ta = el('dtwFgTally'); if (ta) { ta.innerHTML = tallyHtml(s, g, roster, fq); fgLayoutSeats(); }
