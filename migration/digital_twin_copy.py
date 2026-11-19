@@ -32,12 +32,16 @@ from __future__ import annotations
 
 import re
 
-# ratings and measurement services: a sentence that names one is a sourcing sentence ('The Numbers' is left to the
-# room's own name swap; as a pattern it would read every 'the numbers' in plain prose as the tracker)
-_SERVICES = (r"Nielsen|Comscore|Samba\s?TV|VideoAmp|iSpot(?:\.tv)?|Luminate|Parrot Analytics|Circana|NPD(?: Group)?|Box Office Mojo|"
-             r"Sensor Tower|data\.ai|App Annie|Statista|eMarketer|Insider Intelligence|YouGov|Pew(?: Research(?: Center)?)?|MRI[- ]Simmons|Kantar|Antenna Analytics")
-_PUBLICATIONS = (r"Variety|Deadline|The Hollywood Reporter|Hollywood Reporter|THR|TVLine|Vulture|Tudum|Media Play News|Home Media Magazine|"
-                 r"the trade press|the trades|trade press|press reports|SEC filings?|earnings(?: call| report)?s?")
+# The name list lives in migration.source_names (one list for every
+# reader-facing exit). 'The Numbers' stays off it: as a pattern it would
+# read every 'the numbers' in plain prose as the tracker.
+try:
+    from migration.source_names import HARD_ALT as _SERVICES, CASE_ALT as _CASE_NAMES, PHRASE_ALT as _PHRASES
+except Exception:
+    _SERVICES = r"Nielsen|Comscore|Samba\s?TV|VideoAmp|Luminate|Parrot Analytics|Statista|eMarketer|YouGov|Pew|Kantar"
+    _CASE_NAMES = r"(?-i:Variety)|(?-i:Deadline)|(?-i:THR)"
+    _PHRASES = r"trade press|the trades|press reports|SEC filings?"
+_PUBLICATIONS = _CASE_NAMES + r"|" + _PHRASES
 _ATTRIB = _SERVICES + r"|" + _PUBLICATIONS + r"|the network|the platform|the studio|the service"
 
 # 1. rewrites: the fact stays, the sourcing goes
@@ -126,6 +130,13 @@ def strip_calibration_language(text: str) -> str:
         t = str(_pk_net.scrub(t) or '')
     except Exception:
         pass
+    try:   # the shared name list: the citation comes off, the fact stays
+        from migration.source_names import strip_named_sources as _strip_src
+        t = _strip_src(t)
+    except Exception:
+        pass
+    if not t:
+        return t
     if not _DROP_RX.search(t) and not any(rx.search(t) for rx, _ in _REWRITES):
         return t
     return '\n'.join(_strip_line(ln) for ln in t.split('\n'))

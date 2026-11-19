@@ -54013,6 +54013,14 @@ def _scrub_v1_progress(raw: str, mapped_status: str) -> str:
     # Fast path: exact hit against the internal enum table.
     if low in _V1_PROGRESS_MAP:
         return _V1_PROGRESS_MAP[low]
+    try:
+        from migration.source_names import strip_named_sources
+        text = strip_named_sources(text).replace('\n', ' ').replace('\r', ' ').strip()
+    except Exception:
+        pass
+    if not text:
+        return _V1_PROGRESS_MAP.get(mapped_status, '')
+    low = text.lower()
     # Banned-substring guard.
     for tok in _V1_BANNED_TOKENS:
         if tok in low:
@@ -54026,10 +54034,30 @@ def _scrub_v1_progress(raw: str, mapped_status: str) -> str:
 
 def _scrub_v1_freetext(raw: str, cap: int = 700) -> str:
     """Partner-safe gate for longer free-text fields coming back from
-    the engine host (e.g. delivered_summary). Fail-closed: if ANY
-    banned token appears anywhere in the text, return '' - it is always
-    safer to omit the field than to ship one internal word."""
+    the engine host (e.g. delivered_summary). A citation comes off
+    and the fact stays. The view-definition lines are held
+    out and put back. Fail-closed: if ANY banned token appears anywhere
+    in the text, return '' - it is always safer to omit the field than
+    to ship one internal word."""
     text = (raw or '').replace('\r', ' ').replace('\n', ' ').strip()
+    if not text:
+        return ''
+    _held = []
+    try:
+        from prometheus.methodology import shield_definitions, unshield_definitions
+        text, _held = shield_definitions(text)
+    except Exception:
+        _held = []
+    try:
+        from migration.source_names import strip_named_sources
+        text = strip_named_sources(text).strip()
+    except Exception:
+        pass
+    if _held:
+        try:
+            text = unshield_definitions(text, _held)
+        except Exception:
+            pass
     if not text:
         return ''
     low = text.lower()

@@ -13,9 +13,10 @@ What is held here:
     "how does Peacock count a view", "why does your number differ from
     Nielsen ratings") gets the full part: our definition, the two
     entries, the line that ties them back; no read, no build, no model
-  * the lines survive the read scrub, the read PDF, the mail door and
-    the key-facing belt by exact text, while a stray sentence that names
-    a ratings service anywhere else is still dropped
+    * the lines survive the read scrub, the read PDF, the mail door and
+    the key-facing belt by exact text; a stray citation loses the name
+    and keeps the fact, and a sentence that still names the firm is
+    dropped
   * twin and focus group surfaces are unchanged: their guard still
     drops any sentence that names a ratings service
   * the copy: plain, no em or en dashes, people (never households) as
@@ -265,8 +266,9 @@ class Guards(unittest.TestCase):
         self.assertIn(f"- {M.PEACOCK_LINE}", out)
         self.assertIn('2,345,671 viewers watched Poker Face on Peacock', out)
         self.assertNotIn('Per Nielsen', out)
-        self.assertNotIn('4.1M', out)
+        self.assertIn('The finale drew 4.1M viewers', out)
         self.assertNotIn('12 million minutes', out)
+        self.assertNotIn('Nielsen reported', out)
         self.assertNotIn('xqviewdef', out)
 
     def test_the_read_scrub(self):
@@ -349,7 +351,8 @@ class Guards(unittest.TestCase):
         back = pma.scrub_user_text(mixed)
         self.assertIn(M.PEACOCK_LONG, back)
         self.assertIn(M.NIELSEN_LONG, back)
-        self.assertNotIn('4.1M', back)
+        self.assertNotIn('Per Nielsen', back)
+        self.assertIn('The finale drew 4.1M viewers', back)
         self.assertEqual(G.partner_violations(M.others_part()), [])
         self.assertEqual(G.partner_violations(out), [])
         self.assertTrue(G.partner_violations('Nielsen says the finale drew 4.1M.'))

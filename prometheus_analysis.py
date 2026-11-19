@@ -3967,11 +3967,23 @@ _SENTENCE_SPLIT_RX = re.compile(r'(?<=[.!?])\s+')
 
 
 def contains_source_citation(text):
-    return bool(_CITATION_RX.search(str(text or '')))
+    t = str(text or '')
+    if _CITATION_RX.search(t):
+        return True
+    try:
+        from migration.source_names import names_source
+        return names_source(t)
+    except Exception:
+        return False
 
 
 def contains_offclickstream_claim(text):
     return bool(_OFFCLICK_RX.search(str(text or '')))
+
+
+def _frame_break(s):
+    """A citation, a measurement-firm name, or an off-clickstream claim."""
+    return bool(_OFFCLICK_RX.search(s) or contains_source_citation(s))
 
 
 def _drop_frame_breaking_sentences(s):
@@ -3979,14 +3991,13 @@ def _drop_frame_breaking_sentences(s):
     off-clickstream behavior. Never empties a reply: when every
     sentence would drop, the text returns unchanged (the calm layers
     upstream own that case)."""
-    if not (_CITATION_RX.search(s) or _OFFCLICK_RX.search(s)):
+    if not _frame_break(s):
         return s
     out_lines = []
     changed = False
     for line in s.split('\n'):
         parts = _SENTENCE_SPLIT_RX.split(line) if line.strip() else [line]
-        kept = [p for p in parts
-                if not (_CITATION_RX.search(p) or _OFFCLICK_RX.search(p))]
+        kept = [p for p in parts if not _frame_break(p)]
         if len(kept) != len(parts):
             changed = True
         out_lines.append(' '.join(kept).strip() if line.strip()
@@ -4022,6 +4033,11 @@ def scrub_user_text(text):
     try:
         from prometheus import methodology as _vd_meth
         s, _held = _vd_meth.shield_definitions(s)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+    try:   # the name comes off and the number stays, before any word swap
+        from migration.source_names import strip_named_sources as _strip_src
+        s = _strip_src(s)
     except Exception as _fx:
         _faults.note('analysis', _fx)
     s = s.replace('\u2014', ' - ').replace('\u2013', '-')

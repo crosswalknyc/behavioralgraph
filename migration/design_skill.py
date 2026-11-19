@@ -1121,6 +1121,23 @@ def finish(path, *, render_check: bool = False, lint: bool = True,
     _prev_names = None
     try:
         ext = Path(str(path)).suffix.lower()
+        if ext in (".pptx", ".docx", ".html", ".htm"):
+            try:
+                from migration.source_names import scrub_office_file as _scrub_src
+
+                def _hold_lines(text):
+                    from prometheus.methodology import shield_definitions
+                    return shield_definitions(text)
+
+                def _release_lines(text, held):
+                    from prometheus.methodology import unshield_definitions
+                    return unshield_definitions(text, held)
+
+                n_src = int(_scrub_src(path, hold=_hold_lines, release=_release_lines) or 0)
+                if n_src:
+                    rep.fixes["source_names"] = n_src
+            except Exception:
+                pass
         if copy_check is None:
             copy_check = ext == ".pptx"
         copy_repair = bool(copy_repair) and bool(copy_check) and ext == ".pptx"

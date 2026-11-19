@@ -1459,6 +1459,12 @@ _PARTNER_SOURCES = (
     r'sec filings?|10-k|earnings (?:reports?|calls?)|press reports?|trade press|industry reports?|'
     r'public(?:ly available)? (?:data|figures|reports?|sources?)|external (?:data|sources?)|third[- ]party (?:data|sources?)'
 )
+# The shared name list (migration.source_names). One list, every exit.
+try:
+    from migration.source_names import ATTRIB_ALT as _SRC_ATTRIB, HARD_RX as _SRC_HARD_RX
+    _PARTNER_SOURCES = _PARTNER_SOURCES + r'|' + _SRC_ATTRIB
+except Exception:
+    _SRC_HARD_RX = None
 _PARTNER_ATTRIB_RX = re.compile(
     r'(?:,\s*)?\b(?:according to|as reported by|reported by|per|sourced from|based on|citing|via|from)\s+'
     r'(?:the\s+|a\s+|an\s+)?(?:' + _PARTNER_SOURCES + r')(?:\s+(?:data|figures|reports?|numbers|counts|estimates?))?\b[^.;,\n]*', re.I)
@@ -1561,7 +1567,7 @@ _PARTNER_VERB_SWAPS = (
 
 # Data vendors are never an audience brand in our files; their name in a
 # clause is an attribution however it is phrased.
-_PARTNER_VENDOR_RX = re.compile(
+_PARTNER_VENDOR_RX = _SRC_HARD_RX or re.compile(
     r'\b(?:statista|nielsen|comscore|similarweb|sensor tower|data\.ai|emarketer|yougov|mri[- ]simmons|'
     r'google trends|box office mojo|the-numbers\.com|parrot analytics|samba tv|ispot(?:\.tv)?|kantar|gwi|'
     r'global ?web ?index|luminate|circana|npd group|magid)\b', re.I)
@@ -1588,6 +1594,11 @@ def scrub_partner_text(text, fallback=''):
     if not t.strip():
         return t
     t, _held = _hold_view_definitions(t)
+    try:   # citation off, fact stays, before any word that would relabel the number
+        from migration.source_names import strip_named_sources as _strip_src
+        t = _strip_src(t)
+    except Exception:
+        pass
     t = _PARTNER_PAREN_SOURCE_RX.sub('', t)
     t = _PARTNER_SOURCE_INLINE_RX.sub('', t)
     t = _PARTNER_ATTRIB_RX.sub('', t)

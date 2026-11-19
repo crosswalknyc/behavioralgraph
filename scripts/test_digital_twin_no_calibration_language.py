@@ -86,9 +86,11 @@ class Guard(unittest.TestCase):
         for s in ('Calibrated to 2 aired episodes on Paramount+.', 'Calibrated to 7 aired episodes across the library.',
                   'No aired episode to compare against yet. The forecast sits at the low end and calibrates as actuals come in.',
                   'Our read is anchored to the first week.', 'Benchmarked to the premiere.', 'Week-one audience as aired: 10,250,000.',
-                  'Nielsen had week one at 4.1M.', 'The ratings service put it at 3.9M.', 'The ledger carries two episodes.'):
+                  'The ratings service put it at 3.9M.', 'The ledger carries two episodes.'):
             self.assertEqual(C.strip_calibration_language(s), '', s)
             self.assertTrue(C.calibration_hits(s), s)
+        self.assertEqual(C.strip_calibration_language('Nielsen had week one at 4.1M.'), 'Week one at 4.1M.')
+        self.assertTrue(C.calibration_hits('Nielsen had week one at 4.1M.'))
 
     def test_a_source_clause_comes_off_and_the_fact_stays(self):
         self.assertEqual(C.strip_calibration_language('According to Nielsen, week one drew 4.1M viewers.'), 'Week one drew 4.1M viewers.')
