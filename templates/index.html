@@ -51604,11 +51604,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-th-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
         #digitalTwinsIQView .dtw-th-face.s { width: 34px; height: 34px; font-size: 12px; box-shadow: 0 0 0 2px var(--ring, var(--dtw-accent)); }
         #digitalTwinsIQView .dtw-th-stagewrap { position: relative; width: 100%; aspect-ratio: 1.55 / 1; min-height: 480px; max-height: 680px; }
-        #digitalTwinsIQView .dtw-th-table { position: absolute; left: 17%; right: 17%; top: 23%; bottom: 23%; border-radius: 50%; background: var(--dtw-tile); border: 1px solid var(--dtw-rule); box-shadow: inset 0 0 70px rgba(0,0,0,0.35); }
-        #digitalTwinsIQView .dtw-th-tcopy { position: absolute; left: 27%; right: 27%; top: 50%; transform: translateY(-50%); text-align: center; }
+        #digitalTwinsIQView .dtw-th-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; overflow: visible; filter: drop-shadow(0 24px 40px rgba(0,0,0,0.45)); }
+        #digitalTwinsIQView .dtw-th-svg .top { stroke: #2A434B; stroke-width: 1; }
+        #digitalTwinsIQView .dtw-th-svg .edge { stroke: rgba(233,232,225,0.06); stroke-width: 1; }
+        #digitalTwinsIQView .dtw-th-svg .rim path { fill: none; stroke-width: 5; stroke-linecap: round; opacity: .5; transition: stroke .4s ease, opacity .4s ease; }
+        #digitalTwinsIQView .dtw-th-svg .rim path.on { opacity: 1; stroke-width: 6; }
+        #digitalTwinsIQView .dtw-th-tcopy { position: absolute; left: 25%; right: 25%; top: 50%; transform: translateY(-50%); text-align: center; z-index: 2; }
         #digitalTwinsIQView .dtw-th-tcopy .k { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); }
         #digitalTwinsIQView .dtw-th-tcopy .q { margin-top: 6px; font-size: 14.5px; line-height: 20px; font-weight: 500; color: var(--dtw-ink); overflow-wrap: anywhere; max-height: 100px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-th-tcopy.talk .q { font-size: 12.5px; line-height: 17px; font-weight: 400; color: var(--dtw-body); max-height: 51px; }
         #digitalTwinsIQView .dtw-th-tcopy .n { margin-top: 8px; font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-th-floor { display: flex; gap: 14px; align-items: flex-start; text-align: left; margin-top: 14px; padding: 12px 14px; background: rgba(12,22,24,0.55); border: 1px solid rgba(233,232,225,0.08); border-radius: 14px; }
+        #digitalTwinsIQView .dtw-th-floor .dtw-th-face.m { width: 52px; height: 52px; font-size: 16px; box-shadow: 0 0 0 3px var(--dtw-page), 0 0 0 6px var(--ring, var(--dtw-accent)); }
+        #digitalTwinsIQView .dtw-th-floor .t { min-width: 0; }
+        #digitalTwinsIQView .dtw-th-floor .who { font-size: 11px; font-weight: 600; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-th-floor .who .when { color: var(--dtw-mute); font-weight: 400; }
+        #digitalTwinsIQView .dtw-th-floor .tx { font-size: 13px; line-height: 18px; color: var(--dtw-ink); margin-top: 3px; overflow-wrap: anywhere; max-height: 72px; overflow: hidden; }
         #digitalTwinsIQView .dtw-th-mod { position: absolute; left: 50%; top: 9%; transform: translate(-50%, -50%); width: 34px; height: 34px; border-radius: 50%; background: var(--dtw-ink); color: var(--dtw-page); display: flex; align-items: center; justify-content: center; z-index: 3; }
         #digitalTwinsIQView .dtw-th-mod svg { width: 14px; height: 14px; fill: currentColor; display: block; }
         #digitalTwinsIQView .dtw-th-seat { position: absolute; transform: translate(-50%, -50%); width: 92px; text-align: center; cursor: pointer; z-index: 2; }
@@ -54594,12 +54605,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var idx = seat.seat != null ? Number(seat.seat) - 1 : 0, url = seat.portrait_url ? thumb(seat.portrait_url) : '';
                     justin = '<div class="dtw-th-justin"><div class="k">Just in</div><div class="row"><span class="dtw-th-face s" style="--hue:' + seatHue(seat, idx) + ';--ring:' + col + '">' + (url ? '<img src="' + esc(url) + '" alt="">' : esc(initials(seat.name || ''))) + '</span><div><div class="who">' + esc(titleCase(seat.name || '')) + (lab ? ' <span style="color:' + col + '">' + SEP + esc(lab) + '</span>' : '') + '</div>' + (a.line ? '<div class="tx">' + esc(a.line) + '</div>' : '') + '</div></div></div>';
                 }
-                // the table: what is on it now, or up next
-                var onQ = fly ? String(fly.q || '') : String((qs[nowI] || {}).q || ''), onLvl = PA_LEVELS[(qs[nowI] || {}).level] || '', nA = fly ? (fly.answers || []).length : 0, seats = roster.length;
-                var table = '<div class="dtw-th-table"></div><div class="dtw-th-tcopy"><div class="k">' + (fly ? 'On the table' : 'Up next') + (onLvl ? SEP + esc(onLvl) : '') + '</div><div class="q">' + esc(onQ) + '</div><div class="n">' + (fly ? nA + ' of ' + seats + ' have answered' : (done ? done + ' of ' + total + ' answered so far' : 'The room is seated')) + '</div></div>';
                 // the people around it
                 var bySeat = {}; if (fly) (fly.answers || []).forEach(function(x) { bySeat[String(x.seat)] = x; });
                 var spots = stadiumSpots(roster.length);
+                // the table (Jenna 2026-11-19: the rim of B, the inner circle of E): the rim is one piece per person, nearest their seat,
+                // lit in the color of their answer as it lands; the latest answer speaks from the table under the question
+                var onQ = fly ? String(fly.q || '') : String((qs[nowI] || {}).q || ''), onLvl = PA_LEVELS[(qs[nowI] || {}).level] || '', nA = fly ? (fly.answers || []).length : 0, seats = roster.length;
+                var tcopy = '<div class="dtw-th-tcopy' + (srcQ && fly === srcQ ? ' talk' : '') + '"><div class="k">' + (fly ? 'On the table' : 'Up next') + (onLvl ? SEP + esc(onLvl) : '') + (fly ? SEP + nA + ' of ' + seats : '') + '</div><div class="q">' + esc(onQ) + '</div>';
+                if (srcQ && fly === srcQ) {
+                    var la = (fly.answers || []).slice(-1)[0], ls = roster.filter(function(r) { return Number(r.seat) === Number(la.seat); })[0] || { name: la.name, seat: la.seat };
+                    var loid = answerOptId(fly, la), llab = la.option_label || optionLabelOf(fly, loid), lcol = loid ? seriesOf(rk, loid) : 'var(--dtw-accent)', lidx = ls.seat != null ? Number(ls.seat) - 1 : 0, lurl = ls.portrait_url ? thumb(ls.portrait_url) : '';
+                    tcopy += '<div class="dtw-th-floor"><span class="dtw-th-face m" style="--hue:' + seatHue(ls, lidx) + ';--ring:' + lcol + '">' + (lurl ? '<img src="' + esc(lurl) + '" alt="">' : esc(initials(ls.name || ''))) + '</span><div class="t"><div class="who">' + esc(titleCase(ls.name || '')) + (ls.age != null && ls.age !== '' ? ', ' + esc(ls.age) : '') + (ls.city ? ', ' + esc(titleCase(shortCity(ls.city))) : '') + (llab ? ' <span style="color:' + lcol + '">' + SEP + esc(llab) + '</span>' : '') + '<span class="when">' + SEP + 'just now</span></div>' + (la.line ? '<div class="tx">' + esc(la.line) + '</div>' : '') + '</div></div>';
+                } else {
+                    tcopy += '<div class="n">' + (fly ? 'Waiting on the first answer' : (done ? done + ' of ' + total + ' answered so far' : 'The room is seated')) + '</div>';
+                }
+                tcopy += '</div>';
+                // the rim pieces: each seat's piece sits nearest its seat, between the midpoints to its neighbors around the ellipse
+                var VW = 1000, VH = 645, ecx = VW / 2, ecy = VH / 2, erx = VW * 0.33, ery = VH * 0.27, rrx = erx + 13, rry = ery + 13;
+                var angs = roster.map(function(r, i) { var sp0 = spots[i] || [50, 50]; return { i: i, t: Math.atan2((sp0[1] - 50) / 50 * (VH / 2) / rry, (sp0[0] - 50) / 50 * (VW / 2) / rrx) }; });
+                angs.sort(function(p, q2) { return p.t - q2.t; });
+                var pieces = '';
+                angs.forEach(function(p, k) {
+                    var prev = angs[(k - 1 + angs.length) % angs.length].t, next = angs[(k + 1) % angs.length].t;
+                    if (k === 0) prev -= 2 * Math.PI;
+                    if (k === angs.length - 1) next += 2 * Math.PI;
+                    var a0 = (p.t + prev) / 2 + 0.045, a1 = (p.t + next) / 2 - 0.045;
+                    if (a1 <= a0) return;
+                    var r = roster[p.i], an = bySeat[String(r.seat)], oid3 = an ? answerOptId(fly, an) : '', col3 = oid3 ? seriesOf(rk, oid3) : (an ? 'var(--dtw-accent)' : 'var(--dtw-s5)');
+                    var x0 = ecx + rrx * Math.cos(a0), y0 = ecy + rry * Math.sin(a0), x1 = ecx + rrx * Math.cos(a1), y1 = ecy + rry * Math.sin(a1);
+                    pieces += '<path d="M' + x0.toFixed(1) + ',' + y0.toFixed(1) + ' A' + rrx.toFixed(1) + ',' + rry.toFixed(1) + ' 0 ' + (a1 - a0 > Math.PI ? 1 : 0) + ' 1 ' + x1.toFixed(1) + ',' + y1.toFixed(1) + '" class="' + (an ? 'on' : '') + '" style="stroke:' + col3 + '" vector-effect="non-scaling-stroke"/>';
+                });
+                var table = '<svg class="dtw-th-svg" viewBox="0 0 ' + VW + ' ' + VH + '" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="dtwThTable" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#192D34"/><stop offset="0.6" stop-color="#15252A"/><stop offset="1" stop-color="#0F1E1E"/></linearGradient></defs>'
+                    + '<ellipse class="top" cx="' + ecx + '" cy="' + ecy + '" rx="' + erx + '" ry="' + ery + '" fill="url(#dtwThTable)" vector-effect="non-scaling-stroke"/>'
+                    + '<ellipse class="edge" cx="' + ecx + '" cy="' + ecy + '" rx="' + (erx - 14) + '" ry="' + (ery - 14) + '" fill="none" vector-effect="non-scaling-stroke"/>'
+                    + '<g class="rim">' + pieces + '</g></svg>' + tcopy;
                 var people = roster.map(function(r, i) {
                     var a2 = bySeat[String(r.seat)], oid2 = a2 ? answerOptId(fly, a2) : '', col2 = oid2 ? seriesOf(rk, oid2) : (a2 ? 'var(--dtw-accent)' : ''), lab2 = a2 ? (a2.option_label || optionLabelOf(fly, oid2)) : '';
                     var sp = spots[i] || [50, 50], url2 = r.portrait_url ? thumb(r.portrait_url) : '';
@@ -54610,7 +54649,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '<div class="dtw-th" id="dtwFgTheater">'
                     + '<div class="dtw-th-head"><span class="dtw-th-badge"><span class="dtw-fg-pulse"></span>Watching</span><span class="dtw-th-run">The run' + SEP + '<b>' + done + ' of ' + total + '</b> answered' + SEP + 'question ' + (nowI + 1) + ' on the floor</span><span class="dtw-th-stage">' + stageLine + '</span></div>'
                     + '<div class="dtw-th-tl">' + tl + '</div>'
-                    + '<div class="dtw-th-body"><div class="dtw-th-side"><div class="dtw-th-split"><div class="k">The split so far</div>' + split + '</div>' + justin + '</div>'
+                    + '<div class="dtw-th-body"><div class="dtw-th-side"><div class="dtw-th-split"><div class="k">The split so far</div>' + split + '</div>' + (srcQ && fly === srcQ ? '' : justin) + '</div>'
                     + '<div class="dtw-th-stagewrap"><div class="dtw-th-mod" title="Prometheus">' + MARK_SVG + '</div>' + table + people + '</div></div>'
                     + '<div class="dtw-th-foot"><span>Prometheus is running the planned questions for you. The outcome and the report land with question ' + total + '; you can ask your own then.</span><button type="button" class="dtw-fg-act" onclick="dtwPanelClose()">Leave</button></div>'
                     + '</div>';
