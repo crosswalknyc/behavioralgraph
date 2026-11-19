@@ -62,6 +62,73 @@ US_POPULATION = 329_900_000
 # Sample represents this many people
 SAMPLE_REPRESENTS = 10_000_000
 
+# The late check may trim a run's own figure, never take it far below
+# (Jenna 2026-11-18, "never publish a profile or tracker cut far below its
+# quote; correct it before it ships"). By the time the late check runs,
+# the viewer count already sits at the low end of the run's own range, so
+# a proposal under this share of it is not a trim. The check itself drew
+# its line at a 2x correction; that line is now unconditional for cuts.
+LATE_CUT_FLOOR = 0.5
+_MONTH_ROW_RX = re.compile(r'^\d{4}-\d{2}$')
+
+
+def late_cut_refused(current, proposed, floor=LATE_CUT_FLOOR):
+    """True when a late downward correction would take ``current`` far
+    below itself: under ``floor`` of the figure the run was sized at.
+    A raise, a trim inside the floor and an unreadable pair all read
+    False. Pure."""
+    try:
+        cur, new = float(current), float(proposed)
+    except (TypeError, ValueError):
+        return False
+    if cur <= 0 or new <= 0 or new >= cur:
+        return False
+    return new < cur * float(floor)
+
+
+def recouple_tracker_after_size_change(df_out, watchers, clean, signups):
+    """Every rate that sits on a count the late check moved is read off
+    the new count, so no block is left on the old base (2026-11-18: a
+    tracker shipped 3.99% conversion in its key metrics and 2.88% in the
+    summary under them). Covers the two conversion rates, the three
+    rows of the summary that are shares of the viewers, and each month's
+    share of the platform's signups that watched the title. Returns the
+    number of cells it rewrote. Never raises."""
+    n = 0
+    try:
+        watchers, clean, signups = int(watchers or 0), int(clean or 0), int(signups or 0)
+
+        def _count(idx, col="Count"):
+            try:
+                return float(str(df_out.loc[idx, col]).replace(",", ""))
+            except (ValueError, TypeError):
+                return None
+
+        def _put(idx, value):
+            nonlocal n
+            if str(df_out.loc[idx, "Percentage"]) != value:
+                df_out.loc[idx, "Percentage"] = value
+                n += 1
+
+        for idx in df_out.index:
+            cat = str(df_out.loc[idx, "Category"] or "").strip()
+            if cat == "Total Show Conversion Rate" and watchers > 0:
+                _put(idx, f"{signups * 100.0 / watchers:.2f}%")
+            elif cat == "Clean Conversion Rate" and (clean or watchers) > 0:
+                _put(idx, f"{signups * 100.0 / (clean or watchers):.2f}%")
+            elif cat in ("Attributed Signups", "Dormant to Reactive", "TOTAL SIGNUPS") and watchers > 0:
+                c = _count(idx)
+                if c is not None:
+                    _put(idx, f"{round(c * 100.0 / watchers, 2)}%")
+            elif _MONTH_ROW_RX.match(cat) and \
+                    str(df_out.loc[idx, "Secondary Label"] or "").strip().lower() == "watched show":
+                base, part = _count(idx), _count(idx, "Secondary Count")
+                if base and part is not None:
+                    _put(idx, f"{part * 100.0 / base:.1f}%")
+    except Exception as e:  # the file ships as it stands; the count hygiene still runs after
+        print(f"   recouple after size change skipped (non-fatal): {type(e).__name__}: {e}")
+    return n
+
 def gen_pop_projection(raw_number):
     """
     Project a raw number to the US general population.
@@ -4307,8 +4374,26 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
             _has_quoted_number = bool(re.search(r'\d', _watchers_note)) and len(_watchers_note) >= 60
             _strong_evidence = _has_quoted_number and not _gpt_said_low
 
+            # Guard 0 (2026-11-18): a cut that would take the viewers far
+            # below the figure this run was sized at is never applied,
+            # whatever the note says (the evidence test below passed on
+            # any long note with a digit in it: 29,828 went to 10,000 on
+            # a title with no published count). The run's own figure is
+            # already the low end of its range, so it stands as it is.
+            if late_cut_refused(total_watchers, _proposed_panel):
+                _flag_msg = (
+                    f"AI proposed panel {int(_proposed_panel):,} (≈{_proposed_us:,} US) against "
+                    f"{total_watchers:,} (≈{_current_us:,} US): under "
+                    f"{int(LATE_CUT_FLOOR * 100)}% of the figure the run was sized at. "
+                    f"Not applied; the run's own figure stands."
+                )
+                print(f"   🛑 {_flag_msg}")
+                changes.append(_flag_msg)
+                p.setdefault('_ai_flags', []).append(_flag_msg)
+                validation_result['watchers_plausible'] = True  # neutralize this branch
+
             # Guard 1: minimum-evidence threshold for >2× corrections
-            if _scale_ratio >= 2.0 and not _strong_evidence:
+            elif _scale_ratio >= 2.0 and not _strong_evidence:
                 _flag_msg = (
                     f"AI proposed {_scale_ratio:.1f}× correction "
                     f"(panel {total_watchers:,} ≈ {_current_us:,} US → "
@@ -4407,7 +4492,17 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
         suggested_s = validation_result.get('suggested_signups_range_panel', [])
         if len(suggested_s) == 2 and suggested_s[0] is not None and suggested_s[1] is not None:
             target_signups = int((suggested_s[0] + suggested_s[1]) / 2.0)
-            if 0 < target_signups < new_signups:
+            if late_cut_refused(new_signups, target_signups):
+                # Same floor as the viewers (2026-11-18): a trim is taken,
+                # a cut to under half the run's own signups is not.
+                _flag_msg = (
+                    f"AI proposed signups {target_signups:,} against {new_signups:,}: under "
+                    f"{int(LATE_CUT_FLOOR * 100)}% of the run's own figure. Not applied."
+                )
+                print(f"   🛑 {_flag_msg}")
+                changes.append(_flag_msg)
+                p.setdefault('_ai_flags', []).append(_flag_msg)
+            elif 0 < target_signups < new_signups:
                 adjusted_signups = target_signups
                 signups_gpp = format_gen_pop(gen_pop_projection(target_signups))
                 for idx in df_out.index:
@@ -4425,7 +4520,16 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
             if len(suggested_c) == 2 and suggested_c[0] is not None and suggested_c[1] is not None:
                 target_conv = (suggested_c[0] + suggested_c[1]) / 2.0
                 target_signups = int(round(adjusted_watchers * target_conv / 100.0))
-                if 0 < target_signups < new_signups:
+                if late_cut_refused(new_signups, target_signups):
+                    _flag_msg = (
+                        f"AI proposed ~{target_conv:.1f}% conversion (signups {target_signups:,} against "
+                        f"{new_signups:,}): under {int(LATE_CUT_FLOOR * 100)}% of the run's own figure. "
+                        f"Not applied."
+                    )
+                    print(f"   🛑 {_flag_msg}")
+                    changes.append(_flag_msg)
+                    p.setdefault('_ai_flags', []).append(_flag_msg)
+                elif 0 < target_signups < new_signups:
                     adjusted_signups = target_signups
                     signups_gpp = format_gen_pop(gen_pop_projection(target_signups))
                     for idx in df_out.index:
@@ -4477,7 +4581,15 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
             if cat in ("New Platform Signups", "TOTAL SIGNUPS"):
                 continue
 
-            if count_label in signup_labels:
+            # A month row's Count is the PLATFORM's signups that month, not
+            # the title's: it does not move with the title's signups
+            # (2026-11-18: it was scaled with them, which halved the
+            # platform's months and left each month's churn rate reading
+            # against a base that was no longer on the page). Only the
+            # "watched show" count beside it is the title's.
+            _platform_month = bool(_MONTH_ROW_RX.match(cat)) and sec_label == "watched show"
+
+            if count_label in signup_labels and not _platform_month:
                 try:
                     cur = float(str(df_out.loc[idx, "Count"]).replace(",", ""))
                     if cur > 0:
@@ -4505,6 +4617,21 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
                 f"touchpoint, monthly, demographics) by {signup_sf:.4f}x to match "
                 f"the adjusted signup total."
             )
+
+    # When a size did move, every rate that sits on it is read off the
+    # new count, in the same pass (2026-11-18). Nothing is left on the
+    # old base for the reader to trip over.
+    if adjusted_watchers != total_watchers or adjusted_signups != new_signups:
+        _clean_now = 0
+        for idx in df_out.index:
+            if str(df_out.loc[idx, "Category"] or "").strip() == "Clean Sample (New First Time Viewers)":
+                try:
+                    _clean_now = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+                except (ValueError, TypeError):
+                    _clean_now = 0
+        _recoupled = recouple_tracker_after_size_change(df_out, adjusted_watchers, _clean_now, adjusted_signups)
+        if _recoupled:
+            changes.append(f"Recoupled {_recoupled} rate cell(s) to the adjusted counts.")
 
     return df_out, changes
 
