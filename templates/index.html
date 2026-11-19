@@ -51342,6 +51342,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView details.dtw-fold > summary .n { font-weight: 500; letter-spacing: 0.1em; color: var(--dtw-mute); font-size: 0.64rem; }
         #digitalTwinsIQView details.dtw-fold > summary .chev { margin-left: auto; color: var(--dtw-mute); font-size: 0.8rem; transition: transform .15s; }
         #digitalTwinsIQView details.dtw-fold[open] > summary .chev { transform: rotate(180deg); }
+        /* ---- who makes up this audience (2026-11-19): the kinds, largest first, each with its person ---- */
+        #digitalTwinsIQView .dtw-kinds { margin: 0 0 1.1rem; }
+        #digitalTwinsIQView .dtw-kinds-h { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 10px; }
+        #digitalTwinsIQView .dtw-kinds-line { margin: 6px 0 0; font-size: 1.05rem; line-height: 1.4; font-weight: 300; color: var(--dtw-ink); max-width: 760px; }
+        #digitalTwinsIQView .dtw-kinds-note { font-size: 0.72rem; color: var(--dtw-mute); white-space: nowrap; }
+        #digitalTwinsIQView .dtw-kinds-list { border-top: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView details.dtw-kind { border-bottom: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView details.dtw-kind > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 44px minmax(0, 1fr) 190px 180px 18px; gap: 14px; align-items: center; padding: 10px 4px; }
+        #digitalTwinsIQView details.dtw-kind > summary::-webkit-details-marker { display: none; }
+        #digitalTwinsIQView details.dtw-kind > summary:hover { background: rgba(233,232,225,0.025); }
+        #digitalTwinsIQView .dtw-kind-face { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: hsl(var(--hue, 200) 28% 32%); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: none; }
+        #digitalTwinsIQView .dtw-kind-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
+        #digitalTwinsIQView .dtw-kind-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        #digitalTwinsIQView .dtw-kind-main .lab { font-size: 0.92rem; font-weight: 600; color: var(--dtw-ink); line-height: 1.3; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-kind-main .who { font-size: 0.76rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-kind-main .who .x { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-kind-n { font-size: 0.78rem; color: var(--dtw-body); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+        #digitalTwinsIQView .dtw-kind-n b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-kind-n i { font-style: normal; color: var(--dtw-ink); font-weight: 600; margin-left: 10px; display: inline-block; min-width: 44px; }
+        #digitalTwinsIQView .dtw-kind-bar { height: 6px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; display: block; }
+        #digitalTwinsIQView .dtw-kind-bar span { display: block; height: 100%; background: var(--dtw-accent); border-radius: 999px; }
+        #digitalTwinsIQView details.dtw-kind > summary .chev { color: var(--dtw-mute); font-size: 0.8rem; transition: transform .15s; }
+        #digitalTwinsIQView details.dtw-kind[open] > summary .chev { transform: rotate(180deg); }
+        #digitalTwinsIQView .dtw-kind-about { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 22px; padding: 4px 4px 14px 62px; }
+        #digitalTwinsIQView .dtw-kind-about > div { font-size: 0.8rem; line-height: 1.45; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-kind-about .k { display: block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); margin-bottom: 2px; }
+        @media (max-width: 900px) { #digitalTwinsIQView details.dtw-kind > summary { grid-template-columns: 44px minmax(0, 1fr) 18px; } #digitalTwinsIQView .dtw-kind-n, #digitalTwinsIQView .dtw-kind-bar { display: none; } #digitalTwinsIQView .dtw-kinds-note { display: none; } }
         #digitalTwinsIQView details.dtw-fold > .dtw-fold-body { padding: 0.1rem 0.2rem 1.2rem; }
         /* ---- figures strip ---- */
         #digitalTwinsIQView .dtw-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 1.2rem; border-top: 1px solid var(--dtw-rule); border-bottom: 1px solid var(--dtw-rule); margin: 0.6rem 0 0.9rem; }
@@ -53680,13 +53707,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
             function demoRows(cat) { return (((S.twin || {}).identity || {}).demographics || {})[cat] || []; }
             function fold(id, title, note, body, open) { return '<details class="dtw-fold" id="dtwFold-' + id + '"' + (open ? ' open' : '') + '><summary>' + esc(title) + (note ? '<span class="n">' + esc(note) + '</span>' : '') + '<span class="chev">&#9662;</span></summary><div class="dtw-fold-body">' + body + '</div></details>'; }
+            // Who makes up this audience (Jenna 2026-11-19, from the team notice she liked): the kinds of people in the twin, largest
+            // first, each with the person who stands for it, how many people that is and the share, and what the desk wrote about them
+            // behind a tap. The person carries a face once it exists (the twin's own portrait pass), initials until then.
+            function kindsSection(t) {
+                var a = (t || {}).archetypes || {}, groups = (a.groups || []).filter(function(g) { return g && g.label; });
+                if (!groups.length) return '';
+                var noun = a.noun || 'people', size = Number(a.size_people || ((t || {}).meta || {}).size_us || 0), top = groups[0];
+                var maxShare = Math.max.apply(null, groups.map(function(g) { return Number(g.share_pct || 0); }).concat([1]));
+                var line = groups.length + ' kinds of ' + esc(noun) + ' make up the ' + fmtN(size) + ' people in this audience; the largest is ' + esc(String(top.label || '').charAt(0).toLowerCase() + String(top.label || '').slice(1)) + ' at ' + Number(top.share_pct || 0).toFixed(1) + '% (' + fmtN(top.people) + ' ' + esc(noun) + ').';
+                var rows = groups.map(function(g, i) {
+                    var rep = g.representative || {}, who = rep.name ? esc(titleCase(rep.name)) + (rep.age != null && rep.age !== '' ? ', ' + esc(rep.age) : '') + (rep.city ? ', ' + esc(titleCase(shortCity(rep.city))) : '') : '';
+                    var face = rep.portrait_url ? '<img src="' + esc(thumb(rep.portrait_url)) + '" alt="" onerror="this.remove()">' : esc(initials(rep.name || g.label || ''));
+                    var about = [['Who they are', g.who], ['How they relate to it', g.relationship], ['How they decide', g.decides], ['What moves them', g.moves_them], ['What holds them back', g.holds_them_back]].filter(function(x) { return x[1]; });
+                    var more = about.length ? '<div class="dtw-kind-about">' + about.map(function(x) { return '<div><span class="k">' + esc(x[0]) + '</span><span>' + esc(x[1]) + '</span></div>'; }).join('') + '</div>' : '';
+                    var extra = [rep.occupation, rep.income].filter(Boolean).map(function(x) { return esc(x); }).join(SEP);
+                    return '<details class="dtw-kind"><summary><span class="dtw-kind-face" style="--hue:' + hueFor(i) + '">' + face + '</span>'
+                        + '<span class="dtw-kind-main"><span class="lab">' + esc(g.label) + '</span><span class="who">' + who + (extra ? '<span class="x">' + SEP + extra + '</span>' : '') + '</span></span>'
+                        + '<span class="dtw-kind-n"><b>' + fmtN(g.people) + '</b> ' + esc(noun) + '<i>' + Number(g.share_pct || 0).toFixed(1) + '%</i></span>'
+                        + '<span class="dtw-kind-bar"><span style="width:' + Math.max(2, Math.min(100, Number(g.share_pct || 0) / maxShare * 100)).toFixed(1) + '%"></span></span>'
+                        + (more ? '<span class="chev">&#9662;</span>' : '<span class="chev" style="visibility:hidden">&#9662;</span>') + '</summary>' + more + '</details>';
+                }).join('');
+                return '<div class="dtw-kinds"><div class="dtw-kinds-h"><div><div class="dtw-eyebrow">Who makes up this audience</div><p class="dtw-kinds-line">' + line + '</p></div><div class="dtw-kinds-note">Every room seats one of each; tap a kind for what the desk wrote about them.</div></div><div class="dtw-kinds-list">' + rows + '</div></div>';
+            }
             // The selected twin: Identity, Traits, Lifecycle, Runs. No hero card.
             function renderTwin() {
                 var t = S.twin, h = el('dtwTwinPage'); if (!h) return;
                 if (!t) { h.innerHTML = ''; return; }
                 var m = t.meta || {}, ident = t.identity || {}, key = m.key || S.key, lc = t.lifecycle || {};
                 var kn = esc(jsq(key)), nm = m.name || m.subject || 'this twin';
-                var out = '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTwinDeleteAsk(\'' + kn + '\', null, \'dtwTwinDelP-\')">Delete</button>' + assignControl(key) + twinPageConfirm(key, nm) + '</div>';
+                var out = kindsSection(t) + '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTwinDeleteAsk(\'' + kn + '\', null, \'dtwTwinDelP-\')">Delete</button>' + assignControl(key) + twinPageConfirm(key, nm) + '</div>';
                 // Identity
                 var dsh = m.demographics_shares || null, shb = '';
                 if (dsh && dsh.asked && Object.keys(dsh.asked).length) shb = '<div class="dtw-muted" style="margin-bottom:0.6rem;"><b style="color:var(--dtw-ink);font-weight:600;">Shares set for this twin.</b> ' + esc(bwSharesWords(dsh.asked)) + ((dsh.notes || []).length ? ' ' + esc(dsh.notes.join(' ')) : '') + '</div>';

@@ -3648,6 +3648,20 @@ def dt_get(key):
     payload, err = _twin_or_404(user, key)
     if err:
         return err
+    PT = _portraits()
+    if PT is not None:
+        try:
+            # the twin's kinds carry faces like a room's seats (Jenna 2026-11-19): what exists attaches now; what is missing is
+            # generated once in the background and lands on the twin document
+            if PT.attach_twin_portraits(payload, _s3()):
+                DT.save_twin(_s3(), key, payload)
+            PT.schedule_twin_portraits(_s3(), key, payload)
+        except Exception as e:
+            try:
+                from prometheus import faults as _faults
+                _faults.note('digital_twins_api.twin_portraits', e)
+            except Exception:
+                pass
     out = {k: v for k, v in payload.items() if k != 'diagnostics'}
     out['runs'] = DT.product_runs(payload)       # stored runs of the retired Greenlight kind stay on the twin, never on the page
     try:   # a test's sizing travels as its figures and its line, never its basis (what was looked up for the title)

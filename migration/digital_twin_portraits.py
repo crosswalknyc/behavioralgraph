@@ -659,6 +659,125 @@ def schedule_room_portraits(s3, key: str, sess: dict, twins_by_key: Optional[dic
         return False
 
 
+# ------------------------------------------------------------ the twin's own people (Jenna 2026-11-19)
+# The twin page shows the kinds of people in the audience with the person who stands for each; those people get faces the
+# same way a room's seats do. Content-addressed like a seat (no segment), persisted onto the twin's archetypes document.
+TWIN_MAX_PER_PASS = 16
+
+
+def _rep_seat(group: dict) -> dict:
+    rep = (group or {}).get('representative') or {}
+    return {'name': rep.get('name'), 'age': rep.get('age'), 'gender': rep.get('gender') or rep.get('gender_label'), 'city': rep.get('city'), 'segment': ''}
+
+
+def attach_twin_portraits(twin: dict, s3=None) -> int:
+    """The self-heal for the twin's kinds: every representative whose
+    portrait already exists gets its url. No generation."""
+    if not twin or not enabled():
+        return 0
+    changed = 0
+    for g in ((twin.get('archetypes') or {}).get('groups') or []):
+        rep = (g or {}).get('representative')
+        if not isinstance(rep, dict) or not rep.get('name'):
+            continue
+        h = portrait_hash(_rep_seat(g))
+        if rep.get('portrait_hash') == h and rep.get('portrait_url'):
+            continue
+        if exists(s3, h):
+            rep['portrait_hash'] = h
+            rep['portrait_url'] = portrait_url(h, generation_of(h))
+            changed += 1
+    return changed
+
+
+def persist_twin_portraits(s3, key: str, hashes: dict) -> bool:
+    """Re-write the twin document in place: load fresh, put the urls on
+    the matching kinds by id, save."""
+    from migration.digital_twin_synthesis import load_twin, save_twin
+    payload = load_twin(s3, key)
+    if not isinstance(payload, dict):
+        return False
+    changed = 0
+    for g in ((payload.get('archetypes') or {}).get('groups') or []):
+        got = hashes.get(str((g or {}).get('id')))
+        rep = (g or {}).get('representative')
+        if got and isinstance(rep, dict):
+            rep['portrait_hash'], rep['portrait_url'] = got[0], portrait_url(got[0], got[1])
+            changed += 1
+    if changed:
+        save_twin(s3, key, payload)
+    return bool(changed)
+
+
+def ensure_twin_portraits(s3, key: str, twin: dict, *, max_generate: int = TWIN_MAX_PER_PASS, persist: bool = True) -> dict:
+    """Faces for the twin's kinds: cached ones attach, up to
+    ``max_generate`` missing ones are generated, the twin document is
+    re-written in place. Returns {group_id: (hash, generation)}. Never
+    raises."""
+    out = {}
+    try:
+        if not twin or not enabled():
+            return out
+        groups = [g for g in ((twin.get('archetypes') or {}).get('groups') or []) if isinstance((g or {}).get('representative'), dict) and (g['representative'].get('name'))]
+        todo = []
+        for g in groups:
+            h = portrait_hash(_rep_seat(g))
+            if exists(s3, h):
+                out[str(g.get('id'))] = (h, generation_of(h))
+            else:
+                todo.append(g)
+        todo = todo[:max(0, int(max_generate))]
+        if todo:
+            from concurrent.futures import ThreadPoolExecutor
+            demo = ((twin.get('identity') or {}).get('demographics')) or None
+
+            def _one(g):
+                side = generate_portrait(s3, _rep_seat(g), demo)
+                return (str(g.get('id')), side)
+            with ThreadPoolExecutor(max_workers=max(1, min(WORKERS, len(todo)))) as ex:
+                for gid, side in ex.map(_one, todo):
+                    if side:
+                        out[gid] = (side['hash'], int(side.get('generation') or 1))
+            print(f"[portraits] twin {str((twin.get('meta') or {}).get('name') or key)[:40]}: {len(todo)} asked, {len(out)} kinds with a face")
+        if out:
+            for g in groups:
+                got = out.get(str(g.get('id')))
+                if got:
+                    g['representative']['portrait_hash'], g['representative']['portrait_url'] = got[0], portrait_url(got[0], got[1])
+            if persist and s3 is not None and key:
+                persist_twin_portraits(s3, key, out)
+    except Exception as e:
+        _note('digital_twin_portraits.twin', e)
+    return out
+
+
+_TWIN_SCHEDULED: set = set()
+
+
+def schedule_twin_portraits(s3, key: str, twin: dict) -> bool:
+    """Start the twin pass on a daemon thread, once per process per twin
+    (inline under ``configure(background=False)``). False when off or
+    when every kind already has its face."""
+    if not twin or not enabled():
+        return False
+    groups = ((twin.get('archetypes') or {}).get('groups') or [])
+    if not groups or all(((g or {}).get('representative') or {}).get('portrait_url') for g in groups):
+        return False
+    if not _cfg.get('background', True):
+        ensure_twin_portraits(s3, key, twin)
+        return True
+    with _lock:
+        if key in _TWIN_SCHEDULED:
+            return False
+        _TWIN_SCHEDULED.add(key)
+    try:
+        threading.Thread(target=ensure_twin_portraits, args=(s3, key, twin), daemon=True, name=f"dtiq-twin-portraits-{str(key)[-12:]}").start()
+        return True
+    except Exception as e:
+        _note('digital_twin_portraits.schedule_twin', e)
+        return False
+
+
 # ------------------------------------------------------------ the route
 _HASH_RX = re.compile(r"^[0-9a-f]{16,64}$")
 
@@ -696,6 +815,7 @@ def reset_for_tests() -> None:
     with _lock:
         _known.clear()
         _miss_at.clear()
+        _TWIN_SCHEDULED.clear()
         _img_cache.clear()
     _dead_models.clear()
     configure()
@@ -704,4 +824,5 @@ def reset_for_tests() -> None:
 __all__ = ['STYLE_VERSION', 'MODEL', 'FALLBACK_MODELS', 'PREFIX', 'MAX_PER_OPEN', 'OUT_SIZE', 'THUMB_SIZE', 'URL_BASE',
            'configure', 'enabled', 'quality', 'model_cascade', 'portrait_hash', 'portrait_key', 'sidecar_key', 'portrait_url', 'seat_gender', 'city_flavor', 'appearance_word',
            'build_prompt', 'default_generator', 'generate_portrait', 'exists', 'apply_to_session', 'attach_portraits', 'persist_session_portraits',
-           'ensure_room_portraits', 'schedule_room_portraits', 'read_portrait', 'valid_hash', 'reset_for_tests']
+           'ensure_room_portraits', 'schedule_room_portraits', 'read_portrait', 'valid_hash', 'reset_for_tests',
+           'attach_twin_portraits', 'ensure_twin_portraits', 'schedule_twin_portraits', 'persist_twin_portraits', 'TWIN_MAX_PER_PASS']
