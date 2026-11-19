@@ -55,7 +55,11 @@
   .rep .q { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--olive); }
   .rep strong { display: block; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 8px 0 6px; }
   .rep span { font-size: 14px; color: var(--t2-l); line-height: 1.5; }
-  @media (max-width: 1023px) { .rep { grid-template-columns: 1fr; } }
+  .rep .twin { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 2fr; gap: var(--gutter); align-items: center; padding: 22px; border-radius: 12px; background: var(--white); border: 1px solid var(--rule-l); }
+  .rep .twin strong { margin-bottom: 0; }
+  .rep .twin p { margin: 0; font-size: 14px; color: var(--t2-l); line-height: 1.5; }
+  .rep .twin p a { display: inline; padding: 0; border: 0; border-radius: 0; background: none; color: var(--olive); text-decoration: underline; }
+  @media (max-width: 1023px) { .rep { grid-template-columns: 1fr; } .rep .twin { grid-template-columns: 1fr; gap: 0; } }
   .price3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); margin-top: 40px; }
   .price3 .c { padding: 24px 26px; border-radius: 12px; background: var(--slate); border: 1px solid var(--rule-d); }
   .price3 .k { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); margin-bottom: 12px; }
@@ -148,7 +152,7 @@
         {
           "@type": "Question",
           "name": "What is Prometheus?",
-          "acceptedAnswer": {"@type": "Answer", "text": "Prometheus is Crosswalk's research assistant. You ask a question about an audience in plain English, and it answers from the behavior of 10 million US people in the Crosswalk panel: what they search, watch, stream, buy, subscribe to and cancel, recorded day by day since 2021."}
+          "acceptedAnswer": {"@type": "Answer", "text": "Prometheus is Crosswalk's research assistant. You ask a question about an audience, and it answers from the actual behavior of 10 million US people in the Crosswalk panel: what they search, watch, stream, buy, subscribe to and cancel, recorded day by day since 2021."}
         },
         {
           "@type": "Question",
@@ -163,7 +167,7 @@
         {
           "@type": "Question",
           "name": "How is this different from a survey or a ratings service?",
-          "acceptedAnswer": {"@type": "Answer", "text": "Surveys tell you what people say. Ratings see one screen, web analytics one site, card data one checkout. Prometheus reads one person across all of it, ten million times over, census matched to the country and refreshed every morning, and its answers are checked against real outcomes rather than more surveys."}
+          "acceptedAnswer": {"@type": "Answer", "text": "Surveys tell you what people say and can recall. Ratings see one screen, web analytics; one site, credit card data; one checkout. Prometheus reads one person across all of it, ten million times over, census matched to the country and refreshed every morning, and its answers are checked against real outcomes rather than more surveys."}
         },
         {
           "@type": "Question",
@@ -238,11 +242,11 @@
   <div class="wrap">
     <div class="eyebrow"><span class="n">03</span> How it works</div>
     <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Ask Prometheus. It answers from that record.</h2>
-    <p class="lead" style="margin-bottom:44px">Every answer is read from the longitudinal behavior of the people who fit your question, and it lands as an Excel file or a full PowerPoint deck.</p>
+    <p class="lead" style="margin-bottom:44px">Every answer is read from the longitudinal behavior of the people who fit your question or cohort, and it lands as an Excel file or a full PowerPoint deck.</p>
     <div class="caps">
       <div><div class="n">01</div><h3>You ask.</h3><p>Any question, in plain English. Type it or say it.</p></div>
-      <div><div class="n">02</div><h3>Prometheus reads the record.</h3><p>It finds the people who fit, reads five years of what they did, and calculates the answer. A quick count takes seconds. A full read, a few minutes.</p></div>
-      <div><div class="n">03</div><h3>You get the answer.</h3><p>Percentages and people, scaled up to the country. Download it as an Excel file, or export a full PowerPoint deck rich with high-level insights and analysis that tell you how to make the data actionable. Ask it to email you the file, cut the audience, or ask the next question.</p></div>
+      <div><div class="n">02</div><h3>Prometheus reads the record.</h3><p>It finds the people who fit your query, reads five years of what they did, and calculates the answer. A quick count takes seconds. A full read, a few minutes.</p></div>
+      <div><div class="n">03</div><h3>You get the answer.</h3><p>Percentages and people, scaled up to the country. Download it as an Excel file, or export a full PowerPoint deck, rich with high-level insights and analysis that tell you how to make the data actionable. Ask it to email you the file, to cut the audience, or simply to move on to the next question.</p></div>
     </div>
   </div>
 </section>
@@ -255,7 +259,7 @@
         <h2 class="h-l">Who watches Landman, and what do they buy?</h2>
       </div>
       <div>
-        <p class="lead">One question, asked as written. The answer came back in about three minutes: 6,184,372 US viewers, half of them 35 to 54 and just over half men. Their buying is everyday grocery and family goods first, and the lift against the average American sits in workwear, trucks and hardware. That is a marketing plan in one answer.</p>
+        <p class="lead">One question, asked as written. The answer came back in about three minutes: 6,184,372 US viewers, half of them 35 to 54, and just over 50% men. Their buying is everyday grocery and family goods first, and the delta against the average American sits in workwear, trucks and hardware. A marketing plan in one answer.</p>
       </div>
     </div>
     <div class="record">
@@ -269,20 +273,20 @@
 <section class="band light" id="reports">
   <div class="wrap">
     <div class="eyebrow"><span class="n">05</span> The breadth</div>
-    <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Nine kinds of answer, and the digital twins.</h2>
+    <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Nine types of answers, and the digital twins.</h2>
     <p class="lead" style="margin-bottom:40px">The syndicated reports: one question each, the same ten million people behind all of them.</p>
     <div class="rep">
       <a href="profile-iq.html"><div class="q">Who is this audience?</div><strong>Profile IQ</strong><span>Who engages with a title, talent, brand, or team, and what they already buy, watch, and use.</span></a>
       <a href="subscriber-iq.html"><div class="q">Who signed up, and why?</div><strong>Subscriber IQ</strong><span>Signups, cancels, and switches between services, tied to the titles that moved them.</span></a>
       <a href="digital-journey-iq.html"><div class="q">How did they get there?</div><strong>Digital Journey IQ</strong><span>The path from the first search to the purchase, subscription, or cancel, in order.</span></a>
       <a href="attribution-iq.html"><div class="q">Which touchpoint moved them?</div><strong>Attribution IQ</strong><span>Every touch on a campaign, paid and organic, with the credit split along the path people took.</span></a>
-      <a href="brand-partnership-iq.html"><div class="q">What is the partnership worth?</div><strong>Brand Partnership IQ</strong><span>Earned media, engagement, lift, and conversion on the same people, priced after it ran.</span></a>
+      <a href="brand-partnership-iq.html"><div class="q">What is the partnership worth?</div><strong>Brand Partnership IQ</strong><span>Earned media, engagement, lift, and conversion on the same people, evaluated after it ran.</span></a>
       <a href="flywheel-iq.html"><div class="q">What does the title do next?</div><strong>Flywheel IQ</strong><span>From one title to the next owned surface, the checkout, and the lapsed accounts that came back.</span></a>
       <a href="trends-iq.html"><div class="q">What is trending?</div><strong>Trends IQ</strong><span>What is trending across the internet, what people engage with most, and which IP they buy: books, Wattpad, movie and Broadway tickets.</span></a>
       <a href="ranker-iq.html"><div class="q">What is number one?</div><strong>Rankers IQ</strong><span>FAST, podcasts, gaming, streaming and more, ranked every morning on what people played.</span></a>
-      <a href="fin-iq.html"><div class="q">What is the consumer doing on this name?</div><strong>Fin IQ</strong><span>Tickers and platforms read through consumer behavior, for the desk.</span></a>
+      <a href="fin-iq.html"><div class="q">What is the consumer doing on this KPI?</div><strong>Fin IQ</strong><span>Tickers, KPIs and platforms read through daily deltas in consumer interaction.</span></a>
+      <div class="twin"><div><div class="q">What are they thinking?</div><strong>Digital Twins IQ</strong></div><p>Test a plan, a title, a price, or a product launch on ten million twins built from real behavior before you spend. <a href="digital-twins.html">See how Digital Twins IQ works</a>. <b>Beyond the menu.</b> Those are the syndicated reports. Ask literally any question about these ten million people, and Prometheus answers it.</p></div>
     </div>
-    <p class="so-what" style="margin-top:36px"><b>Digital twins.</b> Test a plan, a title, or a price on ten million twins built from real behavior before you spend. <a href="digital-twins.html" style="text-decoration:underline">See how Twin IQ works</a>. <b>Beyond the menu.</b> Those are the syndicated reports. Ask literally any question about these ten million people, and Prometheus answers it.</p>
   </div>
 </section>
 
@@ -304,7 +308,7 @@
       <div class="r"><span class="q">Freshness</span><span class="them">Last quarter, or last year</span><span class="us">Yesterday. Refreshed every morning</span></div>
       <div class="r"><span class="q">Scale</span><span class="them">A sample that speaks for itself</span><span class="us">Census matched, projected to 329.9M Americans</span></div>
       <div class="r"><span class="q">Checked against</span><span class="them">More surveys</span><span class="us">Real outcomes: elections, ratings, accounts opened</span></div>
-      <div class="r"><span class="q">Speed</span><span class="them">Weeks, through a research team</span><span class="us">Minutes, in plain English, any hour of the day</span></div>
+      <div class="r"><span class="q">Speed</span><span class="them">Weeks, through a research team</span><span class="us">Minutes, any hour of the day</span></div>
     </div>
   </div>
 </section>
@@ -313,9 +317,9 @@
   <div class="wrap">
     <div class="eyebrow"><span class="n">07</span> Where it lives</div>
     <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">On every page, on your desktop, and in your API.</h2>
-    <p class="lead" style="margin-bottom:44px">Type to it or talk to it. The same brain answers wherever you are.</p>
+    <p class="lead" style="margin-bottom:44px;max-width:none">Type to it or talk to it. The same brain answers wherever you are.</p>
     <div class="caps">
-      <div><div class="n">01</div><h3>The dashboard.</h3><p>Prometheus floats on every page. Open a profile and ask about it; the answer knows what you are looking at.</p></div>
+      <div><div class="n">01</div><h3>The dashboard.</h3><p>Prometheus floats on every page. Open a profile and ask about it; the query knows what you are looking at.</p></div>
       <div><div class="n">02</div><h3>Your desktop.</h3><p>A standalone Prometheus app, same account, same balance, same library, without opening a browser.</p></div>
       <div><div class="n">03</div><h3>Your API.</h3><p>Your own tools ask the same questions and get the same files, with one key and one wallet.</p></div>
     </div>
@@ -330,7 +334,7 @@
         <h2 class="h-l">Minutes, not weeks. Cents, not a budget line.</h2>
       </div>
       <div>
-        <p class="lead">The question that used to wait for a research project now gets answered before the meeting ends. And because every answer comes from the same ten million people, the same question gets the same answer every time, so you can act on it the same day.</p>
+        <p class="lead">The question that used to wait for the time and budget of a research project now gets answered before the meeting ends. You can act on it the same day.</p>
       </div>
     </div>
     <div class="price3">
@@ -348,7 +352,7 @@
     <div class="faq">
       <div class="item">
         <h3>What is Prometheus?</h3>
-        <p>Crosswalk's research assistant. You ask a question about an audience in plain English, and it answers from the behavior of 10 million US people in the Crosswalk panel: what they search, watch, stream, buy, subscribe to and cancel, recorded day by day since 2021.</p>
+        <p>Crosswalk's research assistant. You ask a question about an audience, and it answers from the actual behavior of 10 million US people in the Crosswalk panel: what they search, watch, stream, buy, subscribe to and cancel, recorded day by day since 2021.</p>
       </div>
       <div class="item">
         <h3>What can I ask it?</h3>
@@ -360,7 +364,7 @@
       </div>
       <div class="item">
         <h3>How is this different from a survey or a ratings service?</h3>
-        <p>Surveys tell you what people say. Ratings see one screen, web analytics one site, card data one checkout. Prometheus reads one person across all of it, ten million times over, census matched and refreshed every morning, and its answers are checked against real outcomes rather than more surveys.</p>
+        <p>Surveys tell you what people say and can recall. Ratings see one screen, web analytics; one site, credit card data; one checkout. Prometheus reads one person across all of it, ten million times over, census matched and refreshed every morning, and its answers are checked against real outcomes rather than more surveys.</p>
       </div>
       <div class="item">
         <h3>What does it cost?</h3>
