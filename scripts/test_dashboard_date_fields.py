@@ -33,6 +33,14 @@ What this suite holds:
      (migration.event_window through prometheus.data_floor). The guard
      never writes the date itself, and the old form defaults are left
      exactly as they were.
+  7. The refusal behind the page (Jenna 2026-11-19: "Yes, add the same
+     refusal behind all four"). Four places held the date on the page
+     with nothing on the server behind it: the Attribution IQ campaign
+     form, the Microdramas custom range, the Attribution IQ as-of and
+     asset dates, and a Rankers end date before the board's first day.
+     Each one: a date before the limit, on it, after it, a range that
+     crosses it, and a value that is not a date. Each route asks before
+     it computes, charges, queues or stores anything.
 
 Hermetic: no model, no live store, no mail, no app boot. The page
 functions are lifted from templates/index.html and run under node; when
@@ -600,6 +608,270 @@ def section_one_date():
     check('the server refusals the forms already had are still there', 'def refuse_form_window_before_data_floor' in APP_SRC)
 
 
+def route_source(name: str) -> str:
+    """Source of one route function in app.py, up to the next route."""
+    m = re.search(r'\ndef ' + re.escape(name) + r'\(.*?(?=\n@app\.route|\n@app\.before_request|\ndef [a-zA-Z_])', APP_SRC, re.S)
+    return m.group(0) if m else ''
+
+
+def section_behind_the_page():
+    print('7. The refusal behind the page')
+    import dated_requests as DR
+    import trends_iq as TIQ
+    from prometheus import data_floor as DF
+
+    START_LINE = SENTENCE + ' Choose a start date on or after January 1, 2021.'
+    END_LINE = SENTENCE + ' Choose an end date on or after January 1, 2021.'
+    DATE_LINE = SENTENCE + ' Choose a date on or after January 1, 2021.'
+    check('the start-date line is the one the other dashboard forms use', DF.form_line() == START_LINE, DF.form_line())
+
+    # ---- 1. the Attribution IQ campaign form: launch date, end date, phases (a range; not strict)
+    # ---- 2. the Microdramas custom range (the same call)
+    for label in ('campaign form', 'Microdramas range'):
+        check(f'{label}: a start before the date is refused', DR.refusal(start='2019-12-30', end='2020-06-30') == START_LINE)
+        check(f'{label}: the day before the date is refused', DR.refusal(start='2020-12-31') == START_LINE)
+        check(f'{label}: a start on the date runs', DR.refusal(start=FLOOR, end='2021-03-01') == '')
+        check(f'{label}: a start after the date runs', DR.refusal(start='2025-07-01', end='2026-06-30') == '')
+        check(f'{label}: a range that crosses the date is refused with the start-date line',
+              DR.refusal(start='2019-12-30', end='2021-12-14') == START_LINE)
+        check(f'{label}: an end before the date is refused', DR.refusal(start='2022-01-01', end='2020-01-01') == END_LINE)
+        check(f'{label}: an end before the date with no start is refused', DR.refusal(end='2020-01-01') == END_LINE)
+        for bad in ('12/30/2019', 'abc', '2019-13-45', '20191230', '2019'):
+            check(f'{label}: {bad!r} is not a date and is not judged', DR.refusal(start=bad, end=bad) == '')
+        for none in (None, '', '   ', True, False):
+            check(f'{label}: {none!r} names no date and runs', DR.refusal(start=none, end=none) == '')
+    check('a date with a time after it is read by its day', DR.refusal(start='2019-12-30T00:00:00') == START_LINE
+          and DR.refusal(start='2022-12-30T00:00:00') == '')
+
+    # ---- 3. the Attribution IQ as-of date and asset From / To (strict: they go straight into the read)
+    check('as-of before the date is refused', DR.refusal(on='2019-12-30', strict=True) == DATE_LINE)
+    check('as-of the day before the date is refused', DR.refusal(on='2020-12-31', strict=True) == DATE_LINE)
+    check('as-of on the date runs', DR.refusal(on=FLOOR, strict=True) == '')
+    check('as-of after the date runs', DR.refusal(on='2026-01-30', strict=True) == '')
+    check('no as-of runs', DR.refusal(on=None, strict=True) == '' and DR.refusal(on='', strict=True) == '')
+    check('asset From before the date is refused', DR.refusal(start='2019-12-30', end='2020-06-30', strict=True) == START_LINE)
+    check('asset From on the date runs', DR.refusal(start=FLOOR, end='2021-02-01', strict=True) == '')
+    check('asset From after the date runs', DR.refusal(start='2026-01-01', end='2026-02-01', strict=True) == '')
+    check('an asset range that crosses the date is refused', DR.refusal(start='2019-12-30', end='2022-01-01', strict=True) == START_LINE)
+    check('asset To before the date is refused', DR.refusal(end='2020-01-01', strict=True) == END_LINE)
+    for bad in ('12/30/2019', 'abc', '2026-02-30', '2026-1-5', "2026-01-01' OR 1=1 --", '2026-01-01T00:00:00', "2026-01-01')"):
+        check(f'as-of {bad!r} is not a date and is refused', DR.refusal(on=bad, strict=True) == DR.UNREADABLE)
+        check(f'asset From {bad!r} is not a date and is refused', DR.refusal(start=bad, end='2026-02-01', strict=True) == DR.UNREADABLE)
+        check(f'asset To {bad!r} is not a date and is refused', DR.refusal(start='2026-01-01', end=bad, strict=True) == DR.UNREADABLE)
+    check('the weekly one-pager (not strict): an as-of before the date is refused, text that is not a date is left alone',
+          DR.refusal(on='2020-05-05') == DATE_LINE and DR.refusal(on='Jan 30, 2026') == '' and DR.refusal(on='2026-01-30') == '')
+
+    lines = [START_LINE, END_LINE, DATE_LINE, DR.UNREADABLE]
+    check('every floor line opens with the standing sentence', all(DR.is_floor_refusal(x) for x in lines[:3]) and not DR.is_floor_refusal(DR.UNREADABLE))
+    check('no line carries a dash or an internal word', not re.search(
+        r'[\u2013\u2014]|floor|clamp|payload|param|query|sql|server|invalid|iso|format|strict', ' '.join(lines), re.I), lines)
+    check('every line is short, full sentences', all(x.endswith('.') and len(x.split()) <= 22 for x in lines), lines)
+    dr_src = open(os.path.join(ROOT, 'dated_requests.py'), encoding='utf-8').read()
+    check('the caller never writes the date or the sentence itself', '2021' not in dr_src and 'can be pulled' not in dr_src)
+    check('the caller only reads the shared helper', 'from prometheus import data_floor' in dr_src and 'window_error(' in dr_src
+          and 'form_line()' in dr_src and 'DATA_FLOOR =' not in dr_src)
+    real = DR._floor
+    try:
+        DR._floor = lambda: (_ for _ in ()).throw(RuntimeError('down'))
+        check('a fault lets the request through as before', DR.refusal(start='2019-01-01', on='abc', strict=True) == '' and DR.floor_iso() == '')
+    finally:
+        DR._floor = real
+    check('the floor handed back with a refusal is the shared constant', DR.floor_iso() == EW.DATA_FLOOR)
+
+    # ---- 4. Rankers: an end date before the board's first held day
+    check('an end date before the board is refused with its first day',
+          TIQ.first_day_refusal('2023-12-31', BOARD_FIRST) == 'This board starts on Jan 1, 2026.')
+    check('the day before the first day is refused', TIQ.first_day_refusal('2025-12-31', BOARD_FIRST) == 'This board starts on Jan 1, 2026.')
+    check('an end date on the first day runs', TIQ.first_day_refusal(BOARD_FIRST, BOARD_FIRST) == '')
+    check('an end date after the first day runs', TIQ.first_day_refusal('2026-06-30', BOARD_FIRST) == '')
+    check('a range that crosses the first day (end inside the board) is not refused here',
+          TIQ.first_day_refusal('2026-01-05', BOARD_FIRST) == '' and TIQ.range_refusal(30) == '')
+    for bad in ('12/31/2023', 'abc', '2026-13-45', '2023-12-31x', None, '', 20231231):
+        check(f'{bad!r} names no end date and runs as before', TIQ.first_day_refusal(bad, BOARD_FIRST) == '')
+    check('the line uses the real first day, whatever it is',
+          TIQ.first_day_refusal('2024-01-01', '2025-03-09') == 'This board starts on Mar 9, 2025.'
+          and TIQ.first_day_refusal('2024-01-01', '2024-12-25') == 'This board starts on Dec 25, 2024.')
+    check('first day not known: the data floor is the limit, with the standing sentence',
+          TIQ.first_day_refusal('2020-06-01', '') == SENTENCE and TIQ.first_day_refusal('2023-06-01', '') == '')
+    check('the line is the page\'s own line', 'This board starts on ' in js_function(HTML, '_tiqRangeNote'))
+
+    real_list, calls = TIQ.list_available_dates, []
+    today = TIQ._today_iso()
+    try:
+        TIQ._first_day_cache.update(at=0.0, day='')
+        TIQ.list_available_dates = lambda *a, **k: (calls.append(1) or [today, '2026-03-02', '2026-01-01', '2026-01-02'])
+        check('the first day is the oldest day the board lists', TIQ.board_first_day() == '2026-01-01')
+        check('the first day is kept, not read again on the next request', TIQ.board_first_day() == '2026-01-01' and len(calls) == 1)
+        check('with no first day handed in, the board\'s own is used',
+              TIQ.first_day_refusal('2023-12-31') == 'This board starts on Jan 1, 2026.' and TIQ.first_day_refusal('2026-02-01') == '')
+        TIQ._first_day_cache.update(at=0.0, day='')
+        TIQ.list_available_dates = lambda *a, **k: [today]
+        check('a list holding only today is not a first day', TIQ.board_first_day() == '')
+        check('so a past date is never refused on a store fault', TIQ.first_day_refusal('2026-02-01') == '')
+        check('and the data floor still holds then', TIQ.first_day_refusal('2019-02-01') == SENTENCE)
+        TIQ.list_available_dates = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('down'))
+        check('a fault reading the list refuses nothing', TIQ.board_first_day() == '' and TIQ.first_day_refusal('2026-02-01') == '')
+    finally:
+        TIQ.list_available_dates = real_list
+        TIQ._first_day_cache.update(at=0.0, day='')
+    tiq_src = open(os.path.join(ROOT, 'trends_iq.py'), encoding='utf-8').read()
+    new_tiq = tiq_src[tiq_src.index('_FIRST_DAY_TTL_S = '):tiq_src.index('def get_filter_options()')]
+    check('no first day and no floor date is written into the board code',
+          '2026-01-01' not in new_tiq and '2021' not in new_tiq and 'can be pulled' not in new_tiq)
+
+    # ---- the door in app.py, and each route asking before it does anything
+    door = route_source('_dated_request_refused')
+    check('one door for every dated route', bool(door) and 'dated_requests' in door and '_dr.refusal(' in door
+          and bool(re.search(r"return jsonify\(_body\), 400", door)))
+    check('the door is fail-safe', door.rstrip().endswith('return None') and 'except Exception' in door)
+    try:
+        import flask
+        fapp = flask.Flask('date_fields_door')
+        ns = {'jsonify': flask.jsonify}
+        exec(door, ns)
+        with fapp.test_request_context('/'):
+            r1 = ns['_dated_request_refused'](start='2019-12-30', end='2021-12-14')
+            r2 = ns['_dated_request_refused'](on="2026-01-01' OR 1=1", strict=True)
+            r3 = ns['_dated_request_refused'](start='2021-01-01', end='2021-12-14')
+            r4 = ns['_dated_request_refused'](on='2026-01-30', strict=True)
+            b1, b2 = r1[0].get_json(), r2[0].get_json()
+        check('a refused request answers 400 with the sentence and nothing else',
+              r1[1] == 400 and b1 == {'success': False, 'error': START_LINE, 'data_floor': FLOOR}, b1)
+        check('a value that is not a date answers 400 with its own plain line',
+              r2[1] == 400 and b2 == {'success': False, 'error': DR.UNREADABLE}, b2)
+        check('a request on or after the date is not touched', r3 is None and r4 is None)
+        # the real route functions, lifted from app.py and run with stand-ins for the work they would do
+        calls = []
+
+        class Work:
+            def __init__(self, name):
+                self.name = name
+
+            def __getattr__(self, attr):
+                def run(*a, **k):
+                    calls.append(f'{self.name}.{attr}')
+                    if attr == 'range_refusal':
+                        return TIQ.range_refusal(*a)
+                    if attr == 'first_day_refusal':
+                        return TIQ.first_day_refusal(a[0], BOARD_FIRST)
+                    return {'success': True}
+                return run
+
+        import traceback as _tb
+        rns = {'request': flask.request, 'jsonify': flask.jsonify, 'Response': flask.Response, 'traceback': _tb, 're': re,
+               '_require_microdramas_iq': lambda: (True, None), '_require_intent_iq': lambda slug: (True, None),
+               '_require_trends_iq': lambda: (True, None), '_microdramas_iq': Work('miq'), '_intent_iq': Work('iiq'),
+               '_mta_iq': Work('mta'), '_trends_iq': Work('tiq')}
+        for name in ('_dated_request_refused', 'api_microdramas_iq_data', 'api_microdramas_iq_competitors', 'api_microdramas_iq_all',
+                     'api_intent_assets', 'api_intent_in_flight', 'api_intent_mta', 'api_trends_iq_data'):
+            exec(route_source(name), rns)
+
+        def hit(fn, path, method='GET', body=None, **kw):
+            del calls[:]
+            import contextlib, io
+            with fapp.test_request_context(path, method=method, json=body), contextlib.redirect_stderr(io.StringIO()):
+                out = rns[fn](**kw)
+            resp, code = out if isinstance(out, tuple) else (out, 200)
+            return code, (resp.get_json() or {}), list(calls)
+
+        for fn in ('api_microdramas_iq_data', 'api_microdramas_iq_competitors', 'api_microdramas_iq_all'):
+            code, js, did = hit(fn, '/x', 'POST', {'start_date': '2019-12-30', 'end_date': '2021-06-01'})
+            check(f'{fn}: a range that reaches before the date answers 400 and computes nothing',
+                  (code, js.get('error'), did) == (400, START_LINE, []), (code, js, did))
+            code, js, did = hit(fn, '/x', 'POST', {'start_date': FLOOR, 'end_date': '2021-06-01'})
+            check(f'{fn}: a range from the date forward runs', code == 200 and len(did) == 1 and did[0].startswith('miq.compute'), (code, did))
+            code, js, did = hit(fn, '/x', 'POST', {'window_days': 7})
+            check(f'{fn}: a preset with no dates runs', code == 200 and len(did) == 1, (code, did))
+            code, js, did = hit(fn, '/x', 'POST', {'start_date': 'abc', 'end_date': '2021-06-01'})
+            check(f'{fn}: a value that is not a date runs as it did before', code == 200 and len(did) == 1, (code, did))
+        code, js, did = hit('api_intent_assets', '/x?window=custom&from=2019-01-01&to=2022-01-01', title_slug='t')
+        check('asset read: From before the date answers 400 and reads nothing', (code, js.get('error'), did) == (400, START_LINE, []), (code, js, did))
+        code, js, did = hit('api_intent_assets', "/x?window=custom&from=2026-01-01'%20OR%201=1", title_slug='t')
+        check('asset read: a From that is not a date never reaches the read', (code, js.get('error'), did) == (400, DR.UNREADABLE, []), (code, js, did))
+        code, js, did = hit('api_intent_assets', '/x?window=custom&from=2021-01-01&to=2021-03-01', title_slug='t')
+        check('asset read: a range from the date forward runs', (code, did) == (200, ['iiq.get_assets']), (code, did))
+        code, js, did = hit('api_intent_assets', '/x?window=all', title_slug='t')
+        check('asset read: no dates runs', (code, did) == (200, ['iiq.get_assets']), (code, did))
+        for fn, work in (('api_intent_in_flight', 'iiq.get_in_flight'), ('api_intent_mta', 'iiq.get_overview')):
+            code, js, did = hit(fn, '/x?as_of=2020-12-31', title_slug='t')
+            check(f'{fn}: as-of before the date answers 400 and reads nothing', (code, js.get('error'), did) == (400, DATE_LINE, []), (code, js, did))
+            code, js, did = hit(fn, '/x?as_of=2026-01-30%27)', title_slug='t')
+            check(f'{fn}: an as-of that is not a date never reaches the read', (code, js.get('error'), did) == (400, DR.UNREADABLE, []), (code, js, did))
+            code, js, did = hit(fn, '/x?as_of=2021-01-01', title_slug='t')
+            check(f'{fn}: as-of on the date runs', code != 400 and work in did, (code, did))
+            code, js, did = hit(fn, '/x', title_slug='t')
+            check(f'{fn}: no as-of runs', code != 400 and work in did, (code, did))
+        code, js, did = hit('api_trends_iq_data', '/x', 'POST', {'asof': '2023-12-31', 'lookback_days': 1})
+        check('board: an end date before its first day answers 400 with the line and computes nothing',
+              (code, js) == (400, {'success': False, 'range_refused': True, 'error': 'This board starts on Jan 1, 2026.'})
+              and 'tiq.compute_view' not in did, (code, js, did))
+        code, js, did = hit('api_trends_iq_data', '/x', 'POST', {'asof': BOARD_FIRST, 'lookback_days': 1})
+        check('board: an end date on its first day runs', code != 400 and 'tiq.compute_view' in did, (code, did))
+        code, js, did = hit('api_trends_iq_data', '/x', 'POST', {'asof': '2026-06-30', 'lookback_days': 200})
+        check('board: a range that crosses its first day runs on the days it has', code != 400 and 'tiq.compute_view' in did, (code, did))
+        code, js, did = hit('api_trends_iq_data', '/x', 'POST', {'asof': '12/31/2023', 'lookback_days': 1})
+        check('board: an end date that is not a date is dropped and the live board runs, as before',
+              code != 400 and 'tiq.compute_view' in did and 'tiq.first_day_refusal' not in did, (code, did))
+        code, js, did = hit('api_trends_iq_data', '/x', 'POST', {'lookback_days': 7})
+        check('board: a live request never looks up the first day', 'tiq.first_day_refusal' not in did and 'tiq.compute_view' in did, did)
+    except ImportError:
+        print('  note flask is not on this machine: the door and route checks were skipped')
+
+    def asks_first(fn, before, strict=None, gate=None):
+        src = route_source(fn)
+        ok = bool(src) and '_dated_request_refused(' in src
+        at = src.index('_dated_request_refused(') if ok else -1
+        for b in before:
+            ok = ok and b in src and at < src.index(b)
+        if gate:
+            ok = ok and gate in src and src.index(gate) < at
+        if strict is not None:
+            ok = ok and (('strict=True' in src[at:at + 400]) == strict)
+        return ok
+
+    check('the campaign form asks before the funds check, the job record, the charge and the run',
+          asks_first('submit_intent_ingest', ['has_credits_for(', 'jobs[job_id] = {', '_save_job_status_to_s3(', 'consume_credit(',
+                                              'spawn_heavy_analysis('], strict=False, gate='user_can_run_analysis_module('))
+    ing = route_source('submit_intent_ingest')
+    check('the campaign form reads the launch date, the end date and every phase',
+          '_dated_request_refused(start=launch_date, end=end_date)' in ing
+          and "start=_iiing_ph.get('start_date'), end=_iiing_ph.get('end_date')" in ing)
+    for fn, work in (('api_microdramas_iq_data', '_microdramas_iq.compute_view('),
+                     ('api_microdramas_iq_competitors', '_microdramas_iq.compute_competitors_view('),
+                     ('api_microdramas_iq_all', '_microdramas_iq.compute_all_platforms_view(')):
+        check(f'{fn} asks before it computes', asks_first(fn, [work], strict=False, gate='_require_microdramas_iq()'))
+    check('the asset read asks first, and takes only whole dates',
+          asks_first('api_intent_assets', ['_intent_iq.get_assets('], strict=True, gate='_require_intent_iq(title_slug)'))
+    check('the in-flight read asks first, and takes only whole dates',
+          asks_first('api_intent_in_flight', ['_intent_iq.get_in_flight('], strict=True, gate='_require_intent_iq(title_slug)'))
+    check('the touchpoint read asks first, and takes only whole dates',
+          asks_first('api_intent_mta', ['_intent_iq.get_overview(', '_mta_iq.compute_mta_coefficients('], strict=True,
+                     gate='_require_intent_iq(title_slug)'))
+    check('the weekly one-pager asks before it is drawn',
+          asks_first('api_intent_weekly_pdf', ['_intent_iq.get_overview(', 'build_weekly_pdf('], strict=False,
+                     gate='_require_intent_iq(title_slug)'))
+    exp = route_source('api_intent_export_xlsx')
+    check('the Excel export asks before it is built, and takes only whole dates',
+          '_dated_request_refused(on=as_of, strict=True)' in exp
+          and exp.index('_dated_request_refused(') < exp.index('build_workbook(') and exp.index('_require_intent_iq(') < exp.index('_dated_request_refused('))
+    tiq_route = route_source('api_trends_iq_data')
+    check('the board asks about its first day before it computes',
+          '_trends_iq.first_day_refusal(asof)' in tiq_route
+          and tiq_route.index('first_day_refusal(') < tiq_route.index('_trends_iq.compute_view(')
+          and tiq_route.index('_require_trends_iq()') < tiq_route.index('first_day_refusal('))
+    check('a refused end date answers the way the page already reads (the line beside the fields, no retry)',
+          bool(re.search(r"return jsonify\(\{'success': False, 'range_refused': True,\s*'error': _tiq_range_why\}\), 400", tiq_route))
+          and 'data.range_refused' in js_function(HTML, 'applyTrendsIQFilters'))
+    check('the first day is only looked up for a dated request', 'if not _tiq_range_why and asof:' in tiq_route)
+    check('the shared helper and its constant are as they were',
+          EW.DATA_FLOOR == '2021-01-01' and EW.floor_status('2019-01-01', '2022-01-01') == 'straddle'
+          and EW.floor_status('2019-01-01', '2020-01-01') == 'before' and EW.floor_status('2021-01-01') == 'ok'
+          and EW.floor_status('abc') == '')
+    check('the form refusals the other routes already had are still there',
+          DF.form_error('/api/submit', 'POST', {'start_date': '2019-01-01'}) == START_LINE
+          and DF.form_error('/api/intent-ingest/submit', 'POST', {'launch_date': '2019-01-01'}) == '')
+
+
 def main():
     have_node = bool(shutil.which('node'))
     if have_node:
@@ -609,6 +881,7 @@ def main():
     if have_node:
         section_floor()
     section_one_date()
+    section_behind_the_page()
     if not have_node:
         note = 'node is not on this machine: the page-function checks were skipped'
         if os.environ.get('DATE_FIELDS_NODE_REQUIRED') == '1':

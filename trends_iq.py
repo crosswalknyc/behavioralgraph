@@ -13017,6 +13017,104 @@ def range_refusal(lookback_days) -> str:
     return RANGE_REFUSAL if n < 1 else ''
 
 
+# The board's first held day (2026-11-19, Jenna: "add the same refusal
+# behind all four"). The page holds Start and End to the days the board
+# has; this is the lock behind it for an end date before the first of
+# those days. The day is the oldest one list_available_dates() offers,
+# the same day the page's fields stop at. It is read, never written
+# here, and kept for a few minutes so a dated request does not walk the
+# store every time.
+_FIRST_DAY_TTL_S = 900
+_first_day_cache = {'at': 0.0, 'day': ''}
+_BOARD_MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+
+
+def _board_day_ok(day) -> bool:
+    """A whole YYYY-MM-DD calendar day."""
+    s = str(day or '')
+    if len(s) != 10 or s[4] != '-' or s[7] != '-':
+        return False
+    try:
+        datetime.strptime(s, '%Y-%m-%d')
+    except ValueError:
+        return False
+    return True
+
+
+def board_day_label(day) -> str:
+    """An ISO day in the page's own short form (month name, day, year).
+    '' when the value is not a day."""
+    if not _board_day_ok(day):
+        return ''
+    y, m, d = str(day).split('-')
+    return f"{_BOARD_MONTHS[int(m) - 1]} {int(d)}, {y}"
+
+
+def board_first_day(force: bool = False) -> str:
+    """The first day the board holds, or '' when it cannot be told.
+
+    A list that holds only today means the store could not be read (or
+    holds nothing yet): that is 'cannot be told', never 'the board
+    starts today', so a past date is not refused on a fault."""
+    now = time.time()
+    if not force and _first_day_cache['day'] \
+            and (now - _first_day_cache['at']) < _FIRST_DAY_TTL_S:
+        return _first_day_cache['day']
+    try:
+        days = [d for d in (list_available_dates() or []) if _board_day_ok(d)]
+    except Exception:
+        return ''
+    if len(days) < 2:
+        return ''
+    first = min(days)
+    _first_day_cache['day'] = first
+    _first_day_cache['at'] = now
+    return first
+
+
+def _board_data_floor() -> tuple:
+    """(floor day, its standing sentence) from the one shared place, or
+    ('', '') when it cannot be read."""
+    try:
+        try:
+            from migration import event_window as _ew
+        except ImportError:
+            import event_window as _ew  # twin layout
+        return str(_ew.DATA_FLOOR or ''), str(_ew.data_floor_sentence() or '')
+    except Exception:
+        return '', ''
+
+
+def first_day_refusal(asof, first_day=None) -> str:
+    """The line for a request whose end date is before the first day the
+    board holds, or '' when it may run.
+
+    asof        the end date the request names (a past day), or nothing
+    first_day   the board's first day when the caller already has it;
+                read from the store when not given
+
+    The line names the board's real first day ("This board starts on
+    <that day>."). When that day cannot be told, the data floor is the
+    limit and its standing sentence is the line. A value that is not a
+    day names no end date and runs as before. Never raises."""
+    try:
+        if not _board_day_ok(asof):
+            return ''
+        end = str(asof)
+        first = board_first_day() if first_day is None else str(first_day or '')
+        floor, sentence = _board_data_floor()
+        if _board_day_ok(first):
+            if end < first:
+                return f"This board starts on {board_day_label(first)}."
+            return ''
+        if _board_day_ok(floor) and end < floor:
+            return sentence
+    except Exception:
+        return ''
+    return ''
+
+
 def get_filter_options() -> dict:
     """Filter dropdown choices for the Trends view.
 

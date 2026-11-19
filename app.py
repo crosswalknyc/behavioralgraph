@@ -562,6 +562,28 @@ def reject_if_access_expired():
     return redirect(url_for('login_page'))
 
 
+def _dated_request_refused(start=None, end=None, on=None, strict=False):
+    """The refusal behind a dashboard date field (Jenna 2026-11-19: "add
+    the same refusal behind all four"). Returns the response to send
+    when a request's date is before the data floor (or, with strict, is
+    not a date at all), else None. Called before anything is computed,
+    charged, queued or stored. The date, the sentence and the judgement
+    live in migration.event_window through prometheus.data_floor;
+    dated_requests only reads them. Fail-safe: any fault returns None
+    and the request runs exactly as before."""
+    try:
+        import dated_requests as _dr
+        _why = _dr.refusal(start=start, end=end, on=on, strict=strict)
+        if not _why:
+            return None
+        _body = {'success': False, 'error': _why}
+        if _dr.is_floor_refusal(_why):
+            _body['data_floor'] = _dr.floor_iso()
+        return jsonify(_body), 400
+    except Exception:
+        return None
+
+
 @app.before_request
 def refuse_form_window_before_data_floor():
     """No data can be pulled from before January 1, 2021 (Jenna
@@ -19555,6 +19577,13 @@ def api_trends_iq_data():
             _tiq_range_why = _trends_iq.range_refusal(req.get('lookback_days'))
         except Exception:
             _tiq_range_why = ''
+        if not _tiq_range_why and asof:
+            # An end date before the first day the board holds is told
+            # so, with that day, and never run (2026-11-19).
+            try:
+                _tiq_range_why = _trends_iq.first_day_refusal(asof)
+            except Exception:
+                _tiq_range_why = ''
         if _tiq_range_why:
             return jsonify({'success': False, 'range_refused': True,
                             'error': _tiq_range_why}), 400
@@ -19730,6 +19759,13 @@ def api_microdramas_iq_data():
         return err
     try:
         req = request.get_json(silent=True) or {}
+        # No data before the data floor (2026-11-19): a custom range that
+        # reaches before it is told so; nothing is computed.
+        _miq_refused = _dated_request_refused(
+            start=(req.get('start_date') if isinstance(req, dict) else None),
+            end=(req.get('end_date') if isinstance(req, dict) else None))
+        if _miq_refused:
+            return _miq_refused
         filters = {
             'sort':          req.get('sort'),
             'window_days':   req.get('window_days'),
@@ -19757,6 +19793,13 @@ def api_microdramas_iq_competitors():
         return err
     try:
         req = request.get_json(silent=True) or {}
+        # No data before the data floor (2026-11-19): a custom range that
+        # reaches before it is told so; nothing is computed.
+        _miq_refused = _dated_request_refused(
+            start=(req.get('start_date') if isinstance(req, dict) else None),
+            end=(req.get('end_date') if isinstance(req, dict) else None))
+        if _miq_refused:
+            return _miq_refused
         filters = {
             'window_days': req.get('window_days'),
             'top_n':       req.get('top_n'),
@@ -19782,6 +19825,13 @@ def api_microdramas_iq_all():
         return err
     try:
         req = request.get_json(silent=True) or {}
+        # No data before the data floor (2026-11-19): a custom range that
+        # reaches before it is told so; nothing is computed.
+        _miq_refused = _dated_request_refused(
+            start=(req.get('start_date') if isinstance(req, dict) else None),
+            end=(req.get('end_date') if isinstance(req, dict) else None))
+        if _miq_refused:
+            return _miq_refused
         filters = {
             'window_days': req.get('window_days'),
             'top_n':       req.get('top_n'),
@@ -20157,6 +20207,13 @@ def api_intent_assets(title_slug):
     ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
+    # No data before the data floor (2026-11-19). The From / To dates go
+    # straight into the read, so a value that is not a date is refused
+    # here as well.
+    _iiq_refused = _dated_request_refused(start=request.args.get('from'),
+                                          end=request.args.get('to'), strict=True)
+    if _iiq_refused:
+        return _iiq_refused
     try:
         return jsonify(_intent_iq.get_assets(
             title_slug,
@@ -20249,6 +20306,11 @@ def api_intent_in_flight(title_slug):
     ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
+    # No data before the data floor (2026-11-19); the as-of date goes
+    # straight into the read, so it must be a date.
+    _iiq_refused = _dated_request_refused(on=request.args.get('as_of'), strict=True)
+    if _iiq_refused:
+        return _iiq_refused
     try:
         return jsonify(_intent_iq.get_in_flight(title_slug,
                                                   as_of=request.args.get('as_of'),
@@ -20270,6 +20332,11 @@ def api_intent_mta(title_slug):
     ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
+    # No data before the data floor (2026-11-19); the as-of date must be
+    # a date.
+    _iiq_refused = _dated_request_refused(on=request.args.get('as_of'), strict=True)
+    if _iiq_refused:
+        return _iiq_refused
     if _mta_iq is None:
         return jsonify({'success': False,
                         'error': 'Multi-Touch Attribution module not loaded'}), 500
@@ -20326,6 +20393,12 @@ def api_intent_weekly_pdf(title_slug):
                         'error': 'Weekly summary PDF module not loaded'}), 500
     try:
         payload = request.get_json(silent=True) or {}
+        # No data before the data floor (2026-11-19): a summary dated
+        # before it is not drawn.
+        _iiq_refused = _dated_request_refused(
+            on=(payload.get('as_of') if isinstance(payload, dict) else None))
+        if _iiq_refused:
+            return _iiq_refused
         # Server-side overview overrides client-supplied title metadata
         # to prevent brand-spoofing via a crafted POST body.
         try:
@@ -20421,6 +20494,11 @@ def api_intent_export_xlsx(title_slug):
     raw_tabs = body.get('tabs') if 'tabs' in body else request.args.get('tabs')
     tabs = _attribution_excel_export.parse_tabs(raw_tabs)
     as_of = str(body.get('as_of') or request.args.get('as_of') or '').strip()[:10] or None
+    # No data before the data floor (2026-11-19); the as-of date must be
+    # a date.
+    _iiq_refused = _dated_request_refused(on=as_of, strict=True)
+    if _iiq_refused:
+        return _iiq_refused
     audience = str(body.get('audience') or request.args.get('audience') or '').strip()[:200] or None
     tables = body.get('tables') if isinstance(body.get('tables'), dict) else None
     try:
@@ -42826,6 +42904,21 @@ def submit_intent_ingest():
             return jsonify({'error': 'at least one asset URL is required'}), 400
         if len(urls) > 500:
             return jsonify({'error': 'max 500 asset URLs per campaign'}), 400
+
+        # No data before the data floor (2026-11-19). A campaign whose
+        # launch date, end date or any phase reaches before it is told
+        # so here: ahead of the funds check, the job record and the
+        # charge, so nothing is charged, queued or stored.
+        _iiing_refused = _dated_request_refused(start=launch_date, end=end_date)
+        if not _iiing_refused:
+            for _iiing_ph in phases_in:
+                if isinstance(_iiing_ph, dict):
+                    _iiing_refused = _dated_request_refused(
+                        start=_iiing_ph.get('start_date'), end=_iiing_ph.get('end_date'))
+                    if _iiing_refused:
+                        break
+        if _iiing_refused:
+            return _iiing_refused
 
         if not has_credits_for(username, CREDITS_INTENT_INGEST, pull_type='Attribution IQ Ingest'):
             _, credits_left = check_user_credits(username)
