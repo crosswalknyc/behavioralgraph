@@ -918,6 +918,16 @@ def _enforce_ledger_coherence(doc, skey, entry):
                           f"({parents[nm]}); clamped to {fixed}")
                     m['value'] = fixed
         # -- cross-subject 4dp repeats --
+        # A delivered figure is what the reader already holds, so it is
+        # never redrawn here; only generated reads carry the fingerprint
+        # check. A deliverable legitimately mirrors one figure under two
+        # subjects: the Kansas City Chiefs stat sheet of 2026-11-19 banked
+        # Kelce's audience outside the team on both the Travis Kelce and
+        # the Kansas City Chiefs buckets, and the redraw turned the second
+        # copy into a second live value for one fact (89,792,288 against
+        # the sheet's 89,523,717) while the stored reply still said 89.5M.
+        if provenance_rank(entry) >= _PROV_RANK[PROV_DELIVERED]:
+            return
         for m in metrics:
             v = m.get('value')
             if not isinstance(v, (int, float)):
