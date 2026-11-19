@@ -901,8 +901,10 @@ class Pricing(unittest.TestCase):
 
     def test_how_to_items_for_every_tab(self):
         ids = [it['id'] for it in DT.how_to()['items']]
-        for tab in ('pilot', 'trailer', 'titles', 'greenlight', 'norms'):
+        for tab in ('pilot', 'trailer', 'titles', 'greenlight', 'predict'):
             self.assertIn(tab, ids)
+        for hidden in DT.HIDDEN_TABS:              # Launch and Norms are hidden for now (Jenna 2026-11-18): out of the directions too
+            self.assertNotIn(hidden, ids)
         for folded in ('script', 'concept'):
             self.assertNotIn(folded, ids)          # the two options live inside the Greenlight item (2026-10-28)
         gl = next(it for it in DT.how_to()['items'] if it['id'] == 'greenlight')

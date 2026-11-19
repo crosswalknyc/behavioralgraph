@@ -50,6 +50,12 @@ TAB_ALIASES = {
 }
 PRODUCT_KEY = 'digitalTwinsIQ'
 PRODUCT_LABEL = 'Digital Twins IQ'
+# Hidden for now (Jenna 2026-11-18: "are Greenlight, Launch, Trailers, Titles and Key Art, Norms built out and
+# functioning? if not let's hide them for now"). Launch Lab and the Spend Engine run on hand-written constants, not an
+# engine; Norms fills only as tests are filed and reads empty today. Greenlight, Trailers and Titles and Key Art are modes
+# of the Pilot Testing room engine and stay. The code, the routes and the grants for the hidden tabs are untouched: the
+# tab buttons are hidden, the how-to and Prometheus's map leave them out, and a deep link lands on Twins.
+HIDDEN_TABS = ('launch', 'norms')
 
 # Pricing defaults (Jenna 2026-10-26). One line each; the live price an
 # admin sets in the billing panel wins over these (wallet.tool_price_usd).
@@ -253,6 +259,11 @@ def tab_for_api_path(path: str):
             or rest.startswith('/jobs/') or rest.startswith('/portrait/')):
         return None
     return 'twins'
+
+
+def tab_hidden(tab) -> bool:
+    """Hidden for now: out of the product surface until it is built out."""
+    return (normalize_tab(tab) or '') in HIDDEN_TABS
 
 
 def tab_allowed(user, tab) -> bool:
@@ -960,6 +971,8 @@ def how_to(price_fn=None) -> dict:
              f"{money(PR.rate('enterprise', 40, price_fn))} a group on an enterprise agreement), charged when the group opens; the seats are included; Prometheus usage metered on top")
     items = []
     for it in HOW_TO:
+        if tab_hidden(it.get('id')):
+            continue          # a hidden tab's directions stay out of the drawer and out of Prometheus's mouth
         row = dict(it)
         if it['id'] == 'panel':
             row['cost'] = f"A focus group room is {group}"

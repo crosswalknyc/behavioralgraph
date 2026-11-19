@@ -160,8 +160,8 @@ PRODUCTS = (
     {'value': 'digitalTwinsIQ', 'label': 'Digital Twins IQ', 'rule': _r_twins,
      'aliases': ('digital twins iq', 'digital twins', 'digital twin', 'twins iq', 'twin iq', 'the twins tab', 'twin dashboard'),
      'picker': 'the Twins tab',
-     'picker_line': "Your twins are listed on the Twins tab; Predictive Analytics, Greenlight, Launch, Focus Group IQ, Pilot Testing, Trailers, Titles and Key Art and Norms are the tabs across the top.",
-     'tabs': ('Twins', 'Predictive Analytics', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'),
+     'picker_line': "Your twins are listed on the Twins tab; Predictive Analytics, Greenlight, Focus Group IQ, Pilot Testing, Trailers and Titles and Key Art are the tabs across the top.",
+     'tabs': ('Twins', 'Predictive Analytics', 'Greenlight', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art'),
      'lands': 'a finished twin appears on the Twins tab in Digital Twins IQ',
      'blurb': 'Digital Twins IQ is where a twin of an audience is built and asked questions, in a focus group, a pilot test or a lab.'},
     {'value': 'intentIQ', 'label': 'Attribution IQ', 'rule': _r_attribution,
@@ -262,16 +262,15 @@ product_by_value = product
 # -------------------------------------------------------------------- tabs
 #
 # (product value, tab id the page uses, label as the tab shows it, aliases)
+# Launch and Norms are hidden for now (migration.digital_twins.HIDDEN_TABS, Jenna 2026-11-18) and are not listed.
 TABS = (
     ('digitalTwinsIQ', 'twins', 'Twins', ('twins tab', 'the twins list')),
     ('digitalTwinsIQ', 'predict', 'Predictive Analytics', ('predictive analytics', 'predictive analytics tab', 'the wizard', 'business question', 'predict')),
     ('digitalTwinsIQ', 'greenlight', 'Greenlight', ('greenlight', 'green light', 'script read', 'concept test', 'greenlight lab')),
-    ('digitalTwinsIQ', 'launch', 'Launch', ('launch tab', 'launch lab', 'spend engine', 'the launch')),
     ('digitalTwinsIQ', 'panel', 'Focus Group IQ', ('focus group iq', 'focus group', 'focus groups', 'the room', 'panel lab', 'the panel')),
     ('digitalTwinsIQ', 'pilot', 'Pilot Testing', ('pilot testing', 'pilot test', 'pilot tests', 'the pilot tab', 'episode test', 'dial test', 'pilot')),
     ('digitalTwinsIQ', 'trailer', 'Trailers', ('trailers', 'trailer test', 'the trailer tab', 'trailer testing')),
     ('digitalTwinsIQ', 'titles', 'Titles and Key Art', ('titles and key art', 'key art', 'title test', 'title testing', 'key art test', 'titles tab')),
-    ('digitalTwinsIQ', 'norms', 'Norms', ('norms', 'the norms tab', 'norm')),
     ('profileIQ', 'insights', 'Insights', ('insights tab', 'the insights')),
     ('profileIQ', 'demographics', 'Demographics', ('demographics tab', 'demographics', 'demo tab')),
     ('profileIQ', 'behavioral', 'Behavioral', ('behavioral tab', 'behavioral', 'behaviors tab')),

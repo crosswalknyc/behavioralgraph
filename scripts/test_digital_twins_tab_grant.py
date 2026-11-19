@@ -85,6 +85,23 @@ def test_api_path_tabs():
     assert DT.tab_allowed({'role': 'user', DT.TABS_FIELD: ['panel']}, 'predict') is False
 
 
+def test_hidden_for_now_tabs():
+    # Jenna 2026-11-18: Launch (hand-written constants) and Norms (empty until tests are filed) are hidden for now;
+    # the grants and the routes stay, the how-to and the page leave them out
+    assert DT.HIDDEN_TABS == ('launch', 'norms')
+    assert DT.tab_hidden('launch') and DT.tab_hidden('spend') and DT.tab_hidden('norms')
+    assert not DT.tab_hidden('panel') and not DT.tab_hidden('predict') and not DT.tab_hidden('greenlight')
+    ids = [it['id'] for it in DT.how_to()['items']]
+    assert 'launch' not in ids and 'spend' not in ids and 'norms' not in ids
+    assert 'predict' in ids and 'panel' in ids and 'greenlight' in ids and 'trailer' in ids and 'titles' in ids
+    html = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             'templates', 'index.html'), encoding='utf-8').read()
+    assert "var DTW_HIDDEN_TABS = ['launch', 'norms'];" in html
+    assert '<button type="button" hidden class="dtw-seg" data-tab="launch"' in html
+    assert '<button type="button" hidden class="dtw-seg" data-tab="norms"' in html
+    assert "if (DTW_HIDDEN_TABS.indexOf(tab) >= 0) tab = 'twins';" in html
+
+
 def test_index_hides_denied_tabs():
     html = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              'templates', 'index.html'), encoding='utf-8').read()
@@ -111,6 +128,7 @@ if __name__ == '__main__':
     test_sony_three_tab_grant()
     test_pilot_mode_maps_to_tab()
     test_api_path_tabs()
+    test_hidden_for_now_tabs()
     test_index_hides_denied_tabs()
     test_admin_tab_checkboxes()
     print('ok')
