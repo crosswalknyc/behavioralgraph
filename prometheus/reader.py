@@ -56,6 +56,7 @@ INTENTS = (
     'analyze',         # an analytical question answered from the library and what we know
     'compare',         # two or more audiences side by side
     'capability',      # can we / is there a way to
+    'dashboard_issue', # how the dashboard itself is behaving: a field, a button, a filter, a download, a page (2026-11-18)
     'command',         # email me the file, download, open X, send to
     'deck',            # build a deck
     'definition',      # what does this number mean / how is it calculated
@@ -64,7 +65,7 @@ INTENTS = (
     'chat',            # greetings, thanks, anything else
 )
 # intents with a deterministic executor in the service
-EXECUTABLE = frozenset(('exists', 'size', 'status', 'capability', 'decline', 'command'))
+EXECUTABLE = frozenset(('exists', 'size', 'status', 'capability', 'decline', 'command', 'dashboard_issue'))
 # intents that pick a model surface
 ANALYZE_SET = frozenset(('analyze_page', 'analyze', 'compare', 'definition'))
 BUILD_SET = frozenset(('build_profile', 'cut', 'journey', 'valuation', 'campaign', 'tracker', 'twin'))
@@ -90,6 +91,7 @@ How to read:
 - A size question (how big, size of, incidence, projected band) is intent size. The audience on the open page is read off the page; any other audience, or a cross of audiences, is a $100 read quoted before any number. "How many people watched X" is analyze (a consumption count).
 - A path described while a Digital Journey is on screen (saw a clip and then watched) restates that journey: analyze_page. A new journey needs an order (build, pull, run, map, set up).
 - An order to build a twin, open Focus Group IQ, a focus group or a room with a twin, open Pilot Testing, open Predictive Analytics (a business question put to a twin: will X lift Y, will X win, should we do X, what will they pay), or ask the room a question: twin, with the twin's subject. A script read, a concept test, a trailer test or a title test is a focus group question or a Predictive Analytics ask, never its own tab.
+- How the dashboard itself is behaving for the person (a field or date that will not take, a button, filter or download that does nothing, a page that will not load, "it won't let me"): dashboard_issue, subjects empty; never analyze, analyze_page, size or capability, whatever is on screen or in the thread.
 - Where is my X, have not received, still waiting, is it done: status. A short yes / run it / approve alone: run_pending. Is there a way to, can we, how do we set up: capability.
 - What does this number mean / how is this calculated: definition. What does X cost: pricing. Email me, send the file, download the csv, open X: command. Build a deck / one-pager / slides: deck.
 - Churn, retention, reactivation, overlap, demographics, over-indexing, trends on a title or audience: analyze (analyze_page when it is about the page).
@@ -147,6 +149,8 @@ SEED_EXAMPLES = [
     {"text": "set up attribution for the Influencer Project campaign", "intent": "campaign", "subjects": ["The Influencer Project"], "note": ""},
     {"text": "female only cut of the Reba profile", "intent": "cut", "subjects": ["Reba McEntire"], "note": ""},
     {"text": "Is there a way to see which creators drove ticket sales for a campaign?", "intent": "capability", "subjects": [], "note": "drew the opener"},
+    {"text": "when i try to put a start of 1/1/2021 it reverts it to 1/1/2026 but it lets me ass an end date of 12/31/2023", "intent": "dashboard_issue", "subjects": [], "note": "Jenna 2026-11-18, a streaming service's profile left in the picker: a date field on the page, not a question about any audience; it ran a read of the open profile"},
+    {"text": "the export button does nothing when I click it", "intent": "dashboard_issue", "subjects": [], "note": "the page itself, never a read"},
     {"text": "can we track churn for Landman on Paramount+?", "intent": "capability", "subjects": ["Landman"], "note": ""},
     {"text": "Don't build a new profile. Answer this from the existing ones: who skews older, Gunna or Drake?", "intent": "compare", "subjects": ["Gunna", "Drake"], "note": "negated_build"},
     {"text": "who skews older, Gunna or Drake?", "intent": "compare", "subjects": ["Gunna", "Drake"], "note": ""},
@@ -718,6 +722,7 @@ ROUTE_FAMILY = {
     'analyze': ('page_analysis', 'reasoned_metrics', 'analyze', 'ledger_replay', 'catalog_lookup', 'cohort_churn'),
     'compare': ('page_analysis', 'reasoned_metrics', 'analyze', 'compare'),
     'capability': ('capability', 'capability_question', 'cant_do'),
+    'dashboard_issue': ('dashboard_behavior',),
     'command': ('command', 'deliverable_lookup', 'csv_download', 'send_file', 'design_request', 'open_screen'),
     'deck': ('deck',),
     'definition': ('product_fact', 'kpi_definition', 'sample_size', 'page_analysis', 'methodology'),

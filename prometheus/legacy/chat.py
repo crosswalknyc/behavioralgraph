@@ -14663,6 +14663,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     if isinstance(data, list):
         data = next((d for d in data if isinstance(d, dict)), {})
     if str(data.get('action') or '').strip().lower() == 'decline':
+        _dbq_dec = __import__('prometheus.dashboard_behavior', fromlist=['from_decline']).from_decline(data, text, '', _pm_ask_hint)   # the dashboard's own controls are never a read (2026-11-18)
+        if _dbq_dec is not None:
+            return _dbq_dec
         gate = {'domain': 'model_decline',
                 'what': 'That behavior',
                 'alternative': 'the digital read on the same subject'}
@@ -16521,6 +16524,11 @@ def _pm_analyze_core(user, body, text, history):
         return jsonify(dict(_subject_rules.build_reroute_payload(), prompt=_pb['prompt'], window=({'start': _pb['start'], 'end': _pb['end']} if _pb.get('start') else None)))
     if _pm_jiq_intent(text) or _pm_read_intent(body, 'journey'):
         return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=True))
+    # A message about how the dashboard itself is behaving is never a read of the open profile (Jenna 2026-11-18,
+    # prometheus.dashboard_behavior): the door's lane answers it; this is the same lane for an ask that reached the core.
+    _dbq_raw = __import__('prometheus.dashboard_behavior', fromlist=['core_hook']).core_hook(text, body, history, user, _pm_ask_hint)
+    if _dbq_raw is not None:
+        return jsonify(_dbq_raw)
     # ------------------ SINGLE ROUTER (2026-08-28) ------------------
     # One server-side decision for every ask (prometheus_router):
     # deterministic prefilters in one fixed precedence, the fast

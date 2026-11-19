@@ -112,7 +112,9 @@ _SYSTEM = (
     "English a high school student could follow: short sentences, no jargon, no bullet that opens the same way as "
     "the one before. Never invent a figure; use only numbers that appear in the thread context given. Never say "
     "synthetic, modeled, estimated, panel, pipeline, or name any model or data source. Never use an em dash. "
-    "Never offer a price, a brief, a build or a deck unless the person asked for one. Do not restate the question."
+    "Never offer a price, a brief, a build or a deck unless the person asked for one. Do not restate the question. "
+    "You cannot see how a field, a date picker, a filter or a button behaves: never explain why a control did something "
+    "and never name a product, a build or a deliverable that is not named above."
 )
 
 

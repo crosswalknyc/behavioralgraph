@@ -1286,6 +1286,20 @@ def scrub_method_language_payload(raw):
         if isinstance(v, str) and v.strip() and not _keeps_sample_words(raw) and SAMPLE_VOCAB_RX.search(v):
             raw[k] = scrub_sample_vocabulary(v)
             raw.setdefault('_scrubbed', []).append(k + ':sample')
+    # how the dashboard works inside is never stated by guesswork, and a product that does not exist is never
+    # promised, in the reply or on a chip (prometheus.dashboard_behavior, 2026-11-18)
+    try:
+        from . import dashboard_behavior as _dbq
+        for k in ('reply', 'message', 'summary', 'text', 'error'):
+            v = raw.get(k)
+            if isinstance(v, str) and v.strip() and _dbq.invented(v):
+                raw[k] = _dbq.scrub(v)
+                raw.setdefault('_scrubbed', []).append(k + ':dashboard')
+        if isinstance(raw.get('followups'), list) and any(isinstance(c, str) and _dbq.invented(c) for c in raw['followups']):
+            raw['followups'] = _dbq.scrub_chips(raw['followups'])
+            raw.setdefault('_scrubbed', []).append('followups:dashboard')
+    except Exception:
+        pass
     ic = raw.get('incidence_check')
     if isinstance(ic, dict) and isinstance(ic.get('message'), str) and not _keeps_sample_words(raw):
         ic['message'] = scrub_sample_vocabulary(ic['message'])

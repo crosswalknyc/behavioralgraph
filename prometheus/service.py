@@ -569,7 +569,7 @@ def accept_offered_run(history, text):
 LANE_ORDER = (
     'intake_cancel',
     'bpiq_wizard', 'build_fix', 'build_facts',
-    'wayfinding', 'study_record',
+    'wayfinding', 'dashboard_behavior', 'study_record',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
     'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'match_answer', 'short_reply',
     'spend_cap_precheck',
@@ -584,12 +584,12 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'dataset_build',
+    'build_fix', 'build_facts', 'wayfinding', 'dashboard_behavior', 'study_record', 'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'service_subscribers', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'unprojected', 'reconcile',
     'us_scope', 'segment_sizing', 'read_brief'))
-NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'build_facts', 'wayfinding', 'study_record', 'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('intake_cancel', 'build_fix', 'build_facts', 'wayfinding', 'dashboard_behavior', 'study_record', 'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'unprojected', 'reconcile', 'us_scope', 'segment_sizing',
                                 'read_brief'))
@@ -1112,6 +1112,42 @@ def ask(user, body, *, via='session'):
             except Exception as _fx:
                 _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
+    # lane: dashboard_behavior
+    # A message about how the dashboard itself is behaving (a field that
+    # will not take a value, a button or a download that does nothing, a
+    # page that will not load) is not a question about an audience (Jenna
+    # 2026-11-18: a date field reported on the Rankers page was answered
+    # with a read of the profile left in the picker, an account of the
+    # field nobody knew, and a product that does not exist). One fixed
+    # reply from prometheus.dashboard_behavior: what Prometheus cannot
+    # see, what the person can do right now, and the note raised to the
+    # team on the held record the ops watch already reads. No model, no
+    # price, no figures, never the open profile. A message that also
+    # asks a question of its own is that question's, and keeps its lane.
+    if not _armed(body) and not _is_order and not body.get('_meta_replay'):
+        _dbq_raw = None
+        try:
+            from . import dashboard_behavior as _dbq
+            _dbq_cs = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
+            if _dbq.is_dashboard_question(text):
+                _dbq_raw = _dbq.answer(text, uname=uname, user=user, ctx=ctx, history=history, thread_id=tid or '', host=host)
+        except Exception as _fx:
+            _faults.note('service.dashboard_behavior', _fx)
+            _dbq_raw = None
+        if _dbq_raw:
+            raw = _dbq_raw
+            if _dbq_cs == 'interpret':
+                raw = _interpret_shape(raw)
+            try:
+                host.ask_hint(route='dashboard_behavior',
+                              outcome=('raised' if (_dbq_raw.get('dashboard_behavior') or {}).get('raised') else 'answered'))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'dashboard_behavior',
+                                                                   'client_hint': None}, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
@@ -3612,6 +3648,13 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
             _pg.say('Sending the file')
             raw = _sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host, subjects=list(subs or []))
             reason = 'email_file'
+    elif intent == 'dashboard_issue':
+        # the Reader read the words as being about the dashboard itself (a wording the lane's own test did not
+        # know): the same fixed reply, never a read of the open profile (prometheus.dashboard_behavior, 2026-11-18)
+        from . import dashboard_behavior as _dbq_r
+        raw = _dbq_r.answer(text, uname=uname, user=user, ctx=ctx, history=history, thread_id=tid or '', host=host, force=True)
+        subs = []
+        reason = 'dashboard_behavior'
     elif intent == 'decline':
         from . import smarter as _sm
         if _last_turn_offered(history):
@@ -3623,7 +3666,7 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
     # restatement instantly, and the correction feeds the bank); never on
     # the one-word yes, which is the whole answer
     if conf < 0.75 and reading.get('restate') and raw.get('action') == 'answer' and raw.get('reply') \
-            and not raw.get('capability_yes') and _restate_reads_clean(reading['restate']):
+            and not raw.get('capability_yes') and not raw.get('dashboard_behavior') and _restate_reads_clean(reading['restate']):
         raw = dict(raw, reply=f"{reading['restate'].rstrip('.')}.\n\n{raw['reply']}")
     raw = dict(raw, reading={'intent': intent, 'confidence': conf, 'subjects': subs})
     decision = {'surface': 'analyze', 'mode': None, 'reason': 'reader:' + reason, 'client_hint': None}
@@ -3634,7 +3677,7 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         if raw.get('memory_confirm'):
             out['memory_confirm'] = raw['memory_confirm']
     try:
-        host.ask_hint(route=reason, outcome='answered', subject=(subs[0] if subs else None))
+        host.ask_hint(route=reason, outcome=('raised' if (raw.get('dashboard_behavior') or {}).get('raised') else 'answered'), subject=(subs[0] if subs else None))
     except Exception as _fx:
         _faults.note('service', _fx)
     env = envelope.wrap(out, surface='analyze', decision=decision, thread_id=tid, via=via)

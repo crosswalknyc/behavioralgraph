@@ -1681,6 +1681,7 @@ SOCIAL TO ACTION CONVERSION:
 - WHAT-IF ADAPTATION ASKS ("if there were an animated adaptation, how many of these readers would tune in and sign up for Prime Video?") are two numbers about the audience on screen: how many would watch it on that service (a share of this audience, reasoned from how they already behave on that service and genre; a fan base on a service most of them use sits 18 to 45%, the Avid tier 45 to 75%, a service most of them do not have 8 to 25%), and how many of those would be NEW to the service, which is the tune-in count times one minus the service's own share in this profile's streaming rows. Lead with both counts, name the base, give the already-on-the-service count its own line. Never answer with the size of the service's whole sign-up audience.
 - MULTIPLE QUESTIONS IN ONE ASK: answer every one, each under its own short plain heading, in the order asked. Never answer only the first and stop.
 - NEVER DECLINE: you never ask the reader to rephrase, narrow, re-aim, or pick a different question, and you never say a number cannot be locked down. When the screen tables do not carry the exact split asked for, derive it from the audience measures you do have and state the read plainly.
+- THE DASHBOARD'S OWN CONTROLS: you cannot see how a field, date picker, filter, button, download or page behaves. A message about one (it will not take a value, it changed what was typed, it will not load) is not a data question: never explain it and never answer it with figures. Say in two plain sentences that you cannot see what that control is doing and that they can give you the subject and dates in words. Never name a product, build or deliverable this prompt does not name.
 
 SUB-CUT ASKS (deliver the cut, never the gap)
 - When the ask names a slice, sub-cohort, or intersection of the OPEN subject that no single row on screen directly carries (a child-age window that sits across two AGE OF CHILDREN bands, a demo sub-slice like women 25-34, a cohort intersection like viewers who also watch another title), return action=generate_metrics. Fill metric_request: subject = the open subject, cohort = the requested slice in one line, covering_rows = the digest rows that bound the slice quoted with their numbers, needed = what the user wants for that slice. A deeper measurement pass delivers the cohort read.
@@ -4042,6 +4043,16 @@ def scrub_user_text(text):
         s = _guards.scrub_method_language(s)
     except Exception as _fx:
         _faults.note('analysis', _fx)
+    # How the dashboard works inside is never stated by guesswork, and a
+    # product that does not exist is never promised (2026-11-18,
+    # prometheus.dashboard_behavior: "the run window asserting itself, not
+    # a bug in the field", "a back-window build"). A text with none of
+    # that comes back byte for byte. One rule, every exit that calls this.
+    try:
+        from prometheus import dashboard_behavior as _dbq
+        s = _dbq.scrub(s)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     # Internal key shapes (2026-10-22: "Base: the BEST_OF_THE_BEST
     # audience" reached a client thread from a file stem): an upper
     # snake key or a dated profile stem outside a URL is rendered as
@@ -6275,6 +6286,7 @@ ADAPTATION AND WHAT-IF ASKS:
 - "If there were an animated adaptation of the series, how many of these readers would tune in and sign up for Prime Video?" is two numbers about the audience ON SCREEN, in this order: (1) how many of them would watch the adaptation on that service across its first season window (the tune-in count, a share of the audience reasoned from how the audience already behaves on that service and in that genre), and (2) how many of those would be NEW to the service: people who would watch but do not use the service today. The service's own row in the FIRST-PARTY PROFILE ROWS (the streaming or platform section) is the share already on the service; new sign-ups = tune-in count x (1 - that share). Carry both as metrics with the base named, the already-on-the-service count as its own line, and the Avid tier's tune-in beside it. The tune-in share of a fan base for a faithful adaptation on a service most of them already use sits 18 to 45% (the Avid tier 45 to 75%); on a service most of them do not have, 8 to 25%; an animated adaptation of a comic or webtoon sits at the top of its band, a live-action one of a novel in the middle. Never size the service's whole subscriber base or its sign-up audience: the question is about the people on screen, and the headline leads with the two counts.
 - MULTIPLE QUESTIONS IN ONE ASK: answer every one, each under its own short plain heading, in the order asked. Never answer only the first and stop.
 - NEVER DECLINE: you never ask the reader to rephrase, narrow, re-aim, or pick a different question, and you never say a number cannot be locked down. When the screen tables do not carry the exact split asked for, derive it from the audience measures you do have and state the read plainly.
+- A message about how the dashboard's own controls behave (a field, a date picker, a filter, a button, a page) is not a measurement: return action=decline with decline_reason=dashboard. Never explain a control, and never name a product, build or deliverable this prompt does not name.
 - TREND ASKS ("since January", "month by month", "how has it moved"): deliver the series, not one point - monthly or weekly figures across the window. Endpoints and published measurements bind; movement between points stays plausible and organic.
 - Today is __TODAY__. Resolve relative windows (last 12 months, past 90 days, since January) against today.
 - The window: use the user's window if named; else the subject's real release or campaign window if you know it; else the trailing 12 months, __T12_START__ to __T12_END__.
@@ -6306,7 +6318,7 @@ WHAT NOT TO DO
 Return strict JSON only:
 {
   "action": "answer" | "decline",
-  "decline_reason": "not_digital" | null,
+  "decline_reason": "not_digital" | "dashboard" | null,
   "subject": "Landman",
   "metric_family": "viewership" | "subscribers" | "search" | "purchases" | "engagement" | "audience" | "revenue",
   "window_label": "__T12_LABEL__",

@@ -104,13 +104,18 @@ REGISTRY = {
         'budget_tokens': 4780, 'target_tokens': 4000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'a plain profile ask with a confident reading: the Reader-aware prune; 8,901 before the 2026-10-14 diet, 19,838 before the audit'},
-    'analysis.system': {'version': '2026.10.14', 'owner': 'page answers', 'loader': _analysis, 'budget_tokens': 6520, 'target_tokens': 3500,   # ratchet reset to current size, 2026-11-05; only shrinks from here
+    # 2026-11-18 (Jenna, a date field answered with a read of the open profile): THE DASHBOARD'S OWN CONTROLS rule joined the
+    # page analyst (121 tokens) and the reasoned read (74 tokens, with the "dashboard" decline reason). Both budgets re-set to
+    # the measured size: 6,641 and 4,136. The text is prometheus.dashboard_behavior.PROMPT_RULE / PROMPT_RULE_SHORT.
+    'analysis.system': {'version': '2026.11.18', 'owner': 'page answers', 'loader': _analysis, 'budget_tokens': 6641, 'target_tokens': 3500,   # ratchet reset to current size, 2026-11-18; only shrinks from here
                         'invariants': ('MULTIPLE QUESTIONS',), 'note': 'the page analyst'},
-    'metrics.system': {'version': '2026.10.14', 'owner': 'reasoned reads', 'loader': _metrics, 'budget_tokens': 4062, 'target_tokens': 2500,   # ratchet reset to current size, 2026-11-05; only shrinks from here
+    'metrics.system': {'version': '2026.11.18', 'owner': 'reasoned reads', 'loader': _metrics, 'budget_tokens': 4136, 'target_tokens': 2500,   # ratchet reset to current size, 2026-11-18; only shrinks from here
                        'invariants': ('SUBSCRIPTION CHURN, RETENTION, REACTIVATION AND COHORT DURABILITY ARE DIGITAL BEHAVIORS',), 'note': 'the reasoned-metrics read'},
     # budget = current size (re-baselined 2026-11-08 for the Nov 6 catalog-identity and question-universe rules Jenna mandated);
     # only shrinks from here except for a new rule Jenna mandates, which re-baselines with a dated note
-    'reader.charter': {'version': '2026.10.14', 'owner': 'the Reader', 'loader': _reader, 'budget_tokens': 1392, 'target_tokens': 1000,
+    # 2026-11-18 (Jenna): the dashboard_issue intent and its one line (82 tokens). The charter stood at 1,431 on main before it
+    # (the Predictive Analytics wording of the same day went in without a re-baseline, 39 over); budget re-set to the measured 1,513.
+    'reader.charter': {'version': '2026.11.18', 'owner': 'the Reader', 'loader': _reader, 'budget_tokens': 1513, 'target_tokens': 1000,
                        'invariants': ('A question is a question', 'Return JSON only'), 'note': 'one understanding step'},
     'journey.research': {'version': '2026.10.14', 'owner': 'Digital Journey', 'loader': _journey, 'budget_tokens': 3200, 'target_tokens': 2500,
                          'invariants': ('CONVERSION NORMS',), 'note': 'journey research'},

@@ -257,6 +257,21 @@ ROWS = [
         'examples': [], 'counter': [('where did the viewers come from', True), ('where is the howdy deck created last night', False)],
     },
     {
+        'id': 'dashboard_behavior', 'surface': 'analyze',
+        'reason': 'dashboard_behavior', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'A message about how the dashboard itself is behaving for the '
+                'person typing ("when I try to put a start of 1/1/2021 it '
+                'reverts it", "the export button does nothing", "the page is '
+                'blank") is not a question about an audience. One fixed reply: '
+                'what Prometheus cannot see, what the person can do right now, '
+                'and the note raised to the team on the held record. Never a '
+                'read of the open profile, never priced, no model (Jenna '
+                '2026-11-18). Served by the ask service lane '
+                '(prometheus.dashboard_behavior).',
+        'examples': [], 'counter': [('which button gets the most clicks on the product page', True), ('why is my build stuck', False)],
+    },
+    {
         'id': 'status_lookup', 'surface': 'analyze',
         'reason': 'status_lookup', 'client_action': 'analyze',
         'host_only': True,
