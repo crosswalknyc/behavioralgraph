@@ -51,11 +51,14 @@ TAB_ALIASES = {
 PRODUCT_KEY = 'digitalTwinsIQ'
 PRODUCT_LABEL = 'Digital Twins IQ'
 # Hidden for now (Jenna 2026-11-18: "are Greenlight, Launch, Trailers, Titles and Key Art, Norms built out and
-# functioning? if not let's hide them for now"). Launch Lab and the Spend Engine run on hand-written constants, not an
-# engine; Norms fills only as tests are filed and reads empty today. Greenlight, Trailers and Titles and Key Art are modes
-# of the Pilot Testing room engine and stay. The code, the routes and the grants for the hidden tabs are untouched: the
-# tab buttons are hidden, the how-to and Prometheus's map leave them out, and a deep link lands on Twins.
-HIDDEN_TABS = ('launch', 'norms')
+# functioning? if not let's hide them for now", then "get rid of these since they are taken care of in predictive
+# analytics and focus group": Greenlight, Trailers, Titles and Key Art). Launch Lab and the Spend Engine run on
+# hand-written constants, not an engine; Norms fills only as tests are filed and reads empty today; Greenlight, Trailers
+# and Titles and Key Art are modes of the Pilot Testing room engine whose asks Predictive Analytics and Focus Group IQ
+# now carry. The product surface is Twins, Predictive Analytics, Focus Group IQ and Pilot Testing. The code, the routes
+# and the grants for the hidden tabs are untouched: the tab buttons are hidden, the how-to and Prometheus's map leave
+# them out, and a deep link lands on Twins.
+HIDDEN_TABS = ('greenlight', 'launch', 'trailer', 'titles', 'norms')
 
 # Pricing defaults (Jenna 2026-10-26). One line each; the live price an
 # admin sets in the billing panel wins over these (wallet.tool_price_usd).
@@ -947,7 +950,7 @@ HOW_TO = [
 ]
 
 
-def how_to(price_fn=None) -> dict:
+def how_to(price_fn=None, include_hidden: bool = False) -> dict:
     """The directions as data: six things, each with what it answers,
     what to put in, the lines to type, how to attach, what comes back,
     the cost and how to export. The dashboard renders it; Prometheus
@@ -971,7 +974,7 @@ def how_to(price_fn=None) -> dict:
              f"{money(PR.rate('enterprise', 40, price_fn))} a group on an enterprise agreement), charged when the group opens; the seats are included; Prometheus usage metered on top")
     items = []
     for it in HOW_TO:
-        if tab_hidden(it.get('id')):
+        if not include_hidden and tab_hidden(it.get('id')):
             continue          # a hidden tab's directions stay out of the drawer and out of Prometheus's mouth
         row = dict(it)
         if it['id'] == 'panel':
@@ -1003,9 +1006,9 @@ def how_to(price_fn=None) -> dict:
                       'Everything here can be typed to Prometheus or done on this page. Type the example lines as written, with your own subject, '
                       'and attach files with the paper clip in the chat.'),
             'items': items, 'pricing': pricing_lines(price_fn),
-            'where': ('Twins land on the Twins tab; script reads and concept tests on the Greenlight tab under their option; Launch plans and the Spend Engine on the Launch tab (its two options) and in '
-                      'the twin\'s Runs list; focus group sessions on the Focus Group IQ tab; watches on the Pilot Testing tab; trailer, title and key art tests on '
-                      'their own tabs; the norms on the Norms tab. Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.')}
+            'where': ('Twins land on the Twins tab; a Predictive Analytics run and its report on the Predictive Analytics tab, with its room under Focus Group IQ; '
+                      'focus group sessions on the Focus Group IQ tab; watches on the Pilot Testing tab. A script, a concept, a trailer or a set of titles or key art goes to '
+                      'the room as a focus group question or a Predictive Analytics ask. Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.')}
 
 
 def how_to_text(topic: str = '', price_fn=None) -> str:
@@ -1014,20 +1017,17 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
     doc = how_to(price_fn)
     low = str(topic or '').lower()
     pick = []
+    lead = ''
     if re.search(r"\bdigital twins? iq\b|\btwin iq\b|\b(all|everything|whole|five)\b", low):
-        pick = []            # the whole product: all six things
-    elif re.search(r"\b(green ?light|logline|idea|script|table read|screenplay|concept|one-sheet|one sheet|synopsis)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'greenlight']
-    elif re.search(r"\b(launch lab|launch|plan|budget)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'launch']
-    elif re.search(r"\b(spend|moves?|daily|rule)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'spend']
-    elif re.search(r"\b(trailer|tv spot|spot test)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'trailer']
-    elif re.search(r"\b(title test|titles?|key art|poster|logline test)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'titles']
-    elif re.search(r"\b(norms?|benchmarks?)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'norms']
+        pick = []            # the whole product
+    elif re.search(r"\b(green ?light|logline|idea|script|table read|screenplay|concept|one-sheet|one sheet|synopsis|trailer|tv spot|spot test|title test|titles?|key art|poster|logline test)\b", low):
+        # a script read, a concept test, a trailer test, a title or key art test: carried by the room now (the tabs are hidden, 2026-11-18)
+        lead = ('A script, a concept, a trailer or a set of titles or key art goes to the room: open a focus group and ask about it (attach the file or paste the text), '
+                'or put the business question to Predictive Analytics and let Prometheus run the room for you.')
+        pick = [it for it in doc['items'] if it['id'] in ('panel', 'predict')]
+    elif re.search(r"\b(launch lab|launch|spend engine|norms?|benchmarks?)\b", low):
+        lead = 'That is not on the page right now. What is: Predictive Analytics, Focus Group IQ and Pilot Testing on any twin.'
+        pick = [it for it in doc['items'] if it['id'] in ('predict', 'panel', 'pilot')]
     elif re.search(r"\b(pilot test|pilot testing|movie test|dial test|watch the cut|critics room|recut|re-test)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'pilot']
     elif re.search(r"\b(panel|focus group|survey|room|moderat)\b", low):
@@ -1035,7 +1035,7 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
     elif re.search(r"\b(build|make|create)\b.*\btwin\b|\btwin\b.*\b(build|built)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'twin']
     items = pick or doc['items']
-    out = [doc['intro']] if not pick else []
+    out = [doc['intro']] if not pick else ([lead] if lead else [])
     for it in items:
         out.append(f"{it['title']}. {it['answers']}")
         if it.get('options'):

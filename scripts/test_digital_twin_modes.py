@@ -901,22 +901,30 @@ class Pricing(unittest.TestCase):
 
     def test_how_to_items_for_every_tab(self):
         ids = [it['id'] for it in DT.how_to()['items']]
-        for tab in ('pilot', 'trailer', 'titles', 'greenlight', 'predict'):
+        for tab in ('pilot', 'predict', 'panel', 'twin'):
             self.assertIn(tab, ids)
-        for hidden in DT.HIDDEN_TABS:              # Launch and Norms are hidden for now (Jenna 2026-11-18): out of the directions too
+        for hidden in DT.HIDDEN_TABS:              # hidden for now (Jenna 2026-11-18): out of the directions too
             self.assertNotIn(hidden, ids)
         for folded in ('script', 'concept'):
-            self.assertNotIn(folded, ids)          # the two options live inside the Greenlight item (2026-10-28)
-        gl = next(it for it in DT.how_to()['items'] if it['id'] == 'greenlight')
-        self.assertEqual([o['id'] for o in gl['options']], ['script', 'concept'])
+            self.assertNotIn(folded, ids)          # the two options lived inside the Greenlight item (2026-10-28), itself hidden now
+        gl = next(it for it in DT.how_to(include_hidden=True)['items'] if it['id'] == 'greenlight')
+        self.assertEqual([o['id'] for o in gl['options']], ['script', 'concept'])   # the entry stays in the source for when it comes back
         text = json.dumps(DT.how_to(), default=str).lower()
         for tok in ('screen engine', 'nrg', 'marketcast', 'fishdog', 'synth', 'claude', 'pipeline', '\u2014', 'greenlight lab'):
             self.assertNotIn(tok, text)
-        self.assertIn('Trailers', DT.how_to_text('how do I run a trailer test'))
-        self.assertIn('Norms', DT.how_to_text('what is the norms tab'))
-        self.assertIn('Greenlight.', DT.how_to_text('how do I use greenlight'))
-        self.assertIn('Greenlight.', DT.how_to_text('how do I run a script read'))
-        self.assertIn('Greenlight.', DT.how_to_text('how do I run a concept test'))
+        # hidden for now (Jenna 2026-11-18): a trailer, title, script or concept ask is answered with the room; Launch and Norms are not on the page
+        for ask in ('how do I run a trailer test', 'how do I use greenlight', 'how do I run a script read', 'how do I run a concept test', 'how do I test key art'):
+            txt = DT.how_to_text(ask)
+            self.assertIn('goes to the room', txt, ask)
+            self.assertIn('Focus Group IQ.', txt, ask)
+            self.assertIn('Predictive Analytics.', txt, ask)
+            self.assertNotIn('Trailers.', txt, ask)
+            self.assertNotIn('Greenlight.', txt, ask)
+        for ask in ('what is the norms tab', 'how do I use launch lab', 'how does the spend engine work'):
+            txt = DT.how_to_text(ask)
+            self.assertIn('not on the page right now', txt, ask)
+            self.assertNotIn('Norms.', txt, ask)
+            self.assertNotIn('Launch Lab.', txt, ask)
 
     def test_rate_card_carries_the_group(self):
         # Jenna 2026-11-05: every mode is one group at the plan rate; the per-mode lines are retired from the card

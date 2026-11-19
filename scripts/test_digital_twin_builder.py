@@ -237,10 +237,11 @@ class Panelists(unittest.TestCase):
         the odds run is gone from the directions and the seed."""
         doc = DT.how_to()
         ids = [it['id'] for it in doc['items']]
-        self.assertIn('greenlight', ids)
+        # Greenlight is hidden for now (Jenna 2026-11-18): its entry stays in the source, out of the directions; the room carries the asks
+        self.assertNotIn('greenlight', ids)
         self.assertNotIn('script', ids)
         self.assertNotIn('concept', ids)
-        gl = next(it for it in doc['items'] if it['id'] == 'greenlight')
+        gl = next(it for it in DT.how_to(include_hidden=True)['items'] if it['id'] == 'greenlight')   # the entry, priced, for when it comes back
         self.assertEqual(gl['title'], 'Greenlight')
         self.assertEqual([o['id'] for o in gl['options']], ['script', 'concept'])
         self.assertEqual([o['title'] for o in gl['options']], ['Script read', 'Concept'])
@@ -258,13 +259,14 @@ class Panelists(unittest.TestCase):
         self.assertTrue(any('script, concept' in l and 'Same rates for both' in l for l in lines))   # a concept test or a script read is one group (2026-11-05)
         self.assertFalse(any('Greenlight Concept - $2,500' in l or 'Greenlight Script read - $3,500' in l for l in lines))
         self.assertFalse(any('Greenlight, Launch' in l for l in lines))
-        self.assertIn('Greenlight tab', doc['where'])
+        self.assertNotIn('Greenlight tab', doc['where'])
+        self.assertIn('goes to the room', doc['where'])
         for ask in ('how do I use Greenlight on a twin', 'how do I run a script read', 'how do I run a concept test'):
             self.assertTrue(DT.is_how_to_ask(ask), ask)
             text = DT.how_to_text(ask)
-            self.assertIn('Greenlight.', text)
-            self.assertIn('Script read ($750 to $1,000 a group)', text)
-            self.assertIn('Concept ($750 to $1,000 a group)', text)
+            self.assertNotIn('Greenlight.', text)          # the hidden tab is never the answer
+            self.assertIn('goes to the room', text)        # the room is
+            self.assertIn('Focus Group IQ.', text)
             self.assertNotIn('odds', text.lower())
 
     def test_retired_greenlight_runs_are_hidden_not_deleted(self):

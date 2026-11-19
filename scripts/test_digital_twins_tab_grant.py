@@ -88,17 +88,20 @@ def test_api_path_tabs():
 def test_hidden_for_now_tabs():
     # Jenna 2026-11-18: Launch (hand-written constants) and Norms (empty until tests are filed) are hidden for now;
     # the grants and the routes stay, the how-to and the page leave them out
-    assert DT.HIDDEN_TABS == ('launch', 'norms')
-    assert DT.tab_hidden('launch') and DT.tab_hidden('spend') and DT.tab_hidden('norms')
-    assert not DT.tab_hidden('panel') and not DT.tab_hidden('predict') and not DT.tab_hidden('greenlight')
+    assert DT.HIDDEN_TABS == ('greenlight', 'launch', 'trailer', 'titles', 'norms')
+    assert DT.tab_hidden('launch') and DT.tab_hidden('spend') and DT.tab_hidden('norms') and DT.tab_hidden('greenlight') and DT.tab_hidden('script') and DT.tab_hidden('trailer') and DT.tab_hidden('titles')
+    assert not DT.tab_hidden('panel') and not DT.tab_hidden('predict') and not DT.tab_hidden('pilot') and not DT.tab_hidden('twins')
     ids = [it['id'] for it in DT.how_to()['items']]
-    assert 'launch' not in ids and 'spend' not in ids and 'norms' not in ids
-    assert 'predict' in ids and 'panel' in ids and 'greenlight' in ids and 'trailer' in ids and 'titles' in ids
+    for hidden in ('launch', 'spend', 'norms', 'greenlight', 'trailer', 'titles'):
+        assert hidden not in ids, hidden
+    assert ids and set(ids) <= {'twin', 'predict', 'panel', 'pilot'}
     html = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              'templates', 'index.html'), encoding='utf-8').read()
-    assert "var DTW_HIDDEN_TABS = ['launch', 'norms'];" in html
-    assert '<button type="button" hidden class="dtw-seg" data-tab="launch"' in html
-    assert '<button type="button" hidden class="dtw-seg" data-tab="norms"' in html
+    assert "var DTW_HIDDEN_TABS = ['greenlight', 'launch', 'trailer', 'titles', 'norms'];" in html
+    for tab in DT.HIDDEN_TABS:
+        assert f'<button type="button" hidden class="dtw-seg" data-tab="{tab}"' in html, tab
+    for tab in ('twins', 'predict', 'panel', 'pilot'):
+        assert f'<button type="button" class="dtw-seg{" active" if tab == "twins" else ""}" data-tab="{tab}"' in html, tab
     assert "if (DTW_HIDDEN_TABS.indexOf(tab) >= 0) tab = 'twins';" in html
 
 

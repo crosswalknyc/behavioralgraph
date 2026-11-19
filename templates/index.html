@@ -52324,12 +52324,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <div class="dtw-segs" role="tablist">
                     <button type="button" class="dtw-seg active" data-tab="twins" role="tab" onclick="dtwTab('twins')">Twins</button>
                     <button type="button" class="dtw-seg" data-tab="predict" role="tab" onclick="dtwTab('predict')">Predictive Analytics</button>
-                    <button type="button" class="dtw-seg" data-tab="greenlight" role="tab" onclick="dtwTab('greenlight')">Greenlight</button>
+                    <button type="button" hidden class="dtw-seg" data-tab="greenlight" role="tab" onclick="dtwTab('greenlight')">Greenlight</button>
                     <button type="button" hidden class="dtw-seg" data-tab="launch" role="tab" onclick="dtwTab('launch')">Launch</button>
                     <button type="button" class="dtw-seg" data-tab="panel" role="tab" onclick="dtwTab('panel')">Focus Group IQ</button>
                     <button type="button" class="dtw-seg" data-tab="pilot" role="tab" onclick="dtwTab('pilot')">Pilot Testing</button>
-                    <button type="button" class="dtw-seg" data-tab="trailer" role="tab" onclick="dtwTab('trailer')">Trailers</button>
-                    <button type="button" class="dtw-seg" data-tab="titles" role="tab" onclick="dtwTab('titles')">Titles and Key Art</button>
+                    <button type="button" hidden class="dtw-seg" data-tab="trailer" role="tab" onclick="dtwTab('trailer')">Trailers</button>
+                    <button type="button" hidden class="dtw-seg" data-tab="titles" role="tab" onclick="dtwTab('titles')">Titles and Key Art</button>
                     <button type="button" hidden class="dtw-seg" data-tab="norms" role="tab" onclick="dtwTab('norms')">Norms</button>
                 </div>
                 <div class="dtw-fg-acts" id="dtwFgActs" hidden></div>
@@ -52489,9 +52489,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         (function() {
             var S = window._dtw = window._dtw || { runs: [], twin: null, key: '', tab: 'twins', openRun: null, session: null, pilot: null, plan: null, howto: null, loaded: false, horizon: '10', spendDay: 1, spendMode: 'chip', pricing: [], summary: null, panelKind: '', portraitTimers: [], roomPollTimer: null, roomTick: null, libKind: 'all', libQ: '', coverTries: 0 };
             var TABS = ['twins', 'predict', 'greenlight', 'launch', 'spend', 'panel', 'pilot', 'trailer', 'titles', 'norms'];
-            // Hidden for now (Jenna 2026-11-18): Launch runs on hand-written constants and Norms fills only as tests are filed. The
-            // buttons stay in the page hidden, a deep link lands on Twins; one list with migration.digital_twins.HIDDEN_TABS.
-            var DTW_HIDDEN_TABS = ['launch', 'norms'];
+            // Hidden for now (Jenna 2026-11-18): Launch runs on hand-written constants, Norms fills only as tests are filed, and the
+            // Greenlight, Trailers and Titles and Key Art asks are carried by Predictive Analytics and Focus Group IQ. The buttons stay
+            // in the page hidden, a deep link lands on Twins; one list with migration.digital_twins.HIDDEN_TABS.
+            var DTW_HIDDEN_TABS = ['greenlight', 'launch', 'trailer', 'titles', 'norms'];
             window._dtwHiddenTabs = DTW_HIDDEN_TABS;
             // Greenlight is two options inside one tab (Jenna 2026-10-28): dtwTab('script') and dtwTab('concept') land on Greenlight with that option picked.
             var GL_OPTIONS = ['script', 'concept'];
