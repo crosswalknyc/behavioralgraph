@@ -74,7 +74,16 @@ MAX_QUESTIONS = 8
 STALE_S = 240.0
 SWEEP_S = 90.0
 RUNNING_KEY = 'system/digital_twins/guided_running.json'
-LIVE: dict = {}        # job_id -> True while a thread in this process runs it
+# The app runs as several worker processes (gunicorn, three workers), each with its own threads and its own memory. A
+# per-process registry is not enough: the first pick-up (2026-11-18, 23:58 UTC) fired in more than one worker at once and
+# two copies of the run raced, asking the same questions twice. One run holds ONE lock on S3 (a small document with the
+# owner and a heartbeat the runner refreshes every HEARTBEAT_S); a run is stale only when its lock is missing or its
+# heartbeat is older than LOCK_STALE_S, whichever process is asking. Acquiring is a conditional write (IfNoneMatch on a
+# missing lock, IfMatch on a stale one), so two processes cannot both win.
+LOCK_PREFIX = 'system/digital_twins/guided_locks/'
+LOCK_STALE_S = 150.0
+HEARTBEAT_S = 30.0
+LIVE: dict = {}        # job_id -> True while a thread in this process runs it (the fast path; the lock is the truth)
 _LIVE_LOCK = threading.Lock()
 # the reader's words for the three levels of the plan (the wide to the narrow)
 LEVEL_WORDS = {'macro': 'The big picture', 'mid': 'Closer in', 'micro': 'The question itself'}
@@ -333,6 +342,95 @@ def _index_remove(s3, job_id: str) -> None:
         _index_write(s3, data)
 
 
+def _lock_key(job_id: str) -> str:
+    return f"{LOCK_PREFIX}{job_id}.json"
+
+
+def _s3_pair(s3):
+    try:
+        from prometheus.digital_twin_job import _s3 as _host_s3
+        return _host_s3() if s3 is None else (s3, 'dashboard-inputs')
+    except Exception:
+        return s3, 'dashboard-inputs'
+
+
+def _lock_read(s3, job_id: str):
+    """(lock document, etag) or (None, None)."""
+    s3b, bucket = _s3_pair(s3)
+    if s3b is None:
+        return None, None
+    try:
+        r = s3b.get_object(Bucket=bucket, Key=_lock_key(job_id))
+        doc = json.loads(r['Body'].read().decode('utf-8')) or {}
+        return doc, str(r.get('ETag') or '').strip('"') or None
+    except Exception:
+        return None, None
+
+
+def lock_fresh(doc, now: Optional[float] = None) -> bool:
+    if not isinstance(doc, dict):
+        return False
+    return (float((now or time.time())) - float(doc.get('heartbeat') or 0)) < LOCK_STALE_S
+
+
+def _lock_acquire(s3, job_id: str, owner: str) -> bool:
+    """Take the run's lock: write it when it is missing (IfNoneMatch), take
+    it over when its heartbeat is stale (IfMatch on the etag we read), keep
+    it when we already own it. A fresh lock held by someone else is a no.
+    With no S3 at all (tests) there is nothing to coordinate: True."""
+    s3b, bucket = _s3_pair(s3)
+    if s3b is None:
+        return True
+    doc, etag = _lock_read(s3, job_id)
+    body = json.dumps({'job_id': job_id, 'owner': owner, 'heartbeat': time.time(), 'host': os.environ.get('RENDER_INSTANCE_ID') or os.environ.get('HOSTNAME') or '', 'pid': os.getpid()}).encode('utf-8')
+    try:
+        if doc is None:
+            s3b.put_object(Bucket=bucket, Key=_lock_key(job_id), Body=body, ContentType='application/json', IfNoneMatch='*')
+            return True
+        if str(doc.get('owner') or '') == owner:
+            s3b.put_object(Bucket=bucket, Key=_lock_key(job_id), Body=body, ContentType='application/json')
+            return True
+        if lock_fresh(doc):
+            return False
+        if etag:
+            s3b.put_object(Bucket=bucket, Key=_lock_key(job_id), Body=body, ContentType='application/json', IfMatch=etag)
+        else:
+            s3b.put_object(Bucket=bucket, Key=_lock_key(job_id), Body=body, ContentType='application/json')
+        return True
+    except Exception as e:
+        # a 412 (someone else wrote first) or any other refusal: not ours
+        if os.environ.get('REGRESSION_TEST_MODE', '').strip().lower() not in ('1', 'true', 'yes'):
+            print(f"[twin-guided] lock {job_id} not taken: {str(e)[:100]}")
+        return False
+
+
+def _lock_beat(s3, job_id: str, owner: str) -> bool:
+    s3b, bucket = _s3_pair(s3)
+    if s3b is None:
+        return True
+    doc, _etag = _lock_read(s3, job_id)
+    if doc is not None and str(doc.get('owner') or '') != owner and lock_fresh(doc):
+        return False       # someone else took it over: this runner must stop
+    try:
+        s3b.put_object(Bucket=bucket, Key=_lock_key(job_id), Body=json.dumps({'job_id': job_id, 'owner': owner, 'heartbeat': time.time(), 'pid': os.getpid()}).encode('utf-8'), ContentType='application/json')
+        return True
+    except Exception:
+        return True
+
+
+def _lock_release(s3, job_id: str, owner: str) -> None:
+    s3b, bucket = _s3_pair(s3)
+    if s3b is None:
+        return
+    doc, _etag = _lock_read(s3, job_id)
+    if doc is not None and str(doc.get('owner') or '') != owner:
+        return
+    try:
+        s3b.delete_object(Bucket=bucket, Key=_lock_key(job_id))
+    except Exception:
+        pass
+
+
 def _status_write(job_id: str, rec: dict) -> None:
     try:
         from prometheus import digital_twin_job as J
@@ -364,6 +462,11 @@ def start_run(s3, payload: dict, key: str, sess: dict, plan_doc: dict, *, userna
     persists the twin (the API passes DT.save_twin bound to s3 and key);
     ``ask`` stands in for digital_twin_panel.ask in tests."""
     job_id = str((sess.get('guided') or {}).get('job_id') or '') or ('gd' + uuid.uuid4().hex[:10])
+    owner = uuid.uuid4().hex[:12]
+    if is_live(job_id) or not _lock_acquire(s3, job_id, owner):
+        # another process (or another thread here) is running this plan: one runner, ever
+        print(f"[twin-guided] {job_id}: already running elsewhere; not started again")
+        return None
     g = sess.setdefault('guided', {})
     g.update({'version': VERSION, 'job_id': job_id, 'plan': {k: v for k, v in plan_doc.items() if k != 'method'}, 'status': 'running', 'started_at': g.get('started_at') or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'done': sum(1 for i in range(len(plan_doc.get('questions') or [])) if _finished(_record_for(sess, i))), 'total': len(plan_doc.get('questions') or []), 'error': ''})
@@ -382,17 +485,29 @@ def start_run(s3, payload: dict, key: str, sess: dict, plan_doc: dict, *, userna
     except Exception:
         pass
 
+    stop = threading.Event()
+
+    def _beat():
+        while not stop.wait(HEARTBEAT_S):
+            if not _lock_beat(s3, job_id, owner):
+                stop.set()
+                break
+
     def _work():
+        hb = threading.Thread(target=_beat, name=f"twin-guided-beat-{job_id}", daemon=True)
+        hb.start()
         try:
             _run(s3, payload, key, sess, plan_doc, job_id, username=username, twins_by_key=twins_by_key or {key: payload}, voices_fn=voices_fn,
-                 usage_extras=usage_extras, save=save, ask=ask, outcome_call=outcome_call)
+                 usage_extras=usage_extras, save=save, ask=ask, outcome_call=outcome_call, stop=stop)
         finally:
+            stop.set()
             _set_live(job_id, False)
             if str((sess.get('guided') or {}).get('status') or '') != 'running':
                 try:
                     _index_remove(s3, job_id)
                 except Exception:
                     pass
+            _lock_release(s3, job_id, owner)
     if run_async:
         th = threading.Thread(target=_work, name=f"twin-guided-{job_id}", daemon=True)
         th.start()
@@ -401,14 +516,18 @@ def start_run(s3, payload: dict, key: str, sess: dict, plan_doc: dict, *, userna
     return rec
 
 
-def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, voices_fn, usage_extras, save, ask, outcome_call):
+def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, voices_fn, usage_extras, save, ask, outcome_call, stop=None):
     g = sess.setdefault('guided', {})
     qs = plan_doc.get('questions') or []
     total = len(qs)
     try:
         from migration import digital_twin_panel as P
-        asker = ask or (lambda sess_, q, **kw: P.ask(sess_, twins_by_key, q, run_async=False, asked_by=username, s3=s3, twin_key=key, voices_fn=voices_fn, usage_extras=usage_extras, ask_again=True, **kw))
+        # the room answers on its own thread (run_async) so the record exists, tagged and saved, the moment the question is
+        # put; this loop waits for it. A runner that loses its lock to another process stops at the next boundary.
+        asker = ask or (lambda sess_, q, **kw: P.ask(sess_, twins_by_key, q, run_async=True, asked_by=username, s3=s3, twin_key=key, voices_fn=voices_fn, usage_extras=usage_extras, ask_again=True, **kw))
         for i, pq in enumerate(qs):
+            if stop is not None and stop.is_set():
+                raise RuntimeError('another process took this run over')
             prior = _record_for(sess, i)
             if prior is not None and not _finished(prior):
                 # a record of ours still in flight: another process may be finishing it (the room's own pick-up), so wait for it;
@@ -436,6 +555,12 @@ def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, vo
                 rec['guided_level'] = pq.get('level')
                 if retry:
                     rec['guided_retry'] = 1
+                if save:
+                    try:
+                        save(payload)      # the question is on the record, tagged, before the room answers
+                    except Exception:
+                        traceback.print_exc()
+                _wait_record(s3, rec, stop=stop)
             g['done'] = sum(1 for j in range(total) if _finished(_record_for(sess, j)))
             if save:
                 try:
@@ -469,6 +594,85 @@ def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, vo
                 pass
         _status_write(job_id, {'job_id': job_id, 'user': username, 'op': 'guided_room', 'status': 'error', 'stage': 'stopped', 'key': key, 'session_id': str(sess.get('id') or ''),
                                'subject': _subject(payload), 'goal': plan_doc.get('goal'), 'done': int(g.get('done') or 0), 'total': total, 'error': g['error']})
+
+
+def _wait_record(s3, rec: dict, *, stop=None, ceiling_s: float = 1800.0) -> dict:
+    """Wait for the room to finish a question it is answering on its own
+    thread. The record object is shared with the room, so it fills in
+    place; the job document is the fallback when it does not. A question
+    past the ceiling is marked failed so the run can move on."""
+    if _finished(rec):
+        return rec
+    try:
+        from migration import digital_twin_room as R
+    except Exception:
+        R = None
+    jid = str(rec.get('job_id') or '')
+    deadline = time.monotonic() + ceiling_s
+    while not _finished(rec):
+        if stop is not None and stop.is_set():
+            break
+        if R is not None and s3 is not None and jid:
+            job = R.job_read(s3, jid)
+            if job is not None:
+                jq = job.get('question') if isinstance(job.get('question'), dict) else {}
+                if str(job.get('status') or '') in ('done', 'error') or str(job.get('stage') or '') in ('done', 'failed'):
+                    for k, v in jq.items():
+                        if k != 'trail':
+                            rec[k] = v
+                    if str(job.get('status') or '') == 'error' and str(rec.get('stage') or '') != 'failed':
+                        rec['stage'] = 'failed'
+                    break
+        elif s3 is None:
+            break        # nothing to wait on (tests)
+        if time.monotonic() > deadline:
+            rec['stage'] = 'failed'
+            rec['finished_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            rec.setdefault('read', 'The room did not finish this one in time.')
+            break
+        time.sleep(8.0)
+    return rec
+
+
+def _norm_q(s) -> str:
+    return re.sub(r"[^a-z0-9]+", ' ', str(s or '').lower()).strip()
+
+
+def reconcile_records(s3, sess: dict, plan_doc: dict) -> int:
+    """Before a pick-up: one record per planned question. Records left in
+    flight by a dead runner go (nothing holds the lock, so nothing is
+    answering them); a finished record that matches a planned question by
+    its words is tagged with its index; a second finished record for the
+    same index (two runners raced) is dropped, the earliest kept. Questions
+    the owner asked by hand are left alone. Returns the number removed."""
+    qs = plan_doc.get('questions') or []
+    plan_by_norm = {}
+    for i, pq in enumerate(qs):
+        plan_by_norm.setdefault(_norm_q(pq.get('q')), i)
+    recs = list(sess.get('questions') or [])
+    keep, seen, removed = [], {}, 0
+    for rec in recs:
+        if not isinstance(rec, dict):
+            keep.append(rec)
+            continue
+        i = rec.get('guided_i')
+        if i is None and _norm_q(rec.get('q')) in plan_by_norm:
+            i = plan_by_norm[_norm_q(rec.get('q'))]
+            rec['guided_i'] = i
+            rec['guided_level'] = (qs[i] or {}).get('level')
+        if i is None:
+            keep.append(rec)
+            continue
+        if not _finished(rec):
+            removed += 1          # in flight with no runner alive: dead
+            continue
+        if i in seen:
+            removed += 1          # a duplicate of a finished question: the first one stands
+            continue
+        seen[i] = rec
+        keep.append(rec)
+    sess['questions'] = keep
+    return removed
 
 
 def _await_or_drop(s3, sess: dict, rec: dict, *, save=None, payload=None, wait_s: float = 900.0) -> Optional[dict]:
@@ -521,6 +725,10 @@ def is_stale(s3, sess: dict, now: Optional[float] = None) -> bool:
     if not jid or is_live(jid):
         return False
     now = now or time.time()
+    lock, _etag = _lock_read(s3, jid)
+    if lock is not None:
+        return not lock_fresh(lock, now)      # a runner anywhere keeps the heartbeat fresh
+    # no lock on file (a run from before locks, or no S3 to read): fall back to the job document and the start time
     try:
         from prometheus import digital_twin_job as J
         doc = J.status_read(jid) or {}
@@ -536,18 +744,6 @@ def is_stale(s3, sess: dict, now: Optional[float] = None) -> bool:
             started = 0.0
         if started and (now - started) < STALE_S:
             return False
-    # a question of its own still moving means something is running it
-    try:
-        from migration import digital_twin_room as R
-        from migration import digital_twin_room_jobs as RJ
-        for rec in sess.get('questions') or []:
-            if rec.get('guided_i') is None or _finished(rec):
-                continue
-            job = R.job_read(s3, str(rec.get('job_id') or '')) if s3 is not None else None
-            if job is not None and str(job.get('status') or '') == 'running' and not RJ.is_stale(job, now):
-                return False
-    except Exception:
-        pass
     return True
 
 
@@ -574,9 +770,10 @@ def resume_if_stale(s3, payload: dict, key: str, sess: dict, *, username: str = 
                                                'session_id': str(sess.get('id') or ''), 'subject': _subject(payload), 'goal': plan_doc.get('goal'), 'done': done, 'total': len(plan_doc['questions']),
                                                'resumes': int((doc or {}).get('resumes') or 0) + 1})
     print(f"[twin-guided] {g.get('job_id')}: picking it back up at question {done + 1} of {len(plan_doc['questions'])} (the run had gone quiet)")
-    start_run(s3, payload, key, sess, plan_doc, username=username or (doc or {}).get('user') or str(sess.get('created_by') or ''), twins_by_key=twins_by_key or {key: payload},
-              voices_fn=voices_fn, usage_extras=usage_extras, save=save, ask=ask, outcome_call=outcome_call, run_async=run_async)
-    return True
+    reconcile_records(s3, sess, plan_doc)
+    started = start_run(s3, payload, key, sess, plan_doc, username=username or (doc or {}).get('user') or str(sess.get('created_by') or ''), twins_by_key=twins_by_key or {key: payload},
+                        voices_fn=voices_fn, usage_extras=usage_extras, save=save, ask=ask, outcome_call=outcome_call, run_async=run_async)
+    return started is not None
 
 
 def sweep(s3, *, load_twin: Callable, save_for: Callable, context_for: Optional[Callable] = None, now: Optional[float] = None) -> int:
@@ -870,5 +1067,6 @@ def public_guided(sess: dict) -> Optional[dict]:
             'started_at': g.get('started_at'), 'finished_at': g.get('finished_at')}
 
 
-__all__ = ['VERSION', 'PRODUCT', 'KINDS', 'LEVEL_WORDS', 'MIN_QUESTIONS', 'MAX_QUESTIONS', 'STALE_S', 'SWEEP_S', 'RUNNING_KEY', 'kind_of', 'plan', 'deterministic_plan', 'start_run',
-           'is_live', 'is_stale', 'resume_if_stale', 'sweep', 'outcome', 'deterministic_outcome', 'outcome_lines', 'public_guided', 'call_word', 'report', 'report_filename', 'build_report_pdf']
+__all__ = ['VERSION', 'PRODUCT', 'KINDS', 'LEVEL_WORDS', 'MIN_QUESTIONS', 'MAX_QUESTIONS', 'STALE_S', 'SWEEP_S', 'RUNNING_KEY', 'LOCK_PREFIX', 'LOCK_STALE_S', 'HEARTBEAT_S', 'kind_of', 'plan',
+           'deterministic_plan', 'start_run', 'is_live', 'is_stale', 'lock_fresh', 'reconcile_records', 'resume_if_stale', 'sweep', 'outcome', 'deterministic_outcome', 'outcome_lines',
+           'public_guided', 'call_word', 'report', 'report_filename', 'build_report_pdf']

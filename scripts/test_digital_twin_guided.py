@@ -422,6 +422,75 @@ class Revive(unittest.TestCase):
         self.assertEqual(state, {}, 'done, missing and finished entries all leave the index')
 
 
+class OneRunner(unittest.TestCase):
+    """One runner, ever, across processes: the lock on S3 with its heartbeat
+    (2026-11-18: the first pick-up fired in more than one gunicorn worker
+    and two copies of the run asked the same questions twice)."""
+
+    def _s3(self):
+        import test_digital_twins_company_scope as CS
+        return CS.FakeS3()
+
+    def test_the_lock_is_taken_once_and_taken_over_only_when_stale(self):
+        s3 = self._s3()
+        self.assertTrue(GD._lock_acquire(s3, 'gdlock1', 'owner-a'))
+        self.assertFalse(GD._lock_acquire(s3, 'gdlock1', 'owner-b'), 'a fresh lock held by someone else is a no')
+        self.assertTrue(GD._lock_acquire(s3, 'gdlock1', 'owner-a'), 'the owner keeps it')
+        sess = {'guided': {'status': 'running', 'job_id': 'gdlock1', 'started_at': '2026-11-18T20:27:45Z'}}
+        self.assertFalse(GD.is_stale(s3, sess), 'a fresh heartbeat means a runner is alive somewhere')
+        doc, _ = GD._lock_read(s3, 'gdlock1')
+        doc['heartbeat'] = time.time() - GD.LOCK_STALE_S - 5
+        s3.put_object(Bucket='dashboard-inputs', Key=GD._lock_key('gdlock1'), Body=json.dumps(doc).encode())
+        self.assertTrue(GD.is_stale(s3, sess), 'a stale heartbeat: the run is quiet')
+        self.assertTrue(GD._lock_acquire(s3, 'gdlock1', 'owner-b'), 'the stale lock is taken over')
+        self.assertFalse(GD._lock_beat(s3, 'gdlock1', 'owner-a'), 'the old owner learns it lost the lock on its next beat')
+        GD._lock_release(s3, 'gdlock1', 'owner-a')
+        self.assertIsNotNone(GD._lock_read(s3, 'gdlock1')[0], 'a release by the old owner does not remove the new lock')
+        GD._lock_release(s3, 'gdlock1', 'owner-b')
+        self.assertIsNone(GD._lock_read(s3, 'gdlock1')[0])
+
+    def test_a_second_start_on_the_same_run_stands_down(self):
+        s3 = self._s3()
+        t = _twin()
+        sess = P.open_session([t], title='Guided', session_id='guided-l')
+        plan = GD.plan(t, 'Should we sign her for a two-year activewear deal?')
+        payload = {'meta': t['meta'], 'panel_sessions': [sess]}
+        gate = __import__('threading').Event()
+
+        def slow_ask(sess_, q, **kw):
+            gate.wait(5)
+            rec = {'id': f"r{len(sess_.get('questions') or []) + 1}", 'q': q, 'kind': kw.get('kind') or 'open', 'stage': 'done', 'finished_at': 'now', 'read': 'r', 'options': []}
+            sess_.setdefault('questions', []).append(rec)
+            return rec
+        first = GD.start_run(s3, payload, 'k', sess, plan, username='jenna', ask=slow_ask, save=lambda p: None, run_async=True)
+        self.assertIsNotNone(first)
+        self.assertIsNone(GD.start_run(s3, payload, 'k', sess, plan, username='jenna', ask=slow_ask, save=lambda p: None, run_async=True), 'the second start stands down')
+        self.assertFalse(GD.resume_if_stale(s3, payload, 'k', sess, run_async=False), 'not stale while the first runner is alive')
+        gate.set()
+        for _ in range(200):
+            if sess['guided'].get('status') == 'done':
+                break
+            time.sleep(0.05)
+        self.assertEqual(sess['guided']['status'], 'done')
+        self.assertIsNone(GD._lock_read(s3, first['job_id'])[0], 'the lock is released when the run ends')
+        self.assertEqual(len(sess['questions']), len(plan['questions']), 'every question asked exactly once')
+
+    def test_reconcile_keeps_one_record_per_planned_question(self):
+        t = _twin()
+        sess = P.open_session([t], title='Guided', session_id='guided-r2')
+        plan = GD.plan(t, 'If we add a holiday boxed set at Target, will more people buy season two?')
+        qs = plan['questions']
+        done = lambda qid, i, q, tagged=True: dict({'id': qid, 'q': q, 'kind': 'open', 'stage': 'done', 'finished_at': 'now', 'read': 'r', 'options': []}, **({'guided_i': i} if tagged else {}))
+        sess['questions'] = [done('a', 0, qs[0]['q']), done('b', None, qs[1]['q'], tagged=False), done('b2', None, qs[1]['q'], tagged=False),
+                             {'id': 'fly', 'q': qs[2]['q'], 'kind': 'open', 'stage': 'researching', 'job_id': 'x', 'answers': []},
+                             done('mine', None, 'Would you watch it with your kids?', tagged=False)]
+        removed = GD.reconcile_records(None, sess, plan)
+        self.assertEqual(removed, 2, 'the duplicate and the dead in-flight record go')
+        ids = [r['id'] for r in sess['questions']]
+        self.assertEqual(ids, ['a', 'b', 'mine'])
+        self.assertEqual([r.get('guided_i') for r in sess['questions']], [0, 1, None], 'the match by words is tagged; the owner\'s own question is left alone')
+
+
 class Faces(unittest.TestCase):
     """A Predictive Analytics room gets its faces like every room (Jenna
     2026-11-18: 'it needs to show their pictures on these'): the portrait

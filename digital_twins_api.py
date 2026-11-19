@@ -3315,7 +3315,7 @@ def dt_guided_run(key):
                 _faults.note('digital_twins_api.guided_portraits', e)
             except Exception:
                 pass
-    job = _guided_start(user, payload, key, sess, plan_doc)
+    job = _guided_start(user, payload, key, sess, plan_doc) or {'job_id': (sess.get('guided') or {}).get('job_id')}
     return _nocache(jsonify({'success': True, 'session_id': sess['id'], 'session': sess, 'job_id': job.get('job_id'), 'guided': GD.public_guided(sess),
                              'message': 'On it. The room is seated; the questions run in order and the outcome lands when the last one does.'}))
 
@@ -3361,7 +3361,8 @@ def dt_guided_resume(key, sid):
     if sess['guided'].get('status') == 'running':
         return _nocache(jsonify({'success': True, 'job_id': sess['guided'].get('job_id'), 'guided': __import__('migration.digital_twin_guided', fromlist=['public_guided']).public_guided(sess), 'note': 'Still running.'}))
     from migration import digital_twin_guided as GD
-    job = _guided_start(user, payload, key, sess, sess['guided']['plan'])
+    GD.reconcile_records(_s3(), sess, sess['guided']['plan'])
+    job = _guided_start(user, payload, key, sess, sess['guided']['plan']) or {'job_id': sess['guided'].get('job_id')}
     return _nocache(jsonify({'success': True, 'job_id': job.get('job_id'), 'guided': GD.public_guided(sess)}))
 
 
