@@ -10989,6 +10989,65 @@ def _journey_access_effective(user, product_key, journey_id):
     return False
 
 
+def _bpiq_file_visible(user, journey_id, meta=None, payload=None,
+                       username=None):
+    """Company-wallet Brand Partnership portal: own company only.
+
+    Crosswalk company and staff see every pull. A leftover '*' on any
+    other company is not the whole library.
+    """
+    import wallet as _w
+    uname = username if username is not None else (
+        session.get('username') or '')
+    try:
+        users_data = load_users()
+    except Exception:
+        users_data = {}
+    return _w.bpiq_result_visible(
+        user, username=uname, journey_id=journey_id,
+        meta=meta, users_data=users_data, payload=payload)
+
+
+def _stamp_bpiq_ownership(s3_key, username):
+    """Record who pulled this valuation and which company wallet owns it."""
+    import wallet as _w
+    bare = str(s3_key or '').replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+    stamp = {'company': '', 'pulled_by': str(username or '').strip()}
+
+    def _mutate(data):
+        if not isinstance(data, dict):
+            return None
+        u = (data.get('users') or {}).get(username)
+        s, wrote = _w.record_bpiq_pull(data, u, username, bare)
+        stamp.update(s or {})
+        return data if wrote else None
+
+    try:
+        _users_cas_mutate(_mutate)
+    except Exception as err:
+        print(f"[bpiq] ownership grant skipped: {err}")
+    if not stamp.get('company'):
+        try:
+            data = load_users()
+            u = (data.get('users') or {}).get(username)
+            s, _wrote = _w.record_bpiq_pull(data, u, username, bare)
+            stamp.update(s or {})
+        except Exception:
+            pass
+    try:
+        meta = load_bpiq_metadata()
+        row = dict(meta.get(bare) or {})
+        if stamp.get('company'):
+            row['company'] = stamp['company']
+        if stamp.get('pulled_by'):
+            row['pulled_by'] = stamp['pulled_by']
+        meta[bare] = row
+        save_bpiq_metadata(meta)
+    except Exception as err:
+        print(f"[bpiq] ownership sidecar skipped: {err}")
+    return stamp
+
+
 def _validate_journeys_payload(raw, field_name):
     """Coerce + validate an incoming journeys payload from admin save.
 
@@ -41247,6 +41306,10 @@ def _run_brand_partnership_iq(job_id):
             s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                                  Body=json.dumps(empty_data).encode('utf-8'),
                                  ContentType='application/json')
+            try:
+                _stamp_bpiq_ownership(s3_key, job.get('username') or '')
+            except Exception as _own_err:
+                print(f"[bpiq] ownership stamp skipped: {_own_err}")
             update_job_status(job_id, s3_key=s3_key)
             return
 
@@ -42062,6 +42125,10 @@ def _run_brand_partnership_iq(job_id):
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
+        try:
+            _stamp_bpiq_ownership(s3_key, job.get('username') or '')
+        except Exception as _own_err:
+            print(f"[bpiq] ownership stamp skipped: {_own_err}")
 
         # 2026-09-09: purgatory register-for-review retired; file
         # was already published at s3_key above.
@@ -42195,14 +42262,16 @@ def get_brand_partnership_iq_result(s3_key):
         bare_key = full_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
         if _bpiq_is_backup_key(full_key) or _bpiq_is_backup_key(bare_key):
             return _key_not_found('brand_partnership', s3_key, _nf_body)
-        # 2026-09-03: Per-journey access gate. Journey id = bare filename
-        # without the .json suffix (matches list_brand_partnership_iq).
+        # Per-file gate: company-wallet seats only open pulls their
+        # company made (Crosswalk sees every pull). Journey id = bare
+        # filename without the .json suffix.
         _bp_journey_id = bare_key[:-5] if bare_key.endswith('.json') else bare_key
-        if not _journey_access_effective(get_current_user(), 'brand_partnership_iq', _bp_journey_id):
-            return jsonify({'success': False, 'error': 'Access denied for this journey.'}), 403
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
+        if not _bpiq_file_visible(get_current_user(), _bp_journey_id,
+                                 meta=meta, payload=data):
+            return jsonify({'success': False, 'error': 'Access denied for this journey.'}), 403
         # The windows the page prints under the title (2026-11-18): read
         # here by the one function the deck uses (migration/bpiq_windows.py)
         # and carried on this response only, under `_bpiq_window`. The
@@ -42241,13 +42310,10 @@ def list_brand_partnership_iq():
         return err
     try:
         bpiq_metadata = load_bpiq_metadata()
-        # 2026-09-03: Per-journey access - filter the catalog to just
-        # the journeys this user was granted. Super admins and cloaked
-        # sessions resolve to '*' (see compute_product_access_flags),
-        # so the filter is a no-op for them.
-        _bp_journeys_grant = _journeys_access_of(get_current_user(), 'brand_partnership_iq')
-        _bp_grant_all = (_bp_journeys_grant == '*')
-        _bp_grant_set = set(_bp_journeys_grant) if isinstance(_bp_journeys_grant, list) else set()
+        # Company-wallet seats see only valuations their company pulled.
+        # Crosswalk company and staff see every pull. A leftover '*' on
+        # any other company is not the whole library.
+        _bp_user = get_current_user()
         paginator = s3_client.get_paginator('list_objects_v2')
         files = []
         for page in paginator.paginate(Bucket=S3_BUCKET,
@@ -42263,13 +42329,12 @@ def list_brand_partnership_iq():
                     continue
                 bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
                 name_part = bare_key.replace('.json', '')
-                # Per-journey access gate. Journey id = bare filename
-                # without the .json suffix (stable across metadata edits).
-                if not _bp_grant_all and name_part not in _bp_grant_set:
+                meta_row = bpiq_metadata.get(bare_key, {}) or {}
+                if not _bpiq_file_visible(_bp_user, name_part, meta=meta_row):
                     continue
                 default_name = re.sub(r'_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',
                                       '', name_part).replace('_', ' ')
-                meta = bpiq_metadata.get(bare_key, {})
+                meta = meta_row
                 display_name = (meta.get('display_name') or default_name).strip()
                 # BPIQ categories are canonical UPPERCASE (see the admin
                 # dropdown in templates/admin.html and the starter list
@@ -42310,12 +42375,28 @@ def export_brand_partnership_iq_deck():
     """
     from migration.bpiq_deck_export import deck_response
 
+    payload = request.get_json(force=True, silent=True) or {}
+    s3_key = str(payload.get('s3_key') or '').strip()
+    if s3_key:
+        bare_key = s3_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+        meta_row = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
+        jid = bare_key[:-5] if bare_key.endswith('.json') else bare_key
+        vis_payload = payload.get('data') if isinstance(
+            payload.get('data'), dict) else payload
+        if not _bpiq_file_visible(
+                get_current_user(), jid, meta=meta_row,
+                payload=vis_payload):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied for this journey.',
+            }), 403
+
     def _meta_for_key(bare_key):
         # The admin-managed sidecar: image_url + category per bare key.
         return (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
 
     return deck_response(
-        request.get_json(force=True, silent=True) or {},
+        payload,
         meta_for_key=_meta_for_key,
         s3_prefix=BRAND_PARTNERSHIP_IQ_S3_PREFIX,
         # the cover photo lives in the private bucket behind

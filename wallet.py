@@ -4506,6 +4506,204 @@ def is_internal_staff_seat(user: dict, username: str = "") -> bool:
     return False
 
 
+def _fold_company_token(name) -> str:
+    return re.sub(r"[^a-z0-9]+", "", canonical_company_name(name).lower())
+
+
+def is_crosswalk_company(name) -> bool:
+    """True for the Crosswalk company wallet (any common spelling)."""
+    n = _fold_company_token(name)
+    return n in {
+        "crosswalk",
+        "crosswalktechnologies",
+        "crosswalknyc",
+        "crosswalktechnologiesinc",
+    }
+
+
+def companies_match(a, b) -> bool:
+    ca, cb = _fold_company_token(a), _fold_company_token(b)
+    return bool(ca) and ca == cb
+
+
+def bpiq_journey_id(key) -> str:
+    """Bare Brand Partnership valuation id (filename without .json)."""
+    s = str(key or "").strip().replace("\\", "/")
+    s = s.split("/")[-1]
+    if s.lower().endswith(".json"):
+        s = s[:-5]
+    return s.strip()
+
+
+def bpiq_grant_ids(raw) -> set:
+    if not isinstance(raw, list):
+        return set()
+    out = set()
+    for item in raw:
+        jid = bpiq_journey_id(item)
+        if jid:
+            out.add(jid)
+    return out
+
+
+def sees_all_bpiq_catalog(user, username: str = "") -> bool:
+    """Crosswalk staff and the Crosswalk company wallet see every pull."""
+    if is_internal_staff_seat(user, username):
+        return True
+    if not isinstance(user, dict):
+        return False
+    return is_crosswalk_company(user.get("company"))
+
+
+def bpiq_catalog_scope(user, users_data=None, username: str = "") -> tuple:
+    """Who this seat may browse in the Brand Partnership portal.
+
+    Returns ('all', None) for Crosswalk / staff, ('company', name) for
+    any other company wallet, or ('self', username) for a personal seat.
+    """
+    if sees_all_bpiq_catalog(user, username):
+        return "all", None
+    if not isinstance(user, dict):
+        return "self", str(username or "")
+    try:
+        _subj, kind, key = resolve_billing_subject(user, users_data or {})
+    except Exception:
+        kind, key = "", ""
+    if kind == "company" and key and not is_crosswalk_company(key):
+        return "company", key
+    return "self", str(username or "")
+
+
+def _company_record(users_data, name) -> tuple:
+    companies = (users_data or {}).get("companies") or {}
+    if not isinstance(companies, dict):
+        return {}, canonical_company_name(name)
+    key = canonical_company_name(name)
+    rec = companies.get(key)
+    if isinstance(rec, dict):
+        return rec, key
+    raw = str(name or "").strip()
+    rec = companies.get(raw)
+    if isinstance(rec, dict):
+        return rec, raw
+    for k, v in companies.items():
+        if isinstance(v, dict) and companies_match(k, name):
+            return v, k
+    return {}, key
+
+
+def record_bpiq_pull(users_data, user, username, journey_id) -> tuple:
+    """Stamp a pull onto the company wallet so teammates see it.
+
+    Returns ({company, pulled_by}, wrote). Does not convert a seat's
+    '*' grant into a list. Crosswalk is not appended (they see all).
+    """
+    jid = bpiq_journey_id(journey_id)
+    pulled_by = str(username or "").strip()
+    company = ""
+    if isinstance(user, dict):
+        try:
+            _subj, kind, key = resolve_billing_subject(
+                user, users_data or {})
+        except Exception:
+            kind, key = "", ""
+        if kind == "company" and key:
+            company = key
+        else:
+            company = canonical_company_name(user.get("company")) or ""
+    if not company and is_internal_staff_seat(user, username):
+        company = "Crosswalk"
+    stamp = {"company": company, "pulled_by": pulled_by}
+    if not jid or not isinstance(users_data, dict):
+        return stamp, False
+    wrote = False
+    if isinstance(user, dict):
+        cur = user.get("brand_partnership_iq_journeys")
+        if cur == "*":
+            pass
+        elif isinstance(cur, list):
+            if jid not in bpiq_grant_ids(cur):
+                user["brand_partnership_iq_journeys"] = list(cur) + [jid]
+                wrote = True
+        else:
+            user["has_brand_partnership_iq_access"] = True
+            user["brand_partnership_iq_journeys"] = [jid]
+            wrote = True
+    if company and not is_crosswalk_company(company):
+        rec = ensure_company_record(
+            users_data, company, seed_user=user if isinstance(user, dict) else None)
+        if isinstance(rec, dict):
+            cur = rec.get("brand_partnership_iq_journeys")
+            if cur != "*":
+                have = list(cur) if isinstance(cur, list) else []
+                if jid not in bpiq_grant_ids(have):
+                    have.append(jid)
+                    rec["brand_partnership_iq_journeys"] = have
+                    wrote = True
+        for _uname, member in company_members(company, users_data):
+            if member is user:
+                continue
+            cur = member.get("brand_partnership_iq_journeys")
+            if cur == "*" or not isinstance(cur, list):
+                continue
+            if jid not in bpiq_grant_ids(cur):
+                member["brand_partnership_iq_journeys"] = list(cur) + [jid]
+                wrote = True
+    return stamp, wrote
+
+
+def bpiq_result_visible(user, *, username="", journey_id="", meta=None,
+                        users_data=None, payload=None) -> bool:
+    """True when this seat may see this Brand Partnership valuation.
+
+    Company-wallet seats (not Crosswalk) see pulls by their own
+    company, plus any file on an explicit grant list. Crosswalk
+    company and staff see every pull. A personal seat sees files it
+    pulled and files it was granted. A leftover '*' on a non-Crosswalk
+    seat is not the whole library.
+    """
+    jid = bpiq_journey_id(journey_id)
+    if not jid:
+        return False
+    meta = dict(meta or {})
+    if isinstance(payload, dict):
+        if not meta.get("pulled_by") and payload.get("created_by"):
+            meta["created_by"] = payload.get("created_by")
+        if not meta.get("company") and payload.get("company"):
+            meta["company"] = payload.get("company")
+    users_data = users_data if isinstance(users_data, dict) else {}
+    scope, scope_key = bpiq_catalog_scope(user, users_data, username)
+    if scope == "all":
+        return True
+    if jid in bpiq_grant_ids(
+            (user or {}).get("brand_partnership_iq_journeys")
+            if isinstance(user, dict) else None):
+        return True
+    pulled = str(
+        meta.get("pulled_by") or meta.get("created_by") or "").strip()
+    if scope == "self":
+        return bool(pulled) and pulled == str(username or "").strip()
+    rec, _ck = _company_record(users_data, scope_key)
+    if jid in bpiq_grant_ids(rec.get("brand_partnership_iq_journeys")):
+        return True
+    file_co = canonical_company_name(meta.get("company"))
+    if file_co and companies_match(file_co, scope_key):
+        return True
+    if pulled:
+        if pulled == str(username or "").strip():
+            return True
+        pu = (users_data.get("users") or {}).get(pulled) or {}
+        if companies_match(pu.get("company"), scope_key):
+            return True
+        try:
+            _s, kind, key = resolve_billing_subject(pu, users_data)
+        except Exception:
+            kind, key = "", ""
+        if kind == "company" and companies_match(key, scope_key):
+            return True
+    return False
+
+
 def has_full_profile_catalog(user, username: str = "") -> bool:
     """True when this seat is not on the Prometheus-only governor.
 
@@ -6225,7 +6423,10 @@ __all__ = [
     "priced_unlock_due", "complimentary_covers_profile",
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
-    "is_internal_staff_seat", "has_full_profile_catalog",
+    "is_internal_staff_seat", "is_crosswalk_company", "companies_match",
+    "bpiq_journey_id", "bpiq_grant_ids", "sees_all_bpiq_catalog",
+    "bpiq_catalog_scope", "record_bpiq_pull", "bpiq_result_visible",
+    "has_full_profile_catalog",
     "profile_iq_module_enabled",
     "is_paid_only_plan",
     "PUBLIC_SIGNUP_SOURCE", "is_public_signup_seat",

@@ -17887,39 +17887,10 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
         except Exception as meta_err:
             print(f"[bpiq-job {job_id}] metadata sidecar failed "
                   f"(non-fatal): {meta_err}")
-        # Access: the requester must see their own result. '*' and
-        # legacy-full users already do; list-scoped users get the new
-        # file appended; users without the product get a scoped grant
-        # of exactly this file.
+        # Company wallet owns the pull so teammates see it. Crosswalk
+        # sees every pull; other companies never inherit the library.
         try:
-            def _grant(u):
-                if not u:
-                    return False
-                cur = u.get('brand_partnership_iq_journeys')
-                if cur == '*':
-                    return False
-                if isinstance(cur, list):
-                    if bare_key in cur:
-                        return False
-                    u['brand_partnership_iq_journeys'] = cur + [bare_key]
-                    return True
-                if u.get('has_brand_partnership_iq_access'):
-                    return False  # legacy '*' compat
-                u['has_brand_partnership_iq_access'] = True
-                u['brand_partnership_iq_journeys'] = [bare_key]
-                return True
-            def _grant_doc(data):
-                # The CAS mutator must hand back the WHOLE users doc
-                # (or None to skip the write). Returning _grant's bool
-                # here wrote the literal `true` over system/users.json
-                # on 2026-10-28 and took the dashboard down (every
-                # sign-in looped between / and /login).
-                if not isinstance(data, dict):
-                    return None
-                if _grant((data.get('users') or {}).get(username)):
-                    return data
-                return None
-            _H._users_cas_mutate(_grant_doc)
+            _H._stamp_bpiq_ownership(out_key, username)
         except Exception as acc_err:
             print(f"[bpiq-job {job_id}] access grant skipped: {acc_err}")
         _pm_bpiq_status_write(job_id, {
