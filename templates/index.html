@@ -51919,6 +51919,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pa-seat em { font-style: normal; font-size: 11px; line-height: 15px; color: var(--dtw-body); margin-top: 3px; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-pa-seat i { font-style: normal; font-size: 10.5px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-pa-acts { margin-top: 1.4rem; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pa-acts.top { margin: 12px 0 2px; padding-bottom: 12px; border-bottom: 1px solid var(--dtw-hair); }
         #digitalTwinsIQView .dtw-pa-acts .dtw-right { margin-left: auto; }
         #digitalTwinsIQView .dtw-pa-outmsg .dtw-fg-bubble p { margin: 6px 0; }
         #digitalTwinsIQView .dtw-pa-outacts { margin-top: 8px; }
@@ -54795,6 +54796,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<div class="dtw-eyebrow">Predictive Analytics ' + SEP + ' ' + esc(aud.name || paTwinName(p.key)) + (aud.people ? ' ' + SEP + ' ' + fmtN(aud.people) + ' people' : '') + (rp.finished_at ? ' ' + SEP + ' ' + esc(fmtDay(rp.finished_at)) : '') + '</div>';
                 out += '<h2 class="dtw-pa-h">' + esc(rp.goal || rp.title || '') + '</h2>';
                 if (rp.asked && rp.asked !== rp.goal) out += '<div class="dtw-pa-asked">You asked: ' + esc(rp.asked) + '</div>';
+                // the exports and the room, above the card (Jenna 2026-11-18): download the report, the raw data, ask the room, start another
+                out += '<div class="dtw-actions dtw-pa-acts top"><a class="dtw-btn dtw-btn-primary" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(p.key) + '/guided/' + esc(p.sid) + '/report.pdf">Download the report (PDF)</a>'
+                    + '<a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(p.key) + '/panel/' + esc(p.sid) + '/export.csv">Raw data (CSV)</a>'
+                    + '<button type="button" class="dtw-btn" onclick="dtwPaWatchRoom()">Ask the room</button>'
+                    + '<button type="button" class="dtw-btn dtw-right" onclick="dtwPaAnother()">Ask another question</button></div>';
                 if (o) {
                     out += '<div class="dtw-pa-outcome"><div class="dtw-pa-callbox ' + paCallClass(o) + '"><span class="k">The call</span><b>' + esc(paCallWord(o)) + '</b></div><div class="dtw-pa-outbody"><p class="lead">' + esc(o.answer || '') + '</p>' + (o.why ? '<p>' + esc(o.why) + '</p>' : '')
                         + ((o.numbers || []).length ? '<ul class="dtw-pa-nums">' + o.numbers.map(function(n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' : '')
@@ -54810,10 +54816,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + ((q.voices || []).length ? '<div class="dtw-pa-voices">' + q.voices.map(function(v) { return '<div class="dtw-pa-voice"><b>' + esc(titleCase(v.name || '')) + (v.age ? ', ' + esc(v.age) : '') + (v.city ? ', ' + esc(titleCase(v.city)) : '') + '</b> ' + esc(v.line || '') + '</div>'; }).join('') + '</div>' : '') + '</div></div>';
                 }).join('') + '</div>';
                 if ((rp.seats || []).length) out += '<div class="dtw-pa-sect"><div class="dtw-fg-land-head"><h3>Who sat in the room</h3><span>One person for each kind of people in the audience, each standing for the people of that kind.</span></div><div class="dtw-pa-seats">' + rp.seats.map(paFace).join('') + '</div></div>';
-                out += '<div class="dtw-actions dtw-pa-acts"><a class="dtw-btn dtw-btn-primary" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(p.key) + '/guided/' + esc(p.sid) + '/report.pdf">Download the report (PDF)</a>'
-                    + '<a class="dtw-btn" onclick="return dtwDownload(this, event)" href="/api/digital-twins/' + esc(p.key) + '/panel/' + esc(p.sid) + '/export.csv">The room as a CSV</a>'
-                    + '<button type="button" class="dtw-btn" onclick="dtwPaWatchRoom()">Open the room and keep asking</button>'
-                    + '<button type="button" class="dtw-btn dtw-right" onclick="dtwPaAnother()">Ask another question</button></div>';
                 return out + '</div>';
             }
             function renderPredict() {
