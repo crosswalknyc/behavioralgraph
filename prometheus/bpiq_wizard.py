@@ -1679,6 +1679,23 @@ def step_prompt(draft, today=None):
         _pinned = pin_to_read(draft, _TURN.user)
         if _pinned is not draft:
             draft.update(_pinned)
+    # No data can be pulled from before the data floor (Jenna 2026-11-18, prometheus.data_floor). A campaign that
+    # ended before it is not valued: the dates are asked for again. One that crosses it starts on it, and a before
+    # window that would reach behind it starts on it too; the window and the recap say so before anything is charged.
+    _floor_note = ''
+    if isinstance(draft, dict) and draft.get('campaign_start') and draft.get('campaign_end'):
+        try:
+            from . import data_floor as _dfl
+            _fk, _fl = _dfl.valuation(draft)
+            if _fk == 'refuse':
+                for _k in ('campaign_start', 'campaign_end', 'attr_start', 'attr_end', 'attr_ok', 'start_hint', 'start_guess',
+                           'dates_inferred', 'launch_window', 'pinned_read', 'read_checked'):
+                    draft.pop(_k, None)
+                draft['step'] = STEP_DATES
+                return _fl, [CHIP_CANCEL]
+            _floor_note = (_fl + ' ') if _fk == 'note' else ''
+        except Exception:
+            _floor_note = ''
     step = (draft or {}).get('step') or next_step(draft)
     if step == STEP_TALENT:
         pair = (draft or {}).get('pair')
@@ -1697,7 +1714,7 @@ def step_prompt(draft, today=None):
             return ASK_DATES_HINT.format(hint=hint), [open_range_chip(guess), CHIP_CANCEL]
         return ASK_DATES, [CHIP_CANCEL]
     if step == STEP_ATTR:
-        return attr_reply(draft, today=today), [
+        return _floor_note + attr_reply(draft, today=today), [
             CHIP_ACCEPT, CHIP_DIFFERENT, CHIP_CANCEL]
     if step == STEP_ATTR_CUSTOM:
         return ASK_ATTR_CUSTOM, [CHIP_CANCEL]
@@ -1708,7 +1725,7 @@ def step_prompt(draft, today=None):
     if step == STEP_LINKS:
         return ASK_LINKS, [CHIP_CANCEL]
     usd = price_usd(bool((draft or {}).get('control_group')))
-    return recap_reply(draft), [accept_chip(usd, included=included_seat(draft)), CHIP_DECLINE, CHIP_CANCEL]
+    return _floor_note + recap_reply(draft), [accept_chip(usd, included=included_seat(draft)), CHIP_DECLINE, CHIP_CANCEL]
 
 
 def control_explainer(draft=None):

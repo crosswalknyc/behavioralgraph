@@ -3154,6 +3154,23 @@ def is_offer_reply(reply):
     return bool(_OFFER_COPY_RX.search(str(reply or '')[:600]))
 
 
+def before_data_floor(entry):
+    """True for a stored read whose window starts before the data floor
+    (Jenna 2026-11-18: no data can be pulled from before January 1,
+    2021; the date lives in migration.event_window). Such a row is never
+    consulted: it does not replay, does not ride into a read as a figure
+    on record, and does not answer a later question. The row itself is
+    left exactly as it was stored. Never raises."""
+    try:
+        ws = str((entry or {}).get('ws') or '').strip()[:10]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", ws):
+            return False
+        from migration.event_window import DATA_FLOOR as _floor
+        return ws < _floor
+    except Exception:
+        return False
+
+
 def is_retired_surface_reply(reply):
     head = str(reply or '')[:600]
     return bool(_RETIRED_SURFACE_RX.search(head[:400])) or is_offer_reply(head)
@@ -3476,8 +3493,8 @@ def consult(subject=None, question=None, metric_family=None,
                 return empty
             bucket = subjects.get(gkey) or {}
             entries = [e for e in (bucket.get('entries') or [])
-                       if isinstance(e, dict) and not e.get('retired')]
-            if gexact.get('retired'):
+                       if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
+            if gexact.get('retired') or before_data_floor(gexact):
                 return empty
             return {'subject': bucket.get('subject'), 'skey': gkey,
                     'entries': entries, 'block': render_block(entries),
@@ -3486,7 +3503,7 @@ def consult(subject=None, question=None, metric_family=None,
                     'match': 'exact' if _can_replay else None}
         bucket = subjects.get(skey) or {}
         entries = [e for e in (bucket.get('entries') or [])
-                   if isinstance(e, dict) and not e.get('retired')]
+                   if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
         if _win_other:
             entries = [e for e in entries if _swm.tracker_file_of(e) not in _win_other]
         if not entries:
@@ -3519,7 +3536,7 @@ def consult(subject=None, question=None, metric_family=None,
                 exact, match = jexact, 'semantic'
                 if jkey and jkey != skey:
                     jb = subjects.get(jkey) or {}
-                    jents = [e for e in (jb.get('entries') or []) if isinstance(e, dict) and not e.get('retired')]
+                    jents = [e for e in (jb.get('entries') or []) if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
                     if jents:
                         skey, bucket, entries = jkey, jb, jents
         if not exact:
@@ -3554,7 +3571,7 @@ def consult(subject=None, question=None, metric_family=None,
             rkey = _resolve_subject(doc, subject=None, question=question, live_only=True)
             if rkey and rkey != skey:
                 rb = subjects.get(rkey) or {}
-                rents = [e for e in (rb.get('entries') or []) if isinstance(e, dict) and not e.get('retired')]
+                rents = [e for e in (rb.get('entries') or []) if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
                 if any(is_record_entry(e) for e in rents):
                     rexact = find_semantic(rents, question, ask_sig=_ask_sig)
                     if rexact is not None and is_record_entry(rexact):

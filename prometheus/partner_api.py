@@ -318,6 +318,12 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
     win = _window(body)
     if win == 'bad':
         return _out(C.declined('unsupported', 'window.start and window.end are YYYY-MM-DD.', conversation_id=cid))
+    # No data can be pulled from before the data floor (Jenna 2026-11-18, prometheus.data_floor): a pinned window
+    # that starts before it is declined with the plain sentence; nothing is read, priced or started on it.
+    if isinstance(win, dict) and win.get('start'):
+        from . import data_floor as _dfl
+        if _dfl.window_error(win.get('start'), win.get('end')):
+            return _out(C.declined('unsupported', _dfl.api_refusal_line(), conversation_id=cid))
     subject = str(body.get('subject') or '').strip()[:160]
     view = str(body.get('view') or '').strip().lower()[:40]
     base_key = str(body.get('base_key') or '').strip()[:300]

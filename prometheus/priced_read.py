@@ -1581,6 +1581,18 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     """
     kind = str(kind or 'report')
     subj = str(subject or '').strip() or 'that subject'
+    # No data can be pulled from before the data floor (Jenna 2026-11-18, prometheus.data_floor): a question whose
+    # window sits before it, or crosses it, is never quoted or charged as written. The reply is the sentence and what
+    # can be run instead; this holds on the Approve of an older quote too (the question it was quoted on rides the
+    # confirm), so a stale card cannot take a charge for dates that cannot be read.
+    try:
+        from . import data_floor as _dfl
+        _stop = _dfl.stop_payload(text) or (
+            _dfl.stop_payload(str(panel_confirm.get('question') or '')) if isinstance(panel_confirm, dict) else None)
+        if _stop:
+            return 'offer', _stop
+    except Exception:
+        pass
     # A category the words list is a cut, never the subject of a quote or a charge, whichever lane brought it
     # and whatever the Reader made of the list (prometheus.cut_list, 2026-11-11: "I can pull that read on Comedy").
     # The quote names the subject on record; with none on record the reader is asked which audience. On the

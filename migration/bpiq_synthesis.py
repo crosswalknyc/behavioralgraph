@@ -1539,6 +1539,24 @@ def _dates(inputs: dict) -> dict:
         pre_s = pre_e - _dt.timedelta(days=max(ev_days, 1) - 1)
     base_e = ev_s - _dt.timedelta(days=1)
     base_s = base_e - _dt.timedelta(days=364)
+    # No data can be pulled from before the data floor (Jenna 2026-11-18;
+    # the date lives in migration.event_window). The before window and
+    # the year of context start on it at the earliest; the order's recap
+    # already said so (prometheus.data_floor.valuation). A campaign that
+    # itself starts before it never reaches here: the order and the form
+    # refuse it.
+    floor_clipped = False
+    try:
+        from migration.event_window import data_floor_date as _floor_date
+        _floor = _floor_date()
+        if pre_s < _floor:
+            pre_s, floor_clipped = _floor, True
+            pre_e = max(pre_e, pre_s)
+        if base_s < _floor:
+            base_s = _floor
+            base_e = max(base_e, base_s)
+    except Exception:
+        floor_clipped = False
     post_s = (_dt.date.fromisoformat(inputs["post_start"])
               if inputs.get("post_start") else ev_e + _dt.timedelta(days=1))
     post_e = (_dt.date.fromisoformat(inputs["post_end"])
@@ -1560,6 +1578,7 @@ def _dates(inputs: dict) -> dict:
                      "days": (base_e - base_s).days + 1},
         "matched": (pre_e - pre_s).days + 1 == ev_days,
         "clipped": clipped,
+        "floor_clipped": floor_clipped,
     }
 
 

@@ -743,6 +743,12 @@ def dt_build():
               'window': body.get('window') if isinstance(body.get('window'), dict) else None, 'ask_text': str(body.get('ask_text') or '')[:400], 'op': 'build',
               'source': source if source in ('profile', 'demographics') else '', 'profile_key': profile_key, 'profile_name': profile_name,
               'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists, 'via': 'dashboard'}   # no seat count is asked for; the room seats the kinds (2026-11-17)
+    # no data can be pulled from before the data floor (Jenna 2026-11-18): a twin is never built or charged on a window that starts before it
+    from prometheus import data_floor as _dfl
+    _w = inputs.get('window') or {}
+    _why = _dfl.window_error(_w.get('start'), _w.get('end')) if _w.get('start') else ''
+    if _why:
+        return jsonify({'success': False, 'error': _why, 'data_floor': _dfl.FLOOR}), 400
     from prometheus import digital_twin_job as J
     from prometheus import twin_named_pull as TNP
     uname = _uname(user)
@@ -795,6 +801,10 @@ def dt_list_preview():
         ws, we = str(w.get('start') or ''), str(w.get('end') or '')
     if len(data) > _LIST_MAX_BYTES:
         return jsonify({'success': False, 'error': 'That file is larger than 25 MB. Send the URL column on its own.'}), 400
+    from prometheus import data_floor as _dfl   # no data before the data floor (Jenna 2026-11-18)
+    _why = _dfl.window_error(ws, we) if ws else ''
+    if _why:
+        return jsonify({'success': False, 'error': _why, 'data_floor': _dfl.FLOOR}), 400
     urls, dropped = [], 0
     if data:
         urls, dropped = TUL.urls_from_bytes(file_name, data)
@@ -827,6 +837,10 @@ def dt_build_from_list():
     if not rec or (str(rec.get('owner') or '') != _uname(user) and not DT.is_admin(user)):
         return jsonify({'success': False, 'error': 'That list is not on your account any more. Upload it again and I will read it back.'}), 400
     window = body.get('window') if isinstance(body.get('window'), dict) and body['window'].get('start') else rec.get('window')
+    from prometheus import data_floor as _dfl   # no data before the data floor (Jenna 2026-11-18)
+    _why = _dfl.window_error((window or {}).get('start'), (window or {}).get('end')) if isinstance(window, dict) and window.get('start') else ''
+    if _why:
+        return jsonify({'success': False, 'error': _why, 'data_floor': _dfl.FLOOR}), 400
     try:
         panelists = int(body.get('panelists') or 0)
     except (TypeError, ValueError):

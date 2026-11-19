@@ -563,6 +563,30 @@ def reject_if_access_expired():
 
 
 @app.before_request
+def refuse_form_window_before_data_floor():
+    """No data can be pulled from before January 1, 2021 (Jenna
+    2026-11-18). A dashboard form that starts a pull with a start date
+    before that day is told so and nothing starts; the person picks a
+    start on or after it and sends it again (never a silent clamp). Only
+    the submit routes named in prometheus.data_floor are read. The date
+    lives in migration.event_window. Fail-safe: any fault lets the
+    request through unchanged."""
+    try:
+        if request.method != 'POST':
+            return None
+        from prometheus import data_floor as _dfl_form
+        _body = request.get_json(silent=True)
+        if not isinstance(_body, dict):
+            _body = request.form.to_dict() if request.form else None
+        _why = _dfl_form.form_error(request.path or '', request.method, _body)
+        if _why:
+            return jsonify({'success': False, 'error': _why, 'data_floor': _dfl_form.FLOOR}), 400
+    except Exception:
+        return None
+    return None
+
+
+@app.before_request
 def redirect_if_dashboard_view_locked():
     """Card-gated seats land on /wallet. No dashboard content until
     a card is on file and the opening top-up has landed."""
@@ -49566,6 +49590,31 @@ def _guard_future_window(draft, decision=None, allow_ask=True):
         return None
 
 
+# Guard 5b: the data floor (Jenna 2026-11-18, after Paula Vazquez was
+# handed 2020 figures: "It should always say no data can be pulled from
+# before jan 1 2021"). Runs AFTER all window binding and the future
+# guard, on every interpret path (dashboard single, batch, v1 check and
+# run). A window wholly before the floor never becomes a brief: the
+# dashboard asks with the sentence, a one-shot surface carries the
+# partner-safe refusal (price 0). A window that crosses the floor starts
+# on it, and the card and the brief summary say so with the dates used,
+# so the real window is what gets approved. The date lives in
+# migration.event_window; the logic in prometheus.data_floor.
+def _guard_data_floor(draft, text='', decision=None, allow_ask=True):
+    try:
+        from prometheus import data_floor as _dfl_guard
+        return _dfl_guard.guard_draft(
+            draft, text, decision=decision, allow_ask=allow_ask,
+            route=_route_window_fields, echo=_append_identity_echo)
+    except Exception as _df_err:
+        try:
+            print(f"[semantic-guards] data-floor guard failed "
+                  f"(non-fatal): {_df_err}")
+        except Exception:
+            pass
+        return None
+
+
 # Guard 6: international detection (the Omaze precedent: OMAZE was the
 # UK flagship, OMAZE GERMANY the country-suffixed sibling).
 _SG_COUNTRY_CANON = {
@@ -50754,6 +50803,12 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
         _dn = str(spec_draft.get('decision') or _dn or '').strip() or _dn
         _guard_future_window(spec_draft, decision=_dn,
                              allow_ask=False)
+        # no data before the data floor (2026-11-18): bind-only here, the
+        # approve step refuses a window that is wholly before it
+        _df_guard = globals().get('_guard_data_floor')
+        if callable(_df_guard):
+            _df_guard(spec_draft, prompt_text, decision=_dn,
+                      allow_ask=False)
         try:   # a window the matched file already holds is a reuse, never a rebuild (Grace Yin 2026-11-16)
             from prometheus import held_window as _held_window
             _dn = _held_window.settle_on_host(
@@ -58823,6 +58878,12 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     _bind_window_confirmation(draft, prompt)
     _ensure_cut_window_echo(draft, decision=decision)
     _guard_future_window(draft, decision=decision, allow_ask=False)
+    # no data before the data floor (2026-11-18): a window wholly before
+    # it refuses on /check and /run alike (price 0, the plain sentence);
+    # one that crosses it starts on it and the brief summary says so
+    _df_guard = globals().get('_guard_data_floor')
+    if callable(_df_guard):
+        _df_guard(draft, prompt, decision=decision, allow_ask=False)
     # `cuts` was computed above (deliverable defs only), BEFORE the
     # refresh demotion / confidence floor / cuts conversion that hang
     # off it. `match_score` (composite confidence) rides from the same
@@ -58987,6 +59048,12 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
             _sep = ' ' if _rid.endswith(('.', '!', '?')) else '. '
             conclusion['brief_summary'] = (
                 f"Subject: {_rid}{_sep}" + conclusion['brief_summary'])
+        _df_note = str(draft.get('data_floor_note') or '').strip()
+        if _df_note and _df_note not in conclusion['brief_summary']:
+            # the window crossed the data floor (2026-11-18): the sentence
+            # and the dates used lead the summary
+            conclusion['brief_summary'] = (
+                _df_note + ' ' + conclusion['brief_summary'])
         if conclusion.get('estimated_audience'):
             conclusion['brief_summary'] += ' ' + _estimated_audience_sentence(
                 conclusion['estimated_audience'])

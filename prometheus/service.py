@@ -759,6 +759,50 @@ def ask(user, body, *, via='session'):
     except Exception as _fx:
         _faults.note('service', _fx)
 
+    # gate: data_floor (ahead of every lane; not a lane of its own, so LANE_ORDER is unchanged)
+    # No data can be pulled from before January 1, 2021 (Jenna 2026-11-18,
+    # after Paula Vazquez was handed 2020 figures; prometheus.data_floor,
+    # the date itself lives in migration.event_window). A message whose
+    # dates, year or "since" sit wholly before that day is answered with
+    # the sentence: nothing is quoted, charged, drafted or started, and
+    # the same question from that day forward is one tap away. One that
+    # crosses it runs on the corrected window and the reply says so
+    # first, with the dates used (envelope.wrap places the note). It runs
+    # ahead of every lane, wizard step and approval, so no path prices or
+    # starts work on dates that cannot be read. A part of a split message
+    # and a replayed question were read on the way in.
+    try:
+        from . import data_floor as _dfl
+        if not body.get('_multi_part') and not body.get('_meta_replay'):
+            _dfl.reset_note()
+            _dfo = _dfl.gate(text, question=str((_last_agent_turn(history) or {}).get('text') or ''))
+            if _dfo and _dfo.get('action') == 'stop':
+                raw = dict(_dfo['payload'])
+                if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                    _opts = raw.get('options')
+                    raw = dict(_interpret_shape(raw), data_floor=raw.get('data_floor'))
+                    if _opts:
+                        raw['options'] = _opts
+                try:
+                    host.ask_hint(route='data_floor', outcome=str(_dfo.get('status') or 'before'))
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'data_floor',
+                                                                       'client_hint': None}, thread_id=tid, via=via)
+                _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+                return env, 200
+            if _dfo and _dfo.get('action') == 'rewrite' and str(_dfo.get('text') or '').strip():
+                _dfl.set_note(_dfo.get('note'), _dfo.get('end'))
+                text = str(_dfo['text'])
+                body = dict(body, text=text, _pm_typed=body.get('_pm_typed') or _typed, _pm_data_floor=str(_dfo.get('end') or '1'))
+                try:
+                    from flask import g as _g_df
+                    _g_df._pm_typed = (text, _typed)      # the stored turn is what the reader typed
+                except Exception:
+                    pass
+    except Exception as _fx:
+        _faults.note('service.data_floor', _fx)
+
     # An order is queued, never deflected (Jenna 2026-11-10, Grace Yin,
     # prometheus.orders): an imperative to queue / run / build / pull /
     # set up / start a product routes to that product's build or brief

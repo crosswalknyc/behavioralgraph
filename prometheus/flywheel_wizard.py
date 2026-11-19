@@ -433,6 +433,13 @@ def confirm_reply(d, price_label='$500', today=None):
         rng = f"{d.get('start_date')} to {d.get('end_date')}"
     lab = str(d.get('window_label') or '')
     win = f"{lab} ({rng})" if lab and rng and lab.lower() != rng.lower() else (rng or lab or 'trailing 12 months')
+    try:   # no data before the data floor (Jenna 2026-11-18): the days before an entry never reach behind it, and the card says so
+        from . import data_floor as _dfl
+        _fl = _dfl.tracker_window(d.get('start_date'), d.get('end_date'), lookback_days=PRE_DAYS) if d.get('start_date') else {}
+        if _fl.get('lookback'):
+            win += f"; {_dfl.SENTENCE} The days before an entry start {_dfl.FLOOR_LABEL} at the earliest"
+    except Exception:
+        pass
     return (f"Here's the Flywheel I'll build:\n"
             f"- Entry point: {entry}\n"
             f"- Ecosystem: {eco}, {fam}\n"

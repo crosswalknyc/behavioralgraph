@@ -277,6 +277,16 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
             _ig.attach_resume_chip(env, hit)
     except Exception:
         pass
+    # An ask that reached before the data floor and was moved onto the
+    # corrected window says so first, with the dates used (Jenna
+    # 2026-11-18, prometheus.data_floor): "No data can be pulled from
+    # before January 1, 2021. The window starts January 1, 2021 and runs
+    # to ...". Once per ask; a reply that already says it is left alone.
+    try:
+        from . import data_floor as _dfl
+        _dfl.attach_note(env, raw, via=via)
+    except Exception:
+        pass
     # A read that landed since the reader's last message, and that the
     # reader's copy of the thread does not show yet, gets one trailing
     # line ("Your <name> read landed above.") and a mark the widget pulls

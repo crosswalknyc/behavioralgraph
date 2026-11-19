@@ -3846,6 +3846,11 @@ def build_analysis_user_prompt(digest_bundle, history, user_message,
         digest_txt = ("(no profile is open in Profile IQ; the DATA "
                       "CURRENTLY ON SCREEN block below is the primary "
                       "evidence)")
+    try:   # no data can be pulled from before the data floor (Jenna 2026-11-18, prometheus.data_floor)
+        from prometheus import data_floor as _dfl
+        ledger_txt = ledger_txt + _dfl.analysis_note()
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return (
         "FIRST-PARTY DATA ON SCREEN\n"
         "==========================\n"
@@ -4189,6 +4194,11 @@ def build_search_demand_user_prompt(text, history, ledger_block=None):
             hist_lines.append(f"{role}: {txt}")
     hist_block = '\n'.join(hist_lines) or '(none)'
     ledger_txt = render_ledger_block(ledger_block)
+    try:   # no data can be pulled from before the data floor (Jenna 2026-11-18, prometheus.data_floor)
+        from prometheus import data_floor as _dfl
+        ledger_txt = ledger_txt + _dfl.study_note()
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return (
         f"{ledger_txt}"
         "RECENT CONVERSATION\n"
@@ -6393,6 +6403,14 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
     try:
         from prometheus import window_scope as _wsc
         window_txt = _wsc.read_window_note(text)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+    # no data can be pulled from before the data floor (Jenna 2026-11-18,
+    # prometheus.data_floor): the read is told so every time, whatever the
+    # words or an earlier turn say
+    try:
+        from prometheus import data_floor as _dfl
+        window_txt = _dfl.read_note() + window_txt
     except Exception as _fx:
         _faults.note('analysis', _fx)
     return (

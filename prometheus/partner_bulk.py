@@ -87,6 +87,11 @@ def _clean_window(raw):
         raise BodyError('"date_range" start and end are real dates, YYYY-MM-DD.')
     if ds > de:
         raise BodyError('"date_range" start must be on or before end.')
+    # No data can be pulled from before the data floor (Jenna 2026-11-18, prometheus.data_floor): a list is never
+    # priced or started on a window that starts before it. The plain sentence, in the body's usual error shape.
+    from . import data_floor as _dfl
+    if _dfl.window_error(s, e):
+        raise BodyError(_dfl.api_refusal_line())
     w = BP._normalize_window({'start': s, 'end': e, 'label': f'{s} to {e}'})
     if (w['start'], w['end']) != (s, e):
         raise BodyError('"date_range" start and end are YYYY-MM-DD.')

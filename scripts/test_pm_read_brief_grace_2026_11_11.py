@@ -214,7 +214,11 @@ class ThroughTheDoor(unittest.TestCase):
         self.assertEqual(len(self.calls), 1, self.calls)                 # one core call: never split
         kind, text, body = self.calls[0]
         self.assertEqual(kind, 'analyze')                                # a read, never the build flow
-        self.assertEqual(text, FIRST)                                    # the whole brief, both questions and the file note
+        # the whole brief, both questions and the file note. Her years ran "from 2019 through 2026"; no data can be
+        # pulled from before January 1, 2021 (Jenna 2026-11-18, prometheus.data_floor), so the brief runs from 2021,
+        # every other word and line break as she typed it, and the reply says so first
+        self.assertEqual(text, FIRST.replace('from 2019 through 2026', 'from 2021 through 2026'))
+        self.assertTrue(env['text'].startswith('No data can be pulled from before January 1, 2021. The window starts January 1, 2021'))
         self.assertEqual(body.get('bind_subject'), SUBJECT)              # bound to the titles, never the page
         self.assertNotEqual(env['decision']['reason'], 'multi_ask')
         self.assertNotEqual(env['decision']['reason'], 'priced_read')
@@ -283,7 +287,7 @@ class ThroughTheDoor(unittest.TestCase):
     def test_the_third_message_is_the_same_read(self):
         env, _st = self._ask(THIRD)
         self.assertEqual([c[0] for c in self.calls], ['analyze'])
-        self.assertEqual(self.calls[0][1], THIRD)
+        self.assertEqual(self.calls[0][1], THIRD.replace('2019\u20132026', '2021\u20132026'))   # the same read, from the data floor (2026-11-18)
         self.assertEqual(self.calls[0][2].get('bind_subject'), SUBJECT)
         self.assertEqual(self.mails, [])
 

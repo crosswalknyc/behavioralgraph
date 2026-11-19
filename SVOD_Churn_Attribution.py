@@ -5588,12 +5588,16 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                     _earliest_episode_dt = _d
     except Exception:
         _earliest_episode_dt = None
-    _PANEL_START = datetime(2021, 1, 1).date()
+    # The floor is read from the one shared place (migration.event_window,
+    # Jenna 2026-11-18), the same module the engine host and the web tier
+    # read; the date is written nowhere else.
+    from migration.event_window import DATA_FLOOR as _DATA_FLOOR_ISO
+    _PANEL_START = datetime.strptime(_DATA_FLOOR_ISO, '%Y-%m-%d').date()
     _PANEL_END   = datetime(2025, 12, 31).date()
     _force_panel_window = bool(
         _earliest_episode_dt is not None
         and (_earliest_episode_dt if not hasattr(_earliest_episode_dt, 'date')
-             else _earliest_episode_dt).strftime('%Y-%m-%d') < '2021-01-01'
+             else _earliest_episode_dt).strftime('%Y-%m-%d') < _DATA_FLOOR_ISO
     )
     if _force_panel_window:
         analysis_range_str = f"{_PANEL_START} to {_PANEL_END}"

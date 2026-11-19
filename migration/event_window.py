@@ -403,3 +403,190 @@ def stamp_window_on_cut_s3(s3_key, start, end, run_id="",
         print(f"[{run_id}] window stamp failed (non-fatal) on "
               f"{s3_key!r}: {e}")
         return False
+
+
+# ---- The data floor (Jenna 2026-11-18, after Paula Vazquez at Dick
+# Wolf Productions was handed 2020 figures): "It should always say no
+# data can be pulled from before jan 1 2021." The date lives HERE and
+# nowhere else. Every surface reads it from this module: the chat reads
+# and their window parsing, the brief interpret / confirm / spec stamp,
+# the key surface, Subscriber IQ trackers, journeys, valuations and
+# their before windows, Digital Twins, the dashboard forms, and the
+# engine host's own check before a build starts. A request that reaches
+# before the floor is told so in plain words: never a silent clamp,
+# never figures presented as covering earlier time, never a build run
+# quietly on another window. Rule file: .cursor/rules/no-data-before-2021.mdc
+
+DATA_FLOOR = "2021-01-01"
+
+_MONTHS_LONG = ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November",
+                "December"]
+
+
+def data_floor_date():
+    """The floor as a datetime.date."""
+    return datetime.strptime(DATA_FLOOR, "%Y-%m-%d").date()
+
+
+def long_date_label(value):
+    """'2021-12-14' (or a date) -> 'December 14, 2021'. '' when the
+    value is not a date."""
+    d = _floor_as_date(value)
+    if d is None:
+        return ""
+    return f"{_MONTHS_LONG[d.month - 1]} {d.day}, {d.year}"
+
+
+def data_floor_label():
+    """'January 1, 2021'."""
+    return long_date_label(DATA_FLOOR)
+
+
+def data_floor_sentence():
+    """The one sentence a reader is told, verbatim on every surface."""
+    return f"No data can be pulled from before {data_floor_label()}."
+
+
+def _floor_as_date(value):
+    """A date from a date, a datetime, or text that opens with an ISO
+    day ('2021-12-14', '2021-12-14T00:00:00'). None otherwise."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if hasattr(value, "year") and hasattr(value, "month") \
+            and hasattr(value, "day") and not isinstance(value, str):
+        try:
+            return datetime(value.year, value.month, value.day).date()
+        except (TypeError, ValueError):
+            return None
+    return parse_iso_date(str(value).strip()[:10])
+
+
+def floor_status(start, end=None):
+    """Where a window sits against the floor.
+
+    'ok'        it starts on or after the floor
+    'before'    all of it ends before the floor
+    'straddle'  it starts before the floor and ends on or after it (an
+                open end, with no end date given, reads this way too)
+    ''          the start is not a date (nothing to judge)
+    """
+    s = _floor_as_date(start)
+    if s is None:
+        return ""
+    floor = data_floor_date()
+    if s >= floor:
+        return "ok"
+    e = _floor_as_date(end)
+    if e is not None and e < floor:
+        return "before"
+    return "straddle"
+
+
+def window_string_floor_status(value):
+    """floor_status for the engine's 'START TO END' form, a {start,
+    end} dict, or a two-item list. '' when no window can be read."""
+    if isinstance(value, dict):
+        return floor_status(value.get("start"), value.get("end"))
+    if isinstance(value, (list, tuple)):
+        vals = [v for v in value if str(v or "").strip()]
+        if len(vals) >= 2:
+            return floor_status(vals[0], vals[-1])
+        return ""
+    m = re.match(r"^\s*(\d{4}-\d{2}-\d{2})\s*(?:TO|->|,|-)\s*"
+                 r"(\d{4}-\d{2}-\d{2})\s*$", str(value or ""),
+                 re.IGNORECASE)
+    if not m:
+        return ""
+    return floor_status(m.group(1), m.group(2))
+
+
+def clamp_to_floor(start, end):
+    """(start_iso, end_iso, status). A straddling window comes back
+    starting on the floor; every other window comes back as given.
+    The caller owns saying so: a clamp is never silent."""
+    status = floor_status(start, end)
+    s, e = _floor_as_date(start), _floor_as_date(end)
+    s_iso = s.isoformat() if s else str(start or "")
+    e_iso = e.isoformat() if e else str(end or "")
+    if status == "straddle":
+        return DATA_FLOOR, e_iso, status
+    return s_iso, e_iso, status
+
+
+def floor_refusal_line(offer=True):
+    """What a reader is told when the whole window is before the floor."""
+    line = data_floor_sentence()
+    if offer:
+        line += (f" I can run the same question from {data_floor_label()} "
+                 f"forward.")
+    return line
+
+
+def floor_window_line(end=None, noun="window"):
+    """What a reader is told when the window crossed the floor and now
+    starts on it: the sentence, then the dates actually used."""
+    line = f"{data_floor_sentence()} The {noun} starts {data_floor_label()}"
+    end_label = long_date_label(end)
+    if end_label:
+        line += f" and runs to {end_label}"
+    return line + "."
+
+
+_SPEC_WINDOW_KEYS = ("date_range", "cut_date_range", "engine_date_range")
+
+
+def spec_floor_status(spec):
+    """The worst floor status across the windows a build spec carries:
+    'before' beats 'straddle' beats 'ok'; '' when it carries none.
+    Reads date_range / cut_date_range / engine_date_range in any of
+    their shapes, a {start, end} event_window, and a Subscriber IQ
+    air_window."""
+    if not isinstance(spec, dict):
+        return ""
+    seen = []
+    for key in _SPEC_WINDOW_KEYS:
+        if spec.get(key):
+            seen.append(window_string_floor_status(spec.get(key)))
+    ew = spec.get("event_window")
+    if isinstance(ew, dict) and ew.get("start"):
+        seen.append(floor_status(ew.get("start"), ew.get("end")))
+    subiq = spec.get("subiq")
+    if isinstance(subiq, dict) and isinstance(subiq.get("air_window"), dict):
+        aw = subiq["air_window"]
+        seen.append(floor_status(aw.get("start"),
+                                 subiq.get("through_date") or aw.get("end")))
+    for worst in ("before", "straddle", "ok"):
+        if worst in seen:
+            return worst
+    return ""
+
+
+class DataFloorRefusal(ValueError):
+    """A build, tracker or read was asked for on a window that reaches
+    before the data floor. Raised before anything is drawn; the text is
+    the sentence the requester reads."""
+
+    def __init__(self, detail=""):
+        super().__init__(data_floor_sentence())
+        self.detail = str(detail or "")
+        self.client_message = data_floor_sentence()
+
+
+def refuse_spec_before_floor(spec, run_id=""):
+    """Engine-host check, run before a build starts and again after an
+    event window is resolved. A spec whose window starts before the
+    floor is refused whole (the web tier corrects a crossing window
+    with the requester before approval, so one that still arrives here
+    was never approved on real dates). Raises DataFloorRefusal; returns
+    None when the spec is clear."""
+    status = spec_floor_status(spec)
+    if status in ("before", "straddle"):
+        windows = {k: (spec or {}).get(k) for k in _SPEC_WINDOW_KEYS
+                   if (spec or {}).get(k)}
+        raise DataFloorRefusal(
+            f"window {status} the {DATA_FLOOR} floor: {windows!r}"
+            + (f" [{run_id}]" if run_id else ""))
+    return None

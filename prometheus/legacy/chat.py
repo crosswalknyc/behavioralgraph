@@ -4191,6 +4191,10 @@ def api_synth_chat_clarify():
             return lbl
 
         def _bind_window(start, end, note):
+            _df = __import__('prometheus.data_floor', fromlist=['gate']).tracker_window(start, subiq.get('through_date') or end)   # no data before the data floor (Jenna 2026-11-18): refused whole, or started on it and said so, look-back included
+            if _df.get('refuse'):
+                return jsonify({'success': True, 'draft': draft, 'message': _df['refuse'], 'next_step': 'subiq_window'})
+            start, note = _df['start'], _df['lead'] + note
             subiq['air_window'] = {'start': start, 'end': end}
             draft['date_range'] = {
                 'start': start,
@@ -4229,7 +4233,7 @@ def api_synth_chat_clarify():
                      + f". Standard exclusion window: viewers "
                        f"already on {_plat_name} in the 6 months "
                        f"(180 days) before your start date are split "
-                       f"out and never counted as new signups. "
+                       f"out and never counted as new signups.{_df['lookback']} "
                        f"Approving locks these dates.")
             return jsonify({'success': True, 'draft': draft,
                             'message': f"{note} {lbl} measures "
@@ -6869,6 +6873,10 @@ def _pm_interpret_core(user, body, text, history):
                 'guidance': True,
                 'error': _fw_ask['question'],
             })
+        # No data before the data floor (Jenna 2026-11-18, prometheus.data_floor): a window before it never becomes a brief; one across it starts on it and the card says so.
+        _df_ask = __import__('prometheus.data_floor', fromlist=['gate']).guard_draft(spec_draft, text, decision=_dec_norm, allow_ask=True, route=_H._route_window_fields)
+        if _df_ask:
+            return jsonify({'success': False, 'guidance': True, 'error': _df_ask['question'], 'data_floor': 'before', 'followups': [_df_ask['chip']] if _df_ask.get('chip') else []})
         _dec_norm = __import__('prometheus.held_window', fromlist=['settle_on_host']).settle_on_host(spec_draft, text, _H, catalog=catalog, user=user, username=(session.get('username') or ''), est_minutes=_estimate_run_minutes) or _dec_norm   # a held window is a reuse (2026-11-16)
         estimated_credits = int(spec_draft.get('estimated_credits')
                                 if spec_draft.get('estimated_credits') is not None else estimated_credits)
@@ -8538,6 +8546,9 @@ def _pm_approve_core(user, body):
     _t_spec = time.monotonic()
     # the question this build was started from rides the brief; read here and taken off, never to the engine
     _origin_keep = _question_first.take_origin(draft)
+    _df_stop = __import__('prometheus.data_floor', fromlist=['gate']).approve_stop(draft)   # a brief whose window still starts before the data floor is not run or charged (Jenna 2026-11-18)
+    if _df_stop:
+        return jsonify({'success': False, 'guidance': True, 'error': _df_stop, 'followups': [], 'data_floor': 'before'})
     spec = _spec_from_draft(draft)
     _pm_ask_stage('approve_spec', t0=_t_spec)
     run_avid = bool(body.get('run_avid', True))
@@ -9669,9 +9680,12 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         # daily tracking with no stop date: propose 30 days and confirm rather than ask (the intake contract; golden g058, 2026-10-14)
         parsed['end_tracking_date'] = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
         parsed.setdefault('_proposed', {'field': 'end_tracking_date', 'value': parsed['end_tracking_date']})
+    _df = __import__('prometheus.data_floor', fromlist=['gate']).intake(parsed) or {}   # no data before the data floor (Jenna 2026-11-18): a window before it is not confirmed; one across it starts on it and the card says so first
+    if _df.get('refuse'):
+        return {**base, 'reply': _df['refuse'], collect_key: True, 'followups': ['Cancel'], 'data_floor': 'before'}
     if complete_fn(parsed):
         _pnote = parsed.pop('_precedent_note', '') if isinstance(parsed, dict) else ''
-        reply = _pm_intake_finish_confirm(parsed, globals()[confirm_name](parsed), run_label)
+        reply = (_df['note'] + '\n\n' if _df.get('note') else '') + _pm_intake_finish_confirm(parsed, globals()[confirm_name](parsed), run_label)
         if _pnote:
             reply = reply.rstrip() + '\n\n' + _pnote
         _pm_pending_intake('stash', user, flow, parsed, run_label)   # a later "Run the journey" still finds it
@@ -14314,7 +14328,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras,
         switch_page=switch_page)
     _sync_held = bool(payload.get('_held'))
-    if panel_charge and (_sync_held or not payload.get('success')):
+    if panel_charge and (_sync_held or not payload.get('success') or payload.get('data_floor') == 'before'):
         # The paid report never delivered: reverse the charge.
         _pm_panel_refund(panel_charge)
     if isinstance(panel_charge, dict) and panel_charge.get('included') and payload.get('success') and payload.get('reply'):
@@ -14662,6 +14676,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     data = result.get('data') or {}
     if isinstance(data, list):
         data = next((d for d in data if isinstance(d, dict)), {})
+    _df_read = __import__('prometheus.data_floor', fromlist=['gate']).hold_read(data, text)   # no data before the data floor (Jenna 2026-11-18): a read that states a window or a row before it never lands; one moved onto it says so first
+    if _df_read:
+        _pm_ask_hint(outcome='data_floor')
+        return _df_read
     if str(data.get('action') or '').strip().lower() == 'decline':
         _dbq_dec = __import__('prometheus.dashboard_behavior', fromlist=['from_decline']).from_decline(data, text, '', _pm_ask_hint)   # the dashboard's own controls are never a read (2026-11-18)
         if _dbq_dec is not None:
@@ -15798,6 +15816,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             # the widget's poll refreshes the thread on done and finds
             # the server's copy, so the server is the writer and the
             # widget's own copy is the fallback, not the other way round.
+            if panel_charge and not held and payload.get('data_floor') == 'before':
+                _pm_panel_refund(panel_charge)   # the read was refused at the data floor: nothing is charged (Jenna 2026-11-18)
             _pm_append_read_to_history(pm_user, job_id, payload, held=held, started_at=head.get('started_at'))
             _pm_read_status_write(job_id, _done)
             _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
