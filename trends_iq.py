@@ -12994,6 +12994,29 @@ def list_available_dates(max_days: int = 730) -> list[str]:
     return sorted(dates, reverse=True)
 
 
+# A board request whose end date is before its start date (2026-11-19,
+# Jenna, after a Rankers date field sent a range of minus 731 days).
+# The page holds both dates to the days the board has before it asks,
+# so this is the second lock: such a request is told so in plain words
+# and nothing is run.
+RANGE_REFUSAL = ('The end date is before the start date. Choose an end '
+                 'date on or after the start date.')
+
+
+def range_refusal(lookback_days) -> str:
+    """The line a reader gets when the range a request carries runs
+    backwards (its length in days is below one), or '' when the range
+    is fine or the request names none. Never raises."""
+    if lookback_days is None or lookback_days == '' \
+            or isinstance(lookback_days, bool):
+        return ''
+    try:
+        n = int(float(lookback_days))
+    except (TypeError, ValueError):
+        return ''
+    return RANGE_REFUSAL if n < 1 else ''
+
+
 def get_filter_options() -> dict:
     """Filter dropdown choices for the Trends view.
 

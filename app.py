@@ -11307,8 +11307,20 @@ def index():
             _seat_included = bool(effective_credits == -1 or _pm_guards.is_staff(user))
         except Exception:
             _seat_included = bool(effective_credits == -1)
+    # The data floor for the page's date pickers (2026-11-19): read from
+    # the one shared place (migration.event_window through
+    # prometheus.data_floor), never written here. Blank on any fault, and
+    # a blank floor leaves the pickers as they were.
+    try:
+        from prometheus import data_floor as _dfl_page
+        _page_data_floor = str(_dfl_page.FLOOR or '')
+        _page_data_floor_sentence = str(_dfl_page.SENTENCE or '')
+    except Exception:
+        _page_data_floor, _page_data_floor_sentence = '', ''
     return render_template('index.html', 
                            app_build_version=APP_BUILD_VERSION,
+                           data_floor=_page_data_floor,
+                           data_floor_sentence=_page_data_floor_sentence,
                            seat_included=_seat_included,
                            username=session.get('username'),
                            insights_quick_snapshot_icon=insights_quick_snapshot_icon,
@@ -19526,6 +19538,17 @@ def api_trends_iq_data():
         asof = asof_raw if (len(asof_raw) == 10
                              and asof_raw[4] == '-' and asof_raw[7] == '-'
                              and asof_raw.replace('-', '').isdigit()) else None
+        # An end date before the start date is told so and never run
+        # (2026-11-19). The page holds both dates to the board's own
+        # days first; this is the lock behind it.
+        _tiq_range_why = ''
+        try:
+            _tiq_range_why = _trends_iq.range_refusal(req.get('lookback_days'))
+        except Exception:
+            _tiq_range_why = ''
+        if _tiq_range_why:
+            return jsonify({'success': False, 'range_refused': True,
+                            'error': _tiq_range_why}), 400
         filters = {
             'geo_type':      req.get('geo_type'),
             'geo_value':     req.get('geo_value'),

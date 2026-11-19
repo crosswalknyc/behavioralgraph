@@ -19547,6 +19547,133 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     window.PM_VIEW_DEFINITION = {{ (view_definition|default(''))|tojson }};
     window.PM_VIEW_NOTE_SHORT = {{ (view_note_short|default(''))|tojson }};
     window.PM_PERIOD_NOTE = {{ (period_note|default(''))|tojson }};
+    // No data can be pulled from before the data floor (Jenna
+    // 2026-11-18). The date and its sentence come from the server's one
+    // constant; nothing on this page writes the date. Every date field
+    // that sets a data window stops at it: the calendar will not offer
+    // an earlier day, and a typed earlier day is held to the floor with
+    // the sentence shown beside the field (never a silent change). A
+    // board with its own later first day (Rankers) keeps that later
+    // limit. A blank floor leaves every field as it was.
+    window.CW_DATA_FLOOR = {{ (data_floor|default(''))|tojson }};
+    window.CW_DATA_FLOOR_SENTENCE = {{ (data_floor_sentence|default(''))|tojson }};
+    function cwIsDataDateField(el) {
+        if (!el || String(el.tagName || '').toUpperCase() !== 'INPUT') return false;
+        if (String(el.type || '').toLowerCase() !== 'date') return false;
+        // opt-out for a date that is not a data window
+        if (el.closest && el.closest('[data-cw-no-floor]')) return false;
+        return true;
+    }
+    // The earliest day a field may offer: the floor, or the field's own
+    // later first day when it has one.
+    function cwDateFloorFor(el) {
+        var floor = String(window.CW_DATA_FLOOR || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(floor)) return '';
+        var own = String((el && el.min) || '');
+        return (/^\d{4}-\d{2}-\d{2}$/.test(own) && own > floor) ? own : floor;
+    }
+    function cwApplyDateFloorMin(el) {
+        if (!cwIsDataDateField(el)) return;
+        var first = cwDateFloorFor(el);
+        if (first && el.min !== first) el.min = first;
+    }
+    // What a typed value is held to. Only a whole date earlier than the
+    // floor moves; a blank or half-typed field is left alone.
+    function cwHeldDate(value, floorISO) {
+        var v = String(value || '');
+        var ok = /^\d{4}-\d{2}-\d{2}$/;
+        if (!ok.test(String(floorISO || '')) || !ok.test(v)) return { value: v, moved: false };
+        return (v < floorISO) ? { value: floorISO, moved: true } : { value: v, moved: false };
+    }
+    function cwDateFloorNotePlace() {
+        var note = document.getElementById('cwDateFloorNote');
+        var el = window.__cwDateFloorNoteFor;
+        if (!note || !el || !el.getBoundingClientRect) return;
+        var r = el.getBoundingClientRect();
+        var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+        var w = note.offsetWidth || 280, h = note.offsetHeight || 40;
+        var left = Math.max(8, Math.min(r.left, vw - w - 8));
+        var top = (r.bottom + 6 + h > vh && r.top - 6 - h > 0) ? (r.top - 6 - h) : (r.bottom + 6);
+        note.style.left = left + 'px';
+        note.style.top = top + 'px';
+    }
+    function cwDateFloorNoteHide() {
+        var note = document.getElementById('cwDateFloorNote');
+        if (note) note.style.display = 'none';
+        window.__cwDateFloorNoteFor = null;
+        if (window.__cwDateFloorNoteTimer) { clearTimeout(window.__cwDateFloorNoteTimer); window.__cwDateFloorNoteTimer = null; }
+    }
+    // One plain line beside the field that was held.
+    function cwDateFloorNote(el, text) {
+        if (!text || !document.body) return;
+        var note = document.getElementById('cwDateFloorNote');
+        if (!note) {
+            note = document.createElement('div');
+            note.id = 'cwDateFloorNote';
+            note.setAttribute('role', 'status');
+            note.setAttribute('aria-live', 'polite');
+            note.style.cssText = 'position:fixed; z-index:2147483000; max-width:320px; padding:8px 12px; border-radius:8px; '
+                + 'font-size:12.5px; line-height:1.4; background:#0C1618; color:#E9E8E1; border:1px solid #C7F23E; '
+                + 'box-shadow:0 6px 18px rgba(0,0,0,0.35); pointer-events:none; display:none;';
+            document.body.appendChild(note);
+        }
+        note.textContent = text;
+        note.style.display = 'block';
+        window.__cwDateFloorNoteFor = el;
+        cwDateFloorNotePlace();
+        if (window.__cwDateFloorNoteTimer) clearTimeout(window.__cwDateFloorNoteTimer);
+        window.__cwDateFloorNoteTimer = setTimeout(cwDateFloorNoteHide, 12000);
+    }
+    // Hold one field. `quiet` skips the change event (used when the
+    // field's own change is already on its way to its handlers).
+    function cwHoldDateInput(el, quiet) {
+        if (!cwIsDataDateField(el)) return false;
+        // a board that holds its own range says so in its own line
+        if (el.hasAttribute && el.hasAttribute('data-cw-own-range')) return false;
+        var held = cwHeldDate(el.value, String(window.CW_DATA_FLOOR || ''));
+        if (!held.moved) return false;
+        el.value = held.value;
+        cwDateFloorNote(el, String(window.CW_DATA_FLOOR_SENTENCE || ''));
+        if (!quiet && typeof Event === 'function' && el.dispatchEvent) {
+            // the form's own listeners read the held date
+            try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e1) {}
+            try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e2) {}
+        }
+        return true;
+    }
+    function cwDateFloorInit() {
+        if (window.__cwDateFloorReady) return;
+        window.__cwDateFloorReady = true;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(window.CW_DATA_FLOOR || ''))) return;
+        var all = function () {
+            try { document.querySelectorAll('input[type="date"]').forEach(cwApplyDateFloorMin); } catch (e) {}
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', all);
+        else all();
+        // fields drawn later get their limit the moment they are used
+        document.addEventListener('focusin', function (ev) { cwApplyDateFloorMin(ev.target); }, true);
+        // a typed date is held when the person leaves the field, presses
+        // Enter, or sends the form (never mid-typing: the year arrives one
+        // digit at a time)
+        document.addEventListener('focusout', function (ev) { cwHoldDateInput(ev.target); }, true);
+        document.addEventListener('keydown', function (ev) { if (ev && ev.key === 'Enter') cwHoldDateInput(ev.target); }, true);
+        document.addEventListener('change', function (ev) {
+            var el = ev.target;
+            if (el && document.activeElement !== el) cwHoldDateInput(el, true);
+        }, true);
+        document.addEventListener('submit', function (ev) {
+            var form = ev.target;
+            if (form && form.querySelectorAll) {
+                try { form.querySelectorAll('input[type="date"]').forEach(function (el) { cwHoldDateInput(el, true); }); } catch (e) {}
+            }
+        }, true);
+        document.addEventListener('input', function (ev) {
+            if (ev.isTrusted && window.__cwDateFloorNoteFor && ev.target === window.__cwDateFloorNoteFor) cwDateFloorNoteHide();
+        }, true);
+        window.addEventListener('scroll', cwDateFloorNotePlace, true);
+        window.addEventListener('resize', cwDateFloorNotePlace);
+    }
+    cwDateFloorInit();
     // Self-serve Prometheus plan (2026-09-24). Set before any module
     // script runs so the Prometheus launcher init can read it.
     window.CW_SELF_SERVE_PLAN = {{ 'true' if self_serve_plan else 'false' }};
@@ -32571,14 +32698,14 @@ https://www.instagram.com/p/..."></textarea>
                          {YYYY-MM-DD}/. min/max on both pickers is set
                          by _tiqLoadAvailableDates() on mount. -->
                     <label for="trendsIQStart">Start</label>
-                    <input type="date" id="trendsIQStart"
+                    <input type="date" id="trendsIQStart" data-cw-own-range="1"
                            title="Pick a past date range to see what was trending then. Defaults to today (live)."
                            onchange="tiqRangeEdited()"
                            style="min-width: 150px;">
                 </div>
                 <div>
                     <label for="trendsIQEnd">End</label>
-                    <input type="date" id="trendsIQEnd"
+                    <input type="date" id="trendsIQEnd" data-cw-own-range="1"
                            title="Pick a past date range to see what was trending then. Defaults to today (live)."
                            onchange="tiqRangeEdited()"
                            style="min-width: 150px;">
@@ -32611,6 +32738,11 @@ https://www.instagram.com/p/..."></textarea>
                     <button type="button" class="tiq-apply-btn" onclick="applyTrendsIQFilters()">Apply</button>
                 </div>
             </div>
+            <!-- One plain line when a Start or End date was moved to a
+                 day the board has (2026-11-19). Empty and hidden
+                 otherwise. Written by _tiqShowRangeNote(). -->
+            <div id="trendsIQRangeNote" role="status" aria-live="polite"
+                 style="display: none; margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: var(--mag-ink, var(--text-primary));"></div>
             <div class="tiq-meta">
                 <span id="trendsIQMeta"></span>
                 <span class="tiq-meta-right">
@@ -73266,44 +73398,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // _tiqLoadAvailableDates() sets min/max on both pickers.
             var startInput = shown ? document.getElementById('trendsIQStart') : null;
             var endInput   = shown ? document.getElementById('trendsIQEnd') : null;
-            var minISO     = (document.getElementById('trendsIQStart') || {}).min || '';
+            // A hand-picked range needs the board's first day. If the
+            // list of days has not landed yet, wait for it once here.
+            if (String(ctl.lookback) === 'custom' && !T.firstDay && !opts.controls) {
+                try { await _tiqLoadAvailableDates(); } catch (e0) {}
+            }
+            var minISO     = (document.getElementById('trendsIQStart') || {}).min || T.firstDay
+                             || window.CW_DATA_FLOOR || '';
             var todayISO   = _tiqTodayISO();
-            var endVal     = ctl.end || '';
-            if (!endVal || endVal > todayISO) {
-                if (endVal) ctl.end = todayISO;
-                endVal = todayISO;
-                if (endInput && endInput.value) endInput.value = todayISO;
+            // 2026-11-19: BOTH dates are held to the days the board has
+            // BEFORE the order check. The start used to be raised to the
+            // first day after that check and the end was never held, so
+            // "Jan 1, 2021 to Dec 31, 2023" became start Jan 1, 2026 with
+            // end Dec 31, 2023: a range of minus 731 days, sent as asked.
+            // _tiqHoldRange returns first <= start <= end <= today and a
+            // length of 1 to 62 days, always.
+            var held = _tiqHoldRange(ctl.start || '', ctl.end || '', minISO, todayISO,
+                                     parseInt(ctl.lookback, 10));
+            var startVal = held.start, endVal = held.end, rangeDays = held.days;
+            if (held.endMoved) {
+                ctl.end = endVal;
+                if (endInput) endInput.value = endVal;
             }
-            var startVal = ctl.start || '';
-            if (!startVal) {
-                // No start picked: fall back to the Window preset length
-                // ending at the end date (default = live today).
-                var presetN = parseInt(ctl.lookback, 10);
-                if (!isFinite(presetN) || presetN < 1) presetN = 1;
-                startVal = _tiqShiftISO(endVal, -(presetN - 1));
-            }
-            if (startVal > endVal) {
-                // Swapped inputs: treat the earlier date as the start.
-                var _sw = startVal; startVal = endVal; endVal = _sw;
-                ctl.start = startVal; ctl.end = endVal;
-                if (startInput) startInput.value = startVal;
-                if (endInput)   endInput.value   = endVal;
-            }
-            // Clamp the start to available history so a range reaching
-            // past coverage degrades to the covered part.
-            if (minISO && startVal < minISO) {
-                startVal = minISO;
+            if (held.startMoved) {
                 ctl.start = startVal;
                 if (startInput) startInput.value = startVal;
             }
-            var rangeDays = _tiqDaysBetween(startVal, endVal) + 1;
-            if (rangeDays > 62) {
-                // Two-month cap, matching the backend accumulator.
-                rangeDays = 62;
-                startVal = _tiqShiftISO(endVal, -61);
-                ctl.start = startVal;
-                if (startInput) startInput.value = startVal;
-            }
+            // Never a silent change: one plain line beside the fields
+            // says where a date was moved to. A fresh Apply with nothing
+            // moved clears it; a background reload leaves it be.
+            var rangeNote = _tiqRangeNote(held, window.CW_DATA_FLOOR, window.CW_DATA_FLOOR_SENTENCE);
+            if (shown && (rangeNote || !opts.controls)) _tiqShowRangeNote(rangeNote);
             var asOfVal = (endVal === todayISO) ? '' : endVal;
             var filters = {
                 geo_type:      document.getElementById('trendsIQGeoType').value || 'National',
@@ -73351,6 +73476,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     signal: ctrl.signal,
                 });
                 var data = await resp.json();
+                if (data && data.range_refused) {
+                    // The range ran backwards and was not run. Say so
+                    // beside the fields; there is nothing to retry.
+                    _tiqShowRangeNote(String(data.error || ''));
+                    document.getElementById('trendsIQMeta').textContent = '';
+                    return;
+                }
                 if (!data || !data.success) throw new Error('trends fetch retry');
                 if (scopeTab) {
                     _tiqTabStates()[scopeTab] = { controls: ctl, data: data };
@@ -73455,6 +73587,86 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return part(startISO, !sameYear) + ' - ' + part(endISO, true);
         }
 
+        // Hold a Start / End pair to the days the board has (2026-11-19).
+        // Order matters: each date is first brought inside [first day,
+        // today]; only then is the order checked, so a start can never
+        // land after the end; the two-month cap comes last. Blank or
+        // half-typed values count as not picked (the end is today, the
+        // start is the Window preset counted back from the end).
+        // Returns { start, end, days, first, startMoved, endMoved,
+        // raised, lowered, swapped, capped } with
+        // first <= start <= end <= today and 1 <= days <= 62.
+        function _tiqHoldRange(startVal, endVal, minISO, todayISO, presetN) {
+            var iso = /^\d{4}-\d{2}-\d{2}$/;
+            var s = iso.test(String(startVal || '')) ? String(startVal) : '';
+            var e = iso.test(String(endVal || '')) ? String(endVal) : '';
+            var first = iso.test(String(minISO || '')) ? String(minISO) : '';
+            if (first && first > todayISO) first = todayISO;
+            var out = { start: '', end: '', days: 1, first: first, startMoved: false, endMoved: false,
+                        raised: false, lowered: false, swapped: false, capped: false };
+            // 1. The end: blank is today; never after today, never
+            //    before the board's first day.
+            if (!e) {
+                e = todayISO;
+            } else if (e > todayISO) {
+                e = todayISO; out.endMoved = true; out.lowered = true;
+            } else if (first && e < first) {
+                e = first; out.endMoved = true; out.raised = true;
+            }
+            // 2. The start: blank is the preset length ending at the end;
+            //    then the same two limits.
+            if (!s) {
+                var n = parseInt(presetN, 10);
+                if (!isFinite(n) || n < 1) n = 1;
+                s = _tiqShiftISO(e, -(n - 1));
+                if (first && s < first) { s = first; out.startMoved = true; out.raised = true; }
+            } else if (s > todayISO) {
+                s = todayISO; out.startMoved = true; out.lowered = true;
+            } else if (first && s < first) {
+                s = first; out.startMoved = true; out.raised = true;
+            }
+            // 3. The order, now that both sit inside the board's days.
+            if (s > e) {
+                var sw = s; s = e; e = sw;
+                out.swapped = true; out.startMoved = true; out.endMoved = true;
+            }
+            // 4. Two-month cap, matching the backend accumulator.
+            var days = _tiqDaysBetween(s, e) + 1;
+            if (days > 62) {
+                days = 62;
+                s = _tiqShiftISO(e, -61);
+                out.capped = true; out.startMoved = true;
+            }
+            if (days < 1) days = 1;
+            out.start = s; out.end = e; out.days = days;
+            return out;
+        }
+
+        // The one plain line for a held range, or '' when nothing moved.
+        // The board's own first day is named; when the only limit known
+        // is the data floor, its standing sentence is used.
+        function _tiqRangeNote(held, floorISO, floorSentence) {
+            if (!held) return '';
+            var lines = [];
+            if (held.raised && held.first) {
+                lines.push((floorSentence && held.first === floorISO)
+                    ? String(floorSentence)
+                    : 'This board starts on ' + _tiqRangeLabel(held.first, held.first) + '.');
+            }
+            if (held.lowered) lines.push('This board runs through today.');
+            if (held.swapped) lines.push('The start date was after the end date, so the two were switched.');
+            if (held.capped) lines.push('This board shows up to 62 days at a time.');
+            return lines.join(' ');
+        }
+
+        // Write (or clear) the line beside the Start / End fields.
+        function _tiqShowRangeNote(text) {
+            var el = document.getElementById('trendsIQRangeNote');
+            if (!el) return;
+            el.textContent = text || '';
+            el.style.display = text ? 'block' : 'none';
+        }
+
         // Window preset picked: fill the Start/End range (ending today)
         // and apply. "Custom range" leaves the dates alone for manual
         // editing - press Apply after picking them.
@@ -73478,6 +73690,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (sel) sel.value = 'custom';
             var meta = document.getElementById('trendsIQMeta');
             if (meta) meta.textContent = 'Press Apply to load the selected date range.';
+            // the line about the last range no longer describes the fields
+            _tiqShowRangeNote('');
         }
 
         // "Today" button: clear the range back to live today and re-run.
@@ -73510,6 +73724,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var today = _tiqTodayISO();
                 // dates is sorted descending; last entry is oldest.
                 var oldest = dates.length ? dates[dates.length - 1] : '';
+                // Apply holds both dates to this day (2026-11-19).
+                if (oldest) window.__trendsIQ.firstDay = oldest;
                 [startPicker, endPicker].forEach(function (p) {
                     if (!p) return;
                     p.max = today;
