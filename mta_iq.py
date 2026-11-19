@@ -2025,9 +2025,20 @@ def compute_mta_coefficients(campaign_slug: str,
     slug = (campaign_slug or "").strip()
     if not slug:
         return {"success": False, "error": "campaign_slug is required"}
+    # The campaign id and the as-of day name where this read is kept, so
+    # only a well-formed id and a whole calendar day go any further
+    # (2026-11-19). Same checks, same plain lines as the campaign read.
+    if not _intent_iq.slug_ok(slug):
+        return {"success": False, "refused": True,
+                "error": _intent_iq.CAMPAIGN_REFUSAL}
 
     if as_of:
-        as_of_iso = str(as_of)[:10]
+        try:
+            as_of_iso = _intent_iq.clean_day(str(as_of)[:10])
+        except _intent_iq.RequestRefused as e:
+            return {"success": False, "refused": True, "error": str(e)}
+        if not as_of_iso:
+            as_of_iso = datetime.utcnow().date().isoformat()
     else:
         as_of_iso = datetime.utcnow().date().isoformat()
 

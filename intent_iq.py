@@ -197,6 +197,159 @@ BRAND_COHORTS_FALLBACK = [
 ]
 
 
+# ── What a request may send ─────────────────────────────────────────────────
+#
+# Jenna, 2026-11-19 (verbatim): "only accept the known values for each
+# filter and refuse anything else".
+#
+# Nothing a request sends is ever written into a statement. Each value
+# is first held to what this read knows:
+#
+#   campaign     a well-formed campaign id (letters, digits, _ and -)
+#   source       one of SOURCE_VALUES
+#   phase, type  one of the campaign's own stored phase names / asset
+#                types (case and spacing forgiven; the stored spelling
+#                is the one used)
+#   dates        a whole YYYY-MM-DD calendar day
+#   question     one of QUESTIONS
+#
+# and is then handed to the store as a bound parameter ({name:Type}),
+# never as text. A value that is not known is refused before the read
+# is built, with a plain line that never repeats what was sent. Nothing
+# given (None, '', spaces) means no filter, as before.
+
+FILTER_REFUSAL = "That filter could not be read. Choose one from the list."
+CAMPAIGN_REFUSAL = "That campaign could not be read. Choose one from the list."
+DATE_REFUSAL = "That date could not be read. Choose a date from the calendar."
+QUESTION_REFUSAL = "That question could not be read. Choose one from the list."
+ASSET_REFUSAL = "That asset could not be read. Choose one from the list."
+
+# Every value the Source filter can hold: the page's own options plus
+# the values stored on assets.
+SOURCE_VALUES = ("paid", "organic", "earned", "official", "natural", "unknown")
+
+_SLUG_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$")
+_DAY_OK = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_MAX_FILTER_LEN = 200
+
+
+class RequestRefused(ValueError):
+    """A request value this read does not accept. The text is the plain
+    line the requester reads; it never carries what was sent."""
+
+
+def _refused(line: str) -> dict:
+    return {"success": False, "error": str(line), "refused": True}
+
+
+def slug_ok(value) -> bool:
+    """A well-formed campaign id."""
+    return isinstance(value, str) and bool(_SLUG_OK.fullmatch(value.strip()))
+
+
+def clean_slug(value) -> str:
+    """The campaign id, or RequestRefused."""
+    if not slug_ok(value):
+        raise RequestRefused(CAMPAIGN_REFUSAL)
+    return value.strip()
+
+
+def clean_day(value) -> Optional[str]:
+    """None when no date was given; a whole YYYY-MM-DD day; else
+    RequestRefused."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RequestRefused(DATE_REFUSAL)
+    s = value.strip()
+    if not s:
+        return None
+    if not _DAY_OK.fullmatch(s):
+        raise RequestRefused(DATE_REFUSAL)
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        raise RequestRefused(DATE_REFUSAL)
+    return s
+
+
+def _filter_text(value) -> Optional[str]:
+    """None when no filter was given; the text when it has the shape of
+    a filter value; else RequestRefused. Run before anything is looked
+    up."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RequestRefused(FILTER_REFUSAL)
+    text = value.strip()
+    if not text:
+        return None
+    if len(text) > _MAX_FILTER_LEN or any(ord(c) < 32 or ord(c) == 127 for c in text):
+        raise RequestRefused(FILTER_REFUSAL)
+    return text
+
+
+def _norm_choice(value) -> str:
+    return " ".join(str(value).split()).casefold()
+
+
+def clean_choice(value, known) -> Optional[str]:
+    """None when no filter was given; the stored spelling of the known
+    value this one names (case and spacing forgiven); else
+    RequestRefused. `known` is the list of accepted values."""
+    text = _filter_text(value)
+    if text is None:
+        return None
+    known = [k for k in (known or []) if isinstance(k, str) and k]
+    if text in known:
+        return text
+    want = _norm_choice(text)
+    for k in known:
+        if _norm_choice(k) == want:
+            return k
+    raise RequestRefused(FILTER_REFUSAL)
+
+
+def _campaign_choices(ch, title_slug: str, snap: Optional[dict] = None) -> dict:
+    """The campaign's own stored phase names and asset types:
+    {"phase": [...], "asset_type": [...]}. Read with the campaign id
+    bound; the statements are fixed and never carry a filter value."""
+    phases: list = []
+    types: list = []
+
+    def _add(lst, v):
+        if isinstance(v, str) and v and v not in lst:
+            lst.append(v)
+
+    if ch is not None:
+        try:
+            for r in ch.query(
+                "SELECT DISTINCT phase_name FROM intent.campaign_phases FINAL "
+                "WHERE title_slug = {slug:String}",
+                parameters={"slug": title_slug},
+            ).result_rows:
+                _add(phases, r[0])
+            for r in ch.query(
+                "SELECT DISTINCT phase_name, asset_type "
+                "FROM intent.campaign_assets FINAL "
+                "WHERE title_slug = {slug:String}",
+                parameters={"slug": title_slug},
+            ).result_rows:
+                _add(phases, r[0])
+                _add(types, r[1])
+        except Exception as e:
+            logger.warning("Attribution IQ: filter values CH read failed: %s", e)
+    if snap:
+        for p in (snap.get("phases") or []):
+            if isinstance(p, dict):
+                _add(phases, p.get("phase_name"))
+        for a in (snap.get("assets") or []):
+            if isinstance(a, dict):
+                _add(phases, a.get("phase_name"))
+                _add(types, a.get("asset_type"))
+    return {"phase": phases, "asset_type": types}
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 def _ch_client():
@@ -233,6 +386,9 @@ def _load_registry() -> dict:
 
 
 def _load_normalized_snapshot(title_slug: str) -> Optional[dict]:
+    if not slug_ok(title_slug):
+        return None
+    title_slug = title_slug.strip()
     s3 = _s3()
     if not s3:
         return None
@@ -514,6 +670,10 @@ def list_titles() -> dict:
 # ── 2. Overview (timeline) ──────────────────────────────────────────────────
 
 def get_overview(title_slug: str) -> dict:
+    try:
+        title_slug = clean_slug(title_slug)
+    except RequestRefused as e:
+        return _refused(str(e))
     ch = _ch_client()
     if ch is not None:
         try:
@@ -521,15 +681,17 @@ def get_overview(title_slug: str) -> dict:
                 "SELECT display_name, distributor, opening_date, "
                 "ticketing_open_date, genre, mpaa_rating, predicted_bo_low_usd, "
                 "predicted_bo_high_usd, actual_opening_bo_usd "
-                f"FROM intent.titles FINAL WHERE title_slug = '{title_slug}'"
+                "FROM intent.titles FINAL WHERE title_slug = {slug:String}",
+                parameters={"slug": title_slug},
             ).result_rows
             if title_rows:
                 t = title_rows[0]
                 phase_rows = ch.query(
                     "SELECT phase_name, phase_order, start_date, end_date, "
                     "description, color_hex "
-                    f"FROM intent.campaign_phases FINAL WHERE title_slug = '{title_slug}' "
-                    "ORDER BY phase_order"
+                    "FROM intent.campaign_phases FINAL WHERE title_slug = {slug:String} "
+                    "ORDER BY phase_order",
+                    parameters={"slug": title_slug},
                 ).result_rows
                 phases = []
                 for p in phase_rows:
@@ -542,8 +704,9 @@ def get_overview(title_slug: str) -> dict:
                         "color_hex":   p[5] or _phase_color(p[0]),
                     })
                 asset_count_rows = ch.query(
-                    f"SELECT count() FROM intent.campaign_assets FINAL "
-                    f"WHERE title_slug = '{title_slug}'"
+                    "SELECT count() FROM intent.campaign_assets FINAL "
+                    "WHERE title_slug = {slug:String}",
+                    parameters={"slug": title_slug},
                 ).result_rows
                 # Merge registry (may carry title_type + terminology +
                 # enabled_tabs) before applying defaults so per-title
@@ -711,22 +874,60 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
     Custom) sums `intent.asset_engagement_daily` over [lo, hi] and drops
     assets with zero activity in the window.
     """
-    where_clauses = [f"a.title_slug = '{title_slug}'"]
-    if phase:           where_clauses.append(f"a.phase_name = '{phase}'")
-    if asset_type:      where_clauses.append(f"a.asset_type = '{asset_type}'")
-    if paid_or_organic: where_clauses.append(f"a.paid_or_organic = '{paid_or_organic}'")
+    # Hold every request value to what this read knows before anything
+    # is built (2026-11-19). The campaign id, the dates and the Source
+    # filter need no look-up; a phase or a type is checked against the
+    # campaign's own stored values just below.
+    try:
+        title_slug = clean_slug(title_slug)
+        from_date = clean_day(from_date)
+        to_date = clean_day(to_date)
+        paid_or_organic = clean_choice(paid_or_organic, SOURCE_VALUES)
+        phase = _filter_text(phase)
+        asset_type = _filter_text(asset_type)
+    except RequestRefused as e:
+        return _refused(str(e))
+    ch = _ch_client()
     # Brand campaigns default to campaign-to-date (unbounded). Films keep
     # the historical YTD default. See _snap_default_window docstring for
     # why: a 2025 brand campaign viewed in 2026 with YTD returns 0 assets.
     _snap_for_window = _load_normalized_snapshot(title_slug) if not window else None
+    if phase or asset_type:
+        try:
+            choices = _campaign_choices(ch, title_slug, _snap_for_window)
+            if _snap_for_window is None and (
+                    (phase and not choices["phase"])
+                    or (asset_type and not choices["asset_type"])):
+                # A campaign held on the snapshot only: its values are there.
+                _snap_for_window = _load_normalized_snapshot(title_slug)
+                choices = _campaign_choices(None, title_slug, _snap_for_window)
+            phase = clean_choice(phase, choices["phase"])
+            asset_type = clean_choice(asset_type, choices["asset_type"])
+        except RequestRefused as e:
+            return _refused(str(e))
+    params: dict = {"slug": title_slug}
+    where_clauses = ["a.title_slug = {slug:String}"]
+    if phase:
+        where_clauses.append("a.phase_name = {phase:String}")
+        params["phase"] = phase
+    if asset_type:
+        where_clauses.append("a.asset_type = {asset_type:String}")
+        params["asset_type"] = asset_type
+    if paid_or_organic:
+        where_clauses.append("a.paid_or_organic = {source:String}")
+        params["source"] = paid_or_organic
     effective_window = _snap_default_window(_snap_for_window, window) or window
     lo, hi, window_label = _resolve_assets_window(effective_window, from_date, to_date)
     where_sql = " AND ".join(where_clauses)
 
     bounded = bool(lo or hi)
     daily_where = []
-    if lo: daily_where.append(f"date >= toDate('{lo}')")
-    if hi: daily_where.append(f"date <= toDate('{hi}')")
+    if lo:
+        daily_where.append("date >= toDate({lo:String})")
+        params["lo"] = lo
+    if hi:
+        daily_where.append("date <= toDate({hi:String})")
+        params["hi"] = hi
     daily_where_sql = (" WHERE " + " AND ".join(daily_where)) if daily_where else ""
 
     cols = ["asset_id", "phase_name", "funnel_stage", "action_label",
@@ -736,7 +937,6 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
              "lifetime_view_count", "lifetime_engagement_count",
              "thumbnail_s3_url"]
 
-    ch = _ch_client()
     if ch is not None:
         try:
             if bounded:
@@ -808,7 +1008,7 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
                     f"WHERE {where_sql} "
                     "ORDER BY a.posted_date, a.asset_id LIMIT 5000"
                 )
-            rows = ch.query(sql).result_rows
+            rows = ch.query(sql, parameters=params).result_rows
             cards = _rows_to_dicts(rows, cols)
             for c in cards:
                 c["posted_date"] = _safe_iso_date(c.get("posted_date"))
@@ -843,13 +1043,17 @@ def get_asset_timeseries(title_slug: str, asset_id: int,
     Powers the click-to-drill modal on the Performance page Top-10 list and
     on the In-Flight Assets cards. Defaults to YTD per Jenna 2026-06-17.
     """
-    ch = _ch_client()
-    if ch is None:
-        return {"success": False, "error": "ClickHouse unavailable"}
+    try:
+        title_slug = clean_slug(title_slug)
+    except RequestRefused as e:
+        return _refused(str(e))
     try:
         asset_id_int = int(asset_id)
     except (TypeError, ValueError):
-        return {"success": False, "error": f"Invalid asset_id: {asset_id!r}"}
+        return _refused(ASSET_REFUSAL)
+    ch = _ch_client()
+    if ch is None:
+        return {"success": False, "error": "ClickHouse unavailable"}
 
     lo, hi, window_label = _resolve_assets_window(window)
 
@@ -861,8 +1065,9 @@ def get_asset_timeseries(title_slug: str, asset_id: int,
             "toUInt64(ext_view_count) AS ext_view_count, "
             "toUInt64(ext_engagement_count) AS ext_engagement_count "
             "FROM intent.campaign_assets FINAL "
-            f"WHERE title_slug = '{title_slug}' AND asset_id = {asset_id_int} "
-            "LIMIT 1"
+            f"WHERE title_slug = {{slug:String}} AND asset_id = {asset_id_int} "
+            "LIMIT 1",
+            parameters={"slug": title_slug},
         ).result_rows
         if m_rows:
             meta = _rows_to_dicts(m_rows, [
@@ -1204,6 +1409,10 @@ def get_demographics(title_slug: str) -> dict:
     If the snapshot has no demographics yet (older ingest run), returns
     success=False with a hint pointing at scripts/build_intent_demographics.py.
     """
+    try:
+        title_slug = clean_slug(title_slug)
+    except RequestRefused as e:
+        return _refused(str(e))
     snap = _load_normalized_snapshot(title_slug) or {}
     demos = snap.get("demographics") or None
 
@@ -1282,6 +1491,10 @@ def get_demographics(title_slug: str) -> dict:
 
 
 def get_audiences(title_slug: str) -> dict:
+    try:
+        title_slug = clean_slug(title_slug)
+    except RequestRefused as e:
+        return _refused(str(e))
     ch = _ch_client()
     db_overlap: list[dict] = []
     if ch is not None:
@@ -1289,8 +1502,9 @@ def get_audiences(title_slug: str) -> dict:
             rows = ch.query(
                 "SELECT subject_key, subject_display, category, overlap_bp, "
                 "rank_within_title, source FROM intent.title_audience_overlap "
-                f"FINAL WHERE title_slug = '{title_slug}' "
-                "ORDER BY overlap_bp DESC"
+                "FINAL WHERE title_slug = {slug:String} "
+                "ORDER BY overlap_bp DESC",
+                parameters={"slug": title_slug},
             ).result_rows
             db_overlap = _rows_to_dicts(rows, ["subject_key", "subject_display",
                                                   "category", "overlap_bp",
@@ -1338,6 +1552,11 @@ def get_audiences(title_slug: str) -> dict:
 
 def get_cohorts(title_slug: Optional[str] = None) -> dict:
     """Return the 4 frequency cohorts + (optionally) per-title overlap."""
+    if title_slug is not None and title_slug != "":
+        try:
+            title_slug = clean_slug(title_slug)
+        except RequestRefused as e:
+            return _refused(str(e))
     ch = _ch_client()
     cohorts: list[dict] = []
     if ch is not None:
@@ -1398,9 +1617,10 @@ def get_cohorts(title_slug: Optional[str] = None) -> dict:
             rows = ch.query(
                 "SELECT cohort_slug, sum(panelist_count) as panelists, "
                 "sum(event_count) as events, avg(engagement_bp) as avg_bp "
-                f"FROM intent.cohort_engagement_daily FINAL "
-                f"WHERE title_slug = '{title_slug}' "
-                "GROUP BY cohort_slug ORDER BY panelists DESC"
+                "FROM intent.cohort_engagement_daily FINAL "
+                "WHERE title_slug = {slug:String} "
+                "GROUP BY cohort_slug ORDER BY panelists DESC",
+                parameters={"slug": title_slug},
             ).result_rows
             out["title_cohort_engagement"] = _rows_to_dicts(rows, [
                 "cohort_slug", "panelists", "events", "avg_bp"
@@ -1413,9 +1633,13 @@ def get_cohorts(title_slug: Optional[str] = None) -> dict:
 # ── 6. Question routing ─────────────────────────────────────────────────────
 
 def answer_question(title_slug: str, qid: str) -> dict:
-    qid = (qid or "").lower()
+    try:
+        title_slug = clean_slug(title_slug)
+    except RequestRefused as e:
+        return _refused(str(e))
+    qid = qid.strip().lower() if isinstance(qid, str) else ""
     if qid not in QUESTIONS:
-        return {"success": False, "error": f"Unknown question: {qid}",
+        return {**_refused(QUESTION_REFUSAL),
                 "available": list(QUESTIONS.keys())}
     handler = {
         "q1": _q1_content_categories_to_engagement,
@@ -1459,7 +1683,7 @@ def _q1_content_categories_to_engagement(title_slug: str) -> dict:
                 FROM intent.campaign_assets a
                 LEFT JOIN intent.asset_engagement_daily e
                     ON e.asset_id = a.asset_id
-                WHERE a.title_slug = '{title_slug}'
+                WHERE a.title_slug = {{slug:String}}
                 GROUP BY a.asset_type, a.paid_or_organic, a.asset_id, a.posted_date
             )
             SELECT asset_type, paid_or_organic,
@@ -1472,7 +1696,7 @@ def _q1_content_categories_to_engagement(title_slug: str) -> dict:
             GROUP BY asset_type, paid_or_organic
             ORDER BY mean_views_7d DESC
             """
-            rows = ch.query(sql).result_rows
+            rows = ch.query(sql, parameters={"slug": title_slug}).result_rows
             ch_rows = _rows_to_dicts(rows, [
                 "asset_type", "paid_or_organic", "asset_count",
                 "mean_views_7d", "median_views_7d"
@@ -1519,9 +1743,10 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
             "SELECT bucket, paid_or_organic, impressions, conversions, "
             "attributed_score, sample_size, computed_at "
             "FROM intent.attribution_results FINAL "
-            f"WHERE title_slug = '{title_slug}' "
+            "WHERE title_slug = {slug:String} "
             "AND metric = 'q2_position_weighted' "
-            "ORDER BY attributed_score DESC"
+            "ORDER BY attributed_score DESC",
+            parameters={"slug": title_slug},
         ).result_rows
         position_weighted = _rows_to_dicts(attr_rows, [
             "asset_type", "paid_or_organic", "impressions",
@@ -1534,8 +1759,9 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
             "SELECT toInt32OrZero(bucket) AS n_exposed, sample_size AS panelists, "
             "conversions AS converters, attributed_score AS conversion_rate "
             "FROM intent.attribution_results FINAL "
-            f"WHERE title_slug = '{title_slug}' AND metric = 'q2_cum_curve' "
-            "ORDER BY n_exposed"
+            "WHERE title_slug = {slug:String} AND metric = 'q2_cum_curve' "
+            "ORDER BY n_exposed",
+            parameters={"slug": title_slug},
         ).result_rows
         cumulative_curve = _rows_to_dicts(curve_rows, [
             "distinct_assets_exposed", "panelists",
@@ -1552,11 +1778,11 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
                count() AS asset_drops,
                sum(ext_view_count) AS cumulative_views_to_date
         FROM intent.campaign_assets FINAL
-        WHERE title_slug = '{title_slug}'
+        WHERE title_slug = {{slug:String}}
         GROUP BY d, paid_or_organic
         ORDER BY d, paid_or_organic
         """
-        rows = ch.query(cum_sql).result_rows
+        rows = ch.query(cum_sql, parameters={"slug": title_slug}).result_rows
         cumulative = _rows_to_dicts(rows, ["date", "paid_or_organic",
                                               "asset_drops", "cumulative_views_to_date"])
         for r in cumulative:
@@ -1589,14 +1815,14 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
                         toUInt64(any(a.ext_engagement_count))) AS engagement_total
         FROM intent.campaign_assets a
         LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
-        WHERE a.title_slug = '{title_slug}'
+        WHERE a.title_slug = {{slug:String}}
           AND a.posted_date >= toDate('{ytd_start}')
         GROUP BY a.asset_id, a.action_label, a.asset_type, a.channel,
                  a.phase_name, a.paid_or_organic, a.url, a.posted_date
         ORDER BY views_total DESC
         LIMIT 10
         """
-        best_rows = ch.query(best_sql).result_rows
+        best_rows = ch.query(best_sql, parameters={"slug": title_slug}).result_rows
         best = _rows_to_dicts(best_rows, ["asset_id", "action_label", "asset_type",
                                              "channel", "phase_name", "paid_or_organic",
                                              "url", "posted_date",
@@ -1761,7 +1987,8 @@ def _measure_subject_ticket_intent(ch, title_slug: str, avg_ticket_usd: float) -
                 "       sum(ext_view_count) AS views, "
                 "       sum(ext_engagement_count) AS eng "
                 "FROM intent.campaign_assets "
-                f"WHERE title_slug = '{title_slug}' AND ({where_clause})"
+                f"WHERE title_slug = {{slug:String}} AND ({where_clause})",
+                parameters={"slug": title_slug},
             ).result_rows
             if not rows:
                 return 0, 0, 0
@@ -1796,7 +2023,8 @@ def _measure_subject_ticket_intent(ch, title_slug: str, avg_ticket_usd: float) -
 
         meta_rows = ch.query(
             "SELECT display_name, opening_date FROM intent.titles FINAL "
-            f"WHERE title_slug = '{title_slug}'"
+            "WHERE title_slug = {slug:String}",
+            parameters={"slug": title_slug},
         ).result_rows
         if meta_rows:
             display_name = meta_rows[0][0]
@@ -1871,8 +2099,9 @@ def _q4_talent_influencer_lift(title_slug: str) -> dict:
             "SELECT bucket AS talent, sample_size AS asset_count, "
             "attributed_score AS views_total, impressions AS engagement_total, "
             "computed_at FROM intent.attribution_results FINAL "
-            f"WHERE title_slug = '{title_slug}' AND metric = 'q4_talent_lift' "
-            "ORDER BY attributed_score DESC"
+            "WHERE title_slug = {slug:String} AND metric = 'q4_talent_lift' "
+            "ORDER BY attributed_score DESC",
+            parameters={"slug": title_slug},
         ).result_rows
         if attr_rows:
             rows = _rows_to_dicts(attr_rows, [
@@ -1894,11 +2123,11 @@ def _q4_talent_influencer_lift(title_slug: str) -> dict:
                sum(ext_engagement_count) AS engagement_total
         FROM intent.campaign_assets
         ARRAY JOIN talent_tags AS talent
-        WHERE title_slug = '{title_slug}'
+        WHERE title_slug = {{slug:String}}
         GROUP BY talent
         ORDER BY views_total DESC
         """
-        rows = ch.query(sql).result_rows
+        rows = ch.query(sql, parameters={"slug": title_slug}).result_rows
         result = _rows_to_dicts(rows, [
             "talent", "asset_count", "views_total", "engagement_total"
         ])
@@ -1920,12 +2149,12 @@ def _q5_trailer_viewership_curve(title_slug: str) -> dict:
                sum(e.views) AS trailer_views
         FROM intent.campaign_assets a
         JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
-        WHERE a.title_slug = '{title_slug}'
+        WHERE a.title_slug = {{slug:String}}
           AND lower(a.asset_type) LIKE '%trailer%'
         GROUP BY d
         ORDER BY d
         """
-        rows = ch.query(sql).result_rows
+        rows = ch.query(sql, parameters={"slug": title_slug}).result_rows
         curve = _rows_to_dicts(rows, ["date", "trailer_views"])
         for r in curve:
             r["date"] = _safe_iso_date(r["date"])
@@ -1999,7 +2228,8 @@ def _q6_audience_shift_over_campaign(title_slug: str) -> dict:
         aud_rows = ch.query(
             "SELECT subject_key, subject_display, category, overlap_bp "
             "FROM intent.title_audience_overlap FINAL "
-            f"WHERE title_slug = '{title_slug}'"
+            "WHERE title_slug = {slug:String}",
+            parameters={"slug": title_slug},
         ).result_rows
         for slug, disp, cat, bp in aud_rows:
             if slug in meta:
@@ -2030,17 +2260,21 @@ def _q6_audience_shift_over_campaign(title_slug: str) -> dict:
                     "note": "No cohorts found for this title."}
 
         # 3) Daily series for every cohort
-        slugs_in = ",".join("'" + s + "'" for s in meta.keys())
-        sql = f"""
+        # The cohort ids come from the store's own rows; they are bound
+        # as a list all the same, never written into the statement.
+        sql = """
         SELECT cohort_slug, date,
                sum(panelist_count) AS engagers,
                avg(engagement_bp)  AS engagement_bp
         FROM intent.cohort_engagement_daily FINAL
-        WHERE title_slug = '{title_slug}' AND cohort_slug IN ({slugs_in})
+        WHERE title_slug = {slug:String} AND cohort_slug IN {cohorts:Array(String)}
         GROUP BY cohort_slug, date
         ORDER BY cohort_slug, date
         """
-        rows = ch.query(sql).result_rows
+        rows = ch.query(sql, parameters={
+            "slug": title_slug,
+            "cohorts": [str(s) for s in meta.keys()],
+        }).result_rows
 
         from collections import defaultdict as _dd
         series_by_slug: dict[str, list[dict]] = _dd(list)
@@ -2102,7 +2336,8 @@ def _resolve_window(window: Optional[str], as_of: Optional[str]) -> tuple[str, s
     what the UI shows next to the headline number.
     """
     w = (window or "ytd").strip().lower()
-    today_expr = f"toDate('{as_of}')" if as_of else "today()"
+    # the as-of day is bound by the caller ({as_of:String}), never written in
+    today_expr = "toDate({as_of:String})" if as_of else "today()"
     # Year-of as_of (default: current year)
     if w in ("ytd", "year_to_date"):
         try:
@@ -2133,6 +2368,11 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
     should be YTD unless otherwise specified for all assets'. Override
     by passing window='14d' / '30d' / '90d' / '365d' / 'all'.
     """
+    try:
+        title_slug = clean_slug(title_slug)
+        as_of = clean_day(as_of)
+    except RequestRefused as e:
+        return _refused(str(e))
     ch = _ch_client()
     if ch is None:
         snap = _load_normalized_snapshot(title_slug)
@@ -2146,7 +2386,10 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
         return {"success": True, "fallback": True,
                  "best_paid": None, "best_organic": None,
                  "window_label": "YTD"}
-    as_of_clause = f"AND a.posted_date <= '{as_of}'" if as_of else ""
+    as_of_clause = "AND a.posted_date <= toDate({as_of:String})" if as_of else ""
+    params: dict = {"slug": title_slug}
+    if as_of:
+        params["as_of"] = as_of
     try:
         def _query_window(window_key: str):
             lower_bound, label = _resolve_window(window_key, as_of)
@@ -2171,14 +2414,14 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
                    any(a.phase_name)           AS phase_name
             FROM intent.campaign_assets a
             LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
-            WHERE a.title_slug = '{title_slug}'
+            WHERE a.title_slug = {{slug:String}}
               {as_of_clause}
               {lower_bound}
             GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
                      a.url, a.posted_date
             ORDER BY views_total DESC
             """
-            rows = ch.query(sql).result_rows
+            rows = ch.query(sql, parameters=params).result_rows
             cards = _rows_to_dicts(rows, ["asset_id", "action_label", "asset_type",
                                              "paid_or_organic", "url", "posted_date",
                                              "views_total", "engagement_total",
@@ -2228,4 +2471,7 @@ __all__ = [
     "list_titles", "get_overview", "get_assets", "get_audiences",
     "get_cohorts", "answer_question", "get_in_flight",
     "QUESTIONS",
+    "RequestRefused", "clean_slug", "slug_ok", "clean_day", "clean_choice",
+    "SOURCE_VALUES", "FILTER_REFUSAL", "CAMPAIGN_REFUSAL", "DATE_REFUSAL",
+    "QUESTION_REFUSAL", "ASSET_REFUSAL",
 ]

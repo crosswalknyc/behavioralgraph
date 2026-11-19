@@ -20185,6 +20185,16 @@ def _user_intent_iq_title_access(user):
     return False, True, set()
 
 
+def _intent_iq_json(result):
+    """The Attribution IQ read's answer. A request value the read
+    refused (a filter, a date, a campaign id or a question it does not
+    know) answers 400 with its plain line; everything else is sent as
+    before."""
+    if isinstance(result, dict) and result.get('refused'):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
 def _require_intent_iq(title_slug=None):
     """Return (False, error_response) if Attribution IQ isn't available.
 
@@ -20202,6 +20212,16 @@ def _require_intent_iq(title_slug=None):
     if _intent_iq is None:
         return False, (jsonify({'success': False, 'error': 'Attribution IQ module not loaded'}), 500)
     if title_slug:
+        # Only a well-formed campaign id goes any further (2026-11-19).
+        # One check for every /api/intent/<campaign>/... route; the read
+        # itself checks again and binds the id.
+        try:
+            _iiq_slug_fine = bool(_intent_iq.slug_ok(title_slug))
+        except Exception:
+            _iiq_slug_fine = False
+        if not _iiq_slug_fine:
+            return False, (jsonify({'success': False, 'refused': True,
+                                    'error': _intent_iq.CAMPAIGN_REFUSAL}), 400)
         is_admin, allow_all, allowed = _user_intent_iq_title_access(user)
         if not (is_admin or allow_all) and title_slug not in allowed:
             return False, (jsonify({'success': False,
@@ -20254,7 +20274,7 @@ def api_intent_overview(title_slug):
     if not ok:
         return err
     try:
-        return jsonify(_intent_iq.get_overview(title_slug))
+        return _intent_iq_json(_intent_iq.get_overview(title_slug))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -20274,7 +20294,7 @@ def api_intent_assets(title_slug):
     if _iiq_refused:
         return _iiq_refused
     try:
-        return jsonify(_intent_iq.get_assets(
+        return _intent_iq_json(_intent_iq.get_assets(
             title_slug,
             phase=request.args.get('phase'),
             asset_type=request.args.get('asset_type'),
@@ -20295,7 +20315,7 @@ def api_intent_asset_timeseries(title_slug, asset_id):
     if not ok:
         return err
     try:
-        return jsonify(_intent_iq.get_asset_timeseries(
+        return _intent_iq_json(_intent_iq.get_asset_timeseries(
             title_slug, asset_id, window=request.args.get('window')))
     except Exception as e:
         traceback.print_exc()
@@ -20309,7 +20329,7 @@ def api_intent_audiences(title_slug):
     if not ok:
         return err
     try:
-        return jsonify(_intent_iq.get_audiences(title_slug))
+        return _intent_iq_json(_intent_iq.get_audiences(title_slug))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -20323,7 +20343,7 @@ def api_intent_cohorts(title_slug=None):
     if not ok:
         return err
     try:
-        return jsonify(_intent_iq.get_cohorts(title_slug))
+        return _intent_iq_json(_intent_iq.get_cohorts(title_slug))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -20336,7 +20356,7 @@ def api_intent_question(title_slug, qid):
     if not ok:
         return err
     try:
-        return jsonify(_intent_iq.answer_question(title_slug, qid))
+        return _intent_iq_json(_intent_iq.answer_question(title_slug, qid))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -20353,7 +20373,7 @@ def api_intent_demographics(title_slug):
     if not ok:
         return err
     try:
-        return jsonify(_intent_iq.get_demographics(title_slug))
+        return _intent_iq_json(_intent_iq.get_demographics(title_slug))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -20371,7 +20391,7 @@ def api_intent_in_flight(title_slug):
     if _iiq_refused:
         return _iiq_refused
     try:
-        return jsonify(_intent_iq.get_in_flight(title_slug,
+        return _intent_iq_json(_intent_iq.get_in_flight(title_slug,
                                                   as_of=request.args.get('as_of'),
                                                   window=request.args.get('window')))
     except Exception as e:
@@ -20412,7 +20432,7 @@ def api_intent_mta(title_slug):
         return jsonify({'success': False,
                         'error': 'Multi-Touch Attribution not enabled for this campaign'}), 404
     try:
-        return jsonify(_mta_iq.compute_mta_coefficients(
+        return _intent_iq_json(_mta_iq.compute_mta_coefficients(
             title_slug, as_of=request.args.get('as_of')))
     except Exception as e:
         traceback.print_exc()

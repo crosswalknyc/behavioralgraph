@@ -762,7 +762,8 @@ def section_behind_the_page():
                '_require_microdramas_iq': lambda: (True, None), '_require_intent_iq': lambda slug: (True, None),
                '_require_trends_iq': lambda: (True, None), '_microdramas_iq': Work('miq'), '_intent_iq': Work('iiq'),
                '_mta_iq': Work('mta'), '_trends_iq': Work('tiq')}
-        for name in ('_dated_request_refused', 'api_microdramas_iq_data', 'api_microdramas_iq_competitors', 'api_microdramas_iq_all',
+        for name in ('_dated_request_refused', '_intent_iq_json', 'api_microdramas_iq_data', 'api_microdramas_iq_competitors',
+                     'api_microdramas_iq_all',
                      'api_intent_assets', 'api_intent_in_flight', 'api_intent_mta', 'api_trends_iq_data'):
             exec(route_source(name), rns)
 
