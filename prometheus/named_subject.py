@@ -295,6 +295,8 @@ def page_named(text, page, normalize, stop):
     """True when the ask carries a distinctive token of the open page
     (first names count; possessives normalize away), or the page is a
     2-5 letter name written in caps in the ask."""
+    if _mate_named(text, page):
+        return False        # the page's name inside another title ("NCIS: Sydney" with NCIS open) is not the page (2026-11-19)
     pg = str(page or '').split(' - ')[0]
     toks = [w for w in normalize(pg).split()
             if len(w) >= 4 and w not in stop]
@@ -327,6 +329,8 @@ def page_named_outright(text, page, normalize, stop):
     not displace the page (Jessie 2026-11-04: "from the New Heights
     Podcast Listeners profile, what percentage ... Tubi, Roku, Pluto"
     ran on the TUBI file, with the New Heights profile open and named)."""
+    if _mate_named(text, page):
+        return False        # "FBI: Most Wanted viewers" with FBI open names another title, never the page (2026-11-19)
     pg = str(page or '').split(' - ')[0]
     toks = [w for w in normalize(pg).split()
             if len(w) >= 3 and w not in stop and w not in _PAGE_NOUN_TOKENS]
@@ -336,10 +340,29 @@ def page_named_outright(text, page, normalize, stop):
     return all(f' {w} ' in tl for w in toks)
 
 
+def _mate_named(text, page):
+    """The franchise mate of the page the words name in its place
+    (prometheus.named_title.mate_named); '' when they name the page, or
+    nothing of the kind."""
+    try:
+        from . import named_title as _nt
+        return _nt.mate_named(text, str(page or '').split(' - ')[0])
+    except Exception:
+        return ''
+
+
 def same_family(entry, page, normalize, stop):
     a = distinct_tokens(family_name(entry), normalize, stop)
     b = distinct_tokens(str(page or '').split(' - ')[0], normalize, stop)
-    return bool(a) and bool(b) and (a == b or a <= b or b <= a)
+    same = bool(a) and bool(b) and (a == b or a <= b or b <= a)
+    if same and a != b:
+        try:    # two titles of one franchise are two families of files (2026-11-19)
+            from . import named_title as _nt
+            if _nt.siblings(family_name(entry), str(page or '').split(' - ')[0]):
+                return False
+        except Exception:
+            pass
+    return same
 
 
 def ask_names_its_audiences(text):
@@ -758,6 +781,8 @@ def page_mentioned(text, page, normalize, stop):
     """Any distinctive page token appears in the ask."""
     page_d = distinct_tokens(page or '', normalize, stop)
     if not page_d:
+        return False
+    if _mate_named(text, page):
         return False
     text_d = set(normalize(str(text or '')).split())
     return bool(page_d & text_d)

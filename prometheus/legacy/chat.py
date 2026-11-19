@@ -12805,6 +12805,7 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     return None
 
 _pm_generation_base = _primary_profile.held(_pm_generation_base, lambda: _profile_catalog_for_chat())   # the primary is the default; a year cut only when the words name its year (2026-11-12)
+_pm_generation_base = __import__('prometheus.named_title', fromlist=['held']).held(_pm_generation_base)   # a file about another title is never the base of a question that names its own (2026-11-19)
 _PM_DATA_FILE_PREFIX = 'generated_data/'
 
 
@@ -13600,6 +13601,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     bind_subject = str(bind_subject or '').strip() or str(getattr(__import__('flask').g, '_pm_retry_bound', '') or '').strip()   # I4b: the retry's bound subject
     bind_subject = _page_default.quoted_subject(panel_confirm, bind_subject) or bind_subject   # the subject a quote named is the one the Approve runs on (2026-10-24)
     bind_subject = bind_subject or _subject_rules.pinned_bind_for(text, history, str(((ctx or {}).get('primary') or {}).get('name') or ''))   # the thread's own subject, never a which-one question from cross-session memory (Emmet Riley 2026-10-26)
+    bind_subject = __import__('prometheus.named_title', fromlist=['rebound']).rebound(bind_subject, text, panel_confirm)   # a subject a lane bound is the title the words name, never a franchise mate of it (2026-11-19)
     bind_cohort = str(bind_cohort or '').strip()
     # A bare "this audience" that starts work binds to the audience on screen (or the thread's) and is confirmed in one line first; the confirmed name rides into the job (2026-10-26, Mark Valdez)
     # A resumed read (the read worker) already passed this gate with the screen it had; it runs on its pinned base and never asks again (Jessie 2026-11-04)
@@ -16283,7 +16285,7 @@ def _pm_analyze_core(user, body, text, history):
                 _my_subj = str(((_my_ctx.get('primary') or {})
                                 .get('name')) or '').strip() \
                     or (pma.guess_subject_from_text(text) or '').strip()
-                if _my_subj:
+                if _my_subj and not __import__('prometheus.named_title', fromlist=['other_than']).other_than(text, _my_subj):   # never the open profile's year package for a title the words name (2026-11-19)
                     _have_y, _miss_y = _pm_year_files_for_subject(
                         _my_subj, _my_years)
                     if _miss_y:

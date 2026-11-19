@@ -1300,6 +1300,17 @@ def scrub_method_language_payload(raw):
             raw.setdefault('_scrubbed', []).append('followups:dashboard')
     except Exception:
         pass
+    # the title the reader named (prometheus.named_title, 2026-11-19): a franchise mate left out is said once, in
+    # one plain sentence, and a title that ends in a dot ends its sentence once ("Chicago P.D.. Pulling")
+    try:
+        from . import named_title as _nt
+        _nt.say_left_out(raw)
+        for k in ('reply', 'message', 'summary', 'text', 'error'):
+            v = raw.get(k)
+            if isinstance(v, str) and '..' in v:
+                raw[k] = _nt.tidy(v)
+    except Exception:
+        pass
     ic = raw.get('incidence_check')
     if isinstance(ic, dict) and isinstance(ic.get('message'), str) and not _keeps_sample_words(raw):
         ic['message'] = scrub_sample_vocabulary(ic['message'])

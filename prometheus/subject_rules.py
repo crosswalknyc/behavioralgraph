@@ -454,6 +454,23 @@ def bound_thread_subject():
 _ON_SUBJECT_RX = re.compile(r"^On ([^:]{2,80}?)(?:\s+-\s+[^:]{1,80})?:\s")
 
 
+def _whole_head(turn, head):
+    """The subject a landed read opens on, colon and all. The header
+    pattern stops at the first colon, which carried "Law & Order" for a
+    read on Law & Order: Special Victims Unit and NCIS for NCIS: Sydney
+    (2026-11-19, prometheus.named_title.read_head). The longer reading is
+    taken only when it is the short one with a subtitle after it."""
+    try:
+        from . import named_title as _nt
+        meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+        whole = _nt.read_head(str(turn.get('text') or turn.get('content') or ''), meta.get('subject'))
+        if whole and str(whole).lower().startswith(str(head).lower() + ':'):
+            return whole
+    except Exception:
+        pass
+    return head
+
+
 def thread_subjects(history, page='', limit=4, include_pin=True):
     """The subjects this thread has been about, most recent first: the
     subject the reader set or Prometheus quoted in the thread (the pin,
@@ -550,7 +567,7 @@ def thread_subjects(history, page='', limit=4, include_pin=True):
             _add(m2.group('what'))
         m3 = _ON_SUBJECT_RX.match(txt)      # a landed read opens "On <subject>:" (2026-10-30)
         if m3 and _norm(m3.group(1)) not in ('it', 'this', 'that'):
-            _add(m3.group(1))
+            _add(_whole_head(turn, m3.group(1)))
         if len(out) >= limit:
             break
     # The conversation's latest subject outranks the binding when the
@@ -591,7 +608,7 @@ def _most_recent_turn_subject(turns, dropped=lambda _n: False, lookback=6):
             cands.append(m2.group('what'))
         m3 = _ON_SUBJECT_RX.match(txt)
         if m3 and _norm(m3.group(1)) not in ('it', 'this', 'that'):
-            cands.append(m3.group(1))
+            cands.append(_whole_head(turn, m3.group(1)))
         for c in cands:
             c = ' '.join(str(c or '').split()).strip(' .,;:')
             if c and len(c) <= 90 and not dropped(c) and not re.search(r"\b(?:all the|the best|which|what|how)\b", c, re.I):
@@ -1188,9 +1205,21 @@ def clean_display(raw, text='', casing=None):
         pass
     # a bare 'the' title keeps its article ("The Office"); other leading articles drop
     if low.startswith('the ') and len(low.split()) <= 3:
-        return _cased(s, casing)
+        return _one_spelling(_cased(s, casing))
     s = re.sub(r"^(?:a|an)\s+", '', s, flags=re.I)
-    return _cased(s, casing)
+    return _one_spelling(_cased(s, casing))
+
+
+def _one_spelling(name):
+    """A listed title in its one spelling: the closing dot this cleaner
+    takes off "Chicago P.D." goes back on, and "chicago pd" is Chicago
+    P.D. (2026-11-19, prometheus.named_title.respell). Any other name is
+    returned as it came."""
+    try:
+        from . import named_title as _nt
+        return _nt.respell(name)
+    except Exception:
+        return name
 
 
 _NEVER_LABEL = frozenset((
@@ -1781,6 +1810,31 @@ def _request_reading():
 def bind(text, history=None, page='', reading=None, catalog_names=None, normalize=None):
     """The one binder. Words beat thread beat page.
 
+    A title the words name is words (Jenna 2026-11-19, prometheus.named_title:
+    "no i need chicago pd" stayed on the thread's Law & Order read because
+    a title typed in lower case that is not on the shelf was not seen): a
+    listed title, or the name in "the same for X" / "what about X", beats
+    the thread and the page, and a listed title is bound under its one
+    name however it was typed ("chicago pd", "Chicago P.D")."""
+    s = _bind_any(text, history, page, reading, catalog_names, normalize)
+    try:
+        from . import named_title as _nt
+        got = _nt.bound_words(text, history, page, s, reading if reading is not None else _request_reading())
+        if got:
+            name, src = got
+            if s.source == 'words' and s.name:
+                disp = s.display.replace(s.name, name) if s.name and s.name in (s.display or '') else name
+                return Subject(s.kind, name, disp or name, dict(s.qualifiers or {}), 'words', s.confidence, s.pointed)
+            return Subject('title', name, name, dict(s.qualifiers or {}), src, 0.85, s.pointed)
+    except Exception:
+        pass
+    return s
+
+
+def _bind_any(text, history=None, page='', reading=None, catalog_names=None, normalize=None):
+    """Words beat thread beat page (the binder's body; ``bind`` adds the
+    last look at the words for a title they name).
+
     A question that lists categories ("... digital original content:
     Comedy, Faith, Drama and Horror") is bound by rule, whatever the
     Reader made of the list (prometheus.cut_list, 2026-11-11: the first
@@ -2001,7 +2055,17 @@ def _page_name(ctx):
 
 def _same_family(a, b, norm):
     na, nb = norm(str(a or '').split(' - ')[0]), norm(str(b or '').split(' - ')[0])
-    return bool(na) and bool(nb) and (na == nb or na in nb or nb in na)
+    same = bool(na) and bool(nb) and (na == nb or na in nb or nb in na)
+    if same and na != nb:
+        # one name inside the other is the same family only when it is the same title: NCIS: Sydney is not
+        # NCIS, Power Book II: Ghost is not Power, Outlander: Blood of My Blood is not Outlander (2026-11-19)
+        try:
+            from . import named_title as _nt
+            if _nt.siblings(a, b):
+                return False
+        except Exception:
+            pass
+    return same
 
 
 def _current_continuation(text, history, page):

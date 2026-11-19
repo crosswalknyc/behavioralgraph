@@ -576,6 +576,11 @@ def question_universe(text, page='', history=None):
         explicit = bool(brands)
         if brands:
             label = _display(brands[0])
+            try:    # a listed title under its one name ("blood of my blood viewers" is Outlander: Blood of My Blood viewers)
+                from . import named_title as _nt
+                label = _nt.relabel(label, t)
+            except Exception:
+                pass
             base = US_PEOPLE if pops else label
         else:
             who = [p for p in pops if _POP_RX.search(' ' + p.lower() + ' ') or _WHO_OF_RX.match(p)]

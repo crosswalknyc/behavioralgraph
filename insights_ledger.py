@@ -1065,6 +1065,17 @@ def bucket_key_for(index_doc, subject):
     for k, v in subjects.items():
         if fold_subject(v.get('subject') or k.replace('_', ' ')) == want:
             return k
+    # the marks inside a name are not part of it either (2026-11-19): "Chicago PD viewers" files where
+    # "Chicago P.D. viewers" already is, so one title's figures are never banked twice under two spellings
+    try:
+        from prometheus import named_title as _nt
+        sk = _nt.spelling_key(subject)
+        if sk:
+            for k, v in subjects.items():
+                if _nt.spelling_key(v.get('subject') or k.replace('_', ' ')) == sk:
+                    return k
+    except Exception:
+        pass
     return want.replace(' ', '_')[:80] or skey
 
 
@@ -1518,6 +1529,51 @@ def _has_live_entries(bucket):
 
 
 def _resolve_subject(index_doc, subject=None, question=None, live_only=False):
+    """The subject bucket for this ask (``_resolve_subject_any``), held to
+    the title the words name (Jenna 2026-11-19, prometheus.named_title): a
+    bucket found by scanning the words is never one filed under another
+    title. A question about NCIS: Sydney does not resolve the NCIS record,
+    Power Book II: Ghost does not resolve Power, Chicago P.D. does not
+    resolve a service's record or a franchise mate's. A bucket named
+    outright is untouched. With no other bucket the answer is None: no
+    figure and no stored answer rides a question about another title."""
+    skip = set()
+    subs = index_doc.get('subjects') or {}
+
+    def _name(k):
+        return (subs.get(k) or {}).get('subject') or str(k).replace('_', ' ')
+
+    for _ in range(6):
+        skey = _resolve_subject_any(index_doc, subject=subject, question=question, live_only=live_only, _skip=skip)
+        try:
+            from prometheus import named_title as _nt
+            asked = subject or _nt.sole(question)
+            if subject and not (skey and _nt.spelling_key(subject) == _nt.spelling_key(_name(skey))):
+                sk = _nt.spelling_key(subject)      # the same subject under another spelling of its marks
+                spelt = [k for k, v in subs.items() if k not in skip and (v.get('entries') or [])
+                         and (not live_only or _has_live_entries(v)) and sk and _nt.spelling_key(_name(k)) == sk]
+                if spelt:
+                    return sorted(spelt, key=lambda k: (len(_name(k)), k))[0]
+            if asked and not (skey and _nt.same_title(asked, _name(skey))):
+                # one title, one record, however it was typed ("SVU", "Chicago PD", "... Viewers on Peacock")
+                same = [k for k, v in subs.items() if k not in skip and (v.get('entries') or [])
+                        and (not live_only or _has_live_entries(v)) and _nt.same_title(asked, _name(k))]
+                if same:
+                    return sorted(same, key=lambda k: (len(_name(k)), k))[0]
+            if not skey:
+                return skey
+            held = _name(skey)
+            if _nt.bucket_fits(question, held, subject):
+                return skey
+            print(f"[insights-ledger] {held!r} is another title than the one asked; its record is not used "
+                  f"| {str(subject or question or '')[:80]}")
+        except Exception:
+            return skey
+        skip.add(skey)
+    return None
+
+
+def _resolve_subject_any(index_doc, subject=None, question=None, live_only=False, _skip=()):
     """Find the subject bucket for this ask. Explicit subject first
     (normalized match), else the longest ledger subject whose
     normalized form appears inside the normalized question, else a
@@ -1530,6 +1586,8 @@ def _resolve_subject(index_doc, subject=None, question=None, live_only=False):
     subjects = index_doc.get('subjects') or {}
     if live_only:
         subjects = {k: v for k, v in subjects.items() if _has_live_entries(v)}
+    if _skip:
+        subjects = {k: v for k, v in subjects.items() if k not in _skip}
     if subject:
         folded = _fold_family_aliases(normalize_subject(subject))
         if folded != normalize_subject(subject):

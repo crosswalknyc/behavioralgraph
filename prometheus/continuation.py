@@ -40,7 +40,7 @@ __all__ = ['classify', 'previous_deliverable', 'rerun_window', 'window_phrase', 
            'rerun_confirm', 'parameter_change_hint', 'KINDS']
 
 KINDS = ('new_ask', 'chip_answer', 'correction', 'question_about_answer',
-         'parameter_change', 'rerun_window', 'acceptance')
+         'parameter_change', 'rerun_window', 'acceptance', 'named_other')
 
 _RERUN_RX = re.compile(
     r"^\W*(?:please\s+|can you\s+|could you\s+)?(?:re-?r(?:u|eu)n|rerun|re-?pull|re-?do|redo|run\s+(?:it|that|this|the\s+same)\s+again|"
@@ -185,6 +185,16 @@ def previous_deliverable(history, page=''):
             continue
         m = _READ_HEAD_RX.match(txt)
         head = (m.group('who').strip() if m else '')
+        if head:
+            # a title that carries a colon is read whole ("Law & Order: Special Victims Unit", "NCIS: Sydney");
+            # the pattern's cut at the first colon carried the franchise in its place (2026-11-19)
+            try:
+                from . import named_title as _nt
+                _whole = _nt.read_head(str(t.get('text') or t.get('content') or ''), meta.get('subject'))
+                if _whole and _whole.lower().startswith(head.lower() + ':'):
+                    head = _whole
+            except Exception:
+                pass
         if head.lower() == 'it':
             # "On it: reading X now." is the promise, not a read on a
             # subject named "it" (a correction after it read "This is it
@@ -403,7 +413,26 @@ def _is_chip_answer(text, prev):
 def classify(text, history, reading=None, page=''):
     """What this turn is, against the previous agent turn.
     Returns {'kind', 'deliverable', 'subject', 'window', 'params',
-             'confidence'}; kind 'new_ask' when nothing binds."""
+             'confidence'}; kind 'new_ask' when nothing binds.
+
+    A turn that would carry the last deliverable's subject (a re-run on
+    another window, another cut of the last read, a correction) stands
+    down when the words name another title (Jenna 2026-11-19: "can you do
+    the same for chicago pd ... for the year 2020" drew a quote to run the
+    Law & Order read again; "no i need chicago pd" started a read of Law &
+    Order: Special Victims Unit). A re-run or another cut becomes
+    ``named_other``, the same question on the title the words name; a
+    correction continues on that title (prometheus.named_title)."""
+    out = _classify(text, history, reading, page)
+    try:
+        from . import named_title as _nt
+        out = _nt.stand_down(out, text, history, page)
+    except Exception:
+        pass
+    return out
+
+
+def _classify(text, history, reading=None, page=''):
     t = ' '.join(str(text or '').split())
     out = {'kind': 'new_ask', 'deliverable': None, 'subject': '', 'window': None, 'params': {}, 'confidence': 0.0}
     if not t:

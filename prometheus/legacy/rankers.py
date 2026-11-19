@@ -242,7 +242,9 @@ _PM_MY_LAST_RE = re.compile(
     re.I)
 
 
-_PM_MY_NYEAR_RE = re.compile(r'\b(\d+)[- ]year\b(?!s?[- ]?olds?\b)', re.I)
+# a count of years, never a calendar year ("for the 2020 year" is one year; it was read as a 2020-year study and
+# capped to a six-year package on the open profile, 2026-11-18)
+_PM_MY_NYEAR_RE = re.compile(r'\b(\d{1,2})[- ]year\b(?!s?[- ]?olds?\b)', re.I)
 
 
 _PM_MY_SINCE_RE = re.compile(r'\bsince\s+(20\d\d)\b', re.I)

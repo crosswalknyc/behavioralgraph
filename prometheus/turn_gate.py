@@ -541,6 +541,26 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
     if kind == 'new_ask':
         return None
 
+    # ---- "the same for <another title>": the question runs on the title the
+    # words name, never as the last read again (Jenna 2026-11-19: "can you do
+    # the same for chicago pd ... for the year 2020" drew "I can run the Law &
+    # Order read again"). The named title rides as the bound subject; the
+    # lanes price and run it as they do any named title, and a file or a
+    # figure held for another title is never its base.
+    if kind == 'named_other':
+        title = str(cont.get('subject') or '').strip()
+        if title:
+            body = dict(body)
+            body['bind_subject'] = body.get('bind_subject') or title
+            body['surface'] = 'analyze'
+            body['_pm_named_title'] = title
+            try:
+                host.ask_hint(route='named_title', outcome='bound_named_title', subject=title)
+            except Exception as _fx:
+                _faults.note('turn_gate', _fx)
+            return {'text': text, 'body': body}
+        return None
+
     # ---- a re-run in a window: the confirm card with the deliverable, the window, the price
     if kind == 'rerun_window':
         if not deliv or deliv.get('kind') in ('none', 'question'):
