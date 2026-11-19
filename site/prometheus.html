@@ -55,7 +55,13 @@
   .rep .q { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--olive); }
   .rep strong { display: block; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 8px 0 6px; }
   .rep span { font-size: 14px; color: var(--t2-l); line-height: 1.5; }
-  @media (max-width: 1023px) { .rep { grid-template-columns: 1fr; } }
+  .rep .twin { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 2fr; gap: var(--gutter); align-items: center; padding: 22px; border-radius: 12px; background: var(--slate); border: 1px solid var(--slate); }
+  .rep .twin .q { color: var(--green); }
+  .rep .twin strong { color: var(--off); margin-bottom: 0; }
+  .rep .twin p { margin: 0; font-size: 14px; color: rgba(233,232,225,0.78); line-height: 1.5; }
+  .rep .twin p b { color: var(--off); }
+  .rep .twin p a { display: inline; padding: 0; border: 0; border-radius: 0; background: none; color: var(--green); text-decoration: underline; }
+  @media (max-width: 1023px) { .rep { grid-template-columns: 1fr; } .rep .twin { grid-template-columns: 1fr; gap: 0; } }
   .price3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); margin-top: 40px; }
   .price3 .c { padding: 24px 26px; border-radius: 12px; background: var(--slate); border: 1px solid var(--rule-d); }
   .price3 .k { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); margin-bottom: 12px; }
@@ -281,8 +287,8 @@
       <a href="trends-iq.html"><div class="q">What is trending?</div><strong>Trends IQ</strong><span>What is trending across the internet, what people engage with most, and which IP they buy: books, Wattpad, movie and Broadway tickets.</span></a>
       <a href="ranker-iq.html"><div class="q">What is number one?</div><strong>Rankers IQ</strong><span>FAST, podcasts, gaming, streaming and more, ranked every morning on what people played.</span></a>
       <a href="fin-iq.html"><div class="q">What is the consumer doing on this KPI?</div><strong>Fin IQ</strong><span>Tickers, KPIs and platforms read through daily deltas in consumer interaction.</span></a>
+      <div class="twin"><div><div class="q">What are they thinking?</div><strong>Digital Twins IQ</strong></div><p>Test a plan, a title, a price, or a product launch on ten million twins built from real behavior before you spend. <a href="digital-twins.html">See how Digital Twins IQ works</a>. <b>Beyond the menu.</b> Those are the syndicated reports. Ask literally any question about these ten million people, and Prometheus answers it.</p></div>
     </div>
-    <p class="so-what" style="margin-top:36px"><b>Digital twins.</b> Test a plan, a title, or a price on ten million twins built from real behavior before you spend. <a href="digital-twins.html" style="text-decoration:underline">See how Twin IQ works</a>. <b>Beyond the menu.</b> Those are the syndicated reports. Ask literally any question about these ten million people, and Prometheus answers it.</p>
   </div>
 </section>
 
