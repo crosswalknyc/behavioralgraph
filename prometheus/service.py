@@ -571,7 +571,7 @@ LANE_ORDER = (
     'bpiq_wizard', 'build_fix', 'build_facts',
     'wayfinding', 'dashboard_behavior', 'study_record',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
-    'deck_conversion', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'match_answer', 'short_reply',
+    'deck_conversion', 'insight_ask', 'read_brief', 'reconcile', 'us_scope', 'segment_sizing', 'number_provenance', 'unprojected', 'confirm_answer', 'match_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'brief_terms', 'product_facts', 'help_writing', 'dataset_build',
@@ -1495,6 +1495,62 @@ def ask(user, body, *, via='session'):
                 env = envelope.wrap(raw, surface='deck', decision=decision, thread_id=tid, via=via)
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'deck')
                 return env, status
+
+    # lane: insight_ask
+    # An open-ended insight request ("what's a unique insight we can email
+    # to Lego around lego shopping behaviour this month", "what would
+    # impress Nike", "find me something we can pitch X", "give me a hook
+    # for X") is the analyst's job: look, pick the strongest finding, hand
+    # it over in a form the reader can forward (Jenna 2026-11-19, Mike
+    # Pusateri at Bent Pixels: the word "email" drew "Nothing has landed in
+    # this chat yet for me to send"). "Email / send / pitch / take to" a
+    # third party says what the READER will do with the answer; Prometheus
+    # never sends to a third party. When the library holds the subject the
+    # analyze core answers from the whole file (prometheus.insight_ask.
+    # core_hook): metered like any talk on a file, never quoted. A subject
+    # the library does not hold, a question the price rules read as a
+    # put-together read, and a step being answered all fall through to the
+    # lanes below unchanged, so the standing quote is what the reader sees.
+    if not _armed(body) and not _is_order and not _no_build and not body.get('_meta_replay'):
+        _ia_raw, _ia_status = None, 200
+        _ia_cs = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
+        _ia_dec = {'surface': 'analyze', 'mode': None, 'reason': 'insight_ask', 'client_hint': None}
+        try:
+            from . import insight_ask as _ia
+            _ia_go = bool(_ia.wants(text)) and bool(host.gate_analyze(user))
+            if _ia_go:
+                # over the daily spend cap the model surfaces stop for the day: the cap's own lane below says so
+                try:
+                    from . import spend_guard as _sg_ia
+                    _ia_go = bool(_sg_ia.check(user)[0])
+                except Exception as _fx:
+                    _faults.note('service.spend_guard', _fx)
+            if _ia_go:
+                from flask import g as _g_ia
+                _g_ia._pm_insight_only = True       # the core answers the insight request or hands back nothing
+                try:
+                    _ia_raw, _ia_status = _unpack(host.analyze_core(user, _analyze_body(body, text, history, _ia_dec, tid), text, history))
+                finally:
+                    _g_ia._pm_insight_only = False
+                if not (isinstance(_ia_raw, dict) and _ia_raw.get('insight_ask')):
+                    _ia_raw = None                  # not held, not openable, or priced: the lanes below take it as they always did
+        except Exception as _fx:
+            _faults.note('service.insight_ask', _fx)
+            _ia_raw = None
+        if _ia_raw:
+            raw = _after_answer(_ia_raw, text, uname, ctx)
+            try:
+                from . import reply_truth as _rtr_ia
+                raw = _rtr_ia.finish_answer(raw, question=text)
+            except Exception as _fx:
+                _faults.note('service.reply_truth', _fx)
+            if _ia_cs == 'interpret':
+                _ia_full = raw
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_ia_full.get('followups') or [])
+            env = envelope.wrap(raw, surface='analyze', decision=_ia_dec, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, _ia_status
 
     # lane: read_brief
     # A read brief is one read on the titles it names (Grace Yin, Amazon,
@@ -3688,6 +3744,11 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         # a send order ('email me the Babylon 5 breakdown') is a file or a
         # summary we hold, never a build (2026-10-14, golden g079)
         from . import send_file as _sf
+        from . import insight_ask as _ia_cmd
+        # "an insight we can email to Lego" is what the reader will do with the answer, never an order to send a file
+        # (Jenna 2026-11-19, prometheus.insight_ask): the read lanes take it
+        if _ia_cmd.stands_down(text):
+            return None
         if re.search(r"\b(e-?mail|send|mail|forward)\b", text, re.I) and (_sf.parse(text) or subs):
             _pg.say('Sending the file')
             raw = _sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host, subjects=list(subs or []))

@@ -6413,6 +6413,17 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
         window_txt = _dfl.read_note() + window_txt
     except Exception as _fx:
         _faults.note('analysis', _fx)
+    # an open-ended insight request ("what would impress X", "a unique
+    # insight we can email to X") lands in the hand-over shape whichever
+    # pass writes it (Jenna 2026-11-19, prometheus.insight_ask)
+    insight_txt = ''
+    try:
+        from prometheus import insight_ask as _ia
+        insight_txt = _ia.read_brief(text)
+        if insight_txt:
+            insight_txt += "\n"
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return (
         f"{req_block}"
         f"{profile_txt}"
@@ -6425,6 +6436,7 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
         "USER'S QUESTION\n"
         "===============\n"
         f"{text}\n\n"
+        f"{insight_txt}"
         "Respond with the strict JSON object described in the system "
         "prompt. JSON only."
     )

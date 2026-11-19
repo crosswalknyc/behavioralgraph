@@ -173,6 +173,15 @@ def action_request(text):
     hits = [k for k, rx in _FAMILIES if rx.search(t)]
     if not hits:
         return None
+    if hits == ['outreach']:
+        # "an insight we can share with the Nike team", "something to send to the client": the reader says what THEY
+        # will do with the answer; it is a question for the data, never a request to contact anyone (Jenna 2026-11-19)
+        try:
+            from . import insight_ask as _ia
+            if _ia.stands_down(t):
+                return None
+        except Exception:
+            pass
     # A supported command wins, except where the family is clearly
     # outside the product (billing, access, schedule, publish never
     # overlap with a supported command the way outreach and the two

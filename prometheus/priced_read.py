@@ -1133,6 +1133,14 @@ def offer(subject, price_label, question, kind='report', frame='', years=1,
             what = _ov.also_watched_lead(question)
         except Exception:
             what = ''
+    if not what and kind in ('custom', 'report'):
+        # an open-ended insight request on a subject the library does not hold says what the read is for; the price
+        # line under it is the standing one (Jenna 2026-11-19, prometheus.insight_ask)
+        try:
+            from . import insight_ask as _ia
+            what = _ia.offer_lead(question, subj)
+        except Exception:
+            what = ''
     kw = dict(kw, what=what)
     # the confirm and the ledger line carry the subject the reader saw
     offer_body = {'question': str(question or '')[:600],

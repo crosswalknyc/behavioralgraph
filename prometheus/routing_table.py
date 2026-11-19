@@ -272,6 +272,25 @@ ROWS = [
         'examples': [], 'counter': [('which button gets the most clicks on the product page', True), ('why is my build stuck', False)],
     },
     {
+        'id': 'insight_ask', 'surface': 'analyze',
+        'reason': 'insight_ask', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'An open-ended insight request ("what\'s a unique insight we can '
+                'email to Lego around lego shopping behaviour this month", "what '
+                'would impress Nike", "find me something we can pitch X", "give '
+                'me a hook for X") on a subject the library holds: the whole file '
+                'is read against the US, the strongest finding leads, then why it '
+                'matters, the support, a forward-ready version and the offer of a '
+                'one-pager. "Email / send / pitch / take to" a third party says '
+                'what the reader will do with the answer; nothing is sent to the '
+                'third party and the words are never an order to send the last '
+                'file. Metered like any talk on a file, never quoted; a subject '
+                'the library does not hold keeps the standing quote (Jenna '
+                '2026-11-19). Served by the ask service lane and the analyze '
+                'core (prometheus.insight_ask).',
+        'examples': [], 'counter': [('email me this file', False), ('top 10 creators Lego shoppers over-index on', False)],
+    },
+    {
         'id': 'status_lookup', 'surface': 'analyze',
         'reason': 'status_lookup', 'client_action': 'analyze',
         'host_only': True,

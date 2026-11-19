@@ -12928,6 +12928,9 @@ def _pm_email_file_intent(text):
     return bool(_PM_EMAIL_FILE_RE.search(t))
 
 
+_pm_email_file_intent = __import__('prometheus.insight_ask', fromlist=['not_a_send']).not_a_send(_pm_email_file_intent)   # "an insight we can email to Lego" is what the reader will do with the answer, never an order to send the last file (Jenna 2026-11-19)
+
+
 def _pm_email_file_response(user, text, history=None):
     """Email the very last thing in the thread (Jenna 2026-11-04). A
     file the last reply carried goes as it is; a read with a table is
@@ -16245,6 +16248,9 @@ def _pm_analyze_core(user, body, text, history):
     # Email the last delivered file (2026-09-29 Jenna: every data
     # answer creates a CSV the user can download or have emailed).
     # Runs before routing so an open profile never hijacks it.
+    _ins_resp = __import__('prometheus.insight_ask', fromlist=['core_hook']).core_hook(text, body, history, user, _pm_ppu, globals())   # an open-ended insight request on a subject we hold is read from the whole file (Jenna 2026-11-19)
+    if _ins_resp is not None:
+        return _ins_resp
     if _pm_email_file_intent(text):
         return _pm_email_file_response(user, text, history)
     # Brand Partnership Valuation wizard (Jenna 2026-10-28): the chip
