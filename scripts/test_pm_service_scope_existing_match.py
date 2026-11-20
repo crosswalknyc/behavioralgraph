@@ -26,6 +26,7 @@ import sys
 import unittest
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -281,7 +282,7 @@ class OneDecisionEverywhere(unittest.TestCase):
 class TheCallSite(unittest.TestCase):
 
     def test_the_interpret_step_hands_the_binder_its_catalog(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         self.assertIn("_named_platforms.bind(spec_draft, text, history, cuts_hit=_platform_hit, catalog=catalog)", src)
 
     def test_a_window_is_read_from_the_sample_size_row(self):

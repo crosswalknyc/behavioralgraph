@@ -43,6 +43,7 @@ import sys
 import time
 from datetime import date
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
@@ -672,7 +673,7 @@ def test_d_the_1000_order():
 # ------------------------------------------------------------------ E
 def test_e_the_wiring():
     print("E. the wiring: the job body, the widget, the email, the fallbacks")
-    chat = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+    chat = _legacy_view()
     job = chat.split('def _pm_run_bpiq_job')[1].split('\ndef ')[0]
     done = job.split("'status': 'done'")[1].split('_bj.settle(')[0]
     check("the job hands the deck over inside its finished status, before the note",

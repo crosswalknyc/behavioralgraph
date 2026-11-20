@@ -17,6 +17,7 @@ import re
 import sys
 from pathlib import Path
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -232,7 +233,7 @@ check("prompt has no em dash", "\u2014" not in system + user)
 
 # ── 10. source wiring ────────────────────────────────────────────────
 app_src = (ROOT / "app.py").read_text(encoding="utf-8")
-chat_src = (ROOT / "prometheus" / "legacy" / "chat.py").read_text(encoding="utf-8")
+chat_src = _legacy_view()
 html_src = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 check("app.py: verify call defined",
       "def _verify_short_name_identity(draft, prompt):" in app_src)

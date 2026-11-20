@@ -13,6 +13,7 @@ import os
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -183,7 +184,7 @@ class TypoVerbsAndChangedName(unittest.TestCase):
 
 class DeckPageNamed(unittest.TestCase):
     def test_deck_core_skips_the_yes_no_when_the_words_name_the_page(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         self.assertIn("and not body.get('confirm_open_screen') and not _page_named:", src)
 
 

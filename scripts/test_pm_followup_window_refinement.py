@@ -55,6 +55,7 @@ import subprocess
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -473,7 +474,7 @@ class AnAgeIsNotASpanOfYears(unittest.TestCase):
 class Wiring(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.chat = _read('prometheus', 'legacy', 'chat.py')
+        cls.chat = _legacy_view()
         cls.app = _app_source()
         cls.mod = _read('prometheus', 'followup_refine.py')
 

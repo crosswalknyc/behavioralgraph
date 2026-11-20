@@ -20,6 +20,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 
@@ -104,7 +105,7 @@ check("Tania's of those how many are on Paramount+ is not one",
 check("empty is not one", is_overlap_read("") is False)
 
 # --- with-base gate in chat.py --------------------------------------
-chat = (WEB / "prometheus" / "legacy" / "chat.py").read_text()
+chat = _legacy_view()
 gate_at = chat.find("NEW-NUMBERS ON AN OPEN FILE (2026-10-21)")
 no_base_at = chat.find("if not base:\n        # A QUESTION about a never-pulled subject")
 digest_at = chat.find("Base rows ride the prompt (2026-08-27, toy-categories routing)")

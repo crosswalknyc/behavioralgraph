@@ -44,6 +44,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -212,7 +213,7 @@ class AClaimNeedsARecord(unittest.TestCase):
         self.assertIn('57.6%', env['text'])
 
     def test_the_wiring(self):
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertIn("fromlist=['finish_read']).finish_read(payload, question=text)", chat)      # the finished read's exit
         svc = Path(ROOT, 'prometheus', 'service.py').read_text(encoding='utf-8')
         self.assertIn('_rtr.finish_answer(raw, question=text)', svc)                              # the written answer's exit
@@ -374,7 +375,7 @@ class AProgressLineHasARun(unittest.TestCase):
         self.assertEqual(find('add drama category'), '')
         self.assertEqual(find(AW['all_on_youtube'], u='jessie'), '')
         self.assertEqual(find(AW['all_on_youtube'], now=at + 7200), '')
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertIn("fromlist=['back_thread']).back_thread(", chat)
 
     def test_a_job_that_died_does_not_leave_its_progress_line_standing(self):
@@ -404,7 +405,7 @@ class AProgressLineHasARun(unittest.TestCase):
         self.assertEqual(len(saved), 3)
         self.assertTrue(saved[1]['meta']['withdrawn'])
         self.assertEqual((saved[2]['text'], saved[2]['meta']['held_ref']), (CALM, 'system/ops/held_replies/2026-11-11/x.json'))
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertEqual(chat.count("_PT.job_failed('read', pm_user, job_id, text"), 2)
         self.assertEqual(chat.count("_PT.job_failed('deck', username, job_id"), 1)
 
@@ -547,7 +548,7 @@ class ADeliverableRidesThrough(unittest.TestCase):
         self.assertTrue(saved[-1]['text'].startswith('Building an insights deck from the Digital original content categories on YouTube read'))
         self.assertEqual(saved[-1]['meta']['ride_along']['deck_job'], 'd1e2c3k4j5b6')            # the line carries its job
         self.assertEqual(w.get(RA._key(USER, tid))['state'], 'started')
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertIn("fromlist=['on_read_landed']).on_read_landed(pm_user, job_id, payload, held=held, probe=probe)", chat)
         bp = Path(ROOT, 'prometheus', 'blueprint.py').read_text(encoding='utf-8')
         self.assertIn('_ride.run(service.ask, user, body, via=via)', bp)
@@ -853,7 +854,7 @@ class TheDoorRuleIsADeckRule(unittest.TestCase):
         self.assertEqual(DW.scrub_filename('Retail_door_mix_Insights.pptx'), 'Retail_store_mix_Insights.pptx')
 
     def test_the_wiring(self):
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertEqual(chat.count('_door_words.scrub_filename('), 1)                    # the deck's own file name
         pma_src = Path(ROOT, 'prometheus_analysis.py').read_text(encoding='utf-8')
         self.assertNotIn('_dw.scrub_read(s)', pma_src)

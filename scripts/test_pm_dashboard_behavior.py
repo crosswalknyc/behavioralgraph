@@ -50,6 +50,7 @@ import subprocess
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -445,7 +446,7 @@ class TheWiring(unittest.TestCase):
         self.assertIn('force=True', ex)
 
     def test_the_two_hooks_in_the_chat_module(self):
-        chat = _read('prometheus', 'legacy', 'chat.py')
+        chat = _legacy_view()
         hook = "__import__('prometheus.dashboard_behavior', fromlist=['core_hook']).core_hook(text, body, history, user, _pm_ask_hint)"
         self.assertEqual(chat.count(hook), 1)
         self.assertLess(chat.index(hook), chat.index('# ------------------ SINGLE ROUTER (2026-08-28) ------------------'))

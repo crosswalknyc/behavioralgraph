@@ -53,6 +53,7 @@ os.environ.setdefault('AWS_ACCESS_KEY_ID', 'AKIATESTNOTREAL000000')
 os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'not-a-real-secret')
 os.environ.setdefault('AWS_SHARED_CREDENTIALS_FILE', '/nonexistent/aws/credentials')
 os.environ.setdefault('AWS_CONFIG_FILE', '/nonexistent/aws/config')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -540,7 +541,7 @@ class TheBrief(unittest.TestCase):
         self.assertEqual(F.approve_stop(None), '')
 
     def test_it_is_wired_on_every_interpret_path_and_the_approval(self):
-        app, chat = _read('app.py'), _read('prometheus/legacy/chat.py')
+        app, chat = _read('app.py'), _legacy_view()
         guard = _grab(app, '_guard_data_floor')
         self.assertIn('guard_draft', guard)
         self.assertIn('route=_route_window_fields', guard)
@@ -683,11 +684,11 @@ class TheReadItself(unittest.TestCase):
         self.assertEqual(on_floor['headline'], 'Calendar 2021 read.')
 
     def test_the_check_is_wired_and_a_charge_is_returned(self):
-        chat = _read('prometheus/legacy/chat.py')
+        chat = _legacy_view()
         self.assertIn(".hold_read(data, text)", chat)
         self.assertIn("or payload.get('data_floor') == 'before'):", chat)
         self.assertIn("if panel_charge and not held and payload.get('data_floor') == 'before':", chat)
-        self.assertLess(chat.count('\n') + 1, 19900, "chat.py stays under 19,900 lines")
+        self.assertLess(_chat_py_lines(), 19900, "chat.py stays under 19,900 lines")
 
 
 # ---------------------------------------------------------------- guided flows
@@ -755,7 +756,7 @@ class GuidedFlows(unittest.TestCase):
         self.assertEqual((out['start'], out['lead']), ('2021-03-01', ''))
         self.assertEqual(out['lookback'], " " + SENT + " That look-back starts January 1, 2021.")
         self.assertEqual(F.tracker_window('2025-11-16', '2026-01-11'), {'start': '2025-11-16', 'lead': '', 'lookback': ''})
-        chat = _read('prometheus/legacy/chat.py')
+        chat = _legacy_view()
         self.assertIn(".tracker_window(start, subiq.get('through_date') or end)", chat)
         self.assertIn(".intake(parsed) or {}", chat)
 

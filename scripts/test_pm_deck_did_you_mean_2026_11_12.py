@@ -53,6 +53,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -68,7 +69,7 @@ from prometheus import deck_subject as DS  # noqa: E402
 from prometheus import envelope as ENV  # noqa: E402
 from prometheus import understand as UN  # noqa: E402
 
-CHAT_SRC = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+CHAT_SRC = _legacy_view()
 
 HER_ASK = 'summary deck for mistletoe murders series viewers'
 CALM = 'I did not land a clean answer on that one'

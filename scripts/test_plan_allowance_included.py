@@ -45,6 +45,7 @@ os.environ.setdefault("PM_MAIL_OFF", "1")
 os.environ.setdefault("CORPUS_CATALOG", "0")
 os.environ.setdefault("PM_PROBE_LOOKUP", "0")     # no sandbox-key lookup over the network
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 if str(WEB) not in sys.path:
     sys.path.insert(0, str(WEB))
@@ -61,7 +62,7 @@ W._pricing_cache["value"] = PRICING
 W._pricing_cache["loaded_at"] = W._now_ts() + 10 ** 9
 
 APP_SRC = (WEB / "app.py").read_text(encoding="utf-8")
-CHAT_SRC = (WEB / "prometheus" / "legacy" / "chat.py").read_text(encoding="utf-8")
+CHAT_SRC = _legacy_view()
 INDEX_SRC = (WEB / "templates" / "index.html").read_text(encoding="utf-8")
 
 SUBIQ = "Chatbot Profile IQ (subscriber_iq)"

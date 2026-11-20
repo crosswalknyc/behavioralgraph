@@ -9,6 +9,7 @@ import os
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -62,7 +63,7 @@ class PageOrders(unittest.TestCase):
         self.assertIsNone(SR.open_profile_build_order('run a profile on Mountain Dew', PAGE, []))   # a named subject has its own lane
 
     def test_chat_wires_the_lane(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         i = src.index('open_profile_build_order(text')
         j = src.index('SINGLE ROUTER (2026-08-28)')
         self.assertLess(i, j, 'the page build order must run ahead of the router')
@@ -126,7 +127,7 @@ class IdentitySwap(unittest.TestCase):
         self.assertFalse(SR.identity_swapped('mcentire', 'Reba McEntire', 'reba mcentire reba_mcentire_09_01_2026'))
 
     def test_wired_into_the_shortlist(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         self.assertIn('from prometheus.subject_rules import identity_swapped', src)
         i = src.index('def _shortlist_profile_matches(')
         j = src.index('_ident_swapped = _identity_swapped(', i)

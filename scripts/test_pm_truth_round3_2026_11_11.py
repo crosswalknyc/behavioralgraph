@@ -43,6 +43,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -75,7 +76,7 @@ PARTS = ["Looking at YouTube. What type of categories do best for digital origin
 # the subject on record for her question, as the shared read store names it (index of 2026-11-12)
 HELD = 'Digital original content categories on YouTube (Comedy, Lifestyle/Arts & Culture, Drama, Horror, Young Adult, Faith)'
 HELD_KEY = 'digital_original_content_categories_on_youtube_comedy_lifestyle_arts_culture_dra'
-CHAT_SRC = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+CHAT_SRC = _legacy_view()
 GOLDEN = {'username': 'canary:golden', 'email': '', 'role': 'super_admin', 'has_chatbot_profile_iq_access': True, 'unlimited': True,
           'company': 'Crosswalk'}
 

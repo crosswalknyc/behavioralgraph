@@ -27,6 +27,7 @@ import os
 import re
 import sys
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
@@ -62,7 +63,7 @@ def body_of(src, name):
 
 
 def main():
-    chat = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+    chat = _legacy_view()
     svc = open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8').read()
 
     print("1. the guided-intake turn sends a valuation ask to the wizard before the flow table is read")

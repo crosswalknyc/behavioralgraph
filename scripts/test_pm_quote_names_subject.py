@@ -40,6 +40,7 @@ from unittest import mock
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -302,8 +303,7 @@ class AtTheGate(unittest.TestCase):
             src = fh.read()
         gate = src[src.index('def work_gate('):]
         self.assertIn("(payload or {}).get('subject') or subject", gate)
-        with open(os.path.join(ROOT, "prometheus", "legacy", "chat.py")) as fh:
-            chat = fh.read()
+        chat = _legacy_view()
         self.assertEqual(chat.count("subj_name = str(_pl.get('subject') or subj_name)"), 2)
 
 

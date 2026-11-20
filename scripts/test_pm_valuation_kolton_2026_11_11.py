@@ -37,6 +37,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.pop('BPIQ_CORPUS_ANCHORS', None)
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 sys.path.insert(0, str(WEB / 'scripts'))
@@ -417,14 +418,14 @@ def test_d_e_deck_names_the_pick_and_keeps_the_read():
     untouched = DP.hold_plan_to_read(copy.deepcopy(plan), PAGE, replan=replan)
     check("a deck that is not made from a read is not touched", '48,217' in repr(untouched) and len(notes) == 1)
 
-    chat = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+    chat = _legacy_view()
     check("the deck route settles the pick through deck_pick", '_deck_pick.settle(' in chat
           and "if _bind_pick and body.get('confirm_open_screen'):" in chat)
     check("the old fall back to the open page is gone",
           "if res_err or not resolution or resolution.get('clarify'):\n                resolution, res_err = _pm_resolve_deck_subject(text, ctx)" not in chat)
     check("the deck route returns the confirm line", chat.count("'confirm_line': _deck_pick.confirm_line(resolution)") == 2)
     check("the deck job holds the plan to the read", '_deck_pick.hold_plan_to_read(' in chat)
-    check("chat.py stays under its line ratchet", chat.count('\n') < 19900)
+    check("chat.py stays under its line ratchet", _chat_py_lines() < 19900)
     html = (WEB / 'templates' / 'index.html').read_text(encoding='utf-8')
     check("the page prints the server's confirm line", 'data.confirm_line ? String(data.confirm_line)' in html)
 
@@ -624,7 +625,7 @@ def test_f_valuation_never_starts_cold():
           '$4,129,457.18' in blk and '311,618' in blk and '(binding)' in blk)
     check("a valuation on a window that does not overlap the read's is not handed over",
           BA.valuation_block(HER, window={'start': '2026-01-01', 'end': '2026-03-31'}, anchors_for=anchors_for) == '')
-    chat = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+    chat = _legacy_view()   # stage 5: chat.py plus its extracted cores
     # the generated read carries it through the knowledge layer (prometheus.knowledge.read_blocks, saved=...) since 2026-11-20
     check("the read lanes carry the saved valuation block",
           chat.count('_bpiq_wiz.saved_valuation_block(text') + chat.count('saved=_bpiq_wiz.saved_valuation_block') >= 2)

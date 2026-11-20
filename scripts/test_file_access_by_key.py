@@ -45,6 +45,7 @@ import sys
 from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = Path(os.path.dirname(os.path.abspath(__file__)))
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
@@ -1014,7 +1015,7 @@ check('the hook: a route that is not a chat route is left alone', seen['other'][
 
 # the wiring, read from the source
 SERVICE_SRC = (ROOT / 'prometheus' / 'service.py').read_text(encoding='utf-8')
-CHAT_SRC = (ROOT / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+CHAT_SRC = _legacy_view()
 INIT_SRC = (ROOT / 'prometheus' / '__init__.py').read_text(encoding='utf-8')
 ask_src = fn_source('ask', SERVICE_SRC, ast.parse(SERVICE_SRC))
 i_scope = ask_src.find('_ks0.page_context(ctx, user, uname, host)')
@@ -1029,7 +1030,7 @@ check('the chat "download that" order passes it to the link', 'bucket=_H.S3_BUCK
 check('no caller reads or signs a thread file without the check',
       CHAT_SRC.count('_lt.file_bytes(') == CHAT_SRC.count('_lt.file_bytes(f, _H.s3_client, bucket=_H.S3_BUCKET, extra_buckets=(\'svod-acquisition\',), allowed=')
       and CHAT_SRC.count('_lt.fresh_url(') == CHAT_SRC.count('_lt.fresh_url(f, _H.s3_client, bucket=_H.S3_BUCKET, allowed='))
-check('the chat file stays under its line ceiling', len(CHAT_SRC.splitlines()) < 19900, str(len(CHAT_SRC.splitlines())))
+check('the chat file stays under its line ceiling', _chat_py_lines() < 19900, str(len(CHAT_SRC.splitlines())))
 SEND_SRC = (ROOT / 'prometheus' / 'send_file.py').read_text(encoding='utf-8')
 ans_src = fn_source('answer', SEND_SRC, ast.parse(SEND_SRC))
 check('send_file.answer checks the context first and the key again at the read',

@@ -18,6 +18,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 
@@ -196,7 +197,7 @@ check("service calls priced_read.service_turn",
       'priced_read' in service and 'service_turn' in service)
 check("service persist keeps priced_paid",
       "meta['priced_paid']" in service)
-chat = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text()
+chat = _legacy_view()
 check("interpret incidence quotes before the sample check",
       'outcome=\'panel_offer\'' in chat[chat.find('INCIDENCE / SAMPLE-SIZE'):
                                        chat.find('INCIDENCE / SAMPLE-SIZE') + 2500]

@@ -26,6 +26,7 @@ import sys
 import unittest
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -345,7 +346,7 @@ class LegacyHandlers(unittest.TestCase):
         ns = {'datetime': datetime, 'timezone': timezone, 'uuid': uuid, 'json': json, 'traceback': __import__('traceback'),
               '_H': _Host(s3), 'jsonify': lambda d: d, 'session': {'username': 'jay'},
               'SYNTH_CHAT_THREADS_PREFIX': 'system/synth_chat_threads'}
-        chat = _legacy_source('prometheus/legacy/chat.py')
+        chat = _legacy_view()
         thr = _legacy_source('prometheus/legacy/threads.py')
 
         def grab(src, name, stop=r'\n\n\n'):

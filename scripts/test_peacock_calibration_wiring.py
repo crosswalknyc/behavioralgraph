@@ -15,6 +15,7 @@ import os
 import re
 import sys
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -68,7 +69,7 @@ check('peacock_actuals' in s_scope and 'pk.calibrate(' in s_scope and 'pk.compon
 s_svod = src('SVOD_Churn_Attribution.py')
 i_file, i_over = s_svod.find('_pk_scale.calibrate('), s_svod.find("# Explicit override always wins (CLI --reach-us flag)")
 check('from migration import peacock_actuals as _pk_scale' in s_svod and 0 < i_file < i_over, 'Subscriber IQ reach, ahead of the explicit override')
-s_chat = src('prometheus', 'legacy', 'chat.py')
+s_chat = _legacy_view()
 check('_pk_scale.block(text, mr, base)' in s_chat and 'from prometheus import peacock_scale as _pk_scale' in s_chat, 'the Prometheus measurement pass is handed the block')
 check(s_chat.count('\n') <= 19_900, 'the legacy chat stays under its line ceiling', str(s_chat.count('\n')))
 check('peacock_actuals' in src('prometheus', 'peacock_scale.py'), 'the Prometheus block is built from the shared module')

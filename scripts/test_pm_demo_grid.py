@@ -56,6 +56,7 @@ import sys
 import unittest
 from unittest import mock
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -589,7 +590,7 @@ class FiguresOnFileAreTheFigures(unittest.TestCase):
         self.assertEqual(by['Chicago Med']['pct_women'], 64.2)
         self.assertLess(row['joint'][0]['pct'], row['pct_women'])
         # the read core hands the facts in from the files
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         self.assertIn('facts=lambda _gp: _grid_facts.platform_facts(_gp, _H.s3_client, _H.S3_BUCKET, _profile_catalog_for_chat(), pma)', src)
 
 
@@ -628,14 +629,14 @@ class AnEmptyReadIsRepairedNeverThrown(unittest.TestCase):
                   'resume': {'text': LIZ}}
         self.assertTrue(RR.is_retryable_held(status))
         self.assertFalse(RR.is_retryable_held(dict(status, status='error')), 'an errored job is never retried: that was her job')
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         job = src[src.index('def _pm_run_read_job('):src.index("@_H.app.route('/api/brief-chat/notify-when-done'")]
         self.assertIn("'status': 'held' if held else 'done'", job)
         self.assertIn('_rr.promised_email(job_id)', job)           # a retry that lands is emailed
         self.assertIn('_PT.keep(pm_user, text, job_id=job_id', job)  # and keeps any open promise on the question
 
     def test_the_core_wires_the_repair(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         i = src.index('def _pm_generate_read_core(')
         body = src[i:src.index('\ndef _pm_name_two_audiences', i)]
         self.assertIn('extra_blocks.extend(_read_repair.ask_blocks(text))', body)

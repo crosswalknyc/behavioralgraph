@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
@@ -265,8 +266,7 @@ except Exception as e:
     print(f"  skip  pyflakes unavailable ({e})")
 
 print("[13] user-facing copy")
-chat_src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'),
-                encoding='utf-8').read()
+chat_src = _legacy_view()
 check('approve to queue' not in chat_src, "no 'approve to queue' copy")
 idx = os.path.join(ROOT, 'templates', 'index.html')
 if os.path.exists(idx):

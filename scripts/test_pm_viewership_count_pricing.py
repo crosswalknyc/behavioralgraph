@@ -24,9 +24,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
-CHAT = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text()
+CHAT = _legacy_view()
 WATCH = (WEB / 'prometheus' / 'legacy' / 'watch.py').read_text()
 
 MARIE = ("Among U.S. panelists who watched Everybody Loves Raymond on Amazon Prime Video in September 2026, "

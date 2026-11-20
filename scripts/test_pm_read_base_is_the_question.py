@@ -33,6 +33,7 @@ import sys
 import unittest
 from unittest import mock
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -250,7 +251,7 @@ class TheOutputGuard(unittest.TestCase):
                                       text='what do Costco members buy for the holidays'), '')
 
     def test_the_read_core_re_reads_on_the_named_universe(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         i = src.index('def _pm_generate_read_core(')
         body = src[i:src.index('\ndef _pm_persist_identity', i)]
         self.assertIn('universe_guard=True', body)
@@ -263,7 +264,7 @@ class TheOutputGuard(unittest.TestCase):
         self.assertLess(swap, body.index('build_reasoned_metrics_user_prompt'), 'a leaked base is swapped before the prompt is built')
 
     def test_the_generation_pass_drops_a_base_the_question_never_named(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         i = src.index('def _pm_generate_metrics_response(')
         body = src[i:src.index('\ndef ', i + 10)]
         self.assertIn("_question_universe.names_other_universe(text, base.get('subject'), page=_qu_page)", body)
@@ -277,7 +278,7 @@ class TheOutputGuard(unittest.TestCase):
         the Starz audience', and the cohort's words matched the question.
         The ladder binds a remembered SUBJECT the words name, never a
         cohort, and never runs when the question names its own universe."""
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         i = src.index('def _pm_generate_metrics_response(')
         body = src[i:src.index('\ndef ', i + 10)]
         ladder = body[body.index('RESOLUTION LADDER, last rung'):body.index('TWO-BASE READS')]
@@ -302,7 +303,7 @@ class TheOutputGuard(unittest.TestCase):
         self.assertFalse(P.looks_like_subject(para), para)                  # the paraphrase would draw the clarify
         self.assertTrue(P.looks_like_subject('potential Paw Patrol consumers'))
         self.assertTrue(QU.same_name('Potential Paw Patrol Consumers', 'potential Paw Patrol consumers'))
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         i = src.index('def _pm_generate_metrics_response(')
         body = src[i:src.index('\ndef ', i + 10)]
         self.assertIn("_question_universe.same_name(subj_name, _qu.label)", body)
@@ -350,7 +351,7 @@ class ThePlanHalf(unittest.TestCase):
             self.assertFalse(PMA.is_media_plan_ask(t), t)
         for word in ('WHO', 'WHERE', 'WHEN', 'WHAT TO SAY', 'imperative verb', 'no source names', 'no em dashes'):
             self.assertIn(word, PMA.MEDIA_PLAN_GUIDANCE)
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         self.assertIn('pma.is_media_plan_ask(text)', src)
         self.assertIn('extra_blocks.append(pma.MEDIA_PLAN_GUIDANCE)', src)
 
@@ -372,7 +373,7 @@ class ThePlanHalf(unittest.TestCase):
         plain = PMA.enforce_metrics_coherence(dict(data))
         self.assertEqual(len(plain['reads']), 5)
         self.assertTrue(all(len(r) <= 480 for r in plain['reads']))
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         # every coherence pass of the read carries the plan flag (and, since
         # 2026-11-10, the ask and the base for the adult account-holder rule)
         self.assertEqual(src.count('plan=_is_plan, **_ah_ctx)'), 5)

@@ -27,6 +27,7 @@ import re
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -156,8 +157,7 @@ class TheWiring(unittest.TestCase):
     through the rule. Source check only: the chat module is not imported."""
 
     def test_the_base_tiers_read_the_library_through_the_rule(self):
-        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-            src = fh.read()
+        src = _legacy_view()
         self.assertGreaterEqual(len(re.findall(r"_subject_rules\.library_named\(_profile_catalog_for_chat\(\), text", src)), 4)
         self.assertIn("_subject_rules.library_named(_profile_catalog_for_chat(), t)", src)
         base = src.split('def _pm_generation_base(', 1)[1].split('\n_pm_generation_base = ', 1)[0]

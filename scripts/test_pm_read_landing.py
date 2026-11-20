@@ -41,6 +41,7 @@ import sys
 import types
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -150,8 +151,7 @@ class AckOnlyLands(unittest.TestCase):
 # ------------------------------------------------------------ 3: the job document carries a thread
 
 def _legacy_fn(name):
-    with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-        src = fh.read()
+    src = _legacy_view()
     tree = ast.parse(src)
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == name:

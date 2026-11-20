@@ -28,6 +28,7 @@ os.environ.setdefault('CORPUS_CATALOG', '0')
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 sys.path.insert(0, str(WEB / 'scripts'))
@@ -142,7 +143,7 @@ def test_b_ask_log():
         RUL._put_ask_record_safe = old
         RUL._SYNC_FOR_TESTS = old_sync
     check("the written record carries extra.order", (kept.get('extra') or {}).get('order') == 'brand_partnership|open|assets|repeated_question')
-    legacy = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+    legacy = _legacy_view()
     i = legacy.index("order_stall', fromlist=['stamp']).stamp(extra, question, payload, ask_history)")
     check("the stamp is taken just before the record is written, and before the question copy is sent",
           i < legacy.index('_rul.record_ask(', i) < legacy.index('_pm_watch_notify(', i))

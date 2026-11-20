@@ -49,6 +49,7 @@ import re
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -323,8 +324,7 @@ class Retirement(unittest.TestCase):
         self.assertEqual(V.left_out_line('anything', ['anything']), '')
 
     def test_the_read_core_completes_instead_of_telling_the_reader(self):
-        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-            src = fh.read()
+        src = _legacy_view()
         self.assertNotIn('pmv.left_out_line(', src)
         self.assertIn('pmv.complete_cells(', src)
         self.assertIn("pmv.COMPLETE_CELLS_SYSTEM_PROMPT", src)
@@ -333,7 +333,7 @@ class Retirement(unittest.TestCase):
         self.assertIn("trim_findings=_trim_findings", src)
 
     def test_no_reader_facing_left_out_phrasing_remains(self):
-        for rel in ('prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py'), os.path.join('prometheus', 'page_default.py')):
+        for rel in ('prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py'), os.path.join('prometheus', 'page_default.py')) + _CORE_FILES:
             with open(os.path.join(ROOT, rel), encoding='utf-8') as fh:
                 src = fh.read()
             for line in src.split('\n'):
@@ -538,8 +538,7 @@ class MatrixCompletion(unittest.TestCase):
         res = pma.enforce_metrics_coherence(_piece_res('Action'))
         res['_missing'] = ['Drama']
         self.assertNotIn('Drama', pma.format_generated_metrics_reply(res))
-        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-            src = fh.read()
+        src = _legacy_view()
         self.assertNotIn('missing_pieces_line(', src)
         self.assertIn('_mx.complete(plan, results, core=_core', src)
         self.assertIn("genpop=_pm_genpop_dimension_shares", src)
@@ -563,7 +562,9 @@ RETIRED_PHRASES = ('did not come back; ask', 'pieces did not come back', 'i coul
                    # offers (2026-11-04): a pull that did not start is held and ops hear; never a notice
                    'i could not start the', 'not started.', 'something went wrong.',
                    'nothing was charged. open your prometheus chat')
-SWEEP_FILES = ['prometheus_analysis.py', 'prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py')]
+# stage 5: the cores extracted from chat.py (prometheus/legacy/core_*.py) stay in every sweep that read chat.py
+_CORE_FILES = tuple(sorted(os.path.join('prometheus', 'legacy', f) for f in os.listdir(os.path.join(ROOT, 'prometheus', 'legacy')) if f.startswith('core_') and f.endswith('.py')))
+SWEEP_FILES = ['prometheus_analysis.py', 'prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py')] + list(_CORE_FILES)
 SWEEP_FILES += sorted(os.path.join('prometheus', f) for f in os.listdir(os.path.join(ROOT, 'prometheus')) if f.endswith('.py'))
 
 

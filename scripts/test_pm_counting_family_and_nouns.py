@@ -33,6 +33,7 @@ import re
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -376,8 +377,7 @@ class PoolNouns(unittest.TestCase):
         self.assertNotIn('} viewers"', src.split('def format_generated_metrics_reply')[1].split('def missing_pieces_line')[0])
         self.assertIn('return _meth.pool_noun_for(res, question)', src)
         # the read core hands the file builder the family
-        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-            src = fh.read()
+        src = _legacy_view()
         self.assertIn("'family': res.get('metric_family')}", src)
         self.assertIn("'family': fam}", src)
 

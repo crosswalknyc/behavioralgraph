@@ -37,6 +37,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -306,11 +307,11 @@ class TheSubjectIsDecidedByRule(_WithLedger):
         self.assertIs(CL.clean_reading(rd2, 'what do Horror viewers buy'), rd2)
         svc = Path(ROOT, 'prometheus', 'service.py').read_text(encoding='utf-8')
         self.assertLess(svc.find('reading = _cutl0.clean_reading(reading, text)'), svc.find("body = dict(body, reading=reading)"))
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertIn("if set(st) <= toks and not __import__('prometheus.cut_list', fromlist=['is_cut']).is_cut(subj, t):", chat)     # the two-audience step
 
     def test_the_wiring(self):
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertIn("subj_hint = _cut_list.hint(text, mr.get('subject'))", chat)
         self.assertLess(len(chat.splitlines()), 19900)
         self.assertEqual(CL.hint(P1, 'Comedy'), '')

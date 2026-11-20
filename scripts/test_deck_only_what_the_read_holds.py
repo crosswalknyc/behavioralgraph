@@ -30,6 +30,7 @@ import tempfile
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ['PM_MAIL_OFF'] = '1'
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
@@ -171,7 +172,7 @@ prompt = pma.INSIGHTS_DECK_SYSTEM_PROMPT
 check('prompt: the plan is no longer asked for example addresses',
       'realistic lowercase urls' not in prompt and 'example clickstream rows' not in prompt
       and 'ONLY when the digest or the material itself lists web addresses' in prompt)
-chat_src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+chat_src = _legacy_view()
 check('deck lane: the build is handed the read as text and the names in it',
       'pma.deck_read_text(digest, history)' in chat_src and 'pma.deck_entities(_read_text, subject)' in chat_src
       and 'protected_names=_read_names, read_text=_read_text' in chat_src

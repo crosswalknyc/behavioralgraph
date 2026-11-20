@@ -30,11 +30,12 @@ import re
 import sys
 from pathlib import Path
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 APP_SRC = (ROOT / 'app.py').read_text(encoding='utf-8')
-CHAT_SRC = (ROOT / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+CHAT_SRC = _legacy_view()
 SERVICE_SRC = (ROOT / 'prometheus' / 'service.py').read_text(encoding='utf-8')
 HOST_SRC = (ROOT / 'prometheus' / 'host.py').read_text(encoding='utf-8')
 

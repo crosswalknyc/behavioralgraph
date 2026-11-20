@@ -30,6 +30,7 @@ import sys
 import unittest
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -387,7 +388,7 @@ class Wiring(unittest.TestCase):
             i = svc.index(lane)
             self.assertIn('not _is_order', svc[i:i + 2500], lane)
         self.assertIn('methodology_answers', svc)
-        chat = _read('prometheus', 'legacy', 'chat.py')
+        chat = _legacy_view()
         self.assertIn('def _pm_approve_core(user, body):', chat)
         self.assertIn('def _pm_auto_start_order(', chat)
         self.assertIn("_oc, _order_notes = _orders.split(text)", chat)

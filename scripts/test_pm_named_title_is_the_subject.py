@@ -49,6 +49,7 @@ import subprocess
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -519,7 +520,7 @@ class StoredFigures(unittest.TestCase):
 # ============================================================================ 7. the wiring
 class TheWiring(unittest.TestCase):
     def test_the_splices_in_the_chat_module(self):
-        chat = _read_src('prometheus', 'legacy', 'chat.py')
+        chat = _legacy_view()
         held = "_pm_generation_base = __import__('prometheus.named_title', fromlist=['held']).held(_pm_generation_base)"
         self.assertEqual(chat.count(held), 1)
         self.assertLess(chat.index("_pm_generation_base = _primary_profile.held(_pm_generation_base"), chat.index(held))   # outermost

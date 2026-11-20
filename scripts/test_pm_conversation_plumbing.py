@@ -31,6 +31,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -451,7 +452,7 @@ class NoDoor(unittest.TestCase):
         DW.scrub_payload(deck)
         self.assertEqual((deck['reply'], deck['followups'], deck['filename']),
                          ('SLIDE 1\nthe home store', ['Show the store mix'], 'Retail_store_mix.pptx'))
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         self.assertEqual(chat.count('_door_words.scrub_filename('), 1)             # the deck's own file name, nothing else
 
     def test_the_house_helper_is_the_one_scrubber(self):

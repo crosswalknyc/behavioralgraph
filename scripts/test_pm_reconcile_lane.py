@@ -31,6 +31,7 @@ import re
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -369,8 +370,7 @@ class AnchorRule(unittest.TestCase):
                                                           {'name': 'Starz', 'key': 'Starz_01_01_2026_00_00.csv'}, catalog=self.CATALOG))
 
     def test_chat_wires_the_rule_on_the_base_and_the_sizing_anchor(self):
-        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-            src = fh.read()
+        src = _legacy_view()
         self.assertGreaterEqual(src.count('_page_default.person_page_for_title_ask('), 3)   # page base, resolved base, sizing anchor
         self.assertIn("_uni_subj = _meth.audience_label(res, '')", src)
         self.assertIn("text, _uni_subj, category=_page_default.subject_category(_uni_subj, base))", src)

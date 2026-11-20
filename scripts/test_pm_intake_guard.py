@@ -34,6 +34,7 @@ import os
 import sys
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -312,7 +313,7 @@ def test_other_paths():
     check("pending_intake picks only on a run order", not PI.is_run_order(POWER) and PI.is_run_order('yes, run it'))
     # the legacy breakout: the brief-shaped test
     import re
-    legacy = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+    legacy = _legacy_view()
     check("legacy breakout consults the guard", 'is_new_ask_for_brief' in legacy)
     check("legacy breakout marks the flow for the way back", "_pm_intake_breakout(text, 'flywheel')" in legacy
           and "_pm_intake_breakout(text, 'digital_journey')" in legacy and "_pm_intake_breakout(text, 'attribution')" in legacy)

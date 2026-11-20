@@ -32,6 +32,7 @@ import os
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -151,7 +152,7 @@ class TheWords(unittest.TestCase):
             self.assertFalse(RB.own_base_brief(words), words)
 
     def test_the_read_path_asks_before_it_takes_a_file(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         resolver = src[src.index('def _pm_generation_base('):src.index("_pm_generation_base = _primary_profile.held(")]
         # the resolver itself returns no file for such a brief, before the open product, the page, the library and Subscriber IQ
         self.assertIn('_page_default.brief_on_own_base(text)', resolver)

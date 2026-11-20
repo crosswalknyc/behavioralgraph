@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = Path(os.path.dirname(os.path.abspath(__file__)))
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
@@ -486,7 +487,7 @@ check('with no library in reach the stored rows decide, the same way', k == KE a
 # ---------------------------------------------------------------------------
 print('8. housekeeping')
 # ---------------------------------------------------------------------------
-chat_lines = len((ROOT / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8').splitlines())
+chat_lines = len(_legacy_view().splitlines())
 check(f'the legacy chat module is under its ceiling ({chat_lines} lines)', chat_lines < 19900)
 for rel in ('prometheus/season_window.py', 'scripts/test_pm_season_window.py'):
     src = (ROOT / rel).read_text(encoding='utf-8')

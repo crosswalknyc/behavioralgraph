@@ -51,6 +51,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 
 import app as A  # noqa: E402
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 
 A.s3_client = None
 A.app.testing = False
@@ -372,7 +373,7 @@ class MutatorsReturnDocuments(unittest.TestCase):
         self.assertEqual(problems, [], '\n'.join(problems))
 
     def test_bpiq_grant_mutator_returns_the_doc(self):
-        src = _read(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'))
+        src = _legacy_view()   # stage 5: chat.py plus its extracted cores
         self.assertNotIn(".get(username)) or None)", src)
         self.assertIn('def _grant_doc(data):', src)
 

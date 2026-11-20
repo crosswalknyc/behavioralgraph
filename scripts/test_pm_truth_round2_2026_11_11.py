@@ -39,6 +39,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -66,7 +67,7 @@ FX = json.loads(Path(HERE, 'fixtures', 'pm_truth_round2_2026_11_11.json').read_t
 FX1 = json.loads(Path(HERE, 'fixtures', 'pm_truth_2026_11_11.json').read_text(encoding='utf-8'))
 AD, AC, JB, LG = FX['armine_deck'], FX['armine_categories'], FX['jessie_batch'], FX['ledger']
 MULTI = FX1['armine_words']['summarize_in_powerpoint']
-CHAT_SRC = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+CHAT_SRC = _legacy_view()
 BANNED = re.compile(r"\b(?:synth\w*|model(?:ed|led)?|estimat\w*|pipeline|hostmap|ledger|bucket|panel|queue|worker|lane|"
                     r"claude|anthropic|llm|prompt)\b|\u2014", re.I)
 

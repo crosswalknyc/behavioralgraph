@@ -34,6 +34,7 @@ import time
 import unittest
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -158,7 +159,7 @@ class WrongFile(unittest.TestCase):
         """The rule as wired in chat._pm_generation_base, read off the source:
         the subject-conflict guard yields to the page named outright, and
         the page returns before the catalog tiers see the hint."""
-        src = _source('prometheus', 'legacy', 'chat.py')
+        src = _legacy_view()
         i = src.index('def _pm_generation_base(')
         body = src[i:src.index('\ndef ', i + 10)]
         self.assertIn("page_named_outright(text, page_base.get('subject')", body)
@@ -228,7 +229,7 @@ class NoBase(unittest.TestCase):
                          (SUBJECT, 'thread'))
 
     def test_chat_passes_the_pin(self):
-        src = _source('prometheus', 'legacy', 'chat.py')
+        src = _legacy_view()
         i = src.index('def _pm_generate_metrics_response(')
         body = src[i:i + 20000]
         self.assertIn("pinned=_resume_pin", body)
@@ -286,7 +287,7 @@ class Replay(unittest.TestCase):
         self.assertIsNotNone(SM.thread_replay(Q3, ok), 'an accepted answer still replays for the same question')
 
     def test_chat_and_service_consult_the_guard(self):
-        src = _source('prometheus', 'legacy', 'chat.py')
+        src = _legacy_view()
         self.assertIn('def _pm_replay_rejected_in_thread(entry, history):', src)
         self.assertGreaterEqual(src.count('_pm_replay_rejected_in_thread('), 4, 'defined once, consulted at every ledger replay')
         svc = _source('prometheus', 'service.py')

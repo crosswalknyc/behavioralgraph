@@ -39,6 +39,7 @@ os.environ.setdefault('CORPUS_CATALOG', '0')
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 sys.path.insert(0, str(WEB / 'scripts'))
@@ -381,7 +382,7 @@ def test_3_to_5_brief_intakes():
           outcome == 'clarified_repeat' and 'clarified_repeat' in AO.ALERT_OUTCOMES)
     obs = OS.observe('not sure', {'success': True, 'action': 'answer', 'reply': line, 'aiq_collect': True}, prev)
     check("and it is flagged on the ask record", obs and OS.FLAG_REPEAT in (obs.get('flags') or []) and obs['flow'] == 'attribution')
-    legacy = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+    legacy = _legacy_view()
     check("a question typed while a brief collects is answered on its own with the way back",
           "_pm_intake_breakout(text, 'digital_journey')" in legacy and "_pm_intake_breakout(text, 'attribution')" in legacy
           and 'mark_resume(FLOW)' in (WEB / 'prometheus' / 'digital_twin_lane.py').read_text(encoding='utf-8'))

@@ -39,6 +39,7 @@ import sys
 import unittest
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -463,7 +464,7 @@ class TheExits(unittest.TestCase):
         self.assertIn('_pb.guard_composed(', src('prometheus', 'figures.py'))
         self.assertIn('_pb.clean(s)', src('prometheus', 'exit.py'))
         self.assertIn('_exit.text(s, _exit.PROSE', src('prometheus_analysis.py'))
-        chat = src('prometheus', 'legacy', 'chat.py')
+        chat = _legacy_view()
         i = chat.index('_rs.shape_finished_read(payload, held)')
         self.assertIn("fromlist=['guard_payload']).guard_payload(payload)", chat[i:i + 400])
         # the finished read is guarded before it lands in the thread, the job record and the email

@@ -45,6 +45,7 @@ import re
 import sys
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -113,12 +114,12 @@ check(MQ.reply_reading('hmm what is the difference', 'Euphoria', 'Sephora') == (
 check(MQ.asked_before(THREAD[:2], 'Sephora') and MQ.asked_before(THREAD, 'SEPHORA - Total Universe'),
       'the thread already asked about Sephora')
 check(not MQ.asked_before(THREAD, 'Euphoria') and not MQ.asked_before([], 'Sephora'), 'and about nothing else')
-chat = _read('prometheus', 'legacy', 'chat.py')
+chat = _legacy_view()
 check('_mq.reply_reading(answer, draft.get(\'subject\') or subject, disp)' in chat, 'the brief flow reads the reply that way')
 check('allow_ask=not _mq_g.asked_before(history, spec_draft.get(\'existing_match_display_name\'))' in chat,
       'the brief flow asks about one profile once')
 check('"allow_ask"' not in chat and "body.get('allow_ask')" not in chat, 'and never on a field the page could send')
-check(len(chat.splitlines()) < 19900, 'the brief flow file stays under its line ceiling', len(chat.splitlines()))
+check(_chat_py_lines() < 19900, 'the brief flow file stays under its line ceiling', len(chat.splitlines()))
 
 print('[C] the answer chips resolve from the thread when the page lost the brief')
 la = MQ.lane('no, build fresh', THREAD)

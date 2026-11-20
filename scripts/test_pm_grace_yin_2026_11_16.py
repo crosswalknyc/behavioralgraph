@@ -47,6 +47,7 @@ import unittest
 from datetime import date
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -205,7 +206,7 @@ class HeldWindow(unittest.TestCase):
         self.assertEqual(HW.settle_on_host(d3, Q4, _H, log=None), '')
 
     def test_wired_into_every_interpret_path(self):
-        chat = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        chat = _legacy_view()
         app = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
         self.assertEqual(chat.count(".settle_on_host(spec_draft, "), 2)             # the single path and the batch slice
         self.assertIn('_held_window.settle_on_host(', app)                          # the array path
@@ -283,7 +284,7 @@ class ApproveNamesItsThread(unittest.TestCase):
                                        load=lambda u, t: [], save=lambda *a: None), 'no_thread')
 
     def test_the_approve_core_and_the_widget_both_carry_it(self):
-        chat = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        chat = _legacy_view()
         self.assertIn('_build_ready.active_thread(lambda: _load_threads_index(_approve_username)', chat)
         html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
         for m in re.finditer(r"fetch\('/api/brief-chat/approve'", html):

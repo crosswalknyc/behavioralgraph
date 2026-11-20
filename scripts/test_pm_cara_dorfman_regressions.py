@@ -35,6 +35,7 @@ import re
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -188,7 +189,7 @@ class OffCampusDiscovery(unittest.TestCase):
         self.assertIsNotNone(NS.fuzzy_catalog_subject('how big is the dicovery+ audience', cat, **kw))
 
     def test_lane_researches_the_premiere(self):
-        src = _source('prometheus/legacy/chat.py')
+        src = _legacy_view()
         i = src.index('def _pm_search_demand_response(')
         j = src.index('\ndef ', i + 10)
         body = src[i:j]
@@ -327,7 +328,7 @@ class PrimeVideoAndTubiOverlap(unittest.TestCase):
         self.assertEqual(BP.alias_tokens('compare Max and Netflix'), set())
 
     def test_detector_and_base_use_the_helpers(self):
-        src = _source('prometheus/legacy/chat.py')
+        src = _legacy_view()
         i = src.index('def _pm_two_base_detect(')
         j = src.index('\ndef ', i + 10)
         self.assertIn('_bp.two_families(found)', src[i:j])

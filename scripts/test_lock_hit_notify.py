@@ -8,6 +8,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ["LOCK_HIT_STATE_FILE"] = tempfile.mkstemp(suffix=".json")[1]
@@ -91,7 +92,7 @@ check("login redirect calls the notifier",
       'where="login"' in (ROOT / "app.py").read_text())
 check("prometheus funds gate calls the notifier",
       'where="prometheus"' in
-      (ROOT / "prometheus" / "legacy" / "chat.py").read_text())
+      _legacy_view())
 
 print()
 if FAILS:

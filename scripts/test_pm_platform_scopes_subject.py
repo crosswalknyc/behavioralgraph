@@ -36,6 +36,7 @@ import sys
 import time
 from unittest import mock
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -219,7 +220,7 @@ check("nothing on record and no thread: the base stands", PS.for_read(ARMINE, []
 check("a chip that chose the YouTube profile keeps it when nothing is on record", PS.for_read(ARMINE, [], base, il, bind_subject='YouTube') is None)
 check("a base that is not a platform is never touched",
       PS.for_read(ARMINE, [], {'subject': 'Mad Men Viewers', 's3_key': 'x.csv', 'source': 'catalog'}, il) is None)
-src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+src = _legacy_view()
 i = src.index('def _pm_generate_metrics_response(')
 body = src[i:i + 60000]
 check("the hook sits in the read lane after the base is resolved and dropped, before the universe guard and the quote",

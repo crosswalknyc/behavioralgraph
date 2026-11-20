@@ -34,6 +34,7 @@ import re
 import sys
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 for p in (ROOT, HERE):
@@ -236,7 +237,7 @@ check('study_record' in order and all(order.index('study_record') < order.index(
                                      ('offer_acceptance', 'read_brief', 'reconcile', 'continuation', 'standing', 'multi_ask', 'sizing_quote', 'reader', 'surface_decision', 'work_gate')),
       'study_record runs before every lane that can draft, price, split or start a read')
 check('study_record' in SV.DETERMINISTIC_LANES and 'study_record' in SV.NEVER_PRICED_LANES, 'deterministic and never priced')
-chat = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+chat = _legacy_view()
 a = chat.find('_study_record.respond(text, history)')
 b = chat.find("'reply': exact['reply'],", a)
 check(a > 0 and 0 < b - a < 2500, 'the stored summary of a record is replayed only after the record lane has left the ask', (a, b))

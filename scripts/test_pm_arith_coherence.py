@@ -29,6 +29,7 @@ import re
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -235,8 +236,7 @@ class MirrorIntoRes(unittest.TestCase):
 
 class Wiring(unittest.TestCase):
     def test_read_core_and_matrix_finish_run_the_pass(self):
-        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-            src = fh.read()
+        src = _legacy_view()
         self.assertGreaterEqual(src.count('_arith.apply(reply, res'), 2)
         # the single read: after the verify passes, before the counting block
         i_pass = src.index('_arith.apply(reply, res')

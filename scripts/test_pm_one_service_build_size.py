@@ -20,6 +20,7 @@ import re
 import sys
 from unittest import mock
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -115,13 +116,13 @@ check(0 < d1["subject_raw_avid"] < d1["subject_raw_tu"] and abs(d1["universe_anc
 plain = {"subject": "Nike", "subject_raw_tu": 90211, "named_platforms": []}
 check(S.apply_to_draft(copy.deepcopy(plain)) == plain and S.apply_to_draft(None) is None and S.apply_to_draft({}) == {},
       "any other draft is handed back as it came")
-chat0 = open(os.path.join(ROOT, "prometheus", "legacy", "chat.py"), encoding="utf-8").read()
+chat0 = _legacy_view()
 check(0 < chat0.index("fromlist=['apply_to_draft']).apply_to_draft(spec_draft).get('subject_raw_tu'))")
       < chat0.index("spec_draft['estimated_audience_low'] = _est_rng['low']"),
       "the interpret step sizes the draft before the brief's estimate is drawn from it")
 
 print("[5] the normalizer")
-chat = open(os.path.join(ROOT, "prometheus", "legacy", "chat.py"), encoding="utf-8").read()
+chat = _legacy_view()
 body = chat[chat.index("def _spec_from_draft(draft):"):]
 body = body[:body.index("\ndef ", 10)]
 rets = re.findall(r"^    return (.+)$", body, re.M)

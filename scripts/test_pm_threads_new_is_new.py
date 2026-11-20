@@ -33,6 +33,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -43,7 +44,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 
 from test_pm_thread_history_merge import FakeS3, _Host, _Req  # noqa: E402
 
-CHAT = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+CHAT = _legacy_view()
 THR = Path(ROOT, 'prometheus', 'legacy', 'threads.py').read_text(encoding='utf-8')
 PREFIX = 'system/synth_chat_threads'
 

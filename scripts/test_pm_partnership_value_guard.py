@@ -43,6 +43,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.pop('BPIQ_CORPUS_ANCHORS', None)
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 sys.path.insert(0, str(WEB / 'scripts'))
@@ -334,7 +335,7 @@ def test_c_deck_of_a_value_read():
                           PAIGE_THREAD, pick='', g={}) is None)
     finally:
         W.store_for = old
-    legacy = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+    legacy = _legacy_view()
     check("the deck surface asks the gate before it resolves a subject",
           '_bpiq_wiz.deck_gate(user, body, text, history, _dp_pick, globals())' in legacy
           and legacy.index('_bpiq_wiz.deck_gate(') < legacy.index('_deck_pick.settle('))
@@ -446,11 +447,11 @@ def test_e_read_never_prices_a_partnership():
                attr_start='2026-09-22', attr_end='2026-11-11', control_group=False, asset_mode='find')))
     env = ENV.wrap(raw, surface='analyze', decision={'reason': 'bpiq_wizard'})
     check("the order's own quote is never touched", 'This is $500.' in env['text'])
-    legacy = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+    legacy = _legacy_view()
     check("a finished read passes the guard before it lands in the thread",
           "partnership_value', fromlist=['guard_read']).guard_read(payload, question=text, history=history)" in legacy
           and legacy.index("fromlist=['guard_read']") < legacy.index('_pm_append_read_to_history(pm_user, job_id, payload'))
-    check("chat.py stays under its line ratchet", len(legacy.splitlines()) < 19900)
+    check("chat.py stays under its line ratchet", _chat_py_lines() < 19900)
 
 
 # ------------------------------------------------------------------ F

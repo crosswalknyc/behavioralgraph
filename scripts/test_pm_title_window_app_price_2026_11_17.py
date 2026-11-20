@@ -42,6 +42,7 @@ from datetime import date, datetime, timezone
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -278,7 +279,7 @@ class OneWindow(unittest.TestCase):
 STAFF = {'username': 'liz', 'email': 'liz@crosswalknyc.com', 'company': 'Crosswalk', 'role': 'super_admin', 'credits': -1}
 PAYER = {'username': 'payer', 'email': 'pat@example.com', 'company': 'Acme Studios', 'role': 'user', 'credits': 12}
 USERS = {'users': {'liz': STAFF, 'payer': PAYER}}
-CHAT = _read('prometheus/legacy/chat.py')
+CHAT = _legacy_view()
 
 
 def _helpers():

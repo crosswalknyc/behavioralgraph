@@ -43,6 +43,7 @@ import subprocess
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -628,7 +629,7 @@ class Wiring(unittest.TestCase):
         self.assertLess(lane.index('_tos.unnamed_title(text, history, ctx,'), lane.index('_prw.work_gate(text, history, ctx, user, body'))
 
     def test_the_size_is_settled_where_the_brief_reads_it(self):
-        chat = _read('prometheus', 'legacy', 'chat.py')
+        chat = _legacy_view()
         at = chat.index("__import__('prometheus.brief_size_hold', fromlist=['ranged']).ranged(_H._estimated_audience_range, spec_draft,")
         rule = chat.index("fromlist=['apply_to_draft']).apply_to_draft(spec_draft).get('subject_raw_tu'))")
         self.assertLess(at, rule)                                       # the scoped rule sizes the draft, then the hold settles it

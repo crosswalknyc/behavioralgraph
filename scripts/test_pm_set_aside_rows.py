@@ -39,6 +39,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ['CORPUS_CATALOG'] = '1'
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = Path(os.path.dirname(os.path.abspath(__file__)))
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
@@ -257,7 +258,7 @@ check('no turn carries a withdrawn or retired mark', not any(
 for rel in ('scripts/test_pm_set_aside_rows.py',):
     src = (ROOT / rel).read_text(encoding='utf-8')
     check(f'no long dash in {rel}', '\u2014' not in src and '\u2013' not in src)
-chat_lines = len((ROOT / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8').splitlines())
+chat_lines = len(_legacy_view().splitlines())
 check(f'the legacy chat module is under its ceiling ({chat_lines} lines)', chat_lines < 19900)
 
 print(f'\n{PASS} passed, {FAIL} failed')

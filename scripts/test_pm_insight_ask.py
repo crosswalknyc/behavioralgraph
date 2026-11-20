@@ -53,6 +53,7 @@ import subprocess
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -75,7 +76,7 @@ def _read(*parts):
 def _legacy_email_intent():
     """The send-a-file check as the chat module defines it, built from
     its own source so the test reads the shipped pattern."""
-    src = _read('prometheus', 'legacy', 'chat.py')
+    src = _legacy_view()
     a = src.index('_PM_EMAIL_FILE_RE = re.compile(')
     b = src.index('_PM_EMAIL_ADDR_RE = re.compile(', a)
     ns = {'re': re}
@@ -525,7 +526,7 @@ class TheWiring(unittest.TestCase):
         self.assertLess(ex.index('_ia_cmd.stands_down(text)'), ex.index('raw = _sf.answer(text, uname, user=user'))
 
     def test_the_two_splices_in_the_chat_module(self):
-        chat = _read('prometheus', 'legacy', 'chat.py')
+        chat = _legacy_view()
         wrap = "_pm_email_file_intent = __import__('prometheus.insight_ask', fromlist=['not_a_send']).not_a_send(_pm_email_file_intent)"
         hook = "__import__('prometheus.insight_ask', fromlist=['core_hook']).core_hook(text, body, history, user, _pm_ppu, globals())"
         self.assertEqual(chat.count(wrap), 1)

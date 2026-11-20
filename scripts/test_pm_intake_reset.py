@@ -27,6 +27,7 @@ import os
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -409,7 +410,7 @@ class Hooks(unittest.TestCase):
 
     def test_new_thread_into_never_wipes_a_thread_with_turns(self):
         from pathlib import Path
-        src = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        src = _legacy_view()
         i = src.index('def _pm_new_thread_into')
         j = src.index('def _pm_rotate_idle_thread')
         block = src[i:j]

@@ -30,6 +30,7 @@ import os
 import sys
 import threading
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, '..')
 sys.path.insert(0, ROOT)
@@ -323,7 +324,7 @@ def src(rel):
         return fh.read()
 
 
-chat = src('prometheus/legacy/chat.py')
+chat = _legacy_view()
 check("_ledger_gate.note_job(job_id, _pm_user, _probe)" in chat
       and chat.index("_ledger_gate.note_job(job_id, _pm_user, _probe)") < chat.index("threading.Thread(target=_pm_run_read_job"),
       "the read job thread is told who asked before it starts")

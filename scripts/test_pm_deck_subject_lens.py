@@ -12,6 +12,7 @@ import os
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -66,7 +67,7 @@ class PageNamed(unittest.TestCase):
 
 class Wiring(unittest.TestCase):
     def test_fuzzy_fallback_gates_the_shortlist_only(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         i = src.index('def _pm_deck_fuzzy_suggestions(')
         body = src[i:i + 3500]
         self.assertIn('for c in pool[:40]:', body)

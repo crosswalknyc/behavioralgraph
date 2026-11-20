@@ -47,6 +47,7 @@ import sys
 import tempfile
 import zipfile
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
@@ -409,7 +410,7 @@ check("deck: a close page with no title in the plan is laid with a headline",
       str([t for si, t in texts_of(out_nt) if si == 3][:4]))
 
 # (e) the deck lane hands the finisher a model pass over only the flagged lines
-chat_src = open(os.path.join(ROOT, "prometheus", "legacy", "chat.py"), encoding="utf-8").read()
+chat_src = _legacy_view()
 check("deck lane: the deck job builds the rewriter from its own model call and passes it to the builder",
       "pma.make_deck_copy_rewriter(_pm_claude_json, usage_extras=_ppu_extras)" in chat_src
       and "copy_rewriter=_copy_rewriter" in chat_src)

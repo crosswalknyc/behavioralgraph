@@ -51,6 +51,17 @@ class _HostProxy:
             return default
         return getattr(mod, name, default)
 
+    def globals(self):
+        """The bound module's own namespace dict, what ``globals()`` returned
+        inside chat.py. An extracted core (stage 5, 2026-11-20) writes
+        ``_C.globals()`` where chat.py wrote ``globals()``, so a lane handed
+        the namespace (the wizard's store, the insight hook, the twin lane)
+        still reads chat.py's helpers from it."""
+        mod = object.__getattribute__(self, '_mod')
+        if mod is None:
+            raise HostNotBound('prometheus.legacy host is not bound (wanted globals())')
+        return vars(mod)
+
 
 H = _HostProxy()
 

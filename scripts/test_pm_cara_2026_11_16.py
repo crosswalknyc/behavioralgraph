@@ -36,6 +36,7 @@ import os
 import sys
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -125,7 +126,7 @@ from prometheus import file_names as FN   # noqa: E402
 check(FN.safe_name('\U0001F465 Subscriber IQ.csv') == 'Subscriber IQ.csv', 'the emoji comes off', FN.safe_name('\U0001F465 Subscriber IQ.csv'))
 check(FN.safe_name('Paramount+.csv') == 'Paramount+.csv' and FN.safe_name('\U0001F465.csv') == 'file.csv' and FN.safe_name('') == 'file', 'plain names pass; an empty one gets a name')
 check(all(ord(ch) < 128 for ch in FN.disposition('Pok\u00e9mon \u2013 Viewers.csv')), 'the header is plain characters')
-src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+src = _legacy_view()
 check('attachment; filename="{' not in src, 'no signed link in chat.py writes a raw file name into its header')
 
 print('[H] the period note and the People line')

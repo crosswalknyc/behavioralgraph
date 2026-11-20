@@ -49,6 +49,7 @@ from unittest.mock import MagicMock
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = Path(os.path.abspath(__file__)).parent      # not resolved: the parent repo is found by walking up
 ROOT = HERE.parent
 if str(ROOT) not in sys.path:
@@ -58,7 +59,7 @@ from prometheus import build_ready as BR  # noqa: E402
 from prometheus import order_truth as OT  # noqa: E402
 from prometheus import repeat_approval as RA  # noqa: E402
 
-CHAT = (ROOT / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+CHAT = _legacy_view()
 BUCKET = 'dashboard-inputs'
 SUBIQ_BUCKET = 'svod-acquisition'
 NAOMI = 'naomi_inoshita'

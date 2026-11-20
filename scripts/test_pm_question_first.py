@@ -42,6 +42,7 @@ import unittest.mock
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -101,7 +102,7 @@ class TheCause(unittest.TestCase):
             self.assertTrue(U._OPS_WORDS_RX.search(q), q)
 
     def test_the_keeping_had_no_writer_and_now_has_one(self):
-        chat, watch, jobs = _read('prometheus/legacy/chat.py'), _read('prometheus/legacy/watch.py'), _read('prometheus/legacy/jobs.py')
+        chat, watch, jobs = _legacy_view(), _read('prometheus/legacy/watch.py'), _read('prometheus/legacy/jobs.py')
         self.assertIn('def _pm_stash_pending_question(', watch)                      # the writer was always there
         self.assertIn('_C._pm_pop_pending_question(', jobs)                           # and so was the hand-back
         self.assertIn('def _pm_pop_pending_question(', watch)
@@ -236,7 +237,7 @@ class TheFollowThrough(unittest.TestCase):
         self.assertIn('_qf.origin_for_build(', svc)
         self.assertIn('_qf.attach_origin(', svc)
         self.assertIn('_qf.with_build_chip(', svc)
-        chat = _read('prometheus/legacy/chat.py')
+        chat = _legacy_view()
         self.assertIn('_question_first.take_origin(draft)', chat)
         self.assertLess(chat.index('_question_first.take_origin(draft)'), chat.index('spec = _spec_from_draft(draft)', chat.index('_question_first.take_origin(draft)')))
         d = {'subject': 'Paige Spiranac', 'origin_question': {'question': HER, 'thread_id': 't1'}}
@@ -275,7 +276,7 @@ class AtAnOpenStep(unittest.TestCase):
             self.assertIsNone(QF.at_open_step(words, 'ip_scope', 'X'), words)
 
     def test_the_clarify_route_asks_first(self):
-        chat = _read('prometheus/legacy/chat.py')
+        chat = _legacy_view()
         route = chat[chat.index("step = str(body.get('step') or '').strip().lower()"):]
         head = route[:route.index("if step == 'identity':")]
         self.assertIn('_question_first.at_open_step(answer, step', head)

@@ -49,6 +49,7 @@ import unittest
 from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -760,7 +761,7 @@ class APointerInsideOneMessageIsNeverThePage(unittest.TestCase):
 
 # ============================================================================ 4
 def _legacy_fn(name):
-    src = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+    src = _legacy_view()
     m = re.search(r'(^def %s\(.*?)(?=\n\n\n)' % re.escape(name), src, re.S | re.M)
     assert m, name
     return m.group(1)
@@ -869,7 +870,7 @@ class ThePaneNeverDropsIntoAnOldChat(unittest.TestCase):
         self.assertEqual(out.get('history'), [])                 # a thread the page opened starts with nothing
 
     def test_a_reopen_on_an_unlisted_thread_is_not_handed_the_active_one(self):
-        chat = Path(ROOT, 'prometheus', 'legacy', 'chat.py').read_text(encoding='utf-8')
+        chat = _legacy_view()
         hist = chat[chat.index('def api_synth_chat_history('):]
         hist = hist[:hist.index('\n\n\n')]
         self.assertIn("'unlisted': True", hist)

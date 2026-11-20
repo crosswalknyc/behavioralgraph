@@ -26,6 +26,7 @@ import unittest
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -242,8 +243,7 @@ class TwinSeatsAdults(unittest.TestCase):
 
 class InterpretAndSpec(unittest.TestCase):
     def test_interpret_prompt_carries_the_adults_line_and_the_flag(self):
-        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
-            src = fh.read()
+        src = _legacy_view()
         self.assertIn('ACCOUNT-HOLDER UNIVERSES ARE ADULTS', src)
         self.assertIn('"account_holder\\": <true|false', src)
         self.assertIn('apply_to_spec_demos', src)

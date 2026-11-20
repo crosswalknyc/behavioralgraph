@@ -69,6 +69,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 os.environ.setdefault('PM_PROBE_LOOKUP', '0')       # no sandbox-key lookup over the network
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = Path(os.path.abspath(__file__)).parent
 ROOT = HERE.parent
 if str(ROOT) not in sys.path:
@@ -109,7 +110,7 @@ PARTNER_AGENT = 'python-requests/2.32.3'
 BUILD_USD = float(PA.PRICING['per_tool_usd']['api_chatbot_profile_iq_build'])
 CUT_USD = float(PA.PRICING['per_tool_usd'].get('api_profile_iq_cut') or 0)
 PAGE = ROOT / 'prometheus' / 'desktop_ui' / 'index.html'
-CHAT = (ROOT / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+CHAT = _legacy_view()
 NODE = shutil.which('node')
 DASH_RX = re.compile('[\u2014\u2013]')
 INSIDE_RX = re.compile(r"\b(synth\w*|modell?ed|estimated|pipeline|queue[ds]?|workers?|engine|build server|hostmap|claude|"

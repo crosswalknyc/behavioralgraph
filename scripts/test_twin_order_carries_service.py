@@ -28,6 +28,7 @@ import os
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -163,7 +164,7 @@ class NothingElseChanges(unittest.TestCase):
 class TheRealConverter(unittest.TestCase):
 
     def test_the_chat_converter_stamps_what_this_test_stamps(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         conv = src[src.index("def _spec_from_draft(draft):"):]
         for line in ("if str(draft.get('seed_source') or '').strip() == 'content_map':", "stamp_client_scope(spec, draft, _scrub, subject)",
                      "_stamp_platform_spec(spec, draft, _scrub, subject)"):

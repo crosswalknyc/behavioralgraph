@@ -39,6 +39,7 @@ import re
 import sys
 import unittest
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -396,7 +397,7 @@ class OtherSurfaces(unittest.TestCase):
 
 class Wiring(unittest.TestCase):
     def test_chat_app_and_modal(self):
-        chat = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        chat = _legacy_view()
         self.assertIn("if _state != 'charged':\n                _pm_ask_hint(outcome='panel_offer', subject=subj_name)", chat)
         self.assertIn("if isinstance(panel_charge, dict) and panel_charge.get('included'):", chat)
         self.assertIn("def _pm_pricing_copy(username=None, user=None):", chat)

@@ -23,6 +23,7 @@ import sys
 import unittest
 from unittest import mock
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -112,7 +113,7 @@ class JourneyCard(unittest.TestCase):
         # the confirm card's chips do not change by seat: Run the journey starts the build, Cancel drops it
         kind, confirm_name, run_label, payload_key, collect_key, _labels = C._PM_INTAKE_UI['digital_journey']
         self.assertEqual((run_label, payload_key), ('Run the journey', 'jiq_confirm_payload'))
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        src = _legacy_view()
         self.assertIn("'followups': [run_label, 'Cancel']", src)
         # the run turn's ack carries the included line for an included seat, through the one gate
         run_turn = src[src.index("_jiq_confirm = body.get('jiq_confirm')"):src.index("if _pm_collect_flag_applies(body, 'jiq_inputs', history)")]

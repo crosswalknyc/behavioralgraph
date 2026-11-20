@@ -70,6 +70,7 @@ os.environ.setdefault("PM_MAIL_OFF", "1")
 os.environ.setdefault("CORPUS_CATALOG", "0")
 os.environ.setdefault("PM_PROBE_LOOKUP", "0")     # no sandbox-key lookup over the network
 
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
 WEB = Path(__file__).resolve().parents[1]
 if str(WEB) not in sys.path:
     sys.path.insert(0, str(WEB))
@@ -105,7 +106,7 @@ W.try_auto_reload = lambda *a, **k: {}            # a card on file is never char
 N.send_runout = lambda *a, **k: None              # and nobody is mailed
 
 APP_SRC = (WEB / "app.py").read_text(encoding="utf-8")
-CHAT_SRC = (WEB / "prometheus" / "legacy" / "chat.py").read_text(encoding="utf-8")
+CHAT_SRC = _legacy_view()
 WATCH_SRC = (WEB / "prometheus" / "legacy" / "watch.py").read_text(encoding="utf-8")
 INDEX_SRC = (WEB / "templates" / "index.html").read_text(encoding="utf-8")
 PB_SRC = (WEB / "prometheus" / "pending_briefs.py").read_text(encoding="utf-8")
