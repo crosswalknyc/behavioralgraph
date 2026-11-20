@@ -67,7 +67,8 @@ ATTACH_LIMIT = 7_500_000                          # SES takes 10 MB raw; the dec
 EVENTS = ('twin_built', 'pilot_created', 'pilot_results', 'room_opened')
 VIA_WORDS = {'dashboard': 'the dashboard', 'chat': 'Prometheus chat', 'api': 'the API'}
 # words that name our machinery; the templates never use them, and the audit in the tests holds the whole body to it
-BANNED_RX = re.compile(r"\b(synth\w*|model\w*|panel\w*|sample\w*|pipeline\w*|queue\w*|worker\w*|claude|anthropic|hostmap|persona\w*|s3)\b", re.I)
+# (stage 4, 2026-11-20: the pattern is prometheus.vocabulary.TWIN_NOTICE_RX, the one table every exit reads)
+from prometheus.vocabulary import TWIN_NOTICE_RX as BANNED_RX  # noqa: E402
 _TAB_FOR_MODE = {'pilot': 'pilot', 'feature': 'pilot', 'episode': 'pilot', 'binge': 'pilot', 'trailer': 'trailer', 'spot': 'trailer',
                  'title': 'titles', 'key_art': 'titles', 'script': 'script', 'concept': 'concept'}
 _MODE_WORD = {'pilot': 'Pilot test', 'feature': 'Screening', 'episode': 'Episode test', 'binge': 'Binge test', 'trailer': 'Trailer test', 'spot': 'Spot test',

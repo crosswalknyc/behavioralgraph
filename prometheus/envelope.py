@@ -23,8 +23,6 @@ ever learns one shape::
 the migration. It is stripped for API-key callers, along with a light
 scrub of infrastructure words from ``text``.
 """
-import re
-
 from . import seams as _seams
 
 _JOB_KEYS = (
@@ -40,10 +38,8 @@ _JOB_KEYS = (
 
 # Hard infrastructure words that must never reach an API consumer even
 # if an upstream string slipped. Prose is already written for users;
-# this is a belt, not a rewrite.
-_INFRA_RX = re.compile(
-    r'\b(hetzner|clickhouse|systemd|traceback|anthropic|claude|openai)\b'
-    r'|/root/|finished_codes|\.py:', re.I)
+# this is a belt, not a rewrite. (stage 4: the list is the table's)
+from .vocabulary import INFRA_RX as _INFRA_RX
 
 
 def _options_of(raw):
@@ -116,70 +112,25 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
             decision = dict(decision or {}, surface='analyze', reason='no_build')
     except Exception:
         pass
-    # The one exit every reply passes (2026-10-05, Jenna): no method
-    # language reaches a reader. Fail-safe.
+    # The one exit every reply passes (2026-10-05, Jenna; stage 4,
+    # 2026-11-20: prometheus.exit.payload, one pipeline in one fixed
+    # order): no method language, no Reader echo, no sample vocabulary, no
+    # dashboard guesswork, the named-title line; the door rule on deck
+    # copy only; a calm line gets its record; no people count above the US
+    # or its base; on the analyze surface the partnership-value and
+    # valuation-price guards and the reply shape; then no dash character
+    # and no HH on any field. Each pass is fail-safe; the reply always ships.
     try:
-        from . import guards as _g
-        _g.scrub_method_language_payload(raw)
-    except Exception:
-        pass
-    # The door rule is about decks (2026-11-11): a chat reply is never run
-    # through it, so a title, a brand or a person's name is never rewritten.
-    # A reply that IS deck copy (an outline typed into the chat) still is.
-    try:
-        from . import door_words as _dw
-        _dw.scrub_payload(raw)
-    except Exception:
-        pass
-    # A promise has a record (2026-11-11, prometheus.promise_truth): a calm
-    # reply with no job and no run behind it gets the held record the ops
-    # watch and the daily digest read. Fail-safe; the reply always ships.
-    try:
-        from . import promise_truth as _ptr
-        _ptr.back_calm(raw, thread_id=thread_id or '')
-    except Exception:
-        pass
-    # A people count never passes the US population or the audience it is
-    # part of (2026-11-11: "about 392,312,555 insurance-active people" on an
-    # audience of 8,977,404). Corrected in place to the figure the answer
-    # carries, or the sentence goes; the reply always ships. Fail-safe.
-    try:
-        from . import people_bounds as _pb
-        _pb.guard_payload(raw)
-    except Exception:
-        pass
-    # A partnership's dollar value is the Brand Partnership valuation's to
-    # state (Jenna 2026-11-11): an answer written in the request that
-    # still carries one loses those lines and points at the valuation.
-    if surface == 'analyze':
+        from . import exit as _exit
+        _q = ''
         try:
-            from . import partnership_value as _pvg
+            from flask import g as _g_pv
+            _q = str(getattr(_g_pv, '_pm_ask_text', '') or '')
+        except Exception:
             _q = ''
-            try:
-                from flask import g as _g_pv
-                _q = str(getattr(_g_pv, '_pm_ask_text', '') or '')
-            except Exception:
-                _q = ''
-            _pvg.guard_payload(raw, decision=decision, question=_q)
-        except Exception:
-            pass
-        # What a valuation costs is fixed (Jenna 2026-11-16): a written
-        # answer never says what would make it cheaper. Those sentences
-        # come out and one line says what the price depends on.
-        try:
-            from . import valuation_price as _vpg
-            _vpg.guard_payload(raw, decision=decision, question=_q)
-        except Exception:
-            pass
-    # Reply shape (2026-10-06): chat answers read as answers, not
-    # reports (no capital-letter headers, definitions out of the
-    # sentence). Analyze surface only; briefs and guidance keep shape.
-    if surface == 'analyze':
-        try:
-            from . import reply_shape as _rs
-            _rs.shape_payload(raw)
-        except Exception:
-            pass
+        _exit.payload(raw, surface=surface, decision=decision, thread_id=thread_id or '', question=_q)
+    except Exception:
+        pass
     job = _job_of(raw, surface)
     # the legacy brief rides as spec_draft / spec_drafts (2026-10-13
     # audit: a successful brief wrapped as kind 'error' with "Nothing

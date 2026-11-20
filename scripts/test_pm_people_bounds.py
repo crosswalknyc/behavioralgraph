@@ -456,9 +456,13 @@ class TheExits(unittest.TestCase):
         def src(*p):
             with open(os.path.join(ROOT, *p), encoding='utf-8') as fh:
                 return fh.read()
-        self.assertIn('_pb.guard_payload(raw)', src('prometheus', 'envelope.py'))
+        # stage 4 (2026-11-20): both passes run inside prometheus.exit, the one pipeline envelope.wrap and
+        # scrub_user_text delegate to
+        self.assertIn('_pb.guard_payload(raw)', src('prometheus', 'exit.py'))
+        self.assertIn('_exit.payload(raw', src('prometheus', 'envelope.py'))
         self.assertIn('_pb.guard_composed(', src('prometheus', 'figures.py'))
-        self.assertIn('_pb.clean(s)', src('prometheus_analysis.py'))
+        self.assertIn('_pb.clean(s)', src('prometheus', 'exit.py'))
+        self.assertIn('_exit.text(s, _exit.PROSE', src('prometheus_analysis.py'))
         chat = src('prometheus', 'legacy', 'chat.py')
         i = chat.index('_rs.shape_finished_read(payload, held)')
         self.assertIn("fromlist=['guard_payload']).guard_payload(payload)", chat[i:i + 400])

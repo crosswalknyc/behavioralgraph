@@ -81,7 +81,8 @@ check('_peacock_on_file(doc, title' in s_tw and '_pk.episode_viewers(' in s_tw, 
 check('on_file = _peacock_on_file(twin, sess)' in s_fc and '_pk.episode_viewers(' in s_fc, 'twin forecast anchor for a Peacock home')
 s_j = src('migration', 'journey_synthesis.py')
 check('return _peacock_title_anchor(inputs, cands)' in s_j and '_pk.viewers(' in s_j, "a journey's watch stage on Peacock")
-for rel, what in ((('prometheus_analysis.py',), 'every Prometheus text headed to a reader'), (('prometheus', 'guards.py'), 'the reply payload scrub'),
+# stage 4 (2026-11-20): scrub_user_text delegates to prometheus.exit.text, the one pipeline; the net is a pass in it
+for rel, what in ((('prometheus', 'exit.py'), 'every Prometheus text headed to a reader'), (('prometheus', 'guards.py'), 'the reply payload scrub'),
                   (('migration', 'digital_twin_copy.py'), 'twin copy, reports, exports and notices')):
     check('_pk_net.scrub(' in src(*rel), f'the net sits under {what}')
 parent = os.path.join(os.path.dirname(ROOT), 'migration', 'peacock_actuals.py')

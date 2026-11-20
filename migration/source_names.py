@@ -140,7 +140,7 @@ HARD_RX = re.compile(r"\b(?:%s)\b" % HARD_ALT, re.I)
 _CASE_RX = re.compile(r"(?<![A-Za-z])(?:%s)(?![A-Za-z])" % "|".join(re.escape(p) for p in sorted(_CASE, key=len, reverse=True)))
 
 _VERBS = (
-    r"reports?|says?|said|puts?|put|counts?|counted|measured|measures|"
+    r"reports?|reported|says?|said|puts?|put|counts?|counted|measured|measures|"
     r"found|finds|shows?|showed|estimates?|estimated|pegs?|pegged|"
     r"lists?|listed|recorded|records|tracked|tracks|places|placed|"
     r"saw|sees|had|has|have|notes?|noted|claims?|claimed|ranks?|ranked"

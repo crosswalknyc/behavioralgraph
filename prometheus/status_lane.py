@@ -350,8 +350,9 @@ def _read_where(it, history, thread_id, host, uname):
     if job_tid and thread_id and job_tid != str(thread_id):
         title = _thread_title(host, uname, job_tid)
         if title:
-            return f"It is in your '{title}' chat: open Chats & Tasks on the left of this panel and pick it."
-        return "It is in another of your chats: open Chats & Tasks on the left of this panel and pick it."
+            return f"It is in your '{title}' chat: open Chats & Tasks on the left of this window and pick it."
+        # "window", never "panel": the exit reads panel as the research word (stage 4 template check, 2026-11-20)
+        return "It is in another of your chats: open Chats & Tasks on the left of this window and pick it."
     try:
         from . import read_landing as _rl
         state, _i = _rl.landing_state(history or [], 'read_job_id', it.get('job_id'), it.get('reply') or '')

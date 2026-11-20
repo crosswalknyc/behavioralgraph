@@ -853,7 +853,11 @@ _NUM_RX = re.compile(r"(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d,])|(?<![\d.,])\d{6,}(
 _SOURCE_RXES = (
     re.compile(r"\b(?:usage|performance)\s+report\b", re.I),
     re.compile(r"\bcontent\s+starts\b", re.I),
-    re.compile(r"\b(?:first[- ]party|client(?:'s)?|studio(?:'s)?|producer(?:'s)?)\s+(?:usage\s+|performance\s+)?(?:actuals?|report|figures?|numbers?|file|workbook|data)\b", re.I),
+    # a figure put at the client's door: "the client's report", "the first-party actuals". Our own first-party
+    # data is the house voice, never a source at the door: "our first-party data", "Crosswalk's own first-party
+    # data" (guards.PROVENANCE_REPLY) stay (stage 4 template check, 2026-11-20)
+    re.compile(r"(?<!\bour )(?<!\bour own )(?<!crosswalk )(?<!crosswalk's )(?<!crosswalk's own )(?<!crosswalk\u2019s )(?<!crosswalk\u2019s own )"
+               r"\b(?:first[- ]party|client(?:'s)?|studio(?:'s)?|producer(?:'s)?)\s+(?:usage\s+|performance\s+)?(?:actuals?|report|figures?|numbers?|file|workbook|data)\b", re.I),
     re.compile(r"\b(?:peacock|nbcuniversal|nbcu|nbc universal|comcast|wolf entertainment|wolf films|universal television)(?:'s|’s)?\s+"
                r"(?:own\s+|internal\s+|reported\s+|official\s+|first[- ]party\s+)*(?:actuals?|figures?|numbers?|counts?|data|dashboard|"
                r"report(?:s|ed|ing)?|says|said|shared|provided|sent|told|shows?\s+that)\b", re.I),

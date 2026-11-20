@@ -115,7 +115,7 @@ def _payload_for(doc: dict, job_doc: dict, kind: str, event: str) -> dict:
         except Exception:
             v1 = C.declined('error', 'The job finished but its result could not be read. Poll the job for the answer.')
     elif event == 'job.held':
-        v1 = C.pending('Held for a moment on our side. Poll again shortly.', retry_after=300, job_id=doc.get('job_id'),
+        v1 = C.pending('Held for a moment. Poll again shortly.', retry_after=300, job_id=doc.get('job_id'),
                        conversation_id=doc.get('conversation_id') or None)
     else:
         v1 = C.declined('error', 'That one did not land. Send the question again.', conversation_id=doc.get('conversation_id') or None)

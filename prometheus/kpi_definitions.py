@@ -173,7 +173,7 @@ DEFINITIONS = [
             "Each person's touchpoints with the subject are counted "
             "across their digital life in the window; those at 4 or more "
             "are the Avid Fans, stated as a share of the Total Universe. "
-            "The Avid Fan file carries the same brands, re-read for that "
+            "The Avid Fan file carries the same brands, read for that "
             "slice, sized at that share of the full audience."),
     },
     {

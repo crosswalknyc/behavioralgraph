@@ -167,7 +167,8 @@ def _billing(user: dict, request_id: str, sandbox: bool, key_id: str = '') -> di
 
 def _scrub(v1: dict) -> dict:
     from . import guards as _g
-    _g.scrub_partner_payload(v1)
+    from . import exit as _exit
+    _exit.partner(v1)      # the key belt, one pipeline (stage 4, 2026-11-20)
     ans = v1.get('answer')
     if isinstance(ans, dict) and not str(ans.get('text') or '').strip():
         ans['text'] = _FALLBACK_ANSWER if ans.get('facts') else ''
@@ -494,7 +495,7 @@ def handle_job(user: dict, job_id: str) -> tuple:
             v1 = C.declined(_reason, str((v1.get('answer') or {}).get('text') or 'That one did not land. Send the question again.'),
                             billing=billing)
     elif st == 'held':
-        v1 = C.pending('Held for a moment on our side. Poll again shortly.', retry_after=120, job_id=job_id, billing=billing)
+        v1 = C.pending('Held for a moment. Poll again shortly.', retry_after=120, job_id=job_id, billing=billing)
     elif st in ('error', 'failed'):
         # a read that could not run carries its own plain line (what it
         # could not do and why); anything else stays the generic decline

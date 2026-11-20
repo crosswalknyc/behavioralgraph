@@ -1076,8 +1076,22 @@ def lead_for(kind, subject, **kw):
     if kind == 'rerun':
         noun = str(kw.get('noun') or 'read')
         wp = str(kw.get('window') or '').strip()
-        return (f"I can run the {subj} {noun} again on {wp}." if wp
-                else f"I can run the {subj} {noun} again.")
+        # a referent label ("the last read") is already the thing: no second
+        # article and no second noun ("the the last read read", replay fail
+        # 7dac6631b6e6, 2026-11-20). A title that carries its own capital
+        # article (The Rainmaker) is written as recorded, with no lowercase
+        # article in front of it.
+        label = str(subj or '').strip()
+        article = 'the '
+        if label.startswith('the '):
+            label = label[4:].strip()
+        elif label.startswith('The '):
+            article = ''
+        thing = f"{article}{label}" if label else f"the {noun}"
+        if label and not label.lower().endswith(noun.lower()):
+            thing += f" {noun}"
+        return (f"I can run {thing} again on {wp}." if wp
+                else f"I can run {thing} again.")
     if kind == 'talent_list':
         return str(kw.get('lead') or f"I can pull that list for {subj}.")
     cond = str(kw.get('condition') or '').strip(' ,.')

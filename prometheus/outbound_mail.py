@@ -40,18 +40,10 @@ BUCKET = os.environ.get('CORPUS_CATALOG_BUCKET', 'dashboard-inputs')
 LOG_PREFIX = 'system/outbound_mail/'
 
 # Words that tell a reader the figures were built, or name our
-# machinery. Mirrors scripts/pm_correction_email.BANNED; keep in step.
-BANNED = ('synth', 'modeled', 'estimated', 'pipeline', 'hostmap',
-          'panel', 'coefficient', 'odds ratio', 'regression', 'logit',
-          'claude', 'hetzner', 'clickstream', 'gen pop', 'genpop',
-          'research', 'anchor', 'placeholder', 'defect', 'synthetic',
-          'reasoned', 'derived from', 'calibrat',
-          '\u2014', '\u2013')
-
-
-def banned_tokens(text):
-    low = str(text or '').lower()
-    return [b for b in BANNED if b in low]
+# machinery. Stage 4 (2026-11-20): the list is prometheus.vocabulary
+# .MAIL_BANNED, the one table every exit reads; scripts/pm_correction_email
+# reads the same one.
+from prometheus.vocabulary import MAIL_BANNED as BANNED, mail_banned_tokens as banned_tokens  # noqa: E402,F401
 
 
 def cause_sentences(text):
@@ -131,25 +123,13 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
     # A reader gets the new data, never the story (Jenna 2026-10-19: "YOU
     # NEVER TELL WHAT HAPPENED. JUST HERE IS THE NEW DATA"). The check runs
     # on the words as written, before any scrub, and refuses the send so
-    # the message is rewritten rather than quietly trimmed.
-    story = cause_sentences(subject) + cause_sentences(body)
-    if story:
-        rec['reason'] = 'explains what happened; a reader gets the new data, never the story: ' + ' | '.join(x.strip()[:90] for x in story[:3])
-        _log(rec)
-        print(f"[outbound-mail] REFUSED to {to}: {rec['reason']}")
-        return rec
-    subject_c = scrub(subject).replace('\n', ' ').strip()[:200]
-    body_c = scrub(body)
-    try:   # views are never left without what a view means (Jenna 2026-10-08); only a read whose own
-        # figures are views carries it, never a text that only uses a viewing word (2026-11-11)
-        from prometheus import methodology as _meth
-        body_c = _meth.attach_view_definition(body_c, family=family)
-        body_c = _meth.ensure_period_note(body_c)   # window total next to its quarters (item 6)
-    except Exception:
-        pass
-    bad = banned_tokens(subject_c) + banned_tokens(body_c)
-    if bad:
-        rec['reason'] = f"banned vocabulary after scrub: {sorted(set(bad))}"
+    # the message is rewritten rather than quietly trimmed. Then the house
+    # scrub, the view definition and the period note, then the banned-token
+    # check on the result. One pipeline (prometheus.exit.mail, stage 4).
+    from prometheus import exit as _exit
+    subject_c, body_c, refusal = _exit.mail(subject, body, family=family)
+    if refusal:
+        rec['reason'] = refusal
         _log(rec)
         print(f"[outbound-mail] REFUSED to {to}: {rec['reason']}")
         return rec

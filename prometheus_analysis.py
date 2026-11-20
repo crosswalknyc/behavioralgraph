@@ -3886,51 +3886,12 @@ import hashlib
 # Output vocabulary scrub. REPLACES banned internal vocabulary instead
 # of blanking the reply (the partner API's _V1_BANNED_TOKENS in app.py
 # fails closed because a progress string is disposable; a Prometheus
-# analysis is not). The token families mirror _V1_BANNED_TOKENS; keep
-# the two lists in step when either grows.
-_SCRUB_RULES = (
-    (r'\bsynthesi[sz]ed\b', 'built'),
-    (r'\bsynthesi[sz]es?\b', 'build'),
-    (r'\bsynthesis\b', 'build'),
-    (r'\bsynthetic(?:ally)?\b', 'measured'),
-    (r'\bsynths?\b', 'build'),
-    (r'\bpipelines?\b', 'process'),
-    (r'\bhostmap(?:ped|s)?\b', 'brand universe'),
-    (r'\benforcers?\b', 'check'),
-    (r'\bmodell?ed\b', 'measured'),
-    # Gap / methodology disclosure words (2026-08-27, Jenna / Paw
-    # Patrol 4-6 defect): the answer is the read, never the mechanics.
-    (r'\bestimated\b', 'measured'),
-    (r'\bderived\b', 'measured'),
-    (r'\bextrapolated\b', 'measured'),
-    (r'\binterpolated\b', 'measured'),
-    (r'\bpanel[- ]projected\b', 'projected'),
-    (r'\bpanelists\b', 'viewers'),
-    (r'\bpanelist\b', 'viewer'),
-    (r'\bpanel\b', 'audience'),
-    # Individual-level language (standing rule): counts and cohorts
-    # are viewers / people / accounts, never households.
-    (r'\bhousehold income\b', 'income'),
-    (r'\bhouseholds\b', 'families'),
-    (r'\bhousehold\b', 'family'),
-    (r'\bhetzner\b', 'server'),
-    (r'\bclickhouse\b', 'server'),
-    (r'\bsystemd\b', 'server'),
-    (r'\bclaude\b', 'the analysis'),
-    (r'\banthropic\b', 'the analysis'),
-    (r'\bopus\b', 'the analysis'),
-    (r'\bsonnet\b', 'the analysis'),
-    (r'\bopen\s?ai\b', 'the analysis'),
-    (r'\bgpt[-0-9a-z.]*\b', 'the analysis'),
-    (r'\bllm\b', 'analysis'),
-    # breakdown field names typed into prose (Cara Dorfman 2026-11-10: a
-    # month table's header read "(penetration_pct is the same shared
-    # audience as a share"): the plain word, never the key
-    (r'\bpenetration_pct\b', 'penetration'),
-    (r'\bshare_pct\b', 'share'),
-)
-_SCRUB_COMPILED = tuple(
-    (re.compile(pat, re.IGNORECASE), rep) for pat, rep in _SCRUB_RULES)
+# analysis is not). Stage 4 (2026-11-20): the lists live in
+# prometheus.vocabulary, the one table every exit reads; these names are
+# aliases so existing imports keep working. A new word goes in the table.
+from prometheus import vocabulary as _vocab  # noqa: E402
+_SCRUB_RULES = _vocab.WORD_SWAPS
+_SCRUB_COMPILED = _vocab.WORD_SWAPS_COMPILED
 
 
 # First-party frame guards (2026-09-28, Phase 2 of the improvement
@@ -3942,26 +3903,8 @@ _SCRUB_COMPILED = tuple(
 # scrub_user_text - a reply minus one sentence stays coherent, a
 # shipped citation breaks the product frame. Word-swapping a citation
 # is never attempted: "according to [the analysis]" reads wrong.
-_CITATION_RX = re.compile(
-    r'\b(?:statista|nielsen|pew(?:\s+research)?|emarketer|yougov|'
-    r'comscore|sensor\s*tower|data\.ai|mri[\s-]?simmons|kantar|'
-    r'parrot\s+analytics|antenna|samba\s*tv|luth)\b'
-    r'|\baccording to (?!the profile\b|the file\b|the data\b|'
-    r'your dashboard\b|crosswalk\b|the read\b)'
-    r'|\bas reported by\b|\bsourced? from\b|\bper (?:a|an|the)? ?'
-    r'(?:survey|study|report)\b|\bsurveys? (?:found|show|suggest)\b'
-    r'|\bindustry (?:reports?|estimates?) (?:say|show|suggest)\b',
-    re.IGNORECASE)
-
-_OFFCLICK_RX = re.compile(
-    r'\b(?:brand\s+)?awareness\b|\bad\s+recall\b|\brecall(?:ed)?\s+'
-    r'seeing\b|\bintend(?:s)?\s+to\s+(?:buy|purchase|subscribe)\b'
-    r'|\bstated\s+intent\b|\bfoot\s*traffic\b|\bfootfall\b'
-    r'|\bin[\s-]store\s+(?:visits?|traffic|purchases?)\b'
-    r'|\b(?:watched|viewed|tuned\s+in)\s+on\s+(?:cable|linear|'
-    r'broadcast\s+tv)\b|\bover[\s-]the[\s-]air\b'
-    r'|\bword\s+of\s+mouth\b|\battended\s+in\s+person\b',
-    re.IGNORECASE)
+_CITATION_RX = _vocab.CITATION_RX
+_OFFCLICK_RX = _vocab.OFFCLICK_RX
 
 _SENTENCE_SPLIT_RX = re.compile(r'(?<=[.!?])\s+')
 
@@ -3988,31 +3931,10 @@ def _frame_break(s):
 
 def _drop_frame_breaking_sentences(s):
     """Remove whole sentences that cite a vendor or assert an
-    off-clickstream behavior. Never empties a reply: when every
-    sentence would drop, the text returns unchanged (the calm layers
-    upstream own that case)."""
-    if not _frame_break(s):
-        return s
-    out_lines = []
-    changed = False
-    for line in s.split('\n'):
-        parts = _SENTENCE_SPLIT_RX.split(line) if line.strip() else [line]
-        kept = [p for p in parts if not _frame_break(p)]
-        if len(kept) != len(parts):
-            changed = True
-        out_lines.append(' '.join(kept).strip() if line.strip()
-                         else line)
-    out = '\n'.join(out_lines)
-    out = re.sub(r'\n{3,}', '\n\n', out).strip()
-    if not out:
-        return s
-    if changed:
-        try:
-            print('[scrub] dropped frame-breaking sentence(s) '
-                  '(citation or off-clickstream claim)')
-        except Exception as _fx:
-            _faults.note('analysis', _fx)
-    return out
+    off-clickstream behavior. Never empties a reply. Stage 4: the pass
+    lives in prometheus.exit; this name stays for callers."""
+    from prometheus import exit as _exit
+    return _exit.drop_frame_breaking_sentences(s)
 
 
 def scrub_user_text(text):
@@ -4020,94 +3942,20 @@ def scrub_user_text(text):
     to the user: banned internal terms replaced with product language,
     em / en dashes replaced with hyphens, and whole sentences dropped
     when they cite a research vendor or assert off-clickstream
-    behavior (2026-09-28 Phase 2)."""
+    behavior (2026-09-28 Phase 2).
+
+    Stage 4 (2026-11-20): this is ``prometheus.exit.text(s, PROSE)``, the
+    one pipeline in its one fixed order (``exit.ORDER``): the held-out
+    view-definition lines, the source names, the dashes, the word swaps,
+    the estimate noun, the frame-breaking sentences, the Peacock net,
+    method language, dashboard guesswork, internal keys, people bounds,
+    the index separator, the lines put back. Same bytes as before the
+    move, plus the HH rule."""
     s = str(text or '')
     if not s:
         return s
-    # The views methodology may say how Nielsen and Peacock count a view
-    # (Jenna 2026-11-11), as a definition, never as a source. Those exact
-    # lines (prometheus.methodology.OTHERS_ALLOWLIST) are held out of the
-    # scrub and put back untouched; a ratings service named in any other
-    # sentence is dropped below, as before.
-    _held = []
-    try:
-        from prometheus import methodology as _vd_meth
-        s, _held = _vd_meth.shield_definitions(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    try:   # the name comes off and the number stays, before any word swap
-        from migration.source_names import strip_named_sources as _strip_src
-        s = _strip_src(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    s = s.replace('\u2014', ' - ').replace('\u2013', '-')
-    s = s.replace('\u2015', ' - ')
-    for rx, rep in _SCRUB_COMPILED:
-        s = rx.sub(lambda m, _r=rep: (_r[:1].upper() + _r[1:]) if m.group(0)[:1].isupper() else _r, s)
-    # 'estimate' as a noun (2026-10-06): a figure, never an estimate.
-    s = re.sub(r'\b([Ee])stimates?\b',
-               lambda m: ('Figure' if m.group(1) == 'E' else 'figure') + ('s' if m.group(0).endswith('s') else ''), s)
-    s = _drop_frame_breaking_sentences(s)
-    # A figure off the Peacock record, a figure put at the service's door,
-    # or a title's account count never ships (2026-11-18); a text with
-    # none of those comes back byte for byte.
-    try:
-        from migration import peacock_actuals as _pk_net
-        s = _pk_net.scrub(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    # Method language (2026-10-06, Jenna: "never mention anything that
-    # sounds synthetic"): sentences about how a figure was made go;
-    # the figures stay. One rule, every exit that calls this.
-    try:
-        from prometheus import guards as _guards
-        s = _guards.scrub_method_language(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    # How the dashboard works inside is never stated by guesswork, and a
-    # product that does not exist is never promised (2026-11-18,
-    # prometheus.dashboard_behavior: "the run window asserting itself, not
-    # a bug in the field", "a back-window build"). A text with none of
-    # that comes back byte for byte. One rule, every exit that calls this.
-    try:
-        from prometheus import dashboard_behavior as _dbq
-        s = _dbq.scrub(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    # Internal key shapes (2026-10-22: "Base: the BEST_OF_THE_BEST
-    # audience" reached a client thread from a file stem): an upper
-    # snake key or a dated profile stem outside a URL is rendered as
-    # the name it stands for. A reader sees a name, never a key.
-    try:
-        from prometheus import subject_display as _sd
-        s = _sd.scrub_keys(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    s = re.sub(r'[ \t]{2,}', ' ', s)
-    # A people count never passes the US population or the base its own
-    # sentence names (2026-11-11, prometheus.people_bounds): the sum done
-    # right, or the sentence dropped. One rule, every exit that calls this.
-    try:
-        from prometheus import people_bounds as _pb
-        s = _pb.clean(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    # An index of four digits or more reads with its separator (2026-11-11:
-    # a deck card printed "index 5548"). One rule, every exit that calls this.
-    try:
-        from prometheus.index_format import separate_index_figures as _sep_idx
-        s = _sep_idx(s)
-    except Exception as _fx:
-        _faults.note('analysis', _fx)
-    # The door rule is about decks (2026-11-11, prometheus.door_words): a chat
-    # read is never run through it. "Architectural Digest Open Door" came back
-    # "Architectural Digest brings" in a read on 2026-11-11.
-    if _held:
-        try:
-            s = _vd_meth.unshield_definitions(s, _held)
-        except Exception as _fx:
-            _faults.note('analysis', _fx)
-    return s
+    from prometheus import exit as _exit
+    return _exit.text(s, _exit.PROSE, note=lambda e: _faults.note('analysis', e))
 
 
 _SD_PATTERNS = (

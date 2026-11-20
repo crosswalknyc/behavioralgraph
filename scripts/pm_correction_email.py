@@ -47,15 +47,20 @@ FROM = 'Prometheus <prometheus@crosswalknyc.com>'
 REPLY_TO = 'jenna@crosswalknyc.com'
 BCC = 'jenna@crosswalknyc.com'
 
-BANNED = ('synth', 'modeled', 'estimated', 'pipeline', 'hostmap',
-          'panel', 'coefficient', 'odds ratio', 'regression', 'logit',
-          'claude', 'hetzner', 'clickstream', 'gen pop', 'genpop',
-          # 2026-10-05 (Jenna): method words that make the data read as
-          # built rather than observed. "researched", "anchored to",
-          # "placeholder", "defect on my side" never reach a user.
-          'research', 'anchor', 'placeholder', 'defect', 'synthetic',
-          'reasoned', 'derived from', 'calibrat',
-          '\u2014', '\u2013')
+# 2026-10-05 (Jenna): method words that make the data read as built
+# rather than observed. "researched", "anchored to", "placeholder",
+# "defect on my side" never reach a user. Stage 4 (2026-11-20): the list
+# is prometheus.vocabulary.MAIL_BANNED, the one table every exit reads;
+# the literal below is the fallback when the package is not importable.
+try:
+    from prometheus.vocabulary import MAIL_BANNED as BANNED
+except Exception:
+    BANNED = ('synth', 'modeled', 'estimated', 'pipeline', 'hostmap',
+              'panel', 'coefficient', 'odds ratio', 'regression', 'logit',
+              'claude', 'hetzner', 'clickstream', 'gen pop', 'genpop',
+              'research', 'anchor', 'placeholder', 'defect', 'synthetic',
+              'reasoned', 'derived from', 'calibrat',
+              '\u2014', '\u2013')
 
 # 2026-10-05 (Jenna, verbatim: "ask me before sending emails"). This
 # tool never sends to a user without an explicit per-send approval

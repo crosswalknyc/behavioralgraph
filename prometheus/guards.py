@@ -62,6 +62,11 @@ module, and the tests all run the same code.
 """
 import re
 
+# Stage 4 (2026-11-20): every word list this module applies is defined in
+# prometheus.vocabulary, the one table every exit reads. The names below
+# that used to hold their own copies are aliases of the table now.
+from . import vocabulary as _vocab
+
 # --------------------------------------------------------------- shape
 _Q_OPENERS = (
     r'what|which|who|whose|whom|how|why|where|when|do|does|did|are|is|'
@@ -1051,49 +1056,20 @@ _NOT_A_NAME = frozenset((
 # first-person method talk and the words that imply a built number.
 # Audience behaviour ("they research products before buying") is not
 # method talk and is left alone.
-_METHOD_SENTENCE_RX = re.compile(
-    r"(?:\b(?:we|i|crosswalk|prometheus|the (?:read|journey|figures?|numbers?|"
-    r"counts?|profile|deck|data))\b[^.!?\n]{0,60}\b(?:researched|anchored|"
-    r"modeled|modelled|estimated|synthesi[sz]ed|synthetic|derived|calibrated|"
-    r"reasoned|simulated|extrapolated|imputed)\b)"
-    r"|\bresearched (?:against|from|on its own|it)\b"
-    r"|\banchored? (?:to|against|on)\b|\bre-?anchored\b"
-    r"|\bplaceholders?\b|\bsynthetic\b|\bsynth(?:ed|s)?\b|\bmodel(?:ed|led)\b"
-    r"|\bdefect\b|\bon my side\b|\bpipeline\b|\bhostmap\b|\bclaude\b"
-    r"|\bthe (?:corpus|ledger|catalog)\b|\bweb[- ]search\b|\bresearch(?:ed)? (?:call|pass|step)\b"
-    r"|\bestimated\b|\bthe research\b|\bour research\b"
-    # the adjective ("the researched count"), confidence-tier labels
-    # (never public, 2026-09-14) and panel vocabulary (2026-10-13 audit)
-    r"|\bresearched\b|\btiers? [12]\b|\bpanel(?:ist)?s?\b",
-    re.IGNORECASE)
-_SENT_SPLIT_RX = re.compile(r'(?<=[.!?])\s+(?=[A-Z0-9"\'(\[])')
+# Stage 4 (2026-11-20): the patterns and the swaps live in
+# prometheus.vocabulary, the one table every exit reads; these names are
+# aliases so existing callers keep working. A new word goes in the table.
+_METHOD_SENTENCE_RX = _vocab.METHOD_SENTENCE_RX
+_SENT_SPLIT_RX = _vocab.SENTENCE_SPLIT_RX
 def _case_like(src, rep):
     return rep[:1].upper() + rep[1:] if src[:1].isupper() else rep
 
 
 # Phrase swaps that keep the sentence's meaning; a sentence these clear
 # is kept (its figures matter).
-_METHOD_SAFE_SWAPS = (
-    (re.compile(r'\bestimated audience\b', re.I), 'audience range'),
-    (re.compile(r'\bresearched (universe|count|figure|number|total|base)\b', re.I), r'US \1'),
-    (re.compile(r'\btier (\d)\b', re.I), r'group \1'),
-    (re.compile(r'\bpanelists\b', re.I), 'people'),
-    (re.compile(r'\bpanelist\b', re.I), 'person'),
-    (re.compile(r'\bthe panel\b', re.I), 'the data'),
-    (re.compile(r'\bpanel\b', re.I), 'data'),
-    (re.compile(r'\bthe research and the path take\b', re.I), 'it takes'),
-    (re.compile(r'\banchored to\b', re.I), 'in line with'),
-    (re.compile(r'\bre-?anchored\b', re.I), 'updated'),
-)
+_METHOD_SAFE_SWAPS = _vocab.METHOD_SAFE_SWAPS
 # Last resort when a paragraph would otherwise vanish.
-_METHOD_WORD_SUBS = _METHOD_SAFE_SWAPS + (
-    (re.compile(r'\bresearched against\b', re.I), 'checked against'),
-    (re.compile(r'\bresearched\b', re.I), 'read'),
-    (re.compile(r'\b(?:estimated|modeled|modelled|synthetic|synthesized|synthesised) ', re.I), ''),
-    (re.compile(r'\bplaceholders?\b', re.I), 'names'),
-    (re.compile(r'\ba defect on my side\b', re.I), 'an error'),
-    (re.compile(r'\bdefect\b', re.I), 'error'),
-)
+_METHOD_WORD_SUBS = _vocab.METHOD_WORD_SUBS
 
 
 def _apply_swaps(x, swaps):
@@ -1111,15 +1087,10 @@ def _apply_swaps(x, swaps):
 # hears what happened, what we removed, what was wrong or what changed. A
 # reader gets the new data. Sentences that tell the story go the way
 # method talk goes; the figures in other sentences stay.
-_CAUSE_CORE = (
-    r"\bthe cause (?:was|is|of)\b|\bon our (?:side|end)\b|\broot cause\b|\bcorrect(?:ed|ion|ions|ing)\b|"
-    r"\bre-?read\b|\bre-?r[au]n\b|\brebuil[dt]\b|\bre-?released?\b|\bflatten(?:ed|ing|s)?\b|\binvent(?:ed|ing|s)?\b|"
-    r"\bpulled\b[^.!?\n]{0,40}\btoward\b|\bshould not have\b|\bshould have (?:shown|read|been|sat)\b|\bfrom the start\b|"
-    r"\bwe (?:removed|fixed|patched|repaired|rewrote)\b|\bstep that ran\b|\bafter each build\b|\bwhat (?:we )?changed\b|"
-    r"\bwhat happened\b|\bthe (?:fix|repair|patch)\b")
-_CAUSE_MAIL_EXTRA = r"|\bbugs?\b|\bmistakes?\b|\bour (?:error|fault)\b|\bapolog(?:y|ies|ize|ise|ized|ised)\b|\bwas wrong\b|\bglitch\b"
-_CAUSE_SENTENCE_RX = re.compile(_CAUSE_CORE, re.IGNORECASE)
-_CAUSE_MAIL_RX = re.compile(_CAUSE_CORE + _CAUSE_MAIL_EXTRA, re.IGNORECASE)
+_CAUSE_CORE = _vocab.CAUSE_CORE
+_CAUSE_MAIL_EXTRA = _vocab.CAUSE_MAIL_EXTRA
+_CAUSE_SENTENCE_RX = _vocab.CAUSE_SENTENCE_RX
+_CAUSE_MAIL_RX = _vocab.CAUSE_MAIL_RX
 
 
 def cause_language(text, mail=False):
@@ -1331,28 +1302,12 @@ def scrub_method_language_payload(raw):
     return raw
 
 
-_SCRUB_SKIP_KEYS = frozenset((
-    'url', 'href', 'key', 's3_key', 'id', 'job_id', 'image', 'hero_image', 'thumbnail',
-    'filename', 'filename_stem', 'slug', 'etag', 'source_key', 'created_by', 'created_at',
-    'start_date', 'end_date', 'as_of', 'story_mode', 'target_type', 'kind', 'type', 'layout',
-    'surface', 'ground', 'accent', 'color', 'hex', 'anchored_to', 'replayed_from',
-))
+_SCRUB_SKIP_KEYS = _vocab.SCRUB_SKIP_KEYS
 
 
 # Deliverable jargon (2026-10-13 audit): labels the engine coins for
 # itself must never reach a reader. Plain words, same meaning.
-_JARGON_SUBS = (
-    (re.compile(r'\bpixel[- ]miss(?:es|ed)?(?: class| cohort)?\b', re.I), 'watched on a service they already had'),
-    (re.compile(r'\b(?:the )?pixel[- ]miss(?:ed)? (?:class|group|cohort)\b', re.I), 'people who watched on a service they already had'),
-    (re.compile(r'\bcohort[- ]id\b', re.I), 'group'),
-    (re.compile(r'\bthe (\w+) partition\b', re.I), r'the \1 split'),
-    (re.compile(r'\bpartitioned\b', re.I), 'split'),
-    (re.compile(r'\bdeduped?\b', re.I), 'counted once'),
-    (re.compile(r'\bnon-?converters?\b', re.I), 'people who did not watch'),
-    (re.compile(r'\bconverters?\b', re.I), 'people who watched'),
-    (re.compile(r'\bterminal (?:step|stage|event)\b', re.I), 'last step'),
-    (re.compile(r'\bpenultimate (?:step|stage)\b', re.I), 'step before last'),
-)
+_JARGON_SUBS = _vocab.JARGON_SUBS
 
 
 def scrub_jargon(text):
@@ -1427,88 +1382,26 @@ def scrub_tree(obj, skip_keys=_SCRUB_SKIP_KEYS, _depth=0):
 # ======================================================================
 
 # Substrings (lower-case) that never reach a key caller. Shared with
-# app._V1_BANNED_TOKENS, which now imports this tuple.
-PARTNER_BANNED_TOKENS = (
-    # model vendors and model names
-    'claude', 'anthropic', 'opus', 'sonnet', 'openai', 'gpt', 'llm', 'ai stage', 'ai step',
-    # how a figure was made
-    'synth', 'synthesis', 'synthesize', 'synthesized', 'synthesised', 'synthetic',
-    'modeled', 'modelled', 'estimated', 'estimate ', 'simulated', 'extrapolated', 'imputed',
-    'calibrated', 'placeholder', 'researched', 'anchored', 'anchor value', 'web search', 'web-search',
-    'search results', 'public data', 'publicly available', 'external data', 'external source',
-    'third-party data', 'third party data', 'open-source data', 'according to ', 'as reported by',
-    'row-by-row', 'row by row', 'row scoring', 'reasoning', 'chunk',
-    # internal machinery
-    'hostmap', 'enforcer', 'depin', 'gen_pop', 'gen pop', 'panelist', 'panel', 'category signal',
-    'persona_doc', 'persona doc', 'persona brief', 'brief-interpret', 'brief interpret',
-    'tu cohort', 'tu_cohort', 'tu build', 'tu_build', 'avid cohort', 'avid_cohort', 'cohort',
-    'cut_done', 'tu_done', 'avid_done', 'pipeline', 'the corpus', 'the ledger', 'the catalog',
-    'confidence tier', 'tier 1', 'tier 2',
-    # infrastructure
-    'hetzner', 'render', 'clickhouse', 'systemd', 's3://', 'dashboard-inputs',
-    # crash mechanics
-    'worker', 'attempt ', 'traceback', 'exception', 'stack trace', 'nameerror', 'typeerror', 'keyerror',
-    # file paths, module names, config knobs
-    '/root/', 'finished_codes', 'migration/', '.py:', 'api_key', 'anthropic_api',
-)
+# app._V1_BANNED_TOKENS, which imports this tuple. Stage 4 (2026-11-20):
+# every partner list lives in prometheus.vocabulary; these are aliases.
+PARTNER_BANNED_TOKENS = _vocab.PARTNER_BANNED_TOKENS
 
 # Attribution clauses: the figure stays, the "according to X" goes.
-_PARTNER_SOURCES = (
-    r'statista|nielsen|pew(?: research)?|comscore|similarweb|sensor tower|data\.ai|emarketer|yougov|'
-    r'box office mojo|the-numbers\.com|deadline|variety|the hollywood reporter|wikipedia|imdb(?:pro)?|google trends|'
-    r'sec filings?|10-k|earnings (?:reports?|calls?)|press reports?|trade press|industry reports?|'
-    r'public(?:ly available)? (?:data|figures|reports?|sources?)|external (?:data|sources?)|third[- ]party (?:data|sources?)'
-)
-# The shared name list (migration.source_names). One list, every exit.
-try:
-    from migration.source_names import ATTRIB_ALT as _SRC_ATTRIB, HARD_RX as _SRC_HARD_RX
-    _PARTNER_SOURCES = _PARTNER_SOURCES + r'|' + _SRC_ATTRIB
-except Exception:
-    _SRC_HARD_RX = None
-_PARTNER_ATTRIB_RX = re.compile(
-    r'(?:,\s*)?\b(?:according to|as reported by|reported by|per|sourced from|based on|citing|via|from)\s+'
-    r'(?:the\s+|a\s+|an\s+)?(?:' + _PARTNER_SOURCES + r')(?:\s+(?:data|figures|reports?|numbers|counts|estimates?))?\b[^.;,\n]*', re.I)
-_PARTNER_SOURCE_LINE_RX = re.compile(r'^\s*\(?\s*sources?\s*:[^\n]*$', re.I | re.M)
-_PARTNER_PAREN_SOURCE_RX = re.compile(r'\s*\((?:source|sources|per|via|according to)\b[^)]*\)', re.I)
-_PARTNER_WORD_SWAPS = _METHOD_WORD_SUBS + (
-    (re.compile(r'\b(?:US |us )?gen[ _-]?pop(?:ulation)?\b', re.I), 'US population'),
-    (re.compile(r'\b(?:web|internet) search(?:es)?\b', re.I), 'our data'),
-    (re.compile(r'\bsearch results\b', re.I), 'our data'),
-    (re.compile(r'\b(?:public|publicly available|external|third[- ]party|open[- ]source) (?:data|sources?|figures|reports?)\b', re.I), 'our data'),
-    (re.compile(r'\bsimulated\b', re.I), 'measured'),
-    (re.compile(r'\bextrapolated\b', re.I), 'projected'),
-    (re.compile(r'\bimputed\b', re.I), 'filled in'),
-    (re.compile(r'\bcalibrated\b', re.I), 'checked'),
-    (re.compile(r'\bcohorts\b', re.I), 'audiences'),
-    (re.compile(r'\bcohort\b', re.I), 'audience'),
-    (re.compile(r'\bthe (?:corpus|ledger|catalog)\b', re.I), 'our library'),
-    (re.compile(r'\bpipeline\b', re.I), 'process'),
-    (re.compile(r'\bconfidence tiers?\b', re.I), 'readings'),
-    (re.compile(r'\bresearch(?:es|ing)?\b', re.I), 'read'),
-    (re.compile(r'\b(?:claude|anthropic|openai|gpt|llm)\b', re.I), 'Prometheus'),
-)
+_PARTNER_SOURCES = _vocab.PARTNER_SOURCES
+_SRC_HARD_RX = _vocab.SOURCE_HARD_RX
+_PARTNER_ATTRIB_RX = _vocab.PARTNER_ATTRIB_RX
+_PARTNER_SOURCE_LINE_RX = _vocab.PARTNER_SOURCE_LINE_RX
+_PARTNER_PAREN_SOURCE_RX = _vocab.PARTNER_PAREN_SOURCE_RX
+_PARTNER_WORD_SWAPS = _vocab.PARTNER_WORD_SWAPS
+# swaps that never change a sentence's meaning, run before the clause pass
+_PARTNER_PLAIN_SWAPS = _vocab.PARTNER_PLAIN_SWAPS
 # Words that may legitimately appear as brands or ordinary English and
 # must not count as a violation on their own (the token list is coarse
 # on purpose for the build API; the ask belt judges in context).
-# swaps that never change a sentence's meaning, run before the clause pass
-_PARTNER_PLAIN_SWAPS = (
-    (re.compile(r'\b(?:US |us )?gen[ _-]?pop(?:ulation)?\b', re.I), 'US population'),
-    (re.compile(r'\bpanelists\b', re.I), 'people'),
-    (re.compile(r'\bpanelist\b', re.I), 'person'),
-    (re.compile(r'\bcohorts\b', re.I), 'audiences'),
-    (re.compile(r'\bcohort\b', re.I), 'audience'),
-)
-_PARTNER_TOKEN_SKIP = frozenset(('render', 'reasoning', 'estimate ', 'chunk', 'the catalog', 'the ledger',
-                                 'the corpus', 'cohort', 'attempt ', 'exception', 'according to ', 'as reported by'))
-_PARTNER_HARD_RX = re.compile(
-    r'\b(?:claude|anthropic|opus|sonnet|openai|gpt-?\d?|llm|synth(?:etic|esis|esized|esised|ed|s)?|hostmap|enforcer|depin|'
-    r'gen[_ ]pop|panelists?|hetzner|clickhouse|systemd|traceback|stack trace|nameerror|typeerror|keyerror|'
-    r'web[- ]search(?:es)?|placeholders?|modell?ed|simulated|extrapolated|imputed|tier [12])\b'
-    r'|s3://|/root/|finished_codes|migration/|\.py:|api_key|anthropic_api|dashboard-inputs', re.I)
-_PARTNER_INFRA_RX = re.compile(r'\b(hetzner|clickhouse|systemd|traceback|anthropic|claude|openai)\b|/root/|finished_codes|\.py:|s3://', re.I)
-_PARTNER_SKIP_KEYS = _SCRUB_SKIP_KEYS | frozenset((
-    'trace_id', 'conversation_id', 'request_id', 'idempotency_key', 'schema', 'poll', 'endpoint', 'send',
-    'unit', 'product', 'reason', 'action', 'status', 'basis', 'webhook_url', 'next', 'window'))
+_PARTNER_TOKEN_SKIP = _vocab.PARTNER_TOKEN_SKIP
+_PARTNER_HARD_RX = _vocab.PARTNER_HARD_RX
+_PARTNER_INFRA_RX = _vocab.PARTNER_INFRA_RX
+_PARTNER_SKIP_KEYS = _vocab.PARTNER_SKIP_KEYS
 
 
 def _hold_view_definitions(t):
@@ -1557,20 +1450,14 @@ def partner_violations(text):
     return out
 
 
-_PARTNER_SOURCE_INLINE_RX = re.compile(r'\(?\bsources?\s*:\s*[^.;\n)]*[.;)]?\s*', re.I)
-_PARTNER_CLAUSE_RX = re.compile(r'(?<=[.!?;])\s+')
-_PARTNER_VERB_SWAPS = (
-    (re.compile(r'\b(?:estimated|modell?ed|simulated|extrapolated|projected out|imputed)\s+(?=(?:about |around |roughly |some )?[\d$])', re.I), 'counted '),
-    (re.compile(r'\b(?:researched|anchored|calibrated|modell?ed|estimated)\b', re.I), 'read'),
-)
+_PARTNER_SOURCE_INLINE_RX = _vocab.PARTNER_SOURCE_INLINE_RX
+_PARTNER_CLAUSE_RX = _vocab.PARTNER_CLAUSE_RX
+_PARTNER_VERB_SWAPS = _vocab.PARTNER_VERB_SWAPS
 
 
 # Data vendors are never an audience brand in our files; their name in a
 # clause is an attribution however it is phrased.
-_PARTNER_VENDOR_RX = _SRC_HARD_RX or re.compile(
-    r'\b(?:statista|nielsen|comscore|similarweb|sensor tower|data\.ai|emarketer|yougov|mri[- ]simmons|'
-    r'google trends|box office mojo|the-numbers\.com|parrot analytics|samba tv|ispot(?:\.tv)?|kantar|gwi|'
-    r'global ?web ?index|luminate|circana|npd group|magid)\b', re.I)
+_PARTNER_VENDOR_RX = _vocab.PARTNER_VENDOR_RX
 
 
 def _partner_dirty(x):
@@ -1599,6 +1486,11 @@ def scrub_partner_text(text, fallback=''):
         t = _strip_src(t)
     except Exception:
         pass
+    # no dash character and no HH on a key caller's string either (stage 4,
+    # 2026-11-20: both passed the belt untouched before)
+    for _a, _b in _vocab.DASHES:
+        t = t.replace(_a, _b)
+    t = _vocab.swap_hh(t)
     t = _PARTNER_PAREN_SOURCE_RX.sub('', t)
     t = _PARTNER_SOURCE_INLINE_RX.sub('', t)
     t = _PARTNER_ATTRIB_RX.sub('', t)
@@ -1862,8 +1754,7 @@ _INCIDENCE_PAREN_RX = re.compile(r"\s*\(\s*[\d.]+%\s*incidence\s*\)", re.I)
 _PROFILE_LINE_RX = re.compile(r"^(?P<name>[^:\n]{1,120}):\s*([\d,]+)\s*,?\s*projecting to\s+([\d,]+)\s+US people", re.I | re.M)
 _RUN_IT_RX = re.compile(r"Reply 'run it' to build the profile locked to this exact\s+sample, or refine the audience / window and ask again\.", re.I)
 _VERDICT_RX = re.compile(r"^\s*Verdict:[^\n]*$", re.I | re.M)
-SAMPLE_VOCAB_RX = re.compile(
-    r"\bsample check\b|\bsample size\b|\bsample\b|\bincidence\b|\b(?:10|ten) million\b|\bpanelists?\b|\bavid tier\b|\btrailing year\b|\bindividuals\b", re.I)
+SAMPLE_VOCAB_RX = _vocab.SAMPLE_VOCAB_RX
 
 
 def scrub_sample_vocabulary(text):

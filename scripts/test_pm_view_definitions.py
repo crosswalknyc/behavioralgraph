@@ -267,7 +267,9 @@ class Guards(unittest.TestCase):
         self.assertIn('2,345,671 viewers watched Poker Face on Peacock', out)
         self.assertNotIn('Per Nielsen', out)
         self.assertIn('The finale drew 4.1M viewers', out)
-        self.assertNotIn('12 million minutes', out)
+        # "Nielsen reported 12 million minutes for it": the name comes off and the figure stays, the same way
+        # "Per Nielsen, the finale drew 4.1M" keeps its figure (stage 4, 2026-11-20: `reported` joined the
+        # citation verbs so "Deadline reported 3.9M" no longer names the outlet)
         self.assertNotIn('Nielsen reported', out)
         self.assertNotIn('xqviewdef', out)
 
@@ -306,7 +308,7 @@ class Guards(unittest.TestCase):
         for ln in (M.NIELSEN_LINE, M.PEACOCK_LINE):
             self.assertIn(' '.join(ln.split()), text)
         self.assertNotIn('Per Nielsen', text)
-        self.assertNotIn('12 million minutes', text)
+        self.assertNotIn('Nielsen reported', text)
 
     def test_the_mail_door(self):
         logged = []
@@ -338,7 +340,7 @@ class Guards(unittest.TestCase):
         self.assertIn(f"- {M.NIELSEN_LINE}", out)
         self.assertIn(f"- {M.PEACOCK_LINE}", out)
         self.assertNotIn('Per Nielsen', out)
-        self.assertNotIn('12 million minutes', out)
+        self.assertNotIn('Nielsen reported', out)
         self.assertEqual(out.count('Nielsen'), 1)
         self.assertNotIn('xqviewdef', out)
         # a held line that opens a sentence the belt re-joins comes back whole

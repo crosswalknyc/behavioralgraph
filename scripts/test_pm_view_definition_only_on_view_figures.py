@@ -98,9 +98,11 @@ def test_a_tonights_email():
     check("the family of the read is sizing, not viewing", M.read_family(None, EMAIL, '') != M.VIEWING)
     for fam in (M.SIZING, M.PURCHASE, M.ENGAGEMENT):
         check(f"stamped {fam}, nothing is attached", HEADER not in M.attach_view_definition(EMAIL, family=fam))
+    # stage 4 (2026-11-20): the door's steps run inside prometheus.exit.mail, which outbound_mail calls
     check("the door's own steps are these two, in this order",
           "body_c = _meth.attach_view_definition(body_c, family=family)\n        body_c = _meth.ensure_period_note(body_c)"
-          in open(os.path.join(ROOT, 'prometheus', 'outbound_mail.py'), encoding='utf-8').read())
+          in open(os.path.join(ROOT, 'prometheus', 'exit.py'), encoding='utf-8').read()
+          and '_exit.mail(subject, body, family=family)' in open(os.path.join(ROOT, 'prometheus', 'outbound_mail.py'), encoding='utf-8').read())
 
 
 def test_b_view_reads_still_carry_it():
@@ -137,7 +139,7 @@ def test_e_other_surfaces():
     print("E. the PDF of an email and the file note follow the same rule")
     src = open(os.path.join(ROOT, 'prometheus_email_pdf.py'), encoding='utf-8').read()
     check("the PDF attaches through the same function", '_meth.attach_view_definition(body_text)' in src)
-    src = open(os.path.join(ROOT, 'prometheus', 'outbound_mail.py'), encoding='utf-8').read()
+    src = open(os.path.join(ROOT, 'prometheus', 'exit.py'), encoding='utf-8').read()
     check("the mail door passes the read's family when it has one", '_meth.attach_view_definition(body_c, family=family)' in src)
     src = open(os.path.join(ROOT, 'prometheus_analysis.py'), encoding='utf-8').read()
     check("the file note asks whether the figures are views", '_meth.figures_are_views(' in src)

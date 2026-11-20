@@ -461,7 +461,7 @@ ARTIFACTS = {
     'email': ('', "in your inbox, sent from Prometheus; say 'email me the file' on any answer and it goes out", ''),
     'deck': ('', "in your inbox, sent from Prometheus when it is built; say 'build a deck from this' on any answer", ''),
     'read': ('', 'in this chat, as its own message, with its CSV link under it', ''),
-    'chat': ('', 'in Chats & Tasks, the rail on the left of this panel', ''),
+    'chat': ('', 'in Chats & Tasks, the rail on the left of this window', ''),
 }
 
 _ARTIFACT_RX = (
@@ -502,8 +502,10 @@ def picker_of(value):
 # -------------------------------------------------------------------- rail
 RAIL = {
     'label': 'Chats & Tasks',
-    'line': ("Your chats and tasks are in the Chats & Tasks rail on the left edge of this panel: click Chats & Tasks to open it, "
-             "pick a chat to go back to it, or press New chat to start a fresh one. The search field at the top of the panel finds any question you asked."),
+    # "window", never "panel": the exit reads panel as the research word and a reader got "the left edge of this
+    # data" (stage 4 template check, 2026-11-20)
+    'line': ("Your chats and tasks are in the Chats & Tasks rail on the left edge of this window: click Chats & Tasks to open it, "
+             "pick a chat to go back to it, or press New chat to start a fresh one. The search field at the top of the rail finds any question you asked."),
 }
 
 _RAIL_RX = re.compile(r"\b(?:chats?\s*(?:&|and)\s*tasks|my\s+(?:chats?|threads?|conversations?|tasks?|history|old\s+chats?|past\s+chats?|previous\s+chats?)|"
