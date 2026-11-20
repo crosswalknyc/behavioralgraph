@@ -53105,11 +53105,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // A deep link: ?view=digitalTwinsIQ&twin=<key>&tab=<tab>, or #digitalTwinsIQ?twin=<key>&tab=<tab>. Read once per page load.
             function urlHint() {
                 try {
-                    var q = new URLSearchParams(window.location.search), twin = q.get('twin') || '', tab = q.get('tab') || '';
+                    var q = new URLSearchParams(window.location.search), twin = q.get('twin') || '', tab = q.get('tab') || '', room = q.get('room') || '';
                     var h = String(window.location.hash || '').replace(/^#/, '');
-                    if (h.indexOf('digitalTwinsIQ') === 0) { var hp = new URLSearchParams(h.split('?')[1] || ''); twin = twin || hp.get('twin') || ''; tab = tab || hp.get('tab') || ''; }
+                    if (h.indexOf('digitalTwinsIQ') === 0) { var hp = new URLSearchParams(h.split('?')[1] || ''); twin = twin || hp.get('twin') || ''; tab = tab || hp.get('tab') || ''; room = room || hp.get('room') || ''; }
                     if (!twin && !tab) return null;
-                    return { twin_key: twin, tab: tab };
+                    return { twin_key: twin, tab: tab, room: room };
                 } catch (_) { return null; }
             }
             window.showDigitalTwinsIQ = function(hint) {
@@ -53134,7 +53134,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var known = function(k) { return !!k && S.runs.some(function(r) { return r.key === k; }); };
                     if (hint && hint.twin_key) { dtwOpen(hint.twin_key, hint.run_id || null, hint.session_id || null, hint.plan_id || null, hint.tab || null); }
                     else if (hint && hint.tab) { dtwTab(hint.tab); }
-                    else if (fromUrl && known(fromUrl.twin_key)) { dtwOpen(fromUrl.twin_key, null, null, null, fromUrl.tab || null); }
+                    else if (fromUrl && known(fromUrl.twin_key)) { dtwOpen(fromUrl.twin_key, null, fromUrl.room || null, null, fromUrl.tab || (fromUrl.room ? 'panel' : null)); }
                     else if (fromUrl && fromUrl.tab) { if (!S.twin && S.runs.length === 1) dtwOpen(S.runs[0].key, null, null, null, fromUrl.tab); else dtwTab(fromUrl.tab); }
                     else if (mem && known(mem.key)) { if (mem.glo && GL_OPTIONS.indexOf(mem.glo) >= 0) S.glOption = mem.glo; dtwOpen(mem.key, null, isPiTab(mem.tab) ? (mem.pid || mem.sid) : mem.sid, null, mem.tab || null); }
                     else if (!S.twin && S.runs.length === 1) { dtwOpen(S.runs[0].key, null, (mem && mem.key === S.runs[0].key && mem.sid) || null, null, (mem && mem.tab) || null); }
@@ -53156,6 +53156,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 S.tab = tab;
+                try { rpTick(); } catch (_) {}
                 document.querySelectorAll('#digitalTwinsIQView .dtw-seg').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
                 document.querySelectorAll('#digitalTwinsIQView .dtw-pane').forEach(function(p) { p.classList.remove('active'); });
                 var pane = el('dtwTab' + tab.charAt(0).toUpperCase() + tab.slice(1)); if (pane) pane.classList.add('active');
@@ -55411,9 +55412,41 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // The console: the seats, then the question dock (pills + title), the thread and the tally.
             // An open room: pills sit on the question dock, the freeze point.
+            // ---- the read a person is mailed once their room session ended (Jenna 2026-11-20). The page only hints: 'here' when a room
+            // comes into view and every five minutes while it stays there, 'leaving' when it goes out of view (the room closed, another
+            // tab or product, the page unloading). A browser tab in the background is not a leave; the server's quiet period covers it.
+            var RP = { key: '', sid: '', showing: false, lastHere: 0, timer: null };
+            function rpInView() {
+                var v = el('digitalTwinsIQView');
+                if (!v || !S.session || !S.key || S.tab !== 'panel') return false;
+                try { if (getComputedStyle(v).display === 'none') return false; } catch (_) {}
+                return true;
+            }
+            function rpSend(key, sid, state, beacon) {
+                if (!key || !sid) return;
+                var url = '/api/digital-twins/' + key + '/panel/' + sid + '/presence', body = JSON.stringify({ state: state });
+                if (beacon) { try { if (navigator.sendBeacon && navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))) return; } catch (_) {} }
+                try { fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: true }).catch(function() {}); } catch (_) {}
+            }
+            function rpTick(beacon) {
+                var inView = rpInView(), key = inView ? S.key : '', sid = inView ? S.session.id : '';
+                if (inView && (!RP.showing || RP.key !== key || RP.sid !== sid)) {
+                    if (RP.showing && RP.sid && (RP.key !== key || RP.sid !== sid)) rpSend(RP.key, RP.sid, 'leaving');
+                    RP.key = key; RP.sid = sid; RP.showing = true; RP.lastHere = Date.now();
+                    rpSend(key, sid, 'here');
+                    return;
+                }
+                if (!inView && RP.showing) { RP.showing = false; rpSend(RP.key, RP.sid, 'leaving', !!beacon); return; }
+                if (inView && document.visibilityState !== 'hidden' && Date.now() - RP.lastHere > 5 * 60 * 1000) { RP.lastHere = Date.now(); rpSend(key, sid, 'here'); }
+            }
+            function rpStart() { if (RP.timer) return; RP.timer = setInterval(function() { try { rpTick(); } catch (_) {} }, 15000); }
+            rpStart();
+            window.addEventListener('pagehide', function() { try { if (RP.showing) { RP.showing = false; rpSend(RP.key, RP.sid, 'leaving', true); } } catch (_) {} });
+            window.addEventListener('pageshow', function() { try { rpTick(); } catch (_) {} });
             function renderPanelConsole() {
                 var h = el('dtwPnConsole'); if (!h) return;
                 syncFgBody();
+                try { rpTick(); } catch (_) {}
                 var s = S.session;
                 if (!s) { var had = S.fg.sid != null; clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = noRoomHtml(); fgLayoutSeats(); if (had) fgScrollTop(); return; }
                 var fresh = S.fg.sid !== s.id;
@@ -55798,6 +55831,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.session = null; S.panelKind = ''; fgReset(null);
                 renderPanelConsole(); renderPanelSessions();
                 try { remember(); } catch (_) {}
+                try { rpTick(); } catch (_) {}
                 fgToast(working ? 'Room closed. The question keeps running; find it under Rooms.' : 'Room closed. Find it under Rooms.');
             };
             function fgToast(text, action) {

@@ -33,6 +33,8 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/panel/<sid>/rename   the same for clients that post
   POST /api/digital-twins/<key>/panel/<sid>/ask      ask the room (synchronous, seconds; the tier cap, the upgrade offer at twenty)
   POST /api/digital-twins/<key>/panel/<sid>/upgrade  move a 1-20 room to 1-40 for the difference at the plan rate (2026-11-05)
+  POST /api/digital-twins/<key>/panel/<sid>/presence {state: here|leaving}: the page's hint for the read a person is mailed once their
+                                                     session in the room ended (2026-11-20; the server's clock decides)
   DELETE /api/digital-twins/<key>/panel/<sid>        delete a room (creator or admin; 30-day undo copy under system/digital_twins/deleted_rooms/)
   POST /api/digital-twins/<key>/panel/<sid>/delete   the same for clients that cannot send DELETE
   DELETE /api/digital-twins/<key>                    delete a twin (creator or admin; 30-day undo copy under system/digital_twins/deleted_twins/)
@@ -492,6 +494,22 @@ def _team_notice(fn_name, *args, **kw):
         return getattr(TN, fn_name)(*args, s3=_s3(), **kw)
     except Exception as e:
         print(f"[digital-twins] team notice {fn_name} skipped: {e}")
+        return None
+
+
+def _session_mail_note(key, sess, user, kind):
+    """The read a person gets after a room session (Jenna 2026-11-20,
+    migration/digital_twin_session_mail): every open, poll, ask and
+    presence ping on a room stamps that person's visit so the sweeper
+    can tell when the session ended. Never in the way of the action."""
+    try:
+        from migration import digital_twin_session_mail as SM
+        if not SM.enabled() or not isinstance(sess, dict):
+            return None
+        return SM.note_activity(_s3(), key, str(sess.get('id') or ''), _uname(user), kind)
+    except Exception as e:
+        if os.environ.get('REGRESSION_TEST_MODE', '').strip().lower() not in ('1', 'true', 'yes'):
+            print(f"[digital-twins] session mail note skipped: {e}")
         return None
 
 
@@ -1241,6 +1259,7 @@ def dt_panel_open(key):
                 _faults.note('digital_twins_api.schedule_portraits', e)
             except Exception:
                 pass
+    _session_mail_note(key, sess, user, 'ask' if rec is not None else 'open')
     return jsonify({'success': True, 'session': sess, 'question': rec, 'reused': reused is not None, 'job_id': (rec or {}).get('job_id'), 'stage': (rec or {}).get('stage'),
                     'extra_panelists': DT.extra_panelists((sess.get('group') or {}).get('in_room'))})
 
@@ -1300,6 +1319,7 @@ def dt_panel_get(key, sid):
         traceback.print_exc()
     if dirty:
         DT.save_twin(_s3(), key, payload)
+    _session_mail_note(key, sess, user, 'poll')
     return _nocache(jsonify({'success': True, 'session': _panel_public(sess)}))
 
 
@@ -1413,9 +1433,41 @@ def dt_panel_ask(key, sid):
         _landed = False
     if not _landed:
         DT.save_twin(_s3(), key, payload)
+    _session_mail_note(key, sess, user, 'ask')
     return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid'),
                     'question_cap': PR.question_cap(sess, _plan(user)), 'group_tier': PR.group_tier(sess, _plan(user)),
                     'job_id': rec.get('job_id'), 'stage': rec.get('stage')})
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/presence', methods=['POST'])
+def dt_panel_presence(key, sid):
+    """The page's light hint for the session read (Jenna 2026-11-20):
+    {state: 'here'} while the room is in view, {state: 'leaving'} when
+    it goes out of view (closed, another tab or product, the page
+    unloading; sent as a beacon). The server's clock decides when the
+    session ended; this only shortens the wait after a leave."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        try:
+            body = json.loads(request.get_data(as_text=True) or '{}')
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+    state = str(body.get('state') or '').strip().lower()
+    if state not in ('here', 'leaving'):
+        return jsonify({'success': False, 'error': "state is 'here' or 'leaving'"}), 400
+    rec = _session_mail_note(key, sess, user, state)
+    return _nocache(jsonify({'success': True, 'state': state, 'noted': rec is not None}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>/upgrade', methods=['POST'])
@@ -3253,6 +3305,63 @@ def _start_guided_sweeper(flask_app):
     _SWEEPER['thread'] = t
 
 
+_MAIL_SWEEPER = {'thread': None, 'app': None}
+
+
+def _session_mail_sweep_once():
+    """One pass of the session read sweeper: every visit that ended is
+    mailed its read (one sender per visit through the store's lock).
+    Runs inside a request context so the seat lookups resolve the way
+    they do on a read."""
+    from migration import digital_twin_session_mail as SM
+    flask_app = _MAIL_SWEEPER.get('app')
+    s3 = _s3()
+    if s3 is None:
+        return 0
+    PT = _portraits()
+    portrait_fn = (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
+
+    def _run():
+        return SM.sweep(s3, load_twin=lambda k: DT.load_twin(_s3(), k), save_for=lambda k: (lambda p: DT.save_twin(_s3(), k, p)),
+                        user_for=_user_record, portrait_fn=portrait_fn)
+    if flask_app is not None:
+        with flask_app.test_request_context():
+            return _run()
+    return _run()
+
+
+def _start_session_mail_sweeper(flask_app):
+    """A daemon thread, started once per process, that mails a person the
+    read of a room session once it ended (Jenna 2026-11-20). Off in the
+    regression harness and under DTIQ_SESSION_MAIL=0."""
+    if _MAIL_SWEEPER.get('thread') is not None:
+        return
+    if str(os.environ.get('REGRESSION_TEST_MODE') or '').strip().lower() in ('1', 'true', 'yes'):
+        return
+    from migration import digital_twin_session_mail as SM
+    if not SM.enabled():
+        return
+    _MAIL_SWEEPER['app'] = flask_app
+
+    def _loop():
+        time.sleep(35.0)      # let the process come up before the first pass
+        while True:
+            try:
+                n = _session_mail_sweep_once()
+                if n:
+                    print(f"[twin-session-mail] sweeper sent {n} read(s)")
+            except Exception as e:
+                try:
+                    from prometheus import faults as _faults
+                    _faults.note('digital_twins_api.session_mail_sweep', e)
+                except Exception:
+                    pass
+            time.sleep(SM.SWEEP_S)
+    t = threading.Thread(target=_loop, name='twin-session-mail-sweeper', daemon=True)
+    t.start()
+    _MAIL_SWEEPER['thread'] = t
+
+
 @bp.route(f'{PREFIX}/<path:key>/guided/run', methods=['POST'])
 def dt_guided_run(key):
     """Open a room for the plan (one group, charged as any room is) and
@@ -3719,6 +3828,10 @@ def register(app):
         _start_guided_sweeper(app)
     except Exception as e:
         print(f"[twin-api] guided sweeper not started: {e}")
+    try:
+        _start_session_mail_sweeper(app)
+    except Exception as e:
+        print(f"[twin-api] session mail sweeper not started: {e}")
     return bp
 
 
