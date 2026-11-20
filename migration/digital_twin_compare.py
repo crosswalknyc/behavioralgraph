@@ -274,6 +274,8 @@ def two_audiences(session: dict, twins_by_key: dict) -> dict:
     bat_seats = {int(r['seat']): (r.get('answers') or {}) for r in (((session.get('scorecard') or {}).get('battery') or {}).get('by_seat') or [])}
     segments = (session.get('group') or {}).get('segments') or []
     people_by_seat = _seat_people(roster, segments)
+    from migration.digital_twin_pilot import seat_weights
+    sw = seat_weights(roster, segments)   # each twin's line counts its seats by the people they stand for (Jenna 2026-11-20)
     for k in keys:
         seats = [r for r in roster if str(r.get('twin') or '') == k]
         series = [seat_dials[str(r['seat'])] for r in seats if str(r['seat']) in seat_dials]
@@ -281,7 +283,7 @@ def two_audiences(session: dict, twins_by_key: dict) -> dict:
             continue
         t = twins_by_key.get(k) or {}
         name = str(((t.get('meta') or {}).get('name')) or next((r.get('segment') for r in seats), k))
-        dial = aggregate_dial(series, f"{subject}|{k}", media_key)
+        dial = aggregate_dial(series, f"{subject}|{k}", media_key, weights=[sw.get(str(r['seat']), 0.0) for r in seats if str(r['seat']) in seat_dials])
         probs = {int(r['seat']): {'a': 0.82 if (bat_seats.get(int(r['seat'])) or {}).get('overall') in ('a', 'b') else 0.18, 'b': 0.18 if (bat_seats.get(int(r['seat'])) or {}).get('overall') in ('a', 'b') else 0.82} for r in seats}
         tp_rows = publish_probs(probs, [('a', 'Total positive', 'yes'), ('b', 'Below', 'no')], seats, segments, f"{session.get('id')}|two|{k}|tp")
         rec = {int(r['seat']): {'a': 0.82 if (bat_seats.get(int(r['seat'])) or {}).get('recommend') == 'a' else 0.18, 'b': 0.18 if (bat_seats.get(int(r['seat'])) or {}).get('recommend') == 'a' else 0.82} for r in seats}

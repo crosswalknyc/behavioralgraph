@@ -104,7 +104,7 @@ def seat_live(sess: dict, twins_by_key: dict) -> dict:
     sess['live'] = {'on': True, 'frames': live.get('frames') or [], 'seat_dials': live.get('seat_dials') or {}, 'events': live.get('events') or [],
                     'started_at': live.get('started_at'), 'finished_at': None, 'finishing_at': None, 'calls': int(live.get('calls') or 0), 'failed': int(live.get('failed') or 0)}
     sess['watch'] = {'source': 'live', 'persona': False, 'captions_n': len(sess['live']['frames']), 'scenes_n': len(sess['live']['frames'])}
-    sess['dial'] = {'t': [], 'value': [], 'splits': {}}
+    sess['dial'] = {'t': [], 'value': [], 'splits': {}, 'weighting': 'people'}
     sess['seat_dials'] = {}
     sess['events'] = []
     sess['scenes'] = []
@@ -352,6 +352,16 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         cohorts = cohort_labels(roster)
     except Exception:
         cohorts, cohort_key = [], None
+    # the room line and every group line count each seat by the people it stands for (Jenna 2026-11-20), the same
+    # weights the published split uses; a room whose seats all stand for the same people is the plain average
+    try:
+        from migration.digital_twin_pilot import seat_weights
+        weights = seat_weights(roster, (sess.get('group') or {}).get('segments') or [])
+    except Exception:
+        weights = {}
+    wsum = {'room': 0.0}
+    by_gender_w = {'F': 0.0, 'M': 0.0}
+    by_cohort_w = {}
     wanted = {}
     thought_n = 0
     for r in roster:
@@ -386,25 +396,32 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         v = shaped.get(sno, wanted.get(sno, dials.get(sno, DEFAULT_DIAL)))
         seat_dials.setdefault(sno, []).append([round(t, 2), round(v, 2)])
         seat_now[sno] = round(v, 2)
-        vals.append(v)
+        w = float(weights.get(sno, 1.0) or 0.0)
+        if w <= 0:
+            w = 1.0
+        vals.append(v * w)
+        wsum['room'] += w
         g = str(r.get('gender') or '').upper()[:1]
         if g in by_gender:
-            by_gender[g].append(v)
+            by_gender[g].append(v * w)
+            by_gender_w[g] += w
         lab = str(r.get('segment') or '')
         if lab in cohorts:
-            by_cohort.setdefault(lab, []).append(v)
-    room = round(sum(vals) / len(vals), 2) if vals else DEFAULT_DIAL
+            by_cohort.setdefault(lab, []).append(v * w)
+            by_cohort_w[lab] = by_cohort_w.get(lab, 0.0) + w
+    room = round(sum(vals) / wsum['room'], 2) if vals and wsum['room'] > 0 else DEFAULT_DIAL
     dial = sess.setdefault('dial', {'t': [], 'value': [], 'splits': {}})
+    dial.setdefault('weighting', 'people')
     dial.setdefault('t', []).append(round(t, 2))
     dial.setdefault('value', []).append(room)
     splits = dial.setdefault('splits', {})
     split_now, split_meta = {}, {}
-    split_defs = [(cohort_key(lab), lab, 'cohort', by_cohort.get(lab) or []) for lab in cohorts] if cohort_key else []
-    split_defs += [('women', 'Women', 'gender', by_gender.get('F') or []), ('men', 'Men', 'gender', by_gender.get('M') or [])]
-    for key, label, grp, xs in split_defs:
-        if not xs:
+    split_defs = [(cohort_key(lab), lab, 'cohort', by_cohort.get(lab) or [], by_cohort_w.get(lab, 0.0)) for lab in cohorts] if cohort_key else []
+    split_defs += [('women', 'Women', 'gender', by_gender.get('F') or [], by_gender_w['F']), ('men', 'Men', 'gender', by_gender.get('M') or [], by_gender_w['M'])]
+    for key, label, grp, xs, xw in split_defs:
+        if not xs or xw <= 0:
             continue
-        v = round(sum(xs) / len(xs), 2)
+        v = round(sum(xs) / xw, 2)
         sp = splits.setdefault(key, {'label': label, 'group': grp, 'n': len(xs), 'value': []})
         # the split series rides the same clock as the room: pad to the room's length so the page can draw it point for point
         while len(sp['value']) < len(dial['value']) - 1:

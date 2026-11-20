@@ -58589,6 +58589,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // the split key the room gives a cohort (the same key live and scored, so a cut cohort survives the scoring)
                 return 'cohort_' + (String(label || '').toLowerCase().replace(/[^0-9a-z]+/g, '_').replace(/^_+|_+$/g, '') || 'x');
             }
+            function piSeatWeights(s) {
+                // {seat: the people it stands for}: the seat's own figure (stands_for_people, else people); one each when the
+                // room carries none, so the line is a plain average then
+                var out = {}, every = true;
+                (((s || {}).group || {}).roster || []).forEach(function(r) { var w = Number(r.stands_for_people || r.people || 0); if (!(w > 0)) every = false; out[String(r.seat)] = w; });
+                if (!every) Object.keys(out).forEach(function(k) { out[k] = 1; });   // a seat without a figure: the room counts one each
+                return out;
+            }
             function piRosterCohorts(s) {
                 // the cohorts the room was cut into, in seat order (two or more), as [{key, label, seats}]
                 var out = [], by = {};
@@ -58619,9 +58627,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var cache = S.piCohortCache || {};
                 if (cache.sig === sig && cache.live === live) return cache.list;
                 var list = order.map(function(c, i) {
-                    var sums = {}, counts = {};
+                    // each seat counts by the people it stands for (Jenna 2026-11-20), the weights the server's line and the
+                    // published split use; a cohort whose seats all stand for the same people is the plain average
+                    var sums = {}, counts = {}, wts = piSeatWeights(s);
                     c.seats.forEach(function(seat) {
-                        (live[String(seat)] || []).forEach(function(p) { var tk = String(Number(p[0])), v = Number(p[1]); if (!isFinite(v)) return; sums[tk] = (sums[tk] || 0) + v; counts[tk] = (counts[tk] || 0) + 1; });
+                        var w = wts[String(seat)] || 1;
+                        (live[String(seat)] || []).forEach(function(p) { var tk = String(Number(p[0])), v = Number(p[1]); if (!isFinite(v)) return; sums[tk] = (sums[tk] || 0) + v * w; counts[tk] = (counts[tk] || 0) + w; });
                     });
                     var value = [], prev = NaN;
                     for (var k = 0; k < ts.length; k++) { var tk = String(Number(ts[k])); if (counts[tk]) prev = Math.round((sums[tk] / counts[tk]) * 100) / 100; value.push(prev); }

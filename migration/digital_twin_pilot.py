@@ -51,6 +51,11 @@ from migration.digital_twin_panel import (
 )
 
 PILOT_VERSION = 'pilot-2'
+# The dial line counts each seat by the people it stands for (Jenna 2026-11-20, choosing between a plain average of the
+# seats and the people behind each seat: "Yes, weight the dial by the people behind each seat"). The room line and every
+# group line are people-weighted means of the seat dials, on the weights the room's published split uses
+# (digital_twin_room._seat_weights). A session's dial carries this stamp once it counts that way.
+DIAL_WEIGHTING = 'people'
 EVENT_TYPES = ('love', 'laugh', 'lean-in', 'confuse', 'check-out', 'wow')
 EVENT_LABEL = {
     'love': 'Loved it',
@@ -718,28 +723,80 @@ def persona_events(seat: dict, card: dict, beats: list, dial: list, scene_read: 
     return out
 
 
-def aggregate_dial(seat_dials: list, subject: str, media_key: str) -> list:
+def seat_weights(roster: list, segments: Optional[list] = None) -> dict:
+    """{seat id as a string: the people the seat stands for}, the weights
+    the room's published split uses (``digital_twin_room._seat_weights``,
+    segment by segment): a seat by kind carries its kind's people, an
+    older room's seats split their segment's people evenly. A segment
+    without a figure falls back to its seats' own people, else one each.
+    A room whose seats all stand for the same number of people comes
+    out equal, so its line is the plain average it always was."""
+    from migration.digital_twin_room import _seat_weights as _room_seat_weights
+    roster = [r for r in (roster or []) if isinstance(r, dict) and r.get('seat') is not None]
+    if not roster:
+        return {}
+    seg_people = {str(sg.get('label')): float(_int_or_zero(sg.get('people'))) for sg in (segments or []) if isinstance(sg, dict)}
+    by_seg = {}
+    for r in roster:
+        by_seg.setdefault(str(r.get('segment') or ''), []).append(r)
+    out = {}
+    for lab, rs in by_seg.items():
+        w_seg = seg_people.get(lab, 0.0)
+        if w_seg <= 0:
+            own = sum(max(0.0, float(_int_or_zero(r.get('people')))) for r in rs if isinstance(r.get('archetype'), dict))
+            w_seg = own if own > 0 else float(len(rs))
+        try:
+            got = _room_seat_weights(rs, w_seg)
+        except Exception:
+            got = {}
+        for r in rs:
+            try:
+                k = int(r['seat'])
+            except (TypeError, ValueError):
+                continue
+            out[str(r['seat'])] = float(got.get(k, w_seg / float(len(rs))))
+    tot = sum(v for v in out.values() if v > 0)
+    if tot <= 0:
+        return {str(r['seat']): 1.0 for r in roster}
+    return out
+
+
+def aggregate_dial(seat_dials: list, subject: str, media_key: str, weights: Optional[list] = None) -> list:
+    """One line from several seat dials: the people-weighted mean when
+    ``weights`` (one per seat dial, the people each stands for) is
+    given, the plain mean otherwise; a small deterministic jitter and
+    the messy fourth decimal as always."""
     if not seat_dials:
         return []
     n = min(len(d) for d in seat_dials)
+    ws = None
+    if weights is not None:
+        ws = [max(0.0, float(w or 0)) for w in weights][:len(seat_dials)]
+        if len(ws) != len(seat_dials) or sum(ws) <= 0:
+            ws = None
     out = []
     for i in range(n):
-        mean = sum(d[i] for d in seat_dials) / float(len(seat_dials))
+        if ws:
+            mean = sum(float(d[i]) * w for d, w in zip(seat_dials, ws)) / sum(ws)
+        else:
+            mean = sum(d[i] for d in seat_dials) / float(len(seat_dials))
         mean += jit(0.021, 0.184, subject, media_key, i, 'agg')
         out.append(_messy_bp(subject, 'room', f"agg-{i}", mean))
     return out
 
 
-def split_dial(roster: list, seat_dials: dict, pred, subject: str, media_key: str, label: str, min_seats: int = 2) -> Optional[list]:
-    """The dial of the seats a predicate picks (any predicate)."""
-    picked = []
+def split_dial(roster: list, seat_dials: dict, pred, subject: str, media_key: str, label: str, min_seats: int = 2, weights: Optional[dict] = None) -> Optional[list]:
+    """The dial of the seats a predicate picks (any predicate), each seat
+    counted by its people when ``weights`` ({seat: people}) is given."""
+    picked, ws = [], []
     for seat in roster:
         sid = str(seat.get('seat'))
         if sid in seat_dials and pred(seat):
             picked.append(seat_dials[sid])
+            ws.append(float((weights or {}).get(sid, 0.0)))
     if len(picked) < min_seats or len(picked) == len(seat_dials):
         return None
-    return aggregate_dial(picked, f"{subject}|{label}", media_key)
+    return aggregate_dial(picked, f"{subject}|{label}", media_key, weights=ws if weights else None)
 
 
 # ----------------------------------------------------------- the splits
@@ -857,13 +914,14 @@ def split_specs(roster: list, twin: dict) -> list:
     return specs
 
 
-def all_splits(roster: list, seat_dials: dict, twin: dict, subject: str, media_key: str) -> dict:
+def all_splits(roster: list, seat_dials: dict, twin: dict, subject: str, media_key: str, weights: Optional[dict] = None) -> dict:
     """{key: {label, group, n, value: [...]}} for every split with at
-    least two seats that is not the whole room."""
+    least two seats that is not the whole room, each line counting its
+    seats by their people when ``weights`` is given."""
     out = {}
     for key, label, group, pred in split_specs(roster, twin):
         n = sum(1 for s in roster if str(s.get('seat')) in seat_dials and pred(s))
-        line = split_dial(roster, seat_dials, pred, subject, media_key, key)
+        line = split_dial(roster, seat_dials, pred, subject, media_key, key, weights=weights)
         if line:
             out[key] = {'label': label, 'group': group, 'n': n, 'value': line}
     return out
@@ -2057,8 +2115,11 @@ def scorecard(twin: dict, roster: list, beats: list, dial: list, events: list,
     women = [s for s in roster if _is_woman(s)]
     men = [s for s in roster if _is_man(s)]
     if women and men and seat_dials:
-        w = aggregate_dial([seat_dials[str(s.get('seat'))] for s in women if str(s.get('seat')) in seat_dials], subject, media_key + '|w')
-        m = aggregate_dial([seat_dials[str(s.get('seat'))] for s in men if str(s.get('seat')) in seat_dials], subject, media_key + '|m')
+        sw = seat_weights(roster, segments or [])
+        w = aggregate_dial([seat_dials[str(s.get('seat'))] for s in women if str(s.get('seat')) in seat_dials], subject, media_key + '|w',
+                           weights=[sw.get(str(s.get('seat')), 0.0) for s in women if str(s.get('seat')) in seat_dials])
+        m = aggregate_dial([seat_dials[str(s.get('seat'))] for s in men if str(s.get('seat')) in seat_dials], subject, media_key + '|m',
+                           weights=[sw.get(str(s.get('seat')), 0.0) for s in men if str(s.get('seat')) in seat_dials])
         if w and m:
             gap = sum(a - b for a, b in zip(w, m)) / float(min(len(w), len(m)))
             if gap >= 3.2:
@@ -2081,6 +2142,92 @@ def scorecard(twin: dict, roster: list, beats: list, dial: list, events: list,
         'loves': loves,
         'checkouts': checkouts,
     }
+
+
+def dial_is_weighted(sess: dict) -> bool:
+    return str(((sess or {}).get('dial') or {}).get('weighting') or '') == DIAL_WEIGHTING
+
+
+def reweight_dial(sess: dict, twin: Optional[dict] = None, *, subject: str = '') -> Optional[dict]:
+    """Re-count a stored test's dial on the people behind each seat
+    (Jenna 2026-11-20), in place, from the seat dials it kept: the room
+    line, every split line, the probes, and the parts of the scorecard
+    that read the line (the dial average, the dead spot, the favorite
+    moment's screen, the women / men note); cached minute reads take
+    their lean from the new line. The battery, the people, the norms and
+    the forecast are untouched. Idempotent: a test already stamped, or
+    one without seat dials on the dial's clock, returns None. Returns
+    {old_avg, new_avg, old_mean, new_mean, splits} when it changed."""
+    if not isinstance(sess, dict) or dial_is_weighted(sess):
+        return None
+    d = sess.get('dial') if isinstance(sess.get('dial'), dict) else None
+    sd = sess.get('seat_dials') if isinstance(sess.get('seat_dials'), dict) else None
+    g = sess.get('group') if isinstance(sess.get('group'), dict) else {}
+    roster = [r for r in (g.get('roster') or []) if isinstance(r, dict)]
+    segments = [x for x in (g.get('segments') or []) if isinstance(x, dict)]
+    if not d or not sd or not roster:
+        return None
+    ts = list(d.get('t') or [])
+    keys = [str(r.get('seat')) for r in roster if str(r.get('seat')) in sd]
+    if len(ts) < 2 or not keys or any(len(sd[k] or []) != len(ts) for k in keys):
+        return None
+    twin = twin or {}
+    subject = subject or _subject(twin) or str(sess.get('title') or 'test')
+    media_key = str((sess.get('media') or {}).get('hash') or sess.get('id') or '')
+    sw = seat_weights(roster, segments)
+    old_value = list(d.get('value') or [])
+    agg = aggregate_dial([sd[k] for k in keys], subject, media_key, weights=[sw.get(k, 0.0) for k in keys])
+    if len(agg) != len(ts):
+        return None
+    old_splits = d.get('splits') if isinstance(d.get('splits'), dict) else {}
+    new_splits = all_splits(roster, {k: sd[k] for k in keys}, twin, subject, media_key, weights=sw)
+    splits = {}
+    for key, row in old_splits.items():
+        if not isinstance(row, dict):
+            continue
+        fresh = new_splits.get(key)
+        splits[key] = dict(row, value=list(fresh['value'])) if fresh and len(fresh.get('value') or []) == len(ts) else row
+    for key, row in new_splits.items():
+        splits.setdefault(key, row)
+    d['value'] = agg
+    d['splits'] = splits
+    d['weighting'] = DIAL_WEIGHTING
+    d['reweighted_at'] = _now()
+    beats = [b for b in (sess.get('beats') or []) if isinstance(b, dict)]
+    events = [e for e in (sess.get('events') or []) if isinstance(e, dict)]
+    if beats and len(beats) >= len(ts):
+        sess['probes'] = probe_points(beats, agg, events, subject)
+    sc = sess.get('scorecard') if isinstance(sess.get('scorecard'), dict) else None
+    old_avg = float(sc.get('overall_like')) if sc and sc.get('overall_like') is not None else None
+    if sc and beats and len(beats) >= len(ts):
+        fresh = scorecard(twin, roster, beats, agg, events, {k: sd[k] for k in keys}, subject, media_key, segments=segments)
+        sc['overall_like'] = fresh['overall_like']
+        sc['dead_spot'] = fresh['dead_spot']
+        if isinstance(sc.get('favorite_moment'), dict):
+            sc['favorite_moment']['on_screen'] = fresh['favorite_moment'].get('on_screen')
+        else:
+            sc['favorite_moment'] = fresh['favorite_moment']
+        sc['notes'] = fresh['notes']
+    # the cached minute reads keep their words; the lean follows the new line
+    digests = sess.get('minute_digests') if isinstance(sess.get('minute_digests'), dict) else None
+    if digests:
+        try:
+            from migration import digital_twin_minutes as MIN
+            for key, rec in digests.items():
+                if not isinstance(rec, dict):
+                    continue
+                parts = str(key).split(':')
+                mode, ident, minute = (parts + ['', '', ''])[:3]
+                if mode == 'person' or not str(minute).isdigit():
+                    continue
+                lines = MIN.lines_in_window(sess, int(minute) * MIN.MINUTE_S, mode, ident)
+                rec['lean'] = MIN.lean_of(sess, mode, ident, int(minute), lines)
+        except Exception as e:
+            print(f"[pilot] minute leans on the new line skipped: {e}")
+    sess['updated_at'] = _now()
+    new_avg = float(sc.get('overall_like')) if sc and sc.get('overall_like') is not None else None
+    mean_of = lambda xs: round(sum(float(x) for x in xs) / len(xs), 2) if xs else None
+    return {'old_avg': old_avg, 'new_avg': new_avg, 'old_mean': mean_of(old_value), 'new_mean': mean_of(agg), 'splits': len(splits), 'seats': len(keys)}
 
 
 def _seat_summary(seat_no: int, series: list, beats: list, scenes_by_id: dict, events: list, acts: int = 6) -> dict:
@@ -2247,12 +2394,15 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
         else:
             events.extend(seat_events(twin, seat, beats, series, seed, media_key))
     events.sort(key=lambda e: (float(e.get('t') or 0), str(e.get('name') or ''), str(e.get('type') or '')))
-    agg = aggregate_dial(list(seat_dials.values()), subject, media_key)
-    splits = all_splits(roster, seat_dials, twin, subject, media_key)
+    # the room line counts each seat by the people it stands for (Jenna 2026-11-20), the same weights the published split uses
+    sw = seat_weights(roster, segments)
+    seat_order = list(seat_dials.keys())
+    agg = aggregate_dial([seat_dials[k] for k in seat_order], subject, media_key, weights=[sw.get(k, 0.0) for k in seat_order])
+    splits = all_splits(roster, seat_dials, twin, subject, media_key, weights=sw)
     session['scenes'] = [{k: s.get(k) for k in ('id', 't_start', 't_end', 'act', 'caption', 'dialogue', 'speaker', 'tone', 'joke', 'silence', 'cue', 'setting')} for s in scenes]
     session['beats'] = [{'i': b['i'], 't': b['t'], 't_start': b['t_start'], 't_end': b['t_end'], 'scene_id': b['scene_id'], 'act': b['act'], 'action': b.get('action') or '',
                          'caption': b.get('caption') or '', 'tone': b['tone'], 'dialogue': b.get('dialogue') or '', 'speaker': b.get('speaker') or '', 'cue': b.get('cue')} for b in beats]
-    session['dial'] = {'t': [b['t'] for b in beats], 'value': agg, 'splits': splits}
+    session['dial'] = {'t': [b['t'] for b in beats], 'value': agg, 'splits': splits, 'weighting': DIAL_WEIGHTING}
     session['seat_dials'] = seat_dials
     session['events'] = events
     session['voices_live'] = live_voices(events, roster)
@@ -3835,7 +3985,7 @@ __all__ = [
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
     'stamp_question', 'question_clock', 'question_split', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
-    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
+    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'seat_weights', 'reweight_dial', 'dial_is_weighted', 'DIAL_WEIGHTING', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'auto_stop_due', 'parse_runtime', 'AUTO_STOP_GRACE_S',
     'attach_norms', 'battery_tallies', 'denominator_line', 'headline_read', 'set_norm', 'keyword_genre', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',

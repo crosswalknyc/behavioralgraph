@@ -332,7 +332,7 @@ class PageLiveViews(unittest.TestCase):
     """The page's dial views while the room is live: the toggle gate, the per-frame merge, the cohort lines from the
     seats, and the handover to the scored series. The spliced functions are lifted from the page and run under node."""
     NAMES = ('watchMedia', 'hasMedia', 'isLiveSess', 'liveFinished', 'mergeLiveFrame', 'piView', 'piSeatSeries', 'piScored',
-             'piLiveSeries', 'piViewModes', 'piViewModesKey', 'piCohortKey', 'piRosterCohorts', 'piCohortSplits')
+             'piLiveSeries', 'piViewModes', 'piViewModesKey', 'piCohortKey', 'piRosterCohorts', 'piCohortSplits', 'piSeatWeights')
 
     @classmethod
     def setUpClass(cls):
@@ -463,6 +463,14 @@ assert(!piLiveSeries(f) && piCohortSplits(f).length === 2 && piViewModesKey(f) =
 // a room with no cohorts: Room and People only
 var g = { id: 'g1', status: 'playing', media: { source: 'watch_url', url: 'https://x/y' }, group: { roster: roster.map(function(r) { return { seat: r.seat, name: r.name }; }) }, live: { on: true, frames: [], seat_dials: {} }, dial: { t: [], value: [], splits: {} } };
 assert(piViewModesKey(g) === 'room,people' && piCohortSplits(g).length === 0, 'no cohorts: ' + piViewModesKey(g));
+// the live cohort lines count each seat by the people it stands for (Jenna 2026-11-20): a seat standing for three times the
+// people pulls its cohort's line three times as hard; a room without figures is the plain average as before
+var wr = [{ seat: 1, name: 'A', segment: 'Women', stands_for_people: 300 }, { seat: 2, name: 'B', segment: 'Women', stands_for_people: 100 }, { seat: 3, name: 'C', segment: 'Men', stands_for_people: 100 }, { seat: 4, name: 'D', segment: 'Men', stands_for_people: 100 }];
+var wl = { id: 'w1', status: 'playing', media: { source: 'watch_url', url: 'https://x/y', kind: 'web' }, group: { roster: wr }, live: { on: true, frames: [{ t: 12 }], seat_dials: { '1': [[12, 80]], '2': [[12, 40]], '3': [[12, 60]], '4': [[12, 20]] } }, dial: { t: [12], value: [50], splits: {} } };
+var ww = piSeatWeights(wl); assert(ww['1'] === 300 && ww['2'] === 100, 'the weights are the people behind the seats');
+var wc = piCohortSplits(wl);
+assert(wc[0].value.join(',') === '70' && wc[1].value.join(',') === '40', 'weighted cohort lines: ' + JSON.stringify(wc.map(function(c) { return c.value; })));
+var eq = piSeatWeights(g); assert(Object.keys(eq).every(function(k) { return eq[k] === 1; }), 'no figures: one each');
 console.log('ok');
 '''
         with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as fh:
