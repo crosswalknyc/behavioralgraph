@@ -39,6 +39,50 @@ _FIT_WHY_RX = re.compile(
     r"\b(?:why|whether|should|makes?\s+sense|good\s+(?:idea|fit|match|partner)|right\s+(?:fit|partner|creator)|worth|value|case\s+for|"
     r"the\s+case|rationale|justif|over\s+(?:other|potential|the\s+other)|versus|vs\.?|compared\s+to|fit)\b", re.I)
 
+# An open recommendation: the words ask WHICH brands (partners, sponsors)
+# suit a talent, or for partners to be found, with no pairing named to
+# value. It is a read on the talent's audience, never a valuation order
+# (Jenna 2026-11-20, her own seat: "Help me identify which 5 brands
+# should partner with <talent> based on her fan base. and what are the
+# pitch angles for each." opened the order with the sentence as the
+# talent and its second clause as the brand).
+_BRAND_FIT_NOUN = (r"(?:brands?|companies|partners?|sponsors?|advertisers?|labels?|retailers?|marketers?|creators?|influencers?|talents?|"
+                   r"athletes?|celebrities|celebs?|personalities|podcasters?|streamers?|artists?|musicians?|teams?|properties|shows?|"
+                   r"ambassadors?|spokes(?:people|persons?|men|women))")
+_BRAND_FIT_RX = re.compile(
+    r"\b(?:(?:which|what)\s+(?:of\s+(?:these|those|the|them)\s+)?(?:[\w-]+\s+){0,3}?" + _BRAND_FIT_NOUN
+    + r"|(?:identify|find|pick|choose|recommend|suggest|shortlist|list|name|source)\s+(?:me\s+|us\s+)?(?:the\s+|some\s+|a\s+few\s+|\d+\s+|five\s+|ten\s+)?(?:best\s+|right\s+|top\s+|potential\s+|ideal\s+|good\s+|new\s+|possible\s+)*(?:brand\s+)?" + _BRAND_FIT_NOUN
+    + r"|potential\s+(?:brand\s+)?partners?|brand\s+fit|pitch\s+angles?"
+    + r"|(?:who|which|what)\s+(?:[\w-]+\s+){0,3}?(?:should|would|could|might|can)\s+(?:\w+\s+){1,3}?partner\s+with"
+    + r"|" + _BRAND_FIT_NOUN + r"\s+(?:that\s+|who\s+)?(?:should|would|could|might|will)\s+(?:partner|work|sponsor|fit|align|pair))\b", re.I)
+
+
+def _is_ask(text):
+    """A question, or a request typed as one (prometheus.intake_guard)."""
+    try:
+        from . import intake_guard as _ig
+        return bool(_ig.is_question_shaped(text) or _ig.is_ask(text))
+    except Exception:
+        return '?' in str(text or '')
+
+
+def brand_fit_ask(text):
+    """True when the words ask which brands (partners, sponsors) suit a
+    talent or for partners to be found: an open recommendation on the
+    talent's audience. A named pairing asked about by its value or its
+    fit ("why it makes sense for Mastercard to partner with Mr. Beast")
+    is not one; neither is an order to value a pairing."""
+    low = _low(text)
+    if not low:
+        return False
+    try:
+        from . import partnership_value as _pv
+        if _pv.value_ask(low):
+            return False
+    except Exception:
+        pass
+    return bool(_BRAND_FIT_RX.search(low))
+
 
 def bpiq_intent(text, chip=''):
     try:
@@ -69,7 +113,11 @@ def bpiq_intent(text, chip=''):
     # the partnership case: 'why it makes sense for Mastercard to partner with Mr. Beast over potential
     # other creators', 'Mastercard is partnering with Mr. Beast, I want to understand why this is a good
     # idea' (Debi 2026-10-26, asked on the Colin and Samir read and answered from it twice)
-    if _PARTNER_FIT_RX.search(low) and _FIT_WHY_RX.search(low):
+    # ... but never an open recommendation (which brands, which creators, who should she partner with, pitch
+    # angles), and never partnership words inside a question: the wizard starts on an explicit valuation order
+    # only, and a question is answered in chat (Jenna 2026-11-20, verbatim: "it already ran my valuation now I
+    # want to ask other questions. make sure it is answering my questions in chat")
+    if _PARTNER_FIT_RX.search(low) and _FIT_WHY_RX.search(low) and not brand_fit_ask(low) and not _is_ask(text):
         return True
     # a pasted deal brief: two names around 'have a Lexus deal' plus the
     # campaign's own words (promo, ads, sponsored, launched, flight). Debi's

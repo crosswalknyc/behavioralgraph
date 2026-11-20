@@ -163,6 +163,7 @@ _INTENT_CLASS = {
     'order': 'order', 'pushback': 'short_reply', 'continuation_rerun': 'continuation',
     'continuation_correction': 'continuation', 'reader_will_share': 'short_reply', 'study_question': 'definition',
     'send_file_order': 'send_file', 'wayfinding': 'wayfinding', 'insight_ask': 'insight',
+    'brand_fit': 'read',   # which brands suit a talent: a read on the talent's audience (2026-11-20)
     'build_fix': 'build', 'build_facts': 'build', 'data_floor': 'data_floor', 'cancel': 'cancel',
     'multi_ask': 'multi_ask', 'provenance': 'provenance', 'offer_reply': 'offer',
     'armed': 'wizard',   # a step the client is in the middle of is a wizard turn

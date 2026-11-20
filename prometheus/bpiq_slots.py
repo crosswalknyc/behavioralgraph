@@ -452,6 +452,12 @@ def pair_answer(text):
     t = _norm(text)
     if not t or '?' in t or len(t) > 160 or re.search(r"https?://", t, re.I):
         return None
+    try:
+        from prometheus import intake_guard as _ig
+        if _ig.is_question_shaped(t) or _ig.is_ask(t):
+            return None          # a question is never two names (2026-11-20)
+    except Exception:
+        pass
     cut = None
     depth = 0
     for i, ch in enumerate(t):

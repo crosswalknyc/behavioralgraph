@@ -136,7 +136,7 @@ In production the same line rides every ask-log record under
 records the same way. The kill switches are environment only:
 `PM_UNDERSTANDING=0` for the step, `PM_U_OFF_<INTENT>=1` for one flipped
 intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`,
-`WIZARD_INTERRUPT`, `VALUATION_REFERENT`).
+`WIZARD_INTERRUPT`, `VALUATION_REFERENT`, `BRAND_FIT`).
 
 ## Refreshing the corpus
 

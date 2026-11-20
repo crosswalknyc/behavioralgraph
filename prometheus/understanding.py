@@ -61,6 +61,7 @@ LANE_INTENTS = (
     'send_file_order',          # email me / send me / download the file we hold
     'wayfinding',               # where is a product, tab, control or the dropdown
     'insight_ask',              # an open-ended insight ask on a subject
+    'brand_fit',                # which brands suit a talent's audience (a read on the talent, never a valuation order)
     'build_fix', 'build_facts', 'data_floor', 'cancel', 'armed', 'multi_ask', 'provenance', 'offer_reply',
 )
 INTENTS = tuple(dict.fromkeys(tuple(getattr(__import__('prometheus.reader', fromlist=['INTENTS']), 'INTENTS', ())) + LANE_INTENTS))
@@ -69,7 +70,8 @@ INTENTS = tuple(dict.fromkeys(tuple(getattr(__import__('prometheus.reader', from
 # A name here is live; a name in SHADOW is computed and logged and keys nothing yet.
 FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'wizard_interrupt',      # an armed wizard step yields to a clearly unrelated ask and takes a plain correction (Jenna 2026-11-20)
-           'valuation_referent')    # words after a delivered valuation that point at it (its deck, its dates, a re-run) are about it
+           'valuation_referent',    # words after a delivered valuation that point at it (its deck, its dates, a re-run) are about it
+           'brand_fit')             # which brands suit a talent is a read on the talent's audience, never a valuation (Jenna 2026-11-20)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
@@ -77,7 +79,7 @@ SHADOW = ('named_title',)
 _CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue'))
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',
-                              'definition', 'capability', 'study_question', 'provenance'))
+                              'definition', 'capability', 'study_question', 'provenance', 'brand_fit'))
 WIZARD_YIELD_CONF = 0.8
 
 ACTIONS = ('answer', 'build', 'deck', 'send', 'open', 'status', 'cancel', 'approve', '')
@@ -252,6 +254,7 @@ def _features(text, ctx, history, body):
     put('wait', lambda: mod('status_lane').is_wait_ask(text))
     put('deliverable', lambda: mod('deliverables').parse(text))
     put('insight', lambda: mod('insight_ask').wants(text))
+    put('brand_fit', lambda: mod('intents').brand_fit_ask(text))
     put('reader_will_share', lambda: mod('insight_ask').reader_will_share(text))
     put('send_order', lambda: mod('insight_ask').is_send_order(text))
     put('send_file', lambda: mod('send_file').parse(text))
@@ -398,6 +401,10 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
                 intent, action = 'deck', 'deck'
             elif prod in ('journey', 'valuation', 'campaign', 'twin'):
                 intent = prod
+        elif f.get('brand_fit') and flipped('brand_fit') and not f.get('wizard_start') and not f.get('insight'):
+            # which brands suit a talent, with pitch angles: a read on the talent's audience; it names no pairing to
+            # value, so it is never the valuation's and an open order yields to it (Jenna 2026-11-20, her own seat)
+            intent, action, conf = 'brand_fit', 'answer', 0.85
         elif f.get('wizard') or f.get('wizard_start'):
             intent, action, conf = (str(f['wizard']) if f.get('wizard') else 'valuation'), 'build', 0.8
         elif f.get('insight') or (f.get('reader_will_share') and not f.get('send_order')):
@@ -497,6 +504,9 @@ def absorb_reading(u, reading, *, min_conf=0.7):
             return u
         if u.intent == 'insight_ask' and r_int == 'command':
             u.source = 'reconciled'
+            return u
+        if u.intent == 'brand_fit' and r_int in ('valuation', 'command'):
+            u.source = 'reconciled'   # which brands suit a talent names no pairing to value (Jenna 2026-11-20)
             return u
         if u.intent in _CONTESTED and r_int not in _CONTESTED and u.confidence >= 0.8:
             u.source = 'reconciled'   # the words settled a contested pair with a strong feature; the reading fills the rest

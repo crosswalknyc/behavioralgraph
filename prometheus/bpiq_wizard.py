@@ -898,6 +898,13 @@ def open_draft(body, history, store, user, thread_id='', today=None):
     return d
 
 
+def order_started_line(text):
+    """True when an agent turn says a valuation order started or is already
+    running: the wizard's draft is spent from that turn on."""
+    txt = str(text or '').strip()
+    return txt.startswith("It's running") or txt.startswith('That valuation is already running')
+
+
 def last_agent_is_wizard(history):
     turn = last_agent_turn(history)
     if not turn:
@@ -909,8 +916,13 @@ def last_agent_is_wizard(history):
     if step_from_prompt(txt) is not None:
         return True
     low = txt.lower()
-    if txt.startswith("Here's what I'll run") or txt.startswith("It's running"):
+    if txt.startswith("Here's what I'll run"):
         return True
+    # "It's running" is not a step: the order was accepted and started and
+    # has left the wizard. Reading it as one re-armed the draft from the
+    # thread after a start and the next question became an order (Jenna
+    # 2026-11-20, her own seat). A started order never takes the next
+    # message; what it owns rides on the run marker.
     if 'needs funds on the account first' in low:
         return True
     # a reply that answered a question typed mid-wizard carries the way
@@ -950,6 +962,15 @@ def replay_history(history, today=None):
             pending = None
             continue
         if role in ('agent', 'assistant'):
+            if order_started_line(txt):
+                # the order was accepted and started: the draft it came from
+                # is spent, and nothing before this turn is replayed into a
+                # new one (Jenna 2026-11-20)
+                d = empty_draft()
+                d['step'] = STEP_TALENT
+                pending = None
+                saw = False
+                continue
             pending = step_from_prompt(txt)
             if pending:
                 saw = True
@@ -1032,9 +1053,11 @@ def _wants(text, body, history, store, user, thread_id):
     if is_next(text) and _open_next(_run_marker(store, user, thread_id)) is not None:
         return True     # the next partnership an earlier ask on this thread named
     draft = open_draft(body, history, store, user, thread_id)
-    if draft is None:
-        return False
     t = str(text or '').strip()
+    if draft is None:
+        # a repeated Accept right after the order started is answered here (it is already running); nothing else
+        # after a start is the wizard's (Jenna 2026-11-20)
+        return bool(_accept_words(t) and order_started_line(str((last_agent_turn(history) or {}).get('text') or '')))
     if _is_resume(t) or is_cancel(t) or is_decline(t) or is_chip(t) or _bpiq_intent(t):
         return True
     # a message the Understanding reads, with confidence, as something else entirely is answered as that; the
@@ -1050,6 +1073,12 @@ def _wants(text, body, history, store, user, thread_id):
         return True
     _stand_aside(draft)
     return False
+
+
+def _accept_words(text):
+    """The accept chip, with or without its price."""
+    t = str(text or '').strip()
+    return bool(t) and bool(_ACCEPT_RE.match(t) or _low(t).startswith('accept'))
 
 
 def _start_fresh(store, user, thread_id, today):
@@ -1382,6 +1411,13 @@ def apply_ahead(draft, text, today=None):
     bits = [b for b in bits if b]
     names = [b for b in bits if b and not parse_dates(b, today=today)[0]
              and not _FRAME_LEFTOVER_RX.match(b) and not _slots.is_filler(b)]
+    # a question is never a name, and neither is a clause of one: "Help me
+    # identify which 5 brands should partner with X based on her fan base.
+    # and what are the pitch angles for each." had become the talent and
+    # the brand (Jenna 2026-11-20). The dates and links above are kept.
+    if names and _is_ask_text(t) and not _bpiq_intent(t):
+        names = []               # a valuation order asked as a question ("can you value Gunna x Nike?") keeps its names
+    names = [b for b in names if _name_shaped(b)]
     if names and not d.get('talent'):
         # "Jennifer Beals, Ganni x Lululemon" or a lone name
         if len(names) == 1 and re.search(r'\s+[xX\u00d7]\s+', names[0]):
@@ -2056,6 +2092,47 @@ def _clean_name(text):
     return t.strip(' .')
 
 
+def _is_ask_text(text):
+    """The message is a question or a request typed as one (the intake
+    guard's own test): never a name, whatever step is open."""
+    try:
+        from prometheus import intake_guard as _ig
+        return bool(_ig.is_question_shaped(text) or _ig.is_ask(text))
+    except Exception:
+        return '?' in str(text or '')
+
+
+_CONJUNCTION_LEAD_RX = re.compile(r"^(?:and|or|but|so|then|also|plus|nor|yet)\b", re.I)
+_CLAUSE_LEAD_RX = re.compile(
+    r"^(?:and|or|but|so|then|also|plus|nor|yet|what|which|who|whom|whose|how|why|when|where|whether|if|because|while|although)\b", re.I)
+_CLAUSE_VERB_RX = re.compile(
+    r"\b(?:should|would|could|might|must|shall|can|did|does|do|has|have|had|want|need|help|tell|show|give|let|identify|recommend|suggest)\b"
+    r"|\b(?:is|are|was|were)\s+(?:a|an|the|it|this|that|there|not|partnering|running|doing|going|working)\b"
+    r"|\bbased\s+on\b|\bfor\s+each\b|\bgood\s+idea\b", re.I)
+
+
+def _name_shaped(name):
+    """A name or a title, not a clause: it does not open on a conjunction
+    or a wh-word, carries no verb phrase of a question or a request, and
+    runs a few words (a title typed as one may run longer)."""
+    n = str(name or '').strip()
+    if not n:
+        return False
+    if _CLAUSE_LEAD_RX.match(n) or _CLAUSE_VERB_RX.search(n):
+        # a title typed as one keeps its own wh-word or verb ("What We Do in
+        # the Shadows", "Do It Yourself Co"); a clause does not: it opens on
+        # a conjunction, or runs on past a title's length
+        try:
+            from prometheus import intake_guard as _ig
+            if (_ig.looks_like_title(n) and len(n.split()) <= 8 and not _CONJUNCTION_LEAD_RX.match(n)
+                    and not re.search(r"\bbased\s+on\b|\bfor\s+each\b", n, re.I)):
+                return True
+        except Exception:
+            pass
+        return False
+    return not _too_long_for_name(n, 12)
+
+
 def _too_long_for_name(name, budget):
     """A name is a few words. A sentence past the budget that is not
     typed as a title is a remark, never the talent or the campaign."""
@@ -2122,8 +2199,10 @@ def apply_answer(draft, text, today=None):
     if step == STEP_TALENT:
         name = _clean_name(t)
         # a bare yes / no is never a talent (2026-11-11: "yes" was stored
-        # as the talent and led the window line as "Yes, gap x jyt")
-        if not name or is_chip(name) or _slots.is_filler(name) or _too_long_for_name(name, 8):
+        # as the talent and led the window line as "Yes, gap x jyt"); a
+        # question or a clause is never one either (2026-11-20)
+        if not name or is_chip(name) or _slots.is_filler(name) or _too_long_for_name(name, 8) \
+                or _is_ask_text(t) or not _name_shaped(name):
             return d, step_prompt(d, today=today)[0]
         mine, other = _pair_pick(d, name)
         if mine:
@@ -2138,7 +2217,7 @@ def apply_answer(draft, text, today=None):
             d['campaign_auto'] = True
     elif step == STEP_CAMPAIGN:
         name = _clean_name(t)
-        if not name or _slots.is_filler(name) or _too_long_for_name(name, 12):
+        if not name or _slots.is_filler(name) or _too_long_for_name(name, 12) or _is_ask_text(t) or not _name_shaped(name):
             return d, ASK_CAMPAIGN
         d['campaign'] = name
         d.pop('campaign_auto', None)
@@ -3448,6 +3527,15 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     # An analysis of a partnership is the valuation's too (Jenna 2026-11-16).
     if _pvk in ('deck', 'analysis') or (_pvk == 'value' and not is_valuation_order(t)):
         return _open_on_value(_pvk, t, history, draft, store, uname or user, thread_id, today)
+
+    # A repeated Accept right after "It's running" (a double tap, a chip
+    # pressed again): the order is running and nothing is re-armed or
+    # charged (Jenna 2026-11-20).
+    if not draft and not collecting and _accept_words(t) \
+            and order_started_line(str((last_agent_turn(history) or {}).get('text') or '')):
+        _mk = _run_marker(store, uname or user, thread_id) or {}
+        return _payload(ALREADY_RUNNING_REPLY, [], draft=None, bpiq_collect=False,
+                        bpiq_job_id=_mk.get('job_id') or None)
 
     # Only Cancel (or Decline on the recap) leaves. A bare name or a
     # subject-shaped reply is the next answer; a question is not (the
