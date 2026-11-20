@@ -51352,7 +51352,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView details.dtw-kind > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 44px minmax(0, 1fr) 190px 180px 18px; gap: 14px; align-items: center; padding: 10px 4px; }
         #digitalTwinsIQView details.dtw-kind > summary::-webkit-details-marker { display: none; }
         #digitalTwinsIQView details.dtw-kind > summary:hover { background: rgba(233,232,225,0.025); }
-        #digitalTwinsIQView .dtw-kind-face { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: hsl(var(--hue, 200) 28% 32%); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: none; }
+        #digitalTwinsIQView .dtw-kind-face { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: color-mix(in srgb, var(--hue, #3B3D38) 55%, #0C1618); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: none; }
         #digitalTwinsIQView .dtw-kind-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
         #digitalTwinsIQView .dtw-kind-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
         #digitalTwinsIQView .dtw-kind-main .lab { font-size: 0.92rem; font-weight: 600; color: var(--dtw-ink); line-height: 1.3; overflow-wrap: anywhere; }
@@ -51471,6 +51471,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         @media (hover: none) { #digitalTwinsIQView .dtw-cover .dtw-x { opacity: 0.7; } }
         #digitalTwinsIQView .dtw-cover .dtw-confirm { position: absolute; inset: 0; z-index: 4; margin: 0; padding: 16px 18px; background: #081113; align-content: center; }
         #digitalTwinsIQView .dtw-cover.confirming { cursor: default; }
+        /* ---- the library cards, redesigned (2026-11-19): led by the people in the twin ---- */
+        #digitalTwinsIQView .dtw-wall:has(.dtw-cover.v2) { grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+        #digitalTwinsIQView .dtw-cover.v2 { background: var(--dtw-raised); border-radius: 16px; padding: 18px 18px 16px; min-height: 222px; display: flex; }
+        #digitalTwinsIQView .dtw-cover.v2 .body { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+        #digitalTwinsIQView .dtw-cover.v2 .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-right: 22px; }
+        #digitalTwinsIQView .dtw-cover.v2 .kind { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-cover.v2 .when { font-size: 10.5px; color: var(--dtw-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-cover.v2 .faces { display: flex; align-items: center; margin-top: 14px; min-height: 40px; }
+        #digitalTwinsIQView .dtw-cover.v2 .faces.empty span { font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-cover.v2 .face { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: color-mix(in srgb, var(--hue, #3B3D38) 55%, #0C1618); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; box-shadow: 0 0 0 2px var(--dtw-raised); flex: none; }
+        #digitalTwinsIQView .dtw-cover.v2 .face + .face { margin-left: -12px; }
+        #digitalTwinsIQView .dtw-cover.v2 .face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
+        #digitalTwinsIQView .dtw-cover.v2 .face.more { background: var(--dtw-input); color: var(--dtw-body); font-size: 11px; }
+        #digitalTwinsIQView .dtw-cover.v2 h2 { margin-top: 14px; font-size: 19px; line-height: 24px; }
+        #digitalTwinsIQView .dtw-cover.v2 .meta { margin-top: 3px; font-size: 12px; color: var(--dtw-body); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-cover.v2 .acts { margin-top: auto; padding-top: 14px; display: flex; gap: 6px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-cover.v2 .acts .dtw-fg-act { height: 28px; font-size: 11.5px; }
+        #digitalTwinsIQView .dtw-cover.v2.on { border-color: var(--dtw-accent); box-shadow: 0 0 0 1px rgba(199,242,62,0.15); }
+        #digitalTwinsIQView .dtw-cover.v2.build { background: transparent; border-style: dashed; }
+        #digitalTwinsIQView .dtw-cover.v2.build .plus { font-size: 30px; line-height: 1; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-cover.v2.build h2 { margin-top: 10px; }
+        #digitalTwinsIQView .dtw-cover.v2.build .ways { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; }
+        #digitalTwinsIQView .dtw-cover.v2.build .ways span { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-cover.v2.build .ways i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+        #digitalTwinsIQView .dtw-lib-bar .dtw-chip i { font-style: normal; color: var(--dtw-mute); margin-left: 4px; }
         #digitalTwinsIQView .dtw-export .dtw-confirm { width: 100%; }
         #digitalTwinsIQView .dtw-twin-card { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.85rem 0.95rem 0.8rem; cursor: pointer; min-width: 0; }
         #digitalTwinsIQView .dtw-hero { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
@@ -53584,6 +53609,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var m = /\$[0-9,.]+/.exec(line);
                 return m ? m[0] : '$750';
             }
+            // the people on a library card (2026-11-19): the first six kinds' representatives, a face where one exists, initials until then
+            function twinFacesHtml(r) {
+                var faces = (r.faces || []).slice(0, 6), total = Number(r.kinds || faces.length || 0);
+                if (!faces.length) return '<div class="faces empty"><span>The people fill in when the twin is opened.</span></div>';
+                var out = faces.map(function(f, i) { return '<span class="face" style="--hue:' + hueFor(i) + '" title="' + esc(titleCase(f.name || '')) + (f.kind ? ', ' + esc(f.kind) : '') + '">' + (f.url ? '<img src="' + esc(thumb(f.url)) + '" alt="" loading="lazy" onerror="this.remove()">' : esc(initials(f.name || ''))) + '</span>'; }).join('');
+                if (total > faces.length) out += '<span class="face more">+' + (total - faces.length) + '</span>';
+                return '<div class="faces">' + out + '</div>';
+            }
+            // what last happened on the twin, in one short line
+            function twinLastLine(r) {
+                var bits = [];
+                if (r.reports) bits.push(r.reports + (r.reports === 1 ? ' report' : ' reports'));
+                var rooms = Math.max(0, Number(r.panel_sessions || 0) - Number(r.reports || 0));
+                if (rooms) bits.push(rooms + (rooms === 1 ? ' room' : ' rooms'));
+                if (r.pilot_sessions) bits.push(r.pilot_sessions + (r.pilot_sessions === 1 ? ' test' : ' tests'));
+                var when = r.last_at ? fmtDay(r.last_at) : (r.created_at ? fmtDay(r.created_at) : '');
+                return (bits.length ? bits.join(SEP_TXT) : 'Nothing asked yet') + (when ? SEP_TXT + when : '');
+            }
+            var SEP_TXT = ' \u00b7 ';
+            // Ask: Predictive Analytics on this twin, at the question step; Room: a new focus group room on it
+            window.dtwTwinAsk = async function(key) {
+                S.pa = paFresh(); S.pa.key = key; S.pa.step = 1;
+                if (S.key !== key) { try { await dtwOpen(key, null, null, null, 'predict'); } catch (_) {} if (S.pa) { S.pa.key = key; S.pa.step = 1; renderPredict(); } }
+                else dtwTab('predict');
+            };
+            window.dtwTwinRoom = async function(key) {
+                if (S.key !== key) { try { await dtwOpen(key, null, null, null, 'panel'); } catch (_) {} }
+                else dtwTab('panel');
+                try { dtwNewRoomOpen(true); } catch (_) {}
+            };
             function coverActivity(r) {
                 var bits = [];
                 bits.push((r.runs || 0) + ((r.runs === 1) ? ' run' : ' runs'));
@@ -53652,7 +53707,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var h = el('dtwLibrary'); if (!h) return;
                 var c = el('dtwLibCount'); if (c) c.textContent = S.runs.length ? (S.runs.length + (S.runs.length === 1 ? ' twin' : ' twins')) : '';
                 var chips = el('dtwLibChips');
-                if (chips) { chips.innerHTML = ''; chips.style.display = 'none'; }
+                if (chips) {
+                    var kindsSeen = {}; S.runs.forEach(function(r) { kindsSeen[twinKindLabel(r) || 'Twin'] = (kindsSeen[twinKindLabel(r) || 'Twin'] || 0) + 1; });
+                    var kindList = Object.keys(kindsSeen).sort(function(a, b) { return kindsSeen[b] - kindsSeen[a]; });
+                    if (kindList.length > 1) {
+                        var cur = S.libKind || 'all';
+                        chips.innerHTML = '<button type="button" class="dtw-chip' + (cur === 'all' ? ' on' : '') + '" onclick="dtwLibFilter(\'all\')">All</button>' + kindList.map(function(k) { return '<button type="button" class="dtw-chip' + (cur === k ? ' on' : '') + '" onclick="dtwLibFilter(\'' + esc(jsq(k)) + '\')">' + esc(k) + ' <i>' + kindsSeen[k] + '</i></button>'; }).join('');
+                        chips.style.display = '';
+                    } else { chips.innerHTML = ''; chips.style.display = 'none'; }
+                }
                 var search = el('dtwLibSearch');
                 if (search) { search.style.display = S.runs.length ? '' : 'none'; if (S.libQ && search.value !== S.libQ) search.value = S.libQ; }
                 if (!S.runs.length) {
@@ -53668,9 +53731,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var tiles = shown.map(function(r) {
                     var on = r.key === S.key;
                     var kn = esc(jsq(r.key)), nm = r.name || r.subject || 'this twin';
-                    return '<article class="dtw-cover' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" role="button" tabindex="0" onclick="dtwCoverOpen(event,\'' + kn + '\')" onkeydown="if(event.key===\'Enter\'){dtwCoverOpen(event,\'' + kn + '\');}" title="' + esc(nm) + '"><div class="body"><h2>' + esc(nm) + '</h2><div class="fig">' + fmtN(r.size_us) + '<span>people in the US</span></div><div class="foot">' + esc(coverActivity(r)) + '</div></div>' + twinDeleteChrome(r.key, nm) + (on ? '<div class="open">Open</div>' : '') + '</article>';
+                    return '<article class="dtw-cover v2' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" role="button" tabindex="0" onclick="dtwCoverOpen(event,\'' + kn + '\')" onkeydown="if(event.key===\'Enter\'){dtwCoverOpen(event,\'' + kn + '\');}" title="' + esc(nm) + '">'
+                        + '<div class="body"><div class="top"><span class="kind">' + esc(twinKindLabel(r) || 'Twin') + '</span><span class="when">' + esc(twinLastLine(r)) + '</span></div>'
+                        + twinFacesHtml(r)
+                        + '<h2>' + esc(nm) + '</h2><div class="meta">' + esc(human(r.size_us)) + ' people' + (r.kinds ? SEP + r.kinds + ' kinds' : '') + '</div>'
+                        + '<div class="acts"><button type="button" class="dtw-fg-act go" onclick="event.stopPropagation(); dtwTwinAsk(\'' + kn + '\')">Ask</button><button type="button" class="dtw-fg-act" onclick="event.stopPropagation(); dtwTwinRoom(\'' + kn + '\')">Open a room</button><button type="button" class="dtw-fg-act" onclick="event.stopPropagation(); dtwOpen(\'' + kn + '\')">' + (on ? 'Open' : 'See the twin') + '</button></div></div>'
+                        + twinDeleteChrome(r.key, nm) + '</article>';
                 });
-                tiles.push('<article class="dtw-cover build" onclick="dtwBuildTwin()"><div class="body"><h2>Build a twin.</h2><div class="fig">' + esc(twinPrice()) + '<span>per twin</span></div><p>Build from a profile or demographics. Prometheus walks you through the twin-building process.</p></div></article>');
+                tiles.unshift('<article class="dtw-cover v2 build" onclick="dtwBuildTwin()" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'){dtwBuildTwin();}"><div class="body"><div class="plus">+</div><h2>Build a twin</h2><div class="meta">' + esc(twinPrice()) + ' per twin</div>'
+                    + '<div class="ways"><span><i style="background:var(--dtw-accent)"></i>From a profile we hold</span><span><i style="background:var(--dtw-second)"></i>Shape a group yourself</span><span><i style="background:var(--dtw-s4)"></i>From a list of links</span></div>'
+                    + '<div class="acts"><button type="button" class="dtw-fg-act go" onclick="event.stopPropagation(); dtwBuildTwin()">Start</button></div></div></article>');
                 h.innerHTML = tiles.join('');
             }
             window.dtwOpen = async function(key, runId, sessionId, planId, tab) {

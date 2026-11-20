@@ -145,6 +145,23 @@ class Build(unittest.TestCase):
         self.assertNotIn('ltv_5y', entry)
         self.assertNotIn('has_ltv', entry)
 
+    def test_index_entry_carries_the_people(self):
+        # the library card leads with who is in the twin (2026-11-19): the kinds count, the first eight
+        # representatives with a face url where one exists, the Predictive Analytics reports, the last activity
+        twin = {'meta': {'name': 'Prime Video', 'created_at': '2026-11-01T10:00:00Z'}, 'runs': [],
+                'archetypes': {'k': 16, 'groups': [{'id': 'g%d' % i, 'label': 'Kind %d' % i, 'representative': {'name': 'Person %d' % i, 'portrait_url': ('/p/%d.jpg' % i) if i % 2 else ''}} for i in range(16)]},
+                'panel_sessions': [{'id': 'a', 'created_at': '2026-11-10T00:00:00Z', 'guided': {'status': 'done'}}, {'id': 'b', 'updated_at': '2026-11-18T23:58:25Z'}],
+                'pilot_sessions': [{'id': 'c', 'created_at': '2026-11-03T00:00:00Z'}]}
+        entry = SYN.index_entry('k', twin)
+        self.assertEqual(entry['kinds'], 16)
+        self.assertEqual(len(entry['faces']), 8)
+        self.assertEqual(entry['faces'][1], {'name': 'Person 1', 'url': '/p/1.jpg', 'kind': 'Kind 1'})
+        self.assertEqual(entry['faces'][0]['url'], '')
+        self.assertEqual(entry['reports'], 1)
+        self.assertEqual(entry['last_at'], '2026-11-18T23:58:25Z')
+        bare = SYN.index_entry('k', {'meta': {'name': 'x', 'created_at': '2026-11-01T10:00:00Z'}})
+        self.assertEqual((bare['kinds'], bare['faces'], bare['reports'], bare['last_at']), (0, [], 0, '2026-11-01T10:00:00Z'))
+
     def test_pinned_profile_is_the_one_read(self):
         s3 = _s3()
         rows = [('BRAND INPUT', 'Gilmore Girls', '100.0', '193413', '6380694'), ('SAMPLE SIZE', '2025-10-26 to 2026-10-26', '100.0', '193413', '6380694'),

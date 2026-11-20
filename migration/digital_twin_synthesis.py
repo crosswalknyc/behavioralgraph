@@ -1827,9 +1827,30 @@ def _slug(s: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_-]+', '_', str(s or '')).strip('_')[:70] or 'twin'
 
 
+def _index_people(payload: dict) -> dict:
+    """What the library card shows of who is in the twin (2026-11-19): the
+    kinds count, the first eight representatives (name, face url when it
+    exists), how many Predictive Analytics reports the twin holds, and
+    when something last happened on it."""
+    arch = payload.get('archetypes') or {}
+    groups = [g for g in (arch.get('groups') or []) if isinstance(g, dict)]
+    faces = []
+    for g in groups[:8]:
+        rep = g.get('representative') or {}
+        faces.append({'name': rep.get('name') or '', 'url': rep.get('portrait_url') or '', 'kind': g.get('label') or ''})
+    sessions = [x for x in (payload.get('panel_sessions') or []) if isinstance(x, dict)]
+    reports = sum(1 for x in sessions if isinstance(x.get('guided'), dict))
+    stamps = [str(x.get('updated_at') or x.get('created_at') or '') for x in sessions + [y for y in (payload.get('pilot_sessions') or []) if isinstance(y, dict)]]
+    stamps += [str(r.get('created_at') or '') for r in (payload.get('runs') or []) if isinstance(r, dict)]
+    last_at = max([t for t in stamps if t] or [str((payload.get('meta') or {}).get('created_at') or '')])
+    return {'kinds': int(arch.get('k') or len(groups) or 0), 'faces': faces, 'reports': reports, 'last_at': last_at}
+
+
 def index_entry(key: str, payload: dict) -> dict:
     m = payload.get('meta') or {}
+    people = _index_people(payload)
     return {'key': key, 'name': m.get('name'), 'subject': m.get('subject'), 'subject_kind': m.get('subject_kind'), 'ip_related': bool(m.get('ip_related')),
+            'kinds': people['kinds'], 'faces': people['faces'], 'reports': people['reports'], 'last_at': people['last_at'],
             'format': m.get('format'), 'platform_home': m.get('platform_home'), 'size_us': m.get('size_us'), 'created_by': m.get('created_by'),
             'created_at': m.get('created_at'), 'updated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'window_start': m.get('window_start'), 'window_end': m.get('window_end'),
