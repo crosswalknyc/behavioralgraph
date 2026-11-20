@@ -143,11 +143,46 @@ def _q(sql):
     return sql if _kind == 'pg' else sql.replace('%s', '?')
 
 
+def _connection_lost(conn, exc):
+    """A dropped or closed connection (the server closed an idle one, a
+    restart, a process that outlived its socket), as opposed to a bad
+    statement."""
+    try:
+        if getattr(conn, 'closed', 0):
+            return True
+    except Exception:
+        pass
+    name = type(exc).__name__
+    text = str(exc).lower()
+    if name in ('OperationalError', 'InterfaceError') and 'syntax' not in text:
+        return True
+    return name == 'ProgrammingError' and 'closed' in text
+
+
 def _exec(sql, params=()):
+    global _conn
     conn = _connect()
-    cur = conn.cursor()
-    cur.execute(_q(sql), params)
-    return cur
+    try:
+        cur = conn.cursor()
+        cur.execute(_q(sql), params)
+        return cur
+    except Exception as e:
+        # one reconnect and one retry when the connection itself is gone
+        # (2026-11-20, the mirror in production): a module-level connection
+        # that the server dropped would otherwise fail every write until
+        # the process restarted
+        if not _connection_lost(conn, e):
+            raise
+        with _lock:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            _conn = None
+        conn = _connect()
+        cur = conn.cursor()
+        cur.execute(_q(sql), params)
+        return cur
 
 
 def _upsert(table, keys, cols, values):

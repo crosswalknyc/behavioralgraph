@@ -145,6 +145,15 @@ class WriteThrough(unittest.TestCase):
         self.assertEqual(row['etag'], '6')     # the fake's ETag is the byte count, quotes stripped
         self.assertEqual(row['nbytes'], 6)
 
+    def test_a_dropped_connection_is_reopened_once(self):
+        s3 = FakeS3()
+        ST.install_mirror(s3)
+        s3.put_object(Bucket='b', Key='system/synth_chat_threads/jane/t1.json', Body=b'[1]')
+        ST._connect().close()          # the server dropped it under us
+        s3.put_object(Bucket='b', Key='system/synth_chat_threads/jane/t2.json', Body=b'[2]')
+        self.assertEqual(ST.doc_text('system/synth_chat_threads/jane/t2.json'), '[2]')
+        self.assertEqual(ST.docs_count('thread'), 2)
+
     def test_doc_put_keeps_the_bytes(self):
         body = json.dumps([{'role': 'user', 'text': 'hi'}], indent=2).encode('utf-8')
         self.assertTrue(ST.doc_put('system/synth_chat_threads/jane/abc.json', body))
