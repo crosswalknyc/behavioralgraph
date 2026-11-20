@@ -208,8 +208,13 @@ def test_valuation_end_to_end():
         s = kw.get('surface')
         if s == 'bpiq_campaign_research':
             return dict(T.campaign(sold_out=False), drop_dates=['2026-10-22'])   # the drop sits inside both windows
-        if s in ('bpiq_sellout_check', 'bpiq_campaign_footprint'):
+        if s == 'bpiq_sellout_check':
             return {}
+        if s == 'bpiq_campaign_footprint':
+            # the campaign's own pages and coverage: the people it reached are countable
+            uniques = 1_400_000 if fake.small else 14_000_000
+            return {'press': [{'outlet': 'Vogue', 'title': 'the drop', 'url': 'https://www.vogue.com/x', 'date': '2026-10-22'}],
+                    'press_pieces_total': 1, 'site': {'brand_site_us_monthly_uniques': uniques, 'collection_page_share_pct': 7.0}}
         if s == 'pm_knowledge_research':
             return {'anchors': [], 'events': []}
         p = T.prim()
@@ -248,7 +253,7 @@ def test_valuation_end_to_end():
         try:
             third = S.synthesize(T.inputs(start='2026-10-21', end='2026-10-31', post_end='2026-11-01'), fake, underpinnings=S.MemoryUnderpinnings(), job_id='third')
             check('PM_TWIN_CHECK=0: the valuation runs as the research gave it',
-                  X.drivers_of(third)['audience_reached'] < 10_000 and 'consistency' not in (third.get('diagnostics') or {}))
+                  X.drivers_of(third)['audience_reached'] < 120_000 and 'consistency' not in (third.get('diagnostics') or {}))
         finally:
             os.environ.pop('PM_TWIN_CHECK', None)
     finally:
@@ -258,6 +263,95 @@ def test_valuation_end_to_end():
         P.STORE_FOR_TESTS = None
 
 
+def test_no_whole_audience_fallback():
+    print("no figure on the talent's whole audience")
+    calls = []
+
+    def fake(system, user, **kw):
+        s = kw.get('surface')
+        calls.append((s, json.loads(user)))
+        if s == 'bpiq_campaign_research':
+            return T.campaign(sold_out=False)
+        if s in ('bpiq_sellout_check', 'bpiq_campaign_footprint'):
+            return {}
+        if s == 'pm_knowledge_research':
+            return {'anchors': [], 'events': []}
+        return T.prim()
+
+    P.STORE_FOR_TESTS = P.MemoryStore()
+    os.environ['BPIQ_WHOLE_AUDIENCE_FALLBACK'] = '0'     # the shared fixtures module keeps the old fallback on for itself
+    try:
+        raised = None
+        try:
+            S.synthesize(T.inputs(), fake, underpinnings=S.MemoryUnderpinnings(), job_id='empty')
+        except S.NoCountableReach as e:
+            raised = e
+        check('a campaign with nothing countable after a second look does not ship a figure', raised is not None)
+        fp_calls = [c for c in calls if c[0] == 'bpiq_campaign_footprint']
+        check('the campaign coverage was looked for twice, the second time with the sharper ask',
+              len(fp_calls) == 2 and any('Second look' in h for h in (fp_calls[1][1].get('verified_facts') or [])))
+        check('no audience primitive was reasoned on the whole audience', not any(c[0] == 'bpiq_synthesis' for c in calls))
+        line = str(getattr(raised, 'client_line', '') or '')
+        check(f'the reader is asked plainly: {line[:90]!r}', line.startswith('We need to confirm which campaign to value for Jennifer Beals x Lululemon')
+              and 'placement or link' in line and '\u2014' not in line
+              and not any(w in line.lower() for w in ('synth', 'model', 'research', 'pipeline', 'footprint', 'fallback', 'estimat')))
+        os.environ['BPIQ_WHOLE_AUDIENCE_FALLBACK'] = '1'
+        p = S.synthesize(T.inputs(), fake, underpinnings=S.MemoryUnderpinnings(), job_id='old-way')
+        check('the old fallback is behind an env switch', isinstance(p, dict) and p.get('projected_audience_size'))
+    finally:
+        os.environ.pop('BPIQ_WHOLE_AUDIENCE_FALLBACK', None)
+        P.STORE_FOR_TESTS = None
+    # the projection follows the sample at the house ratio
+    fixed = S.hold_projection_weight({'audience_size': 375_429, 'projected_audience_size': 92_615_994}, 'anne')
+    check(f"a projection of 246.69 people per sample person is recomputed at 32.99 ({fixed['projected_audience_size']:,})",
+          abs(fixed['projected_audience_size'] / 375_429 - 32.99) < 0.01 and fixed['_projection_before_hold'] == 92_615_994)
+    same = S.hold_projection_weight({'audience_size': 3_847, 'projected_audience_size': 126_907}, 'ok')
+    check('a primitive at the house ratio is left alone', same['projected_audience_size'] == 126_907 and '_projection_before_hold' not in same)
+    # the job holds the order and asks
+    from prometheus import bpiq_job as BJ
+    posted, statuses = [], []
+
+    class FakeChat:
+        def _pm_thread_for_job(self, u, j):
+            return 't1'
+
+        def _pm_load_thread_or_active(self, u, t):
+            return []
+
+        def _pm_history_has_job_turn(self, h, k, j):
+            return False
+
+        def _pm_iso_now(self):
+            return '2026-11-20T18:00:00Z'
+
+        def _pm_save_thread_or_active(self, u, t, h):
+            posted.extend(h)
+
+        def _pm_bpiq_status_write(self, j, d):
+            statuses.append(d)
+
+    BJ._chat = lambda: FakeChat()
+    try:
+        text = BJ.hold_and_ask('job-h', T.inputs(), str(raised.client_line), username='seat1', refund=lambda u, i, j: True)
+        check('the plain question lands in the thread with the charge reversed',
+              posted and posted[0]['text'].startswith('We need to confirm which') and posted[0]['text'].endswith('has been reversed.')
+              and posted[0]['meta'].get('held_for_reader'))
+        check("the job's status carries the same line for the status lane (a client failure line, relayed)",
+              statuses and statuses[0]['status'] == 'error' and statuses[0]['error'] == text and statuses[0].get('held_for_reader'))
+        from prometheus import status_lane as SL
+        check('the status lane relays it as the reader-facing line', SL.client_failure_line(text) == text)
+        posted.clear(); statuses.clear()
+        BJ._job('job-h2')['user'] = 'seat1'          # prepare() leaves the seat on the job
+        BJ.fail(None, T.inputs(), 'job-h2', raised)
+        check('fail() on a held order goes the same way (the charge reversal is attempted; its outcome is said plainly)',
+              posted and posted[0]['text'].startswith('We need to confirm which') and 'reversed' in posted[0]['text'])
+        posted.clear()
+        BJ.fail(None, T.inputs(), 'job-h3', RuntimeError('internal'))
+        check('an ordinary error posts nothing to the reader', posted == [])
+    finally:
+        BJ._chat = lambda: __import__('prometheus.legacy.chat', fromlist=['x'])
+
+
 if __name__ == '__main__':
     test_ask_and_key()
     test_research_step_and_store()
@@ -265,5 +359,6 @@ if __name__ == '__main__':
     test_read_blocks_paths()
     test_insight_blocks_paths()
     test_valuation_end_to_end()
+    test_no_whole_audience_fallback()
     print(f"\n{'FAILED ' + str(FAIL) if FAIL else 'ALL PASSED'}")
     sys.exit(1 if FAIL else 0)

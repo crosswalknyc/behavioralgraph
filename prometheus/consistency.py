@@ -77,6 +77,9 @@ INDEX_KEY = RECORD_PREFIX + 'index.json'
 INDEX_CAP = 2000
 MAX_REBUILDS = 4
 RATE_FLOOR_PP = 0.02          # a rate's band is never narrower than this, so a tiny rate is not pinned
+HOUSE_WEIGHT = 32.99          # US people per sample person on every valuation (329.9M over the 10M)
+WEIGHT_TOLERANCE = 0.05       # a delivered file further off the house ratio than this is not an anchor
+TALENT_BASIS = 'talent audience in the window'
 
 _DEFAULTS = {
     'PM_TWIN_WINDOW_SHIFT_DAYS': 14.0,
@@ -266,6 +269,8 @@ def near_twin(ask: dict, candidates: list) -> Optional[dict]:
     for c in (candidates or []):
         if not isinstance(c, dict):
             continue
+        if c.get('eligible') is False:
+            continue
         if product and c.get('product') and str(c.get('product')) != product:
             continue
         if brand:
@@ -281,6 +286,43 @@ def near_twin(ask: dict, candidates: list) -> Optional[dict]:
         return None
     hits.sort(key=lambda h: h[0])          # first-held wins
     return hits[0][1]
+
+
+def containing_cap(ask: dict, candidates: list) -> Optional[dict]:
+    """The ceiling a longer valuation on the same pairing sets on a
+    sub-window (the Anne Hathaway x Shiseido whole-ambassadorship run,
+    September 2023 to September 2026, caps any eight-day slice of it):
+    among the eligible candidates whose window contains the ask's and
+    runs longer than the shift threshold, the smallest total and people.
+    None when none."""
+    if not enabled() or not isinstance(ask, dict):
+        return None
+    t = thresholds()
+    w0, w1 = _date((ask.get('window') or {}).get('start')), _date((ask.get('window') or {}).get('end'))
+    if not (w0 and w1):
+        return None
+    talent = ask.get('talent') or ask.get('property') or ask.get('subject')
+    brand = ask.get('brand')
+    best = None
+    for c in (candidates or []):
+        if not isinstance(c, dict) or c.get('eligible') is False:
+            continue
+        if brand and not same_pairing(talent, brand, c.get('property') or c.get('talent') or c.get('subject'), c.get('brand')):
+            continue
+        c0, c1 = _date((c.get('window') or {}).get('start')), _date((c.get('window') or {}).get('end'))
+        if not (c0 and c1) or not (c0 <= w0 and c1 >= w1):
+            continue
+        if ((c1 - c0).days - (w1 - w0).days) <= t['PM_TWIN_WINDOW_SHIFT_DAYS']:
+            continue                      # a near twin, not a containing deal
+        figs, drv = c.get('figures') or {}, c.get('drivers') or {}
+        total, people = _num(figs.get('total_usd')), _num(drv.get('audience_reached'))
+        if not total or total <= 0:
+            continue
+        cap = {'ref': c.get('ref'), 'subject': c.get('subject'), 'window': c.get('window'), 'as_of': c.get('as_of'),
+               'total_usd': total, 'people': int(people) if people else None}
+        if best is None or total < best['total_usd']:
+            best = cap
+    return best
 
 
 # ------------------------------------------------- drivers and figures
@@ -349,13 +391,37 @@ def anchor_from_payload(payload: dict, ref: str = '', as_of: str = '') -> Option
         talent = qv
     brand = str(p.get('brand_partner') or '')
     subject = str(p.get('project_name') or f"{talent} x {brand}")
+    eligible, why = anchor_eligibility(p)
     return {
         'id': hashlib.sha1(f"{ref}|{p.get('created_at') or ''}|{subject}".encode()).hexdigest()[:12],
         'product': 'valuation', 'subject': subject, 'property': talent, 'talent': talent, 'brand': brand,
         'window': {'start': str(p.get('start_date') or '')[:10], 'end': str(p.get('end_date') or '')[:10]},
         'as_of': str(as_of or p.get('created_at') or '')[:19],
         'drivers': drivers_of(p), 'figures': figures_of(p), 'ref': str(ref or ''),
+        'eligible': eligible, 'ineligible_why': '' if eligible else why,
     }
+
+
+def anchor_eligibility(payload: dict) -> tuple:
+    """(eligible, why). A delivered valuation anchors a later one only
+    when it valued the people the campaign reached at the house
+    projection. The Anne Hathaway x Shiseido September 1 to 8 run
+    (2026-11-20) valued the talent's whole profile audience for an
+    eight-day campaign at 246.69 US people per sample person against the
+    house 32.99; the two later runs on the pairing are on the designed
+    basis. A file on the talent's whole audience, or off the house
+    ratio, is never the anchor (its figures still cap nothing and bind
+    nothing)."""
+    p = payload if isinstance(payload, dict) else {}
+    n, people = _num(p.get('audience_size')), _num(p.get('projected_audience_size'))
+    if n and people and n > 0:
+        ratio = people / n
+        if abs(ratio / HOUSE_WEIGHT - 1.0) > WEIGHT_TOLERANCE:
+            return False, f'projection {ratio:.2f} US people per sample person against the house {HOUSE_WEIGHT}'
+    camp = p.get('campaign') if isinstance(p.get('campaign'), dict) else {}
+    if str(camp.get('audience_basis') or '').strip().lower().startswith('talent audience'):
+        return False, "valued the talent's own audience, not the people the campaign reached"
+    return True, ''
 
 
 def anchor_from_entry(entry: dict, subject: str = '') -> Optional[dict]:
@@ -792,11 +858,68 @@ def _attach(payload: dict, rec: dict, line: str, ship: bool) -> dict:
     diag = payload.setdefault('diagnostics', {})
     diag['consistency'] = {k: rec.get(k) for k in ('id', 'verdict', 'anchor', 'window', 'changed_windows', 'event',
                                                    'drivers_before', 'drivers_after', 'figures_before', 'figures_after',
-                                                   'line', 'line_shipped', 'bands')}
+                                                   'line', 'line_shipped', 'bands', 'cap', 'passed_over')}
     camp = payload.get('campaign')
     if ship and line and isinstance(camp, dict):
         camp['consistency_line'] = line
     return payload
+
+
+def _cap_step(payload: dict, rec: dict, cap: Optional[dict], rebuild: Optional[Callable], salt: str) -> tuple:
+    """(payload, record). A sub-window never exceeds the whole deal: when
+    a longer valuation on the pairing contains this window, the total
+    and the people reached are held under its figures (a salted margin
+    inside), the people reached carrying the move and the money
+    recomputed by the builder. Applies after a hold or a lift alike."""
+    if not cap or not isinstance(payload, dict):
+        return payload, rec
+    figs, drv = figures_of(payload), drivers_of(payload)
+    total, people = _num(figs.get('total_usd')) or 0.0, _num(drv.get('audience_reached')) or 0.0
+    cap_total, cap_people = float(cap.get('total_usd') or 0), float(cap.get('people') or 0)
+    over_total = cap_total > 0 and total > cap_total
+    over_people = cap_people > 0 and people > cap_people
+    if not (over_total or over_people):
+        rec['cap'] = dict(cap, applied=False)
+        return payload, rec
+    if not callable(rebuild) or people <= 0:
+        rec['cap'] = dict(cap, applied=False, reason='no rebuild available')
+        return payload, rec
+    margin = 0.90 + 0.07 * _unit(salt, 'twin-cap')
+    f = 1.0
+    if over_total:
+        f = min(f, cap_total * margin / total)
+    if over_people:
+        f = min(f, cap_people * margin / people)
+    held, plan = payload, dict(rec.get('plan') or {})
+    cur_people = people
+    for i in range(MAX_REBUILDS):
+        plan['audience_reached'] = _messy_int(salt, ('cap', i), people * f)
+        plan['_reach_now'] = int(cur_people)
+        cand = rebuild(plan)
+        if not isinstance(cand, dict):
+            break
+        held = cand
+        t2, p2 = _num(figures_of(cand).get('total_usd')) or 0.0, _num(drivers_of(cand).get('audience_reached')) or 0.0
+        cur_people = p2 or cur_people
+        ok_t = not cap_total or t2 <= cap_total
+        ok_p = not cap_people or p2 <= cap_people
+        if ok_t and ok_p:
+            break
+        # the money is close to linear in the people reached: the next
+        # step scales by what is still over, inside the margin
+        step = 1.0
+        if cap_total and t2 > cap_total:
+            step = min(step, cap_total * margin / t2)
+        if cap_people and p2 > cap_people:
+            step = min(step, cap_people * margin / p2)
+        f *= min(step, 0.98)
+    rec['cap'] = dict(cap, applied=True, total_before_usd=round(total, 2), people_before=int(people),
+                      total_after_usd=figures_of(held).get('total_usd'), people_after=drivers_of(held).get('audience_reached'))
+    rec['drivers_after'], rec['figures_after'] = drivers_of(held), figures_of(held)
+    rec['verdict'] = (rec.get('verdict') or 'inside') + '+capped'
+    print(f"[pm-consistency] held under the whole deal on the pairing ({cap.get('subject')} {((cap.get('window') or {}).get('start'))} to "
+          f"{((cap.get('window') or {}).get('end'))}): total ${total:,.2f} -> ${rec['cap']['total_after_usd'] or 0:,.2f}")
+    return held, rec
 
 
 def apply_valuation(payload: dict, inputs: dict, *, campaign: Optional[dict] = None,
@@ -804,11 +927,12 @@ def apply_valuation(payload: dict, inputs: dict, *, campaign: Optional[dict] = N
                     research: Optional[Callable] = None, salt: str = '', store=None,
                     self_ref: str = '') -> tuple:
     """(payload, record). The valuation held to its near twin, or lifted
-    by a dated event, or left as built. `rebuild(plan)` returns the
-    valuation rebuilt with the held drivers (the builder recomputes the
-    money); `research(changed_windows)` returns dated events found
-    outside the run's own facts. Never raises; the payload is returned
-    as given on any trouble."""
+    by a dated event, or left as built; then held under any longer
+    valuation on the pairing whose window contains this one.
+    `rebuild(plan)` returns the valuation rebuilt with the held drivers
+    (the builder recomputes the money); `research(changed_windows)`
+    returns dated events found outside the run's own facts. Never
+    raises; the payload is returned as given on any trouble."""
     if not enabled() or not isinstance(payload, dict):
         return payload, {}
     try:
@@ -819,104 +943,120 @@ def apply_valuation(payload: dict, inputs: dict, *, campaign: Optional[dict] = N
         ask = {'talent': talent, 'brand': brand, 'product': 'valuation', 'window': window}
         cands = candidates if candidates is not None else valuation_candidates(talent, brand, exclude_ref=self_ref)
         anchor = near_twin(ask, cands)
-        if not anchor:
+        cap = containing_cap(ask, cands)
+        if not anchor and not cap:
             return payload, {'verdict': 'no_twin'}
         salt = salt or f"twin|{_pieces.pair_key(talent, brand)}|{window['start']}|{window['end']}"
         fresh_d, fresh_f = drivers_of(payload), figures_of(payload)
-        changed = changed_windows(anchor.get('window') or {}, window)
         rec = {
-            'id': hashlib.sha1(f"{anchor.get('id')}|{window['start']}|{window['end']}|{payload.get('created_at')}".encode()).hexdigest()[:12],
+            'id': hashlib.sha1(f"{(anchor or cap or {}).get('id') or (cap or {}).get('ref')}|{window['start']}|{window['end']}|{payload.get('created_at')}".encode()).hexdigest()[:12],
             'product': 'valuation', 'subject': str(payload.get('project_name') or f"{talent} x {brand}"),
-            'pair_key': _pieces.pair_key(talent, brand), 'window': window, 'changed_windows': changed,
-            'anchor': {'id': anchor.get('id'), 'ref': anchor.get('ref'), 'subject': anchor.get('subject'),
-                       'window': anchor.get('window'), 'as_of': anchor.get('as_of'), 'why': anchor.get('why'),
-                       'drivers': anchor.get('drivers'), 'figures': anchor.get('figures')},
+            'pair_key': _pieces.pair_key(talent, brand), 'window': window,
             'drivers_before': fresh_d, 'figures_before': fresh_f, 'bands': bands(),
+            'passed_over': [{'ref': c.get('ref'), 'why': c.get('ineligible_why')} for c in (cands or [])
+                            if isinstance(c, dict) and c.get('eligible') is False],
         }
-        print(f"[pm-consistency] near twin of {rec['subject']} ({window['start']} to {window['end']}): "
-              f"{anchor.get('subject')} {((anchor.get('window') or {}).get('start'))} to "
-              f"{((anchor.get('window') or {}).get('end'))} ({anchor.get('why')})")
-        # the override: a dated event inside the part of the window that changed
-        event = None
-        if changed:
-            event = event_in_changed_window(changed, dated_facts_of(campaign))
-            if event is None and callable(research):
-                try:
-                    found = research(changed) or []
-                    event = event_in_changed_window(changed, found)
-                except Exception as e:
-                    print(f"[pm-consistency] research step skipped: {type(e).__name__}: {e}")
-        if event:
-            direction = 'up' if fresh_d.get('audience_reached', 0) >= (anchor.get('drivers') or {}).get('audience_reached', 0) else 'down'
-            line = lifted_line(event, direction)
-            rec.update(verdict='lifted', event=event, drivers_after=fresh_d, figures_after=fresh_f,
-                       line=line, line_shipped=True)
-            write_record(rec, store)
-            print(f"[pm-consistency] band lifted: {line}")
-            return _attach(payload, rec, line, True), rec
-        plan, moves = plan_holds(fresh_d, anchor.get('drivers') or {}, salt)
-        inside, worst = figures_inside(fresh_f, anchor.get('figures') or {})
-        if not plan and inside:
-            rec.update(verdict='inside', event=None, drivers_after=fresh_d, figures_after=fresh_f, line='', line_shipped=False)
-            write_record(rec, store)
-            return _attach(payload, rec, '', False), rec
-        if not callable(rebuild):
-            rec.update(verdict='held_unapplied', moves=moves, worst=worst, drivers_after=fresh_d, figures_after=fresh_f,
-                       line='', line_shipped=False, reason='no rebuild available')
-            write_record(rec, store)
-            return _attach(payload, rec, '', False), rec
-        held = payload
-        best, best_dev = None, None
-        plan = dict(plan)
-        anchor_reach = _num((anchor.get('drivers') or {}).get('audience_reached')) or 0.0
-        i = 0
-        cand = payload
-        for i in range(MAX_REBUILDS):
-            plan['_reach_now'] = int(_num(drivers_of(cand).get('audience_reached')) or 0)   # the people the order share applies to
-            cand = rebuild(plan)
-            if not isinstance(cand, dict):
-                break
-            ok, worst = figures_inside(figures_of(cand), anchor.get('figures') or {})
-            dev = (worst or {}).get('ratio', 1.0)
-            dev = abs(float(dev) - 1.0) if dev is not None else 0.0
-            if best is None or dev < best_dev:
-                best, best_dev = cand, dev
-            if ok:
-                break
-            # a component still outside its band moves its own lever toward
-            # the anchor's level (the money is always recomputed, never
-            # edited); the total's residual then rides the people reached,
-            # inside their own band
-            moved = _component_levers(plan, cand, anchor, salt, i)
-            if anchor_reach <= 0 or worst is None:
-                if not moved:
-                    break
-                continue
-            total_f, total_a = _num(figures_of(cand).get('total_usd')), _num((anchor.get('figures') or {}).get('total_usd'))
-            if not moved and total_f and total_a and abs(total_f / total_a - 1.0) > band('value'):
-                cur_reach = float(drivers_of(cand).get('audience_reached') or 0)
-                if cur_reach <= 0:
-                    break
-                target = cur_reach * total_a / total_f
-                lo, hi = anchor_reach * (1.0 - band('audience')), anchor_reach * (1.0 + band('audience'))
-                target = min(max(target, lo * 1.02), hi * 0.98)
-                plan['audience_reached'] = _messy_int(salt, ('reach', i), target)
-            elif not moved:
-                break
-        held = best if best is not None else payload
-        held_d, held_f = drivers_of(held), figures_of(held)
-        ship = say_held_to_reader()
-        line = held_line()
-        rec.update(verdict='held', event=None, moves=moves, plan=plan, drivers_after=held_d, figures_after=held_f,
-                   line=line, line_shipped=bool(ship), rebuilds=min(i + 1, MAX_REBUILDS) if moves or not inside else 0)
+        out = payload
+        if anchor:
+            changed = changed_windows(anchor.get('window') or {}, window)
+            rec['changed_windows'] = changed
+            rec['anchor'] = {'id': anchor.get('id'), 'ref': anchor.get('ref'), 'subject': anchor.get('subject'),
+                             'window': anchor.get('window'), 'as_of': anchor.get('as_of'), 'why': anchor.get('why'),
+                             'drivers': anchor.get('drivers'), 'figures': anchor.get('figures')}
+            print(f"[pm-consistency] near twin of {rec['subject']} ({window['start']} to {window['end']}): "
+                  f"{anchor.get('subject')} {((anchor.get('window') or {}).get('start'))} to "
+                  f"{((anchor.get('window') or {}).get('end'))} ({anchor.get('why')})")
+            out, rec = _twin_step(payload, rec, anchor, changed, campaign, rebuild, research, salt)
+        else:
+            rec.update(verdict='no_twin', anchor=None, changed_windows=[], event=None, line='', line_shipped=False,
+                       drivers_after=fresh_d, figures_after=fresh_f)
+        out, rec = _cap_step(out, rec, cap, rebuild, salt)
+        if rec.get('verdict') == 'no_twin' and not (rec.get('cap') or {}).get('applied'):
+            return out, {'verdict': 'no_twin'}
         write_record(rec, store)
-        print(f"[pm-consistency] held to the earlier run: people {fresh_d.get('audience_reached'):,} -> "
-              f"{held_d.get('audience_reached'):,}; total ${fresh_f.get('total_usd') or 0:,.2f} -> "
-              f"${held_f.get('total_usd') or 0:,.2f} (anchor ${(anchor.get('figures') or {}).get('total_usd') or 0:,.2f})")
-        return _attach(held, rec, line, ship), rec
+        ship = bool(rec.get('line_shipped')) and bool(rec.get('line'))
+        return _attach(out, rec, rec.get('line') or '', ship), rec
     except Exception as e:
         print(f"[pm-consistency] check skipped: {type(e).__name__}: {e}")
         return payload, {}
+
+
+def _twin_step(payload: dict, rec: dict, anchor: dict, changed: list, campaign, rebuild, research, salt: str) -> tuple:
+    """The near-twin verdict: lifted by a dated event in the changed part
+    of the window, inside the band, or held (the drivers planned, the
+    money rebuilt, the components' own levers, the residual on the
+    people reached)."""
+    fresh_d, fresh_f = rec['drivers_before'], rec['figures_before']
+    event = None
+    if changed:
+        event = event_in_changed_window(changed, dated_facts_of(campaign))
+        if event is None and callable(research):
+            try:
+                found = research(changed) or []
+                event = event_in_changed_window(changed, found)
+            except Exception as e:
+                print(f"[pm-consistency] research step skipped: {type(e).__name__}: {e}")
+    if event:
+        direction = 'up' if fresh_d.get('audience_reached', 0) >= (anchor.get('drivers') or {}).get('audience_reached', 0) else 'down'
+        line = lifted_line(event, direction)
+        rec.update(verdict='lifted', event=event, drivers_after=fresh_d, figures_after=fresh_f, line=line, line_shipped=True)
+        print(f"[pm-consistency] band lifted: {line}")
+        return payload, rec
+    plan, moves = plan_holds(fresh_d, anchor.get('drivers') or {}, salt)
+    inside, worst = figures_inside(fresh_f, anchor.get('figures') or {})
+    if not plan and inside:
+        rec.update(verdict='inside', event=None, drivers_after=fresh_d, figures_after=fresh_f, line='', line_shipped=False)
+        return payload, rec
+    if not callable(rebuild):
+        rec.update(verdict='held_unapplied', moves=moves, worst=worst, drivers_after=fresh_d, figures_after=fresh_f,
+                   line='', line_shipped=False, reason='no rebuild available')
+        return payload, rec
+    best, best_dev = None, None
+    plan = dict(plan)
+    anchor_reach = _num((anchor.get('drivers') or {}).get('audience_reached')) or 0.0
+    i = 0
+    cand = payload
+    for i in range(MAX_REBUILDS):
+        plan['_reach_now'] = int(_num(drivers_of(cand).get('audience_reached')) or 0)   # the people the order share applies to
+        cand = rebuild(plan)
+        if not isinstance(cand, dict):
+            break
+        ok, worst = figures_inside(figures_of(cand), anchor.get('figures') or {})
+        dev = (worst or {}).get('ratio', 1.0)
+        dev = abs(float(dev) - 1.0) if dev is not None else 0.0
+        if best is None or dev < best_dev:
+            best, best_dev = cand, dev
+        if ok:
+            break
+        # a component still outside its band moves its own lever toward
+        # the anchor's level (the money is always recomputed, never
+        # edited); the total's residual then rides the people reached,
+        # inside their own band
+        moved = _component_levers(plan, cand, anchor, salt, i)
+        if anchor_reach <= 0 or worst is None:
+            if not moved:
+                break
+            continue
+        total_f, total_a = _num(figures_of(cand).get('total_usd')), _num((anchor.get('figures') or {}).get('total_usd'))
+        if not moved and total_f and total_a and abs(total_f / total_a - 1.0) > band('value'):
+            cur_reach = float(drivers_of(cand).get('audience_reached') or 0)
+            if cur_reach <= 0:
+                break
+            target = cur_reach * total_a / total_f
+            lo, hi = anchor_reach * (1.0 - band('audience')), anchor_reach * (1.0 + band('audience'))
+            target = min(max(target, lo * 1.02), hi * 0.98)
+            plan['audience_reached'] = _messy_int(salt, ('reach', i), target)
+        elif not moved:
+            break
+    held = best if best is not None else payload
+    held_d, held_f = drivers_of(held), figures_of(held)
+    ship = say_held_to_reader()
+    rec.update(verdict='held', event=None, moves=moves, plan=plan, drivers_after=held_d, figures_after=held_f,
+               line=held_line(), line_shipped=bool(ship), rebuilds=min(i + 1, MAX_REBUILDS))
+    print(f"[pm-consistency] held to the earlier run: people {fresh_d.get('audience_reached'):,} -> "
+          f"{held_d.get('audience_reached'):,}; total ${fresh_f.get('total_usd') or 0:,.2f} -> "
+          f"${held_f.get('total_usd') or 0:,.2f} (anchor ${(anchor.get('figures') or {}).get('total_usd') or 0:,.2f})")
+    return held, rec
 
 
 # ------------------------------------------------- the generated read
@@ -1021,5 +1161,5 @@ __all__ = ['enabled', 'say_held_to_reader', 'thresholds', 'band', 'bands', 'same
            'windows_near', 'changed_windows', 'near_twin', 'drivers_of', 'figures_of', 'anchor_from_payload',
            'anchor_from_entry', 'held_value', 'plan_holds', 'figures_inside', 'press_clusters', 'dated_facts_of',
            'event_in_changed_window', 'lifted_line', 'held_line', 'write_record', 'lookup', 'valuation_candidates',
-           'apply_valuation', 'near_twin_entry', 'hold_read_metrics', 'twin_block', 'MemoryRecords',
+           'apply_valuation', 'containing_cap', 'anchor_eligibility', 'near_twin_entry', 'hold_read_metrics', 'twin_block', 'MemoryRecords',
            'HELD_LINE', 'EVENT_KINDS', 'RECORD_PREFIX', 'ENV_CHECK', 'ENV_SAY_HELD']

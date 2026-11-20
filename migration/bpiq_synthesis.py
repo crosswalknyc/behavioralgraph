@@ -137,6 +137,63 @@ BASKET_RANGE = (1.2, 1.6)          # pieces per order on a collection drop
 
 RUNS_PREFIX = "system/pm_bpiq_runs/"
 UNDERPINNINGS_PREFIX = "system/bpiq_underpinnings/"
+# A campaign valuation never values the talent's whole profile audience
+# as the people the campaign reached (Jenna 2026-11-20, the Anne Hathaway
+# x Shiseido September 1 to 8 run: an empty campaign lookup fell back to
+# her 92.6M US audience for an eight-day campaign). With nothing
+# countable after a second look the order is held and the reader is
+# asked plainly; nothing ships on the whole audience. Env kill switch
+# BPIQ_WHOLE_AUDIENCE_FALLBACK=1 restores the old fallback.
+WEIGHT_TOLERANCE = 0.05
+HOLD_LINE_PREFIX = "We need to confirm which "
+
+
+class NoCountableReach(RuntimeError):
+    """The campaign's reach could not be counted and the valuation will
+    not ship on the talent's whole audience. `client_line` is the plain
+    question the reader gets; the charge is reversed by the job."""
+
+    def __init__(self, inputs: dict):
+        d = inputs or {}
+        talent = str(d.get("qualifier") or "the talent").strip()
+        brand = str(d.get("brand_partner") or "the brand").strip()
+        start, end = str(d.get("event_start") or "")[:10], str(d.get("event_end") or "")[:10]
+        when = f" between {start} and {end}" if start and end else ""
+        self.client_line = (
+            f"{HOLD_LINE_PREFIX}campaign to value for {talent} x {brand}: the window as given{when} carries no "
+            f"campaign pages, coverage, posts or event we can count, so no figure was produced. Reply with the "
+            f"campaign dates and one placement or link and the valuation runs from there.")
+        super().__init__(self.client_line)
+
+
+def whole_audience_fallback_allowed() -> bool:
+    import os as _os
+    return _os.environ.get("BPIQ_WHOLE_AUDIENCE_FALLBACK", "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def hold_projection_weight(prim: dict, tag: str = "") -> dict:
+    """The projection follows the sample count at the house ratio (US
+    people per sample person), every time (Jenna 2026-11-20: the Anne
+    Hathaway run projected 246.69 per sample person against 32.99 on
+    every other valuation). A primitive further off than the tolerance
+    is recomputed from its sample; the move is noted on the primitive
+    for the record. Never raises."""
+    try:
+        p = dict(prim or {})
+        n = float(p.get("audience_size") or 0)
+        people = float(p.get("projected_audience_size") or 0)
+        if n <= 0:
+            return p
+        if people <= 0 or abs(people / n / PANEL_WEIGHT_DEFAULT - 1.0) > WEIGHT_TOLERANCE:
+            fixed = _messy(("weight", tag, n), n * PANEL_WEIGHT_DEFAULT)
+            print(f"[bpiq-synth] projection held to the house ratio: {int(people):,} -> {fixed:,} "
+                  f"US people on {int(n):,} sample people ({(people / n) if people else 0:.2f} -> {PANEL_WEIGHT_DEFAULT})")
+            p["_projection_before_hold"] = int(people)
+            p["projected_audience_size"] = fixed
+        return p
+    except Exception as e:
+        print(f"[bpiq-synth] projection weight check skipped: {e}")
+        return dict(prim or {})
 RUN_STALE_AFTER_S = 45 * 60        # an unfinished claim older than this is reclaimable
 LIVE_STATUSES = ("queued", "running", "done")
 
@@ -2404,6 +2461,37 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
                 campaign["footprint"] = _fp_m
         except Exception as e:
             print(f"[bpiq-synth] pieces registry skipped: {e}")
+        # Nothing countable (Jenna 2026-11-20): one more look at the campaign's
+        # dated coverage before anything else, with the remembered pieces;
+        # still nothing, and the order is held with a plain question. The
+        # talent's whole audience is never the campaign's reach.
+        from migration import bpiq_campaign as _camp0
+        if not _camp0.has_footprint(campaign.get("footprint") or {}):
+            try:
+                _again = research_footprint(dict(inputs, research_hints=list(inputs.get("research_hints") or []) + [
+                    "Second look: list EVERY dated piece of coverage, review, trade story, syndication and pickup about this "
+                    "campaign in and around the window with its date and outlet, the brand's own campaign pages and posts, "
+                    "and any launch event. A piece dated inside the window counts even when it is small."]),
+                    claude_json, tools=tools)
+                if _camp0.has_footprint(_again):
+                    campaign["footprint"] = _again
+                    print(f"[bpiq-synth] second look found {len(_again.get('press') or [])} press pieces, "
+                          f"{len(_again.get('events') or [])} events")
+                try:
+                    from prometheus import pieces as _pcs2
+                    _fp_m2, _pn2 = _pcs2.merge_footprint(campaign.get("footprint") or {},
+                                                         (inputs.get("qualifier"), inputs.get("brand_partner")),
+                                                         windows["event"], store=_twin_store(underpinnings), run_key=key)
+                    if _pn2:
+                        campaign["footprint"] = _fp_m2
+                except Exception as e:
+                    print(f"[bpiq-synth] pieces registry (second look) skipped: {e}")
+            except Exception as e:
+                print(f"[bpiq-synth] second look skipped: {e}")
+        if not _camp0.has_footprint(campaign.get("footprint") or {}) and not whole_audience_fallback_allowed():
+            print("[bpiq-synth] nothing countable for the campaign's reach after a second look; the order is held, "
+                  "no figure on the talent's whole audience")
+            raise NoCountableReach(inputs)
     # Corpus catalog (2026-10-05): every figure already published on the
     # qualifier (its Profile IQ size, earlier partnership reads, journeys,
     # chat answers) and on the brand partner rides the research prompt as
@@ -2528,6 +2616,8 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
                 print(f"[bpiq-synth] catalog hold skipped: {e}")
         if not campaign.get("category") and prim.get("category"):
             campaign["category"] = str(prim.get("category") or "").strip().upper()
+    # the projection follows the sample at the house ratio, every time
+    prim = hold_projection_weight(prim, key)
     payload = build_payload(inputs, prim, created_by=created_by, campaign=campaign)
     hold_rec = {}
     # The same pairing and the same window as a figure the reader already
@@ -2774,6 +2864,13 @@ def _rebuild_held(inputs: dict, prim: dict, campaign: Optional[dict], plan: dict
         base_people = reach_now or _fnum(plan.get("_reach_now")) or _fnum(prim2.get("projected_audience_size")) or 0
         if base_people:
             camp2["_orders_target"] = max(1, int(round(float(base_people) * share / 100.0)))
+    if reach_now and plan.get("order_share_pct") is None and cv is not None:
+        # the people moved and the order share did not: the orders follow
+        # the share the research gave on the held people (a collection's
+        # inventory read is not a count of this audience's orders)
+        share0 = _fnum(cv.get("post_users_pct"))
+        if share0:
+            camp2["_orders_target"] = max(1, int(round(float(reach_now) * share0 / 100.0)))
     if plan.get("aov_usd") is not None:
         camp2["_aov_held_usd"] = round(float(plan["aov_usd"]), 2)
     if plan.get("drift_pp") is not None:

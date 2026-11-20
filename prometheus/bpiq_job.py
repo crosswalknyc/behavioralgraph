@@ -167,6 +167,7 @@ def prepare(job_id, username, inputs, extras, host, status_write):
     from migration.bpiq_synthesis import (registry_for, claim_run, canonical_inputs,
                                           catalog_lookup, touch_run)
     try:
+        _job(job_id)['user'] = str(username or '')        # for the line that holds an order (hold_and_ask)
         _charge = (extras or {}).get('bpiq_charge')
         if isinstance(_charge, dict) and _charge:
             _job(job_id)['charge'] = dict(_charge)       # for the line that hands the valuation over
@@ -228,13 +229,68 @@ def settle(reg, inputs, job_id, username, bare_key, payload):
 
 
 def fail(reg, inputs, job_id, err):
-    """The claim is marked failed so the next ask with this key runs."""
+    """The claim is marked failed so the next ask with this key runs. An
+    order held for the reader (no countable reach, Jenna 2026-11-20)
+    gets its plain question in the thread and its charge reversed."""
     try:
         if reg is not None:
             from migration.bpiq_synthesis import fail_run
             fail_run(reg, inputs, job_id, reason=str(err)[:160])
     except Exception:
         pass
+    line = str(getattr(err, 'client_line', '') or '').strip()
+    if line:
+        hold_and_ask(job_id, inputs, line)
+
+
+def hold_and_ask(job_id, inputs, line, *, username=None, refund=None, status_write=None):
+    """The order is held, not valued (migration.bpiq_synthesis.NoCountableReach):
+    the reader is asked plainly in the thread for the campaign dates and
+    one placement or link, the charge is reversed, and the job's status
+    carries the same line for the status lane. No figure, no file, no
+    deck. Returns the line as posted; '' when nothing could be posted.
+    Never raises."""
+    try:
+        c = _chat()
+        rec = _job(job_id)
+        uname = str(username or rec.get('user') or '').strip()
+        ok = None
+        try:
+            if callable(refund):
+                ok = bool(refund(uname, inputs, job_id))
+            else:
+                from prometheus import bpiq_wizard as _wiz
+                ok = bool(_wiz._refund_seat({'username': uname}, uname, inputs, job_id, None))
+        except Exception:
+            ok = False
+        text = line.rstrip() + (' The charge for this order has been reversed.' if ok
+                                else ' The charge for this order is being reversed.')
+        try:
+            from prometheus import guards as _g
+            text = _g.scrub_method_language(text) or text
+        except Exception:
+            pass
+        try:
+            (status_write or c._pm_bpiq_status_write)(job_id, {
+                'job_id': job_id, 'user': uname, 'status': 'error', 'error': text, 'held_for_reader': True,
+                'subject': f"{(inputs or {}).get('qualifier')} x {(inputs or {}).get('brand_partner')}",
+                'finished_at': time.time()})
+        except Exception:
+            traceback.print_exc()
+        if not uname:
+            return text
+        tid = c._pm_thread_for_job(uname, job_id)
+        history = c._pm_load_thread_or_active(uname, tid)
+        if c._pm_history_has_job_turn(history, 'bpiq_job_id', job_id):
+            return text
+        history.append({'role': 'agent', 'text': text, 'ts': c._pm_iso_now(),
+                        'meta': {'bpiq_job_id': job_id, 'kind': 'bpiq_hold', 'held_for_reader': True}})
+        c._pm_save_thread_or_active(uname, tid, history)
+        print(f"[bpiq-job {job_id}] held for the reader: {text[:120]}")
+        return text
+    except Exception:
+        traceback.print_exc()
+        return ''
 
 
 # ---------------------------------------------------------------------------

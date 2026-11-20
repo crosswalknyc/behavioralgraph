@@ -34,6 +34,9 @@ from pathlib import Path
 
 os.environ.setdefault('CORPUS_CATALOG', '0')
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
+# these fixtures carry no campaign footprint; the whole-audience fallback they were written against stays on
+# here (a new run with nothing countable is held instead: test_pm_knowledge_layer, Jenna 2026-11-20)
+os.environ.setdefault('BPIQ_WHOLE_AUDIENCE_FALLBACK', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.pop('BPIQ_CORPUS_ANCHORS', None)
 

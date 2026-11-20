@@ -79,6 +79,35 @@ ANNE_FIRST = {
                   'attributable_to_partnership': 17_700_375.89, 'rates': {'conv_value_per_user': 263.6}},
 }
 
+# The second (the whole ambassadorship, September 2023 to September 2026)
+# and third (August 27 to September 8, 2026) valuations delivered on the
+# pairing, on the designed basis: the people the campaign reached at the
+# house projection.
+ANNE_SECOND = {
+    'project_name': 'Anne Hathaway x Shiseido', 'qualifier_value': ['Anne Hathaway'], 'brand_partner': 'Shiseido',
+    'start_date': '2023-09-06', 'end_date': '2026-09-08', 'created_at': '2026-11-20T06:11:12Z',
+    'projected_audience_size': 340_475, 'audience_size': 10_321,
+    'totals': {'pre_users_projected': 100_912, 'post_users_projected': 162_865, 'audience_pen_pre_pct': 29.64, 'audience_pen_post_pct': 47.84},
+    'conversions': {'enabled': True, 'pre_users_projected': 10_853, 'post_users_projected': 13_888},
+    'control_group': {'enabled': True, 'incremental_lift_pp': 16.77, 'control_delta_pp': 1.42, 'background_drift_pp': 1.42},
+    'campaign': {'audience_basis': 'campaign reach', 'aov_usd': 227.56, 'reach': {'reach_us': 340_475, 'press_pieces': 15, 'events': 1}},
+    'valuation': {'total_brand_value': 6_977_878.28, 'brand_engagement_value': 407_162.5, 'earned_media_value': 3_124_847.5,
+                  'brand_lift_value': 285_515.0, 'conversion_value': 3_160_353.28, 'incremental_users': 57_103,
+                  'attributable_to_partnership': 2_073_609.62, 'rates': {'conv_value_per_user': 227.56}},
+}
+ANNE_THIRD = {
+    'project_name': 'Anne Hathaway x Shiseido', 'qualifier_value': ['Anne Hathaway'], 'brand_partner': 'Shiseido',
+    'start_date': '2026-08-27', 'end_date': '2026-09-08', 'created_at': '2026-11-20T06:37:44Z',
+    'projected_audience_size': 53_727, 'audience_size': 1_629,
+    'totals': {'pre_users_projected': 12_467, 'post_users_projected': 53_166, 'audience_pen_pre_pct': 23.2, 'audience_pen_post_pct': 98.96},
+    'conversions': {'enabled': True, 'pre_users_projected': 2_342, 'post_users_projected': 3_694},
+    'control_group': {'enabled': True, 'incremental_lift_pp': 74.41, 'control_delta_pp': 1.35, 'background_drift_pp': 1.35},
+    'campaign': {'audience_basis': 'campaign reach', 'aov_usd': 218.1, 'reach': {'reach_us': 53_727, 'press_pieces': 1, 'events': 0}},
+    'valuation': {'total_brand_value': 1_994_140.4, 'brand_engagement_value': 132_915.0, 'earned_media_value': 855_699.0,
+                  'brand_lift_value': 199_865.0, 'conversion_value': 805_661.4, 'incremental_users': 39_973,
+                  'attributable_to_partnership': 1_005_526.4, 'rates': {'conv_value_per_user': 218.1}},
+}
+
 # The first valuation delivered on Leatherman x Matchbox (September 29 to
 # November 13, 2026): five press pieces, 173,284 people reached.
 LEATHERMAN_FIRST = {
@@ -104,18 +133,20 @@ LEATHERMAN_PIECES_FIRST = [
 LEATHERMAN_PIECES_SECOND = [LEATHERMAN_PIECES_FIRST[3], LEATHERMAN_PIECES_FIRST[4]]
 
 
-def anne_inputs():
+def anne_inputs(start='2026-09-01', end='2026-09-08'):
     return {'qualifier': 'Anne Hathaway', 'brand_partner': 'Shiseido', 'campaign': 'Shiseido',
-            'event_start': '2026-08-27', 'event_end': '2026-09-08', 'post_start': '2026-08-27', 'post_end': '2026-10-08',
+            'event_start': start, 'event_end': end, 'post_start': start, 'post_end': '2026-10-08',
             'control_group': True, 'include_control': True, 'links': []}
 
 
 def anne_prim():
+    # a new September 1 to 8 order read far above the third run: the first
+    # run's own shares on 375,429 sample people at the house projection
     p = T.prim(seed=3)
-    p.update({'audience_size': 1_629, 'projected_audience_size': 53_727, 'category': 'BEAUTY',
-              'totals': {'pre_pen_pct': 23.2041, 'post_pen_pct': 98.9557},
-              'conversions': {'pre_users_pct': 4.3593, 'post_users_pct': 6.8757},
-              'gen_pop_drift_pp': 1.35})
+    p.update({'audience_size': 375_429, 'projected_audience_size': 12_385_403, 'category': 'BEAUTY',
+              'totals': {'pre_pen_pct': 3.41, 'post_pen_pct': 5.93},
+              'conversions': {'pre_users_pct': 0.0386, 'post_users_pct': 0.0447},
+              'gen_pop_drift_pp': 0.26})
     return p
 
 
@@ -127,7 +158,12 @@ def anne_campaign():
               'products': [{'name': 'Intensive SculptDefine Serum', 'type': 'serum', 'price_usd': 175.0, 'hero': True},
                            {'name': 'Vital Perfection Cream', 'type': 'cream', 'price_usd': 135.0, 'hero': False},
                            {'name': 'Vital Perfection Eye Cream', 'type': 'eye', 'price_usd': 115.0, 'hero': False}],
-              'footprint': {'press_pieces': 2, 'social_note': ''}})
+              # the campaign's own footprint: its pages and coverage, so the audience is the people it reached
+              'footprint': C.normalize_footprint({
+                  'press': [{'outlet': 'Beauty Packaging', 'title': 'Shiseido launches', 'url': 'https://www.beautypackaging.com/x', 'date': '2026-09-03'},
+                            {'outlet': 'Marie Claire', 'title': 'wear test', 'url': 'https://www.marieclaire.com/y', 'date': '2026-09-24'}],
+                  'press_pieces_total': 2,
+                  'site': {'brand_site_us_monthly_uniques': 9_800_000, 'collection_page_share_pct': 6.4}})})
     return c
 
 
@@ -236,6 +272,12 @@ def test_anchor_shapes():
           and abs(d['order_share_pct'] - 0.045) < 0.001 and d['aov_usd'] == 263.6 and d['drift_pp'] == 0.26)
     check('and the figures: the total and its four parts', a['figures']['total_usd'] == 102_145_967.0
           and a['figures']['conversion_usd'] == 10_924_902.0 and a['figures']['incremental_people'] == 2_091_965)
+    check("the September 1 run is not an anchor: it valued the talent's whole audience at 246.69 people per sample person",
+          a['eligible'] is False and '246.69' in a['ineligible_why'])
+    check('the third run, on the people the campaign reached at the house ratio, is', X.anchor_from_payload(ANNE_THIRD, ref='third')['eligible'] is True)
+    check('and so is the whole-ambassadorship run', X.anchor_from_payload(ANNE_SECOND, ref='second')['eligible'] is True)
+    off = X.anchor_from_payload(dict(ANNE_THIRD, campaign={'audience_basis': 'talent audience in the window'}), ref='x')
+    check("a file that says it valued the talent's own audience is not an anchor whatever its ratio", off['eligible'] is False)
     b = X.anchor_from_payload(LEATHERMAN_FIRST, ref='old')
     check('pieces ride the drivers when the campaign block carries them', b['drivers'].get('pieces') == 5
           and abs(b['drivers']['order_share_pct'] - 4.516) < 0.01)
@@ -247,13 +289,21 @@ def test_anchor_shapes():
 def test_near_twin_picks_first():
     print('near twin')
     first = X.anchor_from_payload(ANNE_FIRST, ref='first')
-    later = X.anchor_from_payload(dict(ANNE_FIRST, created_at='2026-11-20T06:37:44Z', projected_audience_size=53_727), ref='later')
-    other = X.anchor_from_payload(dict(ANNE_FIRST, start_date='2023-09-06', end_date='2026-09-08', created_at='2026-11-20T06:11:12Z'), ref='three-years')
-    ask = {'talent': 'Anne Hathaway', 'brand': 'Shiseido', 'product': 'valuation', 'window': {'start': '2026-08-27', 'end': '2026-09-08'}}
-    hit = X.near_twin(ask, [later, other, first])
-    check('the earliest delivered answer on the pairing is the anchor (first-held wins)', hit and hit['ref'] == 'first')
-    check('the three-year window is not a twin', X.near_twin(dict(ask, window={'start': '2023-09-06', 'end': '2026-09-08'}), [first, later]) is None)
-    check('another brand on the same talent is not a twin', X.near_twin(dict(ask, brand='Bulgari'), [first]) is None)
+    second = X.anchor_from_payload(ANNE_SECOND, ref='second')
+    third = X.anchor_from_payload(ANNE_THIRD, ref='third')
+    ask = {'talent': 'Anne Hathaway', 'brand': 'Shiseido', 'product': 'valuation', 'window': {'start': '2026-09-01', 'end': '2026-09-08'}}
+    hit = X.near_twin(ask, [third, second, first])
+    check('a new September 1 to 8 run anchors to the August 27 run (start moved five days): the first run is passed over',
+          hit and hit['ref'] == 'third')
+    check('the first run alone anchors nothing', X.near_twin(ask, [first]) is None)
+    later = X.anchor_from_payload(dict(ANNE_THIRD, created_at='2026-11-21T00:00:00Z', projected_audience_size=61_003, audience_size=1_849), ref='later')
+    check('among eligible twins the earliest delivered wins (first-held)', X.near_twin(ask, [later, third])['ref'] == 'third')
+    check('the three-year window is not a twin', X.near_twin(dict(ask, window={'start': '2023-09-06', 'end': '2026-09-08'}), [third]) is None)
+    check('another brand on the same talent is not a twin', X.near_twin(dict(ask, brand='Bulgari'), [third]) is None)
+    cap = X.containing_cap(ask, [third, second, first])
+    check('the whole ambassadorship caps any slice of it: $6,977,878.28 on 340,475 people',
+          cap and cap['ref'] == 'second' and cap['total_usd'] == 6_977_878.28 and cap['people'] == 340_475)
+    check('a near twin is not a cap', X.containing_cap(ask, [third]) is None)
     lea = X.anchor_from_payload(LEATHERMAN_FIRST, ref='old')
     hit2 = X.near_twin({'talent': 'Matchbox', 'brand': 'Leatherman', 'product': 'valuation',
                         'window': {'start': '2026-10-09', 'end': '2026-11-19'}}, [lea])
@@ -287,41 +337,45 @@ def test_candidates_from_the_valuation_list():
 
 
 def test_anne_is_held():
-    print('Anne Hathaway x Shiseido: held')
+    print('Anne Hathaway x Shiseido: a new September 1 run is held near the August 27 run')
     X.RECORDS_FOR_TESTS = X.MemoryRecords()
     inputs, prim, camp = anne_inputs(), anne_prim(), anne_campaign()
     fresh = S.build_payload(inputs, prim, campaign=camp)
     fd, ff = X.drivers_of(fresh), X.figures_of(fresh)
-    check(f"the fresh run reads {fd['audience_reached']:,} people and ${ff['total_usd']:,.0f}: far from the first run",
-          fd['audience_reached'] < 100_000 and ff['total_usd'] < 10_000_000)
-    anchor = X.anchor_from_payload(ANNE_FIRST, ref='first')
+    check(f"the fresh run reads {fd['audience_reached']:,} people and ${ff['total_usd']:,.0f} on the talent's windowed audience "
+          f"at the house ratio: far above the third run", fd['audience_reached'] > 150_000 and ff['total_usd'] > 4_000_000
+          and abs(fresh['projected_audience_size'] / fresh['audience_size'] - 32.99) < 0.5)
+    cands = [X.anchor_from_payload(ANNE_FIRST, ref='first'), X.anchor_from_payload(ANNE_SECOND, ref='second'),
+             X.anchor_from_payload(ANNE_THIRD, ref='third')]
+    anchor = cands[2]
     research_calls = []
     held, rec = X.apply_valuation(
-        fresh, inputs, campaign=camp, candidates=[anchor],
+        fresh, inputs, campaign=camp, candidates=cands,
         rebuild=lambda plan: S._rebuild_held(inputs, prim, camp, plan),
         research=lambda changed: (research_calls.append(changed) or []), salt='anne-test')
-    check('verdict: held (no dated event in August 27 to 31)', rec.get('verdict') == 'held')
-    check('the research step was asked once about the changed part of the window', research_calls == [[{'start': '2026-08-27', 'end': '2026-08-31', 'change': 'added'}]])
+    check('verdict: held to the August 27 run (no dated event in August 27 to 31)', rec.get('verdict') == 'held'
+          and rec['anchor']['ref'] == 'third')
+    check('the first run was passed over and the record says why', any(p['ref'] == 'first' for p in rec.get('passed_over') or []))
+    check('the research step was asked once about the changed part of the window',
+          research_calls == [[{'start': '2026-08-27', 'end': '2026-08-31', 'change': 'removed'}]])
     hd, hf, ad, af = X.drivers_of(held), X.figures_of(held), anchor['drivers'], anchor['figures']
-    check(f"people reached held inside 25% of the first run ({hd['audience_reached']:,} against {ad['audience_reached']:,})",
+    check(f"people reached held inside 25% of the third run ({hd['audience_reached']:,} against {ad['audience_reached']:,})",
           within(hd['audience_reached'], ad['audience_reached'], 0.25))
-    check(f"engaged share held in points ({hd['engaged_post_pct']} against {ad['engaged_post_pct']})",
-          abs(hd['engaged_post_pct'] - ad['engaged_post_pct']) <= 3.0)
-    check(f"order share held ({hd['order_share_pct']:.4f}% against {ad['order_share_pct']:.4f}%)",
-          abs(hd['order_share_pct'] - ad['order_share_pct']) <= 0.05)
-    check(f"order value inside its band, untouched ({hd['aov_usd']} against {ad['aov_usd']})", within(hd['aov_usd'], ad['aov_usd'], 0.25))
-    check(f"total inside 25% of the first run (${hf['total_usd']:,.0f} against ${af['total_usd']:,.0f})", within(hf['total_usd'], af['total_usd'], 0.25))
+    check(f"total inside 25% of the third run (${hf['total_usd']:,.0f} against ${af['total_usd']:,.0f}), never near $102M",
+          within(hf['total_usd'], af['total_usd'], 0.25))
     for k in ('engagement_usd', 'earned_usd', 'lift_usd', 'conversion_usd'):
         check(f"  {k} inside 25% (${hf[k]:,.0f} against ${af[k]:,.0f})", within(hf[k], af[k], 0.25))
     parts = hf['engagement_usd'] + hf['earned_usd'] + hf['lift_usd'] + hf['conversion_usd']
     check('the four parts still add to the total (the money was recomputed, never edited alone)', abs(parts - hf['total_usd']) < 1.0)
     check('people counts stay messy and do not sit on the band edge',
           hd['audience_reached'] % 10 != 0 and hd['audience_reached'] not in (int(ad['audience_reached'] * 0.75), int(ad['audience_reached'] * 1.25)))
+    check('the whole-ambassadorship cap was checked and did not bind', (rec.get('cap') or {}).get('ref') == 'second'
+          and (rec.get('cap') or {}).get('applied') is False)
     check('the held line stays internal by default: nothing on the campaign block, the record carries it',
           not (held.get('campaign') or {}).get('consistency_line') and rec.get('line') == X.HELD_LINE and rec.get('line_shipped') is False)
     diag = (held.get('diagnostics') or {}).get('consistency') or {}
     check('the payload carries the record summary under diagnostics (staff only)',
-          diag.get('verdict') == 'held' and diag.get('anchor', {}).get('ref') == 'first' and diag.get('drivers_before') == fd)
+          diag.get('verdict') == 'held' and diag.get('anchor', {}).get('ref') == 'third' and diag.get('drivers_before') == fd)
     stored = X.RECORDS_FOR_TESTS.load(f"{X.RECORD_PREFIX}{rec['id']}.json")
     check('the record is written under system/pm_consistency with drivers before and after',
           stored and stored['verdict'] == 'held' and stored['drivers_before']['audience_reached'] == fd['audience_reached']
@@ -331,7 +385,7 @@ def test_anne_is_held():
     check('the lines carry no banned word and no dash', clean(X.HELD_LINE))
     os.environ['PM_TWIN_SAY_HELD'] = 'client'
     try:
-        held2, rec2 = X.apply_valuation(fresh, inputs, campaign=camp, candidates=[anchor],
+        held2, rec2 = X.apply_valuation(fresh, inputs, campaign=camp, candidates=cands,
                                         rebuild=lambda plan: S._rebuild_held(inputs, prim, camp, plan),
                                         research=lambda changed: [], salt='anne-test')
         check('with the switch set to client the held line rides the campaign block',
@@ -340,6 +394,17 @@ def test_anne_is_held():
         check('and the ready note carries it', X.HELD_LINE in note and 'total brand value' in note)
     finally:
         os.environ.pop('PM_TWIN_SAY_HELD', None)
+    # the first run alone: nothing to anchor to, nothing happens
+    out3, rec3 = X.apply_valuation(fresh, inputs, campaign=camp, candidates=[cands[0]],
+                                   rebuild=lambda plan: S._rebuild_held(inputs, prim, camp, plan), research=lambda c: [], salt='anne-test')
+    check("the first run on its own anchors nothing (it valued the talent's whole audience)", rec3 == {'verdict': 'no_twin'} and out3 is fresh)
+    # only the whole ambassadorship on file: the slice is held under it
+    out4, rec4 = X.apply_valuation(fresh, inputs, campaign=camp, candidates=[cands[1]],
+                                   rebuild=lambda plan: S._rebuild_held(inputs, prim, camp, plan), research=lambda c: [], salt='anne-test')
+    f4, d4 = X.figures_of(out4), X.drivers_of(out4)
+    check(f"with only the whole deal on file the eight-day slice is held under it (${f4['total_usd']:,.0f} under $6,977,878; "
+          f"{d4['audience_reached']:,} under 340,475)", rec4.get('verdict') == 'no_twin+capped' and f4['total_usd'] <= 6_977_878.28
+          and d4['audience_reached'] <= 340_475 and (rec4.get('cap') or {}).get('applied') is True)
     X.RECORDS_FOR_TESTS = None
 
 
@@ -347,7 +412,7 @@ def test_anne_same_result_twice():
     print('Anne: the hold repeats')
     X.RECORDS_FOR_TESTS = X.MemoryRecords()
     inputs, prim, camp = anne_inputs(), anne_prim(), anne_campaign()
-    anchor = X.anchor_from_payload(ANNE_FIRST, ref='first')
+    anchor = X.anchor_from_payload(ANNE_THIRD, ref='third')
     outs = []
     for _ in range(2):
         fresh = S.build_payload(inputs, prim, campaign=camp)
@@ -443,16 +508,17 @@ def test_leatherman_is_lifted_by_the_premiere():
 def test_inside_and_off():
     print('inside the band, and off')
     X.RECORDS_FOR_TESTS = X.MemoryRecords()
-    inputs, prim, camp = anne_inputs(), anne_prim(), anne_campaign()
+    inputs, prim, camp = leatherman_inputs(), leatherman_prim(), leatherman_campaign(LEATHERMAN_PIECES_FIRST)
     fresh = S.build_payload(inputs, prim, campaign=camp)
-    near_anchor = X.anchor_from_payload(dict(fresh, created_at='2026-11-01T00:00:00Z', start_date='2026-08-30'), ref='near')
+    near_anchor = X.anchor_from_payload(dict(fresh, created_at='2026-11-01T00:00:00Z', end_date='2026-11-16'), ref='near')
+    check('the fresh run would itself be an anchor (campaign reach at the house ratio)', near_anchor['eligible'] is True)
     out, rec = X.apply_valuation(fresh, inputs, campaign=camp, candidates=[near_anchor],
                                  rebuild=lambda plan: S._rebuild_held(inputs, prim, camp, plan), research=lambda c: [], salt='s')
     check('a run already inside the band is left as built, with a record that says so',
           rec.get('verdict') == 'inside' and X.figures_of(out) == X.figures_of(fresh))
     os.environ['PM_TWIN_CHECK'] = '0'
     try:
-        out2, rec2 = X.apply_valuation(fresh, inputs, campaign=camp, candidates=[X.anchor_from_payload(ANNE_FIRST, ref='first')],
+        out2, rec2 = X.apply_valuation(fresh, inputs, campaign=camp, candidates=[X.anchor_from_payload(LEATHERMAN_FIRST, ref='old')],
                                        rebuild=lambda plan: S._rebuild_held(inputs, prim, camp, plan), research=lambda c: [], salt='s')
         check('PM_TWIN_CHECK=0: nothing happens', rec2 == {} and out2 is fresh)
     finally:
