@@ -155,6 +155,17 @@ except Exception as _se:
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _APP_DIR)
 
+# The store's document mirror rides on every S3 client this process makes,
+# so it is registered on boto3's default session before the first client
+# exists (Prometheus rebuild stage 6; 2026-11-20: a client a module made at
+# import, before the late bind, wrote threads and the ledger index past the
+# mirror). A no-op without a store URL; never blocks boot.
+try:
+    from prometheus import store as _pm_store_early
+    _pm_store_early.install_mirror()
+except Exception as _pm_store_early_exc:
+    print(f"⚠️ store mirror not registered at boot: {type(_pm_store_early_exc).__name__}")
+
 # Environment configuration - 'development' or 'production'
 APP_ENV = os.environ.get('APP_ENV', 'production').lower()
 IS_DEV_ENV = APP_ENV == 'development'

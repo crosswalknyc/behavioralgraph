@@ -165,8 +165,8 @@ def api_synth_chat_read_status(job_id):
     if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
         return jsonify({'success': False, 'error': 'bad job id'}), 400
     payload = None
-    if _store.read_enabled():   # the mirror first (stage 6), S3 on a miss
-        payload = _store.doc_get(f"{_C._PM_READ_PREFIX}{job_id}.json", None)
+    if _store.read_enabled():   # the mirror first (stage 6), checked against S3's ETag, S3 on a miss
+        payload = _store.doc_read(f"{_C._PM_READ_PREFIX}{job_id}.json", _H.s3_client, _H.S3_BUCKET, None)
     if not isinstance(payload, dict):
         try:
             resp = _H.s3_client.get_object(

@@ -506,7 +506,7 @@ def _pm_s3_json(key, default):
     try:
         from prometheus import store as _st
         if _st.read_enabled() and _st.mirrors(key):
-            _hit = _st.doc_get(key, None)
+            _hit = _st.doc_read(key, _H.s3_client, _H.S3_BUCKET, None)   # checked against S3's current ETag; a step behind heals itself
             if _hit is not None:
                 return _hit
     except Exception:

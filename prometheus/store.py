@@ -456,7 +456,7 @@ def read_enabled():
 
 # counters for the ops page and the parity harness: how often the mirror
 # was written, how often a read came from it, how often it fell through
-STATS = {'doc_put': 0, 'doc_hit': 0, 'doc_miss': 0, 'doc_delete': 0}
+STATS = {'doc_put': 0, 'doc_hit': 0, 'doc_miss': 0, 'doc_delete': 0, 'doc_heal': 0, 'doc_gone': 0}
 
 
 def doc_put(key, body, etag=None):
@@ -530,6 +530,72 @@ def doc_get(key, default=None):
         return json.loads(text)
     except Exception as e:
         _note('store.doc_get', e)
+        return default
+
+
+def validate_reads():
+    """Whether a read from the mirror is checked against S3's current ETag
+    (one HEAD) before it is served. On by default under the read switch;
+    PM_STORE_READ_VALIDATE=0 serves the mirror as it stands."""
+    return os.environ.get('PM_STORE_READ_VALIDATE', '1') != '0'
+
+
+def doc_read(key, s3=None, bucket=None, default=None):
+    """The read seam under the switch (Jenna 2026-11-20: switch reads on,
+    no user-visible change). The mirrored document, parsed; when a client
+    is given and validation is on, its row's ETag is checked against S3's
+    current ETag with one HEAD first: a match serves the mirror, a
+    mismatch reads S3 and corrects the row on the spot, a document S3 no
+    longer has drops the row and returns ``default``. Two writers racing on
+    one key can leave the mirror a step behind S3; the check means a
+    reader never sees that step. A HEAD that fails for any other reason
+    falls back to ``default`` so the caller reads S3 itself."""
+    if not read_enabled() or not mirrors(key):
+        return default
+    try:
+        if not _ensure():
+            return default
+        row = _exec('SELECT body, etag FROM pm_docs WHERE key = %s', (str(key),)).fetchone()
+    except Exception as e:
+        _note('store.doc_read', e)
+        return default
+    if not row:
+        STATS['doc_miss'] += 1
+        return default
+    body, etag = row[0], (row[1] or '')
+    if s3 is None or not bucket or not validate_reads():
+        STATS['doc_hit'] += 1
+        try:
+            return json.loads(body)
+        except Exception as e:
+            _note('store.doc_read', e)
+            return default
+    try:
+        head = s3.head_object(Bucket=bucket, Key=str(key))
+        current = str((head or {}).get('ETag') or '').strip('"')
+    except Exception as e:
+        if 'NoSuchKey' in str(e) or '404' in str(e) or 'Not Found' in str(e):
+            STATS['doc_gone'] = STATS.get('doc_gone', 0) + 1
+            doc_delete([key])
+            return default
+        _note('store.doc_read_head', e)
+        return default
+    if current and etag and current == etag:
+        STATS['doc_hit'] += 1
+        try:
+            return json.loads(body)
+        except Exception as e:
+            _note('store.doc_read', e)
+            return default
+    # the mirror is a step behind: S3 wins, and the row is corrected now
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=str(key))
+        raw = obj['Body'].read()
+        doc_put(key, raw, etag=(obj or {}).get('ETag') or current)
+        STATS['doc_heal'] = STATS.get('doc_heal', 0) + 1
+        return json.loads(raw.decode('utf-8') if isinstance(raw, (bytes, bytearray)) else str(raw))
+    except Exception as e:
+        _note('store.doc_read_heal', e)
         return default
 
 
@@ -845,8 +911,8 @@ def reconcile(s3, bucket, limit=5000, settle_s=RECONCILE_SETTLE_S):
         _note('store.reconcile', e)
         return out
     out['rows_before'] = len(rows)
-    now = _dt.datetime.now(_dt.timezone.utc)
     listing = _mirrored_listing(s3, bucket)
+    now = _dt.datetime.now(_dt.timezone.utc)
     seen = set()
     gets = 0
     for o in listing:
@@ -858,7 +924,7 @@ def reconcile(s3, bucket, limit=5000, settle_s=RECONCILE_SETTLE_S):
         if row is not None and row.get('etag') and o.get('etag') and row['etag'] == o['etag']:
             out['same'] += 1
             continue
-        if lmd is not None and (now - lmd).total_seconds() < settle_s:
+        if settle_s > 0 and lmd is not None and (now - lmd).total_seconds() < settle_s:
             out['settling'] += 1
             continue
         if gets >= int(limit):
@@ -890,7 +956,7 @@ def reconcile(s3, bucket, limit=5000, settle_s=RECONCILE_SETTLE_S):
         if key in seen:
             continue
         upd = _as_dt(row.get('updated_at'))
-        if upd is not None and (now - upd).total_seconds() < settle_s:
+        if settle_s > 0 and upd is not None and (now - upd).total_seconds() < settle_s:
             out['settling'] += 1
             continue
         out['removed'] += doc_delete([key])
@@ -902,7 +968,7 @@ def reconcile(s3, bucket, limit=5000, settle_s=RECONCILE_SETTLE_S):
     return out
 
 
-def production_parity(s3, bucket, since=None, limit=2000):
+def production_parity(s3, bucket, since=None, limit=2000, settle_s=RECONCILE_SETTLE_S):
     """The mirror against what S3 holds, from inside a running process
     (the live check behind the ops route; stage 6 in production, Jenna
     2026-11-20). Read-only on both sides. Lists the three mirrored
@@ -917,7 +983,7 @@ def production_parity(s3, bucket, since=None, limit=2000):
     import time as _time
     t0 = _time.time()
     out = {'enabled': enabled(), 'rows': 0, 'since': None, 'listed': 0, 'older': 0, 'checked': 0,
-           'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0, 'truncated': False,
+           'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0, 'settling': 0, 'truncated': False,
            'by_family': {}, 'examples': {'different': [], 'only_s3': [], 'only_store': []}}
     if not enabled():
         return out
@@ -936,19 +1002,26 @@ def production_parity(s3, bucket, since=None, limit=2000):
             first = d
     since_dt = _as_dt(since) if since else (first - _dt.timedelta(seconds=90) if first else None)
     out['since'] = since_dt.strftime('%Y-%m-%dT%H:%M:%SZ') if since_dt else None
-    listed = [(o['key'], o['modified']) for o in _mirrored_listing(s3, bucket)]
+    listing = _mirrored_listing(s3, bucket)
+    now = _dt.datetime.now(_dt.timezone.utc)
     seen = set()
     gets = 0
-    for key, lm in listed:
+    for o in listing:
+        key, lm = o['key'], o['modified']
         out['listed'] += 1
         seen.add(key)
         fam = family_of(key)
-        f = out['by_family'].setdefault(fam, {'listed': 0, 'older': 0, 'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0})
+        f = out['by_family'].setdefault(fam, {'listed': 0, 'older': 0, 'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0, 'settling': 0})
         f['listed'] += 1
         lmd = _as_dt(lm)
         if since_dt is None or (lmd is not None and lmd < since_dt):
             out['older'] += 1
             f['older'] += 1
+            continue
+        if settle_s > 0 and lmd is not None and (now - lmd).total_seconds() < settle_s:
+            # a write may still be on its way to the mirror; the next check reads it
+            out['settling'] += 1
+            f['settling'] += 1
             continue
         row = rows.get(key)
         if row is None:
@@ -956,6 +1029,14 @@ def production_parity(s3, bucket, since=None, limit=2000):
             f['only_s3'] += 1
             if len(out['examples']['only_s3']) < 20:
                 out['examples']['only_s3'].append({'key': key, 's3_modified': lmd.strftime('%Y-%m-%dT%H:%M:%SZ') if lmd else None})
+            continue
+        # the ETag S3 answered the put with against the ETag S3 lists now: equal
+        # means the same bytes, with no body read
+        if o.get('etag') and row.get('etag') and o['etag'] == row['etag']:
+            out['checked'] += 1
+            f['checked'] += 1
+            out['same'] += 1
+            f['same'] += 1
             continue
         if gets >= int(limit):
             out['truncated'] = True
@@ -986,8 +1067,12 @@ def production_parity(s3, bucket, since=None, limit=2000):
                     'store_etag': row.get('etag')})
     for key, row in rows.items():
         if key not in seen:
+            upd = _as_dt(row.get('updated_at'))
+            if settle_s > 0 and upd is not None and (now - upd).total_seconds() < settle_s:
+                out['settling'] += 1
+                continue
             out['only_store'] += 1
-            f = out['by_family'].setdefault(row.get('family'), {'listed': 0, 'older': 0, 'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0})
+            f = out['by_family'].setdefault(row.get('family'), {'listed': 0, 'older': 0, 'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0, 'settling': 0})
             f['only_store'] += 1
             if len(out['examples']['only_store']) < 20:
                 out['examples']['only_store'].append({'key': key, 'store_updated': row.get('updated_at')})

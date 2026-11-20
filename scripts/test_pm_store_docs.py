@@ -71,6 +71,8 @@ class FakeS3:
         return {'Body': io.BytesIO(self.objects[Key]), 'ETag': f'"{len(self.objects[Key])}"'}
 
     def head_object(self, Bucket=None, Key=None, **kw):
+        if getattr(self, 'head_fails', False):
+            raise Exception('network down')
         if Key not in self.objects:
             raise Exception('NoSuchKey')
         return {'ETag': f'"{len(self.objects[Key])}"'}
@@ -289,8 +291,16 @@ class TheReadSwitch(unittest.TestCase):
         W._pm_s3_put_json(key, [{'role': 'user', 'text': 'from the mirror'}])
         os.environ['PM_STORE_READ'] = '1'
         self.assertTrue(ST.read_enabled())
-        del self.s3.objects[key]                                      # S3 has nothing; the mirror serves it
+        # checked read (the default): the mirror serves while its ETag is S3's current one
         self.assertEqual(W._pm_s3_json(key, [])[0]['text'], 'from the mirror')
+        self.assertGreaterEqual(ST.STATS['doc_hit'], 1)
+        # the mirror as it stands (PM_STORE_READ_VALIDATE=0): S3 has nothing; the mirror still serves it
+        os.environ['PM_STORE_READ_VALIDATE'] = '0'
+        del self.s3.objects[key]
+        self.assertEqual(W._pm_s3_json(key, [])[0]['text'], 'from the mirror')
+        os.environ.pop('PM_STORE_READ_VALIDATE')
+        # checked again: S3 no longer has it, so neither does the reader
+        self.assertEqual(W._pm_s3_json(key, []), [])
         other = 'system/synth_chat_threads/jane/only_in_s3.json'
         self.s3.objects[other] = b'[{"role": "user", "text": "only s3"}]'
         self.assertEqual(W._pm_s3_json(other, [])[0]['text'], 'only s3')   # a miss falls through
@@ -302,12 +312,19 @@ class TheReadSwitch(unittest.TestCase):
         from prometheus.host import host
         key = 'system/prometheus_reads/0123456789ab.json'
         body = json.dumps({'job_id': '0123456789ab', 'status': 'done'}).encode('utf-8')
-        ST.doc_put(key, body)
+        self.s3.put_object(Bucket='dashboard-inputs', Key=key, Body=body)      # through the seam: S3 and the mirror agree
         os.environ['PM_STORE_READ'] = '1'
         host.bind(s3_client=self.s3, bucket='dashboard-inputs', read_prefix='system/prometheus_reads/')
+        hits = ST.STATS['doc_hit']
         doc, kind = SV.find_job_doc('0123456789ab')
-        self.assertEqual((doc or {}).get('status'), 'done')       # from the mirror: S3 holds nothing
+        self.assertEqual((doc or {}).get('status'), 'done')
         self.assertEqual(kind, 'read')
+        self.assertEqual(ST.STATS['doc_hit'], hits + 1)             # served from the mirror, checked against S3's ETag
+        os.environ['PM_STORE_READ_VALIDATE'] = '0'
+        del self.s3.objects[key]
+        doc_m, _k = SV.find_job_doc('0123456789ab')
+        self.assertEqual((doc_m or {}).get('status'), 'done')      # the mirror as it stands serves it with S3 empty
+        os.environ.pop('PM_STORE_READ_VALIDATE')
         os.environ.pop('PM_STORE_READ', None)
         doc2, _k = SV.find_job_doc('0123456789ab')
         self.assertIsNone(doc2)                                    # switch off: S3 only, and S3 has nothing
@@ -363,7 +380,7 @@ class ParityInProduction(unittest.TestCase):
         self.s3.stamps = {'system/synth_chat_threads/old/t0.json': _dt.datetime(2020, 1, 1, tzinfo=_dt.timezone.utc)}
         # a document the mirror holds that S3 no longer lists
         ST.doc_put('system/synth_chat_threads/gone/t2.json', b'[2]')
-        out = ST.production_parity(self.s3, 'b')
+        out = ST.production_parity(self.s3, 'b', settle_s=0)
         self.assertTrue(out['enabled'])
         self.assertEqual(out['rows'], 5)
         self.assertEqual(out['listed'], 6)
@@ -387,7 +404,8 @@ class ParityInProduction(unittest.TestCase):
     def test_the_limit_truncates_the_gets_not_the_listing(self):
         for i in range(5):
             self._write(f'system/synth_chat_threads/u/t{i}.json', b'[1]')
-        out = ST.production_parity(self.s3, 'b', limit=2)
+        ST._exec('UPDATE pm_docs SET etag = NULL')          # no ETag to compare: every row needs its body read
+        out = ST.production_parity(self.s3, 'b', limit=2, settle_s=0)
         self.assertTrue(out['truncated'])
         self.assertEqual(out['checked'], 2)
         self.assertEqual(out['listed'], 5)
@@ -415,7 +433,7 @@ class ParityInProduction(unittest.TestCase):
             self.assertFalse(st['read_enabled'])
             self.assertEqual(st['rows'], 1)
             self.assertEqual(st['by_family']['thread'], 1)
-            par = c.get('/api/prometheus/ops/store-parity', headers={'X-Ops-Secret': 'shh-test'}).get_json()
+            par = c.get('/api/prometheus/ops/store-parity?settle=0', headers={'X-Ops-Secret': 'shh-test'}).get_json()
             self.assertEqual((par['checked'], par['same'], par['different']), (1, 1, 0))
             os.environ.pop('CRON_SECRET')
             self.assertEqual(c.get('/api/prometheus/ops/store-status', headers={'X-Ops-Secret': 'shh-test'}).status_code, 404)
@@ -603,6 +621,94 @@ class TheEngineWorkerCarriesTheHook(unittest.TestCase):
         self.assertIn('sys.path.append(_bgw_for_store)', src, 'bg-webapp goes last on the path')
         head = src[:src.index('_pm_store.install_mirror()')]
         self.assertIn('try:', head[-700:])
+
+
+class TheCheckedRead(unittest.TestCase):
+    """doc_read under the switch: the mirror is served when its ETag is S3's
+    current ETag; a step behind reads S3 and heals the row; a document S3
+    no longer has drops the row; a HEAD that fails hands the read back."""
+
+    def setUp(self):
+        _sqlite_on()
+        os.environ['PM_STORE_READ'] = '1'
+        self.s3 = FakeS3()
+        ST.install_mirror(self.s3)
+        self.k = 'system/synth_chat_threads/u/t.json'
+        for k in ST.STATS:
+            ST.STATS[k] = 0
+
+    def tearDown(self):
+        os.environ.pop('PM_STORE_READ_VALIDATE', None)
+        _store_off()
+
+    def test_hit_heal_gone_and_head_failure(self):
+        self.s3.put_object(Bucket='b', Key=self.k, Body=b'[1]')
+        self.assertEqual(ST.doc_read(self.k, self.s3, 'b'), [1])
+        self.assertEqual(ST.STATS['doc_hit'], 1)
+        # another writer moved S3 on without the mirror (different length -> different fake ETag)
+        self.s3.objects[self.k] = b'[1, 2, 3]'
+        self.assertEqual(ST.doc_read(self.k, self.s3, 'b'), [1, 2, 3])
+        self.assertEqual(ST.STATS['doc_heal'], 1)
+        self.assertEqual(ST.doc_text(self.k), '[1, 2, 3]', 'the row was corrected on the spot')
+        before = ST.STATS['doc_hit']
+        self.assertEqual(ST.doc_read(self.k, self.s3, 'b'), [1, 2, 3])
+        self.assertEqual(ST.STATS['doc_hit'], before + 1)
+        # S3 no longer has it: the row goes and the caller sees the default
+        del self.s3.objects[self.k]
+        self.assertIsNone(ST.doc_read(self.k, self.s3, 'b'))
+        self.assertEqual(ST.STATS['doc_gone'], 1)
+        self.assertIsNone(ST.doc_text(self.k))
+        # a HEAD that fails for another reason: the default, the caller reads S3
+        self.s3.put_object(Bucket='b', Key=self.k, Body=b'[9]')
+        self.s3.head_fails = True
+        self.assertEqual(ST.doc_read(self.k, self.s3, 'b', default='fallback'), 'fallback')
+        self.s3.head_fails = False
+        # validation off: the mirror as it stands, no HEAD
+        os.environ['PM_STORE_READ_VALIDATE'] = '0'
+        self.s3.objects[self.k] = b'[9, 9]'
+        self.assertEqual(ST.doc_read(self.k, self.s3, 'b'), [9])
+        # a key outside the families or the switch off: the default
+        self.assertIsNone(ST.doc_read('system/prometheus_reads/_queue/x.json', self.s3, 'b'))
+        os.environ.pop('PM_STORE_READ')
+        self.assertIsNone(ST.doc_read(self.k, self.s3, 'b'))
+
+    def test_the_three_seams_use_the_checked_read(self):
+        for rel in ('prometheus/legacy/watch.py', 'prometheus/legacy/jobs.py', 'prometheus/service.py'):
+            src = open(os.path.join(_WEB, rel), encoding='utf-8').read()
+            self.assertIn('doc_read(', src, rel)
+            self.assertNotRegex(src, r"read_enabled\(\)[\s\S]{0,200}doc_get\(", rel)
+
+    def test_parity_settles_and_compares_by_etag(self):
+        self.s3.put_object(Bucket='b', Key=self.k, Body=b'[1]')          # mirrored, fresh
+        out = ST.production_parity(self.s3, 'b')
+        self.assertEqual(out['settling'], 1)
+        self.assertEqual((out['checked'], out['different']), (0, 0))
+        import datetime as _dt
+        self.s3.stamps = {self.k: _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)}
+        ST._exec("UPDATE pm_docs SET updated_at = %s", ('2026-01-01T00:00:00Z',))
+        out = ST.production_parity(self.s3, 'b', since='2000-01-01T00:00:00Z')
+        self.assertEqual((out['checked'], out['same'], out['settling']), (1, 1, 0), out)
+
+
+class TheHookIsRegisteredBeforeTheFirstClient(unittest.TestCase):
+    def test_app_registers_the_default_session_hook_before_any_client(self):
+        src = open(os.path.join(_WEB, 'app.py'), encoding='utf-8').read()
+        reg = src.index('_pm_store_early.install_mirror()')
+        first_client = src.index('boto3.client(')
+        self.assertLess(reg, first_client, 'the default-session hook must precede the first S3 client')
+        self.assertIn('sys.path.insert(0, _APP_DIR)', src[:reg])
+
+    def test_a_client_made_after_the_bare_install_carries_the_hook(self):
+        _sqlite_on()
+        try:
+            import boto3
+            ST.install_mirror()                                   # no client: the default session only
+            c = boto3.client('s3', region_name='us-east-2', aws_access_key_id='x', aws_secret_access_key='y')
+            ids = set(getattr(c.meta.events, '_emitter', c.meta.events)._unique_id_handlers.keys())
+            self.assertTrue(any('pm-store-mirror' in str(u) for u in ids))
+            self.assertTrue(any('del-after-DeleteObjects' in str(u) for u in ids))
+        finally:
+            _store_off()
 
 
 if __name__ == '__main__':

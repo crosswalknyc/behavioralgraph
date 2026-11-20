@@ -119,6 +119,7 @@ def run(cases, *, read_pass=True):
     if read_pass:
         # the second pass: read from the mirror, S3 holding nothing of the mirrored families
         os.environ['PM_STORE_READ'] = '1'
+        os.environ['PM_STORE_READ_VALIDATE'] = '0'   # the pass reads the mirror as it stands: S3 is emptied of the keys, so a checked read would hand them back
         hits0, miss0 = _st.STATS['doc_hit'], _st.STATS['doc_miss']
         read = {'cases': 0, 'landed': 0, 'faults': 0, 'mirror_reads': 0, 'mirror_misses': 0}
         for c in cases:
@@ -136,6 +137,7 @@ def run(cases, *, read_pass=True):
         read['mirror_reads'] = _st.STATS['doc_hit'] - hits0
         read['mirror_misses'] = _st.STATS['doc_miss'] - miss0
         os.environ.pop('PM_STORE_READ', None)
+        os.environ.pop('PM_STORE_READ_VALIDATE', None)
     try:
         os.remove(db)
     except Exception:

@@ -6,7 +6,9 @@ Jenna 2026-11-20): two read-only routes for the operator.
                                             this process's store faults
   GET  /api/prometheus/ops/store-parity     the mirror against S3 in this
                                             process (store.production_parity):
-                                            ?since=<ISO> and ?limit=<n> optional
+                                            ?since=<ISO>, ?limit=<n>, ?settle=<s>
+                                            (seconds a fresh write is left to
+                                            land; default 120) optional
   POST /api/prometheus/ops/store-reconcile  the nightly reconcile, now, under
                                             its lock (store_sweep.run_once;
                                             S3 wins, counts back)
@@ -100,8 +102,12 @@ def store_parity():
         limit = max(1, int(request.args.get('limit') or 2000))
     except Exception:
         limit = 2000
+    try:
+        settle = max(0, int(request.args.get('settle') if request.args.get('settle') is not None else _store.RECONCILE_SETTLE_S))
+    except Exception:
+        settle = _store.RECONCILE_SETTLE_S
     s3, bucket = _s3_and_bucket()
     if s3 is None or not _store.enabled():
         return jsonify({'enabled': _store.enabled(), 'rows': _store.docs_count(),
                         'note': 'the store is off or no S3 client is bound'})
-    return jsonify(_store.production_parity(s3, bucket, since=since, limit=limit))
+    return jsonify(_store.production_parity(s3, bucket, since=since, limit=limit, settle_s=settle))

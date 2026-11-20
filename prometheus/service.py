@@ -181,7 +181,7 @@ def find_job_doc(job_id):
         try:   # the store's mirror first under the read switch (stage 6, 2026-11-20); S3 on a miss
             from . import store as _st
             if _st.read_enabled():
-                _hit = _st.doc_get(f'{prefix}{jid}.json', None)
+                _hit = _st.doc_read(f'{prefix}{jid}.json', s3, host.bucket, None)
                 if isinstance(_hit, dict):
                     return _hit, jtype
         except Exception as _fx:
