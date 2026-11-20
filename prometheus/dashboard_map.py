@@ -457,10 +457,10 @@ ARTIFACTS = {
     'valuation': ('brandPartnershipIQ', 'in the valuation list in Brand Partnership IQ', 'the valuation list'),
     'flywheel': ('flywheelIQ', 'in the study list in Flywheel', 'the study list'),
     'tracker': ('subscriberIQ', 'in the show list in Subscriber IQ', 'the show list'),
-    'export': ('', "from the export buttons on the page you are looking at (the download arrow or Export at the top of the view); every data answer in this chat also carries its own CSV link under the answer", ''),
+    'export': ('', "from the export buttons on the page you are looking at (the download arrow or Export at the top of the view); a data answer in this chat that comes with a file has its CSV link under the answer", ''),
     'email': ('', "in your inbox, sent from Prometheus; say 'email me the file' on any answer and it goes out", ''),
     'deck': ('', "in your inbox, sent from Prometheus when it is built; say 'build a deck from this' on any answer", ''),
-    'read': ('', 'in this chat, as its own message, with its CSV link under it', ''),
+    'read': ('', 'in this chat, each as its own message, with a CSV link under it when the read comes with a file', ''),
     'chat': ('', 'in Chats & Tasks, the rail on the left of this window', ''),
 }
 

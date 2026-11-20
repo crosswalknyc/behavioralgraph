@@ -246,6 +246,7 @@ def _job_items(host, uname, days=7):
                               'ready_message': doc.get('ready_message') or '', 'job_id': doc.get('job_id'),
                               'thread_id': str(doc.get('thread_id') or ''),
                               'reply': (str(_pl.get('reply') or '').strip() if jtype == 'read' else ''),
+                              'file': (_read_file_kind(_pl, doc) if jtype == 'read' else ''),
                               'followups': [f for f in (_pl.get('followups') or []) if isinstance(f, str)][:3] if jtype == 'read' else []})
         except Exception:
             traceback.print_exc()
@@ -342,10 +343,34 @@ def _thread_title(host, uname, tid):
     return ''
 
 
+def _link_kind(link):
+    """'CSV' for a link that opens a CSV, 'file' for any other file, ''
+    when there is no link (a read that answered in words only)."""
+    if not isinstance(link, dict) or not str(link.get('url') or '').strip():
+        return ''
+    names = ' '.join(str(link.get(k) or '') for k in ('name', 'key')) + ' ' + str(link.get('url') or '').split('?', 1)[0]
+    if re.search(r"\.csv\b", names, re.I) or re.search(r"\bcsv\b", str(link.get('label') or ''), re.I):
+        return 'CSV'
+    return 'file'
+
+
+def _read_file_kind(payload, doc):
+    """The file a finished read carries, from its job record: the payload's
+    file link, else the job file the API door serves."""
+    kind = _link_kind((payload or {}).get('file_link'))
+    if kind:
+        return kind
+    files = (doc or {}).get('files')
+    if isinstance(files, dict) and files:
+        return 'CSV' if 'csv' in files else 'file'
+    return ''
+
+
 def _read_where(it, history, thread_id, host, uname):
     """Where a finished read sits, never the read itself (Jenna
     2026-11-10): in this chat as its own message, or in the chat it
-    landed in when that is another one."""
+    landed in when that is another one. Its link is named only when the
+    read carries one."""
     job_tid = str(it.get('thread_id') or '')
     if job_tid and thread_id and job_tid != str(thread_id):
         title = _thread_title(host, uname, job_tid)
@@ -357,9 +382,16 @@ def _read_where(it, history, thread_id, host, uname):
         from . import read_landing as _rl
         state, _i = _rl.landing_state(history or [], 'read_job_id', it.get('job_id'), it.get('reply') or '')
     except Exception:
-        state = 'none'
+        state, _i = 'none', None
     if state == 'landed':
-        return "It is in this chat, above, as its own message with its CSV link under it."
+        try:
+            kind = _link_kind(_turn_meta((history or [])[_i]).get('link'))
+        except Exception:
+            kind = ''
+        kind = kind or str(it.get('file') or '')
+        if kind:
+            return f"It is in this chat, above, as its own message with its {kind} link under it."
+        return "It is in this chat, above, as its own message."
     return "It is in this chat as its own message, above."
 
 
