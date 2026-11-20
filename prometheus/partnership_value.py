@@ -1005,7 +1005,8 @@ def guard_read(payload, question='', history=None, saved=None):
 # decision reasons whose replies are a product's own words, never a read
 _SKIP_REASONS = frozenset(('bpiq_wizard', 'pricing', 'product_facts', 'definitions', 'status', 'status_fast', 'capability',
                            'help_writing', 'intake_cancel', 'number_provenance', 'deliverable_lookup', 'catalog',
-                           'catalog_exists', 'wayfinding', 'email_file'))
+                           'catalog_exists', 'wayfinding', 'email_file',
+                           'valuation_referent'))   # the delivered valuation's own figure, said again (2026-11-20)
 
 
 def guard_payload(raw, decision=None, question='', history=None):

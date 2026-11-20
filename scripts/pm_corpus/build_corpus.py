@@ -2,7 +2,7 @@
 """Build the replay corpus from the real ask log (rebuild stage 1).
 
 For every real ask in the last N days this records what was asked, what
-was open, the thread's last two turns before it, the Reader's logged
+was open, the thread's last twelve turns before it, the Reader's logged
 reading, and what the reader got (route, outcome, class, the reply's
 first sentence, whether a job started, whether money was quoted,
 whether a long-wait mail went out). The result is the specification the
@@ -61,7 +61,7 @@ CACHE_ROOT = os.path.expanduser(os.environ.get('PM_REPLAY_CACHE') or '~/.cache/c
 SKIP_USERS = frozenset({'', 'unknown', 'replay', 'sandbox_partner', 'canary', 'smoke', 'probe', 'golden', 'tester', 'grader'})
 _PROBE_RX = re.compile(r"(?:^|[^a-z])(?:canary|smoke|sandbox|regression|golden|probe)(?:[^a-z]|$)", re.I)
 
-HISTORY_TURNS = 2
+HISTORY_TURNS = 12   # more than the Reader sees (eight): a delivered valuation a dozen turns back is still what "the deck" means (2026-11-20)
 _META_KEEP = ('options', 'offer', 'panel_offer', 'read_job_id', 'deck_job_id', 'bpiq_job_id', 'jiq_job_id',
               'spec_draft', 'draft', 'landed_read_id', 'pending', 'kind', 'route', 'bpiq_wizard')
 

@@ -83,7 +83,9 @@ _ROUTE_EXACT = {
     # several questions
     'multi_ask': 'multi_ask',
     # decks
-    'deck': 'deck', 'deck_conversion': 'deck', 'design_request': 'deck',
+    'deck': 'deck', 'deck_conversion': 'deck', 'design_request': 'deck', 'valuation_deck': 'deck',
+    # the thread's delivered valuation, pointed at again (2026-11-20)
+    'valuation_referent': 'wizard',
     # the reader's own work
     'status_lookup': 'status', 'status_check': 'status', 'status': 'status', 'deliverable_lookup': 'status',
     'workorder_status': 'status', 'workorder_eta': 'status', 'workorder_cancel': 'status',
@@ -185,6 +187,7 @@ _NEAR = {
     'short_reply': {'offer', 'continuation'},
     'continuation': {'short_reply', 'read'},
     'cancel': {'offer'},
+    'deck': {'wizard'},      # a valuation's deck is the valuation's
 }
 
 

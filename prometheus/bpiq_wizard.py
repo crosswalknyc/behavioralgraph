@@ -1037,6 +1037,15 @@ def _wants(text, body, history, store, user, thread_id):
     t = str(text or '').strip()
     if _is_resume(t) or is_cancel(t) or is_decline(t) or is_chip(t) or _bpiq_intent(t):
         return True
+    # a message the Understanding reads, with confidence, as something else entirely is answered as that; the
+    # draft stays at its step and the reply carries the way back (prometheus.wizard_interrupt, Jenna 2026-11-20)
+    try:
+        from prometheus import wizard_interrupt as _wi
+        if _wi.unrelated(body, t, draft):
+            _stand_aside(draft)
+            return False
+    except Exception:
+        pass
     if answers_step(t, draft):
         return True
     _stand_aside(draft)
@@ -2079,6 +2088,16 @@ def apply_answer(draft, text, today=None):
             merged['step'] = next_step(merged)
             merged['_named'] = named
             return merged, None
+    # a plain correction of the campaign dates at the confirm card or any later step replaces them and shows the
+    # card again (prometheus.wizard_interrupt, Jenna 2026-11-20: "the campaign dates are sep 1 - 8, 2026" typed at
+    # the card had set the attribution window instead)
+    try:
+        from prometheus import wizard_interrupt as _wi
+        _corr = _wi.correction(t, d, today=today)
+        if _corr:
+            return _wi.apply_correction(d, _corr, t, today=today), None
+    except Exception:
+        pass
 
     if step in (STEP_TALENT, STEP_CAMPAIGN, STEP_DATES):
         # a link is never a name (2026-11-12: on current code a YouTube

@@ -946,6 +946,57 @@ def ask(user, body, *, via='session'):
     except Exception as _fx:
         _faults.note('service.understanding', _fx)
 
+    # A valuation this thread delivered is what the words point at (prometheus.valuation_referent, Jenna 2026-11-20,
+    # Samantha Kolton's thread): a deck of it again, its figures again, or the order at its confirm card with the
+    # corrected dates. Keyed on the Understanding (referent last_valuation); never a question back about which
+    # campaign, never the Attribution IQ tab, never a promise with nothing running. Kill switch PM_U_OFF_VALUATION_REFERENT=1.
+    try:
+        from . import valuation_referent as _vref
+        _vr_raw = _vref.answer(str(body.get('_pm_order_words') or '') or text, history, user=user, uname=uname,
+                               thread_id=tid or '', body=dict(body, thread_id=tid or ''), host=host)
+    except Exception as _fx:
+        _faults.note('service.valuation_referent', _fx)
+        _vr_raw = None
+    if isinstance(_vr_raw, dict) and _vr_raw.get('hand_to_deck') and host.has('deck_core'):
+        # the saved valuation's deck again, through the deck surface with the valuation picked
+        try:
+            _vr_resp = host.deck_core(user, _deck_body(dict(body, bind_subject=str(_vr_raw.get('subject') or ''), confirm_open_screen=True),
+                                                       text, history, ctx, tid))
+            _vr_deck, _vr_status = _unpack(_vr_resp)
+        except Exception as _fx:
+            _faults.note('service.valuation_referent_deck', _fx)
+            _vr_deck, _vr_status = None, 200
+        if isinstance(_vr_deck, dict) and _vr_deck:
+            try:
+                host.ask_hint(route='valuation_deck', outcome=('queued' if _vr_deck.get('job_id') else 'answered'),
+                              subject=str(_vr_raw.get('subject') or '') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(_vr_deck, surface='deck', decision={'surface': 'deck', 'mode': None, 'reason': 'valuation_referent',
+                                                                   'client_hint': None}, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _vr_deck, 'deck')
+            return env, _vr_status
+        _vr_raw = None
+    if isinstance(_vr_raw, dict) and _vr_raw and not _vr_raw.get('hand_to_deck'):
+        raw = dict(_vr_raw)
+        _vr_kind = str((raw.get('valuation_referent') or {}).get('kind') or 'answered')
+        if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+            _vr_full = raw
+            raw = _interpret_shape(raw)
+            raw['followups'] = list(_vr_full.get('followups') or [])
+            if _vr_full.get('bpiq_wizard'):
+                raw['bpiq_wizard'] = _vr_full['bpiq_wizard']
+            if _vr_full.get('bpiq_collect') is not None:
+                raw['bpiq_collect'] = _vr_full['bpiq_collect']
+        try:
+            host.ask_hint(route='valuation_referent', outcome=_vr_kind, subject=str(((_vr_raw.get('valuation_referent') or {}).get('subject')) or '') or None)
+        except Exception as _fx:
+            _faults.note('service', _fx)
+        env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'valuation_referent',
+                                                             'client_hint': None}, thread_id=tid, via=via)
+        _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+        return env, 200
+
     # lane: intake_cancel
     # Cancel means gone, and a new thread starts clean (Jenna 2026-11-05:
     # "if you cancel a wizard or open a new thread it should drop the

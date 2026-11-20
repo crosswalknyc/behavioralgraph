@@ -2,7 +2,7 @@
 
 Rebuild stage 1 (2026-11-20). The question log is the specification:
 every real ask of the last 30 days, with what was open, the thread's last
-two turns, the Reader's reading and what the reader got. The replay runs
+eight turns, the Reader's reading and what the reader got. The replay runs
 those asks through `service.ask` (the one entry behind
 `POST /api/prometheus/v1/ask`) with nothing live behind it and reports
 drift by intent class. Every later stage runs it before it ships.
@@ -36,7 +36,8 @@ set -a && . bg-webapp/.env; set +a
 export REGRESSION_TEST_MODE=1
 
 # 1. build (or refresh) the corpus from the last 30 days of the ask log
-python3 scripts/pm_corpus/build_corpus.py --days 30
+#    (an operator tool: run it with REGRESSION_TEST_MODE unset, the test guard refuses its upload otherwise)
+env -u REGRESSION_TEST_MODE python3 scripts/pm_corpus/build_corpus.py --days 30
 
 # 2. replay it on the branch you are about to ship
 python3 scripts/pm_corpus/replay_corpus.py --corpus latest
@@ -134,7 +135,8 @@ In production the same line rides every ask-log record under
 `extra.u`; `prometheus.understanding.grade_log_rows` reads a day of
 records the same way. The kill switches are environment only:
 `PM_UNDERSTANDING=0` for the step, `PM_U_OFF_<INTENT>=1` for one flipped
-intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`).
+intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`,
+`WIZARD_INTERRUPT`, `VALUATION_REFERENT`).
 
 ## Refreshing the corpus
 

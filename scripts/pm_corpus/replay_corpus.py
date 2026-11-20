@@ -145,6 +145,14 @@ class _FakeS3Light:
     def generate_presigned_url(self, *a, **k):
         return 'https://fake-s3/' + str((k.get('Params') or {}).get('Key') or '')
 
+    def get_paginator(self, op):
+        me = self
+
+        class _Pag:
+            def paginate(self, **k):
+                yield me.list_objects_v2(**k)
+        return _Pag()
+
     def __getattr__(self, name):
         if name.startswith('__'):
             raise AttributeError(name)
@@ -224,7 +232,7 @@ class _Stub:
                   load_threads_index=lambda u: {'threads': []}, max_threads=50,
                   s3_json=lambda *a, **k: None, s3_put_json=lambda key, *a, **k: me.writes.append(str(key)),
                   thread_key=lambda u, t: f'{u}/{t}', threads_index_key=lambda u: u,
-                  thread_title_from=lambda t: str(t)[:30], bucket='x', s3_client=None,
+                  thread_title_from=lambda t: str(t)[:30], bucket='x', s3_client=_FAKE['s3'],
                   job_owner_ok=lambda a, b: True, claude_data=_claude,
                   load_users=lambda: {'users': {REPLAY_USER['username']: dict(REPLAY_USER)}},
                   check_user_credits=lambda u: (True, -1),

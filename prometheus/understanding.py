@@ -67,12 +67,18 @@ INTENTS = tuple(dict.fromkeys(tuple(getattr(__import__('prometheus.reader', from
 
 # The flips: an executor keyed on the Understanding. Each has its kill switch PM_U_OFF_<NAME>=1.
 # A name here is live; a name in SHADOW is computed and logged and keys nothing yet.
-FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask')
+FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
+           'wizard_interrupt',      # an armed wizard step yields to a clearly unrelated ask and takes a plain correction (Jenna 2026-11-20)
+           'valuation_referent')    # words after a delivered valuation that point at it (its deck, its dates, a re-run) are about it
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
 # these stands the others down. Anything else is "no position taken".
 _CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue'))
+# intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
+WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',
+                              'definition', 'capability', 'study_question', 'provenance'))
+WIZARD_YIELD_CONF = 0.8
 
 ACTIONS = ('answer', 'build', 'deck', 'send', 'open', 'status', 'cancel', 'approve', '')
 
@@ -333,7 +339,8 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         ev = []
         sc = Scope()
         sc.no_build = bool(no_build)
-        sc.armed_step = _armed_step(body) or ('bpiq_wizard' if f.get('wizard_open') and not f.get('cancel') else '')
+        sc.armed_step = _armed_step(body)
+        wiz_open = bool(f.get('wizard_open')) and not f.get('cancel') and not sc.armed_step
         sc.own_order = bool(_OWN_ORDER_RX.search(t))
         sc.feature = bool(f.get('directions')) or (bool(f.get('wayfinding')) and not sc.own_order)
         sc.page = bool(_PAGE_RX.search(t)) and bool(ctx)
@@ -357,6 +364,17 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
                      'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open'):
             if f.get(name):
                 ev.append(name if name != 'wizard' else 'wizard:' + str(f[name]))
+        # a delivered valuation in the thread is what the words point at (prometheus.valuation_referent): its deck,
+        # its figures, a re-run on corrected dates. Read on the reader's own words when the order gate rewrote them.
+        vref = None
+        try:
+            from . import valuation_referent as _vr
+            if _vr.enabled():
+                vref = _vr.read(str(body.get('_pm_order_words') or '') or t, history)
+        except Exception:
+            vref = None
+        if vref:
+            ev.append('valuation_ref:' + str(vref.get('kind') or ''))
         u.evidence = ev
         # ---- the reconciler: hard rules first, then the contested pairs, then the rest
         intent, action, conf = 'analyze', 'answer', 0.6
@@ -364,6 +382,13 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             intent, action, conf = 'armed', '', 0.9              # the step wins (Jenna's call pending)
         elif f.get('cancel'):
             intent, action, conf = 'cancel', 'cancel', 0.9
+        elif vref:
+            # the thread's delivered valuation: a deck of it, or the valuation again (the same or corrected dates)
+            intent, action, conf = ('deck', 'deck', 0.85) if vref.get('kind') == 'deck' else ('valuation', 'build', 0.85)
+            u.referent = 'last_valuation'
+            u.subjects = [Subject(as_written=str(vref.get('subject') or ''), kind='audience', role='subject')]
+            if vref.get('window'):
+                u.window = f"{vref['window'][0]} to {vref['window'][1]}"
         elif is_order or f.get('order'):
             intent, action, conf = 'order', 'build', 0.85
             prod = str(f.get('order_product') or '')
@@ -411,10 +436,18 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         elif sc.page and not u.named_title:
             intent, action, conf = 'analyze_page', 'answer', 0.6
             u.referent = 'page'
+        if sc.no_build and vref and action == 'build':
+            action = 'answer'
         if u.named_title and intent in ('analyze', 'analyze_page', 'continuation_rerun'):
             u.subjects = [Subject(as_written=u.named_title, kind='title', role='title')]
             if intent != 'analyze':
                 intent, u.referent = 'analyze', ''
+        if wiz_open and not (intent in WIZARD_YIELDS_TO and conf >= WIZARD_YIELD_CONF and flipped('wizard_interrupt')):
+            # a Brand Partnership step waits on this thread and the words do not read, with confidence, as something
+            # else: the turn is the wizard's (the step wins); a confident unrelated ask keeps its own intent and the
+            # wizard stands aside for it (Jenna 2026-11-20, interrupt)
+            intent, action, conf = 'armed', '', 0.9
+            sc.armed_step = 'bpiq_wizard'
         u.intent, u.action, u.confidence, u.source = intent, action, round(conf, 2), 'features'
         if sc.no_build and u.action == 'build':
             u.action = 'answer'
@@ -550,6 +583,13 @@ def claims(body, name, fallback):
     return _fb()
 
 
+def mark_keyed(body):
+    """An executor keyed on the Understanding answered this ask (the ask log reads flip=1)."""
+    u = on_body(body)
+    if u is not None:
+        _mark(body, u)
+
+
 def _mark(body, u):
     """The ask log reads that a decision was keyed on the Understanding (a
     lane ran on it, or stood down on it)."""
@@ -626,5 +666,5 @@ def grade_log_rows(rows):
 
 
 __all__ = ['Understanding', 'Subject', 'Scope', 'INTENTS', 'LANE_INTENTS', 'FLIPPED', 'SHADOW', 'enabled', 'flipped',
-           'features', 'absorb_reading', 'on_body', 'attach', 'claims', 'stamp_log', 'agrees', 'grade_log_rows', 'parse_compact',
-           'text_key']
+           'features', 'absorb_reading', 'on_body', 'attach', 'claims', 'mark_keyed', 'stamp_log', 'agrees', 'grade_log_rows',
+           'parse_compact', 'text_key']
