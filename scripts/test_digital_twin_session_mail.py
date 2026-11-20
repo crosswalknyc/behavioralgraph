@@ -493,6 +493,13 @@ class Api(unittest.TestCase):
         finally:
             h.close()
 
+    def test_the_sweeper_leaves_a_heartbeat(self):
+        s3 = FakeS3()
+        SM.heartbeat(s3, seen=3, sent=1, now=NOW)
+        doc, _ = SM._read(s3, SM.HEARTBEAT_KEY)
+        self.assertEqual((doc['visits_seen'], doc['sent'], doc['at']), (3, 1, NOW))
+        self.assertTrue(doc['owner'] and doc['at_iso'].endswith('Z'))
+
     def test_the_switches(self):
         os.environ.pop('DTIQ_SESSION_MAIL', None)
         self.assertFalse(SM.enabled(), 'off in the regression harness unless forced on')

@@ -55,6 +55,7 @@ BUCKET = os.environ.get('CORPUS_CATALOG_BUCKET', 'dashboard-inputs')
 ACTIVE_PREFIX = 'system/digital_twins/session_mail/active/'
 SENT_PREFIX = 'system/digital_twins/session_mail/sent/'
 LOCK_PREFIX = 'system/digital_twins/session_mail/locks/'
+HEARTBEAT_KEY = 'system/digital_twins/session_mail/sweeper.json'    # the last pass: when, which worker, how many visits it saw
 DASHBOARD = 'https://dashboard.crosswalknyc.com'
 SWEEP_S = 60.0                 # how often each worker looks for a visit that is due
 STAMP_MIN_GAP_S = 30.0         # a poll re-stamps a visit at most this often per process (the room polls every few seconds while it works)
@@ -648,6 +649,15 @@ def sweep(s3, *, load_twin: Callable, user_for: Callable, save_for: Optional[Cal
     return sent_n
 
 
-__all__ = ['enabled', 'quiet_s', 'leave_s', 'note_activity', 'visits', 'judge', 'compose', 'send_read', 'sweep', 'acquire', 'release',
+def heartbeat(s3, seen: int = 0, sent: int = 0, now: Optional[float] = None) -> None:
+    """The sweeper's own status key, overwritten on every pass by
+    whichever worker ran it: proof on the box that the thread is alive
+    after a deploy. Never raises."""
+    now = float(now or time.time())
+    _write(s3, HEARTBEAT_KEY, {'at': now, 'at_iso': datetime.fromtimestamp(now, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'owner': _owner(),
+                               'visits_seen': int(seen), 'sent': int(sent), 'quiet_s': quiet_s(), 'leave_s': leave_s(), 'version': VERSION})
+
+
+__all__ = ['enabled', 'heartbeat', 'HEARTBEAT_KEY', 'quiet_s', 'leave_s', 'note_activity', 'visits', 'judge', 'compose', 'send_read', 'sweep', 'acquire', 'release',
            'own_questions', 'finished_questions', 'room_link', 'visit_key', 'sent_key', 'lock_key', 'visit_id',
            'ACTIVE_PREFIX', 'SENT_PREFIX', 'LOCK_PREFIX', 'SWEEP_S', 'STAMP_MIN_GAP_S', 'LOCK_STALE_S', 'CALLER', 'FAMILY', 'KINDS']

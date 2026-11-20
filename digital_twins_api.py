@@ -3322,8 +3322,11 @@ def _session_mail_sweep_once():
     portrait_fn = (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
 
     def _run():
-        return SM.sweep(s3, load_twin=lambda k: DT.load_twin(_s3(), k), save_for=lambda k: (lambda p: DT.save_twin(_s3(), k, p)),
-                        user_for=_user_record, portrait_fn=portrait_fn)
+        seen = len(SM.visits(s3))
+        n = SM.sweep(s3, load_twin=lambda k: DT.load_twin(_s3(), k), save_for=lambda k: (lambda p: DT.save_twin(_s3(), k, p)),
+                     user_for=_user_record, portrait_fn=portrait_fn)
+        SM.heartbeat(s3, seen=seen, sent=n)
+        return n
     if flask_app is not None:
         with flask_app.test_request_context():
             return _run()
