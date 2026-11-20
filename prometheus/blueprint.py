@@ -253,14 +253,19 @@ def ask():
 
 def _email_long_answer(user, body, env):
     """The finished answer to the reader's inbox when the ask ran past
-    the long-wait mark. Only a real answer with text; never a brief card
-    or a clarifier. Returns True when sent."""
+    the long-wait mark. Only a finished answer (prometheus.answer_ready,
+    Jenna 2026-11-19): never a build that started, a brief, a quote, a
+    confirmation, a question back, the calm promise or directions. A
+    build's completion email is the one mail a build sends. Returns True
+    when sent."""
     try:
-        raw = (env or {}).get('raw') if isinstance(env, dict) else None
-        if not isinstance(raw, dict):
+        from . import answer_ready as _ar
+        ok, _why = _ar.finished_answer(env)
+        if not ok:
             return False
-        reply = str(raw.get('reply') or raw.get('answer') or '').strip()
-        if not reply or raw.get('action') not in (None, 'answer') or raw.get('guidance') or raw.get('clarify') or raw.get('spec_draft') or raw.get('spec_drafts'):
+        raw = env.get('raw') if isinstance(env.get('raw'), dict) else env.get('_raw')
+        reply = _ar.reply_text_of(raw)
+        if not reply:
             return False
         to = str((user or {}).get('email') or '').strip()
         if '@' not in to:

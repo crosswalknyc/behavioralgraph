@@ -1844,7 +1844,13 @@ def balance_brackets(text):
     for i in reversed(stack):
         del out[i]
     return re.sub(r"[ \t]{2,}", ' ', ''.join(out))
-_INSIDE_RX = re.compile(r"\s*,?\s*(?:\(?\s*)?inside the (?:10|ten) million(?: sample| panel)?(?: and projected to the US)?\s*\)?", re.I)
+# "the count inside the 10 million US consumers we measure" is the house
+# phrase for the unprojected count (prometheus.orders.RAW_PHRASE, the
+# segment and unprojected reads) and stays whole: without the lookahead
+# this cut "inside the 10 million " out of it and the reader got "the
+# countUS consumers we measure" (Jenna 2026-11-19, the Aiyana Lee turn)
+_INSIDE_RX = re.compile(r"\s*,?\s*(?:\(?\s*)?inside the (?:10|ten) million(?: sample| panel)?(?: and projected to the US)?"
+                        r"(?!\s+(?:US|U\.S\.)\s+consumers\b)\s*\)?", re.I)
 # "Estimated audience: 158,305 to 220,662 inside the 10 million sample,
 # about 5,222,482 to 7,279,639 US people": only the US people survive
 # (Jenna 2026-10-26, Emmet Riley's brief)
