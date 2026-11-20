@@ -74,13 +74,16 @@ GOOD_OUTCOMES = frozenset({
     # deterministic lanes (2026-10-02 S3)
     'in_library', 'not_found', 'approve_without_draft',
     'workorder_status', 'workorder_eta', 'workorder_cancel',
-    'queued'}) | BUILD_DECISIONS   # queued: a deck or read handed to the worker (2026-10-13)
+    'queued',   # queued: a deck or read handed to the worker (2026-10-13)
+    # a read that landed, a wizard turn, an intake step, a restated answer (the corpus gate, 2026-11-20)
+    'landed', 'turn', 'intake', 'answered_restated'}) | BUILD_DECISIONS
 
 # Outcomes that depend on state the replay does not have: an empty
 # library, no active build, no recent read to export.
 HARNESS_LIMITED_OUTCOMES = frozenset({
     'declined_no_base_profile', 'build_first_offer',
-    'declined_no_csv_source', 'nothing_active'})
+    'declined_no_csv_source', 'nothing_active',
+    'no_file'})   # build_facts with no finished file open (the replay carries no files)
 
 # A clarifying question is the intake contract doing its job on an
 # under-specified ask (2026-10-02 W2). It is reported as drift, never
@@ -88,7 +91,9 @@ HARNESS_LIMITED_OUTCOMES = frozenset({
 CLARIFY_OUTCOMES = frozenset({'clarified', 'asked_open_screen', 'asked_base',
                               'asked_what', 'asked_subject',
                               # a follow-up with nothing to point at, or with no launch day in hand (2026-11-18)
-                              'asked_which_title', 'asked_launch_date'})
+                              'asked_which_title', 'asked_launch_date',
+                              # which audience, a confirm before a re-run, a brief held for the go-ahead (2026-11-20)
+                              'asked_audience', 'asked_confirm', 'asked_which', 'held_for_go_ahead'})
 
 # Routes that read Subscriber IQ files the replay does not carry. An
 # honest miss there is unchecked, as is any miss on a non-profile
@@ -529,7 +534,14 @@ def surface_for(question, has_ctx, mode=None):
 
 
 def _probe_inprocess(question, view_id='', subject='', history=None,
-                     view_data=None, logged_outcome=None, mode=None):
+                     view_data=None, logged_outcome=None, mode=None,
+                     reading=None, client_surface=None):
+    """One ask in the child. `reading` is the Reader's logged reading for
+    this ask (rebuild stage 1, 2026-11-20): with one, the canned model
+    hands it back on the Reader's call and no reading is invented; with
+    none, the Reader returns nothing and the pattern lanes carry the ask,
+    which is what production did. `client_surface` is the surface the
+    widget sent with the ask when the log kept it."""
     question = str(question or '').strip()
     out = {'route': '', 'outcome': '', 'surface': '', 'row': None,
            'reply': '', 'status': 0, 'ms': 0, 'result': None}
@@ -550,7 +562,7 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
         surface, row = surface_for(question, has_ctx, mode)
         out['surface'], out['row'] = surface, row
         _STATE['question'] = question
-        _canned_dual(h, subject, logged_outcome)
+        _canned_dual(h, subject, logged_outcome, reading=reading)
         door = _STATE.get('door') or ''
         path = door or ('/api/brief-chat/analyze' if surface == 'analyze'
                         else '/api/brief-chat/interpret')
@@ -559,13 +571,16 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
         if door:
             # the widget's shape: its own surface call, no persisted
             # thread, page context as the dashboard sends it
-            body.update({'client': 'dashboard', 'persist': False, 'surface': surface})
+            body.update({'client': 'dashboard', 'persist': False,
+                         'surface': (client_surface if client_surface in ('analyze', 'interpret', 'deck') else surface)})
         if mode:
             body['mode'] = mode
         n0 = len(_STATE['captured'])
         t0 = time.time()
         try:
-            status, payload = h.post(path, body,
+            # the caller header marks the ask a probe's for the thread
+            # scope and the ledger gate (no thread minted, nothing banked)
+            status, payload = h.post(path, body, headers={'X-Prometheus-Caller': 'replay'},
                                      session={'username': REPLAY_USER['username']})
         except Exception as exc:
             status, payload = 500, {'error': str(exc)[:300]}
@@ -581,6 +596,11 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
             # `surface` stays the routing table's call (what the tests
             # pin); the door's own choice rides alongside
             out['door_surface'] = str(payload.get('surface') or '')
+            out['kind'] = str(payload.get('kind') or '')
+            try:
+                out['decision'] = str((payload.get('decision') or {}).get('reason') or '')
+            except Exception:
+                out['decision'] = ''
             raw = payload.get('raw')
             if isinstance(raw, dict):
                 merged = dict(raw)
@@ -601,11 +621,13 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
     return out
 
 
-def _canned_dual(h, subject, logged_outcome):
+def _canned_dual(h, subject, logged_outcome, reading=None):
     """One canned model that answers each call in the shape its caller
     parses: interpret-tagged agent calls get the brief draft, analysis
     calls get the reply. The door picks the surface itself, so the
-    model can no longer be shaped for one surface up front."""
+    model can no longer be shaped for one surface up front. The Reader's
+    call (surface='reader') gets the logged reading, or no answer at all
+    when the log kept none, so no reading is ever invented."""
     if not str(subject or '').strip():
         # the log kept no subject: read one off the question so a
         # build order or a sizing ask runs instead of declining
@@ -630,15 +652,22 @@ def _canned_dual(h, subject, logged_outcome):
         return {'success': True, 'data': _copy(data), 'model': 'replay'}
 
     h.host.set('_run_nflx_claude_agent', _agent)
-    h.patch('_pm_claude_json', lambda *a, **k: {
-        'success': True, 'data': _copy(reply), 'model': 'replay'})
+    canned_reading = reading if isinstance(reading, dict) and reading.get('intent') else None
+
+    def _json(*a, **k):
+        if str(k.get('surface') or '') == 'reader':
+            if canned_reading is None:
+                return {'success': False, 'error': 'no logged reading'}
+            return {'success': True, 'data': _copy(canned_reading), 'model': 'replay'}
+        return {'success': True, 'data': _copy(reply), 'model': 'replay'}
+    h.patch('_pm_claude_json', _json)
 
 
 # ---------------------------------------------------------------------------
 # Parent-side API
 # ---------------------------------------------------------------------------
 _PROBE_KEYS = ('question', 'view_id', 'subject', 'history', 'view_data',
-               'logged_outcome', 'mode')
+               'logged_outcome', 'mode', 'reading', 'client_surface')
 
 
 def _fault(reason, detail=''):
