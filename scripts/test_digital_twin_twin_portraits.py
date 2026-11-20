@@ -114,14 +114,24 @@ class FacesForTheKinds(unittest.TestCase):
 
 
 class TwinPage(unittest.TestCase):
-    def test_the_twin_page_carries_the_kinds_section(self):
+    def test_learn_more_carries_the_kinds_section(self):
+        # Jenna 2026-11-19: 'this should just fall in the dropdown, not at the bottom of the page'. The whole section
+        # renders inside the entry's Learn more (libLearn calls kindsSection); the twin page below the list no longer
+        # prepends it and only renders when asked for (See the full twin).
         with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
             html = fh.read()
         self.assertIn('function kindsSection(t)', html)
         self.assertIn('Who makes up this audience', html)
-        self.assertIn("var out = kindsSection(t) + '<div class=\"dtw-actions dtw-export\">", html)
-        for need in ('dtw-kind-face', 'dtw-kind-about', 'What holds them back', 'rep.portrait_url'):
+        self.assertEqual(html.count('kindsSection('), 2, 'one definition, one caller')
+        learn = html[html.index('function libLearn(r, doc)'):html.index('function libStats(doc)')]
+        self.assertIn('var kinds = kindsSection(doc);', learn)
+        twin_page = html[html.index('function renderTwin()'):html.index('window.dtwOpenRun = ')]
+        self.assertNotIn('kindsSection(', twin_page)
+        self.assertIn("if (!S.twinPage) { h.innerHTML = ''; return; }", twin_page)
+        for need in ('dtw-kind-face', 'dtw-kind-about', 'What holds them back', 'rep.portrait_url', 'window.dtwTwinPageHide = '):
             self.assertIn(need, html, need)
+        self.assertIn('tap a kind for who they are.', html)
+        self.assertNotIn('tap a kind for what the desk wrote', html)
 
 
 if __name__ == '__main__':
