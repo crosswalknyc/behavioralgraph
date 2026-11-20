@@ -24933,7 +24933,12 @@ DEFAULT_HIDDEN_PRODUCTS = {
     # untouched: Trends IQ reads them.
     'blueIQ': True,
     'hedgeFundIQ': False,
-    'sfConversion': False,
+    # 2026-11-19 (Jenna): SF Conversion sunset, same shape as Blue IQ.
+    # Hidden from SELECT PRODUCT for everyone, its routes answer as
+    # though it is gone, and the paid submit route refuses before it
+    # charges. Nothing is deleted; unchecking the box in Live Features
+    # brings it back.
+    'sfConversion': True,
     'intentIQ': False,
     'impactIQ': False,          # 2026-07-22 sync-gap fix (was in dropdown/admin, missing here)
     'brandPartnershipIQ': False,
@@ -34703,6 +34708,8 @@ def submit_sf_lf_conversion():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
+        if _product_retired('sfConversion'):
+            return jsonify({'error': 'SF Conversion is no longer available'}), 404
         if not user_can_run_analysis_module(user, 'sf_lf_conversion'):
             return jsonify({'error': 'SF-LF Conversion access required'}), 403
         data = request.json
@@ -37181,14 +37188,27 @@ def run_sf_lf_conversion(job_id):
                 pass
 
 
+def _require_sf_conversion():
+    """Return (False, error_response) when SF Conversion is unavailable.
+
+    The retirement is checked before access, so a seat that still holds
+    the grant is told the product is gone rather than that it lacks
+    permission.
+    """
+    if _product_retired('sfConversion'):
+        return False, (jsonify({'success': False,
+                                'error': 'SF Conversion is no longer available'}), 404)
+    return _require_module_access(
+        'has_sf_conversion_access',
+        'analysis_iq_modules::sf_lf_conversion',
+        module_label='SF Conversion')
+
+
 @app.route('/api/sf-lf-conversion/list')
 @requires_auth
 def list_sf_lf_conversion_results():
     """List all SF-LF Conversion results from S3 bucket."""
-    ok, err = _require_module_access(
-        'has_sf_conversion_access',
-        'analysis_iq_modules::sf_lf_conversion',
-        module_label='SF Conversion')
+    ok, err = _require_sf_conversion()
     if not ok:
         return err
     try:
@@ -37253,10 +37273,7 @@ def _require_sf_conversion_journey(s3_key):
 @requires_auth
 def download_sf_lf_conversion(s3_key):
     """Download a released SF-LF Conversion CSV from S3."""
-    ok, err = _require_module_access(
-        'has_sf_conversion_access',
-        'analysis_iq_modules::sf_lf_conversion',
-        module_label='SF Conversion')
+    ok, err = _require_sf_conversion()
     if not ok:
         return err
     denied = _require_sf_conversion_journey(s3_key)
@@ -37290,10 +37307,7 @@ def download_sf_lf_conversion(s3_key):
 @requires_auth
 def get_sf_lf_conversion_data(s3_key):
     """Get SF-LF Conversion CSV data as JSON for dashboard rendering."""
-    ok, err = _require_module_access(
-        'has_sf_conversion_access',
-        'analysis_iq_modules::sf_lf_conversion',
-        module_label='SF Conversion')
+    ok, err = _require_sf_conversion()
     if not ok:
         return err
     denied = _require_sf_conversion_journey(s3_key)
@@ -37523,10 +37537,7 @@ Be balanced. Identify real structural failures AND genuine strategic value. Thin
 @requires_auth
 def sf_lf_performance_analysis():
     """Analyze SF-LF conversion URLs for click farms and marketing effectiveness using GPT-4."""
-    ok, err = _require_module_access(
-        'has_sf_conversion_access',
-        'analysis_iq_modules::sf_lf_conversion',
-        module_label='SF Conversion')
+    ok, err = _require_sf_conversion()
     if not ok:
         return err
     try:
