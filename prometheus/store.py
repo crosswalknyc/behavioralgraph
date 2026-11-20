@@ -24,17 +24,19 @@ The document mirror (rebuild stage 6, 2026-11-20). The records Prometheus
 writes most and reads most (a reader's chat threads and their index, the
 generated-read job documents, the insights ledger index) are mirrored
 into ``pm_docs`` byte for byte, keyed by their S3 key, at the moment they
-are written to S3 (``doc_put``, called from the three write seams:
-prometheus.legacy.watch._pm_s3_put_json, prometheus.thread_merge._put,
-prometheus.legacy.jobs._pm_read_status_write and
-insights_ledger._put_index_cas). S3 stays the system of record and is
+are written to S3 (``doc_put``, from one seam: ``install_mirror`` hooks
+the S3 client at bind, and boto3's default session for every client made
+after it, so every writer mirrors the same bytes after S3 takes them and
+none knows the mirror exists). S3 stays the system of record and is
 never deleted or moved; the mirror is write-through. Reading from the
 mirror is a second switch, ``PM_STORE_READ=1`` (``read_enabled``), under
 which ``_pm_s3_json`` returns the mirrored document first and falls back
 to S3 on a miss. The ledger index keeps its S3 ETag compare-and-set, so
 its read stays on S3; the mirror of it serves the morning review and
 the ops page. Parity: scripts/pm_store_parity.py replays the corpus and
-compares every mirrored key against what landed in S3.
+compares every mirrored key against what landed in S3;
+``production_parity`` does the same against the live bucket from inside
+a running process (the ops route in prometheus.store_ops).
 """
 from __future__ import annotations
 
@@ -614,6 +616,134 @@ def parity(objects):
     for k in doc_keys():
         if k not in seen:
             out['only_store'] += 1
+    return out
+
+
+def _as_dt(v):
+    """An aware UTC datetime from what S3 or the store hands back (a
+    datetime, or an ISO string), or None."""
+    import datetime as _dt
+    if v is None:
+        return None
+    if isinstance(v, _dt.datetime):
+        return v if v.tzinfo else v.replace(tzinfo=_dt.timezone.utc)
+    t = str(v).strip()
+    if not t:
+        return None
+    try:
+        d = _dt.datetime.fromisoformat(t.replace('Z', '+00:00'))
+        return d if d.tzinfo else d.replace(tzinfo=_dt.timezone.utc)
+    except Exception:
+        return None
+
+
+def _list_prefix(s3, bucket, prefix):
+    """Every object under ``prefix`` as (key, LastModified), one page at
+    a time. Read-only."""
+    out = []
+    token = None
+    while True:
+        kw = {'Bucket': bucket, 'Prefix': prefix}
+        if token:
+            kw['ContinuationToken'] = token
+        resp = s3.list_objects_v2(**kw) or {}
+        for o in resp.get('Contents') or []:
+            out.append((o.get('Key'), o.get('LastModified')))
+        token = resp.get('NextContinuationToken') if resp.get('IsTruncated') else None
+        if not token:
+            break
+    return out
+
+
+def production_parity(s3, bucket, since=None, limit=2000):
+    """The mirror against what S3 holds, from inside a running process
+    (the live check behind the ops route; stage 6 in production, Jenna
+    2026-11-20). Read-only on both sides. Lists the three mirrored
+    families in S3, takes every document S3 changed since the mirror's
+    first write (or ``since``, an ISO time), reads it, and compares its
+    bytes with the mirrored row. A document the mirror holds that S3 no
+    longer lists is 'only_store'; one S3 changed that the mirror never
+    saw is 'only_s3' (a writer outside this process). Counts and keys
+    only; never a body."""
+    import datetime as _dt
+    import hashlib
+    import time as _time
+    t0 = _time.time()
+    out = {'enabled': enabled(), 'rows': 0, 'since': None, 'listed': 0, 'older': 0, 'checked': 0,
+           'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0, 'truncated': False,
+           'by_family': {}, 'examples': {'different': [], 'only_s3': [], 'only_store': []}}
+    if not enabled():
+        return out
+    try:
+        if not _ensure():
+            return out
+        rows = {r['key']: r for r in _rows(_exec('SELECT key, family, sha, nbytes, updated_at FROM pm_docs'))}
+    except Exception as e:
+        _note('store.production_parity', e)
+        return out
+    out['rows'] = len(rows)
+    first = None
+    for r in rows.values():
+        d = _as_dt(r.get('updated_at'))
+        if d is not None and (first is None or d < first):
+            first = d
+    since_dt = _as_dt(since) if since else (first - _dt.timedelta(seconds=90) if first else None)
+    out['since'] = since_dt.strftime('%Y-%m-%dT%H:%M:%SZ') if since_dt else None
+    listed = []
+    for prefix in (THREADS_PREFIX, READS_PREFIX, LEDGER_INDEX_KEY):
+        try:
+            listed.extend((k, lm) for k, lm in _list_prefix(s3, bucket, prefix) if mirrors(k))
+        except Exception as e:
+            _note('store.production_parity', e)
+    seen = set()
+    gets = 0
+    for key, lm in listed:
+        out['listed'] += 1
+        seen.add(key)
+        fam = family_of(key)
+        f = out['by_family'].setdefault(fam, {'listed': 0, 'older': 0, 'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0})
+        f['listed'] += 1
+        lmd = _as_dt(lm)
+        if since_dt is None or (lmd is not None and lmd < since_dt):
+            out['older'] += 1
+            f['older'] += 1
+            continue
+        row = rows.get(key)
+        if row is None:
+            out['only_s3'] += 1
+            f['only_s3'] += 1
+            if len(out['examples']['only_s3']) < 20:
+                out['examples']['only_s3'].append(key)
+            continue
+        if gets >= int(limit):
+            out['truncated'] = True
+            continue
+        gets += 1
+        try:
+            body = s3.get_object(Bucket=bucket, Key=key)['Body'].read()
+        except Exception as e:
+            _note('store.production_parity', e)
+            continue
+        text = body.decode('utf-8') if isinstance(body, (bytes, bytearray)) else str(body)
+        sha = hashlib.sha1(text.encode('utf-8')).hexdigest()
+        out['checked'] += 1
+        f['checked'] += 1
+        if sha == str(row.get('sha') or ''):
+            out['same'] += 1
+            f['same'] += 1
+        else:
+            out['different'] += 1
+            f['different'] += 1
+            if len(out['examples']['different']) < 20:
+                out['examples']['different'].append(key)
+    for key, row in rows.items():
+        if key not in seen:
+            out['only_store'] += 1
+            f = out['by_family'].setdefault(row.get('family'), {'listed': 0, 'older': 0, 'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0})
+            f['only_store'] += 1
+            if len(out['examples']['only_store']) < 20:
+                out['examples']['only_store'].append(key)
+    out['elapsed_s'] = round(_time.time() - t0, 1)
     return out
 
 

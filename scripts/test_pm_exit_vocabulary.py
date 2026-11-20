@@ -298,5 +298,78 @@ class TheChecker(unittest.TestCase):
         self.assertIn('sample', ' '.join(V.hits('Estimated audience: 12 inside the 10 million sample.', X.BRIEF_FIELD)).lower())
 
 
+class HouseholdsArePeople(unittest.TestCase):
+    """Jenna 2026-11-20: a household is a person and households are people
+    (individual-level-language.mdc); HHs stays Accounts; the three phrases
+    keep their English."""
+
+    def test_the_nouns(self):
+        out = X.text('Households with kids lead; 2.3M households watched; per household it was 1.4.', X.PROSE)
+        self.assertEqual(out, 'People with kids lead; 2.3M people watched; per person it was 1.4.')
+        self.assertNotIn('famil', out.lower())
+        self.assertEqual(V.hits(out), [])
+
+    def test_the_phrases_keep_their_english(self):
+        self.assertEqual(X.text('Household income over $100K is 34%.', X.PROSE), 'Income over $100K is 34%.')
+        self.assertEqual(X.text('She is a household name; household reach was 40%.', X.PROSE),
+                         'She is a well-known name; reach was 40%.')
+
+    def test_hhs_is_still_accounts(self):
+        out = X.text('The HHs grew to 2,311 households; per-HH spend $42; the HH count fell.', X.PROSE)
+        self.assertIn('Accounts grew to 2,311 people', out)
+        self.assertIn('per account spend $42', out)
+        self.assertNotIn('HH', out)
+
+    def test_no_private_list_still_says_families(self):
+        import re as _re
+        for mod in (V, X, G, E, OM, TN, PMA):
+            src = open(mod.__file__.replace('.pyc', '.py'), encoding='utf-8').read()
+            self.assertIsNone(_re.search(r"""household[^\n]*['"]famil(?:y|ies)['"]""", src), mod.__name__)
+
+
+class SampleAsAName(unittest.TestCase):
+    """Jenna 2026-11-20: a title or a proper name that carries the word
+    Sample is never rewritten; the sizing wording the pass exists to scrub
+    still is."""
+
+    NAMES = [
+        'Sample the album is on Spotify this week.',
+        'The film Sample (2023) found its audience on Tubi.',
+        "'Sample' the single and \"Sample\" the EP both charted.",
+        'Free Sample Friday drew 40,112 people.',
+        "Netflix's Sample soundtrack reached 2.1M people.",
+    ]
+
+    def test_a_name_survives_every_path(self):
+        for c in self.NAMES:
+            self.assertEqual(X.text(c, X.BRIEF_FIELD), c)
+            self.assertEqual(X.text(c, X.PROSE), c)
+            self.assertEqual(G.scrub_sample_vocabulary(c), c)
+            self.assertEqual(V.hits(c, X.BRIEF_FIELD), [], c)
+
+    def test_our_wording_is_still_rewritten(self):
+        out = G.scrub_sample_vocabulary('Sample size 10,000; the sample covers the trailing year; Sample Size: 400; Sample count 12.')
+        self.assertNotRegex(out.lower(), r'\bsample\b')
+        self.assertIn('audience size 10,000', out)
+        self.assertIn('the data covers the last 12 months', out)
+        out = G.scrub_sample_vocabulary('Sample: 12,345 individuals (0.12% incidence)')
+        self.assertIn('people in the US', out)
+        self.assertNotIn('incidence', out.lower())
+        out = G.scrub_sample_vocabulary('Sample check for Yellowstone viewers, trailing year:')
+        self.assertEqual(out, 'Yellowstone viewers, the last 12 months:')
+        self.assertNotRegex(G.scrub_sample_vocabulary('Sample of 300 people clicked.').lower(), r'\bsample\b')
+
+    def test_both_in_one_text(self):
+        out = G.scrub_sample_vocabulary('Sample the album reached 2.1M people; the sample behind it is ours.')
+        self.assertEqual(out, 'Sample the album reached 2.1M people; the data behind it is ours.')
+
+    def test_hold_and_release_are_exact(self):
+        t = 'Sample the album; Samples: 12; the sample.'
+        held_t, held = V.hold_sample_names(t)
+        self.assertEqual(held, ['Sample'])
+        self.assertNotIn('Sample the', held_t)
+        self.assertEqual(V.release_sample_names(held_t, held), t)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

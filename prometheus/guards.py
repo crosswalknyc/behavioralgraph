@@ -1764,6 +1764,12 @@ def scrub_sample_vocabulary(text):
     t = str(text or '')
     if not t.strip() or not SAMPLE_VOCAB_RX.search(t):
         return t
+    # a title or a proper name that carries the word ("Sample the album")
+    # is never ours: held out before any rule reads the text and put back
+    # exactly at the end (Jenna 2026-11-20)
+    t, _held_names = _vocab.hold_sample_names(t)
+    if not SAMPLE_VOCAB_RX.search(t):
+        return str(text or '')
     m = _CHECK_HEAD_RX.search(t)
     if m:
         who, win = split_check_head(m.group('rest'))
@@ -1806,7 +1812,7 @@ def scrub_sample_vocabulary(text):
     t = _INSIDE_RX.sub('', t)
     t = _PROFILE_LINE_RX.sub(lambda mm: f"{mm.group('name')}: {_people(mm.group(3))} in the US", t)
     t = re.sub(r"\btrailing year\s*\(([^)]*)\)", lambda mm: plain_window(mm.group(1)) or 'the last 12 months', t, flags=re.I)
-    t = re.sub(r"\btrailing year\b", 'the last 12 months', t, flags=re.I)
+    t = re.sub(r"\b(?:the )?trailing year\b", 'the last 12 months', t, flags=re.I)
     t = re.sub(r"\bsample check\b", 'audience size', t, flags=re.I)
     t = re.sub(r"\bsample size\b", 'audience size', t, flags=re.I)
     t = re.sub(r"\bavid tier\b", 'most engaged tier', t, flags=re.I)
@@ -1823,4 +1829,4 @@ def scrub_sample_vocabulary(text):
     t = re.sub(r"\bincidence\b", 'share', t, flags=re.I)
     t = re.sub(r"[ \t]{2,}", ' ', t)
     t = re.sub(r"\n{3,}", '\n\n', t).strip()
-    return t
+    return _vocab.release_sample_names(t, _held_names)

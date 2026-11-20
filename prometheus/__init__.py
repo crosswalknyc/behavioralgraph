@@ -71,6 +71,14 @@ def init_app(app, host_module):
         app.register_blueprint(_offers_bp)
     except Exception as e:  # pragma: no cover - defensive at boot
         print(f"[prometheus] offers blueprint not registered: {e}")
+    # The store's ops routes (rebuild stage 6 in production, 2026-11-20):
+    # the mirror's switches and its parity against S3, counts only,
+    # behind the ops secret. Never a reader surface.
+    try:
+        from .store_ops import bp as _store_ops_bp
+        app.register_blueprint(_store_ops_bp)
+    except Exception as e:  # pragma: no cover - defensive at boot
+        print(f"[prometheus] store ops blueprint not registered: {e}")
     # Build-first follow-through (2026-10-06, Jenna): a stashed
     # question answers itself on the user's thread once its profile
     # lands, tab open or not. Daemon thread; kill switch

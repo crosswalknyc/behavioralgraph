@@ -24,7 +24,8 @@ What the table carries, in the order the exit applies it
     copied);
   * the dash rule (em, en and horizontal bar to a hyphen);
   * the word swaps: the synth family, pipeline, hostmap, enforcer, modeled,
-    estimated, derived, panel, household, HH to Accounts (Jenna 2026-08-31),
+    estimated, derived, panel, household to person and households to people
+    (Jenna 2026-11-20), HH to Accounts (Jenna 2026-08-31),
     infrastructure, model and vendor names, field names typed into prose;
   * the method-sentence pattern, its safe swaps and its last-resort subs;
   * the cause narrative (what happened to the data);
@@ -104,10 +105,16 @@ WORD_SWAPS = (
     (r'\bpanelist\b', 'viewer'),
     (r'\bpanel\b', 'audience'),
     # Individual-level language (standing rule): counts and cohorts
-    # are viewers / people / accounts, never households.
+    # are viewers / people / accounts, never households. A household is
+    # a person and households are people (Jenna 2026-11-20); the three
+    # phrases above them keep their English (income stays income, a
+    # household name is a well-known name, household reach is reach).
     (r'\bhousehold income\b', 'income'),
-    (r'\bhouseholds\b', 'families'),
-    (r'\bhousehold\b', 'family'),
+    (r'\bhousehold names\b', 'well-known names'),
+    (r'\bhousehold name\b', 'well-known name'),
+    (r'\bhousehold (?:penetration|reach)\b', 'reach'),
+    (r'\bhouseholds\b', 'people'),
+    (r'\bhousehold\b', 'person'),
 )
 # HHs is Accounts, title case, a direct substitution (Jenna 2026-08-31,
 # individual-level-language.mdc). Case-sensitive so the agency HHS and a
@@ -279,6 +286,35 @@ CAUSE_MAIL_RX = re.compile(CAUSE_CORE + CAUSE_MAIL_EXTRA, re.IGNORECASE)
 # (was guards.SAMPLE_VOCAB_RX)
 SAMPLE_VOCAB_RX = re.compile(
     r"\bsample check\b|\bsample size\b|\bsample\b|\bincidence\b|\b(?:10|ten) million\b|\bpanelists?\b|\bavid tier\b|\btrailing year\b|\bindividuals\b", re.I)
+
+# A title or a proper name that carries the word ("Sample the album", the
+# film "Sample", "Free Sample Friday") is never our sizing noun and is
+# never rewritten (Jenna 2026-11-20). The name is the capital S form that
+# is not one of our own: not the sizing line ("Sample: 12,345"), not the
+# compounds the pass rewrites on their own ("Sample check", "Sample size",
+# "Sample count"), not "Sample of <n>". Lower-case sample stays ours.
+SAMPLE_NAME_RX = re.compile(
+    r"(?<!\w)Samples?\b(?![-:])(?!\s+(?:(?i:check|sizes?|counts?)\b|(?i:of)\s+(?:~|(?i:about|roughly)\s+)?\d))")
+_SAMPLE_NAME_TOKEN = 'xqnameholdq{i}qx'
+_SAMPLE_NAME_TOKEN_RX = re.compile(r'xqnameholdq(\d+)qx')
+
+
+def hold_sample_names(text):
+    """Swap every Sample-as-a-name for a token the sample pass cannot
+    read; ``release_sample_names`` puts them back exactly."""
+    t = str(text or '')
+    held = []
+
+    def _take(m):
+        held.append(m.group(0))
+        return _SAMPLE_NAME_TOKEN.format(i=len(held) - 1)
+    return SAMPLE_NAME_RX.sub(_take, t), held
+
+
+def release_sample_names(text, held):
+    if not held:
+        return text
+    return _SAMPLE_NAME_TOKEN_RX.sub(lambda m: held[int(m.group(1))] if int(m.group(1)) < len(held) else m.group(0), str(text or ''))
 
 # ------------------------------------------------------- deliverable jargon
 # Labels the engine coins for itself never reach a reader (2026-10-13).
@@ -596,6 +632,7 @@ def hits(text, kind=PROSE):
     if kind == NAME:
         return []
     t, held = hold(str(text or ''))
+    t, _names = hold_sample_names(t)
     out = []
     if DASH_RX.search(t):
         out.append('dash')
@@ -632,7 +669,7 @@ __all__ = [
     'names_source', 'strip_named_sources',
     'METHOD_SENTENCE_RX', 'SENTENCE_SPLIT_RX', 'METHOD_SAFE_SWAPS', 'METHOD_WORD_SUBS',
     'CAUSE_CORE', 'CAUSE_MAIL_EXTRA', 'CAUSE_SENTENCE_RX', 'CAUSE_MAIL_RX',
-    'SAMPLE_VOCAB_RX', 'JARGON_SUBS', 'SCRUB_SKIP_KEYS', 'INFRA_RX',
+    'SAMPLE_VOCAB_RX', 'SAMPLE_NAME_RX', 'hold_sample_names', 'release_sample_names', 'JARGON_SUBS', 'SCRUB_SKIP_KEYS', 'INFRA_RX',
     'PARTNER_BANNED_TOKENS', 'PARTNER_SOURCES', 'PARTNER_ATTRIB_RX', 'PARTNER_SOURCE_LINE_RX',
     'PARTNER_PAREN_SOURCE_RX', 'PARTNER_SOURCE_INLINE_RX', 'PARTNER_CLAUSE_RX', 'PARTNER_WORD_SWAPS',
     'PARTNER_PLAIN_SWAPS', 'PARTNER_VERB_SWAPS', 'PARTNER_TOKEN_SKIP', 'PARTNER_HARD_RX', 'PARTNER_INFRA_RX',

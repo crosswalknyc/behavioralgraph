@@ -78,6 +78,13 @@ class FakeS3:
     def delete_object(self, **kw):
         self.deletes.append(kw.get('Key'))
 
+    def list_objects_v2(self, Bucket=None, Prefix='', **kw):
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc)
+        items = [{'Key': k, 'LastModified': getattr(self, 'stamps', {}).get(k, now)}
+                 for k in sorted(self.objects) if k.startswith(Prefix)]
+        return {'Contents': items, 'IsTruncated': False, 'KeyCount': len(items)}
+
 
 def _sqlite_on():
     db = tempfile.mktemp(prefix='pm_store_docs_', suffix='.db')
@@ -292,6 +299,94 @@ class ParityOnTheFixtures(unittest.TestCase):
         self.assertIsNotNone(m, out[-800:])
         self.assertEqual(m.group(1), m.group(2))
         self.assertGreater(int(m.group(3)), 0)
+
+
+class ParityInProduction(unittest.TestCase):
+    """store.production_parity: the mirror against the live bucket from
+    inside a running process, and the ops routes in front of it."""
+
+    def setUp(self):
+        _sqlite_on()
+        self.s3 = FakeS3()
+        ST.install_mirror(self.s3)
+
+    def tearDown(self):
+        _store_off()
+
+    def _write(self, key, body):
+        self.s3.put_object(Bucket='b', Key=key, Body=body)
+
+    def test_same_different_only_s3_only_store_and_older(self):
+        import datetime as _dt
+        self._write('system/synth_chat_threads/jane/t1.json', b'[1]')
+        self._write('system/synth_chat_threads/jane/index.json', b'{"a": 1}')
+        self._write('system/prometheus_reads/0123456789ab.json', b'{"status": "queued"}')
+        self._write('system/insights_ledger/index.json', b'{"rows": []}')
+        # a writer outside this process changed one and added one
+        self.s3.objects['system/prometheus_reads/0123456789ab.json'] = b'{"status": "done"}'
+        self.s3.objects['system/synth_chat_threads/bob/t9.json'] = b'[9]'
+        # a markers key under the reads prefix is not a family and is ignored
+        self.s3.objects['system/prometheus_reads/_queue/0123456789ab.json'] = b'{}'
+        # a document S3 held before the mirror started is older, not checked
+        self.s3.objects['system/synth_chat_threads/old/t0.json'] = b'[0]'
+        self.s3.stamps = {'system/synth_chat_threads/old/t0.json': _dt.datetime(2020, 1, 1, tzinfo=_dt.timezone.utc)}
+        # a document the mirror holds that S3 no longer lists
+        ST.doc_put('system/synth_chat_threads/gone/t2.json', b'[2]')
+        out = ST.production_parity(self.s3, 'b')
+        self.assertTrue(out['enabled'])
+        self.assertEqual(out['rows'], 5)
+        self.assertEqual(out['listed'], 6)
+        self.assertEqual(out['older'], 1)
+        self.assertEqual(out['checked'], 4)
+        self.assertEqual(out['same'], 3)
+        self.assertEqual(out['different'], 1)
+        self.assertEqual(out['only_s3'], 1)
+        self.assertEqual(out['only_store'], 1)
+        self.assertEqual(out['examples']['different'], ['system/prometheus_reads/0123456789ab.json'])
+        self.assertEqual(out['examples']['only_s3'], ['system/synth_chat_threads/bob/t9.json'])
+        self.assertEqual(out['examples']['only_store'], ['system/synth_chat_threads/gone/t2.json'])
+        self.assertEqual(out['by_family']['read']['different'], 1)
+        self.assertEqual(out['by_family']['ledger_index']['same'], 1)
+        self.assertFalse(out['truncated'])
+        self.assertNotIn('body', json.dumps(out).lower().replace('"by_family"', ''))
+
+    def test_the_limit_truncates_the_gets_not_the_listing(self):
+        for i in range(5):
+            self._write(f'system/synth_chat_threads/u/t{i}.json', b'[1]')
+        out = ST.production_parity(self.s3, 'b', limit=2)
+        self.assertTrue(out['truncated'])
+        self.assertEqual(out['checked'], 2)
+        self.assertEqual(out['listed'], 5)
+
+    def test_store_off_says_so(self):
+        _store_off()
+        out = ST.production_parity(self.s3, 'b')
+        self.assertFalse(out['enabled'])
+        self.assertEqual(out['rows'], 0)
+
+    def test_the_ops_routes_answer_only_to_the_secret(self):
+        from flask import Flask
+        from prometheus import store_ops as SO
+        self._write('system/synth_chat_threads/jane/t1.json', b'[1]')
+        app = Flask('t')
+        app.register_blueprint(SO.bp)
+        SO._s3_and_bucket = lambda: (self.s3, 'b')
+        os.environ['CRON_SECRET'] = 'shh-test'
+        try:
+            c = app.test_client()
+            self.assertEqual(c.get('/api/prometheus/ops/store-status').status_code, 404)
+            self.assertEqual(c.get('/api/prometheus/ops/store-parity', headers={'X-Ops-Secret': 'wrong'}).status_code, 404)
+            st = c.get('/api/prometheus/ops/store-status', headers={'X-Ops-Secret': 'shh-test'}).get_json()
+            self.assertTrue(st['enabled'])
+            self.assertFalse(st['read_enabled'])
+            self.assertEqual(st['rows'], 1)
+            self.assertEqual(st['by_family']['thread'], 1)
+            par = c.get('/api/prometheus/ops/store-parity', headers={'X-Ops-Secret': 'shh-test'}).get_json()
+            self.assertEqual((par['checked'], par['same'], par['different']), (1, 1, 0))
+            os.environ.pop('CRON_SECRET')
+            self.assertEqual(c.get('/api/prometheus/ops/store-status', headers={'X-Ops-Secret': 'shh-test'}).status_code, 404)
+        finally:
+            os.environ.pop('CRON_SECRET', None)
 
 
 if __name__ == '__main__':
