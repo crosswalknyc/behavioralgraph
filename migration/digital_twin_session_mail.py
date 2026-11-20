@@ -364,6 +364,24 @@ def _iso_to_epoch(s) -> Optional[float]:
         return None
 
 
+def _span_words(t0, t1) -> str:
+    """How long the questions ran, in the reader's units: nothing under
+    two minutes, minutes to an hour and a half, hours to two days, and
+    nothing at all for a span that stretched over days (the date says
+    enough)."""
+    try:
+        secs = max(0.0, float(t1) - float(t0))
+    except (TypeError, ValueError):
+        return ''
+    mins = int(round(secs / 60.0))
+    if mins < 2:
+        return ''
+    if mins <= 90:
+        return f", over {mins} minutes"
+    hours = int(round(secs / 3600.0))      # past ninety minutes this rounds to two or more
+    return f", over {hours} hours" if hours <= 48 else ''
+
+
 def room_link(key: str, sid: str) -> str:
     """The room on the dashboard: the twin and the room. The page opens
     the Focus Group IQ tab for a link that names a room, so the link
@@ -409,12 +427,7 @@ def compose(payload: dict, sess: dict, rec: dict, user_rec: Optional[dict], *, n
     day = _day(t0)
     if day:
         when = f" on {day}"
-    try:
-        mins = int(round((float(t1) - float(t0)) / 60.0))
-    except Exception:
-        mins = 0
-    if mins >= 2:
-        when += f", over {mins} minutes"
+    when += _span_words(t0, t1)
     where = f"your room on {twin}" + (f' ("{title}")' if title else '')
     qword = 'question' if n == 1 else 'questions'
     lines = [f"Hi {first},", '', f"Here is the read from {where}. You asked {n} {qword}{when}."]

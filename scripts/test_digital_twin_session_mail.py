@@ -268,6 +268,18 @@ class Copy(unittest.TestCase):
         self.assertIn('("Room")', '("Room")')     # the generic title never prints
         self.assertNotIn('("Room")', msg['body'])
 
+    def test_how_long_the_session_ran_in_the_readers_units(self):
+        self.assertEqual(SM._span_words(NOW, NOW + 60), '')
+        self.assertEqual(SM._span_words(NOW, NOW + 9 * 60), ', over 9 minutes')
+        self.assertEqual(SM._span_words(NOW, NOW + 85 * 60), ', over 85 minutes')
+        self.assertEqual(SM._span_words(NOW, NOW + 70 * 60), ', over 70 minutes')
+        self.assertEqual(SM._span_words(NOW, NOW + 95 * 60), ', over 2 hours')
+        self.assertEqual(SM._span_words(NOW, NOW + 91 * 60), ', over 2 hours')
+        self.assertEqual(SM._span_words(NOW, NOW + 3 * 3600), ', over 3 hours')
+        self.assertEqual(SM._span_words(NOW, NOW + 1085 * 60), ', over 18 hours')
+        self.assertEqual(SM._span_words(NOW, NOW + 5 * 86400), '', 'a span over days says nothing; the date is enough')
+        self.assertEqual(SM._span_words(None, NOW), '')
+
     def test_the_neutral_copy_carries_none_of_the_users_words(self):
         twin = _twin(title='Our panel on pricing')
         msg = SM.compose(twin, twin['panel_sessions'][0], _visit(asked=2), USER, neutral=True)
