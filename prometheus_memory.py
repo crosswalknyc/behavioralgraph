@@ -261,6 +261,8 @@ def remember(user, question, subject=None, cohort=None, ledger_key=None,
                 return   # a probe ask is never remembered (2026-11-02)
         except Exception:
             pass
+        if subject and _product_label(subject):
+            subject = None   # a view's title is where the ask was asked, not what it was about (2026-11-20)
         if not thread_id:
             try:
                 from prometheus import thread_scope as _tsc
@@ -352,6 +354,17 @@ def entity_fold(name):
     return ' '.join(t.split())
 
 
+def _product_label(subject):
+    """A product, a tab or the dashboard itself (icon or not) is a place,
+    never a subject (Samantha Kolton 2026-11-20: '🤝 Brand Partnership IQ'
+    was offered as a referent beside Anne Hathaway x Shiseido)."""
+    try:
+        from prometheus import dashboard_map as _dm
+        return bool(_dm.is_product_label(subject))
+    except Exception:
+        return False
+
+
 _NOT_A_REFERENT_RX = re.compile(
     r"^(?:profile ?iq|journey ?iq|subscriber ?iq|attribution ?iq|intent ?iq|brand ?partnership ?iq|digital ?twins? ?iq|"
     r"trends ?iq|culture ?ranker ?iq|flywheel(?: ?conversion)?|microdramas ?iq|analysis ?iq|impact ?iq|"
@@ -371,7 +384,7 @@ def recent_referents(user, k=2):
         # a view id or a product label that slipped into memory is never a
         # subject to offer (golden g065, 2026-11-02: "Do you mean for
         # journeyIQ, or Taylor Swift?")
-        if _NOT_A_REFERENT_RX.match(subj):
+        if _NOT_A_REFERENT_RX.match(subj) or _product_label(subj):
             continue
         cohort = str(a.get('cohort') or '').strip() or None
         # 2026-10-05 (Scott): 'Will And Grace' and 'Will & Grace on

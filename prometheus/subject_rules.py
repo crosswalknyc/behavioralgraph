@@ -415,7 +415,13 @@ def pinned_bind_for(text, history=None, page=''):
     if not pin:
         return ''
     try:
-        s = bind(text, history, page)
+        reading = None
+        try:
+            from flask import g as _g
+            reading = getattr(_g, '_pm_reading', None)
+        except Exception:
+            reading = None
+        s = bind(text, history, page, reading)   # the Reader's reading counts as the words (2026-11-20)
         if s and s.source == 'words':
             return ''
     except Exception:
@@ -1570,7 +1576,7 @@ def _reading_candidates(reading, page, norm, text=''):
 
 _SENTENCE_AUDIENCE_RX = re.compile(
     r"(?<![\w'])(?P<name>[A-Z][\w&'.:!+-]*(?:\s+(?:[A-Z][\w&'.:!+-]*|\d[\w.:-]*|of|the|and|&|de|la))*?)\s+"
-    r"(?P<verb>viewers|fans|readers|listeners|players|watchers|buyers|shoppers|users|customers|subscribers|drinkers|owners)\b")
+    r"(?P<verb>viewers|fans|readers|listeners|players|watchers|buyers|shoppers|users|customers|subscribers|drinkers|owners|audience)\b")
 _SENTENCE_STOP = frozenset(('what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why', 'give', 'show', 'tell',
                             'list', 'the', 'a', 'an', 'do', 'does', 'did', 'are', 'is', 'was', 'were', 'among',
                             'us', 'u.s.', 'our', 'their', 'these', 'those', 'all', 'every', 'any', 'some', 'most',
@@ -1705,6 +1711,11 @@ def sentence_audience(text, casing=None):
             words = words[1:]
             _stripped_lead = True
         if not words:
+            continue
+        # "X audience" names X only when X reads as a name: inside the sentence, or two words or more. A sentence
+        # that opens "Return audience overlap matrix" names nothing (2026-11-20; "if VICE Sports audience has
+        # interest in beauty" names VICE Sports)
+        if m.group('verb').lower() == 'audience' and not mid_sentence and len(words) < 2:
             continue
         raw = ' '.join(words)
         low = raw.lower()
@@ -1985,9 +1996,13 @@ def _bind_words(text, history=None, page='', reading=None, catalog_names=None, n
     # 5c. an audience named inside the sentence: "What did Landman viewers
     # watch next ... the share of Landman viewers" (Liz, 2026-10-21)
     name, verb = sentence_audience(t, casing)
+    deferred = None
     if name:
-        quals['verb'] = verb
-        return Subject('audience', name, f"{name} {verb}", quals, 'words', 0.8)
+        if str(verb or '').lower() == 'audience':
+            deferred = (name, verb)   # "X audience" yields to the Reader's reading of X (its catalog title), 2026-11-20
+        else:
+            quals['verb'] = verb
+            return Subject('audience', name, f"{name} {verb}", quals, 'words', 0.8)
     # 6. the Reader's subjects for these words
     for name, kind, conf in _reading_candidates(reading, page, norm, text=t):
         if page and name == page:
@@ -1996,6 +2011,10 @@ def _bind_words(text, history=None, page='', reading=None, catalog_names=None, n
         disp = clean_display(name, t, casing) or name
         if disp:
             return Subject(kind, disp, disp, quals, 'words', conf)
+    if deferred:
+        # "VICE Sports audience", read from the words alone when no reading names it (Emma Crouchen 2026-11-20)
+        quals['verb'] = deferred[1]
+        return Subject('audience', deferred[0], f"{deferred[0]} {deferred[1]}", quals, 'words', 0.8)
     # 7. "a betting client like draftkings" names DraftKings
     m = _LIKE_IN_TEXT_RX.search(t)
     if m:
@@ -2194,6 +2213,13 @@ def names_other_subject(text, ctx):
         except Exception:
             reading = None
         s = bind(text, None, page, reading)
-        return bool(s) and s.source == 'words' and s.kind in ('title', 'brand', 'person') and not _same_family(s.display, page, norm)
+        if bool(s) and s.source == 'words' and s.kind in ('title', 'brand', 'person', 'audience') and not getattr(s, 'pointed', False) \
+                and not _same_family(s.display, page, norm):
+            return True   # a named audience ("VICE Sports audience") names a subject as a brand or a title does (2026-11-20)
+        try:
+            from . import understanding as _und
+            return bool(_und.read_subject_hint(text, page))
+        except Exception:
+            return False
     except Exception:
         return False

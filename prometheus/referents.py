@@ -718,6 +718,8 @@ def plausible_subject(s):
     # profile when Scott asked how big the sample is).
     if any(w in _SELF_WORDS for w in low):
         return False
+    if is_product_label(subj):
+        return False   # a product or a tab is a place on the dashboard, never a subject (2026-11-20)
     # A capitalized title that opens on "The" is a subject, however
     # ordinary the next word is: The Office, The Bear, The Crown, The
     # Paper, The Voice (2026-10-08, East Tree Media: "The Office" was
@@ -750,12 +752,74 @@ def last_agent_text(history):
     return ''
 
 
+def is_product_label(label):
+    """A product, a tab or the dashboard itself, icon or not: a place on
+    the dashboard, never a subject (prometheus.dashboard_map)."""
+    try:
+        from . import dashboard_map as _dm
+        return bool(_dm.is_product_label(label))
+    except Exception:
+        return False
+
+
+def scope_memory_options(opts, history=None, page=''):
+    """The remembered referents a confirm may offer: never a product or a
+    tab (Samantha Kolton 2026-11-20 was asked "Do you mean for 🤝 Brand
+    Partnership IQ, or Anne Hathaway x Shiseido?"), and when the thread
+    already has a subject of its own, only that subject's family (the
+    open view and an earlier chat never outrank the thread: Emma Crouchen
+    2026-11-20 was asked "VICE Sports, or Pinterest?" two turns after a
+    VICE Sports read). Returns (options, bind): ``bind`` is the one
+    option left when the thread settled it, else ''."""
+    kept = []
+    for o in (opts or []):
+        if not isinstance(o, dict) or not o.get('label'):
+            continue
+        if is_product_label(o.get('subject')) or is_product_label(o.get('label')):
+            continue
+        kept.append(o)
+    own = []
+    try:
+        from . import subject_rules as _sr
+        own = [x for x in (_sr.thread_subjects(history or [], page or '') or []) if str(x or '').strip() and not is_product_label(x)]
+        try:
+            from . import thread_subject as _ts
+            pin = _ts.pinned_subject()
+            if pin and not is_product_label(pin):
+                own = [pin] + own
+        except Exception:
+            pass
+    except Exception:
+        own = []
+    if own and kept:
+        fam = [o for o in kept if any(_same_entity(o.get('subject'), x) for x in own)]
+        if fam:
+            kept = fam
+            if len(kept) == 1:
+                return kept, str(kept[0].get('subject') or '')
+    return kept, ''
+
+
+def _same_entity(a, b):
+    try:
+        import prometheus_memory as _pmm
+        fa, fb = _pmm.entity_fold(str(a or '')), _pmm.entity_fold(str(b or ''))
+    except Exception:
+        fa = re.sub(r"[^a-z0-9]+", '', str(a or '').lower())
+        fb = re.sub(r"[^a-z0-9]+", '', str(b or '').lower())
+    if not fa or not fb:
+        return False
+    return fa == fb or (min(len(fa), len(fb)) >= 5 and (fa in fb or fb in fa))
+
+
 def memory_confirm_payload(text, opts, history=None):
     """"Do you mean for X, or Y?" with the remembered referents as chips.
     Never twice in a row: when the previous turn already asked it (Emmet
     at Kartel saw the same question four times, 2026-10-15), the standing
-    offer comes back instead and the confirm is released."""
-    opts = [o for o in (opts or []) if isinstance(o, dict) and o.get('label')]
+    offer comes back instead and the confirm is released. A product or a
+    tab is never one of the chips (2026-11-20)."""
+    opts = [o for o in (opts or []) if isinstance(o, dict) and o.get('label') and not is_product_label(o.get('label'))
+            and not is_product_label(o.get('subject'))]
     if last_agent_text(history).startswith('Do you mean for') or not opts:
         return {'success': True, 'action': 'answer', 'reply': NO_PLACE_REPLY, 'followups': [],
                 'offer_deck': False, 'deck_angle': None, 'memory_confirm_released': True}

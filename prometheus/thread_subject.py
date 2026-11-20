@@ -46,7 +46,7 @@ from datetime import datetime, timezone
 
 from . import faults as _faults
 
-__all__ = ['statement_subject', 'dropped_names', 'pin_of_thread', 'current', 'pinned_subject',
+__all__ = ['statement_subject', 'dropped_names', 'pin_of_thread', 'current', 'pinned_subject', 'pinnable',
            'pinned_source', 'is_dropped', 'stash', 'scope_to_history', 'pin', 'drop', 'note',
            'last_user_ask', 'STRONG_SOURCES']
 
@@ -359,12 +359,40 @@ def _mutate(host, uname, tid, fn):
         return None
 
 
+def pinnable(subject):
+    """A subject a thread can carry: not a product, a tab or the dashboard
+    itself ('🤝 Brand Partnership IQ' was pinned on Samantha Kolton's
+    thread, 2026-11-20), and not a question or a sentence (the whole ask
+    'this is a Definition or Marketing headline on Prometheus... how would
+    you define yourself' was pinned on Liz's)."""
+    s = ' '.join(str(subject or '').split()).strip(' .,;:')
+    if not s:
+        return False
+    try:
+        from . import dashboard_map as _dm
+        if _dm.is_product_label(s):
+            return False
+    except Exception:
+        pass
+    if '?' in s or len(s.split()) > 12 or re.search(r"[.!;:]\s+\w", s) or re.search(r"\.{3}|\u2026", s):
+        return False
+    try:
+        from . import intake_guard as _ig
+        if _ig.is_question_shaped(s) or _ig.is_ask(s):
+            return False
+    except Exception:
+        pass
+    return True
+
+
 def pin(host, uname, tid, subject, *, source='statement', dropped=()):
     """Pin ``subject`` on the thread. A statement or a correction
     overrides anything; a weaker source only fills an empty pin."""
     subject = ' '.join(str(subject or '').split()).strip(' .,;:')
     if not subject:
         return None
+    if source not in STRONG_SOURCES and not pinnable(subject):
+        return None   # an offer or a draft never pins a product's name or a question (2026-11-20)
 
     def _fn(p):
         cur_src = str(p.get('source') or '') if p.get('subject') else ''
@@ -406,6 +434,8 @@ def note(host, uname, tid, subject, *, source='offer'):
     subject = ' '.join(str(subject or '').split()).strip(' .,;:')
     if not subject or subject.lower() in ('that subject', 'this audience', 'that audience', 'this subject'):
         return None
+    if not pinnable(subject):
+        return current() or None   # a product's name or a question is never the thread's subject (2026-11-20)
     cur = current() or {}
     if cur.get('subject') and _RANK.get(str(cur.get('source') or ''), 0) > _RANK.get(source, 1):
         return cur

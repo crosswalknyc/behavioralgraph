@@ -46,7 +46,7 @@ import re
 __all__ = ['DROPDOWN', 'DROPDOWN_WHERE', 'DASHBOARD_URL', 'PRODUCTS', 'TABS', 'FEATURES', 'ARTIFACTS', 'RAIL', 'PLACEHOLDERS',
            'is_placeholder', 'product', 'product_by_value', 'find_product', 'find_tab', 'find_feature', 'feature', 'strip_feature_words',
            'strip_alias_words', 'alias_pattern', 'find_artifact', 'names_dropdown', 'names_rail', 'access_for', 'hidden_products', 'can_open', 'deep_link', 'where_lands',
-           'picker_of', 'tab_of', 'where_things_are']
+           'picker_of', 'tab_of', 'where_things_are', 'is_product_label', 'strip_icon']
 
 DROPDOWN = 'SELECT PRODUCT'
 DROPDOWN_WHERE = 'the SELECT PRODUCT dropdown at the top right of the dashboard'
@@ -722,3 +722,62 @@ def is_placeholder(label):
     if s.endswith(('...', '\u2026')) and re.match(r"^(?:select|choose|pick)\b", low):
         return True
     return bool(_PLACEHOLDER_RX.match(s))
+
+
+# ------------------------------------------------- a product is not a subject
+# The dropdown label with its icon ("🤝 Brand Partnership IQ"), a tab, a
+# product's alias, the dashboard, Prometheus and Crosswalk themselves: the
+# name of a place on the dashboard, never the name of an audience. Nothing
+# offers one as a subject choice, pins one on a thread, remembers one as a
+# referent or binds a read to one (Samantha Kolton 2026-11-20: "Do you mean
+# for 🤝 Brand Partnership IQ, or Anne Hathaway x Shiseido?", and the chip
+# ran a read on the view).
+_ICON_RX = re.compile(r"^[^A-Za-z0-9]+")
+_SELF_LABELS = frozenset(('prometheus', 'crosswalk', 'cw prometheus', 'crosswalk prometheus', 'the dashboard', 'dashboard',
+                          'analysis iq', 'select product', 'the select product dropdown'))
+
+
+def strip_icon(label):
+    """The label without its leading icon or symbols ("🤝 Brand Partnership IQ" -> "Brand Partnership IQ")."""
+    return _ICON_RX.sub('', ' '.join(str(label or '').split())).strip()
+
+
+@functools.lru_cache(maxsize=1)
+def _product_label_keys():
+    keys = set(_SELF_LABELS)
+    for p in PRODUCTS:
+        keys.add(_fold_label(p['label']))
+        keys.add(_fold_label(p['value']))
+        for a in p.get('aliases') or ():
+            keys.add(_fold_label(a))
+    for _pv, tid, label, aliases in TABS:
+        keys.add(_fold_label(label))
+        keys.add(_fold_label(tid))
+        for a in aliases or ():
+            keys.add(_fold_label(a))
+    keys.add(_fold_label(ANALYSIS_IQ['label']))
+    for a in ANALYSIS_IQ.get('aliases') or ():
+        keys.add(_fold_label(a))
+    keys.discard('')
+    return frozenset(keys)
+
+
+def _fold_label(s):
+    low = re.sub(r"[^a-z0-9 ]+", ' ', strip_icon(s).lower())
+    low = re.sub(r"\s+", ' ', low).strip()
+    low = re.sub(r"^(?:the )+", '', low)
+    low = re.sub(r"\b(?:tab|page|dashboard|view|screen|dropdown|list)$", '', low).strip()
+    return re.sub(r"\bi q\b", 'iq', low)
+
+
+def is_product_label(label):
+    """True when the text is a product, a tab or the dashboard itself
+    (icon or not): never a subject."""
+    f = _fold_label(label)
+    if not f:
+        return False
+    if f in _product_label_keys():
+        return True
+    f2 = re.sub(r"\s*iq$", '', f).strip()
+    return bool(f2) and f2 != f and (f2 in _product_label_keys() or f2 + ' iq' in _product_label_keys())
+

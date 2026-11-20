@@ -300,6 +300,9 @@ def _service_once(stub, case):
             'context': pc or None}
     if case.get('mode'):
         body['mode'] = case['mode']
+    for _k in ('bind_subject', 'bind_cohort'):      # a chip's bound subject, when the case carries one (2026-11-20)
+        if case.get(_k):
+            body[_k] = case[_k]
     t0 = time.time()
     fault = ''
     u_compact = ''

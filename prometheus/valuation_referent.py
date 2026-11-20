@@ -187,11 +187,124 @@ def _last_turn_on_pair(history, held):
     return False
 
 
+# a figure pasted back from the screen or the thread ("$102,145,967.00 total brand value", "102,145,967"), with
+# nothing but the metric's own words around it
+_FIGURE_RX = re.compile(r"(?<![\w.])\$?\s?(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{4,}(?:\.\d{1,2})?)(?!\w|\.\d)")
+_METRIC_WORDS_RX = re.compile(r"\b(?:total|brand|value|attributable|to|the|partnership|earned|media|lift|conversion|audience|fit|"
+                              r"figure|number|this|that|one|is|was|it|its|in|for|of|and|usd|dollars?|million|billion|k|m|b|"
+                              r"what|whats|s|mean|means|meant|does|do|where|from|come|comes|came|why|how|explain|define|"
+                              r"valuation|read|press|platform|share|mix|engagement)\b", re.I)
+
+
+def figure_in(text):
+    """The dollar figure the words are (the whole message a figure plus
+    the metric's own words), as its digits and cents, or ''."""
+    t = ' '.join(str(text or '').split())
+    if not t or len(t) > 120:
+        return ''
+    m = _FIGURE_RX.search(t)
+    if not m:
+        return ''
+    rest = _FIGURE_RX.sub(' ', t)
+    rest = re.sub(r"[\$,.:;()\-]+", ' ', rest)
+    rest = _METRIC_WORDS_RX.sub(' ', rest)
+    if rest.strip():
+        return ''
+    return m.group('num').replace(',', '')
+
+
+def _carries_figure(turn_text, digits):
+    if not digits:
+        return False
+    for m in _FIGURE_RX.finditer(str(turn_text or '')):
+        d = m.group('num').replace(',', '')
+        if d == digits or d.split('.')[0] == digits.split('.')[0]:
+            return True
+    return False
+
+
+def figure_turn(history, digits):
+    """(index, turn) of the newest agent turn that carries this figure
+    and is about a valuation (its meta names a valuation, or its words
+    name a pairing with the figure), or (None, None)."""
+    hist = list(history or [])
+    for i in range(len(hist) - 1, -1, -1):
+        t = hist[i]
+        if not isinstance(t, dict) or str(t.get('role') or '') not in ('agent', 'assistant'):
+            continue
+        txt = _text(t)
+        if not _carries_figure(txt, digits):
+            continue
+        m = _meta(t)
+        if m.get('bpiq_job_id') or m.get('kind') == 'bpiq' or re.search(r"\b(?:total\s+brand\s+value|valuation|attributable\s+to\s+the\s+partnership)\b", txt, re.I):
+            return i, t
+    return None, None
+
+
+def _pair_of_turn(turn):
+    """The pairing a valuation turn is about: its meta subject, else the
+    'X x Y' the words carry."""
+    m = _meta(turn)
+    subject = ' '.join(str(m.get('subject') or '').split())
+    if subject and not _is_product(subject):
+        return subject
+    txt = _text(turn)
+    mm = re.search(r"(?P<pair>[A-Z][\w&'.-]*(?:\s+[A-Z0-9][\w&'.-]*){0,4}\s+[xX\u00d7]\s+[A-Z][\w&'.-]*(?:\s+[A-Z0-9][\w&'.-]*){0,4})", txt)
+    return ' '.join(mm.group('pair').split()) if mm else ''
+
+
+def _is_product(name):
+    try:
+        from . import dashboard_map as _dm
+        return bool(_dm.is_product_label(name))
+    except Exception:
+        return False
+
+
+def figure_read(text, history):
+    """The valuation a pasted figure points at, or None: the delivered
+    record (the pairing of the turn that carries the figure, its window
+    when the thread states it, the figure itself as 'figure') with kind
+    'figure'. A figure the thread itself delivered names the thread's
+    valuation, never a which-subject question (Samantha Kolton 2026-11-20:
+    "$102,145,967.00 total brand value" drew "Do you mean for 🤝 Brand
+    Partnership IQ, or Anne Hathaway x Shiseido?")."""
+    digits = figure_in(text)
+    if not digits:
+        return None
+    i, turn = figure_turn(history, digits)
+    if turn is None:
+        return None
+    held = delivered(history) or {}
+    subject = _pair_of_turn(turn) or str(held.get('subject') or '')
+    if not subject:
+        return None
+    talent = brand = ''
+    pr = re.split(r"\s+[xX\u00d7]\s+", subject, maxsplit=1)
+    if len(pr) == 2:
+        talent, brand = pr[0].strip(), pr[1].strip()
+    start = end = None
+    hist = list(history or [])
+    for t in reversed(hist[:i]):
+        mm = _CAMPAIGN_LINE_RX.search(_text(t))
+        if mm:
+            start, end = _parse_dates(mm.group('win'))
+            if start and end:
+                break
+    m = _meta(turn)
+    shown = re.search(r"\$\s?\d[\d,]*(?:\.\d{1,2})?", ' '.join(str(text or '').split()))
+    return {'job_id': str(m.get('bpiq_job_id') or held.get('job_id') or ''), 'subject': subject, 's3_key': str(m.get('s3_key') or ''),
+            'talent': talent, 'brand': brand, 'start': start, 'end': end, 'total': (shown.group(0) if shown else ''), 'index': i,
+            'kind': 'figure', 'window': None, 'same_window': True, 'figure': digits}
+
+
 def kind_of(text):
-    """'deck', 'rerun', 'restate' or ''."""
+    """'deck', 'rerun', 'restate', 'figure' or ''."""
     t = ' '.join(str(text or '').split())
     if not t:
         return ''
+    if figure_in(t):
+        return 'figure'
     if _DECK_RX.search(t) or _PARTS_RX.search(t):
         return 'deck'
     if _RERUN_RX.search(t):
@@ -210,6 +323,8 @@ def read(text, history):
         t = ' '.join(str(text or '').split())
         if not t or len(t) > 400:
             return None
+        if figure_in(t):
+            return figure_read(t, history)
         held = delivered(history)
         if not held or not held.get('subject'):
             return None
@@ -255,7 +370,21 @@ def restate_payload(hit):
         head += f" Total brand value {hit['total']}."
     head += " It is in the Brand Partnership tab. Say deck and I will send the deck again, or give me new dates and I will run it on those."
     return {'success': True, 'action': 'answer', 'reply': head, 'followups': ['Send the deck', 'New dates'],
-            'offer_deck': False, 'deck_angle': None, 'valuation_referent': {'job_id': hit.get('job_id'), 'kind': 'restate'}}
+            'offer_deck': False, 'deck_angle': None, 'valuation_referent': {'job_id': hit.get('job_id'), 'kind': 'restate', 'subject': subject}}
+
+
+def figure_payload(hit):
+    """A figure pasted back is named for what it is: the thread's own
+    valuation, its pairing and window, in one line."""
+    subject = hit.get('subject') or 'the valuation'
+    win = window_label(hit['start'], hit['end']) if hit.get('start') and hit.get('end') else ''
+    fig = str(hit.get('total') or '').strip()
+    head = (f"{fig} is the total brand value" if fig else "That figure is the total brand value") + f" for {subject}" + (f", {win}" if win else '') + \
+        ", the valuation delivered above in this chat. It is one dollar figure for the partnership: the audience fit, earned media, brand lift " \
+        "and conversion lenses added together. Say deck and I will send its deck again, give me new dates and I will run it on those, " \
+        "or ask me what you want to know about it."
+    return {'success': True, 'action': 'answer', 'reply': head, 'followups': ['Send the deck', 'New dates', 'Why is it this size?'],
+            'offer_deck': False, 'deck_angle': None, 'valuation_referent': {'job_id': hit.get('job_id'), 'kind': 'figure', 'subject': subject}}
 
 
 def rerun_payload(hit, start, end, *, user, uname, thread_id, body, store=None):
@@ -313,6 +442,8 @@ def answer(text, history, *, user, uname, thread_id, body, host=None, g=None, st
             _und.mark_keyed(body)
         except Exception:
             pass
+        if hit['kind'] == 'figure':
+            return figure_payload(hit)
         if hit['kind'] == 'deck' and hit['same_window']:
             return {'hand_to_deck': True, 'subject': hit['subject'], 'job_id': hit.get('job_id'), 'kind': 'deck'}
         if hit['same_window'] or not hit.get('window'):
@@ -328,4 +459,4 @@ def answer(text, history, *, user, uname, thread_id, body, host=None, g=None, st
         return None
 
 
-__all__ = ['FLIP', 'enabled', 'delivered', 'kind_of', 'read', 'answer', 'restate_payload', 'rerun_payload']
+__all__ = ['FLIP', 'enabled', 'delivered', 'kind_of', 'read', 'answer', 'restate_payload', 'rerun_payload', 'figure_in', 'figure_read', 'figure_payload']

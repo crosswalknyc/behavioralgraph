@@ -140,6 +140,14 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # read is a priced custom ask, gated below (2026-10-21). `charge_done` is kept for callsite compatibility.
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = _cut_list.hint(text, mr.get('subject'))   # one of the categories the words list is a cut, never the guess the read starts from (2026-11-11)
+    if not subj_hint and not bind_subject and not isinstance(panel_confirm, dict) and not isinstance(resume_base, dict):
+        # the subject the ask names, carried by the Understanding, is what the read starts from: never the page by
+        # default (Emma Crouchen 2026-11-20, a VICE Sports question read on the open Pinterest file)
+        try:
+            subj_hint = __import__('prometheus.understanding', fromlist=['read_subject_hint']).read_subject_hint(
+                text, str(((ctx or {}).get('primary') or {}).get('name') or '')) or ''
+        except Exception:
+            subj_hint = ''
     # Confirmed memory referent (2026-08-27, Jenna: "know context between sessions and threads"):
     # the widget's confirm chip sends the remembered subject explicitly; it resolves the base directly and rides the consult below so a banked read replays instantly.
     bind_subject = str(bind_subject or '').strip() or str(getattr(__import__('flask').g, '_pm_retry_bound', '') or '').strip()   # I4b: the retry's bound subject
@@ -348,6 +356,15 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 _hit = [o for o in _opts if _ns_mod.page_named(
                     text, o['subject'], _H._normalize_for_match,
                     _C._PM_CLARIFY_STOP_TOKENS)]
+                # never a product or a tab as a chip; the thread's own subject scopes what is offered, and
+                # when it leaves one option that option binds (prometheus.referents, 2026-11-20)
+                try:
+                    from prometheus import referents as _rf_sc
+                    _opts, _sc_bind = _rf_sc.scope_memory_options(_opts, history, _qu_page)
+                    if _sc_bind and not _hit and not bind_subject:
+                        _hit = [o for o in _opts if str(o.get('subject') or '') == _sc_bind]
+                except Exception:
+                    traceback.print_exc()
                 if len(_hit) == 1 and not bind_subject:
                     _C._pm_ask_hint(route='memory_bind',
                                  subject=_hit[0]['subject'])

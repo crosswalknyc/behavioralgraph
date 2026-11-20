@@ -86,6 +86,7 @@ _ROUTE_EXACT = {
     'deck': 'deck', 'deck_conversion': 'deck', 'design_request': 'deck', 'valuation_deck': 'deck',
     # the thread's delivered valuation, pointed at again (2026-11-20)
     'valuation_referent': 'wizard',
+    'valuation_figure': 'definition',   # a figure pasted back names the thread's valuation; the answer says what it is (2026-11-20)
     # the reader's own work
     'status_lookup': 'status', 'status_check': 'status', 'status': 'status', 'deliverable_lookup': 'status',
     'workorder_status': 'status', 'workorder_eta': 'status', 'workorder_cancel': 'status',
@@ -182,13 +183,14 @@ _NEAR = {
     'status': {'send_file'},
     'send_file': {'status'},
     'sizing': {'read'},
-    'definition': {'page_analysis', 'provenance'},
+    'definition': {'page_analysis', 'provenance', 'capability'},   # a question about the product itself reads as either (2026-11-20)
     'provenance': {'definition'},
     'offer': {'short_reply', 'read', 'sizing', 'cancel'},
     'short_reply': {'offer', 'continuation'},
     'continuation': {'short_reply', 'read'},
     'cancel': {'offer'},
     'deck': {'wizard'},      # a valuation's deck is the valuation's
+    'capability': {'definition'},
 }
 
 

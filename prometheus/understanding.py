@@ -71,7 +71,9 @@ INTENTS = tuple(dict.fromkeys(tuple(getattr(__import__('prometheus.reader', from
 FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'wizard_interrupt',      # an armed wizard step yields to a clearly unrelated ask and takes a plain correction (Jenna 2026-11-20)
            'valuation_referent',    # words after a delivered valuation that point at it (its deck, its dates, a re-run) are about it
-           'brand_fit')             # which brands suit a talent is a read on the talent's audience, never a valuation (Jenna 2026-11-20)
+           'brand_fit',             # which brands suit a talent is a read on the talent's audience, never a valuation (Jenna 2026-11-20)
+           'named_subject',         # a subject the words name outranks the open page and the user's memory in the read (Emma Crouchen 2026-11-20)
+           'capability')            # a question about the product itself is product knowledge, never a subject read (Liz 2026-11-20)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
@@ -268,6 +270,7 @@ def _features(text, ctx, history, body):
     put('multi', lambda: mod('multi_ask').split(text))
     put('sample_size', lambda: mod('guards').is_sample_size_ask(text))
     put('capability', lambda: mod('can_do').answer(text) or mod('data_capability').answer(text))
+    put('product_question', lambda: mod('product_facts').family_of(text))
     put('rerun_words', lambda: bool(_RERUN_RX.search(text)))
     put('correction_words', lambda: bool(_CORRECTION_RX.search(text)))
     put('pushback_only', lambda: bool(_PUSHBACK_ONLY_RX.match(text)))
@@ -283,6 +286,92 @@ def _features(text, ctx, history, body):
     # question, per the intake guard): the turn is the wizard's, as it is today
     put('wizard_open', lambda: mod('bpiq_wizard').last_agent_is_wizard(history) and not mod('intake_guard').is_question_shaped(text))
     return out
+
+
+_READ_INTENTS = frozenset(('analyze', 'analyze_page', 'insight_ask', 'brand_fit', 'compare', 'definition', 'multi_ask',
+                           'continuation_rerun', 'continuation_correction', 'size', 'exists'))
+_NAMED_KINDS = frozenset(('title', 'brand', 'person', 'audience'))
+
+
+def _page_of(ctx):
+    try:
+        return str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
+    except Exception:
+        return ''
+
+
+def _words_subject(text, history, ctx, reading=None):
+    """The subject the words name (prometheus.subject_rules.bind on the
+    words, with the Reader's reading when there is one), as a Subject
+    with role 'subject'; None when the words name nothing of their own or
+    only point at the page or the thread."""
+    try:
+        from . import subject_rules as _sr
+        s = _sr.bind(str(text or ''), history, _page_of(ctx), reading)
+        if not (s and s.named and s.source == 'words' and s.kind in _NAMED_KINDS) or getattr(s, 'pointed', False):
+            return None
+        disp = str(s.display or s.name or '').strip()
+        if not disp or _is_product_label(disp):
+            return None
+        return Subject(as_written=disp, kind=str(s.kind), role='subject')
+    except Exception:
+        return None
+
+
+def _is_product_label(name):
+    try:
+        from . import dashboard_map as _dm
+        return bool(_dm.is_product_label(name))
+    except Exception:
+        return False
+
+
+def current():
+    """The Understanding of the ask in flight (flask.g), or None."""
+    try:
+        from flask import g as _g
+        return Understanding.from_dict(getattr(_g, '_pm_understanding', None))
+    except Exception:
+        return None
+
+
+def named_subject(u, text='', page=''):
+    """The subject the Understanding carries from the words that is not
+    the open page's own (its family) and not a pointer: the one a read on
+    these words is about. '' when the Understanding names none, or names
+    the page. Never a product or a tab."""
+    u = Understanding.from_dict(u) if not isinstance(u, Understanding) else u
+    if u is None or not u.subjects:
+        return ''
+    try:
+        from . import subject_rules as _sr
+        pseudo = {'subjects': [{'as_written': s.as_written, 'catalog': s.catalog, 'kind': s.kind} for s in u.subjects
+                               if isinstance(s, Subject) and (s.as_written or s.catalog)]}
+        s = _sr.bind(str(text or ''), None, str(page or ''), pseudo)
+        if not (s and s.named and s.source == 'words' and s.kind in _NAMED_KINDS) or getattr(s, 'pointed', False):
+            return ''
+        disp = str(s.display or s.name or '').strip()
+        if not disp or _is_product_label(disp):
+            return ''
+        if page and _sr._same_family(disp, page, lambda x: re.sub(r"[^a-z0-9]+", '', str(x or '').lower())):
+            return ''
+        return disp
+    except Exception:
+        return ''
+
+
+def read_subject_hint(text='', page=''):
+    """The subject the ask in flight names, for the read's own subject
+    resolution (the hint it starts from, the page it may not default to):
+    the Understanding's named subject when the flip is live, else ''."""
+    if not flipped('named_subject'):
+        return ''
+    u = current()
+    if u is None or u.scope.armed_step or u.intent in ('armed', 'cancel'):
+        return ''
+    if u.text_key and text and text_key(' '.join(str(text).split())) != u.text_key:
+        return ''   # the Understanding is of other words (a lane rewrote the text): no position on these
+    return named_subject(u, text, page)
 
 
 def _host_pricing(text):
@@ -386,8 +475,11 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         elif f.get('cancel'):
             intent, action, conf = 'cancel', 'cancel', 0.9
         elif vref:
-            # the thread's delivered valuation: a deck of it, or the valuation again (the same or corrected dates)
-            intent, action, conf = ('deck', 'deck', 0.85) if vref.get('kind') == 'deck' else ('valuation', 'build', 0.85)
+            # the thread's delivered valuation: a deck of it, the valuation again (the same or corrected dates), or one
+            # of its figures pasted back (a definition of that figure on that valuation, 2026-11-20)
+            intent, action, conf = (('deck', 'deck', 0.85) if vref.get('kind') == 'deck'
+                                    else ('definition', 'answer', 0.85) if vref.get('kind') == 'figure'
+                                    else ('valuation', 'build', 0.85))
             u.referent = 'last_valuation'
             u.subjects = [Subject(as_written=str(vref.get('subject') or ''), kind='audience', role='subject')]
             if vref.get('window'):
@@ -401,6 +493,12 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
                 intent, action = 'deck', 'deck'
             elif prod in ('journey', 'valuation', 'campaign', 'twin'):
                 intent = prod
+        elif f.get('product_question') and not f.get('wizard_start'):
+            # a question about Prometheus or Crosswalk itself (what it is, how it differs from an AI tool, a tagline, what it
+            # can do, what a product costs): product knowledge, never a subject read (Liz 2026-11-20 drew "Which subject
+            # should this be on?" on "a 3-5 word description for CW prometheus versus AI")
+            intent, action, conf = 'capability', 'answer', 0.9
+            ev.append('product:' + str(f['product_question'])[:16])
         elif f.get('brand_fit') and flipped('brand_fit') and not f.get('wizard_start') and not f.get('insight'):
             # which brands suit a talent, with pitch angles: a read on the talent's audience; it names no pairing to
             # value, so it is never the valuation's and an open order yields to it (Jenna 2026-11-20, her own seat)
@@ -449,6 +547,13 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             u.subjects = [Subject(as_written=u.named_title, kind='title', role='title')]
             if intent != 'analyze':
                 intent, u.referent = 'analyze', ''
+        if not u.subjects and intent in _READ_INTENTS:
+            # the subject the words themselves name (the binder, no reading yet): it rides the Understanding so the read
+            # is on it and never on the page that happens to be open (Emma Crouchen 2026-11-20)
+            _ws = _words_subject(t, history, ctx)
+            if _ws is not None:
+                u.subjects = [_ws]
+                ev.append('named:' + str(_ws.kind))
         if wiz_open and not (intent in WIZARD_YIELDS_TO and conf >= WIZARD_YIELD_CONF and flipped('wizard_interrupt')):
             # a Brand Partnership step waits on this thread and the words do not read, with confidence, as something
             # else: the turn is the wizard's (the step wins); a confident unrelated ask keeps its own intent and the
@@ -507,6 +612,9 @@ def absorb_reading(u, reading, *, min_conf=0.7):
             return u
         if u.intent == 'brand_fit' and r_int in ('valuation', 'command'):
             u.source = 'reconciled'   # which brands suit a talent names no pairing to value (Jenna 2026-11-20)
+            return u
+        if u.intent == 'capability' and any(str(e).startswith('product:') for e in u.evidence):
+            u.source = 'reconciled'   # a question about the product itself is answered from product knowledge, whatever the Reader read (2026-11-20)
             return u
         if u.intent in _CONTESTED and r_int not in _CONTESTED and u.confidence >= 0.8:
             u.source = 'reconciled'   # the words settled a contested pair with a strong feature; the reading fills the rest
@@ -675,6 +783,6 @@ def grade_log_rows(rows):
     return {'n': n, 'agree': agree, 'by_class': by_class, 'disagree': dis[:40]}
 
 
-__all__ = ['Understanding', 'Subject', 'Scope', 'INTENTS', 'LANE_INTENTS', 'FLIPPED', 'SHADOW', 'enabled', 'flipped',
+__all__ = ['current', 'named_subject', 'read_subject_hint', 'Understanding', 'Subject', 'Scope', 'INTENTS', 'LANE_INTENTS', 'FLIPPED', 'SHADOW', 'enabled', 'flipped',
            'features', 'absorb_reading', 'on_body', 'attach', 'claims', 'mark_keyed', 'stamp_log', 'agrees', 'grade_log_rows',
            'parse_compact', 'text_key']

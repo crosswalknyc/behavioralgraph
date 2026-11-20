@@ -37,9 +37,9 @@ import re
 
 from . import rate_card as _rc
 
-__all__ = ['FAMILIES', 'enabled', 'looks_like', 'family_of', 'answer', 'price_fn_for', 'thread_has_names', 'facts']
+__all__ = ['FAMILIES', 'enabled', 'looks_like', 'family_of', 'answer', 'price_fn_for', 'thread_has_names', 'facts', 'positioning_ask', 'positioning_answer', 'POSITIONING_LINES']
 
-FAMILIES = ('overview', 'bulk_list', 'valuation', 'twin_pricing')
+FAMILIES = ('overview', 'bulk_list', 'valuation', 'twin_pricing', 'positioning')
 _MAX_LEN = 320
 
 _LEAD = r"^\W*(?:(?:hi|hey|hello|ok|okay|so|and|also|prometheus|quick question|one more|one more thing)[,!.:\s]+)*"
@@ -87,6 +87,65 @@ _NAME_OK = frozenset(('i', 'prometheus', 'crosswalk', 'brand', 'partnership', 'p
                       'can', 'is', 'does', 'do', 'explain', 'tell', 'walk', 'value', 'please', 'hi', 'hey', 'hello', 'ok', 'okay'))
 
 
+# positioning: what Prometheus (or Crosswalk) is, how it differs from an AI tool, a description, tagline or
+# headline for it, "how would you define yourself" (Liz 2026-11-20: "give me a 3-5 word description for CW
+# prometheus versus AI" drew "Which subject should this be on?", and the re-ask ran as a read and died). A
+# question about the product itself is answered from product knowledge, never routed to a subject.
+_SELF = r"(?:cw\s+prometheus|crosswalk\s+prometheus|prometheus|crosswalk|cw|you|yourself|yourselves|this\s+(?:tool|chat|chatbot|assistant|product)|the\s+(?:tool|chatbot|assistant))"
+_AI = r"(?:ai|a\.i\.|an?\s+ai(?:\s+tool)?|chat\s?gpt|gpt|gemini|claude|copilot|perplexity|an?\s+llm|llms?|(?:a\s+)?(?:general|generic|regular|normal|plain|other)\s+(?:ai|chatbot|assistant)s?|(?:other\s+)?(?:ai\s+)?(?:tools|chatbots|assistants))"
+_DESC_NOUN = r"(?:descriptions?|taglines?|headlines?|one[- ]liners?|slogans?|positioning(?:\s+statement)?|elevator\s+pitch|pitch|blurbs?|boilerplate|summary|definition|bio|intro(?:duction)?|value\s+prop(?:osition)?|differentiators?)"
+_POSITIONING_RX = re.compile(
+    _LEAD + r"(?:"
+    r"(?:give|write|draft|send|get|need|want|create|come\s+up\s+with|suggest|tell)\s+(?:me\s+|us\s+)?(?:an?\s+|the\s+|some\s+)?(?:\d+(?:\s*(?:-|to)\s*\d+)?\s*[- ]?words?\s+)?(?:short\s+|quick\s+|crisp\s+|punchy\s+|one[- ]line\s+|marketing\s+)?" + _DESC_NOUN + r"\s+(?:for|of|on|about|describing)\s+" + _SELF + r"\b"
+    r"|(?:an?\s+|the\s+)?(?:short\s+|quick\s+|marketing\s+)?" + _DESC_NOUN + r"\s+(?:for|of|on|about)\s+" + _SELF + r"\b"
+    r"|.*?\b" + _SELF + r"\s+(?:versus|vs\.?|compared\s+(?:to|with)|against|over)\s+" + _AI + r"\b"
+    r"|.*?\b(?:how|what)\s+(?:is|are|does|do|'s)\s+" + _SELF + r"\s+(?:different|differ|better|unlike|not)\b"
+    r"|.*?\bhow\s+(?:would|do|should|can|could)\s+(?:you|prometheus|crosswalk)\s+(?:define|describe|position|explain|introduce|sum\s+up|summari[sz]e)\s+(?:yourself|yourselves|itself|prometheus|crosswalk|what\s+you\s+(?:are|do))\b"
+    r"|.*?\b(?:define|describe|position|introduce|sum\s+up|summari[sz]e)\s+(?:yourself|yourselves|prometheus|crosswalk|cw\s+prometheus)\b"
+    r"|.*?\bwhat\s+(?:is|are|'s)\s+(?:cw\s+prometheus|crosswalk\s+prometheus|prometheus|crosswalk)(?:\s+(?:exactly|really|anyway|in\s+a\s+(?:nutshell|sentence|line|few\s+words)))?\s*\??$"
+    r"|(?:who|what)\s+are\s+you\s*\??$"
+    r"|.*?\bwhat\s+(?:makes|sets)\s+(?:you|prometheus|crosswalk)\s+(?:different|apart|unique|special|stand\s+out)\b"
+    r"|.*?\bwhy\s+(?:use|choose|pick|trust)\s+(?:you|prometheus|crosswalk)\s+(?:over|instead\s+of|rather\s+than|versus|vs\.?)\s+" + _AI + r"\b"
+    r"|.*?\b(?:are|is)\s+(?:you|prometheus|this)\s+(?:just\s+)?(?:an?\s+)?(?:ai|chat\s?gpt|llm|chatbot|ai\s+tool|ai\s+model|language\s+model)\b"
+    r"|.*?\bheadline\s+on\s+prometheus\b|.*?\bmarketing\s+headline\b.{0,40}\bprometheus\b|.*?\bprometheus\b.{0,40}\bmarketing\s+headline\b"
+    r")", re.I)
+
+# Jenna's own answer to Liz (2026-11-20 21:07Z), word for word; the one approved copy for the positioning question
+POSITIONING_LINES = ('Answers from real consumer behavior.', 'Real behavior, not internet guesses.', 'Grounded in what people do.')
+POSITIONING_WHY = ("My pick is the first. It says in plain words what sets Prometheus apart from a general AI tool: a general tool "
+                   "answers from what has been written online, and Prometheus answers from what 30M+ opted-in US consumers actually do "
+                   "across their full digital life.")
+
+
+def positioning_ask(text):
+    """True when the words ask what Prometheus or Crosswalk is, how it
+    differs from an AI tool, or for a description, tagline or headline
+    of it."""
+    t = _clean(text)
+    if not t or len(t) > _MAX_LEN:
+        return False
+    if re.search(r"\bprometheus\s+(?:the\s+)?(?:titan|myth|god|film|movie|show|series|book|play|opera|bound)\b", t, re.I):
+        return False   # the Titan, not the product
+    return bool(_POSITIONING_RX.search(t))
+
+
+POSITIONING_WHAT = ("Prometheus answers from what 30M+ opted-in US consumers actually do across their full digital life: what they watch, "
+                    "stream, buy, search and subscribe to. A general AI tool answers from what has been written online. Ask me about any US "
+                    "audience and the answer comes from real behavior, not internet guesses.")
+_WANTS_LINES_RX = re.compile(r"\b(?:" + _DESC_NOUN + r"|\d+\s*(?:-|to)\s*\d+\s*[- ]?words?|words?\s+or\s+fewer|in\s+\d+\s+words|define\s+yourself|"
+                             r"describe\s+yourself|sum\s+up|summari[sz]e|headline)\b", re.I)
+
+
+def positioning_answer(text=''):
+    """Jenna's three lines with her pick for a description, tagline or
+    headline ask; the one-paragraph answer for "what is Prometheus" and
+    "how is it different from AI"."""
+    if text and not _WANTS_LINES_RX.search(_clean(text)):
+        return POSITIONING_WHAT
+    lines = '\n'.join(f"{i}. {x}" for i, x in enumerate(POSITIONING_LINES, 1))
+    return f"Here are three, each five words or fewer:\n\n{lines}\n\n{POSITIONING_WHY}"
+
+
 def enabled():
     return str(os.environ.get('PM_PRODUCT_FACTS', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
 
@@ -125,6 +184,8 @@ def family_of(text):
         return None
     if _OVERVIEW_RX.search(t):
         return 'overview'
+    if positioning_ask(t):
+        return 'positioning'
     if _STATUS_RX.search(t):
         return None
     if _twin_pricing_ask(t):
@@ -229,6 +290,8 @@ def answer(text, *, price_fn=None, has_names_list=None, included=False):
                  f"several at a time); say 'Queue the list' and the builds run as capacity allows, each profile landing in Select Profile as it "
                  f"finishes, with a summary email as the list progresses. Ask 'how is my list going' any time.")
         return {'reply': reply, 'followups': ['How is my list going?'], 'family': fam}
+    if fam == 'positioning':
+        return {'reply': positioning_answer(text), 'followups': ['What can you do?', 'What does a profile cost?'], 'family': fam}
     if fam == 'twin_pricing':
         if included:
             reply = (INCLUDED_LINE + " Focus groups and pilot tests open on your company's plan with nothing charged to your account, "

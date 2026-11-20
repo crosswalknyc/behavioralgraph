@@ -934,6 +934,25 @@ def ask(user, body, *, via='session'):
         except Exception as _fx:
             _faults.note('service.build_lane', _fx)
 
+    # a product's name is a place on the dashboard, never a subject to read: a bound subject that is one is dropped,
+    # so the ask resolves to the thread's own subject or asks (Samantha Kolton 2026-11-20 tapped the chip
+    # "🤝 Brand Partnership IQ" and a read ran on whatever valuation was open on her screen)
+    try:
+        from . import dashboard_map as _dm_bs
+        for _bk in ('bind_subject',):
+            if body.get(_bk) and _dm_bs.is_product_label(body.get(_bk)):
+                body = dict(body)
+                body.pop(_bk, None)
+                body.pop('bind_cohort', None)
+                try:
+                    host.ask_hint(outcome='product_label_unbound')
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+            _ex_b = body.get('extra') if isinstance(body.get('extra'), dict) else None
+            if _ex_b and _ex_b.get(_bk) and _dm_bs.is_product_label(_ex_b.get(_bk)):
+                body = dict(body, extra={k: v for k, v in _ex_b.items() if k not in (_bk, 'bind_cohort')})
+    except Exception as _fx:
+        _faults.note('service.product_label', _fx)
     # The one typed Understanding of the ask (prometheus.understanding, rebuild stage 2, Jenna 2026-11-20): the
     # lane predicates run once as features, the scope is read off the words (the reader's own order, a feature of
     # the dashboard, people, the page), and a hard rule (an armed step, an order, no_build, a cancel) is never left
@@ -989,7 +1008,8 @@ def ask(user, body, *, via='session'):
             if _vr_full.get('bpiq_collect') is not None:
                 raw['bpiq_collect'] = _vr_full['bpiq_collect']
         try:
-            host.ask_hint(route='valuation_referent', outcome=_vr_kind, subject=str(((_vr_raw.get('valuation_referent') or {}).get('subject')) or '') or None)
+            host.ask_hint(route=('valuation_figure' if _vr_kind == 'figure' else 'valuation_referent'), outcome=_vr_kind,
+                          subject=str(((_vr_raw.get('valuation_referent') or {}).get('subject')) or '') or None)
         except Exception as _fx:
             _faults.note('service', _fx)
         env = envelope.wrap(raw, surface='analyze', decision={'surface': 'analyze', 'mode': None, 'reason': 'valuation_referent',
@@ -2200,7 +2220,9 @@ def ask(user, body, *, via='session'):
         _pf_raw = None
         try:
             from . import product_facts as _pf
-            if _pf.looks_like(text):
+            # keyed on the Understanding (2026-11-20): a question about Prometheus or Crosswalk itself (what it is, how
+            # it differs from an AI tool, a description or tagline) is product knowledge, never a subject read
+            if _u_claims(body, 'capability', lambda: _pf.looks_like(text)):
                 try:
                     from . import priced_read as _prf
                     _pf_incl = bool(_prf.included_with_plan(user, uname, host))   # Included with your plan (Jenna 2026-11-08)

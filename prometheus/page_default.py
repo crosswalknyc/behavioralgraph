@@ -83,6 +83,16 @@ def page_base_stands(text, history, page, page_key, bind_subject='', *, normaliz
     b = str(bind_subject or '').strip()
     if b and normalize(b.split(' - ')[0]) == normalize(page.split(' - ')[0]):
         return True, 'bound'
+    # a subject the words name that is not the page's outranks every signal below: a row of the page the words also
+    # name ("beauty" on the Pinterest file), a page confirmed earlier, the thread (Emma Crouchen 2026-11-20: a VICE
+    # Sports question read the Pinterest file because the file carried a BEAUTY row)
+    try:
+        from . import understanding as _und
+        _other = _und.read_subject_hint(text, page)
+        if _other:
+            return False, f'the words name {_other!r}'
+    except Exception:
+        traceback.print_exc()
     try:
         from . import named_subject as _ns
         if _ns.view_deixis(text):
