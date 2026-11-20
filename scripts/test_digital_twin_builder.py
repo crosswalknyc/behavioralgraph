@@ -159,8 +159,10 @@ class Build(unittest.TestCase):
         self.assertEqual(entry['faces'][0]['url'], '')
         self.assertEqual(entry['reports'], 1)
         self.assertEqual(entry['last_at'], '2026-11-18T23:58:25Z')
+        self.assertEqual(len(entry['shares']), 16)
+        self.assertEqual(entry['biggest'], {'label': 'Kind 0', 'share_pct': 0.0})
         bare = SYN.index_entry('k', {'meta': {'name': 'x', 'created_at': '2026-11-01T10:00:00Z'}})
-        self.assertEqual((bare['kinds'], bare['faces'], bare['reports'], bare['last_at']), (0, [], 0, '2026-11-01T10:00:00Z'))
+        self.assertEqual((bare['kinds'], bare['faces'], bare['shares'], bare['biggest'], bare['reports'], bare['last_at']), (0, [], [], None, 0, '2026-11-01T10:00:00Z'))
 
     def test_pinned_profile_is_the_one_read(self):
         s3 = _s3()
