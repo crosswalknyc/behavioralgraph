@@ -915,6 +915,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         try:
             _H._maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
             _pm_promote_date_snapshot_ask(spec_draft, per_prompt)
+            __import__('migration.saved_subject_size', fromlist=['apply_to_draft']).apply_to_draft(spec_draft, per_prompt, history=history)   # a saved audience size: the card quotes what the build starts from
         except Exception as _fx:
             _faults.note('chat', _fx)
         est_credits = int(spec_draft.get('estimated_credits')
@@ -1159,7 +1160,7 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
 _synth_chat_is_incidence_request = _intake_predicates.is_incidence_request   # moved to prometheus/intake_predicates.py (2026-10-20)
 
 
-def _pm_hold_sample_to_catalog(subject, tu, start=None, end=None):
+def _pm_hold_sample_to_catalog(subject, tu, start=None, end=None, saved=False):
     """Hold a proposed sample to the profile the dashboard already
     holds for the subject (2026-10-06). Returns the held sample (an
     int); the input when nothing anchors it."""
@@ -1171,7 +1172,7 @@ def _pm_hold_sample_to_catalog(subject, tu, start=None, end=None):
     anchors = _cc.anchors_for(subject, window=w, with_ledger=False)
     pa = _cc.profile_anchor(anchors, w)
     if not pa or not pa.get('sample_size'):
-        _h = _shared.held_sizing(__import__('insights_ledger'), subject, w)   # one brain (2026-10-13): a sizing already given for this subject and window holds for everyone
+        _h = None if saved else _shared.held_sizing(__import__('insights_ledger'), subject, w)   # one brain (2026-10-13): a sizing already given for this subject and window holds for everyone; a saved audience size is never replaced by it
         return _h[0] if _h else tu
     ps = int(pa['sample_size'])
     pw = pa.get('window') or {}
@@ -1392,7 +1393,7 @@ def _synth_chat_incidence_check(text, history=None):
                                 f"({_pw.get('start')} to {_pw.get('end')}: {_ps:,} in the sample).")
     except Exception:
         traceback.print_exc()
-    _held_sz = None if _anchor_note else _shared.held_sizing(__import__('insights_ledger'), subject, locals().get('_w'))
+    _held_sz = None if _anchor_note else _shared.held_sizing(__import__('insights_ledger'), subject, locals().get('_w'), ask=text)
     _from_ring = False
     if _held_sz:   # one brain (2026-10-13): the sizing another reader already got for this subject and window
         tu, avid = _held_sz[0], (_held_sz[1] or avid)
@@ -4568,7 +4569,7 @@ def _spec_from_draft(draft):
     #    system/recent_subject_raws.json), re-jitter deterministically
     #    so no two subjects ship identical samples.
     # The worker mirrors both in _run_new_build as defense in depth.
-    _anchor_meta = None
+    _anchor_meta = _saved_trail = None
     try:
         from migration.sample_sizing_guards import apply_sizing_guards
         _guard_s3 = None
@@ -4607,6 +4608,10 @@ def _spec_from_draft(draft):
                       f"({type(_sa_err).__name__}: {_sa_err})")
             except Exception as _fx:
                 _faults.note('chat', _fx)
+        try:   # a saved audience size starts the build (2026-11-20, migration/saved_subject_size): the reader's own size, another window or a disagreeing benchmark keep today's path
+            subject_raw_tu, subject_raw_avid, _saved_trail = __import__('migration.saved_subject_size', fromlist=['spec_step']).spec_step(draft, subject, subject_raw_tu, subject_raw_avid, audience_type_out, follower_ceiling_out, _size_bench, _size_prior, _guard_s3)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         subject_raw_tu, subject_raw_avid, _anchor_meta = apply_sizing_guards(
             subject, subject_raw_tu, subject_raw_avid,
             universe_anchor=draft.get('universe_anchor'),
@@ -4888,13 +4893,14 @@ def _spec_from_draft(draft):
                       str(spec.get('date_range') or ''), re.I)
         _held = _pm_hold_sample_to_catalog(
             subject, int(spec.get('subject_raw_tu') or 0),
-            _m.group(1) if _m else None, _m.group(2) if _m else None)
+            _m.group(1) if _m else None, _m.group(2) if _m else None, saved=bool((_saved_trail or {}).get('applied')))
         if _held and int(_held) != int(spec.get('subject_raw_tu') or 0):
             print(f"[spec-guard] sample held to the dashboard profile: "
                   f"{spec.get('subject_raw_tu')} -> {_held}")
             spec['subject_raw_tu'] = int(_held)
             if int(spec.get('subject_raw_avid') or 0) >= int(_held):
                 spec['subject_raw_avid'] = max(801, int(int(_held) * 0.22))
+        __import__('migration.saved_subject_size', fromlist=['spec_markers']).spec_markers(spec, _saved_trail)   # the worker holds the settled size through its own messy pass
     except Exception:
         traceback.print_exc()
     if draft.get('cut_date_range'):

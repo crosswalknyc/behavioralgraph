@@ -213,10 +213,21 @@ def _window_tuple(w):
     return '', ''
 
 
-def held_sizing(il, subject, window=None):
+def held_sizing(il, subject, window=None, ask=None):
     """(tu, avid, us_audience) the shared ring already holds for this
     subject and window, or None. Two readers sizing the same audience
-    in the same window see one sample, whoever asked first."""
+    in the same window see one sample, whoever asked first. With ``ask``
+    (a sample check's own words), a saved audience size for the subject
+    and window answers first, unless the ask names a size of its own
+    (migration/saved_subject_size, 2026-11-20)."""
+    if ask is not None:
+        try:
+            from migration.saved_subject_size import for_check, projected
+            got = for_check(subject, window, 0, 0, text=ask)
+            if got:
+                return got[0], got[1], projected(got[0])
+        except Exception:
+            pass
     try:
         ws, we = _window_tuple(window)
         led = il.consult(subject=subject, metric_family=SIZING_FAMILY,

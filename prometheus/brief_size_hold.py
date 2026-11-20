@@ -378,14 +378,25 @@ def _fit_whole(s, draft, view, held_tu, ua0):
     s.apply_to_draft(draft)
 
 
+def _saved_size_holds(draft):
+    """A saved audience size the draft still carries stands
+    (migration/saved_subject_size, 2026-11-20)."""
+    try:
+        from migration.saved_subject_size import holds
+        return holds(draft)
+    except Exception:
+        return False
+
+
 def settle(draft, *, s3=None, now=None, who='', thread=''):
     """The brief's size, settled against what is held. Returns the draft.
 
     Same subject, services and window as a live hold: the held size (and
     its Avid tier) is carried. A narrower draft of a held subject is
     capped at the held size. Otherwise the draft's own size becomes the
-    hold. Only a fresh build's draft is touched; a size a shipped build
-    or a sample check already fixed is left alone."""
+    hold. Only a fresh build's draft is touched; a size a shipped build,
+    a sample check or a saved audience size already fixed is left
+    alone."""
     try:
         if not isinstance(draft, dict):
             return draft
@@ -393,7 +404,8 @@ def settle(draft, *, s3=None, now=None, who='', thread=''):
             return draft
         tu = _int(draft.get('subject_raw_tu'))
         base, year, kind = subject_key(draft)
-        if tu <= 0 or not base or draft.get('sample_size_locked') or _shipped_governs(draft):
+        if tu <= 0 or not base or draft.get('sample_size_locked') or _shipped_governs(draft) \
+                or _saved_size_holds(draft):
             return draft
         now = _now(now)
         holds = _load(s3)

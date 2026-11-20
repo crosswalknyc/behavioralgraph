@@ -55040,6 +55040,16 @@ def _v1_interpret_capped(prompt, identity_context=None, actor=None):
             except Exception:
                 pass
             draft[_key_field] = None
+    # A saved audience size starts a fresh build of its subject
+    # (2026-11-20, migration/saved_subject_size): the quote is the size
+    # the build will use. A sample size written in the prompt stays the
+    # caller's, whatever the decision becomes below.
+    try:
+        from migration import saved_subject_size as _saved_size
+        _saved_size.mark_user_set(draft, prompt)
+        _saved_size.apply_to_draft(draft, prompt)
+    except Exception:
+        pass
     if ictx:
         draft['_identity_context'] = dict(ictx)
     # Populate the short-TTL draft cache AFTER all draft-level scrubs so
