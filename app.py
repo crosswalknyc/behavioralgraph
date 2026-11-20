@@ -19125,8 +19125,30 @@ def api_unlock_priced_profile():
 # ============================================================================
 # BLUE IQ — Political tracker
 # ============================================================================
+def _product_retired(product_key):
+    """True when a product is hidden from SELECT PRODUCT for everyone.
+
+    A retired product's own routes answer as though it is gone, so a
+    sunset is not just the option disappearing from the menu. The saved
+    admin state wins over the default, which is what lets an admin bring
+    a product back by unchecking its box.
+    """
+    try:
+        saved = (load_json_from_s3(LIVE_FEATURES_FILE) or {}).get('hidden_products') or {}
+        saved = _migrate_legacy_hidden_product_keys(saved)
+    except Exception:
+        saved = {}
+    if product_key in saved:
+        return bool(saved[product_key])
+    return bool(DEFAULT_HIDDEN_PRODUCTS.get(product_key, False))
+
+
 def _require_blue_iq():
     """Return (False, error_response) if Blue IQ isn't available for this user."""
+    # 2026-11-19 (Jenna): sunset. Retired for everyone until an admin
+    # turns it back on in Live Features.
+    if _product_retired('blueIQ'):
+        return False, (jsonify({'success': False, 'error': 'Blue IQ is no longer available'}), 404)
     ok, err = _require_module_access('has_blue_iq_access',
                                        module_label='Blue IQ')
     if not ok:
@@ -24903,7 +24925,13 @@ DEFAULT_HIDDEN_PRODUCTS = {
     # read in `_migrate_legacy_hidden_product_keys()` below.
     'cultureRankerIQ': False,
     'trendsIQ': False,
-    'blueIQ': False,
+    # 2026-11-19 (Jenna): Blue IQ sunset. Hidden from SELECT PRODUCT
+    # for everyone, admins included. The module, its two routes and
+    # the per-user grants all stay, so unchecking the box in
+    # Admin -> Settings -> Live Features brings it straight back.
+    # The trends scrapers that write under the blue_iq/ prefix are
+    # untouched: Trends IQ reads them.
+    'blueIQ': True,
     'hedgeFundIQ': False,
     'sfConversion': False,
     'intentIQ': False,
