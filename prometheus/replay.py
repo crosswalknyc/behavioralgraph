@@ -110,6 +110,24 @@ _COPY_DEFECT_RE = re.compile(
 
 CHILD_TIMEOUT_S = int(os.environ.get('PM_REPLAY_CHILD_TIMEOUT_S', '900'))
 
+# The child never holds this machine's keys (the corpus gate, 2026-11-20:
+# a help-lane case reached the live model through its own client while
+# the harness's model was canned, because the replay inherited the
+# shell's key). Same list as scripts/run_all_regression_tests.py; the
+# credential files point at /dev/null so a client that reaches for a
+# store or a model fails fast instead of touching anything real.
+STRIP_ENV = ('ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+             'AWS_PROFILE', 'SYNTH_QUEUE_SECRET', 'CLICKHOUSE_PASSWORD', 'BRAVE_SEARCH_API_KEY', 'GOOGLE_API_KEY')
+CHILD_ENV = {'REGRESSION_TEST_MODE': '1', 'PM_MAIL_OFF': '1', 'HOSTMAP_GAP_DOMAIN_RESEARCH': '0',
+             'AWS_SHARED_CREDENTIALS_FILE': '/dev/null', 'AWS_CONFIG_FILE': '/dev/null', 'AWS_EC2_METADATA_DISABLED': 'true'}
+
+
+def child_env():
+    """This process's environment minus the keys, plus the test-mode flags."""
+    env = {k: v for k, v in os.environ.items() if k not in STRIP_ENV}
+    env.update(CHILD_ENV)
+    return env
+
 # A priced offer is the product declining to give a read away, not a
 # dead end: a shipped free answer that now draws an offer is drift to
 # look at, never a regression (Jordan's breakdown asks, 2026-10-12).
@@ -592,6 +610,7 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
         out['outcome'] = str(rec.get('outcome') or '')
         extra = rec.get('extra') or {}
         out['result'] = extra.get('result') if isinstance(extra, dict) else None
+        out['u'] = str(extra.get('u') or '') if isinstance(extra, dict) else ''   # the Understanding's compact line (stage 2)
         if door and isinstance(payload, dict):
             # `surface` stays the routing table's call (what the tests
             # pin); the door's own choice rides alongside
@@ -692,7 +711,7 @@ def probe_many(items, timeout_s=None, python=None):
     try:
         with os.fdopen(fd_in, 'w') as fh:
             json.dump(items, fh)
-        env = dict(os.environ)
+        env = child_env()
         env['PYTHONPATH'] = os.pathsep.join(
             [WEBAPP, os.path.join(REPO_ROOT, 'scripts'), REPO_ROOT,
              env.get('PYTHONPATH', '')]).strip(os.pathsep)

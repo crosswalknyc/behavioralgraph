@@ -147,6 +147,18 @@ def _clean_subject(rest):
     return s
 
 
+_CLAUSE_BREAK_RX = re.compile(
+    r"\s*(?:[,;]|\b(?:and|but|because|since|which|that)\s+(?:i|we|it|you)\b|\b(?:i|we|it|you)\s+(?:have|has|had|am|was|were|did|do|don'?t|"
+    r"haven'?t|hasn'?t|still|never|asked|ordered|requested|ran|can'?t|cannot|need|want)\b).*$", re.I)
+
+
+def _name_part(rest):
+    """The part of the words that names the thing, before the clause about its delivery."""
+    s = ' '.join(str(rest or '').split())
+    cut = _CLAUSE_BREAK_RX.sub('', s).strip()
+    return cut if cut else s
+
+
 def parse(text):
     """{'artifacts': set, 'subject': str, 'when': str} or None."""
     t = ' '.join(str(text or '').split())
@@ -171,7 +183,10 @@ def parse(text):
                      r"audience size|penetration|overlap|churn|signups?|conversions?)\b", rest, re.I):
             return None
         when = ' '.join(x.group(0) for x in _TIME_RX.finditer(rest))
-        return {'artifacts': arts, 'subject': _clean_subject(rest), 'when': when}
+        # the name stops where the sentence turns ("where is my Nurses profile, I have not received it", "... that I
+        # asked for yesterday"): the clause after the comma, the "and", or the "I / we / it <verb>" is about the
+        # delivery, never part of the name (the corpus gate, 2026-11-20: it read "Nurses, I have not received")
+        return {'artifacts': arts, 'subject': _clean_subject(_name_part(rest)), 'when': when}
     m = _MADE_RX.match(t)
     if m:
         arts = _artifacts(m.group('art'))

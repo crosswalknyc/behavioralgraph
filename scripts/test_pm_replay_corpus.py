@@ -174,9 +174,9 @@ class ServiceModeReplay(unittest.TestCase):
             self.assertIn(cls, classes)
 
     def test_known_misses_are_marked_not_hidden(self):
-        misses = [c for c in self.cases if c.get('known_miss')]
-        self.assertTrue(misses)
-        for c in misses:
+        # a case whose current answer is the wrong lane carries both the mark and the expected route (none open today:
+        # the own-order status case was fixed by stage 2 and moved to its right route)
+        for c in [c for c in self.cases if c.get('known_miss')]:
             self.assertIn('expected', c)
             self.assertNotEqual(c['expected'], c['recorded'])
 

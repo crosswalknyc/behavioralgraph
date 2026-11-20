@@ -64,15 +64,18 @@ console prints the summary only.
 Two modes:
 
 - **door** (default): the chat module is loaded in a child process with
-  a fake S3, no ClickHouse, mail off and `REGRESSION_TEST_MODE=1`. Each
-  case posts to `/api/prometheus/v1/ask` as a probe (`X-Prometheus-Caller`),
-  so no thread is minted, nothing is banked, nothing is charged. The
-  model is canned per case: the Reader hands back the reading that was
-  logged for that ask (or nothing, when none was logged, which is what
-  production did), the analyze core gets one short reply, the interpret
-  core gets a draft. Every lane and the cores' own regex layers run for
-  real. A difference only the model could have produced is not a
-  regression.
+  a fake S3, no ClickHouse, mail off and `REGRESSION_TEST_MODE=1`, and
+  without this machine's keys (`prometheus.replay.STRIP_ENV`: the model
+  and store keys are taken out of the child's environment and the
+  credential files point at `/dev/null`, so a module that opens its own
+  client fails fast instead of reaching anything live). Each case posts
+  to `/api/prometheus/v1/ask` as a probe (`X-Prometheus-Caller`), so no
+  thread is minted, nothing is banked, nothing is charged. The model is
+  canned per case: the Reader hands back the reading that was logged for
+  that ask (or nothing, when none was logged, which is what production
+  did), the analyze core gets one short reply, the interpret core gets a
+  draft. Every lane and the cores' own regex layers run for real. A
+  difference only the model could have produced is not a regression.
 - **service**: `service.ask` runs in this process on a stub host with the
   three cores stubbed to markers. Lane level only. The unit test uses it
   and it needs no child and no parent repo.
@@ -103,15 +106,35 @@ by class:
 - **class agreement**: the share of cases whose live class is the
   recorded class or its neighbour (`prometheus.intent_classes.near`).
 
-The gate (`gate.ok`): zero `fail`; with a baseline, zero newly
-`regressed` and no class whose agreement drops more than 5 points.
-Without a baseline the regressions are listed for reading, not failed:
-the recorded route is what shipped at the time, and 313 Prometheus
-commits moved some of it on purpose.
+The gate (`gate.ok`): with a baseline, zero newly `failed`, zero newly
+`regressed`, and no class whose agreement drops more than 5 points; a
+fail the baseline already carried is reported and belongs to whoever
+owns that template. Without a baseline any fail blocks and the
+regressions are listed for reading: the recorded route is what shipped
+at the time, and 313 Prometheus commits moved some of it on purpose.
 
 The verdict rules are `prometheus.replay.compare`; the class table is
 `prometheus.intent_classes`. Both are shared with the stage 2
 Understanding's shadow grading, so "agreement" means one thing.
+
+### The Understanding's shadow grade (stage 2)
+
+When the code under replay carries `prometheus/understanding.py`, each
+entry also has `u`: the Understanding's intent, confidence, source
+(`features`, `reader`, `reconciled`), action, scope flags, whether a
+flipped executor ran or stood down on it, and whether its intent lands
+in the live route's class and the recorded route's class. The summary
+prints the agreement overall and per class:
+
+```
+understanding (shadow): on 1069 asks, intent agrees with the live route 81.9% and with the recorded route 81.9%; 19 answered by a flipped executor
+```
+
+In production the same line rides every ask-log record under
+`extra.u`; `prometheus.understanding.grade_log_rows` reads a day of
+records the same way. The kill switches are environment only:
+`PM_UNDERSTANDING=0` for the step, `PM_U_OFF_<INTENT>=1` for one flipped
+intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`).
 
 ## Refreshing the corpus
 

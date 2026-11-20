@@ -602,6 +602,20 @@ def lane_markers(source=None):
     return [m.group(1) for m in re.finditer(r"^\s*# lane: ([a-z_]+)\s*$", src, re.M)]
 
 
+def _u_claims(body, name, fallback):
+    """Whether a lane keyed on the Understanding runs (prometheus.understanding.claims, rebuild stage 2,
+    2026-11-20). The lane's own predicate decides when the step is off, not flipped for this intent, or
+    unavailable, so a fault here can never silence a lane."""
+    try:
+        from . import understanding as _und
+        return _und.claims(body, name, fallback)
+    except Exception:
+        try:
+            return bool(fallback()) if callable(fallback) else bool(fallback)
+        except Exception:
+            return False
+
+
 def ask(user, body, *, via='session'):
     """Run one ask end to end. Returns (envelope_dict, http_status)."""
     body = body if isinstance(body, dict) else {}
@@ -912,6 +926,18 @@ def ask(user, body, *, via='session'):
         except Exception as _fx:
             _faults.note('service.build_lane', _fx)
 
+    # The one typed Understanding of the ask (prometheus.understanding, rebuild stage 2, Jenna 2026-11-20): the
+    # lane predicates run once as features, the scope is read off the words (the reader's own order, a feature of
+    # the dashboard, people, the page), and a hard rule (an armed step, an order, no_build, a cancel) is never left
+    # to a model. It rides the body from here and the ask log beside the route the lane walk chose; the lanes
+    # flipped to it (_u_claims) run only when it agrees, every other lane runs as before.
+    try:
+        from . import understanding as _und0
+        if _und0.enabled():
+            body = _und0.attach(body, _und0.features(text, ctx, history, body, is_order=_is_order, no_build=_no_build))
+    except Exception as _fx:
+        _faults.note('service.understanding', _fx)
+
     # lane: intake_cancel
     # Cancel means gone, and a new thread starts clean (Jenna 2026-11-05:
     # "if you cancel a wizard or open a new thread it should drop the
@@ -1120,7 +1146,7 @@ def ask(user, body, *, via='session'):
     if not _armed(body) and not _is_order:
         try:
             from . import wayfinding as _wf
-            _wf_raw = _wf.answer(user, text, ctx, host=host, uname=uname, history=history) if _wf.wants(text) else None
+            _wf_raw = _wf.answer(user, text, ctx, host=host, uname=uname, history=history) if _u_claims(body, 'wayfinding', lambda: _wf.wants(text)) else None
         except Exception as _fx:
             _faults.note('service.wayfinding', _fx)
             _wf_raw = None
@@ -1517,7 +1543,7 @@ def ask(user, body, *, via='session'):
         _ia_dec = {'surface': 'analyze', 'mode': None, 'reason': 'insight_ask', 'client_hint': None}
         try:
             from . import insight_ask as _ia
-            _ia_go = bool(_ia.wants(text)) and bool(host.gate_analyze(user))
+            _ia_go = _u_claims(body, 'insight_ask', lambda: bool(_ia.wants(text))) and bool(host.gate_analyze(user))
             if _ia_go:
                 # over the daily spend cap the model surfaces stop for the day: the cap's own lane below says so
                 try:
@@ -2585,7 +2611,7 @@ def ask(user, body, *, via='session'):
             from . import status_lane as _stl_f
             from . import deliverables as _dlv_f
             _sf_raw = (_stl_f.answer(text, uname, host=host, user=user, history=history, thread_id=tid)
-                       if _stl_f.wants_status_fast(text) and not _dlv_f.parse(text) else None)
+                       if _u_claims(body, 'status', lambda: _stl_f.wants_status_fast(text) and not _dlv_f.parse(text)) else None)
         except Exception as e:
             _faults.note('service.status_fast', e)
             _sf_raw = None
@@ -2627,6 +2653,14 @@ def ask(user, body, *, via='session'):
                 _g_rd._pm_reading = reading
             except Exception as _fx:
                 _faults.note('service', _fx)
+        # the reading refines the Understanding (subjects, window, a confident intent); a hard rule stands
+        try:
+            from . import understanding as _und_r
+            _u_r = _und_r.on_body(body)
+            if _u_r is not None:
+                body = _und_r.attach(body, _und_r.absorb_reading(_u_r, reading if isinstance(reading, dict) else None))
+        except Exception as _fx:
+            _faults.note('service.understanding', _fx)
         # A question that lists categories and names no subject of its own ("... digital original content: Comedy,
         # Faith, Drama and Horror") is settled here, by rule, before anything acts on the reading: it runs on the
         # subject on record, or the reader is asked which audience it is on. No lane takes a category, or a library
@@ -2946,7 +2980,7 @@ def ask(user, body, *, via='session'):
             from . import deliverables as _dlv0
             # a named artifact ("where is the howdy deck") belongs to the deliverable lane below
             _st_raw = (_stl.answer(text, uname, host=host, user=user, history=history, thread_id=tid)
-                       if _stl.wants_status(text) and not _dlv0.parse(text) else None)
+                       if _u_claims(body, 'status', lambda: _stl.wants_status(text) and not _dlv0.parse(text)) else None)
         except Exception as e:
             _faults.note('service.status_lane', e)
             _st_raw = None
@@ -3018,7 +3052,7 @@ def ask(user, body, *, via='session'):
                 except Exception:
                     _sf_follow = True
             _sf_raw = (_sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
-                       if (_sf.parse(text) or _sf_follow) else None)
+                       if _u_claims(body, 'send_file_order', lambda: _sf.parse(text) or _sf_follow) else None)
         except Exception as e:
             _faults.note('service.send_file_lane', e)
             _sf_raw = None
@@ -3747,7 +3781,7 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         from . import insight_ask as _ia_cmd
         # "an insight we can email to Lego" is what the reader will do with the answer, never an order to send a file
         # (Jenna 2026-11-19, prometheus.insight_ask): the read lanes take it
-        if _ia_cmd.stands_down(text):
+        if _ia_cmd.stands_down(text) or not _u_claims(body, 'send_file_order', lambda: True):
             return None
         if re.search(r"\b(e-?mail|send|mail|forward)\b", text, re.I) and (_sf.parse(text) or subs):
             _pg.say('Sending the file')

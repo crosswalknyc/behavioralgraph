@@ -5734,7 +5734,7 @@ def _ask_logged(surface):
                     if _tid_trace:
                         extra = dict(extra or {})
                         extra['trace_id'] = _tid_trace
-                    _rd = getattr(_g, '_pm_reading', None); _rd and extra.update({'reading': {k: _rd.get(k) for k in ('intent', 'confidence', 'subjects', 'flags', 'restate', 'ms')}})
+                    extra = __import__('prometheus.understanding', fromlist=['stamp_log']).stamp_log(extra, _g)   # the Reader's reading and the Understanding beside the route (rebuild stage 2 shadow, 2026-11-20)
                     _tb = getattr(_g, '_pm_thread_binding', None); (_tb or getattr(_g, '_pm_thread_id', None)) and extra.update({'thread': dict((_tb or {}), id=getattr(_g, '_pm_thread_id', None))})   # the project the thread follows (2026-10-21)
                     _ao = getattr(_g, '_pm_approved_offer', None); _ao and extra.update({'approved_offer': _ao})   # a typed approval bound to a pending priced offer (2026-10-22)
                 except Exception as _fx:

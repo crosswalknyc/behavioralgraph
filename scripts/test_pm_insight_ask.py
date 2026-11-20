@@ -509,7 +509,9 @@ class TheWiring(unittest.TestCase):
             self.assertLess(at, src.index(later), later)                 # ahead of the Reader, the send lane and every lane that quotes
         lane = src[at:src.index('# lane: read_brief')]
         self.assertIn("if not _armed(body) and not _is_order and not _no_build and not body.get('_meta_replay'):", lane)
-        self.assertIn('_ia_go = bool(_ia.wants(text)) and bool(host.gate_analyze(user))', lane)
+        # the lane's own predicate still gates it; since rebuild stage 2 (2026-11-20) it runs through the Understanding's
+        # _u_claims, which keeps the predicate and adds the stand-down when the ask was read as a send
+        self.assertIn("_ia_go = _u_claims(body, 'insight_ask', lambda: bool(_ia.wants(text))) and bool(host.gate_analyze(user))", lane)
         self.assertIn('_ia_go = bool(_sg_ia.check(user)[0])', lane)        # the daily spend cap holds here as on every model surface
         self.assertIn("_ia_raw.get('insight_ask')", lane)
         self.assertIn("'reason': 'insight_ask'", lane)

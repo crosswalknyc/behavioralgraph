@@ -163,6 +163,7 @@ _INTENT_CLASS = {
     'send_file_order': 'send_file', 'wayfinding': 'wayfinding', 'insight_ask': 'insight',
     'build_fix': 'build', 'build_facts': 'build', 'data_floor': 'data_floor', 'cancel': 'cancel',
     'multi_ask': 'multi_ask', 'provenance': 'provenance', 'offer_reply': 'offer',
+    'armed': 'wizard',   # a step the client is in the middle of is a wizard turn
 }
 
 # Classes that answer from the same machinery: a reading in one is not
@@ -180,9 +181,10 @@ _NEAR = {
     'sizing': {'read'},
     'definition': {'page_analysis', 'provenance'},
     'provenance': {'definition'},
-    'offer': {'short_reply', 'read'},
+    'offer': {'short_reply', 'read', 'sizing', 'cancel'},
     'short_reply': {'offer', 'continuation'},
     'continuation': {'short_reply', 'read'},
+    'cancel': {'offer'},
 }
 
 

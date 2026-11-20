@@ -294,14 +294,22 @@ def _service_once(stub, case):
         body['mode'] = case['mode']
     t0 = time.time()
     fault = ''
+    u_compact = ''
     with stub.app.test_request_context('/api/prometheus/v1/ask', method='POST', headers={'X-Prometheus-Caller': 'replay'}):
         try:
             env, status = service.ask(dict(REPLAY_USER), body)
         except Exception as exc:
             env, status, fault = {}, 500, f'{type(exc).__name__}: {str(exc)[:200]}'
+        try:
+            from flask import g as _g
+            from prometheus import understanding as _und
+            _ud = getattr(_g, '_pm_understanding', None)
+            u_compact = _und.Understanding.from_dict(_ud).compact() if isinstance(_ud, dict) else ''
+        except Exception:
+            u_compact = ''
     if fault:
         return {'route': 'replay_fault', 'outcome': 'service_raised', 'surface': '', 'reply': fault, 'status': 500,
-                'ms': int((time.time() - t0) * 1000), 'kind': '', 'decision': '', 'core': '', 'bind': ''}
+                'ms': int((time.time() - t0) * 1000), 'kind': '', 'decision': '', 'core': '', 'bind': '', 'u': u_compact}
     raw = env.get('raw') if isinstance(env.get('raw'), dict) else {}
     surface = str(env.get('surface') or '')
     inferred, outcome0, _s = _ao._ask_infer_route_outcome(surface, raw, status)
@@ -319,6 +327,7 @@ def _service_once(stub, case):
             'reply': str(env.get('text') or '')[:600], 'status': int(status or 0), 'ms': int((time.time() - t0) * 1000),
             'kind': str(env.get('kind') or ''), 'decision': str((env.get('decision') or {}).get('reason') or ''), 'core': core,
             'bind': str(core_body.get('bind_subject') or (core_body.get('extra') or {}).get('bind_subject') or '') if isinstance(core_body, dict) else '',
+            'u': u_compact,
             'would_charge': len(stub.charges) > n_ch,
             'would_write': (len(stub.writes) + (len(_FAKE['s3'].puts) if _FAKE['s3'] else 0)) > n_wr}
 
@@ -385,6 +394,18 @@ def _entry(case, live, baseline_entry=None):
          'live_class': live_cls, 'class_agree': _ic.near(rec_cls, live_cls),
          'verdict': verdict, 'reason': reason,
          'question': str(case.get('question') or '')[:200], 'reply': str(live.get('reply') or '')[:240]}
+    # the Understanding (stage 2): its compact line, and whether its intent lands in the live and the recorded class
+    uc = str(live.get('u') or '')
+    if uc:
+        try:
+            from prometheus import understanding as _und
+            p = _und.parse_compact(uc)
+            e['u'] = {'intent': p.get('intent'), 'conf': p.get('conf'), 'src': p.get('src'), 'act': p.get('act'),
+                      'scope': p.get('scope'), 'flip': p.get('flip'),
+                      'agree_live': _und.agrees(uc, live.get('route'), live.get('outcome'), live.get('surface') or live.get('door_surface')),
+                      'agree_recorded': _und.agrees(uc, rec.get('route'), rec.get('outcome'), case.get('surface'))}
+        except Exception:
+            e['u'] = None
     if baseline_entry is not None:
         b = baseline_entry.get('live') or {}
         e['baseline'] = {'route': b.get('route'), 'outcome': b.get('outcome'), 'verdict': baseline_entry.get('verdict'),
@@ -412,14 +433,39 @@ def summarize(entries, baseline=None):
     rep = {'n': n, 'verdicts': verdicts, 'by_class': out_classes,
            'agreement': round(100.0 * sum(1 for e in entries if e.get('class_agree')) / max(n, 1), 1),
            'same_pct': round(100.0 * verdicts['same'] / max(n, 1), 1)}
+    # the Understanding's shadow grade over the replay (stage 2)
+    with_u = [e for e in entries if isinstance(e.get('u'), dict)]
+    if with_u:
+        u_cls = defaultdict(lambda: {'n': 0, 'agree_live': 0, 'agree_recorded': 0, 'flipped': 0})
+        for e in with_u:
+            row = u_cls[e['class']]
+            row['n'] += 1
+            row['agree_live'] += 1 if e['u'].get('agree_live') else 0
+            row['agree_recorded'] += 1 if e['u'].get('agree_recorded') else 0
+            row['flipped'] += 1 if e['u'].get('flip') else 0
+        rep['understanding'] = {
+            'n': len(with_u),
+            'agree_live_pct': round(100.0 * sum(1 for e in with_u if e['u'].get('agree_live')) / len(with_u), 1),
+            'agree_recorded_pct': round(100.0 * sum(1 for e in with_u if e['u'].get('agree_recorded')) / len(with_u), 1),
+            'flipped': sum(1 for e in with_u if e['u'].get('flip')),
+            'by_source': dict(sorted(__import__('collections').Counter(str(e['u'].get('src')) for e in with_u).items())),
+            'by_class': {k: dict(v, agree_live_pct=round(100.0 * v['agree_live'] / max(v['n'], 1), 1),
+                                 agree_recorded_pct=round(100.0 * v['agree_recorded'] / max(v['n'], 1), 1))
+                         for k, v in sorted(u_cls.items(), key=lambda kv: -kv[1]['n'])}}
     gate = {'ok': True, 'reasons': []}
-    if verdicts['fail']:
-        gate['ok'] = False
-        gate['reasons'].append(f"{verdicts['fail']} failed replies")
     if baseline:
         b_entries = {e.get('id'): e for e in (baseline.get('entries') or [])}
-        new_regressed = [e['id'] for e in entries if e['verdict'] in ('regressed', 'fail')
+        # a fail the baseline already carried belongs to whoever owns that template; it is reported, it does not
+        # block the stage being gated. A new fail or a new regression does.
+        carried = [e['id'] for e in entries if e['verdict'] == 'fail' and (b_entries.get(e['id']) or {}).get('verdict') == 'fail']
+        new_fail = [e['id'] for e in entries if e['verdict'] == 'fail' and e['id'] not in carried]
+        new_regressed = [e['id'] for e in entries if e['verdict'] == 'regressed'
                          and (b_entries.get(e['id']) or {}).get('verdict') not in ('regressed', 'fail')]
+        if carried:
+            gate['reasons'].append(f"{len(carried)} failed replies carried from the baseline (not this stage's): {', '.join(carried[:6])}")
+        if new_fail:
+            gate['ok'] = False
+            gate['reasons'].append(f"{len(new_fail)} newly failed replies: {', '.join(new_fail[:12])}")
         if new_regressed:
             gate['ok'] = False
             gate['reasons'].append(f"{len(new_regressed)} newly regressed against the baseline: {', '.join(new_regressed[:12])}")
@@ -431,6 +477,9 @@ def summarize(entries, baseline=None):
                 gate['reasons'].append(f"{cls}: agreement {b.get('agreement')} -> {row['agreement']}")
         rep['changed_vs_baseline'] = sum(1 for e in entries if e.get('vs_baseline') == 'changed')
     else:
+        if verdicts['fail']:
+            gate['ok'] = False
+            gate['reasons'].append(f"{verdicts['fail']} failed replies")
         regressed = [e for e in entries if e['verdict'] == 'regressed']
         if regressed:
             gate['reasons'].append(f"{len(regressed)} regressed against the recorded route (no baseline given; read them)")
@@ -470,6 +519,12 @@ def render(rep):
     for cls, row in rep['by_class'].items():
         lines.append(f"  {cls:16s} n={row['n']:4d} agree={row['agreement']:5.1f}%  same={row['same']} drift={row['drift']} "
                      f"regressed={row['regressed']} fail={row['fail']} unchecked={row['unchecked']}")
+    u = rep.get('understanding')
+    if u:
+        lines.append(f"understanding (shadow): on {u['n']} asks, intent agrees with the live route {u['agree_live_pct']}% and with the "
+                     f"recorded route {u['agree_recorded_pct']}%; {u['flipped']} answered by a flipped executor; sources {u['by_source']}")
+        for cls, row in u['by_class'].items():
+            lines.append(f"  {cls:16s} n={row['n']:4d} live={row['agree_live_pct']:5.1f}%  recorded={row['agree_recorded_pct']:5.1f}%  flipped={row['flipped']}")
     g = rep['gate']
     lines.append(('GATE OK' if g['ok'] else 'GATE FAILED') + (': ' + '; '.join(g['reasons']) if g['reasons'] else ''))
     return '\n'.join(lines)

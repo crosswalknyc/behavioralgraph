@@ -802,7 +802,7 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
             record['job_id'] = str(job_id).strip()[:40]
         if isinstance(extra, dict) and extra:
             clean = {}
-            for k, v in list(extra.items())[:8]:
+            for k, v in list(extra.items())[:12]:   # twelve, so the Understanding (rebuild stage 2, 2026-11-20) is never the key dropped
                 if v is None:
                     continue
                 clean[str(k)[:40]] = (v if isinstance(v, (int, float, bool))
