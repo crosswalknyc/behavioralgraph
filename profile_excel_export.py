@@ -192,7 +192,17 @@ def _write_sheet(ws, sheet: Dict[str, Any], stamp: Sequence[str]) -> int:
         if title:
             ws.cell(row=r, column=1, value=title).font = _SUBTITLE_FONT
             r += 1
-        header, body = rows[0], rows[1:]
+
+        # Some tables open with a label/value preamble (the Age card
+        # leads with its two medians). Those lines are narrower than the
+        # table, so the first full-width row is the real column header.
+        full = max(len(x) for x in rows)
+        head_i = next((i for i, x in enumerate(rows) if len(x) == full), 0)
+        for pre in rows[:head_i]:
+            for c, raw in enumerate(pre, start=1):
+                ws.cell(row=r, column=c, value=str(raw)).font = _MUTED_FONT
+            r += 1
+        header, body = rows[head_i], rows[head_i + 1:]
         widest = max(widest, len(header))
         for c, h in enumerate(header, start=1):
             cell = ws.cell(row=r, column=c, value=str(h))

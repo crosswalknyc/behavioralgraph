@@ -184819,8 +184819,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return;
             }
 
+            // The CSV stamp is comma-separated so it lands in two columns
+            // of a spreadsheet. On a workbook it sits under the title as
+            // a line of prose, so "KEY,\"value\"" becomes "Key: value".
             const stamp = String(_cwCsvDownloadStamp(_cwPageStampRanges(profileName)) || '')
-                .split('\n').map(s => s.replace(/^#\s?/, '').trim()).filter(Boolean).slice(0, 4);
+                .split('\n')
+                .map(s => s.replace(/^#\s?/, '').trim())
+                .filter(Boolean)
+                .map(line => {
+                    const m = line.match(/^([A-Z0-9 \/%-]+),(.*)$/);
+                    if (!m) return line.replace(/^"|"$/g, '');
+                    const key = m[1].trim();
+                    const val = m[2].trim().replace(/^"|"$/g, '').replace(/""/g, '"');
+                    const nice = key.charAt(0) + key.slice(1).toLowerCase();
+                    return val ? nice + ': ' + val : nice;
+                })
+                .slice(0, 4);
 
             showNotification('Building your workbook...', 'info');
             fetch('/api/profile-iq/export-workbook.xlsx', {
