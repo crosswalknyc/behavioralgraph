@@ -94,7 +94,7 @@ def _pm_settle_ask(job_id, outcome, reply='', started_at=None):
         pass
 
 
-def _pm_append_read_to_history(username, job_id, payload, held=False, started_at=None):
+def _pm_append_read_to_history(username, job_id, payload, held=False, started_at=None, chain=None, thread_id=None):
     """Land a finished read in the requester's chat thread so it is
     waiting when they return, even if the tab that started it is gone.
     The server's landing is the authoritative copy (2026-11-05,
@@ -105,7 +105,12 @@ def _pm_append_read_to_history(username, job_id, payload, held=False, started_at
     the landed mark. A job id alone never counts as landed; that reading
     left a finished read in the job payload and out of the thread.
     Settles the promise in the ask log either way. Returns 'already',
-    'filled', 'appended' or None."""
+    'filled', 'appended' or None.
+
+    A resumed read lands once for its whole chain (2026-11-20): `chain`
+    is the chain's job ids (read from the chain markers when not given)
+    and `thread_id` the thread that asked; the chain's other 'Working on
+    it' turns come off as the landing fills the first ack."""
     if not username:
         return None
     try:
@@ -114,10 +119,22 @@ def _pm_append_read_to_history(username, job_id, payload, held=False, started_at
         if not reply:
             return None
         from prometheus import read_landing as _rl
-        _tid = _C._pm_thread_for_job(username, job_id)
+        if chain is None:
+            try:
+                from prometheus import read_recovery as _rr
+                chain = _rr.chain_ids(job_id)
+            except Exception:
+                chain = None
+        _tid = thread_id or _C._pm_thread_for_job(username, job_id)
+        if not _tid and chain and len(chain) > 1:
+            try:
+                from prometheus import read_recovery as _rr
+                _tid = _rr.chain_thread(job_id) or None
+            except Exception:
+                pass
         history = _C._pm_load_thread_or_active(username, _tid)
         _meta = _rl.read_meta(job_id, payload)
-        history, how = _rl.land(history, 'read_job_id', job_id, reply, _meta, ts=_C._pm_iso_now())
+        history, how = _rl.land(history, 'read_job_id', job_id, reply, _meta, ts=_C._pm_iso_now(), chain=chain)
         if how == 'already':
             return how
         _C._pm_save_thread_or_active(username, _tid, history)

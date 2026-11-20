@@ -866,12 +866,12 @@ def finalize_faulted(job_id, status, cause, rr=None, reply=None):
             # appended; a turn already carrying it is left alone
             # (prometheus.read_landing, 2026-11-05)
             from prometheus import read_landing as _rl
-            tid = c._pm_thread_for_job(uname, job_id)
+            tid = chain_thread(job_id, status) or c._pm_thread_for_job(uname, job_id)   # the thread that asked, never the one open now (2026-11-20)
             history = c._pm_load_thread_or_active(uname, tid)
             history, how = _rl.land(history, 'read_job_id', job_id, line,
                                     {'read_job_id': job_id, 'kind': 'read', 'faulted': str(cause or '')[:40],
                                      **({'held_ref': _held_ref} if _held_ref else {})},
-                                    ts=c._pm_iso_now())
+                                    ts=c._pm_iso_now(), chain=chain_ids(job_id, status))
             if how != 'already':
                 c._pm_save_thread_or_active(uname, tid, history)
     except Exception:
@@ -954,10 +954,65 @@ def chain_marker(job_id):
         return {}
 
 
+MAX_CHAIN_HOPS = 8
+
+
+def chain_ids(job_id, status=None):
+    """Every job id in this read's resume chain, root first: up through
+    the marker to the root, then down through each record's
+    `resumed_as`. [job_id] alone for a read never resumed. Never raises."""
+    jid = str(job_id or '').strip()
+    if not jid:
+        return []
+    ids = []
+    try:
+        marker = chain_marker(jid)
+        root = str(marker.get('root') or jid)
+        cur, hops = root, 0
+        while cur and cur not in ids and hops < MAX_CHAIN_HOPS:
+            ids.append(cur)
+            doc = status if (cur == jid and isinstance(status, dict)) else (_status_doc(cur) or {})
+            cur = str(doc.get('resumed_as') or '').strip()
+            hops += 1
+    except Exception:
+        traceback.print_exc()
+    if jid not in ids:
+        ids.append(jid)
+    return ids
+
+
+def chain_thread(job_id, status=None):
+    """The thread the read was asked on: this record's thread, else the
+    chain marker's, else the root record's, else the job document's.
+    '' when none is known. Never raises."""
+    try:
+        st = status if isinstance(status, dict) else (_status_doc(job_id) or {})
+        tid = str(st.get('thread_id') or '').strip()
+        if tid:
+            return tid
+        marker = chain_marker(job_id)
+        tid = str(marker.get('thread_id') or '').strip()
+        if tid:
+            return tid
+        root = str(marker.get('root') or '').strip()
+        if root and root != str(job_id):
+            tid = str((_status_doc(root) or {}).get('thread_id') or '').strip()
+            if tid:
+                return tid
+        try:
+            from . import service as _svc
+            return str(_svc.job_thread_id(root or job_id) or '').strip()
+        except Exception:
+            return ''
+    except Exception:
+        return ''
+
+
 def _write_chain(new_id, parent_id, parent_status, held_retry):
     """The child's marker: depth counts fresh passes after the first run;
     the email promise is inherited and set by a held retry (the held
-    read's thread turn is the calm line that promises the email)."""
+    read's thread turn is the calm line that promises the email); the
+    asking thread rides so every copy lands where the question was asked."""
     try:
         parent = chain_marker(parent_id)
         doc = {'root': parent.get('root') or parent_id, 'parent': parent_id,
@@ -965,6 +1020,7 @@ def _write_chain(new_id, parent_id, parent_status, held_retry):
                'promised_email': bool(parent.get('promised_email')) or bool(held_retry),
                'user': str((parent_status or {}).get('user') or ''),
                'question': str((parent_status or {}).get('question') or '')[:300],
+               'thread_id': str((parent_status or {}).get('thread_id') or parent.get('thread_id') or ''),
                'written_at': time.time()}
         s3, bucket = _s3()
         s3.put_object(Bucket=bucket, Key=f"{CHAIN_PREFIX}{new_id}.json",
@@ -1267,7 +1323,8 @@ def _finalize(job_id, status, reason):
                 reason=f"a read was orphaned and could not be recovered ({reason}); the answer is owed by email")
             c._pm_append_read_to_history(uname, job_id, {
                 'success': True, 'action': 'answer', 'reply': note,
-                'followups': [], **({'held_ref': _ref} if _ref else {})})
+                'followups': [], **({'held_ref': _ref} if _ref else {})},
+                chain=chain_ids(job_id, status), thread_id=chain_thread(job_id, status) or None)   # one held line where the question was asked; the chain's other 'Working on it' turns come off (2026-11-20)
     except Exception:
         traceback.print_exc()
     try:
@@ -1351,6 +1408,17 @@ def recover(job_id, status=None, reason='no heartbeat'):
                                         json=body_json, headers=headers):
             from flask import session as _session
             _session['username'] = uname
+            try:
+                # the resumed copy runs on the thread the question was asked
+                # on, wherever the reader is now (2026-11-20, Liz: two resumes
+                # of a stalled read posted their lines into the thread she had
+                # opened meanwhile; the launch below reads this scope)
+                from . import thread_scope as _tscope
+                _ask_tid = chain_thread(job_id, claimed)
+                _tscope.set_current_thread(_ask_tid)
+                _tscope.set_request_thread(_ask_tid)
+            except Exception:
+                traceback.print_exc()
             resp = c._pm_generate_metrics_response(
                 user, rr['text'], list(rr.get('history') or []),
                 prefer_catalog=True,

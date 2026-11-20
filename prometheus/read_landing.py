@@ -32,7 +32,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from datetime import datetime, timezone
 
-__all__ = ['JOB_MARKS', 'LANDED_MARK', 'text_key', 'landing_state', 'land', 'read_meta',
+__all__ = ['JOB_MARKS', 'LANDED_MARK', 'CHAIN_MARK', 'LANDED_JOB', 'text_key', 'is_progress_line', 'carries', 'landing_state', 'land', 'read_meta',
            'landed_since_last_user', 'note_landed_since', 'reset_landed_since', 'pending_landed', 'attach_landed_note', 'landed_line']
 
 # the job marks a server turn can carry (one per job family)
@@ -47,6 +47,16 @@ def text_key(text):
     return ' '.join(str(text or '').split())
 
 
+PROGRESS_OPENERS = ('working on it', 'on it:', 'on it.', 'still reading', 'picking the read back up')
+
+
+def is_progress_line(text):
+    """True for a progress or promise line a read leaves while it runs
+    (the calm line, an ack): never a landed answer."""
+    t = text_key(text).lower()
+    return bool(t) and t.startswith(PROGRESS_OPENERS)
+
+
 def _meta(t):
     m = t.get('meta') if isinstance(t, dict) else None
     return m if isinstance(m, dict) else {}
@@ -56,24 +66,43 @@ def _now_iso():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
 
+CHAIN_MARK = 'read_job_chain'      # every job id of a resumed read's chain, on the turn that landed it
+LANDED_JOB = 'landed_job_id'       # the chain member whose pass landed, when it is not the turn's own id
+
+
+def carries(t, meta_key, job_id):
+    """True when turn t is this job's: it carries the id under
+    `meta_key`, or the id is in the chain the turn landed for, or it is
+    the chain member that landed on the turn."""
+    m = _meta(t)
+    if m.get(meta_key) == job_id or m.get(LANDED_JOB) == job_id:
+        return True
+    chain = m.get(CHAIN_MARK)
+    return isinstance(chain, (list, tuple)) and job_id in chain
+
+
 def landing_state(history, meta_key, job_id, text=''):
     """('landed', i) when turn i carries the job id with the payload
     (its text is `text`) or the landed mark; ('ack', i) when turn i
     carries the job id alone (the promise); ('none', None) when no turn
     carries the job id. A landed turn wins over an ack when both are
-    present (two readings of one job)."""
+    present (two readings of one job). A turn that landed a resumed
+    chain carries every member's id (CHAIN_MARK)."""
     if not job_id:
         return 'none', None
     want = text_key(text)
     ack = None
     for i, t in enumerate(history or []):
         try:
-            if _meta(t).get(meta_key) != job_id:
+            if not carries(t, meta_key, job_id):
                 continue
-            if _meta(t).get(LANDED_MARK):
-                return 'landed', i
             if want and text_key(t.get('text')) == want:
                 return 'landed', i
+            if _meta(t).get(LANDED_MARK) and not is_progress_line(t.get('text')):
+                return 'landed', i
+            # a progress line ('Working on it ...') with the mark is the
+            # promise a held pass left: the answer fills it, never sits
+            # under it (2026-11-20)
             if ack is None:
                 ack = i
         except Exception:
@@ -109,7 +138,7 @@ def read_meta(job_id, payload, meta_key='read_job_id'):
     return meta
 
 
-def land(history, meta_key, job_id, text, meta, *, ts=None):
+def land(history, meta_key, job_id, text, meta, *, ts=None, chain=None):
     """The thread with the payload landed once. Returns (history, how):
     how is 'already' (nothing written: the turn carries the payload or
     the landed mark), 'filled' (the ack turn now carries the payload),
@@ -117,26 +146,73 @@ def land(history, meta_key, job_id, text, meta, *, ts=None):
     every copy of the thread sees one turn change text rather than a
     second one appear; ack-only meta comes off, the ack's other meta
     (a subject note, options the offer carried) is kept under the
-    read's."""
+    read's.
+
+    `chain` (2026-11-20, Liz's stalled positioning read): the job ids of
+    a resumed read, root first. The chain lands ONCE: into the earliest
+    ack any member left (that turn keeps its own id and takes the chain
+    and the member that landed), and every other ack-only turn of the
+    chain (the 'Working on it' lines its resumes posted) comes off the
+    thread. A read never leaves a 'Working on it' line of its own behind
+    once it has landed or been held."""
     hist = list(history or [])
     text = str(text or '')
     meta = dict(meta or {})
     meta.setdefault(meta_key, job_id)
     meta.setdefault(LANDED_MARK, _now_iso())
-    state, i = landing_state(hist, meta_key, job_id, text)
-    if state == 'landed':
-        return hist, 'already'
-    if state == 'ack':
-        ack = dict(hist[i])
-        kept = {k: v for k, v in _meta(ack).items() if k not in _ACK_ONLY and k != 'options'}
-        kept.update(meta)
-        ack['text'] = text
-        ack['meta'] = kept
-        ack['role'] = 'agent'
-        hist[i] = ack
-        return hist, 'filled'
+    ids = []
+    for x in list(chain or []) + [job_id]:       # root first, as the chain runs
+        x = str(x or '').strip()
+        if x and x not in ids:
+            ids.append(x)
+    if len(ids) <= 1:
+        state, i = landing_state(hist, meta_key, job_id, text)
+        if state == 'landed':
+            return hist, 'already'
+        if state == 'ack':
+            hist[i] = _fill(hist[i], text, meta)
+            return hist, 'filled'
+        hist.append({'role': 'agent', 'text': text, 'ts': ts or _now_iso(), 'meta': meta})
+        return hist, 'appended'
+    # a chain: a real answer landed anywhere on it is landed; every
+    # progress line any member left is an ack, and the earliest takes
+    # the landing while the rest come off
+    want = text_key(text)
+    acks = []
+    for i, t in enumerate(hist):
+        try:
+            if not any(carries(t, meta_key, cid) for cid in ids):
+                continue
+            if not is_progress_line(t.get('text')) and ((want and text_key(t.get('text')) == want) or _meta(t).get(LANDED_MARK)):
+                return hist, 'already'
+            acks.append(i)
+        except Exception:
+            continue
+    meta[CHAIN_MARK] = ids
+    if acks:
+        first = acks[0]
+        same_words = text_key(hist[first].get('text')) == want
+        own = _meta(hist[first]).get(meta_key)
+        fill_meta = dict(meta)
+        if own and own != job_id:
+            fill_meta[meta_key] = own            # the turn keeps the id the reader's screen knows
+            fill_meta[LANDED_JOB] = job_id
+        hist[first] = _fill(hist[first], text, fill_meta)
+        for j in reversed(acks[1:]):
+            del hist[j]
+        return hist, ('already' if (same_words and len(acks) == 1) else 'filled')
     hist.append({'role': 'agent', 'text': text, 'ts': ts or _now_iso(), 'meta': meta})
     return hist, 'appended'
+
+
+def _fill(turn, text, meta):
+    ack = dict(turn)
+    kept = {k: v for k, v in _meta(ack).items() if k not in _ACK_ONLY and k != 'options'}
+    kept.update(meta)
+    ack['text'] = text
+    ack['meta'] = kept
+    ack['role'] = 'agent'
+    return ack
 
 
 # ------------------------------------------------------------------------

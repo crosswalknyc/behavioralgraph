@@ -132,6 +132,8 @@ def ask_from(body=None, text: str = '', base=None, mr=None, **over) -> dict:
     the measurement request. Keyword overrides win."""
     b = body if isinstance(body, dict) else {}
     u = b.get('_pm_understanding') if isinstance(b.get('_pm_understanding'), dict) else {}
+    if not u:
+        u = understanding_on_request()
     base = base if isinstance(base, dict) else {}
     mr = mr if isinstance(mr, dict) else {}
     subject = ''
@@ -162,6 +164,94 @@ def ask_from(body=None, text: str = '', base=None, mr=None, **over) -> dict:
         if over.get(k):
             out[k] = str(over[k])
     return out
+
+
+def understanding_on_request() -> dict:
+    """The Understanding the ask service left on the request (stage 2
+    writes `g._pm_understanding`), for a core that is handed no body."""
+    try:
+        from flask import g as _g, has_app_context
+        if has_app_context():
+            u = getattr(_g, '_pm_understanding', None)
+            return u if isinstance(u, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+_OWN_WORDS = frozenset(('crosswalk', 'prometheus', 'cw', 'profile iq', 'brand partnership iq', 'digital journey iq', 'subscriber iq',
+                        'focus group iq', 'digital twins iq', 'attribution iq', 'trends iq', 'impact iq', 'analysis iq', 'gen pop', 'genpop'))
+
+
+def named_subject(text, ask: Optional[dict] = None, base: Optional[dict] = None) -> str:
+    """The subject the words name, in subject position: the
+    Understanding's subject or title; else the universe the question
+    names (prometheus.question_universe); else the house guesser's
+    plausible subject. '' when the words name none, when they name our
+    own product, or when the only name is the base's own."""
+    u = understanding_on_request()
+    for sdict in (u.get('subjects') or []):
+        if isinstance(sdict, dict) and str(sdict.get('role') or 'subject') in ('subject', 'title'):
+            name = str(sdict.get('catalog') or sdict.get('as_written') or '').strip()
+            if name and _fold(name) not in {_fold(w) for w in _OWN_WORDS}:
+                return name
+    if u.get('named_title'):
+        return str(u['named_title']).strip()
+    try:
+        from . import question_universe as _qu
+        uni = _qu.question_universe(str(text or ''), '')
+        if getattr(uni, 'kind', '') == 'named' and getattr(uni, 'explicit', False) and getattr(uni, 'label', ''):
+            return str(uni.label).strip()
+    except Exception:
+        pass
+    try:
+        from . import product_facts as _pf
+        if _pf.looks_like(text):
+            return ''
+    except Exception:
+        pass
+    try:
+        import prometheus_analysis as _pma
+        from . import referents as _refs
+        g = str(_pma.guess_subject_from_text(str(text or '')) or '').strip()
+        if g and _refs.plausible_subject(g) and _fold(g) not in {_fold(w) for w in _OWN_WORDS} and len(_fold(g)) >= 3:
+            return g
+    except Exception:
+        pass
+    return ''
+
+
+def base_is_borrowed(text, named: str, base: Optional[dict]) -> bool:
+    """True when the read's base is another subject's profile: the words
+    name a subject (`named`), the base is a page, catalog or view base
+    for a different name, and the words do not name the base's own
+    subject (a distinctive token of it). A resume's pin counts as a
+    page base; a base the reader chose by its words
+    (`chosen_by_words`) never counts."""
+    b = base if isinstance(base, dict) else {}
+    bs = str(b.get('subject') or '').strip()
+    if not (named and bs) or b.get('chosen_by_words'):
+        return False
+    if str(b.get('source') or '') not in ('page', 'catalog', 'view', ''):
+        return False
+    if _twin.same_name(named, bs) or _twin.same_name(named, bs.split(' - ')[0]):
+        return False
+    # the named subject inside the base's own name ('Anne Hathaway' on the
+    # Anne Hathaway x Shiseido valuation, 'Yellowstone' on its avid cut):
+    # the base is the subject's
+    ntoks = [w for w in re.split(r'[^a-z0-9]+', str(named).lower()) if len(w) >= 3]
+    btoks = set(re.split(r'[^a-z0-9]+', bs.lower()))
+    if ntoks and all(w in btoks for w in ntoks):
+        return False
+    try:
+        from . import named_subject as _ns
+        def _norm(x):
+            return re.sub(r'[^a-z0-9 ]+', ' ', str(x or '').lower()).strip()
+        if _ns.page_named(text, bs, _norm, frozenset(('the', 'a', 'an', 'of', 'and', 'on', 'in', 'for', 'to', 'with'))):
+            return False
+    except Exception:
+        pass
+    return True
 
 
 def ask_key(ask: dict) -> str:
@@ -360,6 +450,18 @@ def research(ask: dict, claude_json: Optional[Callable] = None, tools=None, chan
                 saved = store.load(_anchor_doc_key(key))
             except Exception:
                 saved = None
+            if not (isinstance(saved, dict) and (saved.get('anchors') or saved.get('events') is not None)) and not changed_windows:
+                # the same ask banked without a window (a record saved for
+                # every future pull, 2026-11-20: VICE Sports) answers a
+                # dated ask whose own window moved a day; the standing
+                # default moves daily and must not re-research a subject
+                # the house already sized
+                try:
+                    open_key = ask_key(dict(a, window=None))
+                    if open_key != key:
+                        saved = store.load(_anchor_doc_key(open_key))
+                except Exception:
+                    saved = None
         if isinstance(saved, dict) and (saved.get('anchors') or saved.get('events') is not None) and _fresh(saved, a.get('window') or {}):
             out['anchors'] = _clean_anchors(saved.get('anchors'))
             out['events'] = _clean_events(saved.get('events'))
@@ -377,6 +479,17 @@ def research(ask: dict, claude_json: Optional[Callable] = None, tools=None, chan
                 ask_doc['date_ranges'] = list(changed_windows)
                 ask_doc['date_ranges_rule'] = ('Report only dated events inside these ranges: a release or premiere, '
                                                'a campaign or product launch, a run of coverage, an award, a notable appearance.')
+            if a.get('size_needed'):
+                # a subject we hold no profile on: its audience size is the
+                # first anchor (Jenna 2026-11-20); the low end of what the
+                # sources support, US people in the window, never a global
+                # figure or a follower count standing in for people reached
+                ask_doc['audience_size_rule'] = (
+                    f"No profile is on file for {a.get('subject')}. The first anchor is its US audience size in the window: "
+                    f"the US people who engaged with it (visited, watched, read, followed, searched) over the trailing twelve "
+                    f"months, klass 'audience', unit 'people', at the LOW end of what the sources support. A follower or "
+                    f"subscriber count is a footprint (klass 'footprint'), a global figure is marked global, and neither stands "
+                    f"in for US people reached. Then the anchors the question itself needs.")
             kw = {'max_tokens': 2500, 'temperature': 0.1, 'surface': 'pm_knowledge_research'}
             if tools:
                 kw['tools'] = tools
@@ -487,6 +600,7 @@ def leave_twin(subject, question, twin: Optional[dict], ask_window: Optional[dic
 def take_twin(subject, question) -> Optional[dict]:
     with _PENDING_LOCK:
         _PENDING.pop('val|' + _pending_key(subject, question), None)
+        _PENDING.pop('size|' + _pending_key(subject, question), None)
         return _PENDING.pop(_pending_key(subject, question), None)
 
 
@@ -509,6 +623,23 @@ def peek_valuation(subject, question) -> Optional[dict]:
         return _PENDING.get('val|' + _pending_key(subject, question))
 
 
+def leave_size(subject, question, cap, *, window: Optional[dict] = None, source: str = ''):
+    """Leave the subject's audience size (and the window a researched
+    read defaults to) for the size gate that runs after the model."""
+    if not (cap or window):
+        return
+    with _PENDING_LOCK:
+        now = time.time()
+        for k in [k for k, v in _PENDING.items() if now - v.get('ts', 0) > _PENDING_TTL_S]:
+            _PENDING.pop(k, None)
+        _PENDING['size|' + _pending_key(subject, question)] = {'cap': cap, 'window': window or {}, 'source': source, 'ts': now}
+
+
+def peek_size(subject, question) -> Optional[dict]:
+    with _PENDING_LOCK:
+        return _PENDING.get('size|' + _pending_key(subject, question))
+
+
 def bind_after(res, *, question='', subject=''):
     """After the coherence pass: the stored valuation's figures are put
     back on the read's metrics (the pass may have redrawn a digit or a
@@ -519,9 +650,11 @@ def bind_after(res, *, question='', subject=''):
         if not enabled() or not isinstance(res, dict):
             return res
         pend = peek_valuation(subject, question)
-        if not pend:
-            return res
-        res, rec = _twin.hold_read_to_valuation(res, pend.get('bound') or {}, pend.get('others') or [])
+        if pend:
+            res, rec = _twin.hold_read_to_valuation(res, pend.get('bound') or {}, pend.get('others') or [])
+        sp = peek_size(subject, question)
+        if sp:
+            res, _srec = _twin.size_gate(res, sp.get('cap'), salt=f"size|{_fold(subject)}", window=sp.get('window') or None)
         return res
     except Exception as e:
         print(f"[pm-knowledge] valuation re-bind skipped: {type(e).__name__}: {e}")
@@ -550,6 +683,18 @@ def hold_pending(data, *, question='', subject='', store=None):
                 try:
                     _twin.write_record(dict(vrec, product='read', subject=str(subject or ''), pair_key=_pieces.property_fold(subject),
                                             question=str(question or '')[:300], line='', line_shipped=False), store)
+                except Exception:
+                    pass
+        sp = peek_size(subject, question)
+        if sp:
+            data, srec = _twin.size_gate(data, sp.get('cap'), salt=f"size|{_fold(subject)}", window=sp.get('window') or None)
+            if srec and (srec.get('moves') or srec.get('window_set')):
+                print(f"[pm-knowledge] size gate on {subject}: cap {srec.get('cap')}, {len(srec.get('moves') or [])} count(s) reduced, "
+                      f"window set {srec.get('window_set')}")
+                try:
+                    _twin.write_record(dict(srec, verdict='size_gate', product='read', subject=str(subject or ''),
+                                            pair_key=_pieces.property_fold(subject), question=str(question or '')[:300],
+                                            source=sp.get('source'), line='', line_shipped=False), store)
                 except Exception:
                     pass
         pend = peek_twin(subject, question)
@@ -673,6 +818,42 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         ask = ask_from(body, text, base, mr)
         if not (ask.get('window') or {}).get('start'):
             ask['window'] = inline_window(text)
+        # the subject the words name outranks the open view (Jenna 2026-11-20,
+        # Emma Crouchen's VICE Sports read on the open Pinterest profile): a
+        # subject we hold no profile on is researched, never read off another
+        # profile's base, and its audience size is the ceiling on every count
+        named = named_subject(text, ask, base)
+        base_subject = str(base.get('subject') or '').strip()
+        borrowed = base_is_borrowed(text, named, base)
+        researched = str(base.get('source') or '') == 'panel' or borrowed
+        default_win = None
+        if borrowed:
+            ask['subject'] = named
+            # the ledger for the named subject rides in the core's own
+            # consult object (its block, its entries for the binding after
+            # the model): a decision of record on the named subject replays
+            # through it, and the base's stored figures never bind this read
+            try:
+                import insights_ledger as _il
+                _led2 = _il.consult(subject=named, question=text, metric_family=ask.get('family') or None, history=history)
+                if isinstance(led, dict):
+                    led.clear()
+                    led.update(_led2 if isinstance(_led2, dict) else {})
+                    led.setdefault('entries', [])
+                    led.setdefault('block', '')
+                    led.setdefault('exact', None)
+            except Exception as e:
+                print(f"[pm-knowledge] named-subject ledger consult skipped: {type(e).__name__}: {e}")
+        if researched and not (ask.get('window') or {}).get('start'):
+            # a researched read defaults to the trailing twelve months, never
+            # a calendar year taken from another file (Jenna 2026-11-20)
+            try:
+                from . import window_scope as _ws
+                s0, e0 = _ws.standing_default()
+                default_win = {'start': s0, 'end': e0}
+                ask['window'] = dict(default_win, label='Trailing 12 months', default=True)
+            except Exception:
+                default_win = None
         parts = []
         if callable(pk):
             try:
@@ -702,7 +883,7 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
                  bpiq_source_key=(bound or {}).get('ref'))
         if h.get('block'):
             parts.append(h['block'])
-        elif callable(catalog):
+        elif callable(catalog) and not borrowed:
             try:
                 blk = catalog(base.get('subject'))
             except Exception:
@@ -731,9 +912,26 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
             except Exception:
                 pass
         changed = _twin.changed_windows((st['twin'] or {}).get('window') or {}, ask.get('window') or {}) if st['twin'] else None
+        if researched and not h.get('profile'):
+            ask['size_needed'] = True
         r = research(ask, claude_json, tools, changed_windows=changed or None)
         if r.get('block'):
             parts.append(r['block'])
+        cap, cap_source = None, ''
+        if researched:
+            cap = _twin.anchor_low_people(r.get('anchors') or [])
+            cap_source = 'research' if cap else ''
+        elif isinstance(h.get('profile'), dict) and _twin.same_name(h['profile'].get('subject') or ask.get('subject'), ask.get('subject') or ''):
+            cap = _num(h['profile'].get('audience_size'))
+            cap_source = 'profile' if cap else ''
+        sb = _twin.size_block(ask.get('subject'), cap, researched=researched,
+                              borrowed_from=(base_subject if borrowed else ''), window=default_win)
+        if sb:
+            parts.append(sb)
+        if cap or default_win:
+            leave_size(ask.get('subject') or base_subject, text, cap, window=default_win, source=cap_source)
+            if borrowed:
+                leave_size(base_subject, text, cap, window=default_win, source=cap_source)   # the core may still key the read on the base
         if st['twin']:
             leave_twin(ask.get('subject'), text, st['twin'], ask.get('window'), r.get('events'))
         wb = world_block(text, ask.get('subject'))
@@ -741,7 +939,8 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
             parts.append(wb)
         base['_knowledge'] = {'key': ask_key(ask), 'twin': (st['twin'] or {}).get('ref'), 'valuation': (bound or {}).get('ref'),
                               'anchors': len(r.get('anchors') or []), 'events': len(r.get('events') or []),
-                              'cached': bool(r.get('cached')), 'marks': marks_of(h, r)[:60]}
+                              'cached': bool(r.get('cached')), 'marks': marks_of(h, r)[:60],
+                              'named_subject': named, 'borrowed_base': base_subject if borrowed else '', 'size_cap': cap, 'size_source': cap_source}
         if isinstance(stages, dict):
             stages['knowledge'] = int((time.monotonic() - t0) * 1000)
         return '\n\n'.join(p for p in parts if p)
@@ -771,8 +970,17 @@ def insight_blocks(text, subject, *, history=None, consult=None, claude_json=Non
         st = stored(ask, question=text, history=history)
         led_block = st.get('block') or ''
         thin = len(st.get('entries') or []) < 2
-        r = research(ask, claude_json, tools) if thin else {'block': ''}
-        return led_block, (r.get('block') or '')
+        if thin:
+            h = held(ask.get('subject'))
+            if not h.get('profile'):
+                ask['size_needed'] = True      # a subject we hold no profile on: its audience size is the first anchor (2026-11-20)
+            r = research(ask, claude_json, tools)
+            cap = _twin.anchor_low_people(r.get('anchors') or []) if not h.get('profile') else None
+            sb = _twin.size_block(ask.get('subject'), cap, researched=bool(cap), window=None) if cap else ''
+            anchors = '\n\n'.join(x for x in ((r.get('block') or ''), sb) if x)
+        else:
+            anchors = ''
+        return led_block, anchors
     except Exception as e:
         print(f"[pm-knowledge] insight blocks fell back: {type(e).__name__}: {e}")
         return _legacy()
@@ -799,4 +1007,5 @@ def valuation_events(inputs: dict, changed_windows: list, claude_json=None, tool
 __all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored', 'research', 'anchors_block',
            'facts_block', 'marks_of', 'leave_twin', 'take_twin', 'peek_twin', 'hold_pending', 'read_blocks', 'insight_blocks',
            'leave_valuation', 'peek_valuation', 'bind_after', 'inline_window', 'valuation_for_read', 'world_block',
+           'understanding_on_request', 'named_subject', 'base_is_borrowed', 'leave_size', 'peek_size',
            'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS']

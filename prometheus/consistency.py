@@ -1383,6 +1383,157 @@ def hold_read_to_valuation(data: dict, bound: dict, others: Optional[list] = Non
         return data, {}
 
 
+# --------------------------------------------- the size gate on a read
+# A projected count never implies an audience larger than the subject
+# could have (Jenna 2026-11-20, Emma Crouchen's read: 208,073,835
+# beauty buyers at 73.9% of "VICE Sports", an implied audience of about
+# 281M, which was the open Pinterest profile's). The subject's audience
+# size is the ceiling (anchor low: the low end of what the research or
+# the subject's own profile supports); a count above it, or a count whose
+# companion share implies more people than the ceiling, is reduced to the
+# ceiling times its share before anything ships.
+_COUNT_UNITS = ('people', 'individuals', 'persons', 'users', 'viewers', 'buyers', 'subscribers', 'listeners', 'shoppers',
+                'count', 'accounts', 'households', 'orders', '')
+_PCT_UNITS_GATE = ('pct', 'percent', '%', 'share')
+_TOKEN_STOP = frozenset(('the', 'of', 'in', 'us', 'audience', 'people', 'share', 'penetration', 'rate', 'pct', 'count',
+                         'total', 'with', 'and', 'this', 'projected', 'buyers', 'users', 'viewers'))
+
+
+def _tokens(*parts) -> set:
+    out = set()
+    for p in parts:
+        for t in re.split(r'[^a-z0-9]+', str(p or '').lower()):
+            if len(t) > 2 and t not in _TOKEN_STOP:
+                out.add(t)
+    return out
+
+
+def _companion_share(metrics: list, i: int) -> Optional[float]:
+    """The share (a pct metric) that goes with count metric i: the nearest
+    pct metric sharing a word with it, looking back first."""
+    m = metrics[i]
+    toks = _tokens(m.get('name'), m.get('label'))
+    order = list(range(i - 1, -1, -1)) + list(range(i + 1, len(metrics)))
+    for j in order:
+        o = metrics[j]
+        if not isinstance(o, dict) or str(o.get('unit') or '').lower() not in _PCT_UNITS_GATE:
+            continue
+        v = _num(o.get('value'))
+        if v is None or not (0 < v <= 100):
+            continue
+        if toks & _tokens(o.get('name'), o.get('label')):
+            return v
+    return None
+
+
+def size_gate(data: dict, cap, salt: str = '', window: Optional[dict] = None) -> tuple:
+    """(data, record). Every count in the read sits inside the subject's
+    audience: a count above `cap` US people, or one whose companion share
+    implies more than `cap`, becomes cap times its share (messy, never
+    pinned). Prose that stated a moved figure is rewritten to the moved
+    one. `window` (the trailing twelve months) replaces a missing window
+    or a stale calendar year when given. In place; never raises."""
+    rec = {'cap': int(round(float(cap))) if _num(cap) else None, 'moves': [], 'window_set': False}
+    if not isinstance(data, dict):
+        return data, {}
+    try:
+        capf = _num(cap)
+        metrics = [m for m in (data.get('metrics') or []) if isinstance(m, dict)]
+        if capf and capf > 0:
+            for i, m in enumerate(metrics):
+                unit = str(m.get('unit') or '').lower()
+                if unit not in _COUNT_UNITS:
+                    continue
+                v = _num(m.get('value'))
+                if v is None or v <= 0:
+                    continue
+                share = _companion_share(metrics, i)
+                new = None
+                if share:
+                    implied = v / (share / 100.0)
+                    if implied > capf * 1.02:
+                        new = capf * share / 100.0
+                elif v > capf:
+                    new = capf * (0.93 + 0.05 * _unit(salt, 'size-gate', m.get('name')))
+                if new is not None and new < v:
+                    newi = _messy_int(salt, ('size', m.get('name')), new)
+                    rec['moves'].append({'metric': str(m.get('name') or m.get('label') or ''), 'from': int(round(v)), 'to': newi,
+                                         'share': share, 'implied': int(round(v / (share / 100.0))) if share else None})
+                    m['value'] = newi
+            if rec['moves']:
+                for key in ('headline', 'reads'):
+                    val = data.get(key)
+                    if isinstance(val, str):
+                        data[key] = _rewrite_moved(val, rec['moves'])
+                    elif isinstance(val, list):
+                        data[key] = [_rewrite_moved(x, rec['moves']) if isinstance(x, str) else x for x in val]
+        if isinstance(window, dict) and window.get('start') and window.get('end'):
+            ws, we = str(data.get('window_start') or '')[:10], str(data.get('window_end') or '')[:10]
+            stale = (not ws or not we) or (_date(ws) and _date(we) and (ws, we) != (window['start'], window['end'])
+                                           and _date(ws).month == 1 and _date(ws).day == 1 and _date(we).month == 12 and _date(we).day == 31)
+            if stale:
+                data['window_start'], data['window_end'] = window['start'], window['end']
+                data['window_label'] = _plain_window(window)
+                rec['window_set'] = True
+        return data, rec
+    except Exception as e:
+        print(f"[pm-consistency] size gate skipped: {type(e).__name__}: {e}")
+        return data, {}
+
+
+def _rewrite_moved(text: str, moves: list) -> str:
+    out = str(text or '')
+    for mv in moves:
+        old, new = mv.get('from'), mv.get('to')
+        if not old or not new:
+            continue
+        for a, b in ((f"{old:,}", f"{new:,}"), (str(old), str(new))):
+            if a in out:
+                out = out.replace(a, b)
+    return out
+
+
+def anchor_low_people(anchors: list) -> Optional[int]:
+    """The low end of the researched audience size: the smallest people
+    anchor of the audience or footprint class; else the smallest people
+    anchor at all; None when none."""
+    by = {'audience': [], 'reach': [], 'footprint': [], 'other': []}
+    for a in (anchors or []):
+        if not isinstance(a, dict):
+            continue
+        unit = str(a.get('unit') or '').lower()
+        v = _num(a.get('value'))
+        if v is None or v <= 0 or unit not in ('people', 'individuals', 'persons', 'users', 'viewers', 'subscribers', 'followers', 'listeners', 'readers', 'accounts'):
+            continue
+        k = str(a.get('klass') or '').lower()
+        by[k if k in by else 'other'].append(v)
+    for k in ('audience', 'reach', 'footprint', 'other'):     # the audience class first: followers are a footprint, not the people reached
+        if by[k]:
+            return int(round(min(by[k])))
+    return None
+
+
+def size_block(subject: str, cap, *, researched: bool, borrowed_from: str = '', window: Optional[dict] = None) -> str:
+    """The prompt block that fixes the subject's audience size for a
+    read: binding, anchor low; the rows of another profile are never
+    the subject's; the window is the trailing twelve months unless the
+    question named one. Prompt text only."""
+    who = str(subject or '').strip() or 'the subject'
+    lines = []
+    if _num(cap):
+        lines.append(f"AUDIENCE SIZE (binding, anchor low). {who}: {int(round(float(cap))):,} US people in the window. "
+                     f"Every count in this read sits inside that figure; a share of this audience times this size is the count, "
+                     f"and no count implies an audience larger than it.")
+    if borrowed_from:
+        lines.append(f"The profile rows in this prompt describe {borrowed_from}, not {who}. {who} is the subject of this read: "
+                     f"its figures come from the anchors and the research, never from {borrowed_from}'s rows, and no figure of "
+                     f"{borrowed_from}'s is stated as {who}'s.")
+    if researched and isinstance(window, dict) and window.get('start'):
+        lines.append(f"The window is the trailing twelve months, {_plain_window(window)}, unless the question named one; "
+                     f"never a calendar year taken from another file.")
+    return '\n'.join(lines)
+
+
 def twin_block(anchor: Optional[dict], ask_window: Optional[dict] = None) -> str:
     """The prompt block for a generated read whose ask has a near twin:
     the figures already given, binding inside the band, and the one
@@ -1413,5 +1564,5 @@ __all__ = ['enabled', 'say_held_to_reader', 'thresholds', 'band', 'bands', 'same
            'anchor_from_entry', 'held_value', 'plan_holds', 'figures_inside', 'press_clusters', 'dated_facts_of',
            'event_in_changed_window', 'lifted_line', 'held_line', 'write_record', 'lookup', 'valuation_candidates',
            'apply_valuation', 'containing_cap', 'anchor_eligibility', 'near_twin_entry', 'hold_read_metrics', 'twin_block', 'MemoryRecords',
-           'counts_of', 'which_valuation', 'valuation_block', 'hold_read_to_valuation',
+           'counts_of', 'which_valuation', 'valuation_block', 'hold_read_to_valuation', 'size_gate', 'anchor_low_people', 'size_block',
            'HELD_LINE', 'EVENT_KINDS', 'RECORD_PREFIX', 'ENV_CHECK', 'ENV_SAY_HELD']

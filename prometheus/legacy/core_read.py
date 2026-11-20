@@ -1066,14 +1066,23 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     stages['measured'] = int((time.monotonic() - _t_stage) * 1000)
-    _rm_led_block = led.get('block') or ''
+    _cat_block = ''
     try:   # a pairing Crosswalk has already valued hands the read the valuation's own figures (2026-11-11)
         from prometheus import peacock_scale as _pk_scale   # a read on Peacock answers from the figures on file (2026-11-18)
         _cat_block = __import__('prometheus.knowledge', fromlist=['read_blocks']).read_blocks(text, mr, base, pk=_pk_scale.block, saved=_bpiq_wiz.saved_valuation_block, catalog=_pm_catalog_block, stage=_stage_note, stages=stages, claude_json=lambda _s, _u, **_kw: _C._pm_claude_json(_s, _u, usage_extras=pm_ppu, **_kw), tools=[pma.WEB_SEARCH_TOOL], history=history, led=led)   # the knowledge layer: held, stored, the near twin, the researched anchors (2026-11-20)
-        if _cat_block:
-            _rm_led_block = (_cat_block + '\n' + _rm_led_block) if _rm_led_block else _cat_block
     except Exception:
         traceback.print_exc()
+    # The words named a subject the base does not describe (Emma Crouchen's
+    # VICE Sports read on the open Pinterest profile, 2026-11-20): the layer
+    # re-consulted the ledger for the named subject in place, and the read
+    # runs researched end to end on it; the base's rows never ride the prompt
+    # and never stand as measured.
+    _borrowed_read = bool(((base.get('_knowledge') or {}) if isinstance(base.get('_knowledge'), dict) else {}).get('borrowed_base'))
+    if _borrowed_read:
+        digest_block = ''
+    _rm_led_block = led.get('block') or ''
+    if _cat_block:
+        _rm_led_block = (_cat_block + '\n' + _rm_led_block) if _rm_led_block else _cat_block
     user_prompt = pma.build_reasoned_metrics_user_prompt(
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=_rm_led_block,
@@ -1081,8 +1090,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _v_lookup, verifier_block = None, ''
     try:   # the verifier's rows go in BEFORE generation (2026-10-09, item 2: editor, not gate)
         import prometheus_verify as _pmv0
-        _v_lookup = _pmv0.load_base_lookup(_H.s3_client, _H.S3_BUCKET, base.get('s3_key'), base.get('subject') or '')
-        verifier_block = _pmv0.measured_prompt_block(_v_lookup, text, metric_request=mr or None)
+        if not _borrowed_read:
+            _v_lookup = _pmv0.load_base_lookup(_H.s3_client, _H.S3_BUCKET, base.get('s3_key'), base.get('subject') or '')
+            verifier_block = _pmv0.measured_prompt_block(_v_lookup, text, metric_request=mr or None)
     except Exception:
         traceback.print_exc()
     from prometheus import links as _links   # links are signals (2026-10-09, item 5)
@@ -1108,7 +1118,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # subject has no profile rows anywhere, so the read is researched
     # end to end instead of derived from a base file. The guidance
     # block swaps the grounding order accordingly.
-    _is_panel = str(base.get('source') or '') == 'panel'
+    _is_panel = str(base.get('source') or '') == 'panel' or _borrowed_read
     if _is_panel:
         extra_blocks.append(pma.PANEL_REPORT_GUIDANCE)
     if _qu.kind == 'named' and _qu.explicit and _is_panel:
@@ -1343,7 +1353,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _pm_auto_corrected = False   # silent auto-correct -> verify_outcome 4
     if pmv is not None:
         try:
-            if _v_lookup is None:
+            if _v_lookup is None and not _borrowed_read:   # another subject's rows never verify a read on the named one (2026-11-20)
                 _v_lookup = pmv.load_base_lookup(
                     _H.s3_client, _H.S3_BUCKET, base.get('s3_key'),
                     base.get('subject') or '')
