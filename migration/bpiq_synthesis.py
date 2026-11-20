@@ -869,7 +869,20 @@ def derive_aov(campaign: Optional[dict], category: str, salt: str,
     the priciest); the researched band; the model's own order read
     when it sits inside the category band; the category band (salted,
     middle sixty percent). Returns {aov, basis, basket, floor, band,
-    note}."""
+    note}.
+
+    A value held to a near twin (prometheus.consistency, Jenna
+    2026-11-20) rides `campaign['_aov_held_usd']`: the order value lands
+    on it and the basis stays what the research gave."""
+    out = _derive_aov(campaign, category, salt, caller_rate=caller_rate)
+    held = _fnum((campaign or {}).get("_aov_held_usd"))
+    if held and not _fnum(caller_rate):
+        out = dict(out, aov=round(held, 2), held_to_twin=True)
+    return out
+
+
+def _derive_aov(campaign: Optional[dict], category: str, salt: str,
+                caller_rate=None) -> dict:
     cat = str(category or "").strip().upper()
     band = AOV_BANDS.get(cat, AOV_FALLBACK_BAND)
     basket = round(BASKET_RANGE[0] + (BASKET_RANGE[1] - BASKET_RANGE[0]) * _unit(salt, "basket"), 3)
@@ -2378,6 +2391,19 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
         print(f"[bpiq-synth] campaign research: {len(campaign.get('products') or [])} priced pieces, "
               f"band {campaign.get('price_band')}, sold out {campaign.get('sell_out', {}).get('sold_out')}, "
               f"confidence {campaign.get('confidence')}")
+        # Content pieces by date (Jenna 2026-11-20, Leatherman x Matchbox):
+        # every dated press piece a run on this pairing ever found is
+        # remembered, and a piece dated inside this window is counted
+        # whether or not this run's research found it again.
+        try:
+            from prometheus import pieces as _pcs
+            _fp_m, _pn = _pcs.merge_footprint(campaign.get("footprint") or {},
+                                              (inputs.get("qualifier"), inputs.get("brand_partner")),
+                                              windows["event"], store=_twin_store(underpinnings), run_key=key)
+            if _pn:
+                campaign["footprint"] = _fp_m
+        except Exception as e:
+            print(f"[bpiq-synth] pieces registry skipped: {e}")
     # Corpus catalog (2026-10-05): every figure already published on the
     # qualifier (its Profile IQ size, earlier partnership reads, journeys,
     # chat answers) and on the brand partner rides the research prompt as
@@ -2593,6 +2619,31 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
         except Exception as e:
             print(f"[bpiq-synth] exact landing after the comparison group skipped: {e}")
             exact_target = None
+    # Near-twin consistency (Jenna 2026-11-20): a valuation on the same
+    # pairing and a window near one already delivered stays inside a
+    # band of it on every driver (people reached, engaged share, order
+    # share, order value, drift), the money recomputed from the held
+    # drivers by this builder; the band lifts only for a dated event
+    # inside the part of the window that changed. Not run on an operator
+    # re-run in place or on a valuation landed exactly on a figure given.
+    twin_rec = {}
+    if not exact_target and not force_research:
+        try:
+            from prometheus import consistency as _twin
+            from prometheus import knowledge as _know
+            _ts = _twin_store(underpinnings)
+            payload, twin_rec = _twin.apply_valuation(
+                payload, inputs, campaign=campaign,
+                rebuild=lambda _plan: _rebuild_held(inputs, prim, campaign, _plan, created_by=created_by),
+                research=lambda _changed: _know.valuation_events(inputs, _changed, claude_json=claude_json,
+                                                                 tools=tools, store=_ts),
+                salt=run_salt(inputs), store=_ts)
+            if twin_rec.get("verdict") == "held":
+                _cg2 = payload.get("control_group") or {}
+                if _cg2.get("enabled", True):
+                    payload, _mc_notes2 = _mc.enforce_matched_control(payload, subject=run_salt(inputs))
+        except Exception as e:
+            print(f"[bpiq-synth] near-twin check skipped: {e}")
     if underpinnings is not None and saved is None:
         try:
             aov_doc = {"aov": (payload.get("valuation") or {}).get("rates", {}).get("conv_value_per_user"),
@@ -2614,6 +2665,7 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
                 "primitives": prim,
                 "banked_read": banked,         # the delivered read this run was held to, if any
                 "hold": hold_rec,
+                "twin": {k: twin_rec.get(k) for k in ("id", "verdict", "anchor", "event") if twin_rec.get(k) is not None},
                 "aov": aov_doc,
                 "readme": underpinnings_readme(inputs, campaign, aov_doc, payload),
                 "created_at": _dt.datetime.utcnow().isoformat() + "Z",
@@ -2655,6 +2707,89 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
         except Exception as e:
             print(f"[bpiq-synth] record save skipped: {e}")
     return payload
+
+
+def _twin_store(underpinnings):
+    """The store the pieces registry, the anchor store and the
+    consistency records share: the underpinnings' own S3 client when
+    the run has one, else the bound host's, else none (hermetic)."""
+    try:
+        from prometheus import pieces as _pcs
+        s3, bucket = getattr(underpinnings, "s3", None), getattr(underpinnings, "bucket", None)
+        if s3 is not None and bucket:
+            return _pcs.S3Store(s3, bucket)
+        return _pcs.default_store()
+    except Exception:
+        return None
+
+
+def _rebuild_held(inputs: dict, prim: dict, campaign: Optional[dict], plan: dict, *,
+                  created_by: str = "prometheus") -> dict:
+    """The valuation rebuilt with its drivers held to a near twin's band
+    (prometheus.consistency, Jenna 2026-11-20). The plan names the held
+    drivers: `audience_reached` (US people), `engaged_pre_pct` and
+    `engaged_post_pct`, `order_share_pct`, `aov_usd`, `drift_pp`. Each
+    is set at the primitive the builder reads, so every count, lift,
+    lens and line is recomputed from the held drivers and the page adds
+    up; the total is never edited on its own."""
+    import copy as _copy
+    prim2 = _copy.deepcopy(prim or {})
+    camp2 = _copy.deepcopy(campaign or {})
+    inp2 = dict(inputs or {})
+    plan = plan or {}
+    reach_now = None
+    tgt = plan.get("audience_reached")
+    if tgt:
+        tgt = int(tgt)
+        cur_n = float(prim2.get("audience_size") or 0)
+        cur_p = float(prim2.get("projected_audience_size") or 0)
+        w = (cur_p / cur_n) if (cur_n > 0 and cur_p > 0) else PANEL_WEIGHT_DEFAULT
+        prim2["projected_audience_size"] = tgt
+        prim2["audience_size"] = max(1, int(round(tgt / w)))
+        if isinstance(camp2.get("footprint"), dict):
+            camp2["footprint"]["reach_target_us"] = tgt
+        reach_now = tgt
+    tot = prim2.get("totals") if isinstance(prim2.get("totals"), dict) else {}
+    if plan.get("engaged_post_pct") is not None and tot:
+        tot["post_pen_pct"] = float(plan["engaged_post_pct"])
+    if plan.get("engaged_pre_pct") is not None and tot:
+        tot["pre_pen_pct"] = float(plan["engaged_pre_pct"])
+    if tot and _fnum(tot.get("pre_pen_pct")) and _fnum(tot.get("post_pen_pct")) \
+            and float(tot["pre_pen_pct"]) >= float(tot["post_pen_pct"]):
+        tot["pre_pen_pct"] = round(float(tot["post_pen_pct"]) * 0.82, 4)   # the before share stays below the after share
+    cv = prim2.get("conversions") if isinstance(prim2.get("conversions"), dict) else None
+    if plan.get("order_share_pct") is not None:
+        share = float(plan["order_share_pct"])
+        if cv is not None:
+            old_post = _fnum(cv.get("post_users_pct")) or 0.0
+            old_pre = _fnum(cv.get("pre_users_pct")) or 0.0
+            cv["post_users_pct"] = round(share, 4)
+            pre_share = _fnum(plan.get("order_share_pre_pct"))
+            if pre_share is not None:
+                cv["pre_users_pct"] = round(min(pre_share, share * 0.98), 4)      # the anchor's own before-to-after ratio
+            elif old_post > 0 and old_pre > 0:
+                cv["pre_users_pct"] = round(min(share * (old_pre / old_post), share * 0.9), 4)
+        # the people the share applies to: the held reach, else the reach the
+        # last build landed on (the plan carries it), else the primitive
+        base_people = reach_now or _fnum(plan.get("_reach_now")) or _fnum(prim2.get("projected_audience_size")) or 0
+        if base_people:
+            camp2["_orders_target"] = max(1, int(round(float(base_people) * share / 100.0)))
+    if plan.get("aov_usd") is not None:
+        camp2["_aov_held_usd"] = round(float(plan["aov_usd"]), 2)
+    if plan.get("drift_pp") is not None:
+        prim2["gen_pop_drift_pp"] = round(float(plan["drift_pp"]), 4)
+    # the earned media lens: the platforms' incremental brand share moves
+    # by one factor (the gain over the before share on every platform), so
+    # the earned value per person reached lands near the anchor's
+    s = _fnum(plan.get("emv_scale"))
+    if s and isinstance(prim2.get("per_platform"), list):
+        for row in prim2["per_platform"]:
+            if not isinstance(row, dict):
+                continue
+            pre = _fnum(row.get("brand_pen_pre_pct")) or 0.0
+            post = _fnum(row.get("brand_pen_post_pct")) or 0.0
+            row["brand_pen_post_pct"] = round(min(100.0, max(pre, pre + (post - pre) * s)), 4)
+    return build_payload(inp2, prim2, created_by=created_by, campaign=camp2)
 
 
 def talent_window_audience(inputs: dict, windows: dict) -> Optional[int]:

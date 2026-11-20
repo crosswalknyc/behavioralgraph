@@ -356,6 +356,18 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
     reach = gross * (1.0 - overlap)
     # a line of people reached cannot exceed the union
     reach = max(reach, commercial_people, site_people, press_people, event_people)
+    # Held to a near twin (prometheus.consistency, Jenna 2026-11-20): the
+    # people reached land on the held figure and every line moves with
+    # them, so the union and its parts still add up. Counts of pieces,
+    # events and views are facts of the campaign and stay.
+    target = _num(fp.get("reach_target_us"))
+    if target and reach > 0:
+        f = float(target) / float(reach)
+        site_people, press_people, social_people = site_people * f, press_people * f, social_people * f
+        commercial_people, event_people, search_people = commercial_people * f, event_people * f, search_people * f
+        gross, reach = gross * f, float(target)
+        for ln in lines:
+            ln["people"] = _messy(salt, ("hold", ln.get("line")), float(ln.get("people") or 0) * f)
     return {
         "reach_us": _messy(salt, "reach", reach) if reach else 0,
         "gross_people": _messy(salt, "gross", gross) if gross else 0,
@@ -430,6 +442,14 @@ def derive_drop(campaign: Optional[dict], fp: Optional[dict], aov: dict, salt: s
         basis = "published revenue at the collection's prices"
     basket = max(float(aov.get("basket") or 1.3), 1.0)
     orders = units / basket
+    # Held to a near twin (prometheus.consistency, Jenna 2026-11-20): the
+    # orders land on the held order share of the people reached; the
+    # units follow at the same basket and the price per order is the
+    # collection's own.
+    orders_target = _num(c.get("_orders_target"))
+    if orders_target:
+        orders = float(orders_target)
+        units = orders * basket
     per_order = float(aov.get("aov") or (piece_price * basket))
     revenue = orders * per_order
     return {

@@ -302,6 +302,29 @@ def _model_data(result):
     return result
 
 
+def _hold_twin(d, question, subject):
+    """The near-twin hold on the read's metrics before the coherence
+    pass (prometheus.knowledge.hold_pending, Jenna 2026-11-20): the
+    figures already given on a near-twin ask bound the fresh ones, and
+    the coherence pass that follows recomputes everything derived. The
+    data is returned as given when nothing is pending or on any
+    trouble."""
+    try:
+        from . import knowledge as _know
+        return _know.hold_pending(d, question=question, subject=subject)
+    except Exception:
+        return d
+
+
+def _twin_done(question, subject):
+    """The pending twin is cleared once a pass of the read went through."""
+    try:
+        from . import knowledge as _know
+        _know.take_twin(subject, question)
+    except Exception:
+        pass
+
+
 def coherent(data, *, enforce, again=None, question='', subject='', note=None, log=None, facts=None):
     """(res, data): ``enforce(data)`` with the repair around it.
 
@@ -365,7 +388,10 @@ def coherent(data, *, enforce, again=None, question='', subject='', note=None, l
             # the missing groups of a grid get one piece pass; the second pass is the whole grid again and is
             # completed from what it carries, so a read costs three passes at most
             d = _grid(data, piece=(attempt == 'reply'))
-            return enforce(d), d
+            d = _hold_twin(d, question, subject)
+            res = enforce(d)
+            _twin_done(question, subject)
+            return res, d
         except ValueError as e:
             first_err = first_err or e
             _say(f"{attempt}: {e}")

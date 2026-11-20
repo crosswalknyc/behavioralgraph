@@ -625,7 +625,9 @@ def test_f_valuation_never_starts_cold():
     check("a valuation on a window that does not overlap the read's is not handed over",
           BA.valuation_block(HER, window={'start': '2026-01-01', 'end': '2026-03-31'}, anchors_for=anchors_for) == '')
     chat = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
-    check("the read lanes carry the saved valuation block", chat.count('_bpiq_wiz.saved_valuation_block(text') >= 2)
+    # the generated read carries it through the knowledge layer (prometheus.knowledge.read_blocks, saved=...) since 2026-11-20
+    check("the read lanes carry the saved valuation block",
+          chat.count('_bpiq_wiz.saved_valuation_block(text') + chat.count('saved=_bpiq_wiz.saved_valuation_block') >= 2)
     src = (WEB / 'migration' / 'bpiq_synthesis.py').read_text(encoding='utf-8')
     check("the engine also looks the pairing up brand first in the catalog", 'partnership_brand_first' in src)
 

@@ -14554,7 +14554,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _rm_led_block = led.get('block') or ''
     try:   # a pairing Crosswalk has already valued hands the read the valuation's own figures (2026-11-11)
         from prometheus import peacock_scale as _pk_scale   # a read on Peacock answers from the figures on file (2026-11-18)
-        _cat_block = '\n\n'.join(x for x in (_pk_scale.block(text, mr, base), _bpiq_wiz.saved_valuation_block(text), _pm_catalog_block(base.get('subject'))) if x)
+        _cat_block = __import__('prometheus.knowledge', fromlist=['read_blocks']).read_blocks(text, mr, base, pk=_pk_scale.block, saved=_bpiq_wiz.saved_valuation_block, catalog=_pm_catalog_block, stage=_stage_note, stages=stages, claude_json=lambda _s, _u, **_kw: _pm_claude_json(_s, _u, usage_extras=pm_ppu, **_kw), tools=[pma.WEB_SEARCH_TOOL], history=history, led=led)   # the knowledge layer: held, stored, the near twin, the researched anchors (2026-11-20)
         if _cat_block:
             _rm_led_block = (_cat_block + '\n' + _rm_led_block) if _rm_led_block else _cat_block
     except Exception:

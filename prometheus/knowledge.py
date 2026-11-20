@@ -1,0 +1,655 @@
+"""The knowledge layer: one place every answer reads from, in a fixed
+order (the Prometheus rebuild, stage 3, 2026-11-20).
+
+1. `held(subject)`: the figures the company holds. The corpus catalog's
+   facts on the subject (profiles, trackers, journeys, valuations,
+   decks, chat figures) and the profile-level size facts.
+2. `stored(ask)`: the answers already given. The insights ledger,
+   keyed on the ask (subject, product, metric family, window, scope)
+   and matched on that key first, the question's words as a tie-break.
+   The near twin of the ask (prometheus.consistency) rides along as the
+   anchor a new figure stays close to.
+3. `research(ask)`: outside research as a step of its own, not a tool
+   the reasoning call may or may not pick up (the review found 67% of
+   generated reads made no search). One call with web search returns
+   anchors (value, unit, window, class, kind of source) and dated events
+   into the anchor store `system/pm_anchors/<key>.json`; a later ask on
+   the same key reads them back without a call.
+4. `facts_block(ask, ...)`: the one prompt block the three paths hand
+   their model (held, stored, the near twin, the anchors), each line
+   marked internally with where it came from.
+
+The marks are for the ask log and the record only. The block is prompt
+text; what a reader sees is the model's output after the exits, and the
+consistency lines are fixed house sentences (prometheus.consistency).
+No source name, no method word reaches a reader through this module.
+
+Wiring:
+
+- the generated read (`_pm_generate_read_core` in the legacy file) calls
+  `read_blocks(...)` for its catalog / saved-valuation / Peacock block,
+  which now also carries the near twin and the researched anchors, and
+  leaves the twin for the hold that runs inside `read_repair.coherent`
+  (`hold_pending`);
+- the valuation (`migration/bpiq_synthesis._synthesize`) calls
+  `valuation_events(...)` for the research override of the near-twin
+  check and the pieces registry for its press;
+- the insight lane (`prometheus/insight_ask._core`) calls
+  `insight_blocks(...)` for its ledger block and anchors.
+
+Kill switches, env only: `PM_KNOWLEDGE=0` (the layer hands back the
+blocks the paths assembled before it, nothing researched),
+`PM_KNOWLEDGE_RESEARCH=0` (no research call; stored anchors still read).
+Fail-safe everywhere: any error returns what the path had.
+"""
+from __future__ import annotations
+
+import datetime as _dt
+import hashlib
+import json
+import os
+import re
+import threading
+import time
+from typing import Callable, Optional
+
+from . import consistency as _twin
+from . import pieces as _pieces
+
+ENV = 'PM_KNOWLEDGE'
+ENV_RESEARCH = 'PM_KNOWLEDGE_RESEARCH'
+ANCHOR_PREFIX = 'system/pm_anchors/'
+ANCHOR_FRESH_S = 14 * 24 * 3600          # anchors on an open window are researched again after two weeks
+PRODUCTS = ('read', 'valuation', 'insight', 'journey', 'profile')
+
+RESEARCH_PROMPT = """You gather outside anchors for one measurement question before it is
+answered. Use web search when available. Approved sources only: company
+filings and earnings reports, platform-reported figures, Pew, Nielsen,
+Comscore, Statista, eMarketer, YouGov, Sensor Tower, data.ai, trade and
+business press that states a figure. Return STRICT JSON only:
+
+{
+  "anchors": [
+    {"name": str,                 // what the figure is (US monthly users, US viewers of the title, box office, units sold)
+     "value": number,             // the figure as stated
+     "unit": str,                 // people, usd, pct, views, units, hours
+     "window": {"start": "YYYY-MM-DD"|null, "end": "YYYY-MM-DD"|null},
+     "klass": str,                // footprint, audience, sales, reach, price, share
+     "source_type": str,          // filing, earnings, platform, survey, tracker, press
+     "as_of": "YYYY-MM-DD"|null}
+  ],
+  "events": [
+    {"date": "YYYY-MM-DD",        // only an event you can date to a day
+     "kind": "release"|"premiere"|"launch"|"campaign"|"press_cluster"|"award"|"appearance",
+     "name": str, "where": str}
+  ],
+  "sources": [{"title": str, "url": str, "used_for": str}]
+}
+
+Rules: a figure you did not see is not listed. US figures first; say
+when a figure is global. Events only inside the date ranges given when
+ranges are given; otherwise inside the question's window. Nothing here
+is shown to a reader; it is working material."""
+
+
+# --------------------------------------------------------------- switches
+def enabled() -> bool:
+    return os.environ.get(ENV, '1').strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def research_enabled() -> bool:
+    return enabled() and os.environ.get(ENV_RESEARCH, '1').strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+# ------------------------------------------------------------------- ask
+def _date(s) -> Optional[_dt.date]:
+    try:
+        return _dt.date.fromisoformat(str(s or '')[:10])
+    except ValueError:
+        return None
+
+
+def _window_of(w) -> dict:
+    """{start, end} from a dict, a 'YYYY-MM-DD to YYYY-MM-DD' string, or
+    nothing."""
+    if isinstance(w, dict):
+        return {'start': str(w.get('start') or '')[:10], 'end': str(w.get('end') or '')[:10]}
+    s = str(w or '')
+    ds = re.findall(r'\d{4}-\d{2}-\d{2}', s)
+    if len(ds) >= 2:
+        return {'start': ds[0], 'end': ds[1]}
+    return {'start': '', 'end': ''}
+
+
+def _fold(s) -> str:
+    return re.sub(r'[^a-z0-9]+', '', str(s or '').lower())
+
+
+def ask_from(body=None, text: str = '', base=None, mr=None, **over) -> dict:
+    """The ask the layer keys on: {subject, product, family, window,
+    scope, platform, text}. The Understanding on the body is the first
+    source (stage 2: `body['_pm_understanding']`), then the base, then
+    the measurement request. Keyword overrides win."""
+    b = body if isinstance(body, dict) else {}
+    u = b.get('_pm_understanding') if isinstance(b.get('_pm_understanding'), dict) else {}
+    base = base if isinstance(base, dict) else {}
+    mr = mr if isinstance(mr, dict) else {}
+    subject = ''
+    for s in (u.get('subjects') or []):
+        if isinstance(s, dict) and str(s.get('role') or 'subject') in ('subject', 'title'):
+            subject = str(s.get('catalog') or s.get('as_written') or '').strip()
+            if subject:
+                break
+    if not subject:
+        subject = str(u.get('named_title') or base.get('subject') or mr.get('subject') or '').strip()
+    window = _window_of(over.get('window') or mr.get('window') or u.get('window') or base.get('window'))
+    try:
+        import insights_ledger as _il
+        fam = _il.canon_family(over.get('family') or mr.get('family') or mr.get('metric_family') or '')
+    except Exception:
+        fam = str(over.get('family') or mr.get('family') or 'audience')
+    scope = str(over.get('scope') or mr.get('cohort') or mr.get('dimension') or '').strip()
+    out = {
+        'subject': str(over.get('subject') or subject),
+        'product': str(over.get('product') or 'read'),
+        'family': fam,
+        'window': window,
+        'scope': scope,
+        'platform': str(over.get('platform') or u.get('platform') or mr.get('platform') or '').strip(),
+        'text': str(text or ''),
+    }
+    for k in ('talent', 'brand', 'property'):
+        if over.get(k):
+            out[k] = str(over[k])
+    return out
+
+
+def ask_key(ask: dict) -> str:
+    """'subjectfold|product|family|ws|we|scope': the ledger key's shape
+    with the product in front."""
+    a = ask if isinstance(ask, dict) else {}
+    w = _window_of(a.get('window'))
+    try:
+        import insights_ledger as _il
+        subj = _il.fold_subject(a.get('subject')).replace(' ', '_')[:80] or _il.subject_key(a.get('subject'))
+    except Exception:
+        subj = _fold(a.get('subject'))[:80] or 'unknown'
+    scope = _fold(a.get('scope'))[:40]
+    return f"{subj}|{a.get('product') or 'read'}|{a.get('family') or 'audience'}|{w['start'] or 'any'}|{w['end'] or 'any'}|{scope}"
+
+
+# ------------------------------------------------------------------ held
+def held(subject, window=None, products=None, extra_subjects=()) -> dict:
+    """The figures the company holds on the subject: the catalog's facts
+    (newest first, the ask's window first), the profile-level sizes and
+    the prompt block. Never raises."""
+    out = {'subject': str(subject or '').strip(), 'facts': [], 'profile': None, 'block': '', 'marks': []}
+    if not enabled() or not out['subject']:
+        return out
+    try:
+        from migration import corpus_catalog as _cc
+        names = [out['subject']] + [str(x or '').strip() for x in (extra_subjects or ())]
+        names = [n for n in dict.fromkeys(names) if n]
+        parts = []
+        for n in names[:3]:
+            anchors = _cc.anchors_for(n, window=window, products=products, with_ledger=False)
+            facts = list(anchors.get('facts') or [])
+            out['facts'].extend(facts)
+            if out['profile'] is None:
+                try:
+                    out['profile'] = _cc.profile_anchor(anchors, window)
+                except Exception:
+                    out['profile'] = None
+            blk = _cc.anchors_block(anchors)
+            if blk:
+                parts.append(blk)
+            for f in facts[:60]:
+                out['marks'].append({'kind': 'held', 'product': f.get('product'), 'ref': (f.get('source') or {}).get('key'),
+                                     'as_of': f.get('as_of')})
+        out['block'] = '\n\n'.join(parts)
+    except Exception as e:
+        print(f"[pm-knowledge] held lookup skipped: {type(e).__name__}: {e}")
+    return out
+
+
+# ---------------------------------------------------------------- stored
+def stored(ask: dict, question: str = '', history=None, prior_question: str = '') -> dict:
+    """The answers already given on the ask: the ledger's entries and
+    block, the exact replay when one fits, and the near twin of the ask
+    (the earliest banked read on the subject whose family matches and
+    whose window is near). Never raises."""
+    out = {'entries': [], 'exact': None, 'twin': None, 'block': '', 'marks': [], 'key': ask_key(ask)}
+    if not enabled():
+        return out
+    try:
+        import insights_ledger as _il
+        a = ask if isinstance(ask, dict) else {}
+        w = _window_of(a.get('window'))
+        led = _il.consult(subject=a.get('subject') or None, question=question or a.get('text') or None,
+                          metric_family=a.get('family') or None,
+                          window_start=w['start'] or None, window_end=w['end'] or None,
+                          prior_question=prior_question or None, history=history)
+        out['entries'] = list(led.get('entries') or [])
+        out['exact'] = led.get('exact')
+        out['block'] = str(led.get('block') or '')
+        out['subject'] = led.get('subject')
+        for e in out['entries'][:40]:
+            if isinstance(e, dict):
+                out['marks'].append({'kind': 'stored', 'ref': e.get('k'), 'as_of': e.get('ts'), 'route': e.get('route')})
+        if w['start'] and w['end']:
+            try:
+                out['twin'] = _twin.near_twin_entry({'subject': led.get('subject') or a.get('subject'),
+                                                     'family': a.get('family'), 'window': w}, out['entries'])
+            except Exception as e:
+                print(f"[pm-knowledge] twin lookup skipped: {type(e).__name__}: {e}")
+    except Exception as e:
+        print(f"[pm-knowledge] stored lookup skipped: {type(e).__name__}: {e}")
+    return out
+
+
+# -------------------------------------------------------------- research
+STORE_FOR_TESTS = None
+
+
+def anchor_store():
+    if STORE_FOR_TESTS is not None:
+        return STORE_FOR_TESTS
+    return _pieces.default_store()
+
+
+def _anchor_doc_key(key: str) -> str:
+    return f"{ANCHOR_PREFIX}{hashlib.sha1(str(key).encode()).hexdigest()[:20]}.json"
+
+
+def _unwrap(result):
+    """The parsed object from either model-call shape: the transport
+    envelope ({'success', 'data'}) or the object itself."""
+    if isinstance(result, dict) and 'success' in result and ('data' in result or 'error' in result):
+        if not result.get('success'):
+            return {}
+        d = result.get('data')
+        if isinstance(d, list):
+            d = next((x for x in d if isinstance(x, dict)), {})
+        return d if isinstance(d, dict) else {}
+    if isinstance(result, list):
+        result = next((x for x in result if isinstance(x, dict)), {})
+    return result if isinstance(result, dict) else {}
+
+
+def _num(v):
+    try:
+        if v is None or v == '' or isinstance(v, bool):
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _clean_anchors(raw) -> list:
+    out = []
+    for a in (raw or []):
+        if not isinstance(a, dict):
+            continue
+        v = _num(a.get('value'))
+        name = str(a.get('name') or '').strip()
+        if v is None or not name:
+            continue
+        out.append({'name': name[:120], 'value': v, 'unit': str(a.get('unit') or '').strip()[:24],
+                    'window': _window_of(a.get('window')), 'klass': str(a.get('klass') or '').strip()[:24],
+                    'source_type': str(a.get('source_type') or '').strip()[:24],
+                    'as_of': str(a.get('as_of') or '')[:10]})
+    return out[:40]
+
+
+def _clean_events(raw) -> list:
+    out = []
+    for e in (raw or []):
+        if not isinstance(e, dict):
+            continue
+        d = _date(e.get('date'))
+        kind = str(e.get('kind') or '').strip().lower()
+        if not d or kind not in _twin.EVENT_KINDS:
+            continue
+        out.append({'date': d.isoformat(), 'kind': kind, 'name': str(e.get('name') or '').strip()[:120],
+                    'where': str(e.get('where') or '').strip()[:80]})
+    return out[:40]
+
+
+def _fresh(doc: dict, ask_window: dict) -> bool:
+    """A saved research document is read back when its window is closed
+    (the facts of a finished window do not change) or when it is under
+    two weeks old."""
+    try:
+        ts = float(doc.get('saved_ts') or 0)
+    except (TypeError, ValueError):
+        ts = 0.0
+    end = _date((ask_window or {}).get('end'))
+    today = _dt.date.today()
+    if end and end < today - _dt.timedelta(days=3):
+        return True
+    return bool(ts) and (time.time() - ts) < ANCHOR_FRESH_S
+
+
+def research(ask: dict, claude_json: Optional[Callable] = None, tools=None, changed_windows=None,
+             store=None, force: bool = False) -> dict:
+    """Outside research as a step. Returns {'anchors', 'events', 'block',
+    'marks', 'cached', 'key'}. The anchor store is read first; one call
+    with web search when nothing usable is stored (or `force`); the
+    result is saved under the ask key. With `changed_windows` the call
+    is scoped to dated events inside those ranges. Never raises."""
+    a = ask if isinstance(ask, dict) else {}
+    key = ask_key(a)
+    out = {'anchors': [], 'events': [], 'block': '', 'marks': [], 'cached': False, 'key': key}
+    if not enabled():
+        return out
+    try:
+        store = store if store is not None else anchor_store()
+        if changed_windows:
+            key = key + '|changed:' + hashlib.sha1(json.dumps(changed_windows, sort_keys=True).encode()).hexdigest()[:8]
+            out['key'] = key
+        saved = None
+        if store is not None and not force:
+            try:
+                saved = store.load(_anchor_doc_key(key))
+            except Exception:
+                saved = None
+        if isinstance(saved, dict) and (saved.get('anchors') or saved.get('events') is not None) and _fresh(saved, a.get('window') or {}):
+            out['anchors'] = _clean_anchors(saved.get('anchors'))
+            out['events'] = _clean_events(saved.get('events'))
+            out['cached'] = True
+        elif research_enabled() and callable(claude_json):
+            ask_doc = {
+                'subject': a.get('subject'), 'question': str(a.get('text') or '')[:600],
+                'metric_family': a.get('family'), 'window': a.get('window'), 'scope': a.get('scope'),
+                'platform': a.get('platform'),
+            }
+            for k in ('talent', 'brand', 'property'):
+                if a.get(k):
+                    ask_doc[k] = a[k]
+            if changed_windows:
+                ask_doc['date_ranges'] = list(changed_windows)
+                ask_doc['date_ranges_rule'] = ('Report only dated events inside these ranges: a release or premiere, '
+                                               'a campaign or product launch, a run of coverage, an award, a notable appearance.')
+            kw = {'max_tokens': 2500, 'temperature': 0.1, 'surface': 'pm_knowledge_research'}
+            if tools:
+                kw['tools'] = tools
+            raw = _unwrap(claude_json(RESEARCH_PROMPT, json.dumps(ask_doc), **kw))
+            out['anchors'] = _clean_anchors(raw.get('anchors'))
+            out['events'] = _clean_events(raw.get('events'))
+            if store is not None:
+                try:
+                    store.save(_anchor_doc_key(key), {
+                        'key': key, 'ask': {k: a.get(k) for k in ('subject', 'product', 'family', 'window', 'scope', 'platform')},
+                        'changed_windows': list(changed_windows or []),
+                        'anchors': out['anchors'], 'events': out['events'],
+                        'sources': [s for s in (raw.get('sources') or []) if isinstance(s, dict)][:20],   # internal only
+                        'saved_ts': time.time(), 'saved_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                    })
+                except Exception as e:
+                    print(f"[pm-knowledge] anchor save skipped: {type(e).__name__}: {e}")
+        for x in out['anchors']:
+            out['marks'].append({'kind': 'research', 'ref': x.get('name'), 'as_of': x.get('as_of'), 'source_type': x.get('source_type')})
+        for ev in out['events']:
+            out['marks'].append({'kind': 'research', 'ref': f"event:{ev.get('kind')}:{ev.get('date')}"})
+        out['block'] = anchors_block(out['anchors'], out['events'])
+    except Exception as e:
+        print(f"[pm-knowledge] research step skipped: {type(e).__name__}: {e}")
+    return out
+
+
+def _fmt_num(v) -> str:
+    f = _num(v)
+    if f is None:
+        return str(v)
+    if abs(f) >= 1000:
+        return f"{f:,.0f}"
+    if float(f).is_integer():
+        return str(int(f))
+    return f"{f:.4g}"
+
+
+def anchors_block(anchors: list, events: Optional[list] = None) -> str:
+    """The prompt block for researched anchors and dated events. Prompt
+    text only, never shown to a reader; the model is told so."""
+    lines = []
+    for x in (anchors or [])[:30]:
+        w = x.get('window') or {}
+        win = f" ({w.get('start')} to {w.get('end')})" if w.get('start') and w.get('end') else ''
+        lines.append(f"- {x.get('name')}: {_fmt_num(x.get('value'))} {x.get('unit') or ''}{win}".rstrip())
+    for ev in (events or [])[:12]:
+        lines.append(f"- EVENT {ev.get('date')}: {ev.get('kind')}, {ev.get('name') or ''}".rstrip(', '))
+    if not lines:
+        return ''
+    return ("RESEARCHED ANCHORS (binding, internal). Every figure you state sits inside what these support; "
+            "a count never exceeds the anchor for its measure. Never name a source, a tracker or a publication "
+            "to the reader; state the figures as Crosswalk's own.\n" + '\n'.join(lines))
+
+
+# ------------------------------------------------------------ the block
+def facts_block(ask: dict, held_r: Optional[dict] = None, stored_r: Optional[dict] = None,
+                research_r: Optional[dict] = None, extra: Optional[list] = None) -> str:
+    """The one prompt block: held, stored, the near twin, the anchors,
+    in that order, plus any extra blocks the path still carries."""
+    parts = []
+    if isinstance(held_r, dict) and held_r.get('block'):
+        parts.append(held_r['block'])
+    if isinstance(stored_r, dict):
+        if stored_r.get('block'):
+            parts.append(stored_r['block'])
+        if stored_r.get('twin'):
+            tb = _twin.twin_block(stored_r['twin'], (ask or {}).get('window'))
+            if tb:
+                parts.append(tb)
+    if isinstance(research_r, dict) and research_r.get('block'):
+        parts.append(research_r['block'])
+    for x in (extra or []):
+        if x:
+            parts.append(str(x))
+    return '\n\n'.join(p for p in parts if p)
+
+
+def marks_of(*results) -> list:
+    out = []
+    for r in results:
+        if isinstance(r, dict):
+            out.extend(r.get('marks') or [])
+    return out[:200]
+
+
+# ----------------------------------------------------- the pending twin
+_PENDING: dict = {}
+_PENDING_LOCK = threading.Lock()
+_PENDING_TTL_S = 1800
+
+
+def _pending_key(subject, question) -> str:
+    return hashlib.sha1(f"{_fold(subject)}|{_fold(question)[:200]}".encode()).hexdigest()[:16]
+
+
+def leave_twin(subject, question, twin: Optional[dict], ask_window: Optional[dict] = None, events: Optional[list] = None):
+    """Leave the near twin for the hold that runs after the model."""
+    if not isinstance(twin, dict):
+        return
+    with _PENDING_LOCK:
+        now = time.time()
+        for k in [k for k, v in _PENDING.items() if now - v.get('ts', 0) > _PENDING_TTL_S]:
+            _PENDING.pop(k, None)
+        _PENDING[_pending_key(subject, question)] = {'twin': twin, 'window': ask_window or {}, 'events': list(events or []), 'ts': now}
+
+
+def take_twin(subject, question) -> Optional[dict]:
+    with _PENDING_LOCK:
+        return _PENDING.pop(_pending_key(subject, question), None)
+
+
+def peek_twin(subject, question) -> Optional[dict]:
+    with _PENDING_LOCK:
+        return _PENDING.get(_pending_key(subject, question))
+
+
+def hold_pending(data, *, question='', subject='', store=None):
+    """The near-twin hold on a generated read's metrics, run inside
+    read_repair.coherent before the coherence pass: the twin left by
+    `read_blocks` for this subject and question, the band from
+    prometheus.consistency, the record written. The twin stays pending
+    until `take_twin` clears it (read_repair clears it once the
+    coherence pass succeeds, so a second pass of the same read is held
+    the same way). Returns `data` as given when nothing is pending.
+    Never raises."""
+    try:
+        if not enabled() or not isinstance(data, dict):
+            return data
+        pend = peek_twin(subject, question)
+        if not pend:
+            return data
+        twin = pend.get('twin')
+        changed = _twin.changed_windows((twin or {}).get('window') or {}, pend.get('window') or {})
+        event = _twin.event_in_changed_window(changed, pend.get('events') or []) if changed else None
+        salt = f"twin-read|{_fold(subject)}|{(pend.get('window') or {}).get('start')}|{(pend.get('window') or {}).get('end')}"
+        data, rec = _twin.hold_read_metrics(data, twin, salt=salt, event=event)
+        if rec and rec.get('verdict') in ('held', 'lifted'):
+            rec = dict(rec, product='read', subject=str(subject or ''), window=pend.get('window') or {},
+                       changed_windows=changed, pair_key=_pieces.property_fold(subject),
+                       line=(_twin.lifted_line(event, 'up') if event else _twin.held_line()),
+                       line_shipped=False, bands=_twin.bands())
+            _twin.write_record(rec, store)
+        return data
+    except Exception as e:
+        print(f"[pm-knowledge] pending hold skipped: {type(e).__name__}: {e}")
+        return data
+
+
+# ------------------------------------------------------- the three paths
+def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None, stages=None,
+                claude_json=None, tools=None, history=None, body=None, led=None) -> str:
+    """The generated read's one block: what the path assembled before
+    (Peacock, the saved valuation, the catalog) through `held`, the
+    near twin through `stored` (`led` is the ledger consult the path
+    already made; without it the ledger is consulted once here), the
+    anchors through `research`. The twin is left for `hold_pending`.
+    With the layer off, exactly the block the path built before. Never
+    raises."""
+    def _legacy():
+        parts = []
+        for fn, args in ((pk, (text, mr, base)), (saved, (text,)), (catalog, ((base or {}).get('subject'),))):
+            if callable(fn):
+                try:
+                    blk = fn(*args)
+                except Exception:
+                    blk = ''
+                if blk:
+                    parts.append(str(blk))
+        return '\n\n'.join(parts)
+
+    if not enabled():
+        return _legacy()
+    t0 = time.monotonic()
+    try:
+        base = base if isinstance(base, dict) else {}
+        ask = ask_from(body, text, base, mr)
+        parts = []
+        for fn, args in ((pk, (text, mr, base)), (saved, (text,))):
+            if callable(fn):
+                try:
+                    blk = fn(*args)
+                except Exception:
+                    blk = ''
+                if blk:
+                    parts.append(str(blk))
+        h = held(ask.get('subject'), window=(ask.get('window') if (ask.get('window') or {}).get('start') else None))
+        if h.get('block'):
+            parts.append(h['block'])
+        elif callable(catalog):
+            try:
+                blk = catalog(base.get('subject'))
+            except Exception:
+                blk = ''
+            if blk:
+                parts.append(str(blk))
+        st = {'twin': None, 'marks': []}
+        if (ask.get('window') or {}).get('start') and ask.get('subject'):
+            try:
+                _led = led if isinstance(led, dict) and led.get('entries') is not None else None
+                if _led is None:
+                    import insights_ledger as _il
+                    _led = _il.consult(subject=ask.get('subject'), question=text, history=history)
+                st['twin'] = _twin.near_twin_entry({'subject': _led.get('subject') or ask.get('subject'),
+                                                    'family': ask.get('family'), 'window': ask.get('window')},
+                                                   list(_led.get('entries') or []))
+            except Exception as e:
+                print(f"[pm-knowledge] twin lookup skipped: {type(e).__name__}: {e}")
+        if st['twin']:
+            tb = _twin.twin_block(st['twin'], ask.get('window'))
+            if tb:
+                parts.append(tb)
+        if callable(stage):
+            try:
+                stage('researching')
+            except Exception:
+                pass
+        changed = _twin.changed_windows((st['twin'] or {}).get('window') or {}, ask.get('window') or {}) if st['twin'] else None
+        r = research(ask, claude_json, tools, changed_windows=changed or None)
+        if r.get('block'):
+            parts.append(r['block'])
+        if st['twin']:
+            leave_twin(ask.get('subject'), text, st['twin'], ask.get('window'), r.get('events'))
+        base['_knowledge'] = {'key': ask_key(ask), 'twin': (st['twin'] or {}).get('ref'),
+                              'anchors': len(r.get('anchors') or []), 'events': len(r.get('events') or []),
+                              'cached': bool(r.get('cached')), 'marks': marks_of(h, r)[:60]}
+        if isinstance(stages, dict):
+            stages['knowledge'] = int((time.monotonic() - t0) * 1000)
+        return '\n\n'.join(p for p in parts if p)
+    except Exception as e:
+        print(f"[pm-knowledge] read blocks fell back: {type(e).__name__}: {e}")
+        return _legacy()
+
+
+def insight_blocks(text, subject, *, history=None, consult=None, claude_json=None, tools=None,
+                   window=None, body=None) -> tuple:
+    """(ledger_block, anchors_block) for the insight lane: the stored
+    answers through `stored`, the anchors through `research` when held
+    and stored are thin. `consult` is the lane's own lookup, used when
+    the layer is off. Never raises."""
+    def _legacy():
+        if callable(consult):
+            try:
+                return str(consult() or ''), ''
+            except Exception:
+                return '', ''
+        return '', ''
+
+    if not enabled():
+        return _legacy()
+    try:
+        ask = ask_from(body, text, {'subject': subject, 'window': window}, None, product='insight')
+        st = stored(ask, question=text, history=history)
+        led_block = st.get('block') or ''
+        thin = len(st.get('entries') or []) < 2
+        r = research(ask, claude_json, tools) if thin else {'block': ''}
+        return led_block, (r.get('block') or '')
+    except Exception as e:
+        print(f"[pm-knowledge] insight blocks fell back: {type(e).__name__}: {e}")
+        return _legacy()
+
+
+def valuation_events(inputs: dict, changed_windows: list, claude_json=None, tools=None, store=None) -> list:
+    """The research override for a valuation's near-twin check: dated
+    events inside the parts of the window that changed, from the anchor
+    store or one scoped research call. [] when none or off."""
+    try:
+        if not enabled() or not changed_windows:
+            return []
+        ask = ask_from(None, f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}",
+                       {'subject': f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}"}, None,
+                       product='valuation', talent=str(inputs.get('qualifier') or ''), brand=str(inputs.get('brand_partner') or ''),
+                       window={'start': inputs.get('event_start'), 'end': inputs.get('event_end')})
+        r = research(ask, claude_json, tools, changed_windows=changed_windows, store=store)
+        return list(r.get('events') or [])
+    except Exception as e:
+        print(f"[pm-knowledge] valuation events skipped: {type(e).__name__}: {e}")
+        return []
+
+
+__all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored', 'research', 'anchors_block',
+           'facts_block', 'marks_of', 'leave_twin', 'take_twin', 'peek_twin', 'hold_pending', 'read_blocks', 'insight_blocks',
+           'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS']

@@ -1236,12 +1236,18 @@ def _core(text, body, history, user, ppu, G):
                                angle=p.get('angle') or 'general')
         if not block:
             return None           # nothing in the file stands apart from the US: the standing read answers
-        led_block = ''
+        led_block, anchors_block = '', ''
         try:
-            import insights_ledger as il
-            led_block = str((il.consult(subject=name, question=text, history=history) or {}).get('block') or '')
+            # the knowledge layer (2026-11-20): the answers already given on the subject, and the researched
+            # anchors when the ledger is thin; the lane's own lookup when the layer is off
+            from . import knowledge as _know
+            led_block, anchors_block = _know.insight_blocks(
+                text, name, history=history, window=meta.get('window'), body=b,
+                consult=lambda: str((__import__('insights_ledger').consult(subject=name, question=text, history=history) or {}).get('block') or ''),
+                claude_json=lambda _s, _u, **_kw: G['_pm_claude_json'](_s, _u, usage_extras=ppu, **_kw),
+                tools=[pma.WEB_SEARCH_TOOL])
         except Exception:
-            led_block = ''
+            led_block, anchors_block = '', ''
         try:
             ub = G['_pm_user_block'](uname)
             if ub:
@@ -1249,8 +1255,8 @@ def _core(text, body, history, user, ppu, G):
         except Exception:
             pass
         fig = G['_fig']
-        figs = fig.registry_for(block, digest, led_block)
-        evidence = f"{digest}\n\n{block}"
+        figs = fig.registry_for(block, digest, led_block, anchors_block)
+        evidence = '\n\n'.join(x for x in (digest, block, anchors_block) if x)
         user_prompt = pma.build_analysis_user_prompt(evidence, history, text, ledger_block=led_block) + figs.prompt_suffix() \
             + '\n\n' + brief(p, subject=name, window=meta.get('window') or '')
         res = G['_pm_claude_json'](pma.ANALYSIS_SYSTEM_PROMPT, user_prompt, max_tokens=6000, temperature=0.5, usage_extras=ppu)

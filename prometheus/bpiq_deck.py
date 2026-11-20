@@ -162,6 +162,12 @@ def note(payload, deck=None, charge=None):
     total = money((p.get('valuation') or {}).get('total_brand_value'))
     line = f"Your Brand Partnership valuation is ready: {subject}"
     line += f", total brand value {total}." if total else '.'
+    # the one line a near-twin check ships (prometheus.consistency, Jenna
+    # 2026-11-20): the dated event that moved the figures, or, when the
+    # switch says so, that they sit close to the earlier run
+    twin_line = str(((p.get('campaign') or {}) if isinstance(p.get('campaign'), dict) else {}).get('consistency_line') or '').strip()
+    if twin_line:
+        line += ' ' + twin_line
     if deck and deck.get('url'):
         line += " The deck is below, and the link is good for 7 days."
     else:
