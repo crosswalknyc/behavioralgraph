@@ -9,16 +9,20 @@ the site's Ask box leads into:
 
     1. POST /site/api/signup
          Creates the dashboard account on the Prometheus self-serve plan
-         (status pending_payment) and returns a Stripe Checkout URL for
-         the $500 opening balance. The card is saved on the customer
-         so auto-reload can charge it later.
-    2. Stripe webhook checkout.session.completed (billing_routes.py)
-         Credits the wallet, saves the card, turns auto-reload on
-         ($5,000 when the balance reaches $100), then calls
-         activate_after_payment() below.
+         (status pending_payment) and emails jenna@ and liz@ that
+         someone signed up on their own. Returns a Stripe Checkout URL
+         for the $500 opening balance. The card is saved on the
+         customer. There is no $5,000 auto top-up.
+    2. Stripe webhook (checkout.session.completed or
+         payment_intent.succeeded in billing_routes.py)
+         Credits the wallet, saves the card, and calls
+         activate_after_payment() even when the other event already
+         credited the same payment. The $500 card charge emails
+         jenna@, liz@, and czarina@ via the wallet top-up notice.
     3. activate_after_payment()
-         Flips the account to active and emails jenna@, liz@, jessie@
-         and czarina@ that someone signed up and paid.
+         Flips the account to active and turns auto-reload off so the
+         paid $500 is what they spend. Login no longer waits on a
+         $5,000 opening balance.
     4. GET /site/api/signup/status?sid=cs_...
          The welcome page polls this. Once the account is active it
          logs the browser in (one time, within the signup window) so
@@ -34,9 +38,9 @@ The plan itself (what the user can see once logged in):
       price. They do not get the WBD complimentary Gilmore /
       Dexter / Young Sheldon files, even if they type WBD as
       their company
-    * paying_customer True, billing_mode auto_reload, threshold $100,
-      amount $5,000. The opening balance is $500, so the threshold
-      sits under it and the first login does not immediately reload.
+    * paying_customer True, billing_mode prepay_only. The opening
+      balance is $500. Add Funds later still uses the regular $5,000
+      floor. Prometheus is open as soon as the $500 lands.
 
 No em dashes. Emails are plain text and never raise.
 """
@@ -63,22 +67,21 @@ site_bp = Blueprint("site", __name__)
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
 PLAN_KEY = "prometheus_self_serve"
 OPENING_BALANCE_USD = 500.0
-# Under the opening balance on purpose. A $500 start with a $500
-# threshold would fire the $5,000 reload the moment the wallet is
-# credited (reload runs when balance is at or below the threshold).
+# Public signup spends the $500 they paid. Auto-reload is off
+# (Jenna 2026-11-20). Regular Add Funds stays at the $5,000 floor.
 AUTO_RELOAD_THRESHOLD_USD = 100.0
-AUTO_RELOAD_AMOUNT_USD = 5000.0
+AUTO_RELOAD_AMOUNT_USD = 0.0
 SIGNUP_SOURCE = "self_serve_signup"
 
-# Jenna 2026-09-24: "email me, liz, jessie and czarina when someone
-# signs up and pays the 5k top up". Workflow / billing email, so Liz
-# stays on it (profile-iq-pipeline-rules.mdc section 6).
-SIGNUP_NOTICE_TO: Tuple[str, ...] = (
+# Jenna 2026-11-20: email jenna@ and liz@ when someone signs up for
+# the dashboard on their own. The $500 card payment uses the wallet
+# top-up notice (jenna@ / liz@ / czarina@). Jessie is not on either.
+SIGNUP_CREATED_TO: Tuple[str, ...] = (
     "jenna@crosswalknyc.com",
     "liz@crosswalknyc.com",
-    "jessie@crosswalknyc.com",
-    "czarina@crosswalknyc.com",
 )
+# Kept so older callers of build_signup_notice still resolve a list.
+SIGNUP_NOTICE_TO: Tuple[str, ...] = SIGNUP_CREATED_TO
 EMAIL_SOURCE = "Crosswalk <jenna@crosswalknyc.com>"
 AWS_REGION = "us-east-2"
 
@@ -354,6 +357,30 @@ def is_pending_payment(user: Optional[dict]) -> bool:
     return bool(user) and str(user.get("signup_status") or "") == "pending_payment"
 
 
+PENDING_PAYMENT_MESSAGE = (
+    "Your account is waiting on the $500 opening "
+    "balance. Finish signing up at "
+    "dashboard.crosswalknyc.com/site/signup.html "
+    "with this email and password."
+)
+
+
+def opening_balance_paid(user: Optional[dict]) -> bool:
+    """True once the $500 opener has landed, even if signup_status
+    is still pending_payment (payment_intent credited first)."""
+    if not user:
+        return False
+    if str(user.get("signup_status") or "") == "active":
+        return True
+    if str(user.get("signup_source") or "") != SIGNUP_SOURCE:
+        return False
+    try:
+        lifetime = float(user.get("wallet_lifetime_topups_usd") or 0)
+    except (TypeError, ValueError):
+        lifetime = 0.0
+    return lifetime + 1e-9 >= float(OPENING_BALANCE_USD)
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -382,15 +409,16 @@ def new_self_serve_user_record(*, password_hash: str, email: str,
         "signup_checkout_session": "",
         "signup_paid_at": "",
         "signup_autologin_used": False,
-        # Wallet + billing: own wallet, auto-reload on, card saved by
-        # the checkout webhook.
+        # Wallet + billing: own wallet, prepaid $500, no $5,000
+        # auto-reload. Card is saved by the checkout webhook.
         "billing_source": "user",
         "company_billing_admin": False,
         "company_spend_scope": "inherit",
         "paying_customer": True,
-        "billing_mode": "auto_reload",
+        "billing_mode": "prepay_only",
         "auto_reload_threshold_usd": AUTO_RELOAD_THRESHOLD_USD,
         "auto_reload_amount_usd": AUTO_RELOAD_AMOUNT_USD,
+        "opening_topup_usd": OPENING_BALANCE_USD,
         "wallet_balance_usd": 0.0,
         "wallet_transactions": [],
         # Internal credit allowance stays at 0 so every pull routes to
@@ -466,7 +494,27 @@ def new_self_serve_user_record(*, password_hash: str, email: str,
     rec["complimentary_keys"] = {}
     rec["complimentary_titles"] = {}
     rec["company_billing_admin"] = False
+    rec["billing_mode"] = "prepay_only"
+    rec["auto_reload_amount_usd"] = AUTO_RELOAD_AMOUNT_USD
+    rec["opening_topup_usd"] = OPENING_BALANCE_USD
     return rec
+
+
+def opening_checkout_metadata(*, username: str, question: str = "",
+                              came_from: str = "",
+                              company: str = "") -> dict:
+    """Stripe Checkout metadata for the $500 opener. Auto-reload off."""
+    return {
+        "subject_kind": "user",
+        "subject_key": username,
+        "billed_via_username": username,
+        "enable_auto_reload": "0",
+        "source": SIGNUP_SOURCE,
+        "description": "Opening balance",
+        "first_question": str(question or "")[:200],
+        "came_from": str(came_from or "")[:120],
+        "company": str(company or "")[:120],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -521,6 +569,7 @@ def site_signup():
         return jsonify({"error": "payments_unavailable"}), 503
 
     username = email
+    created = {"new": False}
     data = load_users() or {}
     existing = (data.get("users") or {}).get(username)
     if existing and not is_pending_payment(existing):
@@ -553,6 +602,7 @@ def site_signup():
     pw_hash = hash_password(password)
 
     def _create(doc):
+        created["new"] = False
         users = doc.setdefault("users", {})
         rec = users.get(username)
         if rec and not is_pending_payment(rec):
@@ -563,6 +613,7 @@ def site_signup():
                 last_name=last, company=company, question=question,
                 came_from=came_from)
             users[username] = rec
+            created["new"] = True
         else:
             rec.update({
                 "first_name": first, "last_name": last, "company": company,
@@ -580,6 +631,12 @@ def site_signup():
             "login_url": f"{_base_url()}/login",
         }), 409
 
+    if created["new"]:
+        _send_signup_created_notice_async(
+            username=username, first_name=first, last_name=last,
+            email=email, company=company, question=question,
+            came_from=came_from)
+
     base = _base_url()
     success_url = f"{base}/site/welcome.html?sid={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{base}/site/signup.html?cancelled=1"
@@ -592,19 +649,10 @@ def site_signup():
             username=username,
             product_name="Crosswalk dashboard opening balance",
             product_description=(
-                "$500.00 prepaid balance for Prometheus reports. "
-                "Tops up $5,000 when the balance reaches $100."),
-            metadata={
-                "subject_kind": "user",
-                "subject_key": username,
-                "billed_via_username": username,
-                "enable_auto_reload": "1",
-                "source": SIGNUP_SOURCE,
-                "description": "Opening balance",
-                "first_question": question[:200],
-                "came_from": came_from[:120],
-                "company": company[:120],
-            },
+                "$500.00 prepaid balance for Prometheus reports."),
+            metadata=opening_checkout_metadata(
+                username=username, question=question,
+                came_from=came_from, company=company),
         )
     except billing.BillingError as e:
         print(f"[site-signup] checkout session failed: {e}")
@@ -659,6 +707,9 @@ def activate_after_payment(username: str, metadata: dict,
             rec["signup_source"] = SIGNUP_SOURCE
             changed = True
         rec["billing_source"] = "user"
+        rec["billing_mode"] = "prepay_only"
+        rec["auto_reload_amount_usd"] = AUTO_RELOAD_AMOUNT_USD
+        rec["opening_topup_usd"] = OPENING_BALANCE_USD
         rec["complimentary_keys"] = {}
         rec["complimentary_titles"] = {}
         try:
@@ -682,16 +733,9 @@ def activate_after_payment(username: str, metadata: dict,
     if not snap:
         print(f"[site-signup] activate: no record for {username}")
         return
-    md = metadata if isinstance(metadata, dict) else {}
-    _send_signup_notice_async(
-        rec=snap, username=username, amount_usd=amount_usd,
-        new_balance_usd=new_balance_usd, card_brand=card_brand,
-        card_last4=card_last4,
-        first_question=str(md.get("first_question")
-                           or snap.get("signup_first_question") or ""),
-        came_from=str(md.get("came_from")
-                      or snap.get("signup_came_from") or ""),
-    )
+    # Payment notice is the wallet top-up email to jenna@ / liz@ /
+    # czarina@. Signup-created mail already went at account create.
+    print(f"[site-signup] activated {username}")
 
 
 def _fmt_usd(v) -> str:
@@ -720,9 +764,8 @@ def build_signup_notice(*, rec: dict, username: str, amount_usd: float,
         f"Company: {company}",
         f"Opening balance: {_fmt_usd(amount_usd)}, charged, {card}",
         f"Balance now: {_fmt_usd(new_balance_usd)}",
-        "Plan: Prometheus only. Reports unlock as pulled. Auto top-up "
-        f"{_fmt_usd(AUTO_RELOAD_AMOUNT_USD)} when the balance reaches "
-        f"{_fmt_usd(AUTO_RELOAD_THRESHOLD_USD)}.",
+        "Plan: Prometheus only. Reports unlock as pulled. Prepaid "
+        f"{_fmt_usd(OPENING_BALANCE_USD)} opening balance. No auto top-up.",
     ]
     if first_question:
         lines.append(f"First question: {first_question}")
@@ -747,26 +790,56 @@ def _safe_base() -> str:
         return "https://dashboard.crosswalknyc.com"
 
 
-def _send_signup_notice_async(**kw) -> None:
-    subject, body = build_signup_notice(**kw)
+def build_signup_created_notice(*, username: str, first_name: str,
+                                last_name: str, email: str, company: str,
+                                question: str, came_from: str) -> Tuple[str, str]:
+    name = f"{first_name} {last_name}".strip() or username
+    co = str(company or "").strip() or "(no company given)"
+    when = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
+    subject = f"New dashboard signup: {name} at {co}"
+    lines = [
+        f"{name} at {co} signed up for the dashboard on {when}. "
+        "The $500 opening balance is not paid yet.",
+        "",
+        f"Name: {name}",
+        f"Work email: {email or username}",
+        f"Company: {co}",
+        f"Plan: Prometheus only. Opening balance {_fmt_usd(OPENING_BALANCE_USD)}.",
+    ]
+    if question:
+        lines.append(f"First question: {question}")
+    if came_from:
+        lines.append(f"Came from: {came_from}")
+    lines += [
+        "",
+        f"Open the user in Admin: {_safe_base()}/admin/billing?user={username}",
+        "",
+        "Crosswalk",
+        "Sent by the dashboard when someone signs up on their own.",
+    ]
+    return subject, "\n".join(lines)
+
+
+def _send_signup_created_notice_async(**kw) -> None:
+    subject, body = build_signup_created_notice(**kw)
 
     def _run():
         try:
             from prometheus.mail_guard import sending_allowed, suppressed_note
-            if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
-                print(suppressed_note('signup notice', subject))
+            if not sending_allowed():
+                print(suppressed_note('signup created', subject))
                 return
             import boto3
             ses = boto3.client("ses", region_name=AWS_REGION)
             ses.send_email(
                 Source=EMAIL_SOURCE,
-                Destination={"ToAddresses": list(SIGNUP_NOTICE_TO)},
+                Destination={"ToAddresses": list(SIGNUP_CREATED_TO)},
                 Message={"Subject": {"Data": subject},
                          "Body": {"Text": {"Data": body}}},
             )
-            print(f"[site-signup] notice sent to {SIGNUP_NOTICE_TO}")
+            print(f"[site-signup] created notice sent to {SIGNUP_CREATED_TO}")
         except Exception as e:
-            print(f"[site-signup] notice send failed: {e}")
+            print(f"[site-signup] created notice send failed: {e}")
 
     threading.Thread(target=_run, daemon=True).start()
 

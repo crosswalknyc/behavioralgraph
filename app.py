@@ -422,7 +422,7 @@ except Exception as _newsletter_import_err:
     print(f"⚠️ Newsletter blueprint not registered: {_newsletter_import_err}")
 
 # Public site + self-serve Prometheus signup (Jenna 2026-09-24). Serves
-# the marketing site at /site and the $5,000 opening-balance signup
+# the marketing site at /site and the $500 opening-balance signup
 # that the site's Ask box leads into. See bg-webapp/site_signup.py.
 try:
     from site_signup import register_site_blueprint
@@ -4609,17 +4609,44 @@ def login_page():
         except Exception:
             pass
 
-        # Self-serve signup that never finished the opening balance
-        # (site_signup.py). Send them back to finish, do not open a
-        # dashboard with nothing in it.
+        # Self-serve signup that never finished the $500 opening
+        # balance. If the card already landed and status stuck on
+        # pending_payment, activate and let them in. Do not show a
+        # $5,000 opening-balance message.
         if str(user.get('signup_status') or '') == 'pending_payment':
-            return jsonify({
-                'success': False,
-                'error': ('Your account is waiting on the $5,000 opening '
-                          'balance. Finish signing up at '
-                          'dashboard.crosswalknyc.com/site/signup.html '
-                          'with this email and password.'),
-            })
+            try:
+                from site_signup import (
+                    opening_balance_paid as _signup_paid,
+                    PENDING_PAYMENT_MESSAGE as _pending_msg,
+                    activate_after_payment as _signup_activate,
+                )
+            except Exception:
+                traceback.print_exc()
+                _signup_paid = lambda _u: False
+                _pending_msg = (
+                    'Your account is waiting on the $500 opening '
+                    'balance. Finish signing up at '
+                    'dashboard.crosswalknyc.com/site/signup.html '
+                    'with this email and password.')
+                _signup_activate = None
+            if _signup_paid(user):
+                if _signup_activate:
+                    try:
+                        _signup_activate(
+                            username, {},
+                            float(user.get('wallet_lifetime_topups_usd')
+                                  or 500),
+                            float(user.get('wallet_balance_usd') or 0))
+                        users_data = load_users()
+                        user = (users_data.get('users') or {}).get(
+                            username) or user
+                    except Exception:
+                        traceback.print_exc()
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': _pending_msg,
+                })
         
         # Update last login
         user['last_login'] = datetime.now().isoformat()

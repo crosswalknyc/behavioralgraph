@@ -2689,12 +2689,9 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
                 kind=kind,
                 currency=_cur,
             )
-        # A self-serve signup's opening balance already emails the
-        # team from site_signup.activate_after_payment (with the
-        # signup details). Skip the generic top-up notice so the four
-        # recipients get one email, not two.
-        if str((metadata or {}).get("source") or "") == "self_serve_signup":
-            return
+        # Self-serve $500 opener: jenna@ / liz@ / czarina@ get this
+        # same wallet notice (Jenna 2026-11-20). Signup-created mail
+        # is a separate email at account create.
         send_topup_internal_notice(
             buyer_username=info["buyer_username"],
             buyer_email=info["buyer_email"],
@@ -2834,6 +2831,32 @@ def _apply_topup_auto_reload(rec: dict, md) -> None:
         rec, flag, subject_key=subject_key)
 
 
+def _activate_self_serve_if_needed(md, subject_kind, subject_key,
+                                  amt, credited) -> None:
+    """Flip a public signup live once the $500 has credited.
+
+    Called from both checkout.session.completed and
+    payment_intent.succeeded, including the duplicate-skip path,
+    because the first event can credit and the second used to
+    return before activation.
+    """
+    if str((md or {}).get("source") or "") != "self_serve_signup":
+        return
+    if str(subject_kind or "") != "user":
+        return
+    try:
+        from site_signup import activate_after_payment
+        rec = (credited or {}).get("rec_snapshot") or {}
+        _b, _l = _card_brand_last4_for_subject(rec)
+        activate_after_payment(
+            subject_key, md or {}, amt,
+            (credited or {}).get("new_balance") or 0,
+            card_brand=_b, card_last4=_l)
+    except Exception as e:
+        print(f"[billing] self-serve activation failed "
+              f"(non-fatal): {e}")
+
+
 def _handle_checkout_session_completed(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
     md = obj.get("metadata") or {}
@@ -2915,28 +2938,19 @@ def _handle_checkout_session_completed(event: dict):
     if credited["skipped"]:
         print(f"[billing] webhook skip duplicate ${amt:.2f} for "
               f"{subject_kind}:{subject_key} (session={ref})")
-        return
-    print(f"[billing] webhook credited ${amt:.2f} to "
-          f"{subject_kind}:{subject_key} (session={ref})")
+    else:
+        print(f"[billing] webhook credited ${amt:.2f} to "
+              f"{subject_kind}:{subject_key} (session={ref})")
 
-    # Self-serve signup (Jenna 2026-09-24): the opening balance just
-    # landed, so the account goes live and jenna@ / liz@ / jessie@ /
-    # czarina@ hear about it. Fail-safe: never blocks the credit.
-    if (str(md.get("source") or "") == "self_serve_signup"
-            and subject_kind == "user"):
-        try:
-            from site_signup import activate_after_payment
-            _b, _l = _card_brand_last4_for_subject(
-                credited["rec_snapshot"] or subject)
-            activate_after_payment(
-                subject_key, md, amt, credited["new_balance"],
-                card_brand=_b, card_last4=_l)
-        except Exception as e:
-            print(f"[billing] self-serve activation failed "
-                  f"(non-fatal): {e}")
+    # Activate even on a duplicate skip. payment_intent.succeeded
+    # often credits first; this event used to return before the
+    # account went live.
+    _activate_self_serve_if_needed(
+        md, subject_kind, subject_key, amt, credited)
 
     # Buyer receipt + internal notice (Jenna 2026-09-09). Fire and
     # forget: SES failures print but never bubble up to Stripe.
+    # Duplicate skip still claims; the first event already sent.
     _emit_topup_emails_safe(
         subject_kind=subject_kind,
         subject_key=subject_key,
@@ -3067,6 +3081,9 @@ def _handle_payment_intent_succeeded(event: dict):
             kind=email_kind,
             metadata=md,
         )
+
+    _activate_self_serve_if_needed(
+        md, subject_kind, subject_key, amt, credited)
 
 
 def _handle_payment_intent_failed(event: dict):
