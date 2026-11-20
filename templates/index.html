@@ -28200,11 +28200,17 @@ https://www.instagram.com/p/..."></textarea>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
                             <!-- 2026-09-08 (Jenna): true all-tabs export.
                                  Covers Demographics + Behavioral +
-                                 Interests + Location + Insights in one
-                                 CSV, includes selected cut columns and
-                                 Gen Pop % / Index alongside every profile
-                                 value. See exportAllTabsCSV(). -->
-                            <a href="javascript:void(0)" onclick="exportAllTabsCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📚 All Data (CSV)</a>
+                                 Interests + Location + Insights, includes
+                                 selected cut columns and Gen Pop % / Index
+                                 alongside every profile value.
+                                 2026-11-19: the default is now a workbook
+                                 with a tab per category (client asked to
+                                 stop scrolling one long file to read or
+                                 filter one category). The single file is
+                                 still here for anything that reads it.
+                                 See exportAllTabsXLSX() / exportAllTabsCSV(). -->
+                            <a href="javascript:void(0)" onclick="exportAllTabsXLSX(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📚 All Data (Excel)</a>
+                            <a href="javascript:void(0)" onclick="exportAllTabsCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 All Data (single CSV)</a>
                             <a href="javascript:void(0)" onclick="exportAllPNG(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🖼️ All Charts (PNG)</a>
                             <a href="javascript:void(0)" onclick="exportPDF(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📑 Full Report (PDF)</a>
                             <!-- LISA-style analysis deck (.pptx). Server builder
@@ -184736,6 +184742,111 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // never drift; when exportToCSV() gains a new column, add it
         // here too.
         // ---------------------------------------------------------------
+        // Every tab of the profile as one Excel workbook: Demographics on
+        // one sheet, then a sheet per Behavioral category, Interests,
+        // Locations and the Insights summary. The blocks are the same
+        // on-screen tables exportAllTabsCSV() writes, so the two exports
+        // always carry the same numbers and the same cut columns.
+        function _piqWorkbookSheets() {
+            const sheets = [];
+
+            const demoTables = [];
+            ['Age', 'Gender', 'Ethnicity', 'Income', 'Education', 'Relationship Status', 'Sexual Orientation',
+                'Parental Status', 'Occupation', 'Age of Children', 'Number of Children'].forEach(title => {
+                const block = _piqDemoCsvTable(title);
+                if (block) demoTables.push({ title: title, csv: block });
+            });
+            if (demoTables.length) {
+                sheets.push({ group: 'Demographics', name: 'Demographics', tab: 'Demographics', tables: demoTables });
+            }
+
+            document.querySelectorAll('#tab-behavioral .behavioral-card[data-category]').forEach(card => {
+                const category = card.getAttribute('data-category') || '';
+                if (!category || !_piqCsvShown(card)) return;
+                const items = getBehavioralCsvItems(category, 'all');
+                if (!items.length) return;
+                sheets.push({
+                    group: 'Behavioral',
+                    name: category,
+                    tab: _piqSheetTab('Beh', category),
+                    csv: _piqBehCsvTable(category, items)
+                });
+            });
+
+            const interests = _piqInterestsCsvTable();
+            if (interests) sheets.push({ group: 'Interests', name: 'Interests', tab: 'Interests', csv: interests });
+
+            const locations = _piqLocationCsvTable('All Locations');
+            if (locations) sheets.push({ group: 'Locations', name: 'All Locations', tab: 'Locations', csv: locations });
+
+            const metrics = _piqInsightsSummaryCsv();
+            if (metrics) {
+                sheets.push({ group: 'Insights', name: 'Insights Summary', tab: 'Insights Summary', csv: 'Metric,Value\n' + metrics });
+            }
+
+            return sheets;
+        }
+
+        // Excel caps a tab name at 31 characters, so a long category keeps
+        // its head and its tail ("Beh - Most Purchas...Brands") rather
+        // than losing the end, where the distinguishing word usually sits.
+        function _piqSheetTab(prefix, category) {
+            const clean = String(category || '').replace(/[\[\]:*?\/\\]/g, ' ').replace(/\s+/g, ' ').trim();
+            const head = prefix ? prefix + ' - ' : '';
+            const room = 31 - head.length;
+            if (clean.length <= room) return head + clean;
+            const tail = Math.max(4, Math.floor((room - 3) / 2));
+            return head + clean.slice(0, room - 3 - tail) + '...' + clean.slice(clean.length - tail);
+        }
+
+        function exportAllTabsXLSX() {
+            if (!currentProfileData || !currentDashboardData) {
+                alert('Please select a profile first');
+                return;
+            }
+            const profileName = currentProfileData.name || 'Profile';
+            const _allCohorts = _extraCohortsForCsv();
+            trackActivity('export_all_data_xlsx', 'all_tabs');
+
+            let sheets = [];
+            try {
+                sheets = _piqWorkbookSheets();
+            } catch (e) {
+                console.error('workbook build failed', e);
+            }
+            if (!sheets.length) {
+                showNotification('Nothing to export on this profile yet.', 'error');
+                return;
+            }
+
+            const stamp = String(_cwCsvDownloadStamp(_cwPageStampRanges(profileName)) || '')
+                .split('\n').map(s => s.replace(/^#\s?/, '').trim()).filter(Boolean).slice(0, 4);
+
+            showNotification('Building your workbook...', 'info');
+            fetch('/api/profile-iq/export-workbook.xlsx', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile_name: profileName, sheets: sheets, stamp: stamp })
+            }).then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            }).then(blob => {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                const safeName = String(profileName).replace(/[^a-zA-Z0-9_.-]/g, '_');
+                link.download = `${safeName}_All_Data.xlsx`;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+                const cutSuffix = _allCohorts.length > 0
+                    ? ` (with ${_allCohorts.length} cut${_allCohorts.length === 1 ? '' : 's'})`
+                    : '';
+                showNotification(`\u2705 Exported ${sheets.length} tabs to Excel${cutSuffix}`, 'success');
+            }).catch(err => {
+                console.error('xlsx export failed', err);
+                showNotification('Could not build the workbook. Try the single CSV.', 'error');
+            });
+        }
+
         function exportAllTabsCSV() {
             if (!currentProfileData || !currentDashboardData) {
                 alert('Please select a profile first');
@@ -184772,30 +184883,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             csvContent += `\n\n=== LOCATION ===\n\n`;
             csvContent += _piqLocationCsvTable('All Locations');
 
-            // The metrics row only shows while Data Cuts are on; with cuts
-            // its cards swap the big number for a per-cohort breakdown.
-            const _metricsRow = document.querySelector('#tab-insights .metrics-row');
-            if (_metricsRow && _piqCsvShown(_metricsRow)) {
-                let _metricLines = '';
-                _metricsRow.querySelectorAll('.metric-card').forEach(mc => {
-                    if (!_piqCsvShown(mc)) return;
-                    const content = mc.querySelector('.metric-content');
-                    const label = _piqCsvText(mc.querySelector('.metric-label'));
-                    if (content && _piqCsvShown(content) && label) {
-                        _metricLines += _piqCsvQ(label) + ',' + _piqCsvQ(_piqCsvNum(_piqCsvText(mc.querySelector('.metric-value')))) + '\n';
-                    }
-                    const list = mc.querySelector(':scope > .cmp-stat-list');
-                    if (!list || !_piqCsvShown(list)) return;
-                    const listHead = _piqCsvText(list.querySelector('.cmp-stat-list-header')).replace(/^[^A-Za-z0-9]+/, '') || label;
-                    Array.prototype.forEach.call(list.children, row => {
-                        if (row.classList.contains('cmp-stat-list-header') || row.children.length < 2) return;
-                        const rowLabel = _piqCsvText(row.children[0]);
-                        const rowVal = _piqCsvText(row.children[row.children.length - 1]).replace(/^n=/, '');
-                        _metricLines += _piqCsvQ((listHead ? listHead + ' - ' : '') + rowLabel) + ',' + _piqCsvQ(_piqCsvNum(rowVal)) + '\n';
-                    });
-                });
-                if (_metricLines) csvContent += `\n\n=== INSIGHTS SUMMARY ===\n\nMetric,Value\n` + _metricLines;
-            }
+            const _metricLines = _piqInsightsSummaryCsv();
+            if (_metricLines) csvContent += `\n\n=== INSIGHTS SUMMARY ===\n\nMetric,Value\n` + _metricLines;
 
             // Download
             csvContent = _cwCsvDownloadStamp(_cwPageStampRanges(profileName)) + csvContent;
@@ -184810,6 +184899,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ? ` (with ${_allCohorts.length} cut${_allCohorts.length === 1 ? '' : 's'})`
                 : '';
             showNotification(`✅ Exported all data to CSV${cutSuffix}`, 'success');
+        }
+
+        // The metrics row only shows while Data Cuts are on; with cuts
+        // its cards swap the big number for a per-cohort breakdown.
+        function _piqInsightsSummaryCsv() {
+            const _metricsRow = document.querySelector('#tab-insights .metrics-row');
+            if (!_metricsRow || !_piqCsvShown(_metricsRow)) return '';
+            let _metricLines = '';
+            _metricsRow.querySelectorAll('.metric-card').forEach(mc => {
+                if (!_piqCsvShown(mc)) return;
+                const content = mc.querySelector('.metric-content');
+                const label = _piqCsvText(mc.querySelector('.metric-label'));
+                if (content && _piqCsvShown(content) && label) {
+                    _metricLines += _piqCsvQ(label) + ',' + _piqCsvQ(_piqCsvNum(_piqCsvText(mc.querySelector('.metric-value')))) + '\n';
+                }
+                const list = mc.querySelector(':scope > .cmp-stat-list');
+                if (!list || !_piqCsvShown(list)) return;
+                const listHead = _piqCsvText(list.querySelector('.cmp-stat-list-header')).replace(/^[^A-Za-z0-9]+/, '') || label;
+                Array.prototype.forEach.call(list.children, row => {
+                    if (row.classList.contains('cmp-stat-list-header') || row.children.length < 2) return;
+                    const rowLabel = _piqCsvText(row.children[0]);
+                    const rowVal = _piqCsvText(row.children[row.children.length - 1]).replace(/^n=/, '');
+                    _metricLines += _piqCsvQ((listHead ? listHead + ' - ' : '') + rowLabel) + ',' + _piqCsvQ(_piqCsvNum(rowVal)) + '\n';
+                });
+            });
+            return _metricLines;
         }
 
         function exportAllPNG() {

@@ -41,6 +41,12 @@ except Exception as _xlsx_export_err:
     print(f"⚠️ Attribution IQ Excel export unavailable at import time: {_xlsx_export_err}")
 
 try:
+    import profile_excel_export as _profile_excel_export  # type: ignore
+except Exception as _piq_xlsx_err:
+    _profile_excel_export = None
+    print(f"⚠️ Profile IQ Excel export unavailable at import time: {_piq_xlsx_err}")
+
+try:
     import attribution_weekly_pdf as _attribution_weekly_pdf  # type: ignore
     import campaign_hero_image as _campaign_hero_image  # type: ignore
 except Exception as _weekly_pdf_err:
@@ -42463,6 +42469,41 @@ def _resolve_profile_image_url_from_name(profile_name: str) -> str:
         if url:
             return url
     return ''
+
+
+@app.route('/api/profile-iq/export-workbook.xlsx', methods=['POST'])
+@requires_auth
+def export_profile_iq_workbook():
+    """The whole profile as one Excel workbook, a tab per category.
+
+    The browser sends the tables it has already drawn, one block of CSV
+    text per category, in the order they appear on screen. Reusing the
+    rendered tables is what keeps this identical to the single-file
+    download it replaces.
+    """
+    if _profile_excel_export is None:
+        return jsonify({'success': False, 'error': 'Excel export not available'}), 500
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        return jsonify({'success': False, 'error': 'invalid request body'}), 400
+    sheets = body.get('sheets')
+    if not isinstance(sheets, list) or not sheets:
+        return jsonify({'success': False, 'error': 'nothing to export'}), 400
+    profile_name = str(body.get('profile_name') or 'Profile')[:200]
+    stamp = body.get('stamp')
+    stamp = [str(s)[:300] for s in stamp][:4] if isinstance(stamp, list) else []
+    try:
+        xlsx_bytes, fname = _profile_excel_export.build_workbook(
+            profile_name, sheets, stamp=stamp)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'could not build the export'}), 500
+    resp = Response(
+        xlsx_bytes,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @app.route('/api/profile-iq/export-deck', methods=['POST'])
