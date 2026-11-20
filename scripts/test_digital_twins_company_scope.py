@@ -66,7 +66,7 @@ class FakeS3:
 
 USERS = {
     'users': {
-        'a1': {'email': 'a1@acme.example', 'role': 'user', 'company': 'Acme', 'billing_source': 'company', 'has_digital_twins_iq_access': True},
+        'a1': {'email': 'a1@acme.example', 'role': 'user', 'company': 'Acme', 'billing_source': 'company', 'has_digital_twins_iq_access': True, 'first_name': 'Casey', 'last_name': 'Pearson'},
         'a2': {'email': 'a2@acme.example', 'role': 'admin', 'company': 'Acme', 'billing_source': 'company', 'has_digital_twins_iq_access': True},
         'b1': {'email': 'b1@globex.example', 'role': 'user', 'company': 'Globex', 'billing_source': 'company', 'has_digital_twins_iq_access': True},
         'b2': {'email': 'b2@globex.example', 'role': 'user', 'company': 'Globex', 'billing_source': 'user', 'has_digital_twins_iq_access': True},
@@ -211,6 +211,17 @@ class Routes(unittest.TestCase):
         r = self.c.get('/api/digital-twins/list', query_string=params)
         self.assertEqual(r.status_code, 200, r.get_data(as_text=True)[:300])
         return r.get_json()
+
+    def test_listing_carries_who_built_each_twin(self):
+        # Jenna 2026-11-20: two twins may share a name; the list tells them apart by who built each and when. The
+        # builder's display name rides on every entry (first and last name when on file, the username otherwise).
+        self._as('jenna')
+        by = {r['key']: r.get('built_by') for r in self._list()['runs']}
+        self.assertEqual(by[KEY_A], 'Casey Pearson')
+        self.assertEqual(by[KEY_B], 'b1')
+        self.assertEqual(by[KEY_ADMIN], 'admin')
+        self._as('a1')
+        self.assertEqual([r.get('built_by') for r in self._list()['runs']], ['Casey Pearson'])
 
     def test_listing_is_the_companys_own(self):
         for who in ('a1', 'a2'):

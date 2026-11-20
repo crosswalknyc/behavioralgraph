@@ -532,6 +532,7 @@ def dt_list():
     runs = DT.list_runs(_s3())
     staff = CO.is_staff(user, _uname(user))
     vis = DT.visible_runs(runs, user, company=_company_filter(user))
+    DT.annotate_builders(vis)    # who built each twin, for the list to tell same-name twins apart
     try:
         from migration.digital_twin_covers import schedule_missing
         schedule_missing(_s3(), vis)

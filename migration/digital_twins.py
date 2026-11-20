@@ -162,6 +162,42 @@ def list_runs(s3, *, username: Optional[str] = None, limit: int = 500) -> list:
     return runs[:limit]
 
 
+def builder_name(username, users_data: Optional[dict] = None) -> str:
+    """The display name on file for the seat that built a twin (first and
+    last name, then name or display_name), the username when nothing is
+    on file, '' for no username. Never raises."""
+    u = str(username or '').strip()
+    if not u:
+        return ''
+    rec = {}
+    try:
+        if users_data is None:
+            from migration import digital_twin_company as CO
+            users_data = CO.users_data()
+        rec = ((users_data or {}).get('users') or {}).get(u) or {}
+    except Exception:
+        rec = {}
+    first = str(rec.get('first_name') or rec.get('firstName') or '').strip()
+    last = str(rec.get('last_name') or rec.get('lastName') or '').strip().rstrip('`')
+    return f"{first} {last}".strip() or str(rec.get('name') or rec.get('display_name') or '').strip() or u
+
+
+def annotate_builders(runs: list, users_data: Optional[dict] = None) -> list:
+    """``built_by`` on every index entry (Jenna 2026-11-20: two twins may
+    share a name; the list shows who built each and when). In place;
+    returns the list."""
+    if users_data is None:
+        try:
+            from migration import digital_twin_company as CO
+            users_data = CO.users_data()
+        except Exception:
+            users_data = {}
+    for r in runs or []:
+        if isinstance(r, dict):
+            r['built_by'] = builder_name(r.get('created_by'), users_data)
+    return runs
+
+
 def _role(user) -> str:
     return str((user or {}).get('role') or 'user').lower().replace(' ', '_')
 
