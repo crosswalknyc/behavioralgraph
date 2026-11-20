@@ -114,11 +114,21 @@ def enabled():
     return backend() is not None
 
 
+_conn_pid = None
+
+
 def _connect():
-    global _conn, _kind
+    global _conn, _kind, _conn_pid
     with _lock:
+        if _conn is not None and _conn_pid != os.getpid():
+            # gunicorn preloads the app and forks: a connection opened in the
+            # parent must not be shared by the children (two processes on one
+            # socket corrupt each other's replies). Drop the reference; never
+            # close it, the parent still owns the socket (2026-11-20).
+            _conn = None
         if _conn is not None:
             return _conn
+        _conn_pid = os.getpid()
         b = backend()
         if b == 'pg':
             url = os.environ['DATABASE_URL']
@@ -446,7 +456,7 @@ def read_enabled():
 
 # counters for the ops page and the parity harness: how often the mirror
 # was written, how often a read came from it, how often it fell through
-STATS = {'doc_put': 0, 'doc_hit': 0, 'doc_miss': 0}
+STATS = {'doc_put': 0, 'doc_hit': 0, 'doc_miss': 0, 'doc_delete': 0}
 
 
 def doc_put(key, body, etag=None):
@@ -470,6 +480,30 @@ def doc_put(key, body, etag=None):
     except Exception as e:
         _note('store.doc_put', e)
         return False
+
+
+def doc_delete(keys):
+    """S3 deleted these documents: their mirror rows go too (Jenna
+    2026-11-20, so a deleted thread never lingers). Keys outside the
+    mirrored families are ignored. Returns the number of rows removed;
+    a fault is counted, never raised. The only delete the store ever
+    performs is this echo of S3's own; nothing in S3 is ever deleted by
+    the store."""
+    ks = [str(k) for k in (keys if isinstance(keys, (list, tuple, set)) else [keys]) if k and mirrors(k)]
+    if not ks or not enabled():
+        return 0
+    try:
+        if not _ensure():
+            return 0
+        n = 0
+        for k in ks:
+            cur = _exec('DELETE FROM pm_docs WHERE key = %s', (k,))
+            n += max(0, int(getattr(cur, 'rowcount', 0) or 0))
+        STATS['doc_delete'] = STATS.get('doc_delete', 0) + n
+        return n
+    except Exception as e:
+        _note('store.doc_delete', e)
+        return 0
 
 
 def doc_text(key):
@@ -572,34 +606,106 @@ def _after_call(http_response=None, parsed=None, model=None, context=None, **_kw
         _note('store.mirror_after_call', e)
 
 
+_DEL = '_pm_store_mirror_del'
+
+
+def _provide_delete_params(params, context=None, **_kw):
+    try:
+        if not (isinstance(context, dict) and isinstance(params, dict)):
+            return
+        keys = []
+        if params.get('Key'):
+            keys = [str(params['Key'])]
+        else:
+            for o in ((params.get('Delete') or {}).get('Objects') or []):
+                if isinstance(o, dict) and o.get('Key'):
+                    keys.append(str(o['Key']))
+        keys = [k for k in keys if mirrors(k)]
+        if keys:
+            context[_DEL] = keys
+    except Exception:
+        pass
+
+
+def _after_delete(http_response=None, parsed=None, model=None, context=None, **_kw):
+    try:
+        if not isinstance(context, dict):
+            return
+        keys = context.pop(_DEL, None)
+        if not keys:
+            return
+        status = getattr(http_response, 'status_code', 200)
+        if status is not None and int(status) >= 300:
+            return
+        if isinstance(parsed, dict) and parsed.get('Errors'):
+            failed = {str(e.get('Key')) for e in parsed['Errors'] if isinstance(e, dict)}
+            keys = [k for k in keys if k not in failed]
+        doc_delete(keys)
+    except Exception as e:
+        _note('store.mirror_after_delete', e)
+
+
 def _register_events(events, own=False):
     tag = 'own-' if own else ''
     reg = events.register_first if own else events.register
     reg('provide-client-params.s3.PutObject', _provide_params, unique_id=f'pm-store-mirror-{tag}params')
     reg('after-call.s3.PutObject', _after_call, unique_id=f'pm-store-mirror-{tag}after')
+    for op in ('DeleteObject', 'DeleteObjects'):
+        reg(f'provide-client-params.s3.{op}', _provide_delete_params, unique_id=f'pm-store-mirror-{tag}del-params-{op}')
+        reg(f'after-call.s3.{op}', _after_delete, unique_id=f'pm-store-mirror-{tag}del-after-{op}')
 
 
 def _wrap_plain(client):
     """A store client that is not botocore's (the in-memory store the
-    tests and the replay use): the mirror on its put_object."""
+    tests and the replay use): the mirror on its put_object, and the
+    echo of its deletes on delete_object / delete_objects."""
     fn = getattr(client, 'put_object', None)
-    if not callable(fn) or getattr(fn, _MARK, False):
-        return
-
-    def inner(*a, **k):
-        out = fn(*a, **k)
+    if callable(fn) and not getattr(fn, _MARK, False):
+        def inner(*a, **k):
+            out = fn(*a, **k)
+            try:
+                key, body = k.get('Key'), k.get('Body')
+                if key and mirrors(key) and isinstance(body, (bytes, bytearray, str)):
+                    doc_put(key, body, etag=(out.get('ETag') if isinstance(out, dict) else None))
+            except Exception as e:
+                _note('store.mirror_plain', e)
+            return out
+        setattr(inner, _MARK, True)
         try:
-            key, body = k.get('Key'), k.get('Body')
-            if key and mirrors(key) and isinstance(body, (bytes, bytearray, str)):
-                doc_put(key, body, etag=(out.get('ETag') if isinstance(out, dict) else None))
-        except Exception as e:
-            _note('store.mirror_plain', e)
-        return out
-    setattr(inner, _MARK, True)
-    try:
-        setattr(client, 'put_object', inner)
-    except Exception:
-        pass
+            setattr(client, 'put_object', inner)
+        except Exception:
+            pass
+    d1 = getattr(client, 'delete_object', None)
+    if callable(d1) and not getattr(d1, _MARK, False):
+        def inner_del(*a, **k):
+            out = d1(*a, **k)
+            try:
+                if k.get('Key'):
+                    doc_delete([k['Key']])
+            except Exception as e:
+                _note('store.mirror_plain', e)
+            return out
+        setattr(inner_del, _MARK, True)
+        try:
+            setattr(client, 'delete_object', inner_del)
+        except Exception:
+            pass
+    d2 = getattr(client, 'delete_objects', None)
+    if callable(d2) and not getattr(d2, _MARK, False):
+        def inner_dels(*a, **k):
+            out = d2(*a, **k)
+            try:
+                keys = [o.get('Key') for o in ((k.get('Delete') or {}).get('Objects') or []) if isinstance(o, dict)]
+                failed = {str(e.get('Key')) for e in ((out or {}).get('Errors') or []) if isinstance(e, dict)} if isinstance(out, dict) else set()
+                doc_delete([x for x in keys if x and str(x) not in failed])
+            except Exception as e:
+                _note('store.mirror_plain', e)
+            return out
+        setattr(inner_dels, _MARK, True)
+        try:
+            setattr(client, 'delete_objects', inner_dels)
+        except Exception:
+            pass
 
 
 def install_mirror(client=None):
@@ -676,9 +782,9 @@ def _as_dt(v):
         return None
 
 
-def _list_prefix(s3, bucket, prefix):
-    """Every object under ``prefix`` as (key, LastModified), one page at
-    a time. Read-only."""
+def _list_objects(s3, bucket, prefix):
+    """Every object under ``prefix`` as {'key', 'modified', 'etag'}, one
+    page at a time. Read-only."""
     out = []
     token = None
     while True:
@@ -687,10 +793,112 @@ def _list_prefix(s3, bucket, prefix):
             kw['ContinuationToken'] = token
         resp = s3.list_objects_v2(**kw) or {}
         for o in resp.get('Contents') or []:
-            out.append((o.get('Key'), o.get('LastModified')))
+            out.append({'key': o.get('Key'), 'modified': o.get('LastModified'),
+                        'etag': str(o.get('ETag') or '').strip('"') or None})
         token = resp.get('NextContinuationToken') if resp.get('IsTruncated') else None
         if not token:
             break
+    return out
+
+
+def _list_prefix(s3, bucket, prefix):
+    """Every object under ``prefix`` as (key, LastModified). Read-only."""
+    return [(o['key'], o['modified']) for o in _list_objects(s3, bucket, prefix)]
+
+
+def _mirrored_listing(s3, bucket):
+    out = []
+    for prefix in (THREADS_PREFIX, READS_PREFIX, LEDGER_INDEX_KEY):
+        try:
+            out.extend(o for o in _list_objects(s3, bucket, prefix) if mirrors(o['key']))
+        except Exception as e:
+            _note('store.listing', e)
+    return out
+
+
+RECONCILE_SETTLE_S = 120   # a document S3 or the mirror touched this recently may have a write in flight
+
+
+def reconcile(s3, bucket, limit=5000, settle_s=RECONCILE_SETTLE_S):
+    """Bring the mirror to what S3 holds (Jenna 2026-11-20: S3 always
+    wins, silently, logged, no email). Lists the three families in S3 and
+    compares every mirrored key to its row by the ETag S3 answered the put
+    with; a row that is missing, differs, or carries no ETag yet is read
+    from S3 and rewritten (or has its ETag filled when the bytes already
+    match); a row whose document S3 no longer lists is removed. A document
+    either side touched within ``settle_s`` is left for the next pass (a
+    write may be in flight). Read-only on S3. Returns counts; one log line
+    says what moved."""
+    import datetime as _dt
+    import hashlib
+    import time as _time
+    t0 = _time.time()
+    out = {'enabled': enabled(), 'listed': 0, 'same': 0, 'added': 0, 'replaced': 0, 'etag_filled': 0, 'removed': 0,
+           'settling': 0, 'truncated': False, 'rows_before': 0, 'rows_after': 0, 'elapsed_s': 0.0}
+    if not enabled():
+        return out
+    try:
+        if not _ensure():
+            return out
+        rows = {r['key']: r for r in _rows(_exec('SELECT key, sha, etag, updated_at FROM pm_docs'))}
+    except Exception as e:
+        _note('store.reconcile', e)
+        return out
+    out['rows_before'] = len(rows)
+    now = _dt.datetime.now(_dt.timezone.utc)
+    listing = _mirrored_listing(s3, bucket)
+    seen = set()
+    gets = 0
+    for o in listing:
+        key = o['key']
+        out['listed'] += 1
+        seen.add(key)
+        lmd = _as_dt(o.get('modified'))
+        row = rows.get(key)
+        if row is not None and row.get('etag') and o.get('etag') and row['etag'] == o['etag']:
+            out['same'] += 1
+            continue
+        if lmd is not None and (now - lmd).total_seconds() < settle_s:
+            out['settling'] += 1
+            continue
+        if gets >= int(limit):
+            out['truncated'] = True
+            continue
+        gets += 1
+        try:
+            obj = s3.get_object(Bucket=bucket, Key=key)
+            body = obj['Body'].read()
+            etag = str((obj or {}).get('ETag') or '').strip('"') or o.get('etag')
+        except Exception as e:
+            _note('store.reconcile', e)
+            continue
+        text = body.decode('utf-8') if isinstance(body, (bytes, bytearray)) else str(body)
+        sha = hashlib.sha1(text.encode('utf-8')).hexdigest()
+        if row is None:
+            if doc_put(key, body, etag=etag):
+                out['added'] += 1
+        elif sha != str(row.get('sha') or ''):
+            if doc_put(key, body, etag=etag):
+                out['replaced'] += 1
+        else:
+            try:
+                _exec('UPDATE pm_docs SET etag = %s WHERE key = %s', (etag, key))
+                out['etag_filled'] += 1
+            except Exception as e:
+                _note('store.reconcile', e)
+    for key, row in rows.items():
+        if key in seen:
+            continue
+        upd = _as_dt(row.get('updated_at'))
+        if upd is not None and (now - upd).total_seconds() < settle_s:
+            out['settling'] += 1
+            continue
+        out['removed'] += doc_delete([key])
+    out['rows_after'] = docs_count()
+    out['elapsed_s'] = round(_time.time() - t0, 1)
+    print(f"[store-reconcile] listed={out['listed']} same={out['same']} added={out['added']} replaced={out['replaced']} "
+          f"etag_filled={out['etag_filled']} removed={out['removed']} settling={out['settling']} rows {out['rows_before']}->{out['rows_after']} "
+          f"in {out['elapsed_s']}s", flush=True)
     return out
 
 
@@ -728,12 +936,7 @@ def production_parity(s3, bucket, since=None, limit=2000):
             first = d
     since_dt = _as_dt(since) if since else (first - _dt.timedelta(seconds=90) if first else None)
     out['since'] = since_dt.strftime('%Y-%m-%dT%H:%M:%SZ') if since_dt else None
-    listed = []
-    for prefix in (THREADS_PREFIX, READS_PREFIX, LEDGER_INDEX_KEY):
-        try:
-            listed.extend((k, lm) for k, lm in _list_prefix(s3, bucket, prefix) if mirrors(k))
-        except Exception as e:
-            _note('store.production_parity', e)
+    listed = [(o['key'], o['modified']) for o in _mirrored_listing(s3, bucket)]
     seen = set()
     gets = 0
     for key, lm in listed:

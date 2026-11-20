@@ -54,7 +54,7 @@ def note(label, exc=None, detail=''):
         label = str(label or 'unlabeled')[:80]
         tr = _trace()
         msg = f"{type(exc).__name__}: {exc}" if exc is not None else str(detail or '')
-        print(f"[fault] {label}{(' trace=' + tr) if tr else ''} {msg[:300]}")
+        print(f"[fault] {label}{(' trace=' + tr) if tr else ''} {msg[:300]}", flush=True)   # a pipe is block-buffered; the line lands now (2026-11-20)
         with _lock:
             _counts[label] += 1
             n = _counts[label]

@@ -1,11 +1,15 @@
 """The store's ops surface (Prometheus rebuild stage 6 in production,
 Jenna 2026-11-20): two read-only routes for the operator.
 
-  GET /api/prometheus/ops/store-status   the switches, the row counts by
-                                         family, the mirror's counters
-  GET /api/prometheus/ops/store-parity   the mirror against S3 in this
-                                         process (store.production_parity):
-                                         ?since=<ISO> and ?limit=<n> optional
+  GET  /api/prometheus/ops/store-status     the switches, the row counts by
+                                            family, the mirror's counters and
+                                            this process's store faults
+  GET  /api/prometheus/ops/store-parity     the mirror against S3 in this
+                                            process (store.production_parity):
+                                            ?since=<ISO> and ?limit=<n> optional
+  POST /api/prometheus/ops/store-reconcile  the nightly reconcile, now, under
+                                            its lock (store_sweep.run_once;
+                                            S3 wins, counts back)
 
 Both answer only to the ops secret (``CRON_SECRET``, the one the cron
 routes use) in the ``X-Ops-Secret`` header, and say nothing without it
@@ -48,6 +52,15 @@ def _counts_by_family():
     return out
 
 
+def _store_faults():
+    try:
+        from . import faults as _f
+        snap = _f.snapshot()
+        return {k: v for k, v in (snap.get('counts') or {}).items() if str(k).startswith('store')}
+    except Exception:
+        return {}
+
+
 @bp.route('/store-status', methods=['GET'])
 def store_status():
     if not _authorized():
@@ -58,7 +71,24 @@ def store_status():
         'rows': _store.docs_count(),
         'by_family': _counts_by_family(),
         'stats': dict(_store.STATS),
+        'faults': _store_faults(),
+        'pid': os.getpid(),
+        'version': os.environ.get('RENDER_GIT_COMMIT', '')[:12],
     })
+
+
+@bp.route('/store-reconcile', methods=['POST'])
+def store_reconcile():
+    if not _authorized():
+        return jsonify({'error': 'not found'}), 404
+    s3, bucket = _s3_and_bucket()
+    if s3 is None or not _store.enabled():
+        return jsonify({'enabled': _store.enabled(), 'note': 'the store is off or no S3 client is bound'})
+    from . import store_sweep as _ssw
+    out = _ssw.run_once(s3, bucket, owner=f'ops:{os.getpid()}', force=True)
+    if out is None:
+        return jsonify({'ran': False, 'note': 'the lock is held by another run'}), 409
+    return jsonify(dict(out, ran=True))
 
 
 @bp.route('/store-parity', methods=['GET'])

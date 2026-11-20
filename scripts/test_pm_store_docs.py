@@ -77,11 +77,25 @@ class FakeS3:
 
     def delete_object(self, **kw):
         self.deletes.append(kw.get('Key'))
+        self.objects.pop(kw.get('Key'), None)
+        return {}
+
+    def delete_objects(self, Bucket=None, Delete=None, **kw):
+        out = {'Deleted': [], 'Errors': []}
+        for o in (Delete or {}).get('Objects') or []:
+            k = o.get('Key')
+            if k == getattr(self, 'refuse', None):
+                out['Errors'].append({'Key': k, 'Code': 'AccessDenied'})
+                continue
+            self.deletes.append(k)
+            self.objects.pop(k, None)
+            out['Deleted'].append({'Key': k})
+        return out
 
     def list_objects_v2(self, Bucket=None, Prefix='', **kw):
         import datetime as _dt
         now = _dt.datetime.now(_dt.timezone.utc)
-        items = [{'Key': k, 'LastModified': getattr(self, 'stamps', {}).get(k, now)}
+        items = [{'Key': k, 'LastModified': getattr(self, 'stamps', {}).get(k, now), 'ETag': f'"{len(self.objects[k])}"'}
                  for k in sorted(self.objects) if k.startswith(Prefix)]
         return {'Contents': items, 'IsTruncated': False, 'KeyCount': len(items)}
 
@@ -407,6 +421,188 @@ class ParityInProduction(unittest.TestCase):
             self.assertEqual(c.get('/api/prometheus/ops/store-status', headers={'X-Ops-Secret': 'shh-test'}).status_code, 404)
         finally:
             os.environ.pop('CRON_SECRET', None)
+
+
+class DeletesAreMirrored(unittest.TestCase):
+    """Jenna 2026-11-20: every S3 delete of a mirrored family removes the
+    row in the same seam, so a deleted thread never lingers."""
+
+    def setUp(self):
+        _sqlite_on()
+        self.s3 = FakeS3()
+        ST.install_mirror(self.s3)
+
+    def tearDown(self):
+        _store_off()
+
+    def test_delete_object_and_delete_objects_through_the_plain_seam(self):
+        for k in ('system/synth_chat_threads/u/a.json', 'system/synth_chat_threads/u/b.json', 'system/synth_chat_threads/u/c.json', 'system/synth_chat_threads/u/index.json'):
+            self.s3.put_object(Bucket='b', Key=k, Body=b'[1]')
+        self.assertEqual(ST.docs_count('thread'), 4)
+        self.s3.delete_object(Bucket='b', Key='system/synth_chat_threads/u/a.json')
+        self.assertIsNone(ST.doc_text('system/synth_chat_threads/u/a.json'))
+        self.assertEqual(ST.docs_count('thread'), 3)
+        self.s3.refuse = 'system/synth_chat_threads/u/c.json'
+        self.s3.delete_objects(Bucket='b', Delete={'Objects': [{'Key': 'system/synth_chat_threads/u/b.json'}, {'Key': 'system/synth_chat_threads/u/c.json'}, {'Key': 'system/prometheus_reads/_queue/x.json'}]})
+        self.assertIsNone(ST.doc_text('system/synth_chat_threads/u/b.json'))
+        self.assertEqual(ST.doc_text('system/synth_chat_threads/u/c.json'), '[1]', 'a delete S3 refused keeps its row')
+        self.assertEqual(ST.STATS['doc_delete'] >= 2, True)
+        # a delete outside the families touches nothing and never raises
+        self.s3.delete_object(Bucket='b', Key='system/prometheus_reads/_queue/y.json')
+        self.assertEqual(ST.docs_count('thread'), 2)
+
+    def test_the_botocore_delete_hooks(self):
+        import botocore.session
+        from botocore.stub import Stubber
+        client = botocore.session.get_session().create_client('s3', region_name='us-east-2', aws_access_key_id='x', aws_secret_access_key='y')
+        ST.install_mirror(client)
+        ST.doc_put('system/synth_chat_threads/u/t.json', b'[1]')
+        ST.doc_put('system/synth_chat_threads/u/t2.json', b'[2]')
+        ST.doc_put('system/synth_chat_threads/u/t3.json', b'[3]')
+        with Stubber(client) as stub:
+            stub.add_response('delete_object', {}, {'Bucket': 'b', 'Key': 'system/synth_chat_threads/u/t.json'})
+            stub.add_response('delete_objects', {'Deleted': [{'Key': 'system/synth_chat_threads/u/t2.json'}], 'Errors': [{'Key': 'system/synth_chat_threads/u/t3.json', 'Code': 'AccessDenied', 'Message': 'no'}]},
+                              {'Bucket': 'b', 'Delete': {'Objects': [{'Key': 'system/synth_chat_threads/u/t2.json'}, {'Key': 'system/synth_chat_threads/u/t3.json'}]}})
+            client.delete_object(Bucket='b', Key='system/synth_chat_threads/u/t.json')
+            client.delete_objects(Bucket='b', Delete={'Objects': [{'Key': 'system/synth_chat_threads/u/t2.json'}, {'Key': 'system/synth_chat_threads/u/t3.json'}]})
+        self.assertIsNone(ST.doc_text('system/synth_chat_threads/u/t.json'))
+        self.assertIsNone(ST.doc_text('system/synth_chat_threads/u/t2.json'))
+        self.assertEqual(ST.doc_text('system/synth_chat_threads/u/t3.json'), '[3]')
+
+    def test_the_store_never_deletes_from_s3(self):
+        src = open(os.path.join(_WEB, 'prometheus', 'store.py'), encoding='utf-8').read()
+        self.assertNotIn('s3.delete_object(', src)
+        self.assertNotIn('delete_objects(Bucket', src)
+
+
+class TheReconciler(unittest.TestCase):
+    """store.reconcile: S3 always wins, silently; a document either side
+    touched in the last two minutes waits for the next pass."""
+
+    def setUp(self):
+        _sqlite_on()
+        self.s3 = FakeS3()
+        ST.install_mirror(self.s3)
+
+    def tearDown(self):
+        _store_off()
+
+    def _old(self, key):
+        import datetime as _dt
+        self.s3.stamps = getattr(self.s3, 'stamps', {})
+        self.s3.stamps[key] = _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)
+
+    def test_same_added_replaced_etag_filled_removed(self):
+        import datetime as _dt
+        # same: written through the seam, etag recorded
+        self.s3.put_object(Bucket='b', Key='system/synth_chat_threads/u/same.json', Body=b'[1]')
+        # added: S3 has it, the mirror never saw it (an older writer)
+        self.s3.objects['system/synth_chat_threads/u/added.json'] = b'[2]'
+        # replaced: the mirror is stale
+        self.s3.put_object(Bucket='b', Key='system/prometheus_reads/0123456789ab.json', Body=b'{"status": "queued"}')
+        self.s3.objects['system/prometheus_reads/0123456789ab.json'] = b'{"status": "done"}'
+        # etag_filled: the bytes match but the row carries no etag (a row from before the column)
+        self.s3.objects['system/synth_chat_threads/u/noetag.json'] = b'[4]'
+        ST.doc_put('system/synth_chat_threads/u/noetag.json', b'[4]')
+        # removed: the mirror holds what S3 no longer lists
+        ST.doc_put('system/synth_chat_threads/gone/t.json', b'[5]')
+        for k in list(self.s3.objects):
+            self._old(k)
+        # everything the mirror wrote is "fresh" by updated_at; age the rows
+        ST._exec("UPDATE pm_docs SET updated_at = %s", ('2026-01-01T00:00:00Z',))
+        out = ST.reconcile(self.s3, 'b')
+        self.assertEqual((out['same'], out['added'], out['replaced'], out['etag_filled'], out['removed'], out['settling']), (1, 1, 1, 1, 1, 0), out)
+        self.assertEqual(ST.doc_text('system/prometheus_reads/0123456789ab.json'), '{"status": "done"}')
+        self.assertEqual(ST.doc_text('system/synth_chat_threads/u/added.json'), '[2]')
+        self.assertIsNone(ST.doc_text('system/synth_chat_threads/gone/t.json'))
+        row = ST._rows(ST._exec('SELECT etag FROM pm_docs WHERE key = %s', ('system/synth_chat_threads/u/noetag.json',)))[0]
+        self.assertEqual(row['etag'], '3')
+        # a second pass finds nothing to do
+        out2 = ST.reconcile(self.s3, 'b')
+        self.assertEqual((out2['added'], out2['replaced'], out2['etag_filled'], out2['removed']), (0, 0, 0, 0), out2)
+        self.assertEqual(out2['same'], 4)
+
+    def test_a_fresh_document_waits(self):
+        self.s3.objects['system/synth_chat_threads/u/new.json'] = b'[1]'     # just written by someone else
+        ST.doc_put('system/synth_chat_threads/u/going.json', b'[2]')          # just mirrored; S3 has no object (yet)
+        out = ST.reconcile(self.s3, 'b')
+        self.assertEqual(out['settling'], 2)
+        self.assertEqual((out['added'], out['removed']), (0, 0))
+        self.assertIsNone(ST.doc_text('system/synth_chat_threads/u/new.json'))
+
+    def test_the_sweeper_lock_and_marker(self):
+        from prometheus import store_sweep as SW
+        import datetime as _dt
+        self.assertTrue(SW._claim(self.s3, 'b', 'a'))
+        self.assertFalse(SW._claim(self.s3, 'b', 'b'), 'a fresh lock is held')
+        # a stale lock is taken over
+        self.s3.objects[SW.LOCK_KEY] = json.dumps({'owner': 'a', 'at': 1.0}).encode('utf-8')
+        self.assertTrue(SW._claim(self.s3, 'b', 'b'))
+        SW._release(self.s3, 'b')
+        self.assertNotIn(SW.LOCK_KEY, self.s3.objects)
+        # due only in the hour and once a day
+        hour = _dt.datetime(2026, 11, 21, SW.HOUR_UTC, 10, tzinfo=_dt.timezone.utc)
+        self.assertTrue(SW.due(self.s3, 'b', now=hour))
+        self.assertFalse(SW.due(self.s3, 'b', now=hour.replace(hour=(SW.HOUR_UTC + 3) % 24)))
+        out = SW.run_once(self.s3, 'b', owner='t', force=True)
+        self.assertIsInstance(out, dict)
+        self.assertIn(SW.MARKER_KEY, self.s3.objects)
+        self.assertNotIn(SW.LOCK_KEY, self.s3.objects)
+        marker = json.loads(self.s3.objects[SW.MARKER_KEY])
+        self.assertEqual(marker['day'], SW._today())
+        self.assertIn('counts', marker)
+        # the marker and lock are system keys, never a mirrored family
+        self.assertIsNone(ST.family_of(SW.MARKER_KEY))
+        self.assertIsNone(ST.family_of(SW.LOCK_KEY))
+        self.assertIsNone(SW.run_once(self.s3, 'b', owner='t'), 'not due now')
+        self.assertIsNone(SW.start(object()), 'never a thread under REGRESSION_TEST_MODE')
+
+    def test_the_reconcile_route(self):
+        from flask import Flask
+        from prometheus import store_ops as SO
+        self.s3.objects['system/synth_chat_threads/u/added.json'] = b'[2]'
+        self._old('system/synth_chat_threads/u/added.json')
+        app = Flask('t')
+        app.register_blueprint(SO.bp)
+        SO._s3_and_bucket = lambda: (self.s3, 'b')
+        os.environ['CRON_SECRET'] = 'shh-test'
+        try:
+            c = app.test_client()
+            self.assertEqual(c.post('/api/prometheus/ops/store-reconcile').status_code, 404)
+            out = c.post('/api/prometheus/ops/store-reconcile', headers={'X-Ops-Secret': 'shh-test'}).get_json()
+            self.assertTrue(out['ran'])
+            self.assertEqual(out['added'], 1)
+            st = c.get('/api/prometheus/ops/store-status', headers={'X-Ops-Secret': 'shh-test'}).get_json()
+            self.assertIn('faults', st)
+            self.assertIn('pid', st)
+        finally:
+            os.environ.pop('CRON_SECRET', None)
+
+
+class ForkSafety(unittest.TestCase):
+    def test_a_connection_from_another_process_is_not_reused(self):
+        _sqlite_on()
+        try:
+            c1 = ST._connect()
+            ST._conn_pid = -1          # as if the parent opened it before the fork
+            c2 = ST._connect()
+            self.assertIsNot(c1, c2)
+            self.assertEqual(ST._conn_pid, os.getpid())
+            self.assertTrue(ST.doc_put('system/synth_chat_threads/u/t.json', b'[1]'))
+        finally:
+            _store_off()
+
+
+class TheEngineWorkerCarriesTheHook(unittest.TestCase):
+    def test_source(self):
+        p = os.path.join(os.path.dirname(_WEB), 'migration', 'synth_queue_worker.py')
+        if not os.path.exists(p):
+            self.skipTest('parent checkout not beside bg-webapp')
+        src = open(p, encoding='utf-8').read()
+        self.assertIn('_pm_store.install_mirror()', src)
+        self.assertIn('sys.path.append(_bgw_for_store)', src, 'bg-webapp goes last on the path')
+        head = src[:src.index('_pm_store.install_mirror()')]
+        self.assertIn('try:', head[-700:])
 
 
 if __name__ == '__main__':
