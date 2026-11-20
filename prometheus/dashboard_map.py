@@ -15,6 +15,11 @@ One source for every lane that talks about the dashboard itself:
 * TABS: the tabs inside a product (Digital Twins IQ: Twins, Greenlight,
   Launch, Focus Group IQ, Pilot Testing, Trailers, Titles and Key Art,
   Norms; Profile IQ: Insights ... Workspace).
+* FEATURES: a control or a view inside a product that is neither a tab
+  nor a thing the seat built (the Data Cuts button and the Avid Fan cut
+  listed under it, the Select Profile picker, the US % and HOVER ON
+  toggles, the Twins page's How to / Track record / Build a twin, New
+  room), each named as the page shows it (Jenna 2026-11-19).
 * ARTIFACTS: what a finished thing is called and where it lands (a
   journey under Select a journey, a profile in Select Profile, a twin
   on the Twins tab, exports from the page's export buttons, emailed
@@ -34,12 +39,14 @@ values are used, else the seat's own flags with the same defaults.
 from __future__ import annotations
 
 import difflib
+import functools
 import os
 import re
 
-__all__ = ['DROPDOWN', 'DROPDOWN_WHERE', 'DASHBOARD_URL', 'PRODUCTS', 'TABS', 'ARTIFACTS', 'RAIL', 'PLACEHOLDERS',
-           'is_placeholder', 'product', 'product_by_value', 'find_product', 'find_tab', 'find_artifact', 'names_dropdown',
-           'names_rail', 'access_for', 'hidden_products', 'can_open', 'deep_link', 'where_lands', 'picker_of', 'tab_of', 'where_things_are']
+__all__ = ['DROPDOWN', 'DROPDOWN_WHERE', 'DASHBOARD_URL', 'PRODUCTS', 'TABS', 'FEATURES', 'ARTIFACTS', 'RAIL', 'PLACEHOLDERS',
+           'is_placeholder', 'product', 'product_by_value', 'find_product', 'find_tab', 'find_feature', 'feature', 'strip_feature_words',
+           'strip_alias_words', 'alias_pattern', 'find_artifact', 'names_dropdown', 'names_rail', 'access_for', 'hidden_products', 'can_open', 'deep_link', 'where_lands',
+           'picker_of', 'tab_of', 'where_things_are']
 
 DROPDOWN = 'SELECT PRODUCT'
 DROPDOWN_WHERE = 'the SELECT PRODUCT dropdown at the top right of the dashboard'
@@ -285,6 +292,153 @@ def tab_of(product_value, tab_id):
         if pv == product_value and tid == tab_id:
             return {'product': pv, 'id': tid, 'label': label}
     return None
+
+
+# ---------------------------------------------------------------- features
+#
+# A control or a view inside a product: not a tab, not a thing the seat
+# built. Jenna 2026-11-19, after a Sony seat asked "where is the avid
+# function" and was told nothing was running or delivered for them:
+# "should have said where to find it... click on the data cut option for
+# any profile in profile iq. when someone asks where is, where to find,
+# etc it should tell them."
+#
+# Each entry: the product it lives in, its label as the page shows it
+# (templates/index.html: the Data Cuts button under the profile's name,
+# the Select Profile picker and the Library rail, the US % / US POP # and
+# HOVER ON / HOVER OFF toggles on the Profile IQ toolbar, the How to /
+# Track record / Build a twin buttons at the top of Digital Twins IQ, the
+# Rooms drawer's New room on the Focus Group IQ tab), the ways people
+# name it in chat (lower case, matched on the words with the typo
+# tolerance of find_product; a single word is exact), and the three
+# sentences of the directions: the lead (what it is and where), how to
+# reach it once the product is open, and what it does there. 'tab' is the
+# tab the control sits on when it is not the landing page. 'build' marks
+# a cut that exists on a profile only once it has been built: the reply
+# says so and offers the build instead of promising it on every profile.
+FEATURES = (
+    {'id': 'avid_fan', 'product': 'profileIQ', 'label': 'Avid Fan', 'control': 'Data Cuts', 'tab': '', 'build': 'avid',
+     'aliases': ('avid', 'avid fan', 'avid fans', 'avid cut', 'avid cuts', 'avid fan cut', 'avid fan cuts', 'avid data cut', 'avid fan data cut',
+                 'avid function', 'avid feature', 'avid option', 'avid button', 'avid tier', 'avid cohort', 'avid view', 'avid toggle', 'avid tab',
+                 'avid setting', 'avid filter', 'avid fan function', 'avid fan feature', 'avid fan option', 'avid fan button', 'avid fan tier',
+                 'avid fan cohort', 'avid fan view', 'avid fan toggle', 'avid fan tab', 'avid fan filter', 'most engaged tier', 'avid audience'),
+     'lead': 'The Avid Fan cut is under Data Cuts in Profile IQ.',
+     'how': "open any profile from Select Profile, then click Data Cuts, the button under the profile's name.",
+     'then': 'The Avid Fan cut is listed there as Avid with the other cuts built for that profile; tick it to see it beside the profile on every tab.'},
+    {'id': 'data_cuts', 'product': 'profileIQ', 'label': 'Data Cuts', 'control': 'Data Cuts', 'tab': '', 'build': '',
+     'aliases': ('data cuts', 'data cut', 'cuts', 'cut', 'cut list', 'cuts list', 'cut option', 'cuts option', 'cut button', 'cuts button', 'cut menu',
+                 'cuts menu', 'cut panel', 'cuts panel', 'cut feature', 'cuts feature', 'cut function', 'cuts function', 'cohort cut', 'cohort cuts',
+                 'audience cut', 'audience cuts', 'gender cut', 'gender cuts', 'age cut', 'age cuts', 'dma cut', 'dma cuts', 'market cut', 'market cuts',
+                 'casual fan', 'casual fans', 'casual cut', 'core cohort', 'cross behaviors', 'cross behaviours', 'cross behavior', 'cross behaviour',
+                 'compare date ranges', 'date range comparison', 'earlier date range', 'prior date range', 'previous date range'),
+     'lead': "Data Cuts is the cut list on every profile in Profile IQ, the button under the profile's name.",
+     'how': "open any profile from Select Profile, then click Data Cuts under the profile's name.",
+     'then': ('It lists the cuts built for that profile (the Avid Fan cut, shown as Avid, plus any gender, age, market or earlier date range cut) '
+              'and Cross behaviors; tick a cut to see it beside the profile on every tab.')},
+    {'id': 'select_profile', 'product': 'profileIQ', 'label': 'Select Profile', 'control': 'Select Profile', 'tab': '', 'build': '',
+     'aliases': ('select profile', 'profile picker', 'profile selector', 'profile search', 'profile list', 'profile dropdown', 'profile drop down',
+                 'profile menu', 'profile library', 'library rail', 'library', 'audience picker', 'audience list', 'search profiles', 'change profile',
+                 'switch profile', 'switch profiles', 'pick a profile', 'choose a profile'),
+     'lead': 'Select Profile is the profile picker in Profile IQ.',
+     'how': 'click Select Profile at the top of the page, or the Library rail on the left; type a name to search the list.',
+     'then': "Pick the audience and it opens; the Data Cuts button under its name holds the cuts of that audience."},
+    {'id': 'us_pct', 'product': 'profileIQ', 'label': 'US %', 'control': 'US %', 'tab': '', 'build': '',
+     'aliases': ('us toggle', 'us percent', 'us percentage', 'us pct', 'us numbers', 'us population', 'us population toggle', 'us pop toggle',
+                 'population numbers', 'projection toggle', 'projection mode', 'projected numbers', 'display toggle', 'display mode', 'percent toggle',
+                 'percentage toggle', 'percent mode', 'percentage mode'),
+     'lead': 'The US % toggle is on the Profile IQ toolbar.',
+     'how': 'open a profile; US % sits on the toolbar at the top of the page beside EXPORT and HOVER ON.',
+     'then': 'Click it to show every figure as the number of US people (it reads US POP # while it is on); click it again to go back to the share of the audience.'},
+    {'id': 'hover', 'product': 'profileIQ', 'label': 'HOVER ON', 'control': 'HOVER ON', 'tab': '', 'build': '',
+     'aliases': ('hover', 'hover on', 'hover off', 'hover toggle', 'hover button', 'hover descriptions', 'hover descriptors', 'hover text',
+                 'hover setting', 'hover tooltips', 'tooltips', 'tooltip', 'tooltip toggle'),
+     'lead': 'The hover toggle is on the Profile IQ toolbar, labeled HOVER ON or HOVER OFF.',
+     'how': 'open a profile; the toggle sits on the toolbar at the top of the page beside EXPORT and US %.',
+     'then': 'Click it to turn the descriptions that appear when you hover over a figure on or off.'},
+    {'id': 'build_twin', 'product': 'digitalTwinsIQ', 'label': 'Build a twin', 'control': 'Build a twin', 'tab': '', 'build': '',
+     'aliases': ('build a twin', 'build twin', 'build a twin button', 'twin builder', 'twin wizard', 'new twin', 'create a twin', 'make a twin'),
+     'lead': 'Build a twin is the button at the top of Digital Twins IQ, beside How to and Track record.',
+     'how': 'click Build a twin at the top of the page.',
+     'then': ('It walks you through what the twin stands for, the audience, what you will use it for and a review; '
+              'the finished twin lands on the Twins tab in a few minutes.')},
+    {'id': 'track_record', 'product': 'digitalTwinsIQ', 'label': 'Track record', 'control': 'Track record', 'tab': '', 'build': '',
+     'aliases': ('track record', 'twins track record', 'the track record', 'accuracy record', 'record of calls'),
+     'lead': 'Track record is a button at the top of Digital Twins IQ, beside How to and Build a twin.',
+     'how': 'click Track record at the top of the page.',
+     'then': 'It opens every call the twins made before its outcome, beside the result: the settled calls with the miss, and the open calls still waiting.'},
+    {'id': 'how_to', 'product': 'digitalTwinsIQ', 'label': 'How to', 'control': 'How to', 'tab': '', 'build': '',
+     'aliases': ('how to', 'how to button', 'how to guide', 'twins how to', 'twins guide', 'twins help', 'twins walkthrough'),
+     'lead': 'How to is a button at the top of Digital Twins IQ, beside Track record and Build a twin.',
+     'how': 'click How to at the top of the page.',
+     'then': 'It opens the guide to the product, one entry per tab: what each answers, what to put in, what to type to Prometheus, and what comes back.'},
+    # the tab rides on the Open chip's hint only: the page's id for this tab is a word the house output scrub
+    # rewrites, so it never goes inside a printed link
+    {'id': 'new_room', 'product': 'digitalTwinsIQ', 'label': 'New room', 'control': 'New room', 'tab': 'panel', 'tab_in_link': False, 'build': '',
+     'aliases': ('new room', 'new room button', 'rooms drawer', 'saved rooms', 'rooms list', 'my rooms', 'the rooms', 'open a room', 'start a room'),
+     'lead': 'New room is on the Focus Group IQ tab of Digital Twins IQ.',
+     'how': 'pick a twin, open the Focus Group IQ tab across the top, click Rooms and then New room.',
+     'then': 'Name the room and Prometheus seats it and runs it; your saved rooms are listed in the same Rooms drawer.'},
+)
+
+_FEATURE_BY_ID = {f['id']: f for f in FEATURES}
+
+
+def feature(fid):
+    return _FEATURE_BY_ID.get(str(fid or ''))
+
+
+def find_feature(text):
+    """The feature the words name, longest alias first, with the alias
+    that matched under 'alias'; None when none. 'where is the avid
+    function' -> Avid Fan; 'where are the cuts' -> Data Cuts; 'where is
+    the library' -> Select Profile."""
+    words = _words(text)
+    if not words:
+        return None
+    fid, alias = _find_feature_cached(' '.join(words))
+    if not fid:
+        return None
+    out = dict(_FEATURE_BY_ID[fid])
+    out['alias'] = alias
+    return out
+
+
+@functools.lru_cache(maxsize=2048)
+def _find_feature_cached(joined):
+    """(feature id, alias) for a normalized word string; ('', '') when
+    none. The lanes ask the same words several times per turn."""
+    words = joined.split()
+    best, best_alias = None, ''
+    for f in FEATURES:
+        for alias in f['aliases']:
+            if len(alias) > len(best_alias) and _fuzzy_hit(words, alias):
+                best, best_alias = f, alias
+    return (best['id'], best_alias) if best else ('', '')
+
+
+def strip_alias_words(text, aliases):
+    """The words with every alias taken out (longest first, a trailing s
+    tolerated), so what is left can be read on its own."""
+    t = ' '.join(str(text or '').split())
+    for alias in sorted(set(a for a in (aliases or ()) if a), key=len, reverse=True):
+        t = re.sub(alias_pattern(alias), ' ', t, flags=re.I)
+    return ' '.join(t.split())
+
+
+def alias_pattern(alias):
+    """The regex for an alias in running text: its words in order with
+    any punctuation between them ('us toggle' finds 'US % toggle'), a
+    trailing s tolerated."""
+    return r"\b" + r"[^A-Za-z0-9]+".join(re.escape(w) for w in str(alias).split()) + r"s?\b"
+
+
+def strip_feature_words(text, feat):
+    """The words with every alias of the feature taken out: 'where is
+    avid fans' -> 'where is'; 'where do avid fans shop' -> 'where do
+    shop'."""
+    if not feat:
+        return ' '.join(str(text or '').split())
+    return strip_alias_words(text, feat.get('aliases') or ())
 
 
 # --------------------------------------------------------------- artifacts
@@ -550,7 +704,8 @@ def where_things_are(access=None, hidden=None):
     lands = [ARTIFACTS['journey'][1], ARTIFACTS['profile'][1], ARTIFACTS['twin'][1]]
     return (f"Every product is in {DROPDOWN_WHERE}: " + ', '.join(parts) + ". "
             f"A finished journey lands {lands[0]}, a finished profile {lands[1]}, a twin {lands[2]}; exports download {ARTIFACTS['export'][1].split(' (')[0]}, "
-            f"and emailed files arrive from Prometheus. {RAIL['line']}")
+            f"and emailed files arrive from Prometheus. A profile's cuts (the Avid Fan cut among them, shown as Avid) are under the Data Cuts button "
+            f"beneath its name in Profile IQ, listed once they have been built. {RAIL['line']}")
 
 
 def is_placeholder(label):

@@ -33,6 +33,24 @@ happens to start with "where" ("where did the viewers come from", "where
 is the fall-off") is not this lane's; neither is a named deliverable
 ("where is the Howdy deck", the deliverable lane) nor the reader's own
 results ("where are my results", the status lane).
+
+A control inside a product is a feature (dashboard_map.FEATURES; Jenna
+2026-11-19, after a Sony seat's "where is the avid function" drew "I do
+not have anything running or delivered for you": "should have said
+where to find it... click on the data cut option for any profile in
+profile iq. when someone asks where is, where to find, etc it should
+tell them"). The map had no such feature, so this lane stood aside and
+the status lane's "where is the ..." took the words. A where-is, where
+to find, how do I get to, where can I see or how do I turn on question
+that names a feature and nothing else of substance gets the feature's
+own directions (the Avid Fan cut under Data Cuts, the Select Profile
+picker, the US % and HOVER ON toggles, the Twins page's buttons). The
+delivered-work line stays the status lane's, for the reader's own orders
+and files: a possessive on a file, "the one I asked for", a named thing
+("where is my Nurses file", "where is the Reba avid cut") keep their
+lanes. A cut that exists on a profile only once it has been built is
+never promised on every profile; the reply says so and offers the build
+at the seat's standing cut price (or "included with your plan").
 """
 from __future__ import annotations
 
@@ -41,7 +59,8 @@ import traceback
 
 from . import dashboard_map as M
 
-__all__ = ['wants', 'answer', 'target_of', 'named_thing', 'directions', 'OPEN_CHIP', 'ADD_CHIP', 'add_order', 'chat_reads']
+__all__ = ['wants', 'answer', 'target_of', 'named_thing', 'directions', 'OPEN_CHIP', 'ADD_CHIP', 'add_order', 'chat_reads',
+           'is_directions_ask', 'cut_price_note', 'AVID_BUILD_LINE']
 
 OPEN_CHIP = 'Open {label}'
 # A journey the seat holds only as chat turns (a read answered in the thread,
@@ -59,7 +78,8 @@ _WHERE_RX = re.compile(
     r"\b(?:where(?:'s|\s+is|\s+are|\s+was|\s+were)\b"
     r"|where\s+(?:do|can|would|could|should|did|does|will|might)\s+(?:i|we|one|you|it|they|my|the|a|that|this)\b"
     r"|how\s+(?:do|can|would|could|should|did)\s+(?:i|we|you)\s+(?:get\s+(?:to|into|back\s+to)|open|find|see|reach|access|navigate\s+to|go\s+to|go\s+back\s+to|pull\s+up|bring\s+up|view|switch\s+to|turn\s+on|enable)\b"
-    r"|how\s+to\s+(?:open|find|get\s+to|reach|access|view|switch\s+to)\b"
+    r"|how\s+to\s+(?:open|find|get\s+to|reach|access|view|switch\s+to|turn\s+on|enable)\b"
+    r"|where\s+to\s+(?:find|see|look|go|open|access|get|turn\s+on|enable)\b"
     r"|which\s+(?:tab|menu|dropdown|drop\s*down|page|screen|section|button|product|module|view)\b"
     r"|what\s+(?:tab|menu|dropdown|drop\s*down|page|screen|section)\b"
     r"|is\s+there\s+(?:a|an)\s+(?:tab|page|menu|button|section|place|view)\b"
@@ -74,6 +94,31 @@ _DATA_RX = re.compile(
     # a journey's own tables ("where did the first post sit", "where did they look before", 2026-11-11): the journey lane's
     r"first\s+post|posts?\s+s[ai]t|they\s+look(?:ed)?|look(?:ed)?\s+before|first\s+episode|last\s+touch|first\s+touch)\b", re.I)
 _NAV_WORDS_RX = re.compile(r"\b(?:tab|tabs|menu|dropdown|drop\s*down|button|page|screen|section|dashboard|rail|picker|sidebar|panel|view)\b", re.I)
+# "I can't find the avid toggle", "I don't see data cuts anywhere": a lost
+# reader asking after a control is asking where it is (a lost reader asking
+# after THEIR thing, "I don't see my Nurses profile", is the status lane's)
+_LOST_RX = re.compile(r"\b(?:i\s+)?(?:can'?t|cannot|could\s*n[o']t|couldn'?t|don'?t|do\s+not|not\s+able\s+to|unable\s+to)\s+(?:find|see|locate|spot)\b", re.I)
+# the reader's own order or file: "where is the avid cut I asked for", "where is my avid file" (the status lane's)
+_ORDER_REF_RX = re.compile(
+    r"\b(?:i|we)\s+(?:asked|requested|ordered|approved|paid|bought|built|ran|pulled|set\s+up|had\s+(?:you\s+)?(?:run|build|make|pull))\b"
+    r"|\byou\s+(?:built|ran|made|pulled|promised|were\s+(?:building|running|making|pulling)|said\s+(?:you|it)\s+(?:would|were|was))\b"
+    r"|\bthat\s+(?:was|got)\s+(?:built|run|made|pulled|delivered)\b|\b(?:was|got)\s+delivered\b"
+    r"|\bmy\s+(?:order|request|build|run|file|files|download|downloads|report|reports|results?|answers?|read|reads|csv|deck|email)\b"
+    r"|\b(?:the|that)\s+(?:order|request|build|run|file|download|report|read)\b", re.I)
+# a question about where people are, not where a control is ("where do avid fans live")
+_GEO_RX = re.compile(r"\b(?:live|lives|living|located|based|reside|resides|residing|concentrated|cluster(?:ed|s)?|markets?|cities|city|states?|"
+                     r"dmas?|regions?|countr(?:y|ies)|geograph\w*|zip|metros?|coasts?|towns?|areas?|neighbou?rhoods?|from)\b", re.I)
+# words that describe a control, not another subject: what may be left beside the feature's name
+_FEATURE_FILLER = frozenset((
+    'function', 'functions', 'feature', 'features', 'functionality', 'option', 'options', 'setting', 'settings', 'thing', 'things', 'tool', 'tools',
+    'control', 'controls', 'toggle', 'toggles', 'switch', 'link', 'list', 'drawer', 'box', 'icon', 'area', 'spot', 'place', 'one', 'it', 'that',
+    'this', 'these', 'those', 'there', 'here', 'anywhere', 'somewhere', 'be', 'to', 'get', 'go', 'into', 'up', 'on', 'off', 'do', 'does', 'did',
+    'i', 'we', 'you', 'me', 'can', 'could', 'would', 'should', 'is', 'are', 'was', 'were', 'how', 'where', 'what', 'which', 'find', 'see',
+    'open', 'reach', 'access', 'turn', 'enable', 'use', 'click', 'located', 'hiding', 'hidden', 'gone', 'went', 'supposed', 'exactly', 'please',
+    'again', 'now', 'actually', 'even', 'still', 'then', 'mentioned', 'talked', 'said', 'meant', 'mean', 'described', 'showed', 'called',
+    'profile', 'profiles', 'dashboards', 'site', 'app', 'product', 'products', 'iq', 'cant', 'dont', 'cannot', 'not', 'able', 'unable', 'locate',
+    'within', 'inside', 'under', 'at', 'in', 'new', 'old', 'thanks', 'thank', 'hey', 'hi', 'hello', 'prometheus', 's', 't', 'anyone', 'know',
+    'tell', 'show', 'point', 'take', 'help', 'need', 'want', 'looking', 'trying', 'select', 'pick', 'choose'))
 # the Open chip itself, typed or sent from an older turn ("Open Digital Journey IQ", "take me to profile iq"):
 # the widget switches the page on its own; when the words reach the server they get the directions
 _OPEN_RX = re.compile(r"^\W*(?:open|go\s+to|take\s+me\s+to|switch\s+to|show\s+me|bring\s+up)\s+(?:the\s+)?(?P<what>[A-Za-z0-9&/ \-]{2,40}?)\s*(?:tab|page|view|dashboard)?[.!\s]*$", re.I)
@@ -111,20 +156,110 @@ def _tokens(s):
     return [t for t in re.sub(r"[^a-z0-9+&]+", ' ', str(s or '').lower()).split() if t not in _STOP]
 
 
+def _body(text):
+    """The words with the where-phrase taken out ('how to open digital
+    twins' -> 'digital twins'), so a feature is read from what is asked
+    about and never from the asking ('how to' is a button on the Twins
+    page and also how a question starts)."""
+    t = _WHERE_RX.sub(' ', _clean(text))
+    t = _LOST_RX.sub(' ', t)
+    return ' '.join(t.split())
+
+
+def _feature_of(text):
+    """The feature the words ask about, or None."""
+    return M.find_feature(_body(text))
+
+
+_FEATURE_NOUN = {'avid_fan': 'cut', 'data_cuts': 'cut'}
+_AFTER_FEATURE_RX = re.compile(r"(?:\s+(?:function|feature|option|thing|button|toggle|tier|tab|view|list|setting|cuts?))*"
+                               r"\s+(?:for|of|on|about)\s+(?P<name>[^?]+?)\s*(?=\?|$|\s+(?:in|on)\s+(?:the\s+)?(?:dashboard|site|page|app)\b)", re.I)
+
+
+def _named_after_feature(text, feat):
+    """The profile named after a cut feature ('where is the avid function
+    for Reba' -> 'Reba'); '' when none."""
+    t = _clean(text)
+    for alias in sorted(feat.get('aliases') or (), key=len, reverse=True):
+        m = re.search(M.alias_pattern(alias), t, flags=re.I)
+        if not m:
+            continue
+        m2 = _AFTER_FEATURE_RX.match(t, m.end())
+        if not m2:
+            return ''
+        name = _NAME_ARTIFACT_TAIL_RX.sub('', _trim_name(m2.group('name'), determiner=True)).strip(" ,.;:'\"")
+        toks = _tokens(name)
+        if not name or M.is_placeholder(name) or not toks or len(toks) > 8 or not any(len(x) >= 3 for x in toks):
+            return ''
+        if M.find_product(name) is not None and len(toks) <= 3:
+            return ''
+        if M.find_tab(name) is not None and len(toks) <= 3:
+            return ''
+        if set(toks) <= _feature_vocabulary(feat):
+            return ''
+        return name
+    return ''
+
+
+def _dashboard_vocabulary():
+    """Every word the map uses for a product, a tab, the dropdown or the
+    rail: words that place a control, never another subject."""
+    global _DASH_VOCAB
+    if _DASH_VOCAB is None:
+        words = set()
+        for p in M.PRODUCTS:
+            words |= set(_tokens(' '.join(tuple(p['aliases']) + (p['label'],))))
+        words |= set(_tokens(' '.join(M.ANALYSIS_IQ['aliases'])))
+        for _pv, _tid, label, aliases in M.TABS:
+            words |= set(_tokens(' '.join(tuple(aliases) + (label,))))
+        words |= set(_tokens('tab tabs menu dropdown drop down button page screen section dashboard rail picker sidebar panel view '
+                             'select product list switcher selector chooser main top navigation'))
+        _DASH_VOCAB = frozenset(words)
+    return _DASH_VOCAB
+
+
+_DASH_VOCAB = None
+
+
+def _feature_only(text, tgt):
+    """True when the words ask about the feature and nothing else of
+    substance: the where-phrase, the feature's own name, a product or a
+    tab, the words that describe a control. 'where is the avid function
+    in profile iq' is; 'where do Reba's avid fans live' is not."""
+    feat = tgt.get('feature') or {}
+    body = _body(text)
+    if _GEO_RX.search(M.strip_feature_words(body, feat)):
+        return False
+    known = _feature_vocabulary(feat) | _dashboard_vocabulary() | _FEATURE_FILLER
+    return not [w for w in _tokens(body) if w not in known]
+
+
 # ---------------------------------------------------------------- routing
 
 def target_of(text):
-    """What the words point at: {'kind': 'product'|'tab'|'artifact'|
-    'dropdown'|'rail', ...} or None. A tab beats its product when the
-    words name the tab ('where is pilot testing'); a product beats a
-    bare artifact noun ('the digital journey' is the product, 'my Walter
-    Boys journey' is an artifact of it)."""
+    """What the words point at: {'kind': 'product'|'tab'|'feature'|
+    'artifact'|'dropdown'|'rail', ...} or None. A tab beats its product
+    when the words name the tab ('where is pilot testing'); a feature
+    beats both when the words name a control ('where is the avid
+    function', 'where are the data cuts in profile iq'); a product beats
+    a bare artifact noun ('the digital journey' is the product, 'my
+    Walter Boys journey' is an artifact of it); a thing named beside a
+    cut feature is that cut ('where is the avid cut for Reba')."""
     t = _clean(text)
     if not t:
         return None
     tab = M.find_tab(t)
     prod = M.find_product(t)
     art = M.find_artifact(t)
+    feat = _feature_of(t)
+    if feat:
+        fprod = M.product(feat['product'])
+        name = named_thing(t, fprod) or _named_after_feature(t, feat)
+        noun = _FEATURE_NOUN.get(feat['id'])
+        if name and noun:
+            return {'kind': 'artifact', 'noun': noun, 'name': name, 'product': fprod, 'feature': feat}
+        if not name:
+            return {'kind': 'feature', 'feature': feat, 'product': fprod}
     if tab and prod and tab['product'] == prod['value'] and tab['id'] in ('twins', 'insights') \
             and re.search(r"\bdigital\s+twins?\b|\bprofile\s+iq\b", t, re.I):
         tab = None                      # 'digital twins' names the product; its landing tab is the product
@@ -173,7 +308,36 @@ def named_thing(text, prod=None):
         return ''
     if re.fullmatch(r"(?:select|choose|pick)\b.*", name, flags=re.I):
         return ''
+    # the words were a control's own name ('the avid cut', 'the data cuts list'): no thing is named;
+    # 'my Reba avid cut' names Reba, 'the avid cut on the Nurses profile' names Nurses
+    feat = _feature_of(t)
+    if feat:
+        if set(toks) <= _feature_vocabulary(feat):
+            return ''
+        stripped = _NAME_ARTIFACT_TAIL_RX.sub('', _trim_name(_without_feature_words(name, feat), determiner=True)).strip(" ,.;:'\"")
+        stoks = _tokens(stripped)
+        if not stoks or not any(len(x) >= 3 for x in stoks):
+            return ''
+        if M.find_product(stripped) is not None and len(stoks) <= 3:
+            return ''
+        name = stripped
     return name
+
+
+_NAME_ARTIFACT_TAIL_RX = re.compile(r"(?:\s+(?:profile|profiles|audience|audiences|file|files|run|runs|build|builds|cut|cuts|page))+$", re.I)
+
+
+def _feature_vocabulary(feat):
+    """Every word in the feature's aliases: a name made only of these
+    words is the control's own name, not a thing's."""
+    return set(_tokens(' '.join(feat.get('aliases') or ())))
+
+
+def _without_feature_words(name, feat):
+    """The name with the feature's own words taken out, word by word, in
+    order ('Nurses gender' -> 'Nurses'; 'Reba avid' -> 'Reba')."""
+    vocab = _feature_vocabulary(feat)
+    return ' '.join(w for w in str(name or '').split() if re.sub(r"[^a-z0-9+&]+", '', w.lower()) not in vocab)
 
 
 def add_order(text):
@@ -240,17 +404,39 @@ def _subject_from_history(history):
     return ''
 
 
+def is_directions_ask(text):
+    """A where-is question about a product, a tab, a control, the
+    dropdown or the rail: directions, never the reader's own work. The
+    status lane stands down on these (Jenna 2026-11-19); a question about
+    the reader's own thing ('where is my Nurses file', 'where did my
+    profile go') is not one."""
+    t = _clean(text)
+    try:
+        if not t or not wants(t) or add_order(t):
+            return False
+        tgt = target_of(t) or {}
+        return tgt.get('kind') in ('feature', 'product', 'tab', 'dropdown', 'rail')
+    except Exception:
+        return False
+
+
 def wants(text):
-    """A where-is question about the dashboard, a product, a tab, an
-    artifact's home, the dropdown or the rail; never a data question or
-    a named deliverable. Also the 'Add it to Digital Journey IQ' order,
-    which this lane turns into the journey build."""
+    """A where-is question about the dashboard, a product, a tab, a
+    control (a feature), an artifact's home, the dropdown or the rail;
+    never a data question, a named deliverable or the reader's own order.
+    Also the 'Add it to Digital Journey IQ' order, which this lane turns
+    into the journey build."""
     t = _clean(text)
     if not t or len(t) > _MAX_LEN or len(t.split()) > 34:
         return False
     if add_order(t):
         return True
+    feat = _feature_of(t)
     if not _WHERE_RX.search(t):
+        if feat and _LOST_RX.search(t) and not _ORDER_REF_RX.search(t):
+            # "I can't find the avid toggle": a lost reader asking after a control
+            tgt = target_of(t)
+            return bool(tgt) and tgt.get('kind') == 'feature' and _feature_only(t, tgt)
         m = _OPEN_RX.match(t)
         if not m:
             return False
@@ -267,15 +453,24 @@ def wants(text):
         if (tgt.get('product') or {}).get('value') == M.ANALYSIS_IQ['value']:
             return False
         return True
-    if _DATA_RX.search(t) and not _NAV_WORDS_RX.search(t):
+    # a data question is never this lane's; a feature's own name is not data ('where is avid fans' asks after the cut)
+    if _DATA_RX.search(M.strip_feature_words(t, feat) if feat else t) and not _NAV_WORDS_RX.search(t):
         return False
     tgt = target_of(t)
     if not tgt:
         return False
+    if tgt['kind'] == 'feature':
+        # a control asked about on its own gets directions; the reader's own order or file ("the avid cut I
+        # asked for", "my avid file") and a question about people ("where do avid fans live") keep their lanes
+        if _ORDER_REF_RX.search(t):
+            return False
+        return _feature_only(t, tgt)
     if tgt['kind'] == 'artifact':
         noun = tgt.get('noun')
         if noun == 'read':
             return False               # the reader's own results: the status lane
+        if _ORDER_REF_RX.search(t):
+            return False               # "the Reba avid cut I asked for": the reader's own order, the status lane
         if noun in ('deck', 'email') and tgt.get('name'):
             return False               # a named file: the deliverable lane
         if noun in ('deck', 'export', 'email'):
@@ -443,12 +638,47 @@ def _access_lines(prod, status):
     return f"{label} is not on your {M.DROPDOWN} menu yet; ask your admin for access. {prod.get('blurb') or ''}".strip()
 
 
-def directions(target, *, access, hidden=None, locked=False, held=None, running=None, chat_only=None):
+AVID_BUILD_LINE = ("A profile shows the cut only once it has been built; if a profile you need has none yet, tell me which one and I will "
+                   "build its Avid Fan cut{price}.")
+
+
+def cut_price_note(user=None, uname='', host=None):
+    """' (included with your plan)' for a seat that is never billed, else
+    ' ($100)' from the seat's live cut price in its currency; '' when it
+    cannot be read. Never a new price: the same table the brief card
+    prints."""
+    try:
+        from . import priced_read as _pr
+        if _pr.seat_is_free(user, uname, host):
+            return ' (included with your plan)'
+    except Exception:
+        pass
+    try:
+        from . import pull_discussion as _pd
+        _build, cut = _pd._prices(host, uname)
+        return f" ({cut})" if cut else ''
+    except Exception:
+        return ''
+
+
+def _feature_sentences(target, prod, price=''):
+    feat = target['feature']
+    label = prod['label']
+    sents = [feat['lead'], f"Open {M.DROPDOWN_WHERE}, click {label}, then {feat['how']}"]
+    if feat.get('then'):
+        sents.append(feat['then'])
+    if feat.get('build') == 'avid':
+        sents.append(AVID_BUILD_LINE.format(price=price or ''))
+    return sents
+
+
+def directions(target, *, access, hidden=None, locked=False, held=None, running=None, chat_only=None, price=''):
     """The reply for a target: (sentences, chips, action_hint). ``held`` is
     the holdings dict for an artifact target; ``running`` a running job
     for the named thing; ``chat_only`` the subjects of reads that landed
     in this chat and are NOT in the Digital Journey IQ registry (never
-    claimed to be in the picker)."""
+    claimed to be in the picker); ``price`` the cut price note for a cut
+    that is offered as a build."""
     kind = target.get('kind')
     if kind == 'rail':
         return [M.RAIL['line']], [], None
@@ -473,6 +703,15 @@ def directions(target, *, access, hidden=None, locked=False, held=None, running=
     chip = OPEN_CHIP.format(label=label)
     hint = {'view': prod['value'], 'label': chip}
     sents = []
+    if kind == 'feature':
+        feat = target['feature']
+        sents = _feature_sentences(target, prod, price)
+        if feat.get('tab'):
+            hint['tab'] = feat['tab']
+        link = M.deep_link(prod['value'], tab=(feat.get('tab') if feat.get('tab_in_link', True) else None) or None)
+        if link:
+            sents.append(f"Direct link: {link}")
+        return sents[:5], [chip], hint
     if kind == 'tab':
         tab = target['tab']
         hint['tab'] = tab['id']
@@ -491,15 +730,32 @@ def directions(target, *, access, hidden=None, locked=False, held=None, running=
     chat_only = [s for s in (chat_only or []) if s]
     picker = prod.get('picker') or 'the landing page'
     where = f"under {picker}" if picker.lower().startswith('select') else f"on {picker}" if 'tab' in picker else f"in {picker}"
+    if noun == 'cut':
+        where = "under Data Cuts on its profile"      # a cut is never in Select Profile; it is listed on the profile it was cut from
+    avid = noun == 'cut' and (target.get('feature') or {}).get('id') == 'avid_fan'
     chips = [chip]
     if name and noun:
         found = held.get('found') or []
+        if avid and found:
+            # the Avid Fan cut of a named profile: the cut when it is held, else the profile with no cut yet
+            cuts = [i for i in found if 'avid' in _tokens(i.get('name'))]
+            if cuts:
+                found = cuts
+            else:
+                parents = [i for i in found if ' - ' not in str(i.get('name') or '')] or found
+                sents.append(f"Your {_list_names(parents, 1)[0]} profile is there under Select Profile; it has no Avid Fan cut built yet. "
+                             f"Tell me to build it and I will{price or ''}.")
+                found = None
         if found:
             names = _list_names(found, 2)
             if len(names) == 1:
                 sents.append(f"Your {names[0]} {_noun_phrase(noun)} is there {where}.")
             else:
                 sents.append(f"Your {' and '.join(names)} {_noun_phrase(noun, plural=True)} are there {where}.")
+        elif found is None:
+            pass
+        elif avid and not (running and running.get('status') not in ('done', 'complete', 'completed', 'ready', 'error', 'failed')):
+            sents.append(f"I do not see an Avid Fan cut of {name} there yet. Tell me which profile it is and I will build it{price or ''}.")
         elif running and running.get('status') not in ('done', 'complete', 'completed', 'ready', 'error', 'failed'):
             sents.append(f"Your {running.get('subject') or name} {_noun_phrase(noun)} is still building; it appears there {where} the moment it lands.")
         elif noun == 'journey' and chat_only:
@@ -562,10 +818,16 @@ def answer(user, text, page=None, *, host=None, uname=None, history=None, access
                 locked = bool(host.twins_locked(user))
         except Exception:
             locked = False
-    held, running, chat_only = None, None, []
+    held, running, chat_only, price = None, None, [], ''
     prod = target.get('product')
+    if (target.get('feature') or {}).get('build') == 'avid':
+        # a cut offered as a build carries the seat's own cut price (or "included with your plan"); never a new price
+        price = cut_price_note(user, uname, host)
     if prod and M.can_open(prod['value'], access, hidden, locked=locked) == 'open':
-        noun = target.get('noun') if target.get('kind') == 'artifact' else {'journeyIQ': 'journey', 'profileIQ': 'profile', 'digitalTwinsIQ': 'twin'}.get(prod['value'], '')
+        if target.get('kind') == 'feature':
+            noun = ''                  # a control's directions need no listing of the seat's things
+        else:
+            noun = target.get('noun') if target.get('kind') == 'artifact' else {'journeyIQ': 'journey', 'profileIQ': 'profile', 'digitalTwinsIQ': 'twin'}.get(prod['value'], '')
         name = str(target.get('name') or '')
         if noun in _LISTERS:
             try:
@@ -589,12 +851,13 @@ def answer(user, text, page=None, *, host=None, uname=None, history=None, access
                 chat_only.append(subj)
                 if len(chat_only) >= 2:
                     break
-    sents, chips, hint = directions(target, access=access, hidden=hidden, locked=locked, held=held, running=running, chat_only=chat_only)
+    sents, chips, hint = directions(target, access=access, hidden=hidden, locked=locked, held=held, running=running, chat_only=chat_only, price=price)
     if not sents:
         return None
     reply = ' '.join(s.strip() for s in sents if s and s.strip())
     out = {'success': True, 'action': 'answer', 'reply': reply, 'followups': list(chips), 'offer_deck': False, 'deck_angle': None,
-           'wayfinding': {'kind': target.get('kind'), 'product': (prod or {}).get('value') or '', 'name': str(target.get('name') or '')}}
+           'wayfinding': {'kind': target.get('kind'), 'product': (prod or {}).get('value') or '', 'name': str(target.get('name') or ''),
+                          'feature': (target.get('feature') or {}).get('id') or ''}}
     if hint:
         out['action_hint'] = hint
         out['open_view'] = hint['view']

@@ -20,7 +20,18 @@ Covers, hermetically (fake S3, bound host, no model):
     visible in the copy the client sent;
   * a picker placeholder never becomes a subject label;
   * the lane is registered early, deterministic and never priced; the
-    widget carries the Open chip switch and the landed-since pull.
+    widget carries the Open chip switch and the landed-since pull;
+  * (Jenna 2026-11-19, after a Sony seat's "where is the avid function"
+    drew "I do not have anything running or delivered for you") a
+    where-is question about a control gets that control's directions
+    from the map's features: the exact question names Data Cuts and
+    Profile IQ; the status lane stands down on it; the reader's own
+    orders and files ("where is my Nurses file") keep the delivered
+    path; other controls (Data Cuts, US %, Track record, Select Profile)
+    route to directions; a cut is never promised on every profile and
+    the build is offered at the seat's own cut price; every feature's
+    label is a real on-screen label and its reply survives the house
+    scrubs untouched.
 """
 from __future__ import annotations
 
@@ -532,6 +543,188 @@ class Wiring(unittest.TestCase):
         self.assertIn('window._pmOpenViewHint', html)
         self.assertIn('data.landed_since && data.landed_since.length', html)
         self.assertEqual(html.count('function _pmOpenView('), 1)
+
+
+# ------------------------------------------- a control gets its directions
+#
+# Michael Glenn (Sony), 2026-11-19 21:10 UTC: "where is the avid function" drew
+# "I do not have anything running or delivered for you in the last week ...".
+# Jenna: "should have said where to find it... click on the data cut option
+# for any profile in profile iq. when someone asks where is, where to find,
+# etc it should tell them."
+
+MICHAEL_Q = 'where is the avid function'
+DELIVERED_LINE = 'I do not have anything running or delivered for you in the last week'
+EMPTY = {'items': [], 'found': []}
+
+
+class Features(unittest.TestCase):
+    def setUp(self):
+        self.s3 = FakeS3()
+        _bind(self.s3, _idx())
+        self._persist = S._persist_turn
+        S._persist_turn = lambda *a, **k: None
+
+    def tearDown(self):
+        S._persist_turn = self._persist
+
+    def _ask(self, text, user=None, history=None, **extra):
+        body = dict({'text': text, 'client': 'dashboard', 'surface': 'analyze', 'thread_id': 'thr1',
+                     'history': history if history is not None else []}, **extra)
+        return S.ask(user or SONY_USER, body)
+
+    def test_michaels_question_routes_to_directions(self):
+        self.assertTrue(W.wants(MICHAEL_Q))
+        t = W.target_of(MICHAEL_Q)
+        self.assertEqual((t['kind'], t['feature']['id'], t['product']['value']), ('feature', 'avid_fan', 'profileIQ'))
+        self.assertFalse(STL.wants_status(MICHAEL_Q))
+        self.assertFalse(STL.wants_status_fast(MICHAEL_Q))
+        env, status = self._ask(MICHAEL_Q)
+        self.assertEqual(status, 200)
+        self.assertEqual((env.get('decision') or {}).get('reason'), 'wayfinding')
+        reply = env['raw']['reply']
+        _clean(self, reply)
+        self.assertNotIn(DELIVERED_LINE, reply)
+        self.assertNotIn('nothing running', reply.lower())
+        self.assertTrue(reply.startswith('The Avid Fan cut is under Data Cuts in Profile IQ.'), reply)
+        self.assertIn('click Profile IQ', reply)
+        self.assertIn('click Data Cuts', reply)
+        self.assertIn("the button under the profile's name", reply)
+        self.assertIn('listed there as Avid', reply)
+        # never promised on every profile; the build is offered at the seat's own cut price, no new price
+        self.assertIn('A profile shows the cut only once it has been built', reply)
+        from prometheus import rate_card as RC
+        self.assertIn(f"build its Avid Fan cut ({RC.money(RC.default('profile_iq_derived_cut'))})", reply)
+        self.assertIn('?view=profileIQ', reply)
+        self.assertEqual(env['raw']['followups'], ['Open Profile IQ'])
+        self.assertEqual(env['raw']['action_hint'], {'view': 'profileIQ', 'label': 'Open Profile IQ'})
+        self.assertEqual(env['text'], reply)                        # the house scrubs leave it whole
+        self.assertEqual((env['raw'].get('wayfinding') or {}).get('feature'), 'avid_fan')
+
+    def test_the_same_ask_in_its_other_shapes(self):
+        for q in ('where is the avid function', 'where do I find the avid fan cut', 'where can I see avid fans', 'how do I turn on avid',
+                  "where's the avid option on the dashboard", 'where is the avid cut', 'where is avid', "I can't find the avid toggle",
+                  'where is the avid fan thing you mentioned', 'where is my avid cut'):
+            self.assertTrue(W.wants(q), q)
+            t = W.target_of(q)
+            self.assertEqual((t['kind'], t['feature']['id']), ('feature', 'avid_fan'), q)
+            self.assertFalse(STL.wants_status(q), q)
+            out = W.answer(SONY_USER, q, holdings_fn=lambda n, nm: EMPTY)
+            self.assertIn('Data Cuts', out['reply'], q)
+            self.assertIn('Profile IQ', out['reply'], q)
+            _clean(self, out['reply'])
+
+    def test_the_readers_own_orders_and_files_keep_the_delivered_path(self):
+        for q in ('where is my Nurses file', 'where is the Nurses file I asked for', 'where is the avid cut I asked for', 'where is my avid file',
+                  'where did my profile go', 'where are my results', 'where is the report you built', 'where is my list'):
+            self.assertFalse(W.wants(q), q)
+            self.assertTrue(STL.wants_status(q), q)
+            self.assertFalse(W.is_directions_ask(q), q)
+        out = STL.answer('where is my Nurses file', USER, host=host, user=SONY_USER, history=[], thread_id='thr1')
+        self.assertIn(DELIVERED_LINE, out['reply'])
+        # a thing named beside the cut is looked up on the seat, not answered with the generic directions
+        t = W.target_of('where is my Reba avid cut')
+        self.assertEqual((t['kind'], t['noun'], t['name'], t['feature']['id']), ('artifact', 'cut', 'Reba', 'avid_fan'))
+        self.assertEqual(W.target_of('where is the Avid Fan cut on the Nurses profile')['name'], 'Nurses')
+        self.assertEqual(W.target_of('where is the avid function for Reba McEntire')['name'], 'Reba McEntire')
+        self.assertEqual(W.target_of('where is my Nurses gender cut')['name'], 'Nurses')
+
+    def test_a_question_about_people_is_not_this_lanes(self):
+        for q in ('where do avid fans live', "where do Reba's avid fans shop", 'where are the avid fans located', 'how many avid fans does Reba have',
+                  'where do the avid fans come from', 'what share of avid fans watch Netflix'):
+            self.assertFalse(W.wants(q), q)
+            self.assertFalse(W.is_directions_ask(q), q)
+
+    def test_other_controls_route_to_directions(self):
+        cases = (('where are the data cuts', 'data_cuts', 'Data Cuts is the cut list on every profile in Profile IQ', 'Open Profile IQ'),
+                 ('where is the US % toggle', 'us_pct', 'The US % toggle is on the Profile IQ toolbar', 'Open Profile IQ'),
+                 ('where is track record', 'track_record', 'Track record is a button at the top of Digital Twins IQ', 'Open Digital Twins IQ'),
+                 ('where is select profile', 'select_profile', 'Select Profile is the profile picker in Profile IQ', 'Open Profile IQ'),
+                 ('where is the library', 'select_profile', 'Library rail on the left', 'Open Profile IQ'),
+                 ('where do I build a twin', 'build_twin', 'Build a twin is the button at the top of Digital Twins IQ', 'Open Digital Twins IQ'),
+                 ('where is hover on', 'hover', 'labeled HOVER ON or HOVER OFF', 'Open Profile IQ'),
+                 ('where is the new room button', 'new_room', 'New room is on the Focus Group IQ tab', 'Open Digital Twins IQ'))
+        for q, fid, line, chip in cases:
+            self.assertTrue(W.wants(q), q)
+            self.assertFalse(STL.wants_status(q), q)
+            t = W.target_of(q)
+            self.assertEqual((t['kind'], t['feature']['id']), ('feature', fid), q)
+            out = W.answer(SONY_USER, q, holdings_fn=lambda n, nm: EMPTY)
+            self.assertIn(line, out['reply'], q)
+            self.assertIn('SELECT PRODUCT dropdown at the top right', out['reply'], q)
+            self.assertEqual(out['followups'], [chip], q)
+            _clean(self, out['reply'])
+        # through the door, two of them
+        for q in ('where are the data cuts', 'where is the US % toggle'):
+            env, status = self._ask(q)
+            self.assertEqual((status, (env.get('decision') or {}).get('reason')), (200, 'wayfinding'), q)
+            self.assertNotIn(DELIVERED_LINE, env['raw']['reply'])
+        # the New room hint carries its tab while the printed link stays whole (the tab id is a word the scrub rewrites)
+        out = W.answer(SONY_USER, 'where is the new room', holdings_fn=lambda n, nm: EMPTY)
+        self.assertEqual(out['action_hint'], {'view': 'digitalTwinsIQ', 'label': 'Open Digital Twins IQ', 'tab': 'panel'})
+        self.assertIn('?view=digitalTwinsIQ', out['reply'])
+        self.assertNotIn('tab=', out['reply'])
+        # a product, a tab, the dropdown and the rail still win over the feature words they do not carry
+        self.assertEqual(W.target_of('where is pilot testing')['kind'], 'tab')
+        self.assertEqual(W.target_of('how to open digital twins')['kind'], 'product')          # 'how to' is a button and how a question starts
+        self.assertEqual(W.target_of('where is the how to guide')['feature']['id'], 'how_to')
+        self.assertEqual(W.target_of(SONY_Q)['kind'], 'product')
+
+    def test_a_named_cut_is_looked_up_on_the_seat(self):
+        held = {'items': [{'name': 'Reba McEntire'}, {'name': 'Reba McEntire - Avid Fan'}],
+                'found': [{'name': 'Reba McEntire'}, {'name': 'Reba McEntire - Avid Fan'}]}
+        out = W.answer(SONY_USER, 'where is my Reba avid cut', holdings_fn=lambda n, nm: held)
+        self.assertIn('Your Reba McEntire - Avid Fan cut is there under Data Cuts on its profile.', out['reply'])
+        self.assertNotIn('under Select Profile.', out['reply'])
+        parent_only = {'items': [{'name': 'Nurses'}], 'found': [{'name': 'Nurses'}]}
+        out = W.answer(SONY_USER, 'where is the avid cut for Nurses', holdings_fn=lambda n, nm: parent_only)
+        self.assertIn('Your Nurses profile is there under Select Profile; it has no Avid Fan cut built yet.', out['reply'])
+        self.assertIn('Tell me to build it and I will ($100).', out['reply'])
+        out = W.answer(SONY_USER, 'where is the avid cut for Suits', holdings_fn=lambda n, nm: EMPTY)
+        self.assertIn('I do not see an Avid Fan cut of Suits there yet.', out['reply'])
+        self.assertIn('I will build it ($100).', out['reply'])
+        for o in (out,):
+            _clean(self, o['reply'])
+
+    def test_the_price_is_the_seats_own_or_included(self):
+        from prometheus import rate_card as RC
+        self.assertEqual(W.cut_price_note(SONY_USER, USER, None), f" ({RC.money(RC.default('profile_iq_derived_cut'))})")
+        staff = _user(role='super_admin')
+        self.assertEqual(W.cut_price_note(staff, USER, None), ' (included with your plan)')
+        out = W.answer(staff, MICHAEL_Q, holdings_fn=lambda n, nm: EMPTY)
+        self.assertIn('build its Avid Fan cut (included with your plan).', out['reply'])
+        self.assertNotIn('$', out['reply'])
+        # a seat that cannot open Profile IQ gets the admin line, never the directions
+        locked = W.answer(_user(has_profile_iq_access=False), MICHAEL_Q, holdings_fn=lambda n, nm: EMPTY)
+        self.assertIn('ask your admin for access', locked['reply'])
+        self.assertEqual(locked['followups'], [])
+
+    def test_every_feature_label_is_on_the_page_and_survives_the_scrubs(self):
+        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
+            html = fh.read()
+        for label in ('Data Cuts', 'Select Profile', 'US %', 'HOVER ON', 'Build a twin', 'Track record', 'How to', 'New room', 'Rooms', 'Library', 'Cross behaviors'):
+            self.assertIn(f">{label}<", html, label)
+        for label in ('US POP #', 'HOVER OFF'):          # the toggles' other state, set by script
+            self.assertIn(f"'{label}'", html, label)
+        for f in M.FEATURES:
+            q = 'where is ' + f['aliases'][0]
+            out = W.answer(SONY_USER, q, holdings_fn=lambda n, nm: EMPTY)
+            self.assertEqual((out.get('wayfinding') or {}).get('feature'), f['id'], q)
+            env = ENV.wrap(dict(out), surface='analyze', decision={'reason': 'wayfinding'}, thread_id='thr1')
+            self.assertEqual(env['text'], out['reply'], f['id'])
+            _clean(self, out['reply'])
+            self.assertLessEqual(out['reply'].count('. ') + 1, 6, f['id'])
+        self.assertIn('Data Cuts', M.where_things_are())
+
+    def test_status_lane_stands_down_only_for_directions(self):
+        self.assertTrue(W.is_directions_ask(MICHAEL_Q))
+        self.assertTrue(W.is_directions_ask(SONY_Q))
+        self.assertTrue(W.is_directions_ask('where is pilot testing'))
+        self.assertFalse(W.is_directions_ask('where is my Walter Boys journey'))     # the seat's own thing: looked up, the status lane may still speak
+        self.assertFalse(W.is_directions_ask('where are my results'))
+        self.assertFalse(STL.wants_status('where do I find the data cuts'))
+        self.assertTrue(STL.wants_status('where do I find my results'))
+        self.assertTrue(STL.wants_status_fast('where is my Nurses file'))
 
 
 if __name__ == '__main__':

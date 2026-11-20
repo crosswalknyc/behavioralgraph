@@ -96,6 +96,20 @@ def _kick_sweep(host):
 _FIGURE_PROVENANCE_RX = re.compile(r"(?:\d{1,3}(?:,\d{3})+|\d{4,}).*\b(?:come|comes|coming|came)\s+from\b|\b(?:come|comes|coming|came)\s+from\b.*(?:\d{1,3}(?:,\d{3})+|\d{4,})", re.I | re.S)
 
 
+def _is_directions_ask(t):
+    """A where-is / where to find / how do I get to question about a
+    product, a tab, a control, the dropdown or the rail is the
+    wayfinding lane's: directions, never "nothing running or delivered"
+    (Jenna 2026-11-19, a Sony seat's "where is the avid function"). The
+    reader's own things ("where is my Nurses file", "where did my
+    profile go", "where are my results") stay here."""
+    try:
+        from . import wayfinding as _wf
+        return bool(_wf.is_directions_ask(t))
+    except Exception:
+        return False
+
+
 def wants_status(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 320:
@@ -104,6 +118,8 @@ def wants_status(text):
         return True
     if not _STATUS_RX.search(t):
         return False
+    if _is_directions_ask(t):
+        return False   # "where is the avid function" asks where a control is, not after a delivery (Jenna 2026-11-19)
     if _FIGURE_PROVENANCE_RX.search(t):
         return False   # "where does 12,004,203 come from? I only see 6.6M" asks about a figure, not a delivery (2026-10-22)
     if _NOT_STATUS_RX.search(t) and not re.search(r"\b(email|received|see|find|tab|site|dashboard)\b", t, re.I):

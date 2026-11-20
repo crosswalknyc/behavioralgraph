@@ -251,9 +251,16 @@ ROWS = [
                 'dropdown, the product as the dropdown shows it, its picker '
                 'or tab, the thing the asker holds when they name it, the '
                 'deep link and one Open chip; a product the seat cannot '
-                'open is named with "ask your admin for access". Never a '
-                'read, never priced (Jenna 2026-11-10). Served by the ask '
-                'service lane (prometheus.wayfinding).',
+                'open is named with "ask your admin for access". A where-is, '
+                'where to find, how do I get to or how do I turn on question '
+                'about a control ("where is the avid function", "where are '
+                'the data cuts", "where is the US % toggle") gets that '
+                'control\'s own directions from the map\'s features; the '
+                'status lane\'s delivered-work line is only for the reader\'s '
+                'own orders and files ("where is my Nurses file", "the cut I '
+                'asked for") (Jenna 2026-11-19). Never a read, never priced '
+                '(Jenna 2026-11-10). Served by the ask service lane '
+                '(prometheus.wayfinding).',
         'examples': [], 'counter': [('where did the viewers come from', True), ('where is the howdy deck created last night', False)],
     },
     {
