@@ -137,6 +137,14 @@ class WriteThrough(unittest.TestCase):
         except Exception:
             pass
 
+    def test_the_etag_s3_answered_with_is_kept(self):
+        s3 = FakeS3()
+        ST.install_mirror(s3)
+        s3.put_object(Bucket='b', Key='system/synth_chat_threads/jane/t1.json', Body=b'[1, 2]')
+        row = ST._rows(ST._exec('SELECT etag, nbytes FROM pm_docs WHERE key = %s', ('system/synth_chat_threads/jane/t1.json',)))[0]
+        self.assertEqual(row['etag'], '6')     # the fake's ETag is the byte count, quotes stripped
+        self.assertEqual(row['nbytes'], 6)
+
     def test_doc_put_keeps_the_bytes(self):
         body = json.dumps([{'role': 'user', 'text': 'hi'}], indent=2).encode('utf-8')
         self.assertTrue(ST.doc_put('system/synth_chat_threads/jane/abc.json', body))
@@ -342,9 +350,12 @@ class ParityInProduction(unittest.TestCase):
         self.assertEqual(out['different'], 1)
         self.assertEqual(out['only_s3'], 1)
         self.assertEqual(out['only_store'], 1)
-        self.assertEqual(out['examples']['different'], ['system/prometheus_reads/0123456789ab.json'])
-        self.assertEqual(out['examples']['only_s3'], ['system/synth_chat_threads/bob/t9.json'])
-        self.assertEqual(out['examples']['only_store'], ['system/synth_chat_threads/gone/t2.json'])
+        self.assertEqual([e['key'] for e in out['examples']['different']], ['system/prometheus_reads/0123456789ab.json'])
+        self.assertEqual(out['examples']['different'][0]['store_bytes'], len(b'{"status": "queued"}'))
+        self.assertEqual(out['examples']['different'][0]['s3_bytes'], len(b'{"status": "done"}'))
+        self.assertTrue(out['examples']['different'][0]['store_updated'])
+        self.assertEqual([e['key'] for e in out['examples']['only_s3']], ['system/synth_chat_threads/bob/t9.json'])
+        self.assertEqual([e['key'] for e in out['examples']['only_store']], ['system/synth_chat_threads/gone/t2.json'])
         self.assertEqual(out['by_family']['read']['different'], 1)
         self.assertEqual(out['by_family']['ledger_index']['same'], 1)
         self.assertFalse(out['truncated'])

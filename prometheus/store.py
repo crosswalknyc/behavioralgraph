@@ -83,7 +83,7 @@ DDL = [
     # the document mirror (stage 6): one row per mirrored S3 document, the
     # body exactly as S3 holds it
     """CREATE TABLE IF NOT EXISTS pm_docs (
-        key TEXT PRIMARY KEY, family TEXT NOT NULL, body TEXT NOT NULL, nbytes INTEGER, sha TEXT, updated_at TEXT)""",
+        key TEXT PRIMARY KEY, family TEXT NOT NULL, body TEXT NOT NULL, nbytes INTEGER, sha TEXT, etag TEXT, updated_at TEXT)""",
     "CREATE INDEX IF NOT EXISTS pm_docs_family ON pm_docs (family, updated_at)",
 ]
 
@@ -163,6 +163,7 @@ def _upsert(table, keys, cols, values):
 # existing table alone, so each is added on its own, errors ignored when present)
 DDL_ADD_COLUMNS = [
     ('pm_api_calls', 'question_hash', 'TEXT'),
+    ('pm_docs', 'etag', 'TEXT'),       # what S3 answered the put with (2026-11-20)
 ]
 
 
@@ -413,9 +414,10 @@ def read_enabled():
 STATS = {'doc_put': 0, 'doc_hit': 0, 'doc_miss': 0}
 
 
-def doc_put(key, body):
+def doc_put(key, body, etag=None):
     """Mirror one S3 document, the body exactly as written to S3 (bytes or
-    str). True when stored; False when the store is off, the key is not a
+    str) and, when the caller has it, the ETag S3 answered the put with.
+    True when stored; False when the store is off, the key is not a
     mirrored family, or the write failed (counted, never raised)."""
     fam = family_of(key)
     if not fam or not enabled():
@@ -425,8 +427,9 @@ def doc_put(key, body):
             return False
         import hashlib
         text = body.decode('utf-8') if isinstance(body, (bytes, bytearray)) else str(body)
-        _upsert('pm_docs', ('key',), ('key', 'family', 'body', 'nbytes', 'sha', 'updated_at'),
-                (str(key), fam, text, len(text.encode('utf-8')), hashlib.sha1(text.encode('utf-8')).hexdigest(), _now_iso()))
+        _upsert('pm_docs', ('key',), ('key', 'family', 'body', 'nbytes', 'sha', 'etag', 'updated_at'),
+                (str(key), fam, text, len(text.encode('utf-8')), hashlib.sha1(text.encode('utf-8')).hexdigest(),
+                 (str(etag).strip('"') if etag else None), _now_iso()))
         STATS['doc_put'] += 1
         return True
     except Exception as e:
@@ -528,7 +531,8 @@ def _after_call(http_response=None, parsed=None, model=None, context=None, **_kw
         status = getattr(http_response, 'status_code', 200)
         if status is not None and int(status) >= 300:
             return
-        doc_put(hit[0], hit[1])
+        etag = parsed.get('ETag') if isinstance(parsed, dict) else None
+        doc_put(hit[0], hit[1], etag=etag)
     except Exception as e:
         _note('store.mirror_after_call', e)
 
@@ -552,7 +556,7 @@ def _wrap_plain(client):
         try:
             key, body = k.get('Key'), k.get('Body')
             if key and mirrors(key) and isinstance(body, (bytes, bytearray, str)):
-                doc_put(key, body)
+                doc_put(key, body, etag=(out.get('ETag') if isinstance(out, dict) else None))
         except Exception as e:
             _note('store.mirror_plain', e)
         return out
@@ -677,7 +681,7 @@ def production_parity(s3, bucket, since=None, limit=2000):
     try:
         if not _ensure():
             return out
-        rows = {r['key']: r for r in _rows(_exec('SELECT key, family, sha, nbytes, updated_at FROM pm_docs'))}
+        rows = {r['key']: r for r in _rows(_exec('SELECT key, family, sha, nbytes, etag, updated_at FROM pm_docs'))}
     except Exception as e:
         _note('store.production_parity', e)
         return out
@@ -713,14 +717,15 @@ def production_parity(s3, bucket, since=None, limit=2000):
             out['only_s3'] += 1
             f['only_s3'] += 1
             if len(out['examples']['only_s3']) < 20:
-                out['examples']['only_s3'].append(key)
+                out['examples']['only_s3'].append({'key': key, 's3_modified': lmd.strftime('%Y-%m-%dT%H:%M:%SZ') if lmd else None})
             continue
         if gets >= int(limit):
             out['truncated'] = True
             continue
         gets += 1
         try:
-            body = s3.get_object(Bucket=bucket, Key=key)['Body'].read()
+            obj = s3.get_object(Bucket=bucket, Key=key)
+            body = obj['Body'].read()
         except Exception as e:
             _note('store.production_parity', e)
             continue
@@ -735,14 +740,19 @@ def production_parity(s3, bucket, since=None, limit=2000):
             out['different'] += 1
             f['different'] += 1
             if len(out['examples']['different']) < 20:
-                out['examples']['different'].append(key)
+                out['examples']['different'].append({
+                    'key': key,
+                    's3_bytes': len(body), 's3_modified': lmd.strftime('%Y-%m-%dT%H:%M:%SZ') if lmd else None,
+                    's3_etag': str((obj or {}).get('ETag') or '').strip('"') or None,
+                    'store_bytes': row.get('nbytes'), 'store_updated': row.get('updated_at'),
+                    'store_etag': row.get('etag')})
     for key, row in rows.items():
         if key not in seen:
             out['only_store'] += 1
             f = out['by_family'].setdefault(row.get('family'), {'listed': 0, 'older': 0, 'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0})
             f['only_store'] += 1
             if len(out['examples']['only_store']) < 20:
-                out['examples']['only_store'].append(key)
+                out['examples']['only_store'].append({'key': key, 'store_updated': row.get('updated_at')})
     out['elapsed_s'] = round(_time.time() - t0, 1)
     return out
 
