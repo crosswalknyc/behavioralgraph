@@ -126006,7 +126006,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _jiqMusicRollupLabel(slug) {
             var r = _jiqMusicRollupGet(slug);
-            return (r && r.meta && r.meta.title) || (slug === '__film__' ? 'All films' : slug === '__series__' ? 'All series' : 'Across the file');
+            return (r && r.meta && r.meta.title) || (slug === '__film__' ? 'Average Film' : slug === '__series__' ? 'Average TV Series' : 'Average Overall');
         }
 
         function _jiqMusicPersonLine(demo) {
@@ -126135,7 +126135,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ];
             }
             if (!t || _jiqMusicIsLanding(t.slug)) {
-                return [{ id: 'landing', label: 'Across the file' }];
+                return [{ id: 'landing', label: 'Average Overall' }];
             }
             var a = _jiqMusicAnalysis(t);
             var stages = [
@@ -126457,8 +126457,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _jiqMusicActiveSlug = '__all__';
                 _jiqMusicActiveStage = 'landing';
             }
-            if (_jiqMusicActiveSlug === '__film__' && _jiqMusicKindFilter === 'Series') _jiqMusicActiveSlug = '__series__';
-            if (_jiqMusicActiveSlug === '__series__' && _jiqMusicKindFilter === 'Film') _jiqMusicActiveSlug = '__film__';
             var t = _jiqMusicGet(_jiqMusicActiveSlug) || vis[0] || {};
             var stages = _jiqMusicStages(t);
             if (!stages.some(function(s) { return s.id === _jiqMusicActiveStage; })) {
@@ -126481,15 +126479,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }).join('')
                 + '</select></label>'
                 + '<label>Title<select id="jiqMusicTitlePick">'
+                + '<optgroup label="Averages">'
                 + '<option value="__all__"'
                 + (_jiqMusicIsLanding(_jiqMusicActiveSlug) ? ' selected' : '')
                 + '>' + _jiqMusicEsc(_jiqMusicRollupLabel('__all__')) + '</option>'
-                + (_jiqMusicRollupGet('__film__') && _jiqMusicKindFilter !== 'Series'
-                    ? '<option value="__film__"' + (_jiqMusicActiveSlug === '__film__' ? ' selected' : '') + '>'
-                        + _jiqMusicEsc(_jiqMusicRollupLabel('__film__')) + '</option>' : '')
-                + (_jiqMusicRollupGet('__series__') && _jiqMusicKindFilter !== 'Film'
-                    ? '<option value="__series__"' + (_jiqMusicActiveSlug === '__series__' ? ' selected' : '') + '>'
-                        + _jiqMusicEsc(_jiqMusicRollupLabel('__series__')) + '</option>' : '')
+                + '<option value="__film__"' + (_jiqMusicActiveSlug === '__film__' ? ' selected' : '') + '>'
+                + _jiqMusicEsc(_jiqMusicRollupLabel('__film__')) + '</option>'
+                + '<option value="__series__"' + (_jiqMusicActiveSlug === '__series__' ? ' selected' : '') + '>'
+                + _jiqMusicEsc(_jiqMusicRollupLabel('__series__')) + '</option>'
+                + '</optgroup>'
+                + '<optgroup label="Individual Titles">'
                 + vis.map(function(row) {
                     var slug = row.slug;
                     var title = (row.meta && row.meta.title) || slug;
@@ -126497,6 +126496,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + (slug === _jiqMusicActiveSlug ? ' selected' : '') + '>'
                         + _jiqMusicEsc(title) + '</option>';
                 }).join('')
+                + '</optgroup>'
                 + '</select></label>'
                 + '<label>Stage<select id="jiqMusicStage" data-stage="dropdown">'
                 + stages.map(function(s) {
@@ -126537,7 +126537,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqMusicRenderLanding() {
             var d = _jiqMusicLanding();
             if (!d) {
-                return _jiqMusicSec('01 Across the file',
+                return _jiqMusicSec('01 Average Overall',
                     'Open a title to walk the journey.',
                     'The catalog is loaded');
             }
@@ -127871,8 +127871,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var conv = _jiqMusicThemeById(r, 'conversion') || {};
                 html += '<div class="jiq-song-pad">' + _jiqMusicRead(conv.body || '') + '</div>';
                 var F = _jiqMusicRollupGet('__film__'), S = _jiqMusicRollupGet('__series__');
-                if (F) html += _jiqMusicRollupBlock(num(), F) + '<div class="jiq-song-pad">' + _jiqMusicRead('Pick All films in the Title menu for every page of this read.') + '</div>';
-                if (S) html += _jiqMusicRollupBlock(num(), S) + '<div class="jiq-song-pad">' + _jiqMusicRead('Pick All series in the Title menu for every page of this read.') + '</div>';
+                if (F) html += _jiqMusicRollupBlock(num(), F) + '<div class="jiq-song-pad">' + _jiqMusicRead('Pick Average Film in the Title menu for every page of this read.') + '</div>';
+                if (S) html += _jiqMusicRollupBlock(num(), S) + '<div class="jiq-song-pad">' + _jiqMusicRead('Pick Average TV Series in the Title menu for every page of this read.') + '</div>';
                 var kindTh = _jiqMusicThemeById(r, 'kind') || {};
                 html += _jiqMusicSec(num() + ' Films against series', kindTh.header || 'Films and series side by side.', kindTh.kicker || 'Same measures, same windows');
                 html += _jiqMusicKindCompare(r);
@@ -128520,7 +128520,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (title0) title0.innerHTML = copy.titleHtml || 'Music to<br>Long Form.';
                 if (lead0) lead0.textContent = copy.lead || 'The clip type decides more than the song.';
                 if (deck0) deck0.textContent = copy.deck || '';
-                if (meta0) meta0.textContent = copy.eyebrow || 'Across the file';
+                if (meta0) meta0.textContent = copy.eyebrow || 'Average Overall';
                 if (kpis0) {
                     var sm = land.scene_meme || {};
                     kpis0.innerHTML =
@@ -205939,6 +205939,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         outline: none; border-color: #C7F23E;
     }
     #jiqMusicTitlePick { min-width: 240px; max-width: 420px; width: 36vw; }
+    .jiq-music-nav select optgroup {
+        font-family: inherit; font-weight: 700; font-size: 10px;
+        letter-spacing: .12em; text-transform: uppercase;
+        color: #9AA09B; background: #15252A;
+    }
+    body[data-theme="light"] .jiq-music-nav select optgroup {
+        color: #5C6560; background: #E9E8E1;
+    }
     #jiqMusicStage { min-width: 180px; }
     body[data-theme="light"] .jiq-music-nav select {
         border-color: #C9C6BA; background-color: #FFFFFF; color: #0C1618;
