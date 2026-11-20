@@ -392,14 +392,34 @@ def anchor_from_payload(payload: dict, ref: str = '', as_of: str = '') -> Option
     brand = str(p.get('brand_partner') or '')
     subject = str(p.get('project_name') or f"{talent} x {brand}")
     eligible, why = anchor_eligibility(p)
+    post = p.get('post_period') if isinstance(p.get('post_period'), dict) else {}
     return {
         'id': hashlib.sha1(f"{ref}|{p.get('created_at') or ''}|{subject}".encode()).hexdigest()[:12],
         'product': 'valuation', 'subject': subject, 'property': talent, 'talent': talent, 'brand': brand,
         'window': {'start': str(p.get('start_date') or '')[:10], 'end': str(p.get('end_date') or '')[:10]},
+        'measured_through': str(post.get('end') or '')[:10],
         'as_of': str(as_of or p.get('created_at') or '')[:19],
-        'drivers': drivers_of(p), 'figures': figures_of(p), 'ref': str(ref or ''),
+        'drivers': drivers_of(p), 'figures': figures_of(p), 'counts': counts_of(p), 'ref': str(ref or ''),
         'eligible': eligible, 'ineligible_why': '' if eligible else why,
     }
+
+
+def counts_of(payload: dict) -> dict:
+    """The people counts a valuation states: reached, engaged, converted,
+    new to the brand (incremental), and the orders."""
+    p = payload if isinstance(payload, dict) else {}
+    t = p.get('totals') if isinstance(p.get('totals'), dict) else {}
+    cv = p.get('conversions') if isinstance(p.get('conversions'), dict) else {}
+    val = p.get('valuation') if isinstance(p.get('valuation'), dict) else {}
+    out = {}
+    for src, key in ((p.get('projected_audience_size'), 'reached'), (t.get('post_users_projected'), 'engaged'),
+                     (cv.get('post_users_projected'), 'converted'), (val.get('incremental_users'), 'incremental')):
+        v = _num(src)
+        if v is not None and v >= 0:
+            out[key] = int(round(v))
+    if 'converted' in out:
+        out['orders'] = out['converted']
+    return out
 
 
 def anchor_eligibility(payload: dict) -> tuple:
@@ -1132,6 +1152,237 @@ def hold_read_metrics(data: dict, anchor: Optional[dict], salt: str = '', event:
         return data, {}
 
 
+# ------------------------------------- a read about a stored valuation
+# A read about a valuation already on file reads that file's figures for
+# exactly the window asked and never mixes runs (Jenna 2026-11-20, the
+# Anne Hathaway x Shiseido thread: a read on August 27 to September 8
+# printed the September 1 file's $102,145,967 and 92,615,994 people; an
+# earlier full-period read headlined $6,977,878.28 and listed a total of
+# 1,997,755.4 under it).
+_FULL_PERIOD_RX = re.compile(
+    r"\b(?:full|whole|entire|complete|overall|total)\s+(?:period|window|partnership|deal|ambassadorship|run|term|campaign)\b|"
+    r"\ball[- ]time\b|\bsince (?:the )?(?:start|beginning)\b|\bacross (?:the )?(?:whole|full|entire)\b", re.I)
+_METRIC_MAP = (
+    # (which figure of the file, the words a metric name or label carries, unit)
+    ('figures.total_usd', ('total brand value', 'total_brand_value', 'brand value total', 'total value'), 'usd'),
+    ('figures.attributable_usd', ('attributable',), 'usd'),
+    ('figures.conversion_usd', ('conversion value', 'conversion_value'), 'usd'),
+    ('figures.earned_usd', ('earned media', 'earned_media'), 'usd'),
+    ('figures.engagement_usd', ('engagement value', 'engagement_value', 'brand engagement value'), 'usd'),
+    ('figures.lift_usd', ('lift value', 'lift_value', 'brand lift value'), 'usd'),
+    ('counts.incremental', ('incremental', 'new us people', 'new people', 'new to the brand', 'new_us'), 'people'),
+    ('counts.converted', ('converted', 'orders', 'purchas', 'conversions'), 'people'),
+    ('counts.engaged', ('engaged', 'engaging'), 'people'),
+    ('counts.reached', ('reached', 'reach', 'audience'), 'people'),
+)
+_USD_UNITS = ('usd', 'dollars', '$', 'money')
+_PEOPLE_UNITS = ('people', 'individuals', 'persons', 'users', 'viewers', 'count', '')
+
+
+def which_valuation(cands: list, window: Optional[dict] = None, text: str = '') -> Optional[dict]:
+    """The stored valuation a read is about: the file whose window is
+    exactly the one asked; else, when the words ask for the whole
+    period, the longest window; else, with a window asked, the file
+    that shares the most of it; else the newest delivered file. None
+    with no candidates. Eligibility does not matter here: a delivered
+    file is what the reader holds."""
+    files = [c for c in (cands or []) if isinstance(c, dict) and c.get('window')]
+    if not files:
+        return None
+    w0, w1 = _date((window or {}).get('start')), _date((window or {}).get('end'))
+    if w0 and w1:
+        exact = [c for c in files if _date(c['window'].get('start')) == w0 and _date(c['window'].get('end')) == w1]
+        if exact:
+            exact.sort(key=lambda c: c.get('as_of') or '', reverse=True)
+            return exact[0]
+    if _FULL_PERIOD_RX.search(str(text or '')):
+        files.sort(key=lambda c: ((_date(c['window'].get('end')) or _dt.date.min) - (_date(c['window'].get('start')) or _dt.date.max)).days, reverse=True)
+        return files[0]
+    if w0 and w1:
+        scored = []
+        for c in files:
+            c0, c1 = _date(c['window'].get('start')), _date(c['window'].get('end'))
+            if not (c0 and c1):
+                continue
+            ov = _overlap_days(w0, w1, c0, c1)
+            if ov <= 0:
+                continue
+            union = (max(w1, c1) - min(w0, c0)).days + 1
+            scored.append((ov / float(union), c.get('as_of') or '', c))
+        if scored:
+            scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+            return scored[0][2]
+        return None                  # a window that touches no file is a fresh read
+    files.sort(key=lambda c: c.get('as_of') or '', reverse=True)
+    return files[0]
+
+
+def _plain_window(w: Optional[dict]) -> str:
+    w0, w1 = _date((w or {}).get('start')), _date((w or {}).get('end'))
+    if not (w0 and w1):
+        return ''
+    return f"{w0.strftime('%B')} {w0.day}, {w0.year} to {w1.strftime('%B')} {w1.day}, {w1.year}"
+
+
+def valuation_block(bound: Optional[dict], others: Optional[list] = None) -> str:
+    """The prompt block for a read about a valuation on file: that
+    file's figures, binding, and the other windows on the pairing named
+    so their figures are never stated as this answer. Prompt text only."""
+    if not isinstance(bound, dict):
+        return ''
+    f, c = bound.get('figures') or {}, bound.get('counts') or {}
+    lines = []
+    if f.get('total_usd') is not None:
+        lines.append(f"- total brand value = ${float(f['total_usd']):,.2f}")
+    if f.get('attributable_usd') is not None:
+        lines.append(f"- value attributable to the partnership = ${float(f['attributable_usd']):,.2f}")
+    for k, lbl in (('conversion_usd', 'conversion value'), ('earned_usd', 'earned media value'),
+                   ('engagement_usd', 'brand engagement value'), ('lift_usd', 'brand lift value')):
+        if f.get(k) is not None:
+            lines.append(f"- {lbl} = ${float(f[k]):,.2f}")
+    for k, lbl in (('reached', 'US people the campaign reached'), ('engaged', 'US people who engaged with the brand in the window'),
+                   ('converted', 'US people who ordered in the window'), ('incremental', 'new US people engaging with the brand')):
+        if c.get(k) is not None:
+            lines.append(f"- {lbl} = {int(c[k]):,}")
+    if not lines:
+        return ''
+    mt = _date(bound.get('measured_through'))
+    through = f", measured through {mt.strftime('%B')} {mt.day}, {mt.year}" \
+        if mt and bound.get('measured_through') != (bound.get('window') or {}).get('end') else ''
+    head = (f"THE VALUATION ON FILE FOR THIS WINDOW (binding). {bound.get('subject')}, campaign "
+            f"{_plain_window(bound.get('window'))}{through}. A read about this valuation states these figures and only these, "
+            f"as they are; every line agrees with the headline; nothing is re-derived.")
+    other_lines = []
+    for o in (others or []):
+        if not isinstance(o, dict) or o.get('ref') == bound.get('ref'):
+            continue
+        other_lines.append(f"{_plain_window(o.get('window'))}")
+    if other_lines:
+        head += (f" Other valuations exist on this pairing for other windows ({'; '.join(other_lines[:4])}); "
+                 f"their figures are not this answer and are not stated here.")
+    return head + '\n' + '\n'.join(lines)
+
+
+def _bound_value(bound: dict, path: str):
+    group, key = path.split('.', 1)
+    return _num((bound.get(group) or {}).get(key))
+
+
+def _metric_slot(name: str, label: str, unit: str) -> Optional[str]:
+    """Which figure of a file a read metric states, by its words."""
+    hay = f"{_fold(name)} {_fold(label)}"
+    u = str(unit or '').strip().lower()
+    for path, words, kind in _METRIC_MAP:
+        if kind == 'usd' and u and u not in _USD_UNITS:
+            continue
+        if kind == 'people' and u and u not in _PEOPLE_UNITS:
+            continue
+        if any(_fold(w) in hay for w in words):
+            return path
+    return None
+
+
+def _other_figures(others: list, bound: dict) -> list:
+    out = []
+    for o in (others or []):
+        if not isinstance(o, dict) or o.get('ref') == bound.get('ref'):
+            continue
+        for grp in ('figures', 'counts'):
+            for v in (o.get(grp) or {}).values():
+                f = _num(v)
+                if f and f > 0:
+                    out.append(f)
+    return out
+
+
+def _near(a, b, rel=0.005) -> bool:
+    try:
+        return b > 0 and abs(float(a) / float(b) - 1.0) <= rel
+    except (TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+_FIG_RX = re.compile(r'\$?\s?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{4,}(?:\.\d+)?)')
+
+
+def _sentence_mixes(sentence: str, other_figs: list) -> bool:
+    for m in _FIG_RX.finditer(sentence or ''):
+        try:
+            v = float(m.group(1).replace(',', ''))
+        except ValueError:
+            continue
+        if any(_near(v, o) for o in other_figs):
+            return True
+    return False
+
+
+def hold_read_to_valuation(data: dict, bound: dict, others: Optional[list] = None) -> tuple:
+    """(data, record). A read about a stored valuation: every metric that
+    states one of the file's figures is set to the file's value; a metric
+    carrying another run's figure that maps to nothing is dropped; the
+    headline and the reads lose any sentence that carries another run's
+    figure; the window on the read is the file's. In place; never raises."""
+    rec = {'verdict': 'bound', 'ref': (bound or {}).get('ref'), 'window': (bound or {}).get('window'), 'set': [], 'dropped': [],
+           'sentences_dropped': 0, 'names': []}
+    if not isinstance(data, dict) or not isinstance(bound, dict):
+        return data, {}
+    try:
+        other_figs = _other_figures(others or [], bound)
+        kept, used = [], set()
+        for m in (data.get('metrics') or []):
+            if not isinstance(m, dict):
+                continue
+            name, label, unit = str(m.get('name') or ''), str(m.get('label') or ''), str(m.get('unit') or '')
+            slot = _metric_slot(name, label, unit)
+            cur = _num(m.get('value'))
+            if slot:
+                v = _bound_value(bound, slot)
+                if v is not None:
+                    if slot in used:
+                        rec['dropped'].append({'metric': name or label, 'value': cur, 'why': 'a second line on one figure'})
+                        continue
+                    used.add(slot)
+                    if cur is None or not _near(cur, v, 1e-9):
+                        rec['set'].append({'metric': name or label, 'from': cur, 'to': v, 'slot': slot})
+                    m['value'] = round(v, 2) if slot.startswith('figures') else int(round(v))
+                    rec['names'].append(re.sub(r'[^a-z0-9_]+', '_', name.strip().lower())[:48] or label)
+                    kept.append(m)
+                    continue
+            if cur is not None and any(_near(cur, o) for o in other_figs):
+                rec['dropped'].append({'metric': name or label, 'value': cur})
+                continue
+            kept.append(m)
+        data['metrics'] = kept
+        for key in ('headline', 'reads'):
+            val = data.get(key)
+            if isinstance(val, str):
+                if _sentence_mixes(val, other_figs):
+                    rec['sentences_dropped'] += 1
+                    data[key] = ''
+            elif isinstance(val, list):
+                keep = []
+                for sline in val:
+                    if isinstance(sline, str) and _sentence_mixes(sline, other_figs):
+                        rec['sentences_dropped'] += 1
+                        continue
+                    keep.append(sline)
+                data[key] = keep
+        f = bound.get('figures') or {}
+        if not str(data.get('headline') or '').strip() and f.get('total_usd') is not None:
+            tail = f", with ${float(f['attributable_usd']):,.2f} attributable to the partnership" if f.get('attributable_usd') is not None else ''
+            data['headline'] = (f"{bound.get('subject')}, {_plain_window(bound.get('window'))}: total brand value "
+                                f"${float(f['total_usd']):,.2f}{tail}.")
+        w = bound.get('window') or {}
+        if w.get('start') and w.get('end'):
+            data['window_start'], data['window_end'] = str(w['start'])[:10], str(w['end'])[:10]
+            data['window_label'] = _plain_window(w)
+        data['_valuation_bound'] = list(dict.fromkeys(rec['names']))
+        return data, rec
+    except Exception as e:
+        print(f"[pm-consistency] valuation binding skipped: {type(e).__name__}: {e}")
+        return data, {}
+
+
 def twin_block(anchor: Optional[dict], ask_window: Optional[dict] = None) -> str:
     """The prompt block for a generated read whose ask has a near twin:
     the figures already given, binding inside the band, and the one
@@ -1162,4 +1413,5 @@ __all__ = ['enabled', 'say_held_to_reader', 'thresholds', 'band', 'bands', 'same
            'anchor_from_entry', 'held_value', 'plan_holds', 'figures_inside', 'press_clusters', 'dated_facts_of',
            'event_in_changed_window', 'lifted_line', 'held_line', 'write_record', 'lookup', 'valuation_candidates',
            'apply_valuation', 'containing_cap', 'anchor_eligibility', 'near_twin_entry', 'hold_read_metrics', 'twin_block', 'MemoryRecords',
+           'counts_of', 'which_valuation', 'valuation_block', 'hold_read_to_valuation',
            'HELD_LINE', 'EVENT_KINDS', 'RECORD_PREFIX', 'ENV_CHECK', 'ENV_SAY_HELD']

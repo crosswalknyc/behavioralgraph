@@ -316,6 +316,19 @@ def _hold_twin(d, question, subject):
         return d
 
 
+def _bind_after(res, question, subject):
+    """A read about a valuation on file keeps that file's figures through
+    the coherence pass (prometheus.knowledge.bind_after, Jenna
+    2026-11-20): the pass may redraw a digit or keep a thread figure, and
+    the stored-figure binding that follows reads the names it must leave
+    alone. Returns the result as given when nothing is pending."""
+    try:
+        from . import knowledge as _know
+        return _know.bind_after(res, question=question, subject=subject)
+    except Exception:
+        return res
+
+
 def _twin_done(question, subject):
     """The pending twin is cleared once a pass of the read went through."""
     try:
@@ -390,6 +403,7 @@ def coherent(data, *, enforce, again=None, question='', subject='', note=None, l
             d = _grid(data, piece=(attempt == 'reply'))
             d = _hold_twin(d, question, subject)
             res = enforce(d)
+            res = _bind_after(res, question, subject)
             _twin_done(question, subject)
             return res, d
         except ValueError as e:

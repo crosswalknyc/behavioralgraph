@@ -179,10 +179,12 @@ def ask_key(ask: dict) -> str:
 
 
 # ------------------------------------------------------------------ held
-def held(subject, window=None, products=None, extra_subjects=()) -> dict:
+def held(subject, window=None, products=None, extra_subjects=(), bpiq_source_key=None) -> dict:
     """The figures the company holds on the subject: the catalog's facts
     (newest first, the ask's window first), the profile-level sizes and
-    the prompt block. Never raises."""
+    the prompt block. With `bpiq_source_key` (a read about one stored
+    valuation) the other valuation files on the subject leave the block,
+    so no other run's figures ride as binding. Never raises."""
     out = {'subject': str(subject or '').strip(), 'facts': [], 'profile': None, 'block': '', 'marks': []}
     if not enabled() or not out['subject']:
         return out
@@ -194,6 +196,11 @@ def held(subject, window=None, products=None, extra_subjects=()) -> dict:
         for n in names[:3]:
             anchors = _cc.anchors_for(n, window=window, products=products, with_ledger=False)
             facts = list(anchors.get('facts') or [])
+            if bpiq_source_key:
+                want = str(bpiq_source_key).split('/')[-1]
+                facts = [f for f in facts if not (isinstance(f, dict) and f.get('product') == 'bpiq'
+                                                 and str(((f.get('source') or {}).get('key')) or f.get('source_key') or '').split('/')[-1] != want)]
+                anchors = dict(anchors, facts=facts)
             out['facts'].extend(facts)
             if out['profile'] is None:
                 try:
@@ -479,12 +486,46 @@ def leave_twin(subject, question, twin: Optional[dict], ask_window: Optional[dic
 
 def take_twin(subject, question) -> Optional[dict]:
     with _PENDING_LOCK:
+        _PENDING.pop('val|' + _pending_key(subject, question), None)
         return _PENDING.pop(_pending_key(subject, question), None)
 
 
 def peek_twin(subject, question) -> Optional[dict]:
     with _PENDING_LOCK:
         return _PENDING.get(_pending_key(subject, question))
+
+
+def leave_valuation(subject, question, bound: Optional[dict], others: Optional[list] = None):
+    """Leave the stored valuation a read is about for the hold that runs
+    after the model (and again after the coherence pass)."""
+    if not isinstance(bound, dict):
+        return
+    with _PENDING_LOCK:
+        _PENDING['val|' + _pending_key(subject, question)] = {'bound': bound, 'others': list(others or []), 'ts': time.time()}
+
+
+def peek_valuation(subject, question) -> Optional[dict]:
+    with _PENDING_LOCK:
+        return _PENDING.get('val|' + _pending_key(subject, question))
+
+
+def bind_after(res, *, question='', subject=''):
+    """After the coherence pass: the stored valuation's figures are put
+    back on the read's metrics (the pass may have redrawn a digit or a
+    thread figure may have been kept), the window and the bound names
+    ride the result for the stored-figure binding that follows. Returns
+    `res` as given when nothing is pending. Never raises."""
+    try:
+        if not enabled() or not isinstance(res, dict):
+            return res
+        pend = peek_valuation(subject, question)
+        if not pend:
+            return res
+        res, rec = _twin.hold_read_to_valuation(res, pend.get('bound') or {}, pend.get('others') or [])
+        return res
+    except Exception as e:
+        print(f"[pm-knowledge] valuation re-bind skipped: {type(e).__name__}: {e}")
+        return res
 
 
 def hold_pending(data, *, question='', subject='', store=None):
@@ -499,6 +540,18 @@ def hold_pending(data, *, question='', subject='', store=None):
     try:
         if not enabled() or not isinstance(data, dict):
             return data
+        vp = peek_valuation(subject, question)
+        if vp:
+            data, vrec = _twin.hold_read_to_valuation(data, vp.get('bound') or {}, vp.get('others') or [])
+            if vrec and (vrec.get('set') or vrec.get('dropped') or vrec.get('sentences_dropped')):
+                print(f"[pm-knowledge] read bound to the valuation on file {vrec.get('ref')}: "
+                      f"{len(vrec.get('set') or [])} figures set, {len(vrec.get('dropped') or [])} dropped, "
+                      f"{vrec.get('sentences_dropped')} sentences on other runs dropped")
+                try:
+                    _twin.write_record(dict(vrec, product='read', subject=str(subject or ''), pair_key=_pieces.property_fold(subject),
+                                            question=str(question or '')[:300], line='', line_shipped=False), store)
+                except Exception:
+                    pass
         pend = peek_twin(subject, question)
         if not pend:
             return data
@@ -517,6 +570,77 @@ def hold_pending(data, *, question='', subject='', store=None):
     except Exception as e:
         print(f"[pm-knowledge] pending hold skipped: {type(e).__name__}: {e}")
         return data
+
+
+# ------------------------------------------- the window and the file asked
+def inline_window(text) -> dict:
+    """The window the words state ('8/27/26-9/8/26', 'Aug 27 to Sep 8,
+    2026'), as {start, end}; empty when none."""
+    try:
+        from . import inline_dates as _idates
+        w = _idates.parse_inline_window(str(text or ''))
+        if isinstance(w, dict) and w.get('start') and w.get('end'):
+            return {'start': str(w['start'])[:10], 'end': str(w['end'])[:10]}
+    except Exception:
+        pass
+    return {'start': '', 'end': ''}
+
+
+def _pairing_of(text, ask, base, mr) -> Optional[tuple]:
+    """(talent, brand) the read is about: the words first, then the
+    subject the ask, the base or the request carries when it is a
+    pairing ('Anne Hathaway x Shiseido')."""
+    try:
+        from migration import bpiq_anchors as _ba
+        pr = _ba.pairing_in(text)
+        if pr:
+            return pr
+        for cand in ((ask or {}).get('subject'), (base or {}).get('subject'), (mr or {}).get('subject')):
+            pr = _ba.pair_of(cand) if cand else None
+            if pr:
+                return pr
+    except Exception:
+        pass
+    return None
+
+
+def valuation_for_read(text, ask, base=None, mr=None) -> tuple:
+    """(bound, others): the stored valuation a read is about and every
+    other valuation file on the same pairing. (None, []) when the words
+    name no pairing with a valuation on file, or when the window asked
+    touches none of them."""
+    try:
+        pr = _pairing_of(text, ask, base, mr)
+        if not pr:
+            return None, []
+        cands = _twin.valuation_candidates(pr[0], pr[1])
+        if not cands:
+            return None, []
+        bound = _twin.which_valuation(cands, (ask or {}).get('window'), text)
+        return bound, cands
+    except Exception as e:
+        print(f"[pm-knowledge] valuation lookup skipped: {type(e).__name__}: {e}")
+        return None, []
+
+
+def world_block(text, subject='') -> str:
+    """The guidance for a question about the world (awareness, buzz,
+    interest, momentum for a subject; Jenna 2026-11-20, 'is there any
+    awareness for the film Josephine'): answer the question asked, from
+    the research, in the signals Crosswalk reads. Prompt text only."""
+    try:
+        from . import catalog_lane as _cat
+        if not _cat.world_question(text):
+            return ''
+    except Exception:
+        return ''
+    who = str(subject or '').strip() or 'the subject'
+    return (f"THE QUESTION IS ABOUT THE WORLD, NOT THE SHELF. The reader asks whether there is attention around {who} "
+            f"and how much. Answer that first, plainly: yes or no, how much, where it sits (who is searching, talking, "
+            f"watching the trailer or clips, reading the coverage) and where it is thin, from the researched anchors and "
+            f"the dated events (a release date, a trailer, a festival premiere, named with its date). Speak in attention, "
+            f"interest, conversation, searches and views; the words awareness, recall and intent never appear in the reply. "
+            f"Never say the subject is not on the dashboard, never offer to build a profile, never answer about what is held.")
 
 
 # ------------------------------------------------------- the three paths
@@ -547,16 +671,35 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
     try:
         base = base if isinstance(base, dict) else {}
         ask = ask_from(body, text, base, mr)
+        if not (ask.get('window') or {}).get('start'):
+            ask['window'] = inline_window(text)
         parts = []
-        for fn, args in ((pk, (text, mr, base)), (saved, (text,))):
-            if callable(fn):
-                try:
-                    blk = fn(*args)
-                except Exception:
-                    blk = ''
-                if blk:
-                    parts.append(str(blk))
-        h = held(ask.get('subject'), window=(ask.get('window') if (ask.get('window') or {}).get('start') else None))
+        if callable(pk):
+            try:
+                blk = pk(text, mr, base)
+            except Exception:
+                blk = ''
+            if blk:
+                parts.append(str(blk))
+        # a read about a valuation on file reads that file, for exactly
+        # the window asked, and never mixes runs (Jenna 2026-11-20)
+        bound, others = valuation_for_read(text, ask, base, mr)
+        if bound:
+            vb = _twin.valuation_block(bound, others)
+            if vb:
+                parts.append(vb)
+            leave_valuation(ask.get('subject') or base.get('subject'), text, bound, others)
+        elif callable(saved):
+            try:
+                blk = saved(text, window=ask.get('window')) if (ask.get('window') or {}).get('start') else saved(text)
+            except TypeError:
+                blk = saved(text)
+            except Exception:
+                blk = ''
+            if blk:
+                parts.append(str(blk))
+        h = held(ask.get('subject'), window=(ask.get('window') if (ask.get('window') or {}).get('start') else None),
+                 bpiq_source_key=(bound or {}).get('ref'))
         if h.get('block'):
             parts.append(h['block'])
         elif callable(catalog):
@@ -593,7 +736,10 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
             parts.append(r['block'])
         if st['twin']:
             leave_twin(ask.get('subject'), text, st['twin'], ask.get('window'), r.get('events'))
-        base['_knowledge'] = {'key': ask_key(ask), 'twin': (st['twin'] or {}).get('ref'),
+        wb = world_block(text, ask.get('subject'))
+        if wb:
+            parts.append(wb)
+        base['_knowledge'] = {'key': ask_key(ask), 'twin': (st['twin'] or {}).get('ref'), 'valuation': (bound or {}).get('ref'),
                               'anchors': len(r.get('anchors') or []), 'events': len(r.get('events') or []),
                               'cached': bool(r.get('cached')), 'marks': marks_of(h, r)[:60]}
         if isinstance(stages, dict):
@@ -652,4 +798,5 @@ def valuation_events(inputs: dict, changed_windows: list, claude_json=None, tool
 
 __all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored', 'research', 'anchors_block',
            'facts_block', 'marks_of', 'leave_twin', 'take_twin', 'peek_twin', 'hold_pending', 'read_blocks', 'insight_blocks',
+           'leave_valuation', 'peek_valuation', 'bind_after', 'inline_window', 'valuation_for_read', 'world_block',
            'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS']

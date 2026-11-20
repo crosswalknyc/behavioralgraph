@@ -259,15 +259,64 @@ def roster_reply(noun, person, qualifier='', included=False):
     return reply, chips
 
 
+# A question about the world is never a shelf lookup (Jenna 2026-11-20,
+# on 'is there any awareness for the film Josephine' answered 'No. There
+# is nothing on ... on the dashboard yet': "the answer for this would be
+# if there is any actual awareness for this ... not do we have a profile
+# for this ... you would research and then you would answer"). Awareness,
+# buzz, momentum, hype, interest, anticipation, demand, who it is for,
+# whether anyone is talking about it: the ask goes on to the reasoning
+# path, which researches the subject and answers the question asked.
+_WORLD_RX = re.compile(
+    r"\b(?:awareness|buzz|momentum|hype|anticipation|excitement|chatter|word of mouth|popularity|"
+    r"interest (?:in|for|around)|demand for|appetite for|talking about|heard of|well[- ]known|how popular|"
+    r"traction|a following|an audience for)\b", re.I)
+_WORLD_OPENER_RX = re.compile(r"^\s*(?:hey |hi |prometheus,? |pls |please |plz )?(?:is|are) there\b", re.I)
+
+
+def world_question(text) -> bool:
+    """True for a question about the world (does this subject have
+    awareness, buzz, interest, momentum) rather than about the shelf."""
+    t = ' '.join(str(text or '').split())
+    return bool(t) and bool(_WORLD_RX.search(t))
+
+
+# the words the lane last read on this thread (the door's own lane runs
+# before the Reader's executor, which calls `answer` with words of its
+# own); kept half a minute so an executor can tell a world question
+import threading as _threading
+import time as _time
+_LAST = _threading.local()
+
+
+def _remember(t):
+    try:
+        _LAST.text, _LAST.ts = t, _time.time()
+    except Exception:
+        pass
+
+
+def _last_ask():
+    try:
+        if _time.time() - float(getattr(_LAST, 'ts', 0) or 0) <= 30:
+            return str(getattr(_LAST, 'text', '') or '')
+    except Exception:
+        pass
+    return ''
+
+
 def parse(text):
     """('exists'|'size'|'roster', subject) or None."""
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 200:
         return None
+    _remember(t)
     _ro = roster_ask(t)
     if _ro:
         return 'roster', _ro
     m = _EXISTS_RX.match(t)
+    if m and _WORLD_OPENER_RX.match(t) and world_question(m.group('rest')):
+        return None                  # 'is there any awareness for ...' asks about the world, not the shelf
     if m:
         subj = _clean_subject(m.group('rest'))
         if subj and len(subj.split()) <= 10 and _looks_like_entity(subj):
@@ -579,9 +628,32 @@ def open_reply(name, on_screen=False):
             'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'subject': name, 'open_chip': True}
 
 
+def _original_ask():
+    """The words the reader typed, from the request when there is one;
+    an executor may call this lane with its own words ('do we have X?')
+    for a question that was about the world."""
+    try:
+        from flask import has_request_context, request
+        if has_request_context():
+            j = request.get_json(silent=True)
+            if isinstance(j, dict) and j.get('text'):
+                return str(j.get('text'))
+    except Exception:
+        pass
+    return ''
+
+
 def answer(text, ctx=None):
     """A finished reply payload for an existence or size ask the
-    catalog can settle, else None."""
+    catalog can settle, else None. A question about the world (awareness,
+    buzz, interest for a subject) is never settled here, whichever words
+    reached the lane."""
+    try:
+        for _orig in (_original_ask(), _last_ask()):
+            if _orig and _WORLD_OPENER_RX.match(_orig) and world_question(_orig):
+                return None
+    except Exception:
+        pass
     parsed = parse(text)
     _windowed = False
     if not parsed:

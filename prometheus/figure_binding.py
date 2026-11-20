@@ -228,8 +228,14 @@ def bind_to_stored(res, prior_entries, ask_text=''):
         if bd and any(r.get('bound_from') for r in (bd.get('rows') or [])):
             _renormalize(bd)
         smet = _stored_metrics(prior_entries, res, ask_text)
+        # a figure already bound to the valuation on file for the window
+        # asked stays that file's (prometheus.knowledge.bind_after, Jenna
+        # 2026-11-20): a stored read on another window never overwrites it
+        _file_bound = {_norm(n) for n in (res.get('_valuation_bound') or []) if n}
         for m in (res.get('metrics') or []):
             if not isinstance(m, dict) or not isinstance(m.get('value'), (int, float)):
+                continue
+            if _file_bound and _norm(m.get('name')) in _file_bound:
                 continue
             hit = smet.get((new_coh, _norm(m.get('name'))))
             if not hit:

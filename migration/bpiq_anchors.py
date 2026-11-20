@@ -760,8 +760,14 @@ def saved_valuation(pairing, window: Optional[dict] = None, anchors_for: Optiona
                         rec["people"] = int(round(val))
                 if not (rec.get("total_brand_value") or rec.get("people")):
                     continue
-                if best is None or rec["as_of"] > best["as_of"]:
+                # the file for exactly the window asked wins over a newer file on
+                # another window (2026-11-20: a read on August 27 to September 8
+                # must never carry the September 1 file's figures)
+                rec["_exact"] = bool(w0 and w1 and f0 == w0 and f1 == w1)
+                if best is None or (rec["_exact"], rec["as_of"]) > (bool(best.get("_exact")), best["as_of"]):
                     best = rec
+        if best:
+            best.pop("_exact", None)
         return best
     except Exception as e:
         print(f"[bpiq-anchors] saved valuation lookup skipped: {type(e).__name__}: {e}")
