@@ -385,7 +385,7 @@ class TheBriefAndTheReply(unittest.TestCase):
                      'never call them shoppers, buyers or customers as a group',
                      'Nothing is sent to Lego by you', 'the 12 months to October 20, 2026', 'The reader asked about "this month"',
                      'never households', 'never "real-time" or "today"', 'times the US rate', IA.ONE_PAGER_CHIP,
-                     'naming one row only', 'a multiple is quoted as its line prints it', 'plain words a high school student would follow',
+                     'naming one row only', 'a multiple is quoted as its line prints it', 'plain words a 7th grader would follow',
                      'The words "In our profile of the Lego audience" open the reply', "In Crosswalk's profile of the Lego audience,",
                      'a large share with a large multiple of the US rate beats a huge multiple on a sliver'):
             self.assertIn(must, b, must)

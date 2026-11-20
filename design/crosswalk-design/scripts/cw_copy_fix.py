@@ -48,6 +48,10 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 import readability_check as rc  # noqa: E402
 
+# A sentence this long or longer is split when the grade is over the
+# ceiling (plain-english-all-outputs.mdc, 2026-11-20: the bar is grade 7).
+_GRADE_SPLIT = int(getattr(rc, "GRADE_SPLIT_WORDS", 15))
+
 try:
     import cw_names as _names
 except Exception:  # pragma: no cover
@@ -277,6 +281,11 @@ _SPLITS = [
     (re.compile(r",\s+which\s+"), "That "),
     (re.compile(r",\s+who\s+"), "They "),
     (re.compile(r",\s+where\s+"), "There, "),
+    # a causal or defining clause keeps its sense as its own sentence
+    # (2026-11-20: the grade 7 bar splits more cells; ", because the same
+    # viewers return" reads "That is because the same viewers return")
+    (re.compile(r",\s+because\s+"), "That is because "),
+    (re.compile(r",\s+meaning\s+"), "That means "),
     (re.compile(r":\s+"), ""),
     (re.compile(r",\s+"), ""),
     (re.compile(r"\s+and\s+"), ""),
@@ -817,15 +826,15 @@ def _targets(analysis: dict) -> dict:
                 kinds=["header"], issues=list(f["issues"]))
         elif kind == "long_sentence":
             for lab, u in deck.holding(f["text"]):
-                add(lab, u, f"a sentence of {f['words']} words (30 at most): split it into two sentences",
+                add(lab, u, f"a sentence of {f['words']} words ({rc.SENTENCE_WORD_CEILING} at most): split it into two sentences",
                     kinds=["long_sentence"], long=[f["text"]])
         elif kind == "grade":
             sents = sorted(f.get("sentences") or [], key=lambda s: -len(_words(s)))[:6]
             for s in sents:
-                if len(_words(s)) < 18:
+                if len(_words(s)) < _GRADE_SPLIT:
                     continue
                 for lab, u in deck.holding(s):
-                    add(lab, u, "the deck reads above grade 10: shorter sentences, plainer words",
+                    add(lab, u, f"the deck reads above grade {rc.GRADE_CEILING:g}: shorter sentences, plainer words",
                         kinds=["grade"], grade=[s])
         elif kind == "jargon":
             for lab, u in deck.holding(f["word"]):
@@ -958,7 +967,7 @@ def _fallback(text: str, t: dict) -> str:
     for phrase in t.get("phrases") or []:
         out = drop_phrase(out, phrase, t.get("spare"), title=bool(t.get("title")))
     if "long_sentence" in kinds or "grade" in kinds:
-        ceiling = rc.SENTENCE_WORD_CEILING if "long_sentence" in kinds and "grade" not in kinds else 18
+        ceiling = rc.SENTENCE_WORD_CEILING if "long_sentence" in kinds and "grade" not in kinds else _GRADE_SPLIT
         closed = bool(re.search(r"[.!?]$", out))
         parts = [split_long_sentence(s, ceiling) if len(_words(s)) > ceiling else s for s in _sentences(out)]
         out = " ".join(parts)

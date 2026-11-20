@@ -115,7 +115,7 @@ Write the plan as JSON only:
 Rules.
 - Five to eight questions, in order from the wide to the narrow: first where the audience stands today (habit, awareness, what they already do), then the pull and the friction (what moves them, what holds them back), then the specific scenario the business question describes, and last the one question that settles it (a yes or no, or a pick between the options). The last question IS the business question, put to one person in plain words.
 - Each question is something one person can answer about themselves in a sentence; never a market question ("what share of people...").
-- Plain English a high school student follows. Short. No jargon, no brand-speak.
+- Plain English a 7th grader follows. Short. No jargon, no brand-speak.
 - Options for a pick are short, distinct, and cover the real answers including "neither" or "not for me" where honest.
 - Never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data, survey. No em dashes.
 - Keep the user's names, prices, titles and dates exactly as written.
@@ -135,7 +135,7 @@ Answer the business question for the person who asked it. JSON only:
 Rules.
 - Use only numbers that appear in the record; never invent or round them to a looser figure. State shares in plain words when it helps ("about three in ten") and keep the exact figure beside it.
 - Say what the room said; do not hedge the call with "might" or "could" when the split is clear, and do not overstate a narrow one.
-- Plain English a high school student follows. Never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data, survey, prediction. No em dashes.
+- Plain English a 7th grader follows. Never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data, survey, prediction. No em dashes.
 """
 
 _BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|research(?:ed)?|panel|sample|archetypes?|personas?|segments?|cohorts?|confidence|survey|prediction)\b", re.I)

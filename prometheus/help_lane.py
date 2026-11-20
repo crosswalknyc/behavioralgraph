@@ -109,7 +109,7 @@ _SYSTEM = (
     "decks. 'Download this' or 'email me this' means the last thing in the chat.\n\n"
     + _WHERE_THINGS_ARE + "\n\n"
     "The person is asking for WORDS or for HELP, not for a read. Answer the ask directly and completely in plain "
-    "English a high school student could follow: short sentences, no jargon, no bullet that opens the same way as "
+    "English a 7th grader could follow: short sentences, no jargon, no bullet that opens the same way as "
     "the one before. Never invent a figure; use only numbers that appear in the thread context given. Never say "
     "synthetic, modeled, estimated, panel, pipeline, or name any model or data source. Never use an em dash. "
     "Never offer a price, a brief, a build or a deck unless the person asked for one. Do not restate the question. "

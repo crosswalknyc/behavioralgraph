@@ -1969,8 +1969,9 @@ def build_payload(inputs: dict, prim: dict, *,
     _conv_note = ""
     if camp_block.get("sold_out"):
         _d = _plain_days(camp_block.get("days_to_sell_out"))
+        # two sentences, never one of 26 words (plain-english-all-outputs.mdc, 2026-11-20)
         _conv_note = (f"The collection sold out {_d or 'inside the window'}, so most purchases "
-                      f"landed in the first 48 hours; later traffic in the window is waitlist "
+                      f"landed in the first 48 hours. Later traffic in the window is waitlist "
                       f"and restock intent.").replace("  ", " ")
         if camp_block.get("inventory_signal") == "small":
             _conv_note += " The run was small, so the sell-out reflects limited inventory as much as demand."

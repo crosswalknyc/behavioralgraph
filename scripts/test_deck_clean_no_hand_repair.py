@@ -573,10 +573,48 @@ def as_shipped(cell):
     return next((t for t in page_t if t.startswith(head)), None)
 
 
+# The copy repair may split a long cell into two sentences at a clause
+# before the box fit shortens it (the grade 7 bar, plain-english-all-outputs.mdc,
+# 2026-11-20). The words stay the original words, in order; the splitter
+# may change a comma to a full stop, capitalize the next word, or open the
+# second sentence with one of these (cw_copy_fix._SPLITS).
+_SPLIT_OPENERS = ("that is because", "that means", "there", "they", "that", "but", "so", "yet")  # longest first
+_SPLIT_JOINERS = {"and", "but", "so", "yet", "while", "which", "who", "where", "because", "meaning"}
+
+
+def _plain_words(text):
+    return [re.sub(r"[^\w'-]+", "", x).lower() for x in text.split() if re.sub(r"[^\w'-]+", "", x)]
+
+
+def _shipped_words(t):
+    """The shipped cell's words, with the opener the splitter put on a
+    second sentence taken off (only at a sentence start)."""
+    words = []
+    for k, s in enumerate(re.split(r"(?<=[.!?])\s+", t.strip())):
+        ws = _plain_words(s)
+        if k:
+            for o in _SPLIT_OPENERS:
+                ow = o.split()
+                if ws[:len(ow)] == ow:
+                    ws = ws[len(ow):]
+                    break
+        words += ws
+    return words
+
+
 def whole(cell, t):
-    w, src_w = t.split(), cell.split()
-    return w == src_w[:len(w)] and not t.endswith((",", ";", ":", "/", "...", "\u2026")) \
-        and w[-1].lower().strip(",") not in db._TRAIL_WORDS
+    """Every shipped word is an original word, in order; the only original
+    words skipped are the joiners a clause split consumes. A cut inside a
+    word, an ellipsis, or a trailing filler word fails."""
+    src, i = _plain_words(cell), 0
+    for x in _shipped_words(t):
+        while i < len(src) and src[i] != x and src[i] in _SPLIT_JOINERS:
+            i += 1
+        if i >= len(src) or src[i] != x:
+            return False
+        i += 1
+    return not t.endswith((",", ";", ":", "/", "...", "\u2026")) \
+        and t.split()[-1].lower().strip(",.") not in db._TRAIL_WORDS
 
 
 shipped = [(c, as_shipped(c)) for c in flat]

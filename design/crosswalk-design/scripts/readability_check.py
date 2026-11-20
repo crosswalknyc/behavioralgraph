@@ -13,8 +13,11 @@ Reports:
       markdown headings or the first line of each block)
     - clever-header patterns (fragment cadences, colon reveals,
       questions, common idioms)
-    - sentences over 30 words
-    - Flesch-Kincaid grade for body copy (target 10 or lower)
+    - sentences over 25 words
+    - Flesch-Kincaid grade for body copy (target 7 or lower: a 7th
+      grader reads it once; plain-english-all-outputs.mdc, 2026-11-20).
+      Protected names (titles, brands, the read's own category labels)
+      count as plain one-syllable nouns, so a title never sets the grade.
     - jargon words with a plain substitute
     - words that are fine once but not on repeat ("actually")
     - template tells (no-formulaic-deck-prose.mdc, 2026-10-19):
@@ -59,8 +62,16 @@ except Exception:  # pragma: no cover
         return [m.group(0) for m in re.finditer(r"\bdoors?\b", text or "", re.I)]
 
 HEADER_WORD_CEILING = 12
-SENTENCE_WORD_CEILING = 30
-GRADE_CEILING = 10.0
+# 2026-11-20 (Jenna): every output reads like a 7th grader wrote it. The
+# ceilings moved from 30 words / grade 10 to 25 words / grade 7
+# (.cursor/rules/plain-english-all-outputs.mdc). cw_copy_fix.py reads
+# these names, so the repair follows the same bar.
+SENTENCE_WORD_CEILING = 25
+GRADE_CEILING = 7.0
+# When the grade is over the ceiling, the repair splits every sentence
+# this long or longer at its best join (the average is meant to sit
+# under 15 words). Read by cw_copy_fix.py.
+GRADE_SPLIT_WORDS = 15
 
 JARGON = {
     "leverage": "use",
@@ -100,6 +111,23 @@ JARGON = {
     "in order to": "to",
     "it is worth noting": "",
     "at the end of the day": "",
+    # 2026-11-20: 7th grade words. Each swap drops into the sentence as is.
+    "approximately": "about",
+    "demonstrates": "shows",
+    "demonstrate": "show",
+    "indicates": "shows",
+    "indicate": "show",
+    "subsequently": "then",
+    "prior to": "before",
+    "in excess of": "more than",
+    "commence": "start",
+    "commences": "starts",
+    "terminate": "end",
+    "terminates": "ends",
+    "numerous": "many",
+    "sufficient": "enough",
+    "obtain": "get",
+    "regarding": "about",
 }
 
 IDIOMS = [
@@ -197,6 +225,27 @@ def _seen(text: str) -> str:
         return text
     try:
         return _names.mask(text)
+    except Exception:
+        return text
+
+
+def _names_as_nouns(text: str) -> str:
+    """The text with every protected name read as plain one-syllable
+    nouns, one per word of the name, so the word count holds. A title, a
+    brand or a category label from the read's own data ("The Mandela
+    Catalogue", "Lifestyle / Arts & Culture") is not the writer's
+    vocabulary; its syllables never count toward the grade
+    (plain-english-all-outputs.mdc, 2026-11-20)."""
+    if _names is None or not text:
+        return text
+    try:
+        out, last = [], 0
+        for a, b in _names.spans(text):
+            out.append(text[last:a])
+            out.append(re.sub(r"\S+", "Name", text[a:b]))
+            last = b
+        out.append(text[last:])
+        return "".join(out)
     except Exception:
         return text
 
@@ -835,7 +884,7 @@ def analyze(headers: list[str], bodies: list[str], pages: list[Page], slide_coun
         lines.append(f"  [FLAG] {len(words_of(s))} words: {s[:110]}{'...' if len(s) > 110 else ''}")
         recs.append({"kind": "long_sentence", "text": s, "words": len(words_of(s))})
     prose_text = " ".join(prose_sents)
-    grade = fk_grade(prose_text)
+    grade = fk_grade(_names_as_nouns(prose_text))  # a title's syllables are not the writer's words
     if grade is not None:
         ok = grade <= GRADE_CEILING
         if not ok:

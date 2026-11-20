@@ -865,7 +865,7 @@ def brief(p, *, subject, window=''):
         "RULES: every number is quoted exactly from the data above and carries its US comparison; write \"N times the US rate\", "
         "never idx or index, never \"4.4x\"; a multiple is quoted as its line prints it, never worked out again and never written "
         "as a calc token; a number is never softened with about, roughly, around or nearly; count people or accounts, never "
-        "households; plain words a high school student would follow, so no marketing jargon (territory, play pattern, "
+        "households; plain words a 7th grader would follow, so no marketing jargon (territory, play pattern, "
         "co-merchandising, whitespace, lane, pool, activation); rows marked confirmed online purchase "
         "are things they bought, say bought; state measured numbers flat with no words about how sure the read is; no em dashes or "
         "en dashes; never \"real-time\" or \"today\" (the data is a day behind); never say on screen, open profile, the file, the "

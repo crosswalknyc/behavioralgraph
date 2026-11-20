@@ -645,7 +645,7 @@ Write:
  "recommendations": 3 to 4 plain steps for a network or advertiser, each with the number that justifies it,
  "facts": 5 one-sentence facts, each with one number from the digest
 }
-Rules: every number is copied from the digest exactly as given (same share, same index, same count); never introduce a number that is not in the digest; a share is written as a percent with one decimal; an index as "2.3x US adults"; counts with commas. A high school reader must follow every line: one idea per bullet, no sentence over 28 words, a bullet is one or two short sentences. No em dashes, no colons in headers, no puns, no internal words (modeled, estimated, panel data, cohort, benchmark, survey, source), never a platform or company you were not given. Do not mention linear TV, cable, ratings or anything outside what the digest shows."""
+Rules: every number is copied from the digest exactly as given (same share, same index, same count); never introduce a number that is not in the digest; a share is written as a percent with one decimal; an index as "2.3x US adults"; counts with commas. A 7th grader must follow every line: one idea per bullet, no sentence over 25 words, a bullet is one or two short sentences. No em dashes, no colons in headers, no puns, no internal words (modeled, estimated, panel data, cohort, benchmark, survey, source), never a platform or company you were not given. Do not mention linear TV, cable, ratings or anything outside what the digest shows."""
 
 
 def _digest(payload: dict) -> dict:

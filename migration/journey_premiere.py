@@ -973,7 +973,7 @@ Write:
  "recommendations": 3 or 4 plain steps for the network, each with the number that justifies it,
  "facts": 5 one-sentence facts, each with one number from the digest
 }
-Rules: every number is copied from the digest exactly as given (same share, same count); never introduce a number that is not in the digest; a share is written as a percent with one decimal; counts with commas. A high school reader must follow every line: one idea per bullet, no sentence over 30 words. No em dashes, no colons in headers, no puns, no internal words (modeled, estimated, panel data, cohort, benchmark, survey, source, research), never a platform, outlet or person you were not given."""
+Rules: every number is copied from the digest exactly as given (same share, same count); never introduce a number that is not in the digest; a share is written as a percent with one decimal; counts with commas. A 7th grader must follow every line: one idea per bullet, no sentence over 25 words. No em dashes, no colons in headers, no puns, no internal words (modeled, estimated, panel data, cohort, benchmark, survey, source, research), never a platform, outlet or person you were not given."""
 
 
 def _digest(payload: dict) -> dict:

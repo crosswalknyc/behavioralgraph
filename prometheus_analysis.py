@@ -4952,7 +4952,7 @@ SO_WHAT_GUIDANCE = (
     'five moves, most valuable first. The LAST read is "First step this '
     'week: ..." one concrete action the reader can take in the next '
     'seven days.\n'
-    '- Plain words a smart 16-year-old follows. No index without a plain '
+    '- Plain words a 7th grader follows. No index without a plain '
     'comparison next to it ("2x the US average"). No methodology, no '
     'hedging, no "this reads as" for the moves - say what to do.\n'
     '- Dollars: when you price inventory or a deal, show the arithmetic '
@@ -5004,7 +5004,7 @@ MEDIA_PLAN_GUIDANCE = (
     'figure; for paid search, the term groups to buy and the ones to '
     'skip, with when each group goes live.\n'
     '- Each move starts with an imperative verb and carries the number '
-    'that justifies it. Plain words a smart 16-year-old follows. No '
+    'that justifies it. Plain words a 7th grader follows. No '
     'methodology, no hedging on the moves, no source names, no em dashes. '
     'Every count messy (never a round number); every share a share of the '
     'universe this read names.\n')
@@ -6793,7 +6793,7 @@ RULES
 - A sentence runs 30 words or fewer. Split a long one into two sentences.
 - When a line is told a phrase is used elsewhere in the deck, say the same thing in different words. Swapping one word is not enough; none of that phrase's five-word runs may remain.
 - When a line is told its neighbors open the same way, open it differently: lead with the subject, the comparison or what the figure rules out. If the others open on a number, this one opens on a word.
-- Plain words a high school student reads easily. Never "does the work", "heavy lifting", "does the talking", door or doors, an em dash or an en dash, "household", "modeled", "estimated".
+- Plain words a 7th grader reads easily. Never "does the work", "heavy lifting", "does the talking", door or doors, an em dash or an en dash, "household", "modeled", "estimated".
 - Keep the ending the original had: a line without a full stop stays without one.
 
 Return strict JSON only: {"rewrites": [{"id": "u1", "text": "..."}]} with one entry for every id you were given."""

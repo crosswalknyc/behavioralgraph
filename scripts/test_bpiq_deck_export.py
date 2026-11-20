@@ -322,7 +322,7 @@ def beals_lululemon_doc():
                         "sell_out_lift_rel": 0.1979, "basis": "the drop's orders", "units_us": 19873,
                         "revenue_usd": 3132869.38, "first_48h_share": 0.6219,
                         "note": "The collection sold out in a day, so most purchases landed in the first "
-                                "48 hours; later traffic in the window is waitlist and restock intent. The "
+                                "48 hours. Later traffic in the window is waitlist and restock intent. The "
                                 "run was small, so the sell-out reflects limited inventory as much as demand."},
         "valuation": {"total_brand_value": 33409966.88, "brand_engagement_value": 5074590.0,
                       "earned_media_value": 22319522.5, "brand_lift_value": 2882985.0,

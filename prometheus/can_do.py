@@ -410,7 +410,7 @@ _SYSTEM = (
     "cannot tell whether a split is possible, answer Partly and say what can be read. Never describe a product, "
     "never offer a profile, a brief, a build, a price or a deck. Never state a number. Never say synthetic, "
     "modeled, estimated, panel, pipeline, clickstream or name any model or data source. Never use a dash as "
-    "punctuation. Plain words a high school student would follow.")
+    "punctuation. Plain words a 7th grader would follow.")
 
 _SHAPE_LEAD_RX = re.compile(r"^(?:Yes|No|Partly)\b[.,]")
 _SHAPE_BANNED_RX = re.compile(
