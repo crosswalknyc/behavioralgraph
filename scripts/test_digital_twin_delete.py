@@ -126,10 +126,17 @@ class Page(unittest.TestCase):
         self.assertIn('You can undo for 30 days', page)
         self.assertIn('twinDeleteChrome', page)
         self.assertIn('dtwTwinDelP-', page)
-        self.assertIn('dtwCoverOpen', page)
-        build = page[page.find('dtw-cover build'):page.find('dtw-cover build') + 400]
+        # the library is the editorial index (2026-11-19): every entry carries the delete chrome, the name opens the twin,
+        # and the confirm lands on the entry; Build a new twin sits in the header with no delete on it
+        entry = page[page.index('function libEntry(r, i)'):page.index('function libDoc(key)')]
+        self.assertIn('twinDeleteChrome(key, nm)', entry)
+        self.assertIn('dtwLibSeeTwin', entry)
+        self.assertIn(".closest('.dtw-cover, .dtw-entry')", page)
+        self.assertIn('#dtwLibrary .dtw-entry.confirming', page)
+        build = page[page.index('class="dtw-lib-build"'):page.index('class="dtw-lib-build"') + 700]
         self.assertIn('dtwBuildTwin()', build)
         self.assertNotIn('dtwTwinDelete', build)
+        self.assertIn('Delete this twin', page[page.index('function libLearn(r, doc)'):page.index('function libStats(doc)')])
         with open(os.path.join(ROOT, 'digital_twins_api.py'), encoding='utf-8') as fh:
             api = fh.read()
         self.assertIn('def dt_delete(', api)
