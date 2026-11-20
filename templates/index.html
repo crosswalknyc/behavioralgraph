@@ -52290,7 +52290,65 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-ticker .hit:hover, #digitalTwinsIQView .dtw-pi-ticker .hit:focus-visible { background: rgba(233,232,225,0.07); outline: none; }
         #digitalTwinsIQView .dtw-pi-ticker .hit.on { background: rgba(199,242,62,0.12); box-shadow: inset 0 2px 0 #C7F23E; }
         #digitalTwinsIQView .dtw-pi-ticker .ph { position: absolute; top: -3px; width: 2px; height: 13px; margin-left: -1px; background: var(--dtw-ink); pointer-events: none; }
-        #digitalTwinsIQView .dtw-pi-ticker .ph.stop { background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-ticker .ph.stop { background: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-ticker .ph.rp { background: #C7F23E; top: -5px; height: 16px; }
+        /* ---- the replay of a finished test (2026-11-19): the transport, the scrubber, the moment under the playhead ---- */
+        #digitalTwinsIQView .dtw-pi-transport { gap: 6px; }
+        #digitalTwinsIQView .dtw-pi-transport .dtw-pi-note { margin-right: 4px; }
+        #digitalTwinsIQView .dtw-pi-tb { appearance: none; height: 28px; min-width: 28px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--dtw-rule); background: transparent; color: var(--dtw-ink); font: inherit; font-size: 11.5px; font-variant-numeric: tabular-nums; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-tb:hover { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pi-tb:focus-visible { outline: none; border-color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-tb svg { width: 11px; height: 11px; fill: currentColor; display: block; }
+        #digitalTwinsIQView .dtw-pi-tb.rate { min-width: 38px; font-weight: 600; letter-spacing: 0.02em; }
+        #digitalTwinsIQView .dtw-pi-tplay { min-width: 96px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+        #digitalTwinsIQView .dtw-pi-tplay svg { width: 10px; height: 10px; fill: currentColor; display: block; }
+        #digitalTwinsIQView .dtw-pi-tdur { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dtw-mute); margin-left: -3px; }
+        #digitalTwinsIQView .dtw-pi-scrub { position: relative; height: 18px; margin: 6px 0 0; cursor: pointer; touch-action: none; outline: none; user-select: none; }
+        #digitalTwinsIQView .dtw-pi-scrub .tr { position: absolute; left: 0; right: 0; top: 7px; height: 4px; border-radius: 2px; background: var(--dtw-track); overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-scrub .tr i { display: block; height: 100%; width: 0; background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-scrub .mk { position: absolute; inset: 0; pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev { position: absolute; top: 12px; width: 2px; height: 6px; margin-left: -1px; border-radius: 1px; opacity: 0.6; background: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.love, #digitalTwinsIQView .dtw-pi-scrub .ev.wow { background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.laugh { background: #E682FF; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.lean-in { background: #3358FF; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.confuse { background: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.check-out { background: #7C878A; }
+        #digitalTwinsIQView .dtw-pi-scrub .qm { position: absolute; top: 0; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-scrub .hd { position: absolute; top: 2px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #C7F23E; box-shadow: 0 0 0 2px var(--dtw-page); pointer-events: none; transition: transform 0.08s; }
+        #digitalTwinsIQView .dtw-pi-scrub:hover .hd, #digitalTwinsIQView .dtw-pi-scrub:focus-visible .hd, #digitalTwinsIQView .dtw-pi-scrub.drag .hd { transform: scale(1.2); }
+        #digitalTwinsIQView .dtw-pi-scrub:focus-visible .tr { box-shadow: 0 0 0 1px rgba(199,242,62,0.55); }
+        #digitalTwinsIQView .dtw-pi-now { border: 1px solid var(--dtw-rule); border-radius: 12px; background: var(--dtw-raised); padding: 12px 14px 10px; display: grid; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-now .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-now .at { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #C7F23E; font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-now .at span { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-now .dial { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-now .dial .v { font-size: 26px; font-weight: 300; color: var(--dtw-ink); font-variant-numeric: tabular-nums; line-height: 1; }
+        #digitalTwinsIQView .dtw-pi-now .dial .d { font-size: 11px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-now .dial .d.up { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-now .dial .d.dn { color: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-now .grp { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dtw-body); margin-left: 8px; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-now .grp i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+        #digitalTwinsIQView .dtw-pi-now .grp b { color: var(--dtw-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-now .scene .cap { font-size: 14px; line-height: 20px; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-now .scene .dlg { font-size: 12.5px; line-height: 18px; color: var(--dtw-body); margin-top: 3px; }
+        #digitalTwinsIQView .dtw-pi-now .scene .dlg b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-now .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 10px 20px; border-top: 1px solid var(--dtw-rule); padding-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-now .cols .dtw-pi-h { margin-bottom: 4px; }
+        #digitalTwinsIQView .dtw-pi-nowrow { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--dtw-ink); min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-nowrow .circwrap { flex: 0 0 auto; display: inline-flex; align-self: flex-start; }
+        #digitalTwinsIQView .dtw-pi-nowface { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 10.5px; position: relative; overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-nowface img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+        #digitalTwinsIQView .dtw-pi-nowrow .nm { font-weight: 600; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-nowrow .dl { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-nowrow .dl.up { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-nowrow .dl.dn { color: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-nowrow .txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+        #digitalTwinsIQView .dtw-pi-nowrow .who { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-nowrow .k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-nowrow .ln { color: var(--dtw-body); font-size: 12px; line-height: 16px; min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-now .ask { font-size: 12px; line-height: 16px; color: var(--dtw-body); margin-top: 6px; }
+        #digitalTwinsIQView .dtw-pi-now .ask b { color: var(--dtw-ink); font-weight: 600; }
+        @media (max-width: 980px) { #digitalTwinsIQView .dtw-pi-now .cols { grid-template-columns: 1fr; } }
         .dtw-pi-tip { position: fixed; z-index: 1200; max-width: 320px; min-width: 200px; background: #15252A; color: #E9E8E1; border: 1px solid rgba(233,232,225,0.14); border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 16px; box-shadow: 0 10px 28px rgba(0,0,0,0.38); pointer-events: none; font-family: 'Crosswalk Inter', Inter, system-ui, sans-serif; text-transform: none; letter-spacing: normal; font-weight: 400; text-align: left; }
         body[data-theme="light"] .dtw-pi-tip { background: #FFFFFF; color: #0C1618; border-color: #C9C6BA; box-shadow: 0 10px 28px rgba(12,22,24,0.18); }
         .dtw-pi-tip .k { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; align-items: baseline; }
@@ -55914,7 +55972,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     (function tick() { if (!v || v.paused) return; revealPilot(v.currentTime); S.pilotClock.raf = requestAnimationFrame(tick); })();
                 });
                 v.addEventListener('pause', function() { stopPilotClock(); revealPilot(v.currentTime); });
-                v.addEventListener('ended', function() { try { dtwPilotStop(true); } catch (_) {} });
+                v.addEventListener('ended', function() { if (piReplayable(S.pilot)) { piReplayHalt(true); return; } try { dtwPilotStop(true); } catch (_) {} });
+                v.addEventListener('loadedmetadata', function() { if (piReplayable(S.pilot)) { try { v.currentTime = Number((S.pilotClock || {}).t || 0); } catch (_) {} } });
             }
             function bindWatchLink(s) {
                 var m = watchMedia(s);
@@ -56219,9 +56278,203 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }, 4000);
                 }
             }
+            // ---- the replay (Jenna 2026-11-19: "after one finishes you see the dial test still and can run the timeline
+            // back/forward/etc to see what was happening at that time if you want"). A finished test keeps its dial on screen,
+            // drawn in full, and the playhead runs over it: Replay and Pause, ten seconds either way, the start and the end,
+            // a scrubber under the dial, the arrow keys and the space bar. Whatever sits under the playhead is read at that
+            // second: the scene on screen, the room's line and every group's, the seats that moved most in the last half
+            // minute, and what the seats said in it. Nothing is added: every reading, remark and scene is the test's own.
+            S.pilotReplay = S.pilotReplay || { sid: '', on: false, raf: 0, t0: 0, from: 0, rate: 1 };
+            var PI_STEP_S = 10, PI_KEY_STEP_S = 5, PI_KEY_BIG_S = 30, PI_NOW_BACK_S = 30, PI_RATES = [1, 2, 4];
+            var PI_ACT_WORD = { open: 'The opening', setup: 'The setup', middle: 'The middle', turn: 'The turn', close: 'The close', end: 'The end' };
+            var PI_SVG_PLAY = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.5l8 4.5-8 4.5z"/></svg>';
+            var PI_SVG_PAUSE = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.5h2.6v9H2.5zM6.9 1.5h2.6v9H6.9z"/></svg>';
+            var PI_SVG_START = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1.5h1.8v9H2zM10.5 1.5v9L4.4 6z"/></svg>';
+            var PI_SVG_END = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8.2 1.5H10v9H8.2zM1.5 1.5v9L7.6 6z"/></svg>';
+            function piReplayable(s) { s = s || S.pilot || {}; return piFinished(s) && s.status !== 'preparing' && (((s.dial || {}).t || []).length > 1); }
+            function piReplayOn() { var r = S.pilotReplay; return !!(r && r.on && S.pilot && r.sid === S.pilot.id); }
+            function piVideoEl() { var v = el('dtwPiVideo'); return (v && v.src) ? v : null; }
+            function piReplayPlaying() { var v = piVideoEl(); if (v) return !v.paused && !v.ended; return piReplayOn(); }
+            function piReplayHalt(keepVideo) {
+                var r = S.pilotReplay; if (!r) return;
+                r.on = false;
+                if (r.raf) { try { cancelAnimationFrame(r.raf); } catch (_) {} r.raf = 0; }
+                if (!keepVideo) { var v = piVideoEl(); if (v && !v.paused) { try { v.pause(); } catch (_) {} } }
+                piTransportPaint();
+            }
+            function piSeekTo(t) {
+                var s = S.pilot || {}; t = Math.max(0, Math.min(piStopPoint(s), Number(t) || 0));
+                var v = piVideoEl(); if (v) { try { if (Math.abs(v.currentTime - t) > 0.25) v.currentTime = t; } catch (_) {} }
+                S.pilotClock.t = t;
+                if (piReplayOn()) { S.pilotReplay.from = t; S.pilotReplay.t0 = Date.now(); }
+                revealPilot(t);
+            }
+            window.dtwPilotReplay = function(on) {
+                var s = S.pilot; if (!s || !piReplayable(s)) return;
+                var r = S.pilotReplay; r.sid = s.id;
+                if (on == null) on = !piReplayPlaying();
+                if (!on) { piReplayHalt(); return; }
+                var end = piStopPoint(s), t = Number(S.pilotClock.t || 0);
+                if (t >= end - 0.05) t = 0;   // Replay at the end starts over
+                r.on = true; r.from = t; r.t0 = Date.now();
+                S.pilotClock.t = t;
+                var v = piVideoEl();
+                if (v) {   // the picture is the clock: its ticks reveal the room
+                    try { v.playbackRate = r.rate; if (Math.abs(v.currentTime - t) > 0.25) v.currentTime = t; var p = v.play(); if (p && p.catch) p.catch(function() {}); } catch (_) {}
+                    piTransportPaint(); return;
+                }
+                stopPilotClock(); S.pilotClock.slate = false;
+                revealPilot(t);
+                (function tick() {
+                    if (!piReplayOn()) return;
+                    var now = r.from + (Date.now() - r.t0) / 1000 * r.rate;
+                    if (now >= end) { r.on = false; r.raf = 0; S.pilotClock.t = end; revealPilot(end); return; }
+                    S.pilotClock.t = now; revealPilot(now);
+                    r.raf = requestAnimationFrame(tick);
+                })();
+                piTransportPaint();
+            };
+            window.dtwPilotStep = function(ds) { if (!piReplayable()) return; piSeekTo(Number(S.pilotClock.t || 0) + Number(ds || 0)); };
+            window.dtwPilotJump = function(where) { if (!piReplayable()) return; piSeekTo(where === 'end' ? piStopPoint() : 0); };
+            window.dtwPilotRate = function() {
+                var r = S.pilotReplay, i = PI_RATES.indexOf(Number(r.rate) || 1); r.rate = PI_RATES[(i + 1) % PI_RATES.length];
+                var v = piVideoEl(); if (v) { try { v.playbackRate = r.rate; } catch (_) {} }
+                if (piReplayOn()) { r.from = Number(S.pilotClock.t || 0); r.t0 = Date.now(); }
+                piTransportPaint();
+            };
+            function piTransportHtml(s) {
+                var end = piStopPoint(s), t = Math.max(0, Math.min(end, Number((S.pilotClock || {}).t || 0)));
+                return '<div class="dtw-pi-controls dtw-pi-transport" id="dtwPiTransport" role="group" aria-label="Run the test back and forward">'
+                    + '<span class="dtw-pi-note" id="dtwPiNote">Stopped at ' + esc(clockFmt(end)) + '. Run it back from any second.</span>'
+                    + '<button type="button" class="dtw-pi-tb" onclick="dtwPilotJump(\'start\')" title="Back to the start (Home)" aria-label="Back to the start">' + PI_SVG_START + '</button>'
+                    + '<button type="button" class="dtw-pi-tb" onclick="dtwPilotStep(-' + PI_STEP_S + ')" title="Back ten seconds. The left arrow key steps five; with shift, thirty." aria-label="Back ten seconds">&lsaquo; 10s</button>'
+                    + '<button type="button" class="dtw-btn dtw-btn-primary dtw-pi-tplay" id="dtwPiReplayBtn" onclick="dtwPilotReplay()" title="Replay from here (space bar)">' + PI_SVG_PLAY + 'Replay</button>'
+                    + '<button type="button" class="dtw-pi-tb" onclick="dtwPilotStep(' + PI_STEP_S + ')" title="Forward ten seconds. The right arrow key steps five; with shift, thirty." aria-label="Forward ten seconds">10s &rsaquo;</button>'
+                    + '<button type="button" class="dtw-pi-tb" onclick="dtwPilotJump(\'end\')" title="To the end (End)" aria-label="To the end">' + PI_SVG_END + '</button>'
+                    + '<button type="button" class="dtw-pi-tb rate" id="dtwPiRate" onclick="dtwPilotRate()" title="Replay speed">' + esc(String(S.pilotReplay.rate || 1)) + 'x</button>'
+                    + '<span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t)) + '</span><span class="dtw-pi-tdur">/ ' + esc(clockFmt(end)) + '</span></div>';
+            }
+            function piTransportPaint() {
+                var b = el('dtwPiReplayBtn'); if (!b) return;
+                var playing = piReplayPlaying(), html = playing ? (PI_SVG_PAUSE + 'Pause') : (PI_SVG_PLAY + 'Replay');
+                if (b.innerHTML !== html) { b.innerHTML = html; b.title = playing ? 'Pause (space bar)' : 'Replay from here (space bar)'; }
+                var rt = el('dtwPiRate'); if (rt) { var txt = String(S.pilotReplay.rate || 1) + 'x'; if (rt.textContent !== txt) rt.textContent = txt; }
+            }
+            // ---- the scrubber under the dial: the played part in green, every reaction as a tick in its color, every question as a dot
+            function piScrubHtml(s) {
+                return '<div class="dtw-pi-scrub" id="dtwPiScrub" role="slider" tabindex="0" aria-label="Where you are in the test" aria-valuemin="0" aria-valuemax="' + Math.round(piStopPoint(s)) + '" aria-valuenow="0" title="Drag, or click, to any second">'
+                    + '<div class="tr"><i id="dtwPiScrubDone"></i></div><div class="mk" id="dtwPiScrubMarks"></div><i class="hd" id="dtwPiScrubHead"></i></div>';
+            }
+            function paintPilotScrub(t) {
+                var box = el('dtwPiScrub'); if (!box) return;
+                var s = S.pilot || {}, dur = piDur(s), end = piStopPoint(s), tt = Math.max(0, Math.min(end, Number(t) || 0)), pct = (tt / dur * 100).toFixed(3) + '%';
+                var marks = el('dtwPiScrubMarks'), key = [s.id, (s.events || []).length, (s.questions || []).length, dur.toFixed(1)].join('|');
+                if (marks && marks.getAttribute('data-k') !== key) {
+                    var html = '';
+                    (s.events || []).forEach(function(e) { var et = Number(e.t || 0); if (!(et >= 0 && et <= dur)) return; html += '<i class="ev ' + esc(e.type || '') + '" style="left:' + (et / dur * 100).toFixed(3) + '%"></i>'; });
+                    (s.questions || []).forEach(function(q) { var qt = Number(q.playhead_s); if (!isFinite(qt) || !String(q.q || '').trim()) return; html += '<i class="qm" style="left:' + (Math.min(dur, Math.max(0, qt)) / dur * 100).toFixed(3) + '%"></i>'; });
+                    marks.innerHTML = html; marks.setAttribute('data-k', key);
+                }
+                var done = el('dtwPiScrubDone'); if (done) done.style.width = pct;
+                var hd = el('dtwPiScrubHead'); if (hd) hd.style.left = pct;
+                box.setAttribute('aria-valuenow', String(Math.round(tt))); box.setAttribute('aria-valuetext', clockFmt(tt) + ' of ' + clockFmt(end));
+            }
+            // ---- what was happening at the playhead
+            function piIdxAt(ts, t) { var k = -1; for (var i = 0; i < (ts || []).length; i++) { if (Number(ts[i]) <= t + 0.05) k = i; else break; } return k; }
+            function piNowFace(r, i) {
+                var url = (r || {}).portrait_url || '', nm = titleCase((r || {}).name || '');
+                return '<span class="dtw-pi-nowface" style="--hue:' + seatHue(r, i) + '">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>';
+            }
+            function piNowKey(s, t) {
+                var ts = ((s || {}).dial || {}).t || [], k = piIdxAt(ts, t), n = 0, lo = t - PI_NOW_BACK_S;
+                ((s || {}).events || []).forEach(function(e) { var et = Number(e.t || 0); if (et <= t + 0.05 && et >= lo) n++; });
+                var sc = sceneAt(s, t);
+                return [s.id, k, n, sc ? sc.id : '', ((s || {}).questions || []).length].join('|');
+            }
+            function piNowHtml(s, t) {
+                var d = (s || {}).dial || {}, ts = d.t || [], vs = d.value || [], k = piIdxAt(ts, t);
+                if (!ts.length) return '<div class="dtw-pi-fn">This test has no readings to run back through.</div>';
+                var at = '<div class="at">At ' + esc(clockFmt(t)) + '</div>';
+                if (k < 0) return '<div class="top">' + at + '</div><div class="dtw-pi-fn">Before the first reading, at ' + esc(clockFmt(ts[0])) + '.</div>';
+                var sc = sceneAt(s, t), actWord = sc && sc.act ? (PI_ACT_WORD[String(sc.act)] || '') : '';
+                var k0 = Math.max(0, piIdxAt(ts, t - PI_NOW_BACK_S));
+                var val = Number(vs[k]), was = Number(vs[k0]), delta = (isFinite(val) && isFinite(was) && k0 < k) ? val - was : NaN;
+                at = '<div class="at">At ' + esc(clockFmt(t)) + (actWord ? ' <span>&middot; ' + esc(actWord) + '</span>' : '') + (sc ? ' <span>&middot; scene ' + esc(String(Number(sc.id) + 1)) + '</span>' : '') + '</div>';
+                var dial = '<div class="dial"><span class="v">' + (isFinite(val) ? val.toFixed(1) : '-') + '</span>'
+                    + (isFinite(delta) && Math.abs(delta) >= 0.05 ? '<span class="d ' + (delta > 0 ? 'up' : 'dn') + '">' + (delta > 0 ? '+' : '') + delta.toFixed(1) + ' in the last half minute</span>' : '<span class="d">the room, 0 to 100</span>');
+                piCohortSplits(s).forEach(function(c) { var cv = Number((c.value || [])[k]); if (!isFinite(cv)) return; dial += '<span class="grp"><i style="background:' + esc(c.color) + '"></i>' + esc(c.label) + ' <b>' + cv.toFixed(1) + '</b></span>'; });
+                dial += '</div>';
+                var scene = sc ? ('<div class="scene">' + (sc.caption ? '<div class="cap">' + esc(sc.caption) + '</div>' : '<div class="cap dtw-muted">No scene read at this second.</div>')
+                    + (sc.dialogue ? '<div class="dlg">' + (sc.speaker ? '<b>' + esc(sc.speaker) + ':</b> ' : '') + '&ldquo;' + esc(sc.dialogue) + '&rdquo;</div>' : '') + '</div>') : '<div class="scene"><div class="cap dtw-muted">No scene read at this second.</div></div>';
+                // the seats that moved most in the last half minute, on the test's own readings
+                var roster = ((s.group || {}).roster || []), movers = [];
+                if (k0 < k) roster.forEach(function(r, i) {
+                    var ss = piSeatSeries(s, r.seat); if (!ss || (ss.t || []).length !== ts.length) return;
+                    var a = Number(ss.v[k]), b = Number(ss.v[k0]); if (!isFinite(a) || !isFinite(b) || Math.abs(a - b) < 0.05) return;
+                    movers.push({ r: r, i: i, d: a - b, v: a });
+                });
+                movers.sort(function(x, y) { return Math.abs(y.d) - Math.abs(x.d); });
+                var mv = movers.slice(0, 4).map(function(m) {
+                    return '<div class="dtw-pi-nowrow"><span class="circwrap">' + piNowFace(m.r, m.i) + '</span><span class="nm">' + esc(titleCase(m.r.name || '')) + '</span><span class="dl ' + (m.d > 0 ? 'up' : 'dn') + '">' + (m.d > 0 ? '+' : '') + m.d.toFixed(1) + '</span><span class="ln">now ' + m.v.toFixed(1) + '</span></div>';
+                }).join('');
+                var moversHtml = '<div><div class="dtw-pi-h">Moved most</div>' + (mv || '<div class="dtw-pi-fn">' + (k0 < k ? 'No seat moved in the last half minute.' : 'The first reading.') + '</div>') + '</div>';
+                // what the seats said in the last half minute, newest first
+                var lo = t - PI_NOW_BACK_S, bySeat = {};
+                roster.forEach(function(r, i) { bySeat[Number(r.seat)] = { r: r, i: i }; });
+                var said = (s.events || []).filter(function(e) { var et = Number(e.t || 0); return et <= t + 0.05 && et >= lo; });
+                said.sort(function(a, b) { return Number(b.t || 0) - Number(a.t || 0); });
+                var sd = said.slice(0, 5).map(function(e) {
+                    var hit = bySeat[Number(e.seat)] || {}, r = hit.r || { seat: e.seat, name: e.name };
+                    return '<div class="dtw-pi-nowrow"><span class="circwrap">' + piNowFace(r, hit.i || 0) + '</span><span class="txt"><span class="who"><span class="nm">' + esc(titleCase(r.name || e.name || '')) + '</span><span class="k">' + esc(clockFmt(e.t)) + ' &middot; ' + esc(PI_EVT[e.type] || e.type || '') + '</span></span>' + (e.line ? '<span class="ln">' + esc(e.line) + '</span>' : '') + '</span></div>';
+                }).join('');
+                var asked = (s.questions || []).filter(function(q) { var qt = Number(q.playhead_s); return isFinite(qt) && String(q.q || '').trim() && qt <= t + 0.75 && qt >= lo; });
+                var askHtml = asked.length ? '<div class="ask"><b>Asked here:</b> ' + esc(asked[0].q) + (asked.length > 1 ? ' <span class="dtw-muted">and ' + (asked.length - 1) + ' more</span>' : '') + '<span class="dtw-muted"> The answers are in the room.</span></div>' : '';
+                var saidHtml = '<div><div class="dtw-pi-h">Said in the last half minute</div>' + (sd || '<div class="dtw-pi-fn">Nothing said in the last half minute.</div>') + askHtml + '</div>';
+                return '<div class="top">' + at + dial + '</div>' + scene + '<div class="cols">' + moversHtml + saidHtml + '</div>';
+            }
+            function paintPilotNow(t) {
+                var box = el('dtwPiNow'); if (!box) return;
+                var s = S.pilot || {}, key = piNowKey(s, t);
+                if (box.getAttribute('data-k') === key) { var at = box.querySelector('.at'); if (at) { var sc = sceneAt(s, t), actWord = sc && sc.act ? (PI_ACT_WORD[String(sc.act)] || '') : ''; at.innerHTML = 'At ' + esc(clockFmt(t)) + (actWord ? ' <span>&middot; ' + esc(actWord) + '</span>' : '') + (sc ? ' <span>&middot; scene ' + esc(String(Number(sc.id) + 1)) + '</span>' : ''); } return; }
+                box.innerHTML = piNowHtml(s, t); box.setAttribute('data-k', key);
+            }
+            // ---- the scrubber takes the pointer; the keys run the test when nothing else has them
+            if (!window._piReplayWired) {
+                window._piReplayWired = true;
+                var piDrag = null;
+                var piScrubAt = function(e, box) { var r = box.getBoundingClientRect(), f = (e.clientX - r.left) / Math.max(1, r.width); return Math.max(0, Math.min(1, f)) * piDur(S.pilot); };
+                document.addEventListener('pointerdown', function(e) {
+                    var box = e.target && e.target.closest ? e.target.closest('#dtwPiScrub') : null;
+                    if (!box || !piReplayable(S.pilot) || (e.button != null && e.button !== 0)) return;
+                    e.preventDefault();
+                    piDrag = { box: box, was: piReplayPlaying() };
+                    box.classList.add('drag');
+                    try { box.setPointerCapture(e.pointerId); } catch (_) {}
+                    if (piDrag.was) piReplayHalt();
+                    piSeekTo(piScrubAt(e, box));
+                    try { box.focus({ preventScroll: true }); } catch (_) {}
+                }, true);
+                document.addEventListener('pointermove', function(e) { if (!piDrag) return; piSeekTo(piScrubAt(e, piDrag.box)); }, true);
+                var piDragEnd = function(e) { if (!piDrag) return; var d = piDrag; piDrag = null; d.box.classList.remove('drag'); try { d.box.releasePointerCapture(e.pointerId); } catch (_) {} if (d.was) dtwPilotReplay(true); };
+                document.addEventListener('pointerup', piDragEnd, true);
+                document.addEventListener('pointercancel', piDragEnd, true);
+                document.addEventListener('keydown', function(e) {
+                    if (!S.pilot || !piReplayable(S.pilot) || !isPiTab(S.tab) || !el('dtwPiTransport')) return;
+                    if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+                    var tgt = e.target, tag = tgt && tgt.tagName ? tgt.tagName.toLowerCase() : '';
+                    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tgt && tgt.isContentEditable)) return;
+                    var k = e.key;
+                    if (k === ' ' || k === 'Spacebar') { if ((tag === 'button' || tag === 'a') && tgt.id !== 'dtwPiReplayBtn') return; e.preventDefault(); dtwPilotReplay(); }
+                    else if (k === 'ArrowLeft') { e.preventDefault(); dtwPilotStep(-(e.shiftKey ? PI_KEY_BIG_S : PI_KEY_STEP_S)); }
+                    else if (k === 'ArrowRight') { e.preventDefault(); dtwPilotStep(e.shiftKey ? PI_KEY_BIG_S : PI_KEY_STEP_S); }
+                    else if (k === 'Home') { e.preventDefault(); dtwPilotJump('start'); }
+                    else if (k === 'End') { e.preventDefault(); dtwPilotJump('end'); }
+                }, true);
+            }
             function playheadNow() {
                 var v = el('dtwPiVideo');
-                if (v && v.src && isFinite(v.currentTime)) return v.currentTime;
+                // a finished test keeps its own clock: the picture, when there is one, is moved to it (dtwPilotReplay, piSeekTo)
+                if (v && v.src && isFinite(v.currentTime) && !piReplayable(S.pilot)) return v.currentTime;
                 return Number((S.pilotClock || {}).t || 0);
             }
             function stopPilotClock() { if (S.pilotClock && S.pilotClock.raf) { try { cancelAnimationFrame(S.pilotClock.raf); } catch (_) {} S.pilotClock.raf = 0; } }
@@ -56239,6 +56492,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 paintPilotSeats(t);
                 paintPilotMarks(t);
                 paintPilotSuggest(t);
+                paintPilotScrub(t);
+                paintPilotNow(t);
+                piTransportPaint();
                 var ck = el('dtwPiClock'); if (ck) ck.textContent = clockFmt(t);
                 var slc = el('dtwPiSlateClock'); if (slc) slc.textContent = clockFmt(t);
                 var num = el('dtwPiDialNum');
@@ -56296,6 +56552,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var focusSeat = view.hover != null ? view.hover : view.seat;
                 function seatsOf(cohortKey) { return piCohortSeats(s, cohortKey); }
                 var cut = (view.mode === 'cohorts' && view.cohort) ? cohorts.filter(function(x) { return x.key === view.cohort; })[0] : null;
+                // a finished test keeps the whole dial on screen (Jenna 2026-11-19): the part past the playhead is drawn quiet
+                var replay = piReplayable(s);
+                if (replay && upto < piStopPoint(s) - 0.05) {
+                    var lineRest = function(vals, color, width) {
+                        if (!vals || !vals.length) return;
+                        ctx.strokeStyle = color; ctx.lineWidth = width || 1.2; ctx.beginPath();
+                        var started = false;
+                        for (var i = 0; i < ts.length; i++) {
+                            if (ts[i] < upto) continue;
+                            var yv = Number(vals[i]); if (!isFinite(yv)) continue;
+                            var x = X(ts[i]), y = Y(yv);
+                            if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+                        }
+                        if (started) ctx.stroke();
+                    };
+                    ctx.save(); ctx.globalAlpha = 0.28;
+                    if (cut) lineRest(cut.value, cut.color, 1.2);
+                    else if (view.mode === 'cohorts') cohorts.forEach(function(c) { lineRest(c.value, c.color, 1.0); });
+                    lineRest(vs, '#E9E8E1', 1.4);
+                    ctx.restore();
+                }
                 if (view.mode === 'people') {
                     // every seat thin in its cohort color; the followed seat full and on top
                     roster.forEach(function(r, i) { if (Number(r.seat) === focusSeat) return; var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piAlpha(piSeatLineColor(s, r, i), focusSeat != null ? 0.22 : 0.55), 1.1); });
@@ -56314,6 +56591,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var last = 0;
                 for (var j = 0; j < ts.length; j++) { if (ts[j] <= upto) last = j; }
                 if (vs.length) { ctx.beginPath(); ctx.arc(X(ts[last] || 0), Y(vs[last] || 0), 3.5, 0, Math.PI * 2); ctx.fill(); }
+                if (replay) { var px = Math.round(X(Math.min(upto, dur))) + 0.5; ctx.strokeStyle = 'rgba(199,242,62,0.9)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, 2); ctx.lineTo(px, h - 2); ctx.stroke(); }
                 piDrawBuckets(ctx, s, view, X, Y, upto, dur, w, h);
             }
             function paintPilotRail(t) {
@@ -57308,7 +57586,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function piDialHover(c, e) {
                 var rect = c.getBoundingClientRect(), n = piSeatHit(c, e.clientX - rect.left, e.clientY - rect.top, playheadNow());
-                c.style.cursor = n != null ? 'pointer' : '';
+                c.style.cursor = n != null ? 'pointer' : (piReplayable(S.pilot) ? 'ew-resize' : '');
                 if (n == null) { piHoverSeat(null); piBioRelease(); return; }
                 // the card opens once beside the pointer and stays put while the same line is followed, so it can be read or
                 // scrolled; a card a photo in the room opened moves to the pointer here and leaves with it, as any hover card does
@@ -57327,7 +57605,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 document.addEventListener('keydown', piSeatRowKey, true);
                 document.addEventListener('mousemove', function(e) { var c = e.target; if (c && c.id === 'dtwPiDial') piDialHover(c, e); }, true);
                 document.addEventListener('mouseout', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var to = e.relatedTarget; if (to && to.closest && to.closest('#dtwPiBioCard')) return; c.style.cursor = ''; piHoverSeat(null); piBioRelease(); }, true);
-                document.addEventListener('click', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var rect = c.getBoundingClientRect(), n = piSeatHit(c, e.clientX - rect.left, e.clientY - rect.top, playheadNow()); if (n != null) dtwPilotViewSeat(n); }, true);
+                document.addEventListener('click', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var rect = c.getBoundingClientRect(), n = piSeatHit(c, e.clientX - rect.left, e.clientY - rect.top, playheadNow()); if (n != null) dtwPilotViewSeat(n); else if (piReplayable(S.pilot)) piSeekTo((e.clientX - rect.left) / Math.max(1, rect.width) * piDur(S.pilot)); }, true);
             }
             // ---- the ticker under the dial, the five-minute averages, the minute under the pointer, and the chat lit for a minute
             // (Jenna 2026-11-05: "it needs to show a ticker with duration and time across the bottom so you can see where things
@@ -57456,6 +57734,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var at = Math.max(0, Math.min(dur, fin ? piStopPoint(s) : (Number(t) || 0)));
                 ph.style.left = (at / dur * 100).toFixed(3) + '%';
                 ph.title = (fin ? 'Stopped at ' : '') + clockFmt(at);
+                var rp = el('dtwPiTickRp');
+                if (fin && piReplayable(s)) {
+                    if (!rp) { rp = document.createElement('i'); rp.className = 'ph rp'; rp.id = 'dtwPiTickRp'; box.appendChild(rp); }
+                    var tt = Math.max(0, Math.min(dur, Number(t) || 0));
+                    rp.style.left = (tt / dur * 100).toFixed(3) + '%'; rp.style.display = Math.abs(tt - at) < 0.5 ? 'none' : ''; rp.title = clockFmt(tt);
+                } else if (rp) rp.remove();
             }
             // the minute tip: the time, the active line's average in that minute, how many seats were talking, and the read
             var PI_TIP = { minute: null, key: '', el: null };
@@ -57785,7 +58069,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 metaBits.push(esc(s.cut_label || 'Cut A'));
                 metaBits.push('Compared to: ' + esc(piComparedLabel(piNormChoice(s))));
                 if (s.lineage && s.lineage.parent) metaBits.push('<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(s.lineage.parent) + '\')">against ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>');
-                var controls = '<div class="dtw-pi-controls"><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span></div>';
+                var controls = piReplayable(s) ? piTransportHtml(s) : (piFinished(s) && !preparing) ? '<div class="dtw-pi-controls"><span class="dtw-pi-note" id="dtwPiNote">Stopped. This test kept no second-by-second readings to run back through.</span><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span></div>' : '<div class="dtw-pi-controls"><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span></div>';
                 // the controls ride in the locked test bar (2026-11-03); the meta line stays over the stage
                 var topbar = '<div class="dtw-pi-topbar"><div class="meta">' + metaBits.map(function(b) { return '<span>' + b + '</span>'; }).join('') + '</div></div>';
                 var live = isLiveSess(s) && (watchMedia(s) || {}).kind !== 'video', platform = (s.media || {}).platform_label || 'the service';
@@ -57797,8 +58081,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var stage = '<div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><iframe id="dtwPiFrame" class="dtw-pi-frame" title="The episode" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade" style="display:none"></iframe><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">' + esc(clockFmt(t0)) + '</div><div class="s" id="dtwPiOn"></div><div class="s">' + esc(hint) + '</div>' + (slateBtns ? '<div class="dtw-pi-slatebtns">' + slateBtns + '</div>' : '') + '</div></div>';
                 var center = '<div class="dtw-pi-col center">' + topbar + stage + prep
                     + '<div class="dtw-pi-dialwrap"><canvas id="dtwPiDial"></canvas><div class="dtw-pi-dialnum" id="dtwPiDialNum"></div></div>'
+                    + (piReplayable(s) ? piScrubHtml(s) : '')
                     + '<div class="dtw-pi-ticker" id="dtwPiTicker" aria-label="Minutes"></div>'
                     + splitLegend(s)
+                    + (piReplayable(s) ? '<div class="dtw-pi-now" id="dtwPiNow">' + piNowHtml(s, t0) + '</div>' : '')
                     + '<div class="dtw-pi-marks" id="dtwPiMarks">' + renderPilotMarks(s, t0) + '</div></div>';
                 var kindSel = piKindSel();
                 var roomInner = piRoomHtml(s, t0, kindSel);
@@ -57844,6 +58130,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (piRoomPopped() && S.roomPopHtml) piPaintPopout(S.roomPopHtml);
                 piScrollRestore(h, keep);
                 piFocusScroll(!keep && S.pilot.status === 'playing');   // a test already playing when it is first shown settles once; a repaint leaves the fold alone
+                if (piReplayable(S.pilot)) { if (S.pilotClock.sid !== S.pilot.id) { S.pilotClock.sid = S.pilot.id; S.pilotClock.t = piStopPoint(S.pilot); S.pilotReplay.on = false; } }
+                else { S.pilotClock.sid = S.pilot.id; if (S.pilotReplay.on) piReplayHalt(true); }
                 bindPilotMedia();
                 schedulePilotPortraits();
                 revealPilot(playheadNow());
@@ -58554,6 +58842,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
             window.dtwPilotSeek = function(t) {
                 t = Number(t || 0);
+                if (piReplayable(S.pilot)) { piSeekTo(t); return; }
                 var v = el('dtwPiVideo');
                 if (v && v.src) { try { v.currentTime = t; } catch (_) {} }
                 S.pilotClock.t = t;
