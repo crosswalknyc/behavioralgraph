@@ -164,12 +164,16 @@ def api_synth_chat_read_status(job_id):
         return err
     if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
         return jsonify({'success': False, 'error': 'bad job id'}), 400
-    try:
-        resp = _H.s3_client.get_object(
-            Bucket=_H.S3_BUCKET, Key=f"{_C._PM_READ_PREFIX}{job_id}.json")
-        payload = json.loads(resp['Body'].read().decode('utf-8'))
-    except Exception:
-        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    payload = None
+    if _store.read_enabled():   # the mirror first (stage 6), S3 on a miss
+        payload = _store.doc_get(f"{_C._PM_READ_PREFIX}{job_id}.json", None)
+    if not isinstance(payload, dict):
+        try:
+            resp = _H.s3_client.get_object(
+                Bucket=_H.S3_BUCKET, Key=f"{_C._PM_READ_PREFIX}{job_id}.json")
+            payload = json.loads(resp['Body'].read().decode('utf-8'))
+        except Exception:
+            return jsonify({'success': False, 'error': 'unknown job'}), 404
     uname = (user.get('username') or user.get('email') or '').strip()
     if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403

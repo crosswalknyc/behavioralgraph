@@ -19,6 +19,22 @@ Tables (created by `migrate()`):
 
 Backfill: scripts/backfill_pm_store.py reads the S3 documents into the
 tables; idempotent (upserts on the natural keys).
+
+The document mirror (rebuild stage 6, 2026-11-20). The records Prometheus
+writes most and reads most (a reader's chat threads and their index, the
+generated-read job documents, the insights ledger index) are mirrored
+into ``pm_docs`` byte for byte, keyed by their S3 key, at the moment they
+are written to S3 (``doc_put``, called from the three write seams:
+prometheus.legacy.watch._pm_s3_put_json, prometheus.thread_merge._put,
+prometheus.legacy.jobs._pm_read_status_write and
+insights_ledger._put_index_cas). S3 stays the system of record and is
+never deleted or moved; the mirror is write-through. Reading from the
+mirror is a second switch, ``PM_STORE_READ=1`` (``read_enabled``), under
+which ``_pm_s3_json`` returns the mirrored document first and falls back
+to S3 on a miss. The ledger index keeps its S3 ETag compare-and-set, so
+its read stays on S3; the mirror of it serves the morning review and
+the ops page. Parity: scripts/pm_store_parity.py replays the corpus and
+compares every mirrored key against what landed in S3.
 """
 from __future__ import annotations
 
@@ -62,6 +78,11 @@ DDL = [
     # model call (dashboard, API and the build server alike)
     """CREATE TABLE IF NOT EXISTS pm_request_charges (
         request_id TEXT PRIMARY KEY, billed_usd REAL, cost_usd REAL, calls INTEGER, updated_at TEXT)""",
+    # the document mirror (stage 6): one row per mirrored S3 document, the
+    # body exactly as S3 holds it
+    """CREATE TABLE IF NOT EXISTS pm_docs (
+        key TEXT PRIMARY KEY, family TEXT NOT NULL, body TEXT NOT NULL, nbytes INTEGER, sha TEXT, updated_at TEXT)""",
+    "CREATE INDEX IF NOT EXISTS pm_docs_family ON pm_docs (family, updated_at)",
 ]
 
 
@@ -337,7 +358,7 @@ def counts():
     try:
         if not _ensure():
             return out
-        for t in ('pm_ask_log', 'pm_threads', 'pm_jobs', 'pm_ledger_facts'):
+        for t in ('pm_ask_log', 'pm_threads', 'pm_jobs', 'pm_ledger_facts', 'pm_docs'):
             out[t] = _exec(f'SELECT COUNT(*) FROM {t}').fetchone()[0]
     except Exception as e:
         _note('store.counts', e)
@@ -353,6 +374,247 @@ def reset_for_tests():
         except Exception:
             pass
         _conn, _kind, _migrated = None, None, False
+
+
+# ------------------------------------------------------------ document mirror
+THREADS_PREFIX = 'system/synth_chat_threads/'
+READS_PREFIX = 'system/prometheus_reads/'
+LEDGER_INDEX_KEY = 'system/insights_ledger/index.json'   # insights_ledger.INDEX_KEY
+
+
+def family_of(key):
+    """'thread' | 'read' | 'ledger_index' | None: which mirrored family an
+    S3 key belongs to. A read job document is the one-segment JSON under
+    the reads prefix; the queue, chain and in-flight markers under it are
+    transient and are not mirrored."""
+    k = str(key or '')
+    if k.startswith(THREADS_PREFIX) and k.endswith('.json'):
+        return 'thread'
+    if k == LEDGER_INDEX_KEY:
+        return 'ledger_index'
+    if k.startswith(READS_PREFIX) and k.endswith('.json') and '/' not in k[len(READS_PREFIX):]:
+        return 'read'
+    return None
+
+
+def mirrors(key):
+    return family_of(key) is not None
+
+
+def read_enabled():
+    """The second switch: read mirrored documents before S3."""
+    return enabled() and os.environ.get('PM_STORE_READ', '') == '1'
+
+
+# counters for the ops page and the parity harness: how often the mirror
+# was written, how often a read came from it, how often it fell through
+STATS = {'doc_put': 0, 'doc_hit': 0, 'doc_miss': 0}
+
+
+def doc_put(key, body):
+    """Mirror one S3 document, the body exactly as written to S3 (bytes or
+    str). True when stored; False when the store is off, the key is not a
+    mirrored family, or the write failed (counted, never raised)."""
+    fam = family_of(key)
+    if not fam or not enabled():
+        return False
+    try:
+        if not _ensure():
+            return False
+        import hashlib
+        text = body.decode('utf-8') if isinstance(body, (bytes, bytearray)) else str(body)
+        _upsert('pm_docs', ('key',), ('key', 'family', 'body', 'nbytes', 'sha', 'updated_at'),
+                (str(key), fam, text, len(text.encode('utf-8')), hashlib.sha1(text.encode('utf-8')).hexdigest(), _now_iso()))
+        STATS['doc_put'] += 1
+        return True
+    except Exception as e:
+        _note('store.doc_put', e)
+        return False
+
+
+def doc_text(key):
+    """The mirrored body as text, or None."""
+    if not enabled() or not mirrors(key):
+        return None
+    try:
+        if not _ensure():
+            return None
+        row = _exec('SELECT body FROM pm_docs WHERE key = %s', (str(key),)).fetchone()
+        STATS['doc_hit' if row else 'doc_miss'] += 1
+        return row[0] if row else None
+    except Exception as e:
+        _note('store.doc_text', e)
+        return None
+
+
+def doc_get(key, default=None):
+    """The mirrored document parsed, or ``default`` on a miss."""
+    text = doc_text(key)
+    if text is None:
+        return default
+    try:
+        return json.loads(text)
+    except Exception as e:
+        _note('store.doc_get', e)
+        return default
+
+
+def doc_keys(family=None, limit=100000):
+    """The mirrored keys, newest first."""
+    if not enabled():
+        return []
+    try:
+        if not _ensure():
+            return []
+        if family:
+            cur = _exec('SELECT key FROM pm_docs WHERE family = %s ORDER BY updated_at DESC LIMIT %s', (family, int(limit)))
+        else:
+            cur = _exec('SELECT key FROM pm_docs ORDER BY updated_at DESC LIMIT %s', (int(limit),))
+        return [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        _note('store.doc_keys', e)
+        return []
+
+
+def docs_count(family=None):
+    if not enabled():
+        return 0
+    try:
+        if not _ensure():
+            return 0
+        if family:
+            return int(_exec('SELECT COUNT(*) FROM pm_docs WHERE family = %s', (family,)).fetchone()[0])
+        return int(_exec('SELECT COUNT(*) FROM pm_docs').fetchone()[0])
+    except Exception as e:
+        _note('store.docs_count', e)
+        return 0
+
+
+# ------------------------------------------------- the one write seam
+# Every writer of a mirrored document (the shared helper, the ETag-guarded
+# thread merge, the read status write, the read worker's claim, the
+# sweeper, the drilldown job write, the ledger index compare-and-set)
+# puts through the S3 client. The mirror hooks the client once, at bind,
+# and mirrors after every successful put of a mirrored key: nothing is
+# mirrored that S3 refused, nothing a writer does can bypass it, and no
+# writer needs to know the mirror exists. Reads are the explicit seams
+# (_pm_s3_json, the read status route, service.find_job_doc) under the
+# read switch, with S3 as the fallback.
+_MARK = '_pm_store_mirror_wrapped'
+_CTX = '_pm_store_mirror'
+
+
+def _provide_params(params, context=None, **_kw):
+    try:
+        if isinstance(context, dict) and isinstance(params, dict):
+            key = params.get('Key')
+            if key and mirrors(key):
+                body = params.get('Body')
+                if isinstance(body, (bytes, bytearray, str)):
+                    context[_CTX] = (str(key), body)
+    except Exception:
+        pass
+
+
+def _after_call(http_response=None, parsed=None, model=None, context=None, **_kw):
+    try:
+        if not isinstance(context, dict):
+            return
+        hit = context.pop(_CTX, None)
+        if not hit:
+            return
+        status = getattr(http_response, 'status_code', 200)
+        if status is not None and int(status) >= 300:
+            return
+        doc_put(hit[0], hit[1])
+    except Exception as e:
+        _note('store.mirror_after_call', e)
+
+
+def _register_events(events, own=False):
+    tag = 'own-' if own else ''
+    reg = events.register_first if own else events.register
+    reg('provide-client-params.s3.PutObject', _provide_params, unique_id=f'pm-store-mirror-{tag}params')
+    reg('after-call.s3.PutObject', _after_call, unique_id=f'pm-store-mirror-{tag}after')
+
+
+def _wrap_plain(client):
+    """A store client that is not botocore's (the in-memory store the
+    tests and the replay use): the mirror on its put_object."""
+    fn = getattr(client, 'put_object', None)
+    if not callable(fn) or getattr(fn, _MARK, False):
+        return
+
+    def inner(*a, **k):
+        out = fn(*a, **k)
+        try:
+            key, body = k.get('Key'), k.get('Body')
+            if key and mirrors(key) and isinstance(body, (bytes, bytearray, str)):
+                doc_put(key, body)
+        except Exception as e:
+            _note('store.mirror_plain', e)
+        return out
+    setattr(inner, _MARK, True)
+    try:
+        setattr(client, 'put_object', inner)
+    except Exception:
+        pass
+
+
+def install_mirror(client=None):
+    """Put the mirror on ``client`` and on every S3 client made after
+    this call. Safe to call more than once. Returns the client."""
+    try:
+        import boto3
+        _register_events(boto3._get_default_session().events)
+    except Exception:
+        pass
+    if client is None:
+        return client
+    try:
+        events = getattr(getattr(client, 'meta', None), 'events', None)
+        if events is not None and hasattr(events, 'register'):
+            _register_events(events, own=True)
+        else:
+            _wrap_plain(client)
+    except Exception as e:
+        _note('store.install_mirror', e)
+    return client
+
+
+def parity(objects):
+    """Compare the mirror against ``objects`` ({key: bytes} as S3 holds
+    them). Returns {'checked', 'same', 'different', 'only_s3',
+    'only_store', 'by_family': {...}} over the mirrored families; the
+    keys of every difference ride under 'different_keys' (first 50)."""
+    out = {'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0, 'only_store': 0, 'by_family': {}, 'different_keys': []}
+    mirrored = {k: v for k, v in (objects or {}).items() if mirrors(k)}
+    seen = set()
+    for k, body in mirrored.items():
+        fam = family_of(k)
+        f = out['by_family'].setdefault(fam, {'checked': 0, 'same': 0, 'different': 0, 'only_s3': 0})
+        text = body.decode('utf-8') if isinstance(body, (bytes, bytearray)) else str(body)
+        have = doc_text(k)
+        out['checked'] += 1
+        f['checked'] += 1
+        seen.add(k)
+        if have is None:
+            out['only_s3'] += 1
+            f['only_s3'] += 1
+            if len(out['different_keys']) < 50:
+                out['different_keys'].append(('only_s3', k))
+        elif have == text:
+            out['same'] += 1
+            f['same'] += 1
+        else:
+            out['different'] += 1
+            f['different'] += 1
+            if len(out['different_keys']) < 50:
+                out['different_keys'].append(('different', k))
+    for k in doc_keys():
+        if k not in seen:
+            out['only_store'] += 1
+    return out
 
 
 # ---------------------------------------------------------------- key surface

@@ -178,6 +178,14 @@ def find_job_doc(job_id):
         return None, None
     s3 = host.s3_client
     for prefix, jtype in _job_prefixes():
+        try:   # the store's mirror first under the read switch (stage 6, 2026-11-20); S3 on a miss
+            from . import store as _st
+            if _st.read_enabled():
+                _hit = _st.doc_get(f'{prefix}{jid}.json', None)
+                if isinstance(_hit, dict):
+                    return _hit, jtype
+        except Exception as _fx:
+            _faults.note('service', _fx)
         try:
             obj = s3.get_object(Bucket=host.bucket, Key=f'{prefix}{jid}.json')
             return json.loads(obj['Body'].read().decode('utf-8')), jtype

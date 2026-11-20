@@ -10814,12 +10814,8 @@ def _pm_read_job_doc(job_id):
     jid = ''.join(c for c in str(job_id or '') if c.isalnum() or c in '-_')
     if not jid:
         return None
-    try:
-        obj = _H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=f"{_PM_READ_PREFIX}{jid}.json")
-        doc = json.loads(obj['Body'].read().decode('utf-8'))
-        return doc if isinstance(doc, dict) else None
-    except Exception:
-        return None
+    doc = _pm_s3_json(f"{_PM_READ_PREFIX}{jid}.json", None)   # the shared read: the store's mirror first under PM_STORE_READ (stage 6, 2026-11-20), S3 on a miss
+    return doc if isinstance(doc, dict) else None
 
 
 def _pm_job_bind_thread(job_id, username=None, resumed=False, question=''):

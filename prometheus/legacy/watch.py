@@ -501,6 +501,16 @@ def _pm_safe_user(username):
 
 
 def _pm_s3_json(key, default):
+    # the store's mirror first when the read switch is on (rebuild stage 6,
+    # 2026-11-20: PM_STORE_READ=1); a miss or a fault falls through to S3
+    try:
+        from prometheus import store as _st
+        if _st.read_enabled() and _st.mirrors(key):
+            _hit = _st.doc_get(key, None)
+            if _hit is not None:
+                return _hit
+    except Exception:
+        pass
     try:
         obj = _H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=key)
         return json.loads(obj['Body'].read().decode('utf-8'))
@@ -511,6 +521,9 @@ def _pm_s3_json(key, default):
 
 
 def _pm_s3_put_json(key, obj):
+    # a mirrored key (a thread, a read job document, the ledger index) is
+    # mirrored into the store by the client hook after S3 takes it
+    # (prometheus.store.install_mirror, rebuild stage 6, 2026-11-20)
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=key,
         Body=json.dumps(obj, indent=2).encode('utf-8'),

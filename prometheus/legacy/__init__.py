@@ -82,6 +82,12 @@ def bind(mod):
         _pf.install(getattr(mod, 's3_client', None))
     except Exception:
         pass
+    try:   # and the store's document mirror (rebuild stage 6, 2026-11-20): every put of a thread, a read job
+        # document or the ledger index is mirrored after S3 takes it; off unless the store is on
+        from prometheus import store as _st
+        _st.install_mirror(getattr(mod, 's3_client', None))
+    except Exception:
+        pass
 
 
 def bind_core(mod):
