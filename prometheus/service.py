@@ -742,6 +742,10 @@ def ask(user, body, *, via='session'):
                               extra=(text, body.get('_pm_continued_from')))
     except Exception as _fx:
         _faults.note('service', _fx)
+    try:   # the correction this ask continues from, for the lanes that ask whether the page was pushed away (prometheus.screen_scope)
+        __import__('flask').g._pm_continued_from = str(body.get('_pm_continued_from') or '')
+    except Exception:
+        pass
     # A read that landed since the reader's last message and that the copy
     # of the thread the widget sent does not show yet (prometheus.read_landing,
     # Jenna 2026-11-10): noted here, attached once to the reply as a single
@@ -3782,7 +3786,16 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
     except Exception:
         page = ''
     if _rd.refers_to_page(reading) and page:
-        subs = [page] + [x for x in subs if x.lower() not in ('<page>', 'this', 'that', 'it')]
+        # the Reader's flag says the words point back at something; the page is that something only when the words
+        # point at the screen themselves (prometheus.screen_scope, Jenna 2026-11-20); else the thread or a question
+        try:
+            from . import screen_scope as _ss_x
+            _page_ok = (not _ss_x.enabled()) or _ss_x.page_is_subject(text, history, page)[0]
+        except Exception:
+            _page_ok = True
+        subs = [x for x in subs if x.lower() not in ('<page>', 'this', 'that', 'it', 'this audience')]
+        if _page_ok:
+            subs = [page] + subs
     if intent == 'size':
         from . import sizing_lane as _szl, guards as _g
         if body.get('_pm_priced_retry'):

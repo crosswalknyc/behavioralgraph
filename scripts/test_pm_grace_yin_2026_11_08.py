@@ -90,10 +90,15 @@ class PointsAtThePage(unittest.TestCase):
         self.assertEqual(s.source, 'page')
         self.assertTrue(s.pointed)
 
-    def test_reader_flag_is_a_pointer_too(self):
+    def test_reader_flag_alone_is_not_a_pointer(self):
+        # the Reader's own flag never binds the screen; the words must point at it (Jenna 2026-11-20: never use what is
+        # on screen for context, always ask). "those viewers" with no thread is nobody in particular.
         s = sr.bind('are those viewers on a paid plan', None, PAGE,
                     reading={'intent': 'analyze', 'confidence': 0.8, 'subjects': [], 'flags': ['refers_to_page']})
-        self.assertEqual(s.name, PAGE)
+        self.assertNotEqual(s.name, PAGE)
+        s2 = sr.bind('are the viewers in this profile on a paid plan', None, PAGE,
+                     reading={'intent': 'analyze', 'confidence': 0.8, 'subjects': [], 'flags': ['refers_to_page']})
+        self.assertEqual(s2.name, PAGE)
 
     def test_no_page_no_pointer(self):
         s = sr.bind(Q5, None, '', reading={'intent': 'analyze', 'confidence': 0.8, 'subjects': [], 'flags': []})

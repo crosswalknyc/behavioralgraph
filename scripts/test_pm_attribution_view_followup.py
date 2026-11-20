@@ -54,12 +54,16 @@ IIQ = {"view_context": {"view_id": "intentIQ",
 SUB = {"view_context": {"view_id": "subscriberIQ",
                         "view_title": "Subscriber IQ", "data": {}}}
 
-check("the defect ask grounds on the Attribution view",
-      owns("where is the fall-off from the ticket checkout page?", IIQ))
-check("checkout vocabulary owns the Attribution view",
-      owns("why do people abandon at checkout?", IIQ))
-check("touch vocabulary owns the Attribution view",
-      owns("what was the strongest last-touch?", IIQ))
+# Jenna 2026-11-20: what is on the screen never decides on its own. Funnel words alone do not hand the ask to the
+# open campaign; the words point at it ("this campaign", "on this page") or name it, or the lane asks.
+check("the defect ask grounds on the Attribution view when the words point at it",
+      owns("where is the fall-off from the ticket checkout page in this campaign?", IIQ))
+check("funnel vocabulary alone does not own the Attribution view",
+      not owns("where is the fall-off from the ticket checkout page?", IIQ))
+check("checkout vocabulary owns the Attribution view when the words point at it",
+      owns("why do people abandon at checkout on this page?", IIQ))
+check("touch vocabulary alone does not own the Attribution view",
+      not owns("what was the strongest last-touch?", IIQ))
 check("funnel vocabulary does not own other views bare",
       not owns("where is the fall-off from the ticket checkout page?",
                SUB))
@@ -68,7 +72,7 @@ check("original campaign vocabulary still owns",
 check("no view context never owns",
       not owns("where is the fall-off from checkout?", {}))
 
-# On-screen vocabulary overlap binds any data view.
+# Naming what the view is about (its show, an episode on it) binds any data view; shared words on the screen do not.
 HYD = {"view_context": {
     "view_id": "subscriberIQ", "view_title": "Subscriber IQ",
     "data": {"show": "Landman", "episodes": [

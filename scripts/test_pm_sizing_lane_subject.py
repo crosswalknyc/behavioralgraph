@@ -110,12 +110,19 @@ class Trigger(unittest.TestCase):
 
 class PageBinding(unittest.TestCase):
     def test_a_bare_ask_sizes_the_open_profile(self):
-        for t in ('how many people are in this audience', 'how big is it', 'how big is this one',
-                  "what's the size of this audience", 'size this'):
+        # the words point at the screen: the open profile is sized (its figure is free)
+        for t in ('how many people are in this profile', 'how big is the one I have open', 'how big is this profile',
+                  "what's the size of the audience on this page", 'size this profile'):
             self.assertTrue(SZ.wants_sizing(t), t)
             self.assertEqual(SZ.subjects(t, PAGE), ['Howie Mandel'], t)
             self.assertTrue(P.sizes_open_page(t, PAGE), t)
             self.assertIsNone(P.classify(t, [], PAGE), t)     # a figure on screen: the free lookup, never a quote
+        # "this audience" / "it" with no thread is nobody in particular: the lane asks, the open profile is never taken
+        # (Jenna 2026-11-20: never use what is on screen for context, always ask)
+        for t in ('how many people are in this audience', 'how big is it', "what's the size of this audience", 'size this'):
+            self.assertTrue(SZ.wants_sizing(t), t)
+            self.assertNotIn('Howie Mandel', SZ.subjects(t, PAGE), t)
+            self.assertFalse(P.sizes_open_page(t, PAGE), t)
 
     def test_naming_the_open_subject_sizes_it(self):
         t = "how big is Howie Mandel's audience"

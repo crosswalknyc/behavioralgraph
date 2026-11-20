@@ -293,6 +293,18 @@ _READ_INTENTS = frozenset(('analyze', 'analyze_page', 'insight_ask', 'brand_fit'
 _NAMED_KINDS = frozenset(('title', 'brand', 'person', 'audience'))
 
 
+def _points_at_screen(text):
+    """The words point at the open view itself (prometheus.screen_scope);
+    the older, looser pattern when the rule is switched off."""
+    try:
+        from . import screen_scope as _ss
+        if _ss.enabled():
+            return _ss.points_at_screen(text)
+    except Exception:
+        pass
+    return bool(_PAGE_RX.search(str(text or '')))
+
+
 def _page_of(ctx):
     try:
         return str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
@@ -435,7 +447,7 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         wiz_open = bool(f.get('wizard_open')) and not f.get('cancel') and not sc.armed_step
         sc.own_order = bool(_OWN_ORDER_RX.search(t))
         sc.feature = bool(f.get('directions')) or (bool(f.get('wayfinding')) and not sc.own_order)
-        sc.page = bool(_PAGE_RX.search(t)) and bool(ctx)
+        sc.page = bool(_points_at_screen(t)) and bool(ctx)
         sc.people = bool(_PEOPLE_RX.search(t))
         u.scope = sc
         # the title the words name, when it is not the one carried

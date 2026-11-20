@@ -1015,7 +1015,11 @@ _METRIC_WORDS = frozenset((
 # a leading verb makes the phrase a behavior, not a thing
 _DISCOURSE_LEAD_RX = re.compile(
     r"^(?:what|how|which|why|when|where|who|whom|whose|is|are|was|were|can|could|would|should|do|does|did|and|also|but|so|or|"
-    r"what about|how about|same for|now|then|ok|okay|yes|no)\b", re.I)
+    r"what about|how about|same for|now|then|ok|okay|yes|no|"
+    # an instruction is not an audience name ("rank the top retailers for these shoppers" was quoted as a read on
+    # "Rank the Top Retailers for These shoppers", 2026-11-20)
+    r"rank|show|list|give|tell|find|compare|calculate|compute|break|split|cross|size|pull|run|build|send|get|describe|"
+    r"analy[sz]e|identify|summari[sz]e|count|measure|estimate|project|map|chart|plot|table|export|email|please)\b", re.I)
 _BEHAVIOR_LEAD_RX = re.compile(
     r"^(?:who\s+)?(?:also\s+)?(?:watch(?:es|ed|ing)?|drink(?:s|ing)?|drank|buy(?:s|ing)?|bought|read(?:s|ing)?|"
     r"listen(?:s|ed|ing)?|play(?:s|ed|ing)?|stream(?:s|ed|ing)?|shop(?:s|ped|ping)?|eat(?:s|ing)?|ate|"
@@ -1721,6 +1725,10 @@ def sentence_audience(text, casing=None):
         low = raw.lower()
         if low in _SENTENCE_STOP or low in _NEVER_LABEL or is_metric_phrase(raw):
             continue
+        # a run of function words is not a name ("For the audience in this profile" opens with 'For the')
+        if all(w.lower() in _SENTENCE_STOP or w.lower() in ('for', 'of', 'on', 'in', 'to', 'at', 'by', 'with', 'from', 'about', 'and', 'or', 'this', 'that', 'my', 'your')
+               for w in words):
+            continue
         name = clean_display(raw, t, casing) or raw
         if not name or len(name) < 2:
             continue
@@ -1906,6 +1914,19 @@ def _bind_words(text, history=None, page='', reading=None, catalog_names=None, n
         r"sign[- ]?ups|signups|fans|buyers|shoppers|individuals|persons)\b", t, re.I))
     if not pointed and isinstance(reading, dict) and 'refers_to_page' in (reading.get('flags') or []):
         pointed = True
+    # What is on screen is never the subject unless the words point at it (Jenna 2026-11-20, prometheus.screen_scope):
+    # "this audience", "these people", "it" and the Reader's flag say the words point back at SOMETHING; only an
+    # explicit pointer at the screen ("this profile", "the one I have open", "on this page") makes that something the
+    # page. The thread's own subject still answers a pointer below (step 8); the page does only when pointed at.
+    try:
+        from . import screen_scope as _ss
+        if _ss.enabled() and page:
+            pointed_at_page = bool(_ss.points_at_screen(t))    # "the viewers in the open profile", "on this page"
+            pointed = pointed or pointed_at_page
+        else:
+            pointed_at_page = pointed
+    except Exception:
+        pointed_at_page = pointed
     # 1. an explicit build order names its subject
     eb = explicit_build_subject(t)
     if eb:
@@ -2028,7 +2049,7 @@ def _bind_words(text, history=None, page='', reading=None, catalog_names=None, n
         disp = clean_display(subs[0], '', casing) or subs[0]
         if disp:
             return Subject('audience', disp, disp, quals, 'thread', 0.5, pointed)
-    if page and pointed:
+    if page and pointed_at_page:
         return Subject('audience', page, page, quals, 'page', 0.5, True)
     return Subject('none', '', '', quals, 'none', 0.0, pointed)
 
@@ -2186,6 +2207,19 @@ def bind_or_continue(text, ctx, history, ask_hint=None):
                 if callable(ask_hint):
                     ask_hint(route='screen_bind', outcome='bound_thread_pin', subject=pin)
                 return {'route': 'bind', 'subject': pin, 'qualifiers': {}}
+            # the thread's own earlier subject carries forward (Jenna 2026-11-20): an ask that names nothing and
+            # does not point at the screen, in a thread whose last answer was on another subject, is about that
+            # subject ("what do they buy" after a read on Northwind Sports), never the page and never a question
+            try:
+                from . import screen_scope as _ss_bc
+                if _ss_bc.enabled() and not _ss_bc.points_at_screen(text) and not _ss_bc.thread_on_page(history, page, norm):
+                    _subs = [x for x in thread_subjects(history, page) if x and not _same_family(x, page, norm)]
+                    if _subs:
+                        if callable(ask_hint):
+                            ask_hint(route='screen_bind', outcome='continued_thread_subject', subject=_subs[0])
+                        return {'route': 'bind', 'subject': _subs[0], 'qualifiers': {}}
+            except Exception:
+                pass
         if s and s.source == 'words' and s.kind in ('title', 'brand', 'person', 'audience') and not _same_family(s.display, page, norm):
             # "people who watched the Among Us series on Paramount+" with
             # Paramount+ open binds Among Us; the page rides as the

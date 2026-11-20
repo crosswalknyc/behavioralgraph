@@ -95,9 +95,11 @@ _DROP_RX = re.compile(
     r"forget\s+(?:about\s+)?|drop|leave\s+out|instead\s+of|rather\s+than)\s+"
     r"(?P<names>[A-Za-z0-9][A-Za-z0-9&'+.:/-]*(?:\s+[A-Za-z0-9&'+.:/-]+){0,7})", re.I)
 # the name before the complaint: "no! LeBron James has nothing to do with this"
+# the verb typed short ("Lebron james hs nothing to do with this") still drops the name; a contraction ("that's not
+# what I meant") leaves only the pronoun, which is never a name
 _DROP_BEFORE_RX = re.compile(
-    r"(?P<names>[A-Za-z][A-Za-z0-9&'+.:/-]*(?:\s+[A-Za-z0-9][A-Za-z0-9&'+.:/-]*){0,4}?)\s+"
-    r"(?:has|have|had|is|was)\s+(?:nothing\s+to\s+do\s+with|not\s+(?:what|the\s+subject|relevant|related|part\s+of)|"
+    r"(?P<names>[A-Za-z][A-Za-z0-9&+.:/-]*(?:\s+[A-Za-z0-9][A-Za-z0-9&'+.:/-]*){0,4}?)"
+    r"(?:\s+(?:has|hs|hav|have|had|is|was|got)|['’]s)\s+(?:nothing\s+to\s+do\s+with|not\s+(?:what|the\s+subject|relevant|related|part\s+of)|"
     r"(?:an?\s+)?(?:independent|separate|unrelated|different)\s+(?:of|from|to)|irrelevant)\b", re.I)
 _DROP_BEFORE_SKIP = frozenset(('no', 'nope', 'this', 'that', 'it', 'which', 'what', 'the', 'a', 'an', 'but', 'and',
                                'so', 'okay', 'ok', 'well', 'also', 'again', 'sorry', 'please', 'i', 'we', 'you', 'he',

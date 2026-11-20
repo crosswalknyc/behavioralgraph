@@ -579,11 +579,14 @@ DOOR_ITEMS = (
        dict(PROFILE, question="what should I know before a pitch meeting"),
        dict(PROFILE, question="what is the median age")]
     # 30-34: the words point at the screen, or name the open profile
-    + [dict(PROFILE, question="what share of this audience is female"),
-       dict(PROFILE, question="what do these viewers buy"),
+    + [dict(PROFILE, question="what share of this profile is female"),
+       dict(PROFILE, question="what do the viewers in this profile buy"),
        dict(PROFILE, question="top brands here"),
        dict(PROFILE, question="summarize this profile"),
        dict(PROFILE, question="what share of Amazon Prime Video viewers also use Hulu")]
+    # 35-36: an audience noun with no thread is nobody in particular; the screen is never taken (Jenna 2026-11-20)
+    + [dict(PROFILE, question="what share of this audience is female"),
+       dict(PROFILE, question="what do these viewers buy")]
 )
 
 
@@ -702,6 +705,14 @@ class ThroughTheDoor(unittest.TestCase):
         self.assertTrue(summary['jobs'])
         self.assertIn('reading Amazon Prime Video now', summary['reply'])
         self.assertIn(PAGE, str(named['subject']))
+
+    def test_an_audience_noun_alone_never_takes_the_screen(self):
+        for r in self.res[35:37]:
+            self.assertNotEqual((r['route'], r['outcome']), ('panel_fact', 'answered'), r['reply'][:120])
+            self.assertNotEqual(r['route'], 'page_analysis', r['reply'][:120])
+            self.assertTrue(r['reply'].rstrip().endswith(('?', 'audience.')), r['reply'])
+            self.assertFalse(re.search(r"\d", r['reply']), 'a figure from the open profile was volunteered')
+            self.assertTrue(any(PAGE in c for c in r['chips']), 'the profile is offered, one tap, never taken')
 
 
 if __name__ == '__main__':

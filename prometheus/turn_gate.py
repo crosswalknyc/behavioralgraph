@@ -769,6 +769,8 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
         # and the thread's own subject stays pinned, so no later clarify,
         # read or draft can bring the page back.
         negated = [str(x) for x in ((cont.get('params') or {}).get('negated') or []) if str(x or '').strip()]
+        if subj and _sr._norm(subj) in {_sr._norm(x) for x in negated}:
+            subj = ''   # the subject the reader just pushed away is never continued on, whatever the store holds
         try:
             from . import thread_subject as _ts
             if negated:

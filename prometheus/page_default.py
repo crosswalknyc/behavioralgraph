@@ -93,6 +93,18 @@ def page_base_stands(text, history, page, page_key, bind_subject='', *, normaliz
             return False, f'the words name {_other!r}'
     except Exception:
         traceback.print_exc()
+    # What is on screen is never the subject unless the reader's own words put it there (Jenna 2026-11-20,
+    # prometheus.screen_scope): the words point at the screen, name the page, or this thread's own turns put it on
+    # the page (its last answer landed there, or the reader said yes to it). A word that is a row of the open file
+    # ("beauty" on a profile with a BEAUTY row), a page confirmed in another thread, and a bare pronoun with no
+    # thread behind it decide nothing: the lane asks.
+    try:
+        from . import screen_scope as _ss
+        if _ss.enabled():
+            ok, why = _ss.page_is_subject(text, history, page, normalize=normalize, stop=stop_tokens, bind_subject=bind_subject)
+            return (True, why) if ok else (False, 'not pointed at')
+    except Exception:
+        traceback.print_exc()
     try:
         from . import named_subject as _ns
         if _ns.view_deixis(text):

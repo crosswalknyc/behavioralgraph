@@ -791,12 +791,16 @@ def scope_memory_options(opts, history=None, page=''):
             pass
     except Exception:
         own = []
-    if own and kept:
+    if own:
         fam = [o for o in kept if any(_same_entity(o.get('subject'), x) for x in own)]
         if fam:
             kept = fam
             if len(kept) == 1:
                 return kept, str(kept[0].get('subject') or '')
+        else:
+            # the thread's own subject answers a bare pronoun ("what do they buy") before anything remembered from
+            # another chat or the screen does (Jenna 2026-11-20): bind it, offer nothing else
+            return [{'label': own[0], 'subject': own[0], 'cohort': None}], str(own[0])
     return kept, ''
 
 

@@ -367,12 +367,7 @@ def _sizing_subject(text, ctx=None):
         for s in _sz.subjects(text, ctx):
             if s and s != '__page__' and not _sz.is_panel_noun(s):
                 return _sz.strip_audience_nouns(s) or s
-        page = ''
-        try:
-            page = str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
-        except Exception:
-            page = ''
-        return page or 'that audience'
+        return 'that audience'   # the open page is never the subject a size is quoted on by default (Jenna 2026-11-20)
     except Exception:
         return 'that audience'
 
@@ -1990,23 +1985,40 @@ def is_everyone(label):
         return _fold(label) in ('everyoneintheus', 'everyone', 'genpop', 'usgenpop', 'generalpopulation', 'allusadults', 'usadults')
 
 
-def which_audience(text, ctx=None):
+def which_audience(text, ctx=None, history=None):
     """The one question when a put-together read names no audience and
     does not point at the page (Jenna 2026-10-06: nothing named, nothing
     assumed; 2026-10-24: never the open profile by default). The page is
     a chip, never the answer; everyone in the US is the other chip; the
     widget's "Something else" asks the reader to name one. No quote and
-    no charge until the audience is settled."""
+    no charge until the audience is settled. A page the reader has said
+    no to in this thread is not offered again."""
     page = _page_name(ctx)
+    if page and history is not None:
+        try:
+            from . import screen_scope as _ss_wa
+            if _ss_wa.page_rejected(text, history, page):
+                page = ''
+        except Exception:
+            pass
+    if not page:
+        try:   # the valuation, campaign or journey open on a product tab is the one tap the same way a profile is
+            from . import view_base as _vb_wa
+            _vc_wa = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
+            if _vb_wa.view_base(_vc_wa):
+                page = str(_vb_wa.view_label(_vc_wa) or '').strip()
+        except Exception:
+            page = ''
     opts = []
     if page:
         opts.append({'label': f'{page} (open on your screen)', 'subject': page})
     opts.append({'label': GEN_POP_LABEL, 'subject': GEN_POP_LABEL})
+    # one short question, the open view as one tap inside it, never chosen for the reader (Jenna 2026-11-20)
     if page:
-        reply = (f"Which audience should this run on? The question does not name one, and {page} is only "
-                 f"the profile open on your screen. Pick it, pick everyone in the US, or name another audience.")
+        reply = (f"Which audience should I read for this? The question does not name one, and {page} is only "
+                 f"what is open on your screen. Pick it, pick everyone in the US, or name another audience.")
     else:
-        reply = "Which audience should this run on? The question does not name one. Pick everyone in the US, or name an audience."
+        reply = "Which audience should I read for this? The question does not name one. Pick everyone in the US, or name an audience."
     return {'success': True, 'action': 'answer', 'reply': reply,
             'followups': [o['label'] for o in opts] + ['Something else'],
             'offer_deck': False, 'deck_angle': None, 'audience_confirm': True,
@@ -2105,12 +2117,19 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
                 rd = _sr._request_reading()
             pointed = ('refers_to_page' in (rd.get('flags') or [])) if isinstance(rd, dict) \
                 else bool(_POINTS_AT_PAGE_RX.search(words))
+            try:
+                from . import screen_scope as _ss_wg
+                if _ss_wg.enabled():
+                    # the reader's own words point at the screen or name the page, or this thread put it there; else the lane asks (Jenna 2026-11-20)
+                    pointed = bool(page) and _ss_wg.page_is_subject(words, history, page)[0]
+            except Exception:
+                pass
             if page and pointed:
                 body['bind_subject'] = page
                 return None
         except Exception:
             pass
-        return which_audience(words, ctx)
+        return which_audience(words, ctx, history)
     kind = hit['kind'] if hit['kind'] in CUSTOM_FAMILY or hit['kind'] == 'viewership' else 'report'
     extra = {}
     try:

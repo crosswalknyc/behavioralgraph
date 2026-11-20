@@ -397,6 +397,14 @@ def screen_bind_verdict(text, page, base, page_key, normalize, stop):
     if topic_only(text) and not (
             base and str(base.get('source') or '') == 'catalog'
             and str(base.get('s3_key') or '') != str(page_key or '')):
+        try:
+            from . import screen_scope as _ss
+            if _ss.enabled():
+                # the page only when the reader's own words point at the screen ("what do the viewers in this profile
+                # buy"); a topic with no pointer is still a question, never the page by default (Jenna 2026-11-20)
+                return 'page' if _ss.points_at_screen(text) else 'confirm'
+        except Exception:
+            pass
         return 'page'
     return 'confirm'
 
@@ -972,7 +980,18 @@ _PLATFORM_REF_RX = (
 
 
 def view_deixis(text):
-    """The ask points at what is on screen."""
+    """The ask points at what is on screen. An explicit pointer only
+    ("this profile", "the one I have open", "on this page", "these
+    numbers"); "this audience" or "these people" on its own is not one
+    (Jenna 2026-11-20: never use what is on screen for context; always
+    ask). prometheus.screen_scope holds the one list; the older pattern
+    stands when the rule is switched off."""
+    try:
+        from . import screen_scope as _ss
+        if _ss.enabled():
+            return _ss.points_at_screen(text)
+    except Exception:
+        pass
     return bool(DEIXIS_RX.search(str(text or '')))
 
 

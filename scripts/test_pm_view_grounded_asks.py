@@ -48,8 +48,10 @@ SUB = {"view_context": {"view_id": "subscriberIQ",
 
 check("the defect ask grounds on the Attribution view",
       owns("What drove conversion in this campaign window?", VC))
-check("campaign vocab alone owns intentIQ asks",
-      owns("which creative drove the most conversions?", VC))
+check("campaign vocab alone never owns intentIQ asks",       # Jenna 2026-11-20: the screen never decides on its own
+      not owns("which creative drove the most conversions?", VC))
+check("campaign vocab owns intentIQ asks when the words point at the screen",
+      owns("which creative drove the most conversions in this campaign?", VC))
 check("screen deixis owns any data view",
       owns("What drove signups this window?", SUB))
 check("analyze-this-screen owns the view",

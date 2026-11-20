@@ -230,7 +230,8 @@ class TheSubjectIsDecidedByRule(_WithLedger):
                 with APP.test_request_context('/api/prometheus/v1/ask', method='POST'):
                     env, _st = S.ask(dict(NB.ARMINE), {'text': P1, 'client': 'dashboard', 'surface': 'analyze',
                                                        '_client_surface_sent': 'analyze', 'history': []})
-                self.assertTrue(env['text'].startswith('Which audience should this run on?'), (label, env['text'][:120]))
+                self.assertTrue(env['text'].startswith(('Which audience should this run on?', 'Which audience should I read for this?')),
+                                (label, env['text'][:120]))
                 self.assertEqual([c for c in w.calls if c[0] in ('analyze', 'interpret')], [], label)     # no lane ran
                 self.assertNotIn('$', env['text'])
         finally:
@@ -254,8 +255,10 @@ class TheSubjectIsDecidedByRule(_WithLedger):
         self.assertEqual(CL.gate(q, thread, None, {}, reading=READINGS['Horror matched to a library profile']),
                          {'bind': 'Mistletoe Murders Viewers', 'cohort': 'on YouTube', 'source': 'record'})
         page = {'primary': {'name': 'Cruel Summer Viewers', 's3_key': 'Cruel_Summer_Viewers_11_11_2026_02_14.csv'}}
-        got = CL.gate('For this audience, which genres do best: Comedy, Drama and Horror?', [], page, {}, reading=None)
+        got = CL.gate('For the audience in this profile, which genres do best: Comedy, Drama and Horror?', [], page, {}, reading=None)
         self.assertEqual((got['bind'], got['source']), ('Cruel Summer Viewers', 'page'))
+        # "this audience" with nothing on the thread is nobody in particular: the reader is asked (Jenna 2026-11-20)
+        self.assertEqual(CL.gate('For this audience, which genres do best: Comedy, Drama and Horror?', [], page, {}, reading=None), {'ask': True})
         # the open page is never the default: with nothing pointing at it the reader is asked, the page a chip
         self.assertEqual(CL.gate(q, [], page, {}, reading=None), {'ask': True})
         self.assertIn('Cruel Summer Viewers (open on your screen)', PR.which_audience(q, page)['followups'])

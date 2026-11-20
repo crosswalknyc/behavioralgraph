@@ -8998,6 +8998,8 @@ def _pm_view_owns_ask(text, ctx):
         return False
     if _PM_VIEW_DEIXIS_RE.search(t):
         return True
+    if __import__('prometheus.screen_scope', fromlist=['enabled']).enabled():
+        return bool(__import__('prometheus.screen_scope', fromlist=['view_named']).view_named(t, vc))   # the words name what the view is about or point at it, or the lane asks (Jenna 2026-11-20)
     if view_id == 'intentIQ' and (
             _PM_CAMPAIGN_ASK_RE.search(t)
             or _PM_FUNNEL_ASK_RE.search(t)
@@ -9072,7 +9074,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     _pg_named = _ns_mod.page_named(text, page, _norm, _stop)
     # On screen, continued (2026-10-13): deixis, the thread's last answer on this page, or a brand that is a row on it binds the page
     _page_signal = (_ns_mod.view_deixis(text) or _ns_mod.thread_on_page(history or [], page, _norm)
-                    or bool(_pm_page_brand_named(text, page_key)))
+                    or (bool(_pm_page_brand_named(text, page_key)) and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled()))   # a row named is not a pointer (Jenna 2026-11-20)
     if _ent and str(_ent.get('s3_key') or '') and _ns_mod.platform_reference(
             text, str(_ent.get('display_name') or _ent.get('subject') or '').split(' - ')[0]):
         _ent = None   # "his youtube channel link" names a surface, not the YouTube profile
@@ -9166,7 +9168,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     elif verdict == 'confirm' and (
             _page_signal
             or _pm_thread_confirmed_page(history, page)
-            or _pm_page_confirmed_recently(_pm_ask_log_user(''), page)):
+            or (_pm_page_confirmed_recently(_pm_ask_log_user(''), page) and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled())):   # another thread's yes binds nothing here (2026-11-20)
         _pm_ask_hint(route='screen_bind', outcome='bound_thread_confirmed',
                      subject=page)
         return {'route': 'bind', 'subject': page}
@@ -9175,7 +9177,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         # the answer's base, stated in the reply with the other file
         # as a switch chip. No third question (2026-10-02 S5).
         verdict = 'page'
-    if verdict == 'confirm' and any(
+    if verdict == 'confirm' and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled() and any(   # asked once is not answered once: the question is asked again (Jenna 2026-11-20)
             str(t.get('role') or '') != 'user' and str(t.get('text') or t.get('content') or '').startswith(f'Do you want this on {page}')
             for t in (history or [])):
         # never twice in a thread (2026-10-13 audit); asked once, the page is the base
@@ -9585,7 +9587,7 @@ def _pm_generation_base(subject_hint, text, ctx=None,
             _own = _vb.names_view(text, _vc0) or _vb.names_view(subject_hint, _vc0)
             if not _own:
                 try:
-                    _own = bool(_PM_VIEW_DEIXIS_RE.search(str(text or ''))) or not str(subject_hint or '').strip()
+                    _own = bool(_PM_VIEW_DEIXIS_RE.search(str(text or ''))) or (not str(subject_hint or '').strip() and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled())   # no hint is not a pointer (Jenna 2026-11-20)
                 except Exception:
                     _own = False
             if _own and not _subject_rules.names_other_subject(text, ctx):

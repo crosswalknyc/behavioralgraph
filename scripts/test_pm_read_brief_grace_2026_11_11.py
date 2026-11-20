@@ -143,8 +143,10 @@ class TheLanesThatTookIt(unittest.TestCase):
         for q in (FIRST, SECOND, THIRD):
             u = QU.question_universe(q, page)
             self.assertEqual((u.kind, u.label, u.base), ('named', 'US people', 'US people'), q[:40])
-        # a question that does point at the page keeps it
-        self.assertEqual(QU.question_universe('What share of this audience is men 18-34?', page).kind, 'page')
+        # a question whose words point at the screen keeps the page; "this audience" alone is nobody in particular
+        # (Jenna 2026-11-20: never use what is on screen for context, always ask)
+        self.assertEqual(QU.question_universe('What share of this profile is men 18-34?', page).kind, 'page')
+        self.assertNotEqual(QU.question_universe('What share of this audience is men 18-34?', page).kind, 'page')
 
     def test_split_by_source_is_not_a_split_of_a_held_figure(self):
         import prometheus_analysis as pma

@@ -120,13 +120,18 @@ class TheReading(unittest.TestCase):
         self.assertTrue(QU.names_other_universe(JENNA, 'Mountain Dew', page='Mountain Dew'))
 
     def test_pointing_at_the_page_binds_the_page(self):
-        for t in ('how many of this audience bought Paw Patrol toys', 'of those, how many bought paw patrol toys',
-                  'how many of them bought Paw Patrol toys', 'what share of these viewers bought a Paw Patrol toy',
-                  'how many people', 'how big is it', 'give me a social media strategy for this audience',
-                  'how do I reach them on tiktok'):
+        for t in ('how many of this profile bought Paw Patrol toys', 'of the ones in the open profile, how many bought paw patrol toys',
+                  'how many on this page bought Paw Patrol toys', 'what share of the viewers in this profile bought a Paw Patrol toy',
+                  'how many people are in the profile I have open', 'how big is the one I have open',
+                  'give me a social media strategy for the audience on this page', 'how do I reach the people in this profile on tiktok'):
             u = QU.question_universe(t, 'Starz')
             self.assertEqual((u.kind, u.label), ('page', 'Starz'), t)
             self.assertFalse(QU.names_other_universe(t, 'Starz', page='Starz'), t)
+        # an anaphor ("this audience", "of those", "them", a bare "how many people") is the thread's subject or a question,
+        # never the screen (Jenna 2026-11-20)
+        for t in ('how many of this audience bought Paw Patrol toys', 'of those, how many bought paw patrol toys',
+                  'how many of them bought Paw Patrol toys', 'how many people', 'how big is it', 'how do I reach them on tiktok'):
+            self.assertNotEqual(QU.question_universe(t, 'Starz').kind, 'page', t)
 
     def test_naming_the_pages_own_subject_binds_the_page(self):
         for t in ('how many Starz subscribers bought Paw Patrol toys', "what do Starz's viewers buy for the holidays",
@@ -196,11 +201,22 @@ class TheReadLaneBase(unittest.TestCase):
         self.assertEqual((fz or {}).get('subject'), 'Godzilla Minus One')
 
     def test_the_page_binds_when_pointed_at_or_named(self):
-        for t in ('how many of this audience bought Paw Patrol toys', 'of those, how many bought paw patrol toys',
-                  'how many people are in this audience'):
+        for t in ('how many of this profile bought Paw Patrol toys', 'of the ones on this page, how many bought paw patrol toys',
+                  'how many people are in the profile I have open'):
             b = _base('', t, ctx=STARZ)
             self.assertEqual((b or {}).get('source'), 'page', t)
             self.assertEqual((b or {}).get('subject'), 'Starz', t)
+        # "this audience" with no thread is nobody in particular: the page is only a candidate here, and the read
+        # core's gate (page_default.base_stands) refuses it, so the reader is asked (Jenna 2026-11-20)
+        from prometheus import page_default as PD
+        for t in ('how many of this audience bought Paw Patrol toys', 'how many people are in this audience'):
+            b = _base('', t, ctx=STARZ)
+            self.assertEqual((b or {}).get('source'), 'page', t)
+            stands, why = PD.base_stands(t, [], b, '', normalize=_norm, stop_tokens=frozenset())
+            self.assertFalse(stands, (t, why))
+        for t in ('how many of this profile bought Paw Patrol toys', 'how many people are in the profile I have open'):
+            b = _base('', t, ctx=STARZ)
+            self.assertTrue(PD.base_stands(t, [], b, '', normalize=_norm, stop_tokens=frozenset())[0], t)
         b = _base('Starz', 'how many Starz subscribers bought Paw Patrol toys', ctx=STARZ)
         self.assertEqual(((b or {}).get('subject'), (b or {}).get('source')), ('Starz', 'page'))
 
@@ -320,11 +336,13 @@ class SizingLaneStillHolds(unittest.TestCase):
         self.assertIs(SZ.points_at_page, QU.points_at_page)
 
     def test_the_sizing_cases(self):
-        for t in ('how many people are in this audience', 'how big is it', 'how big is this one',
-                  "what's the size of this audience", 'size this'):
+        for t in ('how many people are in this profile', 'how big is the one I have open', 'how big is this profile',
+                  "what's the size of the audience on this page", 'size this profile'):
             self.assertTrue(SZ.points_at_page(t), t)
-            self.assertEqual(SZ.subjects(t, self.PAGE), ['Howie Mandel'], t)
-            self.assertTrue(P.sizes_open_page(t, self.PAGE), t)
+        for t in ('how many people are in this audience', 'how big is it', 'size this'):
+            self.assertFalse(SZ.points_at_page(t), t)      # the thread's subject or a question, never the screen
+            self.assertNotIn('Howie Mandel', SZ.subjects(t, self.PAGE), t)
+            self.assertFalse(P.sizes_open_page(t, self.PAGE), t)
         for t in (self.JENNA_SIZING, 'how big is that season of Fightland', 'how many people watched that show'):
             self.assertFalse(SZ.points_at_page(t), t)
             self.assertNotIn('Howie Mandel', SZ.subjects(t, self.PAGE), t)

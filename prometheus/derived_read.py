@@ -99,13 +99,31 @@ def plan(text, history, ctx, body, *, pma, ns, normalize, stop, plausible, consu
         subject = str(pc.get('subject') or '').strip()
     if not subject:
         try:
+            # the subject the Understanding read from the words ("ncis sydney viewers by age" names NCIS: Sydney even
+            # when the simple matcher above misses the spelling); never the page's own, never a pointer
+            from . import understanding as _U_dr
+            _pg_u = str((ctx.get('primary') or {}).get('name') or '').strip() if isinstance(ctx, dict) else ''
+            subject = _article(str(_U_dr.read_subject_hint(text, _pg_u) or '').strip(), text)
+        except Exception:
+            subject = ''
+    if not subject:
+        try:
             subject = str(thread_subject(history) or '').strip()
         except Exception:
             subject = ''
     if not subject and isinstance(ctx, dict):
-        vc = (ctx.get('view_context') or {}).get('data') or {}
-        subject = (str(vc.get('show') or vc.get('title') or '').strip()
-                   or str((ctx.get('primary') or {}).get('name') or '').strip())
+        # the open view is the subject only when the words point at it (prometheus.screen_scope, Jenna 2026-11-20);
+        # a derived read that names nothing and points at nothing asks which subject (the caller's clarify)
+        try:
+            from . import screen_scope as _ss_dr
+            _pg_dr = str((ctx.get('primary') or {}).get('name') or '').strip()
+            _vc_ok = (not _ss_dr.enabled()) or _ss_dr.points_at_screen(text) or (bool(_pg_dr) and _ss_dr.page_is_subject(text, history, _pg_dr)[0])
+        except Exception:
+            _vc_ok = True
+        if _vc_ok:
+            vc = (ctx.get('view_context') or {}).get('data') or {}
+            subject = (str(vc.get('show') or vc.get('title') or '').strip()
+                       or str((ctx.get('primary') or {}).get('name') or '').strip())
 
     # figures: pasted into the ask, else the thread's delivered read
     series = []
@@ -140,6 +158,16 @@ def plan(text, history, ctx, body, *, pma, ns, normalize, stop, plausible, consu
             'reply': (f"Which title or audience are the figures for? Name it, or paste the "
                       f"figures, and I will split them by {dim}."),
             'followups': [], 'offer_deck': False, 'deck_angle': None}
+        if not series and isinstance(ctx, dict) and str((ctx.get('primary') or {}).get('name') or '').strip():
+            # nothing pasted and nothing named with a profile open: the standing question, the open profile one tap
+            # inside it, never taken on its own (Jenna 2026-11-20)
+            try:
+                from . import priced_read as _pr_dr
+                _wa = _pr_dr.which_audience(text, ctx)
+                if isinstance(_wa, dict) and _wa.get('reply'):
+                    out['ask'] = dict(_wa, success=True, action='answer')
+            except Exception:
+                pass
     return out
 
 

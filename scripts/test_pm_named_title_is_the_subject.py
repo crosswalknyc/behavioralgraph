@@ -295,9 +295,13 @@ class TheBinder(unittest.TestCase):
         self.assertEqual(SR.thread_subjects(thread, '')[0], SVU_READ_SUBJECT)
 
     def test_the_page_still_answers_when_the_words_point_at_it(self):
-        for q in ("what share of this audience is female", "what do these viewers buy", "do these viewers watch Chicago P.D."):
+        for q in ("what share of this profile is female", "what do the viewers on this page buy", "do the viewers in the open profile watch Chicago P.D."):
             s = SR.bind(q, None, 'NCIS')
             self.assertEqual((s.source, s.display), ('page', 'NCIS'), q)
+        # "this audience" / "these viewers" with no thread is nobody in particular: never the page (Jenna 2026-11-20)
+        for q in ("what share of this audience is female", "what do these viewers buy", "do these viewers watch Chicago P.D."):
+            s = SR.bind(q, None, 'NCIS')
+            self.assertNotEqual(s.source, 'page', q)
 
     def test_one_name_for_one_title(self):
         for q, want in (("how many people watched Chicago P.D. on Prime Video in 2023", 'Chicago P.D.'),      # was 'Chicago P'

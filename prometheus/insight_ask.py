@@ -426,6 +426,12 @@ def _find_subject(t):
 
 
 def _points_at_screen(t):
+    try:
+        from . import screen_scope as _ss
+        if _ss.enabled():
+            return _ss.points_at_screen(t)   # one pointer for every lane (Jenna 2026-11-20)
+    except Exception:
+        pass
     return bool(re.search(
         r"\b(?:this|these|that|those)\s+(?:audience|profile|brand|file|data|page|shoppers?|customers?|viewers?|fans?|buyers?|users?|"
         r"people|group|cohort|segment|read|report|title|show|series|film|talent|creator)s?\b|\b(?:here|on\s+(?:this|the)\s+(?:page|screen)|"

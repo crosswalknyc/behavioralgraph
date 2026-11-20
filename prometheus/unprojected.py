@@ -299,7 +299,8 @@ def _line(raw, projected, lead):
 
 
 def _payload(reply, found, **detail):
-    return {'success': True, 'action': 'answer', 'reply': reply, 'followups': [], 'offer_deck': False,
+    followups = list(detail.pop('followups', None) or [])
+    return {'success': True, 'action': 'answer', 'reply': reply, 'followups': followups, 'offer_deck': False,
             'deck_angle': None, 'unprojected': dict(detail, found=found)}
 
 
@@ -351,14 +352,24 @@ def answer(text, history=None, ctx=None):
                 lead = 'that is'
             return _payload(_line(raw, val, lead), True, basis='last_read', projected=int(val), raw=int(raw),
                             subject=subject or None)
-    # 4. the profile open on the screen
+    # 4. the profile open on the screen: its figure only when the words point at it; otherwise it is one tap in
+    #    the question, never the answer by default (Jenna 2026-11-20, prometheus.screen_scope)
     if page:
+        _pointed = True
+        try:
+            from . import screen_scope as _ss_un
+            _pointed = (not _ss_un.enabled()) or _ss_un.page_is_subject(t, history, page)[0]
+        except Exception:
+            _pointed = True
         hit = _profile_hit(page, ctx)
-        if hit:
+        if hit and _pointed:
             raw, us = int(hit['sample']), int(hit.get('us') or _pj.project(hit['sample']))
             subj = str(hit.get('name') or page)
             return _payload(_line(raw, us, f"the {subj} audience is"), True, basis='open_profile', subject=subj,
                             projected=us, raw=raw)
+        if hit:
+            return _payload(WHICH_NUMBER + f" If you mean {page}, the profile open on your screen, say so.", False, basis='which',
+                            followups=[f'{page} (open on your screen)'])
     return _payload(WHICH_NUMBER, False, basis='which')
 
 

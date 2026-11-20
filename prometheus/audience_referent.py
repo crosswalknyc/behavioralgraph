@@ -133,6 +133,21 @@ def resolve(text, ctx=None, thread=None, history=None):
     ('TikTok', 'thread') or ('', '')."""
     if not bare_referent(text):
         return '', ''
+    # the thread's own subject first: "this audience" points at what the chat has been about; the screen only
+    # when the thread has nothing, and then as a question (Jenna 2026-11-20, prometheus.screen_scope)
+    try:
+        from . import screen_scope as _ss_ar
+        _thread_first = _ss_ar.enabled()
+    except Exception:
+        _thread_first = False
+    if _thread_first:
+        name = thread_audience(thread, history)
+        if name:
+            return name, 'thread'
+        name = screen_audience(ctx)
+        if name:
+            return name, 'screen'
+        return '', ''
     name = screen_audience(ctx)
     if name:
         return name, 'screen'
@@ -152,7 +167,7 @@ def confirm_payload(text, name, source, referent='this audience'):
     if source == 'thread':
         reply = f"I read '{referent}' as {name} from earlier in this chat. Go, or name another?"
     else:
-        reply = f"Using the {name} audience open on your screen. Say go, or name a different audience."
+        reply = f"Which audience should I read for this? {name} is open on your screen: say go for it, or name a different audience."
     opts = [{'label': f'Go with {name}', 'subject': name}]
     return {'success': True, 'action': 'answer', 'reply': reply,
             'followups': [f'Go with {name}', 'A different audience'],
@@ -195,8 +210,15 @@ def gate(text, bind_subject='', *, ctx=None, thread=None, history=None, confirme
     for turn in reversed(list(history or [])):
         if isinstance(turn, dict) and str(turn.get('role') or '') != 'user':
             last = str(turn.get('text') or turn.get('content') or ''); break
-    if name and (last.startswith(f'Using the {name} audience') or last.startswith(f"I read '{ref}' as {name}")):
-        return None    # asked once in this thread; the next ask runs on it
+    if name and source == 'thread' and last.startswith(f"I read '{ref}' as {name}"):
+        return None    # the thread's own subject, read back once; the next ask runs on it
+    if name and source == 'screen' and (last.startswith(f'Using the {name} audience') or last.startswith('Which audience should I read for this?')):
+        try:
+            from . import screen_scope as _ss_g
+            if not _ss_g.enabled():
+                return None   # the older rule: asked once in this thread, the next ask ran on the screen
+        except Exception:
+            return None
     return confirm_payload(t, name, source, referent=ref)
 
 

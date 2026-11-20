@@ -85,17 +85,36 @@ _PAGE_POINTER_RX = re.compile(
     r"^\W*(?:(?:please |can you |could you )?(?:sizes?|sizing|size (?:it|this|that|this one)|incidence|how big|how large|how many|headcount|sample size|audience size)\W*)$", re.I)
 
 
+# the size words a screen pointer rides with ("how big is the one I have open", "size this profile")
+_SIZE_WORD_RX = re.compile(r"\bhow (?:big|large|many)\b|\b(?:sizes?|sizing|incidence|headcount|head count|sample[- ]size|audience[- ]size|universe[- ]size|projected band)\b", re.I)
+
+
 def points_at_page(text):
     """True when a sizing ask points at the open page and names nothing
     else: a pronoun in the subject slot, or a bare size word."""
     t = _squash(text)
     if not t or len(t) > 240:
         return False
+    _screen = None
+    try:
+        # "how big is it" / "how big is this audience" with nothing named points at SOMETHING: the thread's subject
+        # when there is one, a question when there is none; only the reader's own words pointing at the screen ("the
+        # one I have open", "this profile") are the page (Jenna 2026-11-20, prometheus.screen_scope)
+        from . import screen_scope as _ss
+        if _ss.enabled():
+            _screen = bool(_ss.points_at_screen(t))
+            if not _screen:
+                return False
+    except Exception:
+        _screen = None
     if not _PAGE_POINTER_RX.search(t):
-        return False
+        if not (_screen and _SIZE_WORD_RX.search(t)):
+            return False
     # a title word or a named thing beside the pronoun means the words
     # name their own subject ("how big is that season of Fightland")
     rest = _PAGE_POINTER_RX.sub(' ', t)
+    if _screen:
+        rest = _ss.POINTER_RX.sub(' ', rest)
     rest = re.sub(r"\b(?:how (?:big|large|many)|sizes?|sizing|incidence|headcount|head count|sample[- ]size|audience[- ]size|universe[- ]size|band|reach|"
                   r"people|users|panelists|individuals|folks|audience|profile|page|file|open|one|the|a|an|of|for|on|in|is|are|was|were|does|do|did|"
                   r"what|whats|what's|tell|give|show|me|us|please|thanks|projected|total|overall|exactly|roughly|about|now|again|and|also|so|just|"
@@ -135,6 +154,15 @@ def page_pointer(text, strong_only=False):
     t = _squash(text)
     if not t:
         return False
+    try:
+        # "this audience", "of those", "reach them": an anaphor to the thread's subject, never the screen; only the
+        # reader's own words pointing at the screen ("this profile", "the one I have open") are the page
+        # (Jenna 2026-11-20, prometheus.screen_scope)
+        from . import screen_scope as _ss
+        if _ss.enabled():
+            return bool(_ss.points_at_screen(t))
+    except Exception:
+        pass
     if _STRONG_POINTER_RX.search(t) or points_at_page(t):
         return True
     if strong_only:

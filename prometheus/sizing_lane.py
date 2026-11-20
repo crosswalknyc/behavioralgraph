@@ -579,7 +579,31 @@ def subjects(text, ctx=None):
         if i == 0 and own and not c.lower().startswith(own.lower() + ' '):
             c = own + ' ' + c
         c = _restore_lead(t, c, ctx)
+        try:
+            # "the one I have open" / "the audience on this page": the reader's words point at the screen and name
+            # nothing else, so the candidate is the page, never a name read off the pointer ('I have open')
+            from . import screen_scope as _ss_pt
+            if _ss_pt.enabled() and _ss_pt.points_at_screen(t):
+                _spans = [m.group(0).lower() for m in _ss_pt.POINTER_RX.finditer(t)]
+                _cl = c.lower().strip()
+                if any(_cl in sp or sp in _cl for sp in _spans) and not _ss_pt.POINTER_RX.sub(' ', c).strip(" ,.'\"-").strip() \
+                        or any(_cl in sp for sp in _spans):
+                    out.append('__page__')
+                    continue
+                if re.fullmatch(r"(?:the\s+)?(?:audience|profile|people|viewers|users|one)\s*(?:on|in|of)?\s*", _ss_pt.POINTER_RX.sub(' ', c).strip(), re.I):
+                    out.append('__page__')
+                    continue
+        except Exception:
+            pass
         if _DEIXIS_RX.match(c):
+            # "it" / "this audience" points at something: the page only when the words point at the screen
+            # ("the open profile", "this one I have open"); otherwise the thread or a question (Jenna 2026-11-20)
+            try:
+                from . import screen_scope as _ss_sz
+                if _ss_sz.enabled() and not _ss_sz.points_at_screen(t) and not re.match(r"^(?:the open (?:one|profile|page)|the one open)$", c, re.I):
+                    continue
+            except Exception:
+                pass
             out.append('__page__')
             continue
         if (_plausible(c) or _reads_as_title(c) or _held_name(c, ctx)) and not _is_panel_self(c):

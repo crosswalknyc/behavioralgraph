@@ -261,7 +261,9 @@ class TheLanesThatTookIt(unittest.TestCase):
             for q in (SPEC, SINGLE_2022, TWO_BOOKS, THREE_BOOKS):
                 u = QU.question_universe(q, page)
                 self.assertEqual((u.kind, u.base), ('named', 'US people'), (page, q[:40]))
-        self.assertEqual(QU.question_universe('What share of this audience is women 18-34?', HAZBIN['primary']['name']).kind, 'page')
+        # the words point at the screen: the page. "this audience" alone is nobody in particular (Jenna 2026-11-20)
+        self.assertEqual(QU.question_universe('What share of this profile is women 18-34?', HAZBIN['primary']['name']).kind, 'page')
+        self.assertNotEqual(QU.question_universe('What share of this audience is women 18-34?', HAZBIN['primary']['name']).kind, 'page')
 
     def test_a_service_in_a_list_of_sources_is_never_the_base(self):
         from prometheus import page_default as PD

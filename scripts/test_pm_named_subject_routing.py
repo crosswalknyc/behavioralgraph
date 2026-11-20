@@ -169,18 +169,24 @@ class NamedSubjectOutranksThePage(unittest.TestCase):
                                               brand_named=lambda t, k: 'BEAUTY', ask_user='')
             self.assertFalse(stands)
             self.assertIn('Example Sports audience', why)
-            # the page still stands for a question that points at it, row named or not
-            stands2, why2 = PD.page_base_stands('what do these people buy', [], PAGE, PAGE_KEY, '', normalize=_norm, stop_tokens=frozenset(),
-                                                brand_named=lambda t, k: 'BEAUTY', ask_user='')
+            # the page still stands for a question whose words point at the screen, row named or not
+            stands2, why2 = PD.page_base_stands('what do the people in this profile buy', [], PAGE, PAGE_KEY, '', normalize=_norm,
+                                                stop_tokens=frozenset(), brand_named=lambda t, k: 'BEAUTY', ask_user='')
             self.assertTrue(stands2, why2)
-            # the switch restores the old reading: the row-named signal lets the page stand again
+            # "these people" with no thread is nobody in particular: the page never stands on it (Jenna 2026-11-20)
+            stands2b, _ = PD.page_base_stands('what do these people buy', [], PAGE, PAGE_KEY, '', normalize=_norm, stop_tokens=frozenset(),
+                                              brand_named=lambda t, k: 'BEAUTY', ask_user='')
+            self.assertFalse(stands2b)
+            # both switches restore the old reading: the row-named signal lets the page stand again
             os.environ['PM_U_OFF_NAMED_SUBJECT'] = '1'
+            os.environ['PM_SCREEN_SCOPE'] = '0'
             try:
                 stands3, why3 = PD.page_base_stands(AUDIENCE_Q, [], PAGE, PAGE_KEY, '', normalize=_norm, stop_tokens=frozenset(),
                                                     brand_named=lambda t, k: 'BEAUTY', ask_user='')
                 self.assertTrue(stands3, why3)
             finally:
                 os.environ.pop('PM_U_OFF_NAMED_SUBJECT', None)
+                os.environ.pop('PM_SCREEN_SCOPE', None)
 
     def test_the_pin_yields_to_words_the_reader_read(self):
         stub = RC._Stub()
