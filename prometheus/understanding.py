@@ -76,7 +76,8 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'capability',            # a question about the product itself is product knowledge, never a subject read (Liz 2026-11-20)
            'provenance',            # where a figure came from, two figures squared, the unprojected count, US or global (2026-11-20, night)
            'exists',                # is X in the library, what do we hold on X, the roster (the catalog lanes, 2026-11-20, night)
-           'definition')            # what a term, a figure or a method means; the house sample; a brief's own terms (2026-11-20, night)
+           'definition',            # what a term, a figure or a method means; the house sample; a brief's own terms (2026-11-20, night)
+           'size')                  # how many people an audience holds, a demographic segment counted (the sizing lanes, 2026-11-20, night)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
@@ -84,7 +85,7 @@ SHADOW = ('named_title',)
 # else is "no position taken". Grows with each class moved onto the
 # Understanding (2026-11-20, night).
 _CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance',
-                        'exists', 'definition'))
+                        'exists', 'definition', 'size'))
 STAND_DOWN_CONF = 0.75  # a weak reading (a correction, the page, the generic status at 0.7) never stands a lane down
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',
@@ -303,6 +304,8 @@ def _features(text, ctx, history, body):
     # the catalog lanes: ('exists' | 'size' | 'roster', subject) when the words ask what the library holds
     put('catalog', lambda: (mod('catalog_lane').parse(text) or (None, None))[0])
     put('definition', lambda: _definition_kind(text, history))
+    # the sizing lanes: a joint demographic segment counted, or how many people an audience holds
+    put('sizing', lambda: 'segment' if mod('segment_sizing').is_segment_ask(text) else ('audience' if mod('sizing_lane').wants_sizing(text) else ''))
     return out
 
 
@@ -522,9 +525,9 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         for name in ('wayfinding', 'directions', 'status_fast', 'status', 'wait', 'deliverable', 'insight', 'reader_will_share',
                      'send_order', 'send_file', 'dashboard_issue', 'cancel', 'order', 'multi', 'sample_size', 'capability',
                      'rerun_words', 'correction_words', 'pushback_only', 'send_words', 'build_verb', 'thanks', 'bare_reply',
-                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance', 'catalog', 'definition'):
+                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance', 'catalog', 'definition', 'sizing'):
             if f.get(name):
-                ev.append(name if name not in ('wizard', 'provenance', 'catalog', 'definition') else name + ':' + str(f[name]))
+                ev.append(name if name not in ('wizard', 'provenance', 'catalog', 'definition', 'sizing') else name + ':' + str(f[name]))
         # a delivered valuation in the thread is what the words point at (prometheus.valuation_referent): its deck,
         # its figures, a re-run on corrected dates. Read on the reader's own words when the order gate rewrote them.
         vref = None
@@ -613,10 +616,19 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             # no model call (the catalog_exists and catalog lanes, 2026-11-20, night); "is there any X measurement
             # available in Crosswalk" is a question about the product (capability), not the shelf
             intent, action, conf = 'exists', 'answer', 0.8
-        elif (f.get('sample_size') or f.get('definition')) and not f.get('brief'):
+        elif f.get('sizing') == 'segment' and not f.get('brief'):
+            # a joint demographic segment counted ("how many people in your database are blue-collar men 30 to 55 ..."):
+            # the segment lane sits ahead of every definition answer in the walk (2026-11-20, night)
+            intent, action, conf = 'size', 'answer', 0.75
+        elif (f.get('sample_size') or (f.get('definition') and f.get('definition') != 'drilldown')) and not f.get('brief'):
             # what a term, a figure or a method means, the house sample, a check on the last answer: answered from the
             # house glossary and the thread, never a read (2026-11-20, night)
             intent, action, conf = 'definition', 'answer', 0.75
+        elif (f.get('sizing') == 'audience' or f.get('catalog') == 'size') and not f.get('brief'):
+            # how many people an audience holds: the sizing lanes (2026-11-20, night)
+            intent, action, conf = 'size', 'answer', 0.75
+        elif f.get('definition') == 'drilldown' and not f.get('brief'):
+            intent, action, conf = 'definition', 'answer', 0.75   # a number on the open journey, a KPI: the definitions lane, late in the walk
         elif f.get('status_fast') or f.get('status'):
             intent, action, conf = 'status', 'status', 0.7   # the generic status shape, nothing else read
         elif f.get('capability'):
@@ -630,6 +642,8 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             u.referent = 'page'
         if sc.no_build and vref and action == 'build':
             action = 'answer'
+        if sc.page and not u.referent and not u.named_title and intent in _READ_INTENTS:
+            u.referent = 'page'   # the words point at the screen: the size, the read or the definition is of what is open
         if u.named_title and intent in ('analyze', 'analyze_page', 'continuation_rerun'):
             u.subjects = [Subject(as_written=u.named_title, kind='title', role='title')]
             if intent != 'analyze':
@@ -781,7 +795,8 @@ def claims(body, name, fallback):
         if ok:
             _mark(body, u)
         return ok
-    if u.intent in _CONTESTED and float(u.confidence or 0) >= STAND_DOWN_CONF:
+    if u.intent in _CONTESTED and float(u.confidence or 0) >= STAND_DOWN_CONF and (u.intent not in FLIPPED or flipped(u.intent)):
+        # a reading whose own flip is switched off is back on the lane walk: it stands nothing down either
         if _fb():
             _mark(body, u)   # the lane wanted the ask and stood down on the Understanding's reading: a keyed decision
         return False

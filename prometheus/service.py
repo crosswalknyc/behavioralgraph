@@ -1843,7 +1843,7 @@ def ask(user, body, *, via='session'):
     if not _armed(body) and not _is_order:
         try:
             from . import segment_sizing as _seg
-            _seg_raw = _seg.answer(text, history, ctx=ctx)
+            _seg_raw = _seg.answer(text, history, ctx=ctx) if _u_claims(body, 'size', lambda: True) else None   # keyed; the lane's own resolve decides (a follow-up points back)
         except Exception as _fx:
             _faults.note('service.segment_sizing', _fx)
             _seg_raw = None
@@ -3052,7 +3052,8 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _armed(body) and not _is_order and not _no_build:
         try:
             from . import sizing_lane as _szl, guards as _gs
-            _sz = _szl.answer(text, ctx, host=host, history=history, staff=_gs.is_staff(user))
+            _sz = (_szl.answer(text, ctx, host=host, history=history, staff=_gs.is_staff(user))
+                   if _u_claims(body, 'size', lambda: True) else None)   # keyed: a confident other reading stands it down (2026-11-20)
         except Exception as e:
             _faults.note('service.sizing_lane', e)
             _sz = None

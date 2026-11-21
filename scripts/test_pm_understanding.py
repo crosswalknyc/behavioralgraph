@@ -297,6 +297,17 @@ class Claims(unittest.TestCase):
             self.assertFalse(U.claims(b, 'status', lambda: True), q)
         self.assertTrue(U.flipped('definition'))
 
+    def test_size_is_read_and_keyed(self):
+        # how many people an audience holds, a joint demographic segment counted (2026-11-20, night)
+        for q in ('how big is the Harbor Lights audience', 'how many people in your database are men aged 30 to 55 with income $50k to $200k in blue-collar jobs'):
+            b = U.attach({'text': q}, U.features(q, None, [], {}))
+            u = U.on_body(b)
+            self.assertEqual(u.intent, 'size', (q, u.evidence))
+            self.assertTrue(U.claims(b, 'size', lambda: True), q)
+        self.assertTrue(U.flipped('size'))
+        # the house sample is a definition, never a sizing
+        self.assertEqual(U.on_body(U.attach({'text': 'how big is your sample'}, U.features('how big is your sample', None, [], {}))).intent, 'definition')
+
     def test_a_weak_reading_never_stands_a_lane_down(self):
         b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])
         u = U.on_body(b)
