@@ -107,9 +107,13 @@ PAGES = {
         og_image="assets/images/og-digital-twins.png"),
     "twins-track-record.html": dict(
         title="Digital Twins: How We Score Ourselves | Crosswalk",
-        description="Every call the Crosswalk twins make goes on the record before the outcome, dated and hashed, and is scored the moment the outcome lands. The method, the words for how firm a count is, and the record itself.",
+        description="Every call the Crosswalk twins make goes on the record before the outcome, dated and hashed, then scored when it lands. The method, how firm each count is, and the record.",
         kind="product", name="Digital twins track record", crumb_label="Track record",
         og_image="assets/images/og-digital-twins.png"),
+    "prometheus.html": dict(
+        title="Prometheus: Ask Anything About 10 Million Real People | Crosswalk",
+        description="Prometheus is Crosswalk's research assistant. Ask any audience question in plain English and it answers from what 10 million US people do, recorded day by day since 2021.",
+        kind="product", name="Prometheus", og_image="assets/images/og-prometheus.jpg"),
     "micro-series.html": dict(
         title="Micro-series: who watches vertical dramas, and where | Crosswalk",
         description="Who watches vertical dramas on ReelShort, DramaBox, GoodShort, NetShort and Peacock, who pays, and where the paywall sits. Counted from 10 million US people, updated daily.",
