@@ -518,8 +518,8 @@ class Routes(unittest.TestCase):
 
 class Page(unittest.TestCase):
     def setUp(self):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as f:
-            self.src = f.read()
+        import _index_page
+        self.src = _index_page.text(ROOT)   # the page with its split files inlined back (the Digital Twins IQ JS lives in static/)
         with open(os.path.join(ROOT, 'site', 'twins-track-record.html'), encoding='utf-8') as f:
             self.site = f.read()
 

@@ -198,11 +198,11 @@
             // A deep link: ?view=digitalTwinsIQ&twin=<key>&tab=<tab>, or #digitalTwinsIQ?twin=<key>&tab=<tab>. Read once per page load.
             function urlHint() {
                 try {
-                    var q = new URLSearchParams(window.location.search), twin = q.get('twin') || '', tab = q.get('tab') || '', room = q.get('room') || '';
+                    var q = new URLSearchParams(window.location.search), twin = q.get('twin') || '', tab = q.get('tab') || '', room = q.get('room') || '', record = q.get('record') || '';
                     var h = String(window.location.hash || '').replace(/^#/, '');
                     if (h.indexOf('digitalTwinsIQ') === 0) { var hp = new URLSearchParams(h.split('?')[1] || ''); twin = twin || hp.get('twin') || ''; tab = tab || hp.get('tab') || ''; room = room || hp.get('room') || ''; }
-                    if (!twin && !tab) return null;
-                    return { twin_key: twin, tab: tab, room: room };
+                    if (!twin && !tab && !record) return null;
+                    return { twin_key: twin, tab: tab, room: room, record: record };
                 } catch (_) { return null; }
             }
             window.showDigitalTwinsIQ = function(hint) {
@@ -232,6 +232,7 @@
                     else if (mem && known(mem.key)) { if (mem.glo && GL_OPTIONS.indexOf(mem.glo) >= 0) S.glOption = mem.glo; dtwOpen(mem.key, null, isPiTab(mem.tab) ? (mem.pid || mem.sid) : mem.sid, null, mem.tab || null); }
                     else if (!S.twin && S.runs.length === 1) { dtwOpen(S.runs[0].key, null, (mem && mem.key === S.runs[0].key && mem.sid) || null, null, (mem && mem.tab) || null); }
                     else if (mem && mem.tab) { dtwTab(mem.tab); }
+                    if (fromUrl && fromUrl.record) { setTimeout(function() { try { dtwRecordOpen(true); } catch (_) {} }, 250); }
                 });
                 if (!S.howto) { api('/how-to').then(function(d) { S.howto = d; renderHowto(); renderEmptyAll(); }).catch(function() {}); }
             };
@@ -765,17 +766,99 @@
                 if (r.abs_error != null) return recUnit(r.abs_error, r.unit) + ' off';
                 return '';
             }
-            function recKind(k) { return { forecast: 'Pilot test', room_count: 'Focus group', scorecard: 'Scorecard', call: 'Call' }[k] || k || ''; }
+            function recKind(k) { return { forecast: 'Pilot test', room_count: 'Focus group', scorecard: 'Pilot test', call: 'Call' }[k] || k || ''; }
+            function recCap(s) { s = String(s || ''); return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+            // the open calls carry the day each is due and what settles it; a client adds its own result to its own open calls
+            // (Jenna 2026-11-20: the Add your result button); a scored call is never revised
             function recTable(rows, staff, settled) {
                 if (!rows.length) return '<p class="dtw-muted">' + (settled ? 'Nothing settled yet.' : 'Nothing waiting.') + '</p>';
-                var head = '<tr><th>Audience</th><th>What was asked</th><th>We said</th>' + (settled ? '<th>What happened</th><th>Miss</th>' : '<th>How firm</th>') + '<th>Called</th>' + (settled ? '<th>Settled</th>' : '') + (staff ? '<th>Company</th>' : '') + '</tr>';
+                var acts = !settled && rows.some(function(r) { return r.can_add; });
+                var head = '<tr><th>Audience</th><th>What was asked</th><th>We said</th>' + (settled ? '<th>What happened</th><th>Miss</th>' : '<th>How firm</th><th>Due</th>') + '<th>Called</th>' + (settled ? '<th>Settled</th>' : '') + (staff ? '<th>Company</th>' : '') + (acts ? '<th></th>' : '') + '</tr>';
+                var cols = 6 + (settled ? 1 : 0) + (staff ? 1 : 0) + (acts ? 1 : 0);
                 var body = rows.map(function(r) {
-                    return '<tr><td>' + esc(r.subject) + '<div class="dtw-muted">' + esc(recKind(r.kind)) + (r.house ? ' &middot; house' : '') + '</div></td><td>' + esc(r.what) + '</td><td>' + recSaid(r, 'said') + '</td>'
-                        + (settled ? '<td>' + recSaid(r, 'happened') + (r.outcome_class ? '<div class="dtw-muted">' + esc(r.outcome_class) + '</div>' : '') + '</td><td>' + esc(recMiss(r)) + '</td>' : '<td>' + esc(r.firmness ? r.firmness.charAt(0).toUpperCase() + r.firmness.slice(1) : '') + '</td>')
-                        + '<td>' + esc(r.called_on) + '</td>' + (settled ? '<td>' + esc(r.settled_on) + '</td>' : '') + (staff ? '<td>' + esc(r.company || '') + (r.public ? ' <span class="dtw-muted">public</span>' : '') + '</td>' : '') + '</tr>';
+                    var tr = '<tr><td>' + esc(r.subject) + '<div class="dtw-muted">' + esc(recKind(r.kind)) + (r.house ? ' &middot; Crosswalk' : '') + '</div></td><td>' + esc(r.what) + '</td><td>' + recSaid(r, 'said') + '</td>'
+                        + (settled ? '<td>' + recSaid(r, 'happened') + (r.outcome_class ? '<div class="dtw-muted">' + esc(r.outcome_class) + '</div>' : '') + '</td><td>' + esc(recMiss(r)) + '</td>'
+                                   : '<td>' + esc(recCap(r.firmness)) + '</td><td>' + esc(r.due_on || 'Not set yet') + (r.check ? '<div class="dtw-muted">Settled by ' + esc(r.check) + '</div>' : '') + '</td>')
+                        + '<td>' + esc(r.called_on) + '</td>' + (settled ? '<td>' + esc(r.settled_on) + '</td>' : '') + (staff ? '<td>' + esc(r.company || '') + (r.public ? ' <span class="dtw-muted">public</span>' : '') + '</td>' : '')
+                        + (acts ? '<td>' + (r.can_add ? '<button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwRecAdd(\'' + esc(jsq(r.id)) + '\')">Add your result</button>' : '') + '</td>' : '') + '</tr>';
+                    if (!settled && S.recAdd === r.id) tr += '<tr class="dtw-rec-addrow"><td colspan="' + cols + '">' + recAddForm(r) + '</td></tr>';
+                    return tr;
                 }).join('');
                 return '<table class="dtw-table">' + head + body + '</table>';
             }
+            function recAddForm(r) {
+                var id = esc(jsq(r.id)), how = String(r.scored_as || ''), field;
+                if (how === 'winner' && (r.options || []).length) field = '<select id="dtwRecAddV" class="dtw-in">' + r.options.map(function(o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join('') + '</select>';
+                else if (how === 'yes_no') field = '<select id="dtwRecAddV" class="dtw-in"><option value="yes">It happened</option><option value="no">It did not happen</option></select>';
+                else field = '<input id="dtwRecAddV" class="dtw-in" inputmode="decimal" placeholder="' + (r.unit === 'pct' ? 'The share your results show, like 61.4' : 'The number your results show') + '">';
+                return '<div class="dtw-rec-add"><label class="dtw-field">Your result</label>' + field + '<input id="dtwRecAddNote" class="dtw-in" placeholder="A note, if you want one">'
+                    + '<div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwRecAddSend(\'' + id + '\')">Add your result</button><button type="button" class="dtw-btn" onclick="dtwRecAdd(null)">Cancel</button></div>'
+                    + '<div id="dtwRecAddLine" class="dtw-muted">Once it is added the call is scored. A scored call is never revised.</div></div>';
+            }
+            window.dtwRecAdd = function(id) { S.recAdd = id || null; renderRecord(S.record); };
+            window.dtwRecAddSend = async function(id) {
+                var r = ((S.record || {}).open || []).filter(function(x) { return x.id === id; })[0] || {};
+                var v = ((el('dtwRecAddV') || {}).value || '').trim(), body = { note: ((el('dtwRecAddNote') || {}).value || '').trim() };
+                if (r.scored_as === 'winner') body.winner = v; else if (r.scored_as === 'yes_no') body.happened = (v === 'yes'); else body.value = v;
+                var line = el('dtwRecAddLine'); if (line) line.textContent = 'Adding your result...';
+                try {
+                    await api('/ledger/' + encodeURIComponent(id) + '/result', { method: 'POST', body: JSON.stringify(body) });
+                    S.recAdd = null;
+                    var d = await api('/track-record'); S.record = d; renderRecord(d);
+                } catch (e) { if (line) line.textContent = String((e && e.message) || e); }
+            };
+            // staff: put a question on the record on purpose, before its result (Jenna 2026-11-20: "Only calls we deliberately log
+            // before the result"); a Crosswalk call logged here goes on the public record, a client's stays with the client
+            function recLogForm(d) {
+                var lg = S.recLog || {};
+                var twins = (S.runs || []).map(function(r) { return '<option value="' + esc(r.key) + '"' + (r.key === lg.key ? ' selected' : '') + '>' + esc(twinOptionLabel(r)) + '</option>'; }).join('');
+                var sess = lg.twin ? (lg.twin.panel_sessions || []).concat(lg.twin.pilot_sessions || []).filter(function(s) { return (s.questions || []).some(function(q) { return q.finished_at; }); }) : [];
+                var cur = sess.filter(function(s) { return s.id === lg.sid; })[0] || null;
+                var sessOpts = sess.map(function(s) { return '<option value="' + esc(s.id) + '"' + (cur && s.id === cur.id ? ' selected' : '') + '>' + esc(s.title || 'Room') + '</option>'; }).join('');
+                var qOpts = cur ? (cur.questions || []).filter(function(q) { return q.finished_at && q.kind !== 'rating' && q.kind !== 'probe'; }).map(function(q) { return '<option value="' + esc(q.id) + '"' + (q.id === lg.qid ? ' selected' : '') + '>' + esc(String(q.q || '').slice(0, 110)) + '</option>'; }).join('') : '';
+                var openOpts = ((d || {}).open || []).filter(function(r) { return !r.logged; }).map(function(r) { return '<option value="' + esc(r.id) + '">' + esc(String(r.subject || '') + ': ' + String(r.what || '').slice(0, 80)) + '</option>'; }).join('');
+                return '<h4 style="margin-top:1.4rem;">Log a call</h4><div class="dtw-bw-sub">Put a question on the record before its result. A Crosswalk call logged here goes on the public record; a client\'s stays with the client until an admin releases it.</div>'
+                    + '<div class="dtw-rec-log">'
+                    + '<label class="dtw-field">Twin</label><select class="dtw-in" id="dtwRecLogTwin" onchange="dtwRecLogTwin(this.value)"><option value="">Pick a twin</option>' + twins + '</select>'
+                    + '<label class="dtw-field">Room</label><select class="dtw-in" id="dtwRecLogSess" onchange="dtwRecLogSess(this.value)"><option value="">' + (lg.key ? (sess.length ? 'Pick a room' : 'No finished questions on this twin') : 'Pick a twin first') + '</option>' + sessOpts + '</select>'
+                    + '<label class="dtw-field">Question</label><select class="dtw-in" id="dtwRecLogQ" onchange="dtwRecLogQ(this.value)"><option value="">' + (cur ? 'Pick a question' : 'Pick a room first') + '</option>' + qOpts + '</select>'
+                    + (openOpts ? '<label class="dtw-field">Or a call already waiting</label><select class="dtw-in" id="dtwRecLogId"><option value="">None</option>' + openOpts + '</select>' : '')
+                    + '<label class="dtw-field">What is measured</label><input class="dtw-in" id="dtwRecLogWhat" placeholder="Who wins the runoff on December 9" value="' + esc(lg.what || '') + '">'
+                    + '<div class="dtw-two"><div><label class="dtw-field">Due</label><input type="date" class="dtw-in" id="dtwRecLogDue"></div><div><label class="dtw-field">The result exists from</label><input type="date" class="dtw-in" id="dtwRecLogKnow"></div></div>'
+                    + '<div class="dtw-two"><div><label class="dtw-field">Settled by</label><select class="dtw-in" id="dtwRecLogCheck"><option value="certified">A certified result</option><option value="published">A published result</option><option value="counted">Our own count</option><option value="client">The client\'s own results</option></select></div>'
+                    + '<div><label class="dtw-field">Scored as</label><select class="dtw-in" id="dtwRecLogScored"><option value="winner">The winner</option><option value="number">A number</option><option value="yes_no">Yes or no</option><option value="split">The split</option></select></div></div>'
+                    + '<div class="dtw-two"><div><label class="dtw-field">What happens</label><select class="dtw-in" id="dtwRecLogEvent"><option value="election">An election</option><option value="premiere">A premiere</option><option value="opening_weekend">An opening weekend</option><option value="behavior">Something people do</option><option value="other">Something else</option></select></div>'
+                    + '<div><label class="dtw-field">Our own count of</label><select class="dtw-in" id="dtwRecLogMetric"><option value="">Nothing; another check settles it</option><option value="title_viewers">People who watched the title</option><option value="return_pct">The share who watched again in week two</option></select></div></div>'
+                    + '<div class="dtw-two"><div><label class="dtw-field">Title, for our own count</label><input class="dtw-in" id="dtwRecLogTitle"></div><div><label class="dtw-field">Platform</label><input class="dtw-in" id="dtwRecLogPlatform"></div></div>'
+                    + '<div class="dtw-two"><div><label class="dtw-field">Window starts</label><input type="date" class="dtw-in" id="dtwRecLogWs"></div><div><label class="dtw-field">Window ends</label><input type="date" class="dtw-in" id="dtwRecLogWe"></div></div>'
+                    + '<div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwRecLogSend()">Log the call</button></div><div id="dtwRecLogLine" class="dtw-muted"></div></div>';
+            }
+            window.dtwRecLogTwin = async function(key) {
+                S.recLog = { key: key || '', twin: null, sid: '', qid: '', what: '' };
+                if (key) { try { var d = await api('/' + key); S.recLog.twin = d.twin || null; } catch (_) {} }
+                renderRecord(S.record);
+            };
+            window.dtwRecLogSess = function(sid) { var lg = S.recLog || {}; lg.sid = sid || ''; lg.qid = ''; S.recLog = lg; renderRecord(S.record); };
+            window.dtwRecLogQ = function(qid) {
+                var lg = S.recLog || {}; lg.qid = qid || '';
+                var sess = lg.twin ? (lg.twin.panel_sessions || []).concat(lg.twin.pilot_sessions || []).filter(function(s) { return s.id === lg.sid; })[0] : null;
+                var q = sess ? (sess.questions || []).filter(function(x) { return x.id === qid; })[0] : null;
+                var w = el('dtwRecLogWhat'); if (w && q && !w.value) { w.value = String(q.q || ''); lg.what = w.value; }
+                S.recLog = lg;
+            };
+            window.dtwRecLogSend = async function() {
+                var lg = S.recLog || {}, v = function(id) { return ((el(id) || {}).value || '').trim(); };
+                var body = { twin_key: lg.key || '', session_id: lg.sid || '', question_id: v('dtwRecLogQ') || lg.qid || '', ledger_id: v('dtwRecLogId'), what: v('dtwRecLogWhat'),
+                    due_at: v('dtwRecLogDue'), knowable_at: v('dtwRecLogKnow') || v('dtwRecLogDue'), check: v('dtwRecLogCheck'), scored_as: v('dtwRecLogScored'), event: v('dtwRecLogEvent'),
+                    metric: v('dtwRecLogMetric'), title: v('dtwRecLogTitle'), platform: v('dtwRecLogPlatform'), window_start: v('dtwRecLogWs'), window_end: v('dtwRecLogWe') };
+                var line = el('dtwRecLogLine'); if (line) line.textContent = 'Logging the call...';
+                try {
+                    var r = await api('/ledger/log', { method: 'POST', body: JSON.stringify(body) });
+                    S.recLog = null;
+                    var d = await api('/track-record'); S.record = d; renderRecord(d);
+                    var l2 = el('dtwRecLogLine'); if (l2) l2.textContent = 'Logged. Due ' + (r.due_on || 'when its day is set') + (r.public ? '; it is on the public record.' : '; it stays with the client until an admin releases it.');
+                } catch (e) { if (line) line.textContent = String((e && e.message) || e); }
+            };
             function renderRecord(d) {
                 var h = el('dtwRecordBody'); if (!h) return;
                 if (!d) { h.innerHTML = '<p class="dtw-muted">Reading the record...</p>'; return; }
@@ -786,11 +869,12 @@
                     + (sm.hit_rate != null ? '<div class="r"><span class="k">Called right</span><span class="v">' + Math.round(sm.hit_rate * 100) + '% of the calls</span></div>' : '')
                     + (sm.mean_relative_miss != null ? '<div class="r"><span class="k">Typical miss</span><span class="v">' + (Math.round(sm.mean_relative_miss * 1000) / 10) + '% on a count</span></div>' : '')
                     + '</div>';
-                var who = staff ? (d.company ? 'The calls of ' + esc(d.company) + ' and the public record.' : 'Every company\'s calls and the public record.') : 'Your company\'s rooms and tests, and the public record. Another company never sees yours.';
+                var who = staff ? (d.company ? 'The calls of ' + esc(d.company) + ' and the public record.' : 'Every company\'s calls and the public record.') : 'Your company\'s calls, and the public record. Another company never sees yours.';
                 h.innerHTML = '<div class="dtw-bw-sub">' + esc(d.line || '') + ' ' + who + '</div>' + tiles
                     + '<h4 style="margin-top:1rem;">Settled</h4><div class="dtw-bw-sub">What we said, then what happened.</div>' + recTable(d.rows || [], staff, true)
-                    + '<h4 style="margin-top:1.2rem;">Open</h4><div class="dtw-bw-sub">Calls waiting on their outcome. Each is dated by its hash; nothing is added after the fact.</div>' + recTable(d.open || [], staff, false)
-                    + '<div class="dtw-bw-sub" style="margin-top:1.2rem;">The public record, the house\'s own calls, is on the website: <a class="dtw-link" href="' + esc(d.public_url || 'https://www.crosswalknyc.com/twins-track-record.html') + '" target="_blank" rel="noopener">crosswalknyc.com/twins-track-record</a>.</div>';
+                    + '<h4 style="margin-top:1.2rem;">Open</h4><div class="dtw-bw-sub">Calls waiting on their result, with the day each is due and what settles it. Each is dated by its hash; nothing is added after the fact.</div>' + recTable(d.open || [], staff, false)
+                    + (staff ? recLogForm(d) : '')
+                    + '<div class="dtw-bw-sub" style="margin-top:1.2rem;">The public record is on the website: <a class="dtw-link" href="' + esc(d.public_url || 'https://www.crosswalknyc.com/twins-track-record.html') + '" target="_blank" rel="noopener">crosswalknyc.com/twins-track-record</a>.</div>';
             }
             window.dtwRecordOpen = function(on) {
                 if (on) { try { dtwBuildOpen(false); dtwNewRoomOpen(false); dtwRoomsOpen(false); dtwHowtoOpen(false); } catch (_) {} }
