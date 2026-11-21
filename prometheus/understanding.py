@@ -588,7 +588,12 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         elif f.get('insight') or (f.get('reader_will_share') and not f.get('send_order')):
             intent, action, conf = 'insight_ask', 'answer', 0.85   # the Lego class: an insight to share, never a send
         elif f.get('send_order') or (f.get('send_file') and not f.get('insight')):
-            intent, action, conf = 'send_file_order', 'send', 0.85
+            if f.get('deliverable') and not f.get('send_file'):
+                # "send me that deck": a thing we produced, looked up and handed over (the deliverable lane sits ahead
+                # of the send lane in the walk and the send lane's own parse does not take it)
+                intent, action, conf = 'status', 'status', 0.75
+            else:
+                intent, action, conf = 'send_file_order', 'send', 0.85
         elif f.get('dashboard_issue') and not sc.own_order:
             intent, action, conf = 'dashboard_issue', 'answer', 0.8
         elif (f.get('wayfinding') or f.get('directions')) and not (sc.own_order or f.get('wait') or (f.get('deliverable') and not f.get('directions'))):

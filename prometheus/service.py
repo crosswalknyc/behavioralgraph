@@ -3112,7 +3112,7 @@ def ask(user, body, *, via='session'):
         try:
             from . import deliverables as _dlv
             _dl_raw = (_dlv.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
-                       if _dlv.parse(text) else None)
+                       if _u_claims(body, 'status', lambda: _dlv.parse(text)) else None)   # keyed (status, 2026-11-20)
         except Exception as e:
             _faults.note('service.deliverable_lane', e)
             _dl_raw = None
