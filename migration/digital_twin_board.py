@@ -203,14 +203,22 @@ def seat_priority(opts_out: list, plan: Optional[dict] = None) -> dict:
 
 # ------------------------------------------------------ rule 2: distinct
 def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_people: Optional[int] = None, n_seats: int = 0, seed: str = '',
-                     priority: Optional[dict] = None) -> dict:
+                     priority: Optional[dict] = None, hold=None) -> dict:
     """No two rows share a share at one decimal or a people figure, in
     place on ``opts_out`` (and the segment rows, which stay the exact
     parts of the room). Ties break by subject-salted tenths that keep the
     order ``priority`` / the seats / the current share give; the lead row
     absorbs the rounding so shares sum to 100.0 and people to the room;
     no row is left at 0.0% and no people figure ends in 0. Returns
-    {'changed', 'ties' (the groups found), 'uncoded', 'before', 'after'}."""
+    {'changed', 'ties' (the groups found), 'uncoded', 'before', 'after'}.
+
+    ``hold``: option ids whose people and share are fixed (the rows the
+    house read pinned: Jenna 2026-11-05, "make sure it matches this").
+    A held row never moves; the tie it sits in breaks by moving the
+    other row, the lead is drawn from the free rows, and the free rows
+    are spread over what is left of the room. Before 2026-11-20 the
+    guard recomputed every row's people from its one-decimal share, so a
+    coded board lost the house figure (679,241 became 676,472)."""
     rows = [r for r in (opts_out or []) if isinstance(r, dict)]
     n = len(rows)
     report = {'changed': False, 'ties': tie_groups(rows), 'uncoded': is_uncoded(rows), 'before': [], 'after': []}
@@ -219,17 +227,26 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
     total = int(total_people or 0) or sum(int(r.get('people') or 0) for r in rows)
     if total <= 0:
         return report
+    hold_ids = set(hold or ())
+    H = {i for i, r in enumerate(rows) if r.get('id') in hold_ids}
+    free = [i for i in range(n) if i not in H]
+    if len(free) < 2:
+        H, free = set(), list(range(n))   # nothing left to spread: the whole board is free, as before the hold
     report['before'] = [(str(r.get('label') or ''), round(float(r.get('pct') or 0.0), 1), int(r.get('people') or 0)) for r in rows]
     pr = dict(priority or {})
 
     def rank(i):
         r = rows[i]
-        return (-float(pr.get(r.get('id'), 0.0)), -int(r.get('seats_n') or len(r.get('seats') or [])), -float(r.get('pct') or 0.0), i)
+        return (0 if i in H else 1, -float(pr.get(r.get('id'), 0.0)), -int(r.get('seats_n') or len(r.get('seats') or [])), -float(r.get('pct') or 0.0), i)
 
     t = [int(round(float(r.get('pct') or 0.0) * 10)) for r in rows]
     if sum(t) <= 0:
         t = [int(round(int(r.get('people') or 0) / float(total) * 1000)) for r in rows]
-    k_max = min(range(n), key=lambda i: (-t[i], rank(i)))
+    held_tenths = sum(t[i] for i in H)
+    budget = 1000 - held_tenths          # the tenths the free rows share (1000 with nothing held)
+    held_people = sum(int(rows[i].get('people') or 0) for i in H)
+    pool = total - held_people           # the people the free rows share
+    k_max = min(free, key=lambda i: (-t[i], rank(i)))
 
     def _groups():
         by = {}
@@ -237,11 +254,31 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
             by.setdefault(t[i], []).append(i)
         return [g for g in by.values() if len(g) >= 2]
 
+    def _spread_held(g):
+        """A tie on a held row: the free rows in it step away from the held
+        value on salted tenths (down, or up when down would touch zero);
+        two held rows tied with each other trade a tenth so their sum, the
+        house share, holds."""
+        held_in = sorted((i for i in g if i in H), key=rank)
+        free_in = sorted((i for i in g if i not in H), key=rank)
+        if len(held_in) >= 2:
+            m = len(held_in)
+            for j, idx in enumerate(held_in):
+                t[idx] += (m - 1) - 2 * j if m == 2 else ((m - 1) // 2 - j)
+        base_t = t[held_in[0]]
+        step = 0
+        for j, idx in enumerate(free_in):
+            step += 1 + (1 if _unit('gap', seed, rows[idx].get('label'), j, len(free_in)) < 0.45 else 0)
+            t[idx] = base_t - step if base_t - step >= 1 else base_t + step
+
     for _ in range(8):
         groups = _groups()
         if not groups:
             break
         for g in groups:
+            if any(i in H for i in g):
+                _spread_held(g)
+                continue
             g.sort(key=rank)
             m = len(g)
             # the tied rows spread on salted, uneven steps of one or two tenths (never an even ladder), the first in rank on top
@@ -259,7 +296,7 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
                 offs = [o + (1 - lo) for o in offs]
             for i, idx in enumerate(g):
                 t[idx] += offs[i]
-        t[k_max] = 1000 - sum(t[i] for i in range(n) if i != k_max)
+        t[k_max] = budget - sum(t[i] for i in free if i != k_max)
     # a last sweep: any pair still equal moves the lower-ranked row down a tenth (never below one), the lead absorbs
     for _ in range(n * 2):
         groups = _groups()
@@ -268,17 +305,19 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
         for g in groups:
             g.sort(key=rank)
             for j, idx in enumerate(g[1:], start=1):
+                if idx in H:
+                    continue
                 t[idx] = max(1, t[idx] - j)
-        t[k_max] = 1000 - sum(t[i] for i in range(n) if i != k_max)
-    for i in range(n):
+        t[k_max] = budget - sum(t[i] for i in free if i != k_max)
+    for i in free:
         if i != k_max and t[i] < 1:
             t[i] = 1
-    t[k_max] = 1000 - sum(t[i] for i in range(n) if i != k_max)
+    t[k_max] = budget - sum(t[i] for i in free if i != k_max)
     # people from the shares, the lead absorbing the gap; distinct, and never a trailing zero (the way real counts land)
-    people = [int(round(t[i] / 1000.0 * total)) for i in range(n)]
-    people[k_max] = total - sum(people[i] for i in range(n) if i != k_max)
-    seen = set()
-    for i in sorted((i for i in range(n) if i != k_max), key=rank):
+    people = [int(rows[i].get('people') or 0) if i in H else int(round(t[i] / 1000.0 * total)) for i in range(n)]
+    people[k_max] = pool - sum(people[i] for i in free if i != k_max)
+    seen = {people[i] for i in H}
+    for i in sorted((i for i in free if i != k_max), key=rank):
         guard = 0
         while (people[i] in seen or (people[i] > 0 and people[i] % 10 == 0)) and guard < 20:
             d = 1 + int(_unit('digit', seed, rows[i].get('label'), guard) * 8)
@@ -286,7 +325,7 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
             people[k_max] -= d
             guard += 1
         seen.add(people[i])
-    j2 = min((i for i in range(n) if i != k_max), key=lambda i: (-people[i], rank(i)), default=None)
+    j2 = min((i for i in free if i != k_max), key=lambda i: (-people[i], rank(i)), default=None)
     guard = 0
     while j2 is not None and (people[k_max] in seen or (people[k_max] > 0 and people[k_max] % 10 == 0)) and guard < 20:
         d = 1 + int(_unit('lead-digit', seed, guard) * 3)
@@ -296,7 +335,7 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
     # the shares are the people's own (one decimal, the lead takes the rounding), and a collision the rounding re-creates
     # on a small room moves a sliver more between the two rows
     for _ in range(5):
-        pcts = _pcts(people, total, k_max)
+        pcts = _pcts(people, total, k_max, hold_pcts={i: float(rows[i].get('pct') or 0.0) for i in H})
         dup = {}
         for i in range(n):
             dup.setdefault(pcts[i], []).append(i)
@@ -307,28 +346,30 @@ def enforce_distinct(opts_out: list, by_segment: Optional[list] = None, total_pe
         for g in clash:
             g.sort(key=rank)
             for j, idx in enumerate(g[1:], start=1):
-                if idx == k_max:
+                if idx == k_max or idx in H:
                     continue
                 mv = min(step * j, max(0, people[idx] - 1))
                 people[idx] -= mv
                 people[k_max] += mv
-    pcts = _pcts(people, total, k_max)
+    pcts = _pcts(people, total, k_max, hold_pcts={i: float(rows[i].get('pct') or 0.0) for i in H})
     for r, p, c in zip(rows, pcts, people):
         r['pct'] = max(0.0, float(p))
         r['people'] = max(0, int(c))
-    _segments_follow(rows, by_segment, total, seed, rank)
+    _segments_follow(rows, by_segment, total, seed, rank, hold_idx=H)
     report['after'] = [(str(r.get('label') or ''), round(float(r.get('pct') or 0.0), 1), int(r.get('people') or 0)) for r in rows]
     report['changed'] = report['before'] != report['after']
     return report
 
 
-def _pcts(people: list, total: int, k_max: int) -> list:
+def _pcts(people: list, total: int, k_max: int, hold_pcts: Optional[dict] = None) -> list:
     pcts = [round(int(p) / float(total or 1) * 100.0, 1) for p in people]
+    for i, p in (hold_pcts or {}).items():   # a held row keeps the share the house pin gave it
+        pcts[i] = round(float(p), 1)
     pcts[k_max] = round(pcts[k_max] + round(100.0 - sum(pcts), 1), 1)
     return pcts
 
 
-def _segments_follow(rows: list, by_segment: Optional[list], total: int, seed: str, rank) -> None:
+def _segments_follow(rows: list, by_segment: Optional[list], total: int, seed: str, rank, hold_idx=None) -> None:
     """The segment rows are the exact parts of the room rows: one segment
     takes the room's figures; several share each row in proportion to
     what they held, each keeps its own total, and a tie inside a segment
@@ -338,6 +379,7 @@ def _segments_follow(rows: list, by_segment: Optional[list], total: int, seed: s
     if not segs:
         return
     n = len(rows)
+    H = set(hold_idx or ())   # a held row's segment parts follow its people and never give or take a sliver
     for sr in segs:
         while len(sr['distribution']) < n:
             sr['distribution'].append({'label': rows[len(sr['distribution'])].get('label'), 'pct': 0.0, 'people': 0})
@@ -362,7 +404,8 @@ def _segments_follow(rows: list, by_segment: Optional[list], total: int, seed: s
         want = int(sr.get('people') or 0)
         have = sum(int(r.get('people') or 0) for r in sr['distribution'])
         if want and have != want:
-            j = max(range(n), key=lambda i: int(sr['distribution'][i].get('people') or 0))
+            pick = [i for i in range(n) if i not in H] or list(range(n))
+            j = max(pick, key=lambda i: int(sr['distribution'][i].get('people') or 0))
             sr['distribution'][j]['people'] = max(0, int(sr['distribution'][j]['people']) + (want - have))
     # a tie inside a segment: a sliver moves between the two largest segments on the same row pair, so the room holds
     order = sorted(range(len(segs)), key=lambda j: -sizes[j])
@@ -375,7 +418,7 @@ def _segments_follow(rows: list, by_segment: Optional[list], total: int, seed: s
             seen = {}
             for i in range(n):
                 p = int(sr['distribution'][i].get('people') or 0)
-                if p in seen and p > 0:
+                if p in seen and p > 0 and i not in H and seen[p] not in H:
                     k = seen[p]
                     lo, hi = sorted((i, k), key=rank)   # the lower-ranked row gives
                     d = 1 + int(_unit('seg-tie', seed, sr.get('segment'), i, k) * 4)
@@ -449,10 +492,12 @@ def demote_other(opts_out: list, by_segment: Optional[list], total_people: int, 
 
 
 def guard_board(opts_out: list, by_segment: Optional[list], total_people: int, n_seats: int, seed: str, priority: Optional[dict] = None,
-                answers: Optional[list] = None) -> dict:
+                answers: Optional[list] = None, hold=None) -> dict:
     """Rules 2 and 3 on a published split, in place, before the seats are
     mirrored to it: distinct shares and people, Other never the lead.
-    Returns the trail entry."""
+    ``hold`` names the option ids a house read pinned; they keep their
+    people and share through the guard (see enforce_distinct). Returns
+    the trail entry."""
     rows = [r for r in (opts_out or []) if isinstance(r, dict)]
     out = {'version': BOARD_VERSION, 'uncoded': is_uncoded(rows), 'other_led': other_leads(rows), 'ties': tie_groups(rows), 'changed': False,
            'before': [(str(r.get('label') or ''), round(float(r.get('pct') or 0.0), 1), int(r.get('people') or 0)) for r in rows]}
@@ -461,7 +506,9 @@ def guard_board(opts_out: list, by_segment: Optional[list], total_people: int, n
     if out['other_led'] or other_share(rows) > OTHER_CAP * 100.0 + 5.0:
         out['demoted'] = demote_other(rows, by_segment, total_people, n_seats, seed, answers=answers)
         out['changed'] = True
-    rep = enforce_distinct(rows, by_segment, total_people, n_seats, seed, priority=priority)
+    if hold:
+        out['held'] = [str(r.get('label') or '') for r in rows if r.get('id') in set(hold)]
+    rep = enforce_distinct(rows, by_segment, total_people, n_seats, seed, priority=priority, hold=hold)
     out['changed'] = bool(out['changed'] or rep.get('changed'))
     out['after'] = [(str(r.get('label') or ''), round(float(r.get('pct') or 0.0), 1), int(r.get('people') or 0)) for r in rows]
     out['lead'] = str((lead_row(rows) or {}).get('label') or '')

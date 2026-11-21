@@ -232,6 +232,53 @@ class Distinct(unittest.TestCase):
         self.assertFalse(rep['changed'])
         self.assertEqual([(r['pct'], r['people']) for r in rows], [(58.3, 583_001), (41.7, 416_999)])
 
+    def test_the_rows_a_house_read_pinned_hold_through_the_guard(self):
+        # The P-Valley x S.W.A.T. Exiles coded board (2026-11-05, "make sure it matches this"): the two engaged rows were
+        # pinned to 679,241 people of 6,094,342 (a salted 266,934 + 412,221, shares 4.4 + 6.7 = 11.1), and the coder's new
+        # row tied the second one at 6.7. The guard breaks the tie by moving the new row; the pinned rows keep their people
+        # and shares, the board still sums to the room, and no two rows share a share or a people figure.
+        total = 6_094_342
+        rows = [{'id': 'a', 'label': 'Yes, keeping up with it weekly on Starz', 'lean': 'yes', 'pct': 4.4, 'people': 266_934, 'seats_n': 0},
+                {'id': 'b', 'label': 'Started it or watched an episode, not current', 'lean': 'yes', 'pct': 6.7, 'people': 412_221, 'seats_n': 1},
+                {'id': 'c', 'label': "Saw the tile, it's on my list for later", 'lean': 'maybe', 'pct': 25.4, 'people': 1_546_965, 'seats_n': 3},
+                {'id': 'd', 'label': "No, it's not my kind of show", 'lean': 'no', 'pct': 28.3, 'people': 1_723_711, 'seats_n': 3},
+                {'id': 'e', 'label': 'No, my Starz is off right now or never heard of it', 'lean': 'no', 'pct': 28.5, 'people': 1_736_258, 'seats_n': 3},
+                {'id': 'f', 'label': 'Only if it drops the week P-Valley is back', 'lean': 'maybe', 'pct': 6.7, 'people': 408_253, 'seats_n': 2}]
+        rep = B.enforce_distinct(rows, None, total, 12, 'seed-7', priority=B.seat_priority(rows, {'targets': {'a': 4.4, 'b': 6.7}}), hold={'a', 'b'})
+        self.assertTrue(rep['changed'])
+        self.assertTrue(_distinct(rows), rows)
+        by = {r['id']: r for r in rows}
+        self.assertEqual((by['a']['people'], by['b']['people']), (266_934, 412_221), 'the pinned rows keep their people')
+        self.assertEqual((by['a']['pct'], by['b']['pct']), (4.4, 6.7), 'the pinned rows keep their shares')
+        self.assertEqual(by['a']['people'] + by['b']['people'], 679_155)
+        self.assertNotEqual(by['f']['pct'], 6.7, 'the new row is the one that moves off the tie')
+        self.assertEqual(sum(int(r['people']) for r in rows), total)
+        self.assertAlmostEqual(sum(float(r['pct']) for r in rows), 100.0, places=6)
+        self.assertTrue(all(int(r['people']) % 10 != 0 for r in rows))
+        # the same board through guard_board, with segments: the held rows' segment parts still sum to their people
+        rows2 = [dict(r) for r in [
+            {'id': 'a', 'label': 'Yes, keeping up with it weekly on Starz', 'lean': 'yes', 'pct': 4.4, 'people': 266_934, 'seats_n': 0},
+            {'id': 'b', 'label': 'Started it or watched an episode, not current', 'lean': 'yes', 'pct': 6.7, 'people': 412_221, 'seats_n': 1},
+            {'id': 'c', 'label': "Saw the tile, it's on my list for later", 'lean': 'maybe', 'pct': 25.4, 'people': 1_546_965, 'seats_n': 3},
+            {'id': 'd', 'label': "No, it's not my kind of show", 'lean': 'no', 'pct': 28.3, 'people': 1_723_711, 'seats_n': 3},
+            {'id': 'e', 'label': 'No, my Starz is off right now or never heard of it', 'lean': 'no', 'pct': 28.5, 'people': 1_736_258, 'seats_n': 3},
+            {'id': 'f', 'label': 'Only if it drops the week P-Valley is back', 'lean': 'maybe', 'pct': 6.7, 'people': 408_253, 'seats_n': 2}]]
+        segs = [{'segment': 'X', 'people': 3_656_605, 'distribution': [{'label': r['label'], 'pct': r['pct'], 'people': int(r['people'] * 0.6)} for r in rows2]},
+                {'segment': 'Y', 'people': 2_437_737, 'distribution': [{'label': r['label'], 'pct': r['pct'], 'people': r['people'] - int(r['people'] * 0.6)} for r in rows2]}]
+        out = B.guard_board(rows2, segs, total, 12, 'seed-7', priority=B.seat_priority(rows2, {'targets': {'a': 4.4, 'b': 6.7}}), hold={'a', 'b'})
+        self.assertEqual(out['held'], [rows2[0]['label'], rows2[1]['label']])
+        self.assertTrue(_distinct(rows2), rows2)
+        self.assertEqual((rows2[0]['people'], rows2[1]['people']), (266_934, 412_221))
+        for i, r in enumerate(rows2):
+            self.assertEqual(int(r['people']), sum(int(s['distribution'][i]['people']) for s in segs), 'the room is the exact sum of its segments')
+        for s in segs:
+            self.assertEqual(sum(int(x['people']) for x in s['distribution']), int(s['people']), 'each segment keeps its own total')
+        # without a hold the same board is spread the old way (the free path is unchanged)
+        rows3 = [dict(r, pct=p, people=c) for r, (p, c) in zip(rows, [(4.4, 266_934), (6.7, 412_221), (25.4, 1_546_965), (28.3, 1_723_711), (28.5, 1_736_258), (6.7, 408_253)])]
+        B.enforce_distinct(rows3, None, total, 12, 'seed-7', priority=B.seat_priority(rows3))
+        self.assertTrue(_distinct(rows3))
+        self.assertEqual(sum(int(r['people']) for r in rows3), total)
+
 
 class OtherNeverLeads(unittest.TestCase):
     def test_the_guard_demotes_an_other_lead_without_a_coder(self):

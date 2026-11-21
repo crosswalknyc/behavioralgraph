@@ -232,9 +232,10 @@ class Upgrade(unittest.TestCase):
         dial_row = next(r for r in rows if r[0] == 'Dial average')
         self.assertEqual(dial_row[1], f"{float(sess['scorecard']['overall_like']):.1f}")
         csv = PI.session_csv(sess)
-        # the dial block in the CSV carries the line's own values
-        self.assertIn(f"{line[0]:.4f}", csv)
-        self.assertIn(f"{line[-1]:.4f}", csv)
+        # the dial block in the CSV carries the line's own values, as cells (a value whose fourth decimal is 0 prints
+        # as 54.645, not 54.6450, so the match is the cell the writer puts down, never a re-formatted string)
+        self.assertIn(f",{line[0]},", csv)
+        self.assertIn(f",{line[-1]},", csv)
 
 
 class Live(unittest.TestCase):

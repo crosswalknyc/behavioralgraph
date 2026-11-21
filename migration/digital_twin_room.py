@@ -4782,7 +4782,9 @@ def run_question(ctx: dict) -> dict:
         #     seats are then mirrored to the guarded count
         try:
             from migration import digital_twin_board as BOARD
-            trail['board_guard'] = BOARD.guard_board(opts_out, by_segment, total_people, len(roster), seed, priority=BOARD.seat_priority(opts_out, plan), answers=rec['answers'])
+            # the rows a house read pinned keep their people and share through the guard (the house figure survives a coded board)
+            _hold = set(plan.get('pinned') or ()) if (plan and isinstance(plan.get('house'), dict) and plan['house'].get('people')) else None
+            trail['board_guard'] = BOARD.guard_board(opts_out, by_segment, total_people, len(roster), seed, priority=BOARD.seat_priority(opts_out, plan), answers=rec['answers'], hold=_hold)
             if rec.get('multi_select'):
                 rec['mentions'] = BOARD.mentions(opts_out, rec['answers'], len(roster), total_people, seed)
         except Exception as e:
