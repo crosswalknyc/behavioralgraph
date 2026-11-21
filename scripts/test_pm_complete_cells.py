@@ -560,8 +560,12 @@ RETIRED_PHRASES = ('did not come back; ask', 'pieces did not come back', 'i coul
                    'i do not have a figure', 'not available to me', 'nothing to give', 'no figures to give',
                    'ask it again and i will run it fresh', 'ask for it again and it runs alone', 'ask again and i will retry',
                    # offers (2026-11-04): a pull that did not start is held and ops hear; never a notice
-                   'i could not start the', 'not started.', 'something went wrong.',
+                   'i could not start the', 'something went wrong.',
                    'nothing was charged. open your prometheus chat')
+# The offers page's bare status label ('Not started.') is retired as a whole string. A sentence that answers a
+# person's own question about an approval that never started is not that label: Jenna 2026-11-17 (Naomi
+# Inoshita's chat): "the answer is that it has not started and what to do" (status_lane.approval_reply).
+RETIRED_WHOLE = ('not started.',)
 # stage 5: the cores extracted from chat.py (prometheus/legacy/core_*.py) stay in every sweep that read chat.py
 _CORE_FILES = tuple(sorted(os.path.join('prometheus', 'legacy', f) for f in os.listdir(os.path.join(ROOT, 'prometheus', 'legacy')) if f.startswith('core_') and f.endswith('.py')))
 SWEEP_FILES = ['prometheus_analysis.py', 'prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py')] + list(_CORE_FILES)
@@ -596,6 +600,8 @@ class StringSweep(unittest.TestCase):
                 for ph in RETIRED_PHRASES:
                     if ph in low:
                         hits.append(f"{rel}:{lineno}: {ph!r} in {s[:80]!r}")
+                if low.strip() in RETIRED_WHOLE:
+                    hits.append(f"{rel}:{lineno}: the retired label {s!r}")
         self.assertEqual(hits, [])
 
     def test_fault_paths_hand_the_reader_the_calm_line(self):

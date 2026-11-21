@@ -357,9 +357,12 @@ def post(text, page, tid, history=None, extra=None):
             'log': [{'route': r.get('route'), 'outcome': r.get('outcome'), 'reply': r.get('reply'),
                      'result': (r.get('extra') or {}).get('result'), 'gate': (r.get('extra') or {}).get('gate')} for r in recs],
             # the ops alerts raised while this ask ran that are about its reply: the classifier's own
-            # ('ask outcome empty') and anything the deck step raised. A background thread's note is not this ask's.
+            # ('ask outcome empty') and anything the deck step raised. A background thread's note is not this ask's:
+            # the deck job thread the ask started runs on in the harness with no model and sends its own
+            # 'brief-chat/deck-job' note to ops when it fails; that is the job's fate, not the reply's.
             'alerts': [str(x)[:300] for x in (getattr(h.host, 'error_emails', []) or [])[e0:]
-                       if 'ask outcome' in str(x) or 'deck' in str(x[0] if isinstance(x, tuple) and x else x).lower()]}
+                       if ('ask outcome' in str(x) or 'deck' in str(x[0] if isinstance(x, tuple) and x else x).lower())
+                       and str(x[0] if isinstance(x, tuple) and x else x) != 'brief-chat/deck-job']}
 
 def fresh():
     st, d = h.post('/api/brief-chat/threads/new', {}, session=S)

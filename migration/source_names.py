@@ -169,7 +169,10 @@ _PAREN_RX = re.compile(
     % ATTRIB_ALT,
     re.I,
 )
-_SOURCE_LINE_RX = re.compile(r"\(?\s*sources?\s*:\s*[^.;\n)]*", re.I)
+# "Source: <outlet>" goes; the house's own line ("Source: Crosswalk", the one the brand standards put on a deck
+# page, or "our" / "first-party") is the reader's own attribution and stays (2026-11-20: the BPIQ valuation deck
+# lost its source line on every page)
+_SOURCE_LINE_RX = re.compile(r"\(?\s*sources?\s*:(?!\s*(?:crosswalk\b|our\b|first[- ]party\b|the house\b))\s*[^.;\n)]*", re.I)
 _LEAD_VERB_RX = re.compile(
     r"^(?:the\s+)?(?:%s)(?:'s|\u2019s)?\s+(?:%s)\s+(?:it\s+at\s+)?" % (ATTRIB_ALT, _VERBS),
     re.I,

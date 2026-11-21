@@ -356,6 +356,10 @@ NS = {
     'load_users': lambda: USERS_DOC,
     '_require_module_access': _user_can_access_stub_module,
     '_require_sf_conversion_journey': lambda k: None,
+    '_product_retired': lambda key: False,     # the SF Conversion sunset switch (app._product_retired); off here, the key gate is the subject
+    # the per-file company gate on a Brand Partnership valuation (app._bpiq_file_visible, wallet.bpiq_result_visible) has
+    # its own suites; here it is open, like _journey_access_effective above, so the key gate is what is measured
+    '_bpiq_file_visible': lambda user, journey_id, meta=None, payload=None, username=None: True,
     'user_can_view_ticket_sales_tracker': lambda u: True,
     'user_can_run_analysis_module': lambda u, m: True,
     '_journey_access_effective': lambda u, p, j: True,
@@ -383,7 +387,7 @@ lift({
     '_normalize_role', '_key_refusal_username', '_key_not_found', '_door_key', '_is_missing_key_error',
     '_user_can_access_profile_run', '_require_profile_run_access', '_user_can_open_subscriber',
     '_bpiq_is_backup_key', '_user_jiq_run_access', '_jiq_item_allowed', '_pm_can_open_journey',
-    '_ticker_symbol_from_s3_key', '_is_root_csv_key',
+    '_ticker_symbol_from_s3_key', '_is_root_csv_key', '_require_sf_conversion',
     # read doors
     'download_cached', 'get_profile_run_metadata', 'get_profile_data', 'serve_profile_image',
     'serve_ticker_image', 'get_ticket_sales_iq_data', 'download_ticket_sales_tracker',

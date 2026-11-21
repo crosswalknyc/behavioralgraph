@@ -59,6 +59,17 @@ class Strip(unittest.TestCase):
             _clean(got)
             self.assertEqual(strip_named_sources(got), got)
 
+    def test_the_house_source_line_stays(self):
+        # the brand standards put "Source: Crosswalk" on a deck page; it is the reader's own attribution, never a
+        # citation (2026-11-20: the BPIQ valuation deck lost it on every page)
+        line = "Source: Crosswalk. 2,278,204 projected US people, Aug 2 to Sep 21, 2026."
+        self.assertEqual(strip_named_sources(line), line)
+        self.assertEqual(strip_named_sources("Source: Crosswalk"), "Source: Crosswalk")
+        self.assertEqual(strip_named_sources("Our first-party read puts it at 4.1M."), "Our first-party read puts it at 4.1M.")
+        # an outlet's source line still goes, and a line that names us beside an outlet goes with it
+        self.assertEqual(strip_named_sources("Source: Nielsen. 4.1M viewers watched."), "4.1M viewers watched.")
+        self.assertEqual(strip_named_sources("Sources: Crosswalk and Statista. 4.1M watched."), "4.1M watched.")
+
     def test_a_plain_sentence_is_unchanged_and_a_bare_citation_goes(self):
         plain = "The room liked the pilot and 4.1M people watched it."
         self.assertEqual(strip_named_sources(plain), plain)

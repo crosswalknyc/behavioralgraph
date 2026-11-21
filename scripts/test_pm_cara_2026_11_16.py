@@ -165,11 +165,18 @@ for tid, turns, view in (('90ecf3aebf', T1, 'profileIQ'), ('694f7eb888', T2, 'su
                       'history': [{'role': x.get('role'), 'text': x.get('text') or '', 'meta': x.get('meta') or {}} for x in turns[:i]]})
         meta.append((tid, i))
 res = replay.probe_many(items, timeout_s=900)
-WANT = {('90ecf3aebf', 4): 'catalog_lookup'}
+# 694f7eb888:0, "WHERE TO FIND THE SUBSCRIBER RETENTION CURVES METRIC WITHIN SUBSCRIBER IQ IN THIS DASHBOARD?", is a
+# where-to-find question about a thing in the dashboard: since 2026-11-19 (Jenna: a where-is question gets its
+# directions) it is the wayfinding lane's, answered with Subscriber IQ's own line and never a priced read. Her
+# questions about the curve itself stay with the definitions.
+WANT = {('90ecf3aebf', 4): 'catalog_lookup', ('694f7eb888', 0): 'wayfinding'}
 for (tid, i), r in zip(meta, res):
     route, reply = str(r.get('route') or ''), str(r.get('reply') or '')
     want = WANT.get((tid, i), 'how_computed')
     check(route == want, f"{tid}:{i} routes to {want}", (route, r.get('outcome'), reply[:160]))
+    if want == 'wayfinding':
+        check('Subscriber IQ' in reply and 'retention' in reply.lower() and '$' not in reply and 'prices at' not in reply.lower(),
+              f"{tid}:{i} is answered with directions to Subscriber IQ, never a price", reply[:200])
     check(not r.get('jobs'), f"{tid}:{i} starts no job", r.get('jobs'))
     low = reply.lower()
     check('$' not in reply and 'ready to run' not in low and 'approve' not in low and 'out of this thread' not in low

@@ -77,7 +77,21 @@ PARSED = {'subject': 'My Life with the Walter Boys', 'platform': 'Netflix', 'jou
           'start_behavior': 'saw a social post or short-form clip about My Life with the Walter Boys', 'watch_definition': 'clicked_through'}
 
 
+# The seat a price line is for is read the way the ask door reads it since 2026-11-17 (prometheus.ask_outcome.
+# seat_username: the browser session inside a request, else the identity the door stamped; never the request
+# body). The card is composed inside a request whose session names the seat, exactly as the dashboard asks it.
+_WEB = __import__('flask').Flask('journey_card_included_test')
+_WEB.secret_key = 'made-up-test-key'
+_CTX = {'ctx': None}
+
+
 def _as(username):
+    if _CTX['ctx'] is not None:
+        _CTX['ctx'].pop()
+    ctx = _WEB.test_request_context('/api/brief-chat/analyze', method='POST')
+    ctx.push()
+    __import__('flask').session['username'] = username
+    _CTX['ctx'] = ctx
     C.session = {'username': username}
 
 
