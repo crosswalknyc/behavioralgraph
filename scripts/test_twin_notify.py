@@ -165,7 +165,7 @@ class TwinBuilt(Setup):
         self.assertEqual(m['subject'], 'Digital twin built: Jennifer Beals (Jenna Menking, Crosswalk)')
         body = m['body']
         for want in ('Jenna Menking (jenna@crosswalknyc.com) at Crosswalk built a digital twin.', 'Twin: Jennifer Beals', 'Built from: the Jennifer Beals profile',
-                     'Audience: 8,255,144 people in the US', 'Window: 2025-11-05 to 2026-11-05 (trailing twelve months)', 'Kind: talent', 'Home: Paramount+',
+                     'Audience: 8,255,144 people in the US', 'Window: 2025-11-05 to 2026-11-05 (trailing twelve months)', 'Type: talent', 'Home: Paramount+',   # Type:, never Kind: (Jenna 2026-11-20, ce3e7a85)
                      'Asked: "Build a twin of Jennifer Beals"', 'Asked through: the dashboard', 'Built: Nov 5, 2026', 'Open it: https://dashboard.crosswalknyc.com/?view=digitalTwinsIQ&twin=jb'):
             self.assertIn(want, body)
         self.assertClean(m)
