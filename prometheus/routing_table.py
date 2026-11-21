@@ -413,13 +413,16 @@ ROWS = [
     {
         'id': 'service_subscribers', 'surface': 'analyze',
         'reason': 'service_subscribers', 'client_action': 'analyze',
+        'host_only': True,
         'note': 'The US subscriber base of a streaming service, or of each '
                 'of the major services, from the house registry '
                 '(prometheus.service_subscribers): one wording, the same '
                 'figures on every ask, never priced, never a title lookup '
-                '(Cara Dorfman 2026-11-16).',
-        'examples': [('where to find subscriber estimates for each streaming service', False),
-                     ('how many subscribers does Peacock have in the US', False)],
+                '(Cara Dorfman 2026-11-16). Served by the ask service lane, '
+                'not decide(): "where to find subscriber estimates for each '
+                'streaming service", "how many subscribers does Peacock have '
+                'in the US" (scripts/test_pm_service_subscribers.py).',
+        'examples': [],
         'counter': [('how do you estimate churn for paramount+', False),
                     ('paramount+ viewers in the trailing 12 months', False)],
     },
