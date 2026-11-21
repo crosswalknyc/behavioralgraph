@@ -130,8 +130,8 @@ class TwinPage(unittest.TestCase):
         self.assertIn("if (!S.twinPage) { h.innerHTML = ''; return; }", twin_page)
         for need in ('dtw-kind-face', 'dtw-kind-about', 'What holds them back', 'rep.portrait_url', 'window.dtwTwinPageHide = '):
             self.assertIn(need, html, need)
-        self.assertIn('tap a kind for who they are.', html)
-        self.assertNotIn('tap a kind for what the desk wrote', html)
+        self.assertIn('tap an archetype for who they are.', html)   # Jenna 2026-11-20: an archetype is never called a kind
+        self.assertNotIn('tap a kind for', html)
 
 
 if __name__ == '__main__':

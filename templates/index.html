@@ -53444,7 +53444,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var pull = b.source !== 'demographics' && !b.profile_key && !!b.subject, pa = pull ? bwPrice('profile') : 0;
                 var rows = [['Source', b.source === 'demographics' ? 'A group shaped by demographics' : (b.profile_key ? 'A defined group, from the profile you picked' : 'A defined group; no audience on file yet, so Prometheus pulls it first'), 0],
                             ['Audience', bwAudienceLabel(), 1], ['Purpose', (b.chip ? b.chip : '') + (b.purpose.trim() ? (b.chip ? '. ' : '') + b.purpose.trim() : '') || 'Open', 2],
-                            ['Seats', 'One per kind of person in the audience, twelve or more, each sized by the people it stands for (the seats are part of each group)', null]];
+                            ['Seats', 'One archetype representative per archetype in the audience, twelve or more, each sized by the people it stands for (the seats are part of each group)', null]];
                 var shw = b.source === 'demographics' ? bwSharesWords() : '';
                 if (shw) rows.splice(2, 0, ['Shares', shw, 1]);
                 var sum = '<div class="dtw-bw-sum">' + rows.map(function(r) { return '<div class="r"><span class="k">' + r[0] + '</span><span class="v">' + esc(r[1]) + (r[2] === null ? '' : '<button type="button" class="dtw-link" onclick="dtwBwGo(' + r[2] + ')">Change</button>') + '</span></div>'; }).join('') + '</div>';
@@ -53608,7 +53608,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             ['Window', p.window_words || '', 1],
                             ['Category', (p.category || '') + (p.category_reason ? ' (' + p.category_reason + ')' : ''), null],
                             ['Purpose', (b.chip ? b.chip : '') + (b.purpose.trim() ? (b.chip ? '. ' : '') + b.purpose.trim() : '') || 'Open', 2],
-                            ['Seats', 'One per kind of person in the audience, twelve or more, each sized by the people it stands for (the seats are part of each group)', null]];
+                            ['Seats', 'One archetype representative per archetype in the audience, twelve or more, each sized by the people it stands for (the seats are part of each group)', null]];
                 var sum = '<div class="dtw-bw-sum">' + rows.map(function(r) { return '<div class="r"><span class="k">' + r[0] + '</span><span class="v">' + esc(r[1]) + (r[2] === null ? '' : '<button type="button" class="dtw-link" onclick="dtwBwGo(' + r[2] + ')">Change</button>') + '</span></div>'; }).join('') + '</div>';
                 var price = '<div class="dtw-bw-price">'
                     + '<div class="r"><span><i>The audience</i>, pulled from your list</span><b>' + esc(pr.profile_label || '') + '</b></div>'
@@ -53714,7 +53714,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var sel = el('dtwPnTier'); if (sel && sel.options.length && groupCard()) { var cur = sel.value; sel.innerHTML = groupTierOptions(cur); }
                 var tier = (sel && sel.value) || groupTierDefault();
                 var k = ((S.twin || {}).archetypes || {}).k;
-                h.innerHTML = '<b>' + (k ? k + ' seats' : 'One seat per kind of person') + '</b>, one for each kind of person in the audience, each sized by the people it stands for; the seats are part of the group. ' + esc(groupQuote(tier));
+                h.innerHTML = '<b>' + (k ? k + ' seats' : 'One seat per archetype') + '</b>, one archetype representative for each archetype in the audience, each sized by the people it stands for; the seats are part of the group. ' + esc(groupQuote(tier));
             };
             window.dtwAttach = function(kind) {
                 var nm = twinName() || '[twin]';
@@ -53936,7 +53936,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return [r.name, r.subject, r.built_by, twinQualifier(r)].join(' ').toLowerCase().indexOf(q) >= 0;
                 });
                 if (!shown.length) { h.innerHTML = '<div class="dtw-lib-empty"><p class="stand">No twin matches that. Try a shorter word, or build the twin you are looking for.</p></div>'; return; }
-                var out = '<div class="dtw-lib-cols"><span class="dtw-cap">&#8470;</span><span class="dtw-cap">The kinds</span><span class="r"><span class="dtw-cap">The twin</span><span class="dtw-cap">Size' + SEP_TXT + 'kinds' + SEP_TXT + 'last used</span></span></div>';
+                var out = '<div class="dtw-lib-cols"><span class="dtw-cap">&#8470;</span><span class="dtw-cap">The archetypes</span><span class="r"><span class="dtw-cap">The twin</span><span class="dtw-cap">Size' + SEP_TXT + 'archetypes' + SEP_TXT + 'last used</span></span></div>';
                 shown.forEach(function(r, i) { out += libEntry(r, i + 1); if (S.libOpen && S.libOpen.key === r.key) out += libPanel(r); });
                 h.innerHTML = out + '<div class="dtw-lib-end"></div>';
             }
@@ -53949,7 +53949,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function libKindsBar(r) {
                 var sh = (r.shares || []).map(Number).filter(function(v) { return v > 0; }), k = Number(r.kinds || sh.length || 0), big = r.biggest || null;
                 var segs = sh.length ? sh.map(function(v, i) { return '<span style="flex:' + Math.max(0.25, v).toFixed(2) + ';background:' + (i < 10 ? hueFor(i) : 'var(--dtw-track)') + '"></span>'; }).join('') : '<span style="flex:1;background:var(--dtw-track)"></span>';
-                var line = k ? ('<b>' + k + ' kinds.</b>' + (big && big.label ? ' The biggest: ' + esc(big.label) + ', ' + pct(big.share_pct, 1) : '')) : 'The kinds fill in when the twin is opened.';
+                var line = k ? ('<b>' + k + ' archetypes.</b>' + (big && big.label ? ' The biggest: ' + esc(big.label) + ', ' + pct(big.share_pct, 1) : '')) : 'The archetypes fill in when the twin is opened.';
                 return '<div class="kinds"><div class="bar">' + segs + '</div><div class="line">' + line + '</div></div>';
             }
             function libEntry(r, i) {
@@ -53959,7 +53959,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<span class="no">' + pad2(i) + '</span>' + libKindsBar(r)
                     + '<div class="main"><div class="name-row"><button type="button" class="name" title="See the full twin" onclick="dtwLibSeeTwin(\'' + kn + '\')">' + esc(nm) + '</button>'
                     + '<span class="kind ' + libKindClass(r) + '">' + esc(twinKindLabel(r) || 'Twin') + '</span>' + (cur ? '<span class="kind cur">Open</span>' : '') + (twinQualifier(r) ? '<span class="built">' + esc(twinQualifier(r)) + '</span>' : '')
-                    + '<span class="facts">' + esc(human(r.size_us)) + ' people' + SEP_TXT + (r.kinds ? r.kinds + ' kinds' + SEP_TXT : '') + (last ? 'last used ' + esc(fmtDay(last)) : 'new') + '</span></div>'
+                    + '<span class="facts">' + esc(human(r.size_us)) + ' people' + SEP_TXT + (r.kinds ? r.kinds + ' archetypes' + SEP_TXT : '') + (last ? 'last used ' + esc(fmtDay(last)) : 'new') + '</span></div>'
                     + '<div class="acts">'
                     + '<button type="button" class="dtw-lb look' + (open === 'learn' ? ' on' : '') + '" aria-expanded="' + (open === 'learn') + '" onclick="dtwLibToggle(\'' + kn + '\', \'learn\')">Learn more<i>&#9660;</i></button>'
                     + '<button type="button" class="dtw-lb look' + (open === 'past' ? ' on' : '') + '" aria-expanded="' + (open === 'past') + '" onclick="dtwLibToggle(\'' + kn + '\', \'past\')">Past work<em>' + libPastCount(r) + '</em><i>&#9660;</i></button>'
@@ -54003,7 +54003,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="col"><div class="dtw-lib-sec"><span class="dtw-cap">Who they are</span><span class="n">' + fmtN(m.size_us || r.size_us) + ' ' + esc(arch.noun || 'people') + (win ? SEP_TXT + esc(win) : '') + '</span></div>' + libStats(doc) + '</div></div>';
                 // the whole Who makes up this audience section, as it stood on the twin page (Jenna 2026-11-19: 'this should just fall in the dropdown')
                 var kinds = kindsSection(doc);
-                out += kinds ? '<div class="kinds">' + kinds + '</div>' : '<div class="dtw-lib-sec"><span class="dtw-cap">Who makes up this audience</span></div><div class="dtw-lib-wait">The kinds fill in the first time the twin is opened.</div>';
+                out += kinds ? '<div class="kinds">' + kinds + '</div>' : '<div class="dtw-lib-sec"><span class="dtw-cap">Who makes up this audience</span></div><div class="dtw-lib-wait">The archetypes fill in the first time the twin is opened.</div>';
                 return out + '</div>';
             }
             function libStats(doc) {
@@ -54220,7 +54220,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!groups.length) return '';
                 var noun = a.noun || 'people', size = Number(a.size_people || ((t || {}).meta || {}).size_us || 0), top = groups[0];
                 var maxShare = Math.max.apply(null, groups.map(function(g) { return Number(g.share_pct || 0); }).concat([1]));
-                var line = groups.length + ' kinds of ' + esc(noun) + ' make up the ' + fmtN(size) + ' people in this audience; the largest is ' + esc(String(top.label || '').charAt(0).toLowerCase() + String(top.label || '').slice(1)) + ' at ' + Number(top.share_pct || 0).toFixed(1) + '% (' + fmtN(top.people) + ' ' + esc(noun) + ').';
+                var line = groups.length + ' archetypes make up the ' + fmtN(size) + ' ' + esc(noun) + ' in this audience; the largest is ' + esc(String(top.label || '').charAt(0).toLowerCase() + String(top.label || '').slice(1)) + ' at ' + Number(top.share_pct || 0).toFixed(1) + '% (' + fmtN(top.people) + ' ' + esc(noun) + ').';
                 var rows = groups.map(function(g, i) {
                     var rep = g.representative || {}, who = rep.name ? esc(titleCase(rep.name)) + (rep.age != null && rep.age !== '' ? ', ' + esc(rep.age) : '') + (rep.city ? ', ' + esc(titleCase(shortCity(rep.city))) : '') : '';
                     var face = rep.portrait_url ? '<img src="' + esc(thumb(rep.portrait_url)) + '" alt="" onerror="this.remove()">' : esc(initials(rep.name || g.label || ''));
@@ -54233,7 +54233,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '<span class="dtw-kind-bar"><span style="width:' + Math.max(2, Math.min(100, Number(g.share_pct || 0) / maxShare * 100)).toFixed(1) + '%"></span></span>'
                         + (more ? '<span class="chev">&#9662;</span>' : '<span class="chev" style="visibility:hidden">&#9662;</span>') + '</summary>' + more + '</details>';
                 }).join('');
-                return '<div class="dtw-kinds"><div class="dtw-kinds-h"><div><div class="dtw-eyebrow">Who makes up this audience</div><p class="dtw-kinds-line">' + line + '</p></div><div class="dtw-kinds-note">Every room seats one of each; tap a kind for who they are.</div></div><div class="dtw-kinds-list">' + rows + '</div></div>';
+                return '<div class="dtw-kinds"><div class="dtw-kinds-h"><div><div class="dtw-eyebrow">Who makes up this audience</div><p class="dtw-kinds-line">' + line + '</p></div><div class="dtw-kinds-note">Every room seats one archetype representative of each; tap an archetype for who they are.</div></div><div class="dtw-kinds-list">' + rows + '</div></div>';
             }
             // The selected twin: Identity, Traits, Lifecycle, Runs. No hero card.
             function renderTwin() {
@@ -55671,7 +55671,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '<div class="dtw-pa-qbody"><div class="dtw-pa-qtext">' + esc(q.q || '') + '</div>' + paSplitBars(q.split) + (q.read ? '<div class="dtw-pa-read">' + esc(q.read) + '</div>' : (q.failed ? '<div class="dtw-pa-read">The room did not finish this one.</div>' : ''))
                         + ((q.voices || []).length ? '<div class="dtw-pa-voices">' + q.voices.map(function(v) { return '<div class="dtw-pa-voice"><b>' + esc(titleCase(v.name || '')) + (v.age ? ', ' + esc(v.age) : '') + (v.city ? ', ' + esc(titleCase(v.city)) : '') + '</b> ' + esc(v.line || '') + '</div>'; }).join('') + '</div>' : '') + '</div></div>';
                 }).join('') + '</div>';
-                if ((rp.seats || []).length) out += '<div class="dtw-pa-sect"><div class="dtw-fg-land-head"><h3>Who sat in the room</h3><span>One person for each kind of people in the audience, each standing for the people of that kind.</span></div><div class="dtw-pa-seats">' + rp.seats.map(paFace).join('') + '</div></div>';
+                if ((rp.seats || []).length) out += '<div class="dtw-pa-sect"><div class="dtw-fg-land-head"><h3>Who sat in the room</h3><span>One archetype representative for each archetype in the audience, each standing for the people of that archetype.</span></div><div class="dtw-pa-seats">' + rp.seats.map(paFace).join('') + '</div></div>';
                 return out + '</div>';
             }
             function renderPredict() {
@@ -56933,7 +56933,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '<button type="button" class="dtw-pi-rowdup" title="Duplicate this setup" aria-label="Duplicate ' + esc(x.name || 'this setup') + '" onclick="dtwPilotDuplicateSetup(\'' + esc(x.id) + '\')">Duplicate</button></div>';
                 }).join('');
                 var saved = '<div class="dtw-pi-h">Saved setups <span class="n">' + setups.length + '</span></div><div class="dtw-pi-list">' + (srows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">Fill in the form and press Save setup to keep it here. Come back any time and open it to edit, without typing it again.</p>') + '</div>';
-                var tests = '<div class="dtw-pi-col side tests">' + saved + '<div class="dtw-pi-h">Past tests <span class="n">' + past.length + '</span></div><div class="dtw-pi-list">' + (rows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">No tests of this kind on this twin yet. The first one lands here.</p>') + '</div></div>';
+                var tests = '<div class="dtw-pi-col side tests">' + saved + '<div class="dtw-pi-h">Past tests <span class="n">' + past.length + '</span></div><div class="dtw-pi-list">' + (rows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">No tests of this type on this twin yet. The first one lands here.</p>') + '</div></div>';
                 var normSel = '<label class="dtw-field" for="dtwPiNorm">Compare to</label><select id="dtwPiNorm" class="dtw-in" required onchange="dtwPilotNormTouched()">' + piNormOptions(mode, '') + '</select><input type="hidden" id="dtwPiNormTouched" value="">'
                     + '<div class="dtw-pi-fn" id="dtwPiNormHint" style="margin-top:4px">Every score is read against this norm. The room suggests one once it has watched the cut; you can change it any time.</div>';
                 var cut = '<div class="dtw-pi-col side cut"><div class="dtw-pi-h">' + esc(cutHead) + '</div>' + modeSel + normSel + stim + '</div>';
@@ -58066,7 +58066,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '<div class="dtw-pi-legend">' + room + '</div>';
             }
             function piKindSel() {
-                return '<select id="dtwPiKindSel" class="dtw-in" onchange="dtwPilotKindSel(this.value)" aria-label="Kind of question"><option value=""' + (!S.pilotKind ? ' selected' : '') + '>Open</option><option value="yes_no"' + (S.pilotKind === 'yes_no' ? ' selected' : '') + '>Yes / no</option><option value="rating"' + (S.pilotKind === 'rating' ? ' selected' : '') + '>Rating</option><option value="show_of_hands"' + (S.pilotKind === 'show_of_hands' ? ' selected' : '') + '>Show of hands</option></select>';
+                return '<select id="dtwPiKindSel" class="dtw-in" onchange="dtwPilotKindSel(this.value)" aria-label="Type of question"><option value=""' + (!S.pilotKind ? ' selected' : '') + '>Open</option><option value="yes_no"' + (S.pilotKind === 'yes_no' ? ' selected' : '') + '>Yes / no</option><option value="rating"' + (S.pilotKind === 'rating' ? ' selected' : '') + '>Rating</option><option value="show_of_hands"' + (S.pilotKind === 'show_of_hands' ? ' selected' : '') + '>Show of hands</option></select>';
             }
             function piRoomHtml(s, t0, kindSel) {
                 // the room column: the seats as a thread, the composer, the questions. Painted inline or into the popped-out window.

@@ -841,10 +841,10 @@ HOW_TO = [
         'answers': 'Who an audience is and how it behaves: its people, platforms and buying, twelve dials for how it responds, and where it sits in its lifecycle.',
         'put_in': ('Build a twin on the Twins tab walks you through it. First, what the twin stands for: a defined group from a profile (the audience of a title, a talent or a brand). '
                    'A named subject sits on its Total Universe. If none is on file, one is pulled first and that file is what the twin and every room use. '
-                   'The twin page then shows who makes up the audience: the kinds of people in it, how many people each kind is, and the person who stands for each one; '
-                   'the seats in a room match that file\'s mix (gender, orientation, education, occupation) and each persona is built from its kind and those attributes. '
+                   'The twin page then shows who makes up the audience: its archetypes, how many people each archetype is, and the archetype representative who stands for each one; '
+                   'the seats in a room match that file\'s mix (gender, orientation, education, occupation) and each representative is built from its archetype and those attributes. '
                    'Or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for. '
-                   f'Rooms on the twin seat one person per kind (up to {PANEL_SEATS_MAX} seats, part of the group price); set a seat count by hand only if you want to change that. Or type the ask to Prometheus with a window if it is not the last 12 months.'),
+                   f'Rooms on the twin seat one archetype representative per archetype (up to {PANEL_SEATS_MAX} seats, part of the group price); set a seat count by hand only if you want to change that. Or type the ask to Prometheus with a window if it is not the last 12 months.'),
         'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of women 25 to 44 in Dallas who shop at Target'],
         'attach': 'Nothing is needed. If you have a brief or a deck on the subject, attach it with the paper clip and the twin reads it.',
         'comes_back': ('The twin lands on the Twins tab in a few minutes, with its first two runs. Prometheus confirms in the chat; there is no email. '
@@ -913,8 +913,8 @@ HOW_TO = [
         'id': 'panel', 'title': 'Focus Group IQ',
         'answers': 'A focus group Prometheus moderates for you (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and Prometheus runs the room: the %s and people counts, the split by segment, a one-line read and a few panelist voices, in a minute or two. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
         'put_in': (f'A name for the room (you can change it later on the room page), the twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), '
-                   f'whether the group answers 1-20 or 1-40 questions, then your questions. The room seats one person for each kind of people in the audience, and each seat stands for the people of that kind '
-                   f'(an audience of a million made of twelve kinds seats twelve people whose counts add up to the million); ask for a number of seats (2 to {PANEL_SEATS_MAX}) only if you want to change that. '
+                   f'whether the group answers 1-20 or 1-40 questions, then your questions. The room seats one archetype representative for each archetype in the audience, and each seat stands for the people of that archetype '
+                   f'(an audience of a million made of twelve archetypes seats twelve representatives whose counts add up to the million); ask for a number of seats (2 to {PANEL_SEATS_MAX}) only if you want to change that. '
                    'The seats match the twin\'s profile (the gender split, orientation, education and the rest); each persona is built from those attributes.'),
         'type_this': ['Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box', 'Ask them why', 'Show of hands, who watched season 1?',
                       'Ask the room: trailer A vs trailer B', 'Re-ask at $19'],
@@ -933,8 +933,8 @@ HOW_TO = [
                     '(women and men, under and over 35), the dial split by any group in the room (age, ethnicity, orientation, education, '
                     'where they are with the title, avid or casual), the favorite moment, the dead spot, the transcript.'),
         'put_in': (f'A name for the test, the twin (or a second twin) in the room, whether the group answers 1-20 or 1-40 questions, and the cut: upload an mp4, mov or webm, '
-                   'paste a watch link from any streamer, or type a title and a runtime if the file is not in hand yet. The room seats one person per kind of people in the audience, '
-                   f'each standing for the people of that kind (up to {PANEL_SEATS_MAX} seats, part of the group price); set a seat count by hand only to change that. '
+                   'paste a watch link from any streamer, or type a title and a runtime if the file is not in hand yet. The room seats one archetype representative per archetype in the audience, '
+                   f'each standing for the people of that archetype (up to {PANEL_SEATS_MAX} seats, part of the group price); set a seat count by hand only to change that. '
                    'The genre is read from the cut; change it with the chip on the test if it reads wrong.'),
         'type_this': ['Open Pilot Testing on the Gilmore Girls twin and play the season 2 pilot',
                       'Ask the room at 12:40: would you keep watching?',

@@ -39,7 +39,7 @@ from migration import digital_twin_session_mail as SM  # noqa: E402
 KEY = 'digital-twins/carol/Jennifer_Beals_20261028_120000_abc123def0.json.gz'
 SID = 'fg01'
 NOW = 1_800_000_000.0
-BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|research\w*|panel\w*|survey\w*|confidence|prediction|archetype\w*|persona\w*|segment\w*|cohort\w*|calibrat\w*|nielsen|estimat\w*|pipeline|hostmap|claude)\b", re.I)
+BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|research\w*|panel\w*|survey\w*|confidence|prediction|persona\w*|segment\w*|cohort\w*|calibrat\w*|nielsen|estimat\w*|pipeline|hostmap|claude)\b", re.I)
 
 
 class _Body:

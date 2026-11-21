@@ -1772,7 +1772,7 @@ def kinds_reply(text, body, history, user):
     if not lines:
         return _payload(f"The {r.get('name')} twin has no breakdown yet; open it and I will build one.", [OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ')
     head = A.archetype_summary_line(payload)
-    reply = _scrub(head + '\n\n' + '\n'.join(f"- {ln}" for ln in lines) + '\n\nA room on this twin seats one person per kind, each standing for the people of that kind.')
+    reply = _scrub(head + '\n\n' + '\n'.join(f"- {ln}" for ln in lines) + '\n\nA room on this twin seats one archetype representative per archetype, each standing for the people of that archetype.')
     return _payload(reply, [f"Open a focus group with the {r.get('name')} twin", f"Open the {r.get('name')} twin", OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ',
                     action_hint={'view': 'digitalTwinsIQ', 'tab': 'twins', 'twin_key': r.get('key')})
 

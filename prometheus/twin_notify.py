@@ -513,7 +513,7 @@ def _twin_body(payload: dict, key: str, st: dict, inputs: dict, via: str, s3=Non
         lines.append(f"Window: {m.get('window_start') or '?'} to {m.get('window_end') or '?'}" + (f" ({label})" if label else ''))
     kind = str(m.get('subject_kind') or '').strip()
     if kind:
-        lines.append(f"Kind: {kind}" + (f", {m.get('format')}" if m.get('format') else ''))
+        lines.append(f"Type: {kind}" + (f", {m.get('format')}" if m.get('format') else ''))   # the twin's type; 'kind' never sits beside the archetypes (Jenna 2026-11-20)
     if m.get('platform_home'):
         lines.append(f"Home: {m.get('platform_home')}")
     try:   # who makes up the audience (2026-11-17): the kinds, their people and who stands for each

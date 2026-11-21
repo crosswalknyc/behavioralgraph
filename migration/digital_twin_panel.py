@@ -2012,7 +2012,7 @@ def session_csv(session: dict) -> str:
     import io
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(['Session', 'Question id', 'Question', 'Kind', 'Segment', 'Answer', 'Share %', 'People', 'Low %', 'High %', 'How firm'])
+    w.writerow(['Session', 'Question id', 'Question', 'Question type', 'Segment', 'Answer', 'Share %', 'People', 'Low %', 'High %', 'How firm'])
     for q in session.get('questions') or []:
         fb = q.get('firmness') if isinstance(q.get('firmness'), dict) else {}
         rng = {str(r.get('label')): r for r in (fb.get('ranges') or []) if isinstance(r, dict)}
@@ -2026,7 +2026,7 @@ def session_csv(session: dict) -> str:
     roster = ((session.get('group') or {}).get('roster') or [])
     if roster:
         w.writerow([])
-        w.writerow(['Session', 'Seat', 'Name', 'Age', 'City', 'Segment', 'Kind', 'People'])
+        w.writerow(['Session', 'Seat', 'Name', 'Age', 'City', 'Segment', 'Archetype', 'People'])
         for r in roster:
             if isinstance(r, dict):
                 w.writerow([session.get('id'), r.get('seat'), r.get('name'), r.get('age'), r.get('city'), r.get('segment'), (r.get('archetype') or {}).get('label') or '', r.get('people') or r.get('stands_for_people')])

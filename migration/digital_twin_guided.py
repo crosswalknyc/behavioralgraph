@@ -104,7 +104,7 @@ KIND_IDS = tuple(k[0] for k in KINDS)
 LEVELS = ('macro', 'mid', 'micro')
 Q_KINDS = ('yes_no', 'multiple_choice', 'open', 'rating')
 
-PLAN_SYSTEM = """You plan a focus group for one business question. The room is a set of people who each stand for a kind of person in the audience; they answer one question at a time, in character, and the room reports the split, a read and their voices.
+PLAN_SYSTEM = """You plan a focus group for one business question. The room is a set of archetype representatives who each stand for an archetype in the audience; they answer one question at a time, in character, and the room reports the split, a read and their voices.
 
 Write the plan as JSON only:
 {"goal": one plain sentence that restates the business question as the thing the user needs to know,
@@ -117,7 +117,7 @@ Rules.
 - Each question is something one person can answer about themselves in a sentence; never a market question ("what share of people...").
 - Plain English a 7th grader follows. Short. No jargon, no brand-speak.
 - Options for a pick are short, distinct, and cover the real answers including "neither" or "not for me" where honest.
-- Never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data, survey. No em dashes.
+- Never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, persona, segment, cohort, confidence, data, survey. An archetype is called an archetype, never a kind of person. No em dashes.
 - Keep the user's names, prices, titles and dates exactly as written.
 """
 
@@ -128,17 +128,17 @@ Answer the business question for the person who asked it. JSON only:
  "answer": one sentence that states the call plainly with the one number that carries it,
  "why": two or three sentences on why the room landed there, in plain words,
  "numbers": [three to five short lines, each carrying one number from the record exactly as published (a share, a people count, a seat count), the most decisive first],
- "who": one sentence on which kinds of people in the room drove the result and which pushed the other way,
+ "who": one sentence on which archetypes in the room drove the result and which pushed the other way,
  "would_change": one sentence on what would most likely move the result,
  "next": one follow-up question worth asking this room next}
 
 Rules.
 - Use only numbers that appear in the record; never invent or round them to a looser figure. State shares in plain words when it helps ("about three in ten") and keep the exact figure beside it.
 - Say what the room said; do not hedge the call with "might" or "could" when the split is clear, and do not overstate a narrow one.
-- Plain English a 7th grader follows. Never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data, survey, prediction. No em dashes.
+- Plain English a 7th grader follows. Never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, persona, segment, cohort, confidence, data, survey, prediction. An archetype is called an archetype, never a kind of person. No em dashes.
 """
 
-_BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|research(?:ed)?|panel|sample|archetypes?|personas?|segments?|cohorts?|confidence|survey|prediction)\b", re.I)
+_BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|research(?:ed)?|panel|sample|personas?|segments?|cohorts?|confidence|survey|prediction)\b", re.I)   # archetype is a reader word (Jenna 2026-11-20)
 
 
 def kind_of(text: str, hint: str = '') -> str:
@@ -270,7 +270,7 @@ def plan(twin: dict, goal: str, kind: str = '', *, models=None, call: Optional[C
         brief = _twin_brief(twin)
     except Exception:
         brief = {'name': _subject(twin)}
-    body = {'audience': brief, 'kinds_of_people_in_the_room': _kinds_words(twin, 8), 'business_question': goal,
+    body = {'audience': brief, 'archetypes_in_the_room': _kinds_words(twin, 8), 'business_question': goal,
             'question_kind': dict((k[0], k[1]) for k in KINDS).get(kind, 'Something else'), 'today': time.strftime('%Y-%m-%d', time.gmtime())}
     try:
         data = call(PLAN_SYSTEM, json.dumps(body, default=str)[:14000], 2400, 0.3)
@@ -839,7 +839,7 @@ def _digest(sess: dict, plan_doc: dict) -> list:
 
 # A sentence that still says how the answer was made after the house scrub is dropped whole: the reader gets the answer, never
 # the method (no-modeled-or-source-language.mdc; the firmness words stay off this surface too)
-_DROP_SENTENCE = re.compile(r"\b(synthetic|synth|modell?ed|model|estimat\w*|research\w*|panel|sampl\w*|archetyp\w*|personas?|segments?|cohorts?|confiden\w*|survey\w*|predict\w*|calibrat\w*|anchor\w*|benchmark\w*|simulat\w*|twins?|seat-weighted|weighted)\b", re.I)
+_DROP_SENTENCE = re.compile(r"\b(synthetic|synth|modell?ed|model|estimat\w*|research\w*|panel|sampl\w*|personas?|segments?|cohorts?|confiden\w*|survey\w*|predict\w*|calibrat\w*|anchor\w*|benchmark\w*|simulat\w*|twins?|seat-weighted|weighted)\b", re.I)
 
 
 def _scrub(s: str) -> str:

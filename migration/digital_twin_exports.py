@@ -485,8 +485,8 @@ def _pages(payload: dict) -> list:
             rep = g.get('representative') or {}
             who = f"{rep.get('name')}, {rep.get('age')}, {rep.get('city')}" if rep.get('name') else ''
             krows.append((str(g.get('label') or ''), f"{float(g.get('share_pct') or 0):.1f}%", f"{int(g.get('people') or 0):,} {arch.get('noun') or 'people'}" + (f". {who}" if who else '')))
-        pages.append({'kind': 'table', 'header': _words(f"{len(arch.get('groups') or [])} kinds of people make up this audience"), 'sub': sub,
-                      'rows': krows, 'head': ('Kind', 'Share', 'People, and who stands for them'), 'dark': True})
+        pages.append({'kind': 'table', 'header': _words(f"{len(arch.get('groups') or [])} archetypes make up this audience"), 'sub': sub,
+                      'rows': krows, 'head': ('Archetype', 'Share', 'People, and the archetype representative'), 'dark': True})
     traits = payload.get('traits') or {}
     tr_rows = sorted(traits.items(), key=lambda kv: -abs(float(kv[1].get('value') or 50) - 50))[:8]
     pages.append({'kind': 'table', 'header': 'How this audience responds, strongest dials first.', 'sub': 'Each dial runs 0 to 100; 50 is an ordinary US audience.',

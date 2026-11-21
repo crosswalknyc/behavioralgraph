@@ -52,7 +52,7 @@ from migration import digital_twin_panel as P  # noqa: E402
 sys.path.insert(0, HERE)
 from test_digital_twin_room_seats import _beals  # noqa: E402
 
-BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|research|panel|sample|archetype|persona|segment|cohort|confidence|survey|prediction)\b", re.I)
+BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|research|panel|sample|persona|segment|cohort|confidence|survey|prediction)\b", re.I)
 
 
 def _twin():

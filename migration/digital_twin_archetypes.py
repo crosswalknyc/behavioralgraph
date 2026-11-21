@@ -146,20 +146,20 @@ _INTENSITY_GENDER_TILT = 1.06   # the devoted lean a little further toward the a
 _NOUNS = {'title': 'viewers', 'platform': 'subscribers', 'brand': 'buyers', 'talent': 'followers', 'audience': 'people', 'civic': 'voters'}
 _FORMAT_NOUNS = {'podcast': 'listeners', 'book': 'readers', 'game': 'players', 'creator': 'followers', 'series': 'viewers', 'film': 'viewers'}
 
-ARCHETYPE_SYSTEM = """You are the audience strategist naming the kinds of people that make up one audience, so a focus group can seat one person per kind, each standing for the people of that kind. You are given the audience (who it is, how it behaves, its lifecycle, its platforms and purchases, the research on its base person when there is one) and a skeleton: the kinds already found from the audience's own numbers (relationship stage x life stage x intensity), each with its share, its demographic profile and its habits. Your job is to make each kind a real, specific person a studio or brand executive would recognize, in this subject's own terms.
+ARCHETYPE_SYSTEM = """You are the audience strategist naming the archetypes that make up one audience, so a focus group can seat one archetype representative per archetype, each standing for the people of that archetype. You are given the audience (who it is, how it behaves, its lifecycle, its platforms and purchases, the research on its base person when there is one) and a skeleton: the archetypes already found from the audience's own numbers (relationship stage x life stage x intensity), each with its share, its demographic profile and its habits. Your job is to make each archetype a real, specific person a studio or brand executive would recognize, in this subject's own terms.
 Rules:
-- Keep every skeleton id. You may set merge_into on a kind that is truly the same person as another (then it disappears into that one), and you may split one kind in two by giving split_label and split_share_pct (the share of the kind that goes to the second). Keep the total between 6 and 16 kinds.
-- label: three to seven plain words, specific to this subject and this kind ("Weeknight regulars who found it on Hulu", "Parents who keep it on for the kids", "Lapsed fans waiting for the next season"). No puns. No demographic-only labels ("Women 35 to 54"); the age and gender are already on the card.
+- Keep every skeleton id. You may set merge_into on an archetype that is truly the same person as another (then it disappears into that one), and you may split one archetype in two by giving split_label and split_share_pct (the share of the archetype that goes to the second). Keep the total between 6 and 16 archetypes.
+- label: three to seven plain words, specific to this subject and this archetype ("Weeknight regulars who found it on Hulu", "Parents who keep it on for the kids", "Lapsed fans waiting for the next season"). No puns. No demographic-only labels ("Women 35 to 54"); the age and gender are already on the card.
 - who: two sentences about who they are and how the subject fits their week. relationship: one sentence on where they stand with the subject now. decides: one sentence on how they decide to watch, buy or show up. moves_them: a short phrase. holds_them_back: a short phrase.
-- share_adjust_pct: a relative nudge to the kind's share, between -30 and 30, when the audience's facts argue the skeleton has it too big or too small. The totals are re-fitted afterwards; you shape the mix, not the size of the audience.
-- trait_shifts: up to five of these dials moved by -20 to 20 points for this kind: discovery_social_vs_search, binge_vs_appointment, price_sensitivity, churn_propensity, franchise_loyalty, merch_propensity, second_screen, live_events, creator_follow, ad_tolerance, trial_speed, word_of_mouth.
-- There are at least twelve kinds and the room seats one person per kind; a merge that would leave fewer than twelve is ignored. A kind that reads as two distinct kinds of people can be split (split_label, split_share_pct).
-- profile_lean: who this kind is, when it really skews, as the share (percent, 0 to 100) of the kind on the named rows, by category: gender, sexual_orientation, ethnicity, income, parental, relationship, education. Use the audience's own row labels (the gender rows you were given, for example Female, Male, Non-Binary, Trans Female, Trans Male; the orientation rows, for example LGBTQ+ or Gay or Lesbian). Rows you do not name share what is left in the audience's own proportions. A kind that is gay men: {"gender": {"Male": 95}, "sexual_orientation": {"LGBTQ+": 95}}; a kind that is trans women: {"gender": {"Trans Female": 90}, "sexual_orientation": {"LGBTQ+": 85}}; a kind of young mothers: {"parental": {"Has Children": 92}}. {} when the kind is the audience's own mix. The other kinds are re-fitted so the audience's totals hold, and a kind can never hold more of a row than the audience has (a 7% kind can be 90% trans women only if the audience is at least 6.3% trans women; if the rows do not hold a kind, do not name it), so lean only where the facts argue it.
-- Plain English a 7th grader follows; third person; no first names; never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, archetype, persona, segment, cohort, confidence, data. No em dashes.
+- share_adjust_pct: a relative nudge to the archetype's share, between -30 and 30, when the audience's facts argue the skeleton has it too big or too small. The totals are re-fitted afterwards; you shape the mix, not the size of the audience.
+- trait_shifts: up to five of these dials moved by -20 to 20 points for this archetype: discovery_social_vs_search, binge_vs_appointment, price_sensitivity, churn_propensity, franchise_loyalty, merch_propensity, second_screen, live_events, creator_follow, ad_tolerance, trial_speed, word_of_mouth.
+- There are at least twelve archetypes and the room seats one archetype representative per archetype; a merge that would leave fewer than twelve is ignored. An archetype that reads as two distinct archetypes can be split (split_label, split_share_pct).
+- profile_lean: who this archetype is, when it really skews, as the share (percent, 0 to 100) of the archetype on the named rows, by category: gender, sexual_orientation, ethnicity, income, parental, relationship, education. Use the audience's own row labels (the gender rows you were given, for example Female, Male, Non-Binary, Trans Female, Trans Male; the orientation rows, for example LGBTQ+ or Gay or Lesbian). Rows you do not name share what is left in the audience's own proportions. An archetype that is gay men: {"gender": {"Male": 95}, "sexual_orientation": {"LGBTQ+": 95}}; an archetype that is trans women: {"gender": {"Trans Female": 90}, "sexual_orientation": {"LGBTQ+": 85}}; an archetype of young mothers: {"parental": {"Has Children": 92}}. {} when the archetype is the audience's own mix. The other archetypes are re-fitted so the audience's totals hold, and an archetype can never hold more of a row than the audience has (a 7% archetype can be 90% trans women only if the audience is at least 6.3% trans women; if the rows do not hold an archetype, do not name it), so lean only where the facts argue it.
+- Plain English a 7th grader follows; third person; no first names; never these words: synthetic, synth, model, modeled, estimated, research, panel, sample, persona, segment, cohort, confidence, data. Never call an archetype a kind or a type of person; the word is archetype, and the person who stands for one is the archetype representative. No em dashes.
 Return JSON only:
-{"groups": [{"id": "<skeleton id>", "label": "...", "who": "...", "relationship": "...", "decides": "...", "moves_them": "...", "holds_them_back": "...", "share_adjust_pct": 0, "trait_shifts": {}, "profile_lean": {}, "merge_into": null, "split_label": null, "split_share_pct": null}], "notes": "<one sentence on what distinguishes this audience's kinds>"}"""
+{"groups": [{"id": "<skeleton id>", "label": "...", "who": "...", "relationship": "...", "decides": "...", "moves_them": "...", "holds_them_back": "...", "share_adjust_pct": 0, "trait_shifts": {}, "profile_lean": {}, "merge_into": null, "split_label": null, "split_share_pct": null}], "notes": "<one sentence on what distinguishes this audience's archetypes>"}"""
 
-_BANNED_RX = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|estimate|research(?:ed)?|panel|panelists?|sample|archetypes?|personas?|segments?|cohorts?|confidence|data)\b", re.I)
+_BANNED_RX = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|estimate|research(?:ed)?|panel|panelists?|sample|personas?|segments?|cohorts?|confidence|data)\b", re.I)   # archetype is a reader word (Jenna 2026-11-20)
 
 
 # ------------------------------------------------------------------ helpers
@@ -253,7 +253,7 @@ def noun_for(twin: dict) -> str:
 def scrub_text(s: str) -> str:
     """Reader copy: the house words off, no em or en dashes."""
     t = str(s or '').replace('\u2014', ', ').replace('\u2013', '-')
-    t = _BANNED_RX.sub(lambda m: {'archetype': 'kind', 'archetypes': 'kinds', 'persona': 'person', 'personas': 'people', 'segment': 'group', 'segments': 'groups',
+    t = _BANNED_RX.sub(lambda m: {'persona': 'person', 'personas': 'people', 'segment': 'group', 'segments': 'groups',
                                    'cohort': 'group', 'cohorts': 'groups', 'sample': 'group', 'panel': 'group', 'data': 'record', 'confidence': 'certainty'}.get(m.group(1).lower(), ''), t)
     t = re.sub(r"\s{2,}", ' ', t).replace(' ,', ',').replace(' .', '.').strip()
     return t
@@ -1191,10 +1191,10 @@ def ensure_archetypes(twin: dict, *, models=None, usage_extras: Optional[dict] =
     arch = box.get('arch')
     if th.is_alive() or not isinstance(arch, dict) or not arch.get('groups'):
         why = f"did not answer within {budget:.0f}s" if th.is_alive() else f"failed: {str(box.get('err') or 'no kinds')[:120]}"
-        print(f"[archetypes] the kinds desk {why}; the deterministic kinds stand and the desk runs at the next open")
+        print(f"[archetypes] the archetype desk {why}; the deterministic archetypes stand and the desk runs at the next open")
         return derive_archetypes(twin, call=None, force=True)
     twin['archetypes'] = arch
-    print(f"[archetypes] {arch.get('k')} kinds ({arch.get('method')}) in {time.time() - t0:.1f}s")
+    print(f"[archetypes] {arch.get('k')} archetypes ({arch.get('method')}) in {time.time() - t0:.1f}s")
     return arch
 
 
@@ -1235,7 +1235,8 @@ def archetype_summary_line(twin: dict) -> str:
     noun = arch.get('noun') or 'people'
     size = int(arch.get('size_people') or 0)
     top = groups[0]
-    return (f"{len(groups)} kinds of {noun} make up the {size:,} people in this audience; the largest is {str(top.get('label') or '').lower()} "
+    # Jenna 2026-11-20: an archetype is called an archetype, never a kind
+    return (f"{len(groups)} archetypes make up the {size:,} {noun} in this audience; the largest is {str(top.get('label') or '').lower()} "
             f"at {float(top.get('share_pct') or 0):.1f}% ({int(top.get('people') or 0):,} {noun}).")
 
 

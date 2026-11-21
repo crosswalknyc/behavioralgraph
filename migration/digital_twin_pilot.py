@@ -3887,7 +3887,7 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
                     e.get('name'), e.get('age'), e.get('city'), e.get('line'), e.get('intensity')])
     w.writerow([])
     questions = [q for q in (session.get('questions') or []) if isinstance(q, dict)]
-    w.writerow(['Clock', 'Question', 'Kind', 'Read'])
+    w.writerow(['Clock', 'Question', 'Question type', 'Read'])
     for q in questions:
         w.writerow([question_clock(q), q.get('q'), q.get('kind'), q.get('read')])
     w.writerow([])
@@ -3919,7 +3919,7 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
     g = session.get('guide') or {}
     if g.get('questions'):
         w.writerow([])
-        w.writerow(['Guide clock', 'Suggested question', 'Kind', 'Why there'])
+        w.writerow(['Guide clock', 'Suggested question', 'Question type', 'Why there'])
         for q in g['questions']:
             w.writerow([q.get('clock'), q.get('q'), q.get('kind'), q.get('why')])
     return buf.getvalue()

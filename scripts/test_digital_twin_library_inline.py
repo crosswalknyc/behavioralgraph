@@ -135,7 +135,7 @@ assert.strictEqual(libRoomSeedTake('other'), null, 'another twin never takes it'
 var seed = libRoomSeedTake('pv'); assert.ok(seed && seed.q === 'Q', 'taken'); assert.strictEqual(S.roomSeed, null, 'taken once');
 S.roomSeed = { key: 'pv', q: 'Q', title: 'T', at: Date.now() - 16 * 60 * 1000 }; assert.strictEqual(libRoomSeedTake('pv'), null, 'stale seeds are dropped');
 var all = [closed, run, pa, room, pt].join(' ').replace(/<[^>]+>/g, ' ');
-var bad = all.match(/\\b(synthetic|synth|modell?ed|model|estimated|research|panel|sample|archetype|persona|segment|cohort|confidence|survey|prediction|calibrated|Nielsen)\\b/ig);
+var bad = all.match(/\\b(synthetic|synth|modell?ed|model|estimated|research|panel|sample|persona|segment|cohort|confidence|survey|prediction|calibrated|Nielsen)\\b/ig);
 assert.ok(!bad, 'banned words: ' + bad);
 console.log('node logic checks: OK');
 `);
@@ -194,7 +194,7 @@ class Page(unittest.TestCase):
         self.assertNotIn('\u2014', self.block)
         self.assertNotIn('\u2013', self.block)
         text = re.sub(r"<[^>]+>", ' ', self.block)
-        self.assertFalse(re.search(r"\b(synthetic|synth|modell?ed|hostmap|Claude|persona|archetype|cohort|confidence|calibrat|Nielsen)\b", text, re.I), 'method or source words in the reader copy')
+        self.assertFalse(re.search(r"\b(synthetic|synth|modell?ed|hostmap|Claude|persona|cohort|confidence|calibrat|Nielsen)\b", text, re.I), 'method or source words in the reader copy')
         css = self.html[self.html.index('/* an item opened in place (2026-11-20)'):self.html.index('.dtw-lib-acts .dtw-lb.link.quiet { margin-left: auto; }')]
         for sel in ('.dtw-lib-item.open', '.dtw-lib-detail', '.dtw-lib-q', '.dtw-lib-seats', '.dtw-lib-acts'):
             self.assertIn(sel, css, sel)

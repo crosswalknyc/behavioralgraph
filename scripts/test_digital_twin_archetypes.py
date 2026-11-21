@@ -77,7 +77,7 @@ sys.path.insert(0, HERE)
 from test_digital_twin_room_seats import _beals  # noqa: E402
 from test_digital_twin_room_seats_mirror_count import _pvalley, fake_model, LABELS  # noqa: E402
 
-BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|research|panel|sample|archetype|persona|segment|cohort|confidence|pipeline|corpus)\b", re.I)
+BANNED = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|research|panel|sample|persona|segment|cohort|confidence|pipeline|corpus)\b", re.I)
 
 
 def _twin(size=1_000_000, avid=24.3):
@@ -191,8 +191,8 @@ class Settle(unittest.TestCase):
         self.assertEqual(len(lines), arch['k'])
         self.assertRegex(lines[0], r"^.+: [\d,]+ \w+ \(\d+\.\d%\)\. \w[\w .'-]*, \d+, .+\.$")
         summary = A.archetype_summary_line(t)
-        self.assertIn('kinds of', summary)
-        self.assertIn('1,000,000', summary)
+        self.assertIn(' archetypes make up the 1,000,000 ', summary)   # Jenna 2026-11-20: an archetype is called an archetype, never a kind
+        self.assertNotRegex(summary, r"\bkinds?\b")
 
     def test_a_small_audience_keeps_whole_people(self):
         t = _twin(size=340)

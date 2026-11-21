@@ -291,7 +291,7 @@ class InTheRoom(unittest.TestCase):
         csv_text = P.session_csv(sess)
         self.assertIn('How firm', csv_text)
         self.assertIn('firm', csv_text.lower())
-        self.assertIn('Kind', csv_text)
+        self.assertIn('Question type', csv_text)   # the question's type; 'kind' never sits beside the archetypes (Jenna 2026-11-20)
 
     def test_a_prior_only_question_still_calls_it_and_publishes(self):
         twin = _pvalley()
