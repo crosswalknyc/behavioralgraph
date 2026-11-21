@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-17T23:22:36Z",
+ "as_of": "2026-11-21T02:59:01Z",
  "rows": [
   {
    "subject": "NCIS: New York",
@@ -12,15 +12,18 @@
    "high": null,
    "happened": 86.8,
    "happened_distribution": null,
-   "outcome_class": "panel",
+   "outcome_class": "our own count",
    "called_on": "2026-10-30",
    "settled_on": "2026-11-05",
+   "due_on": "",
+   "check": "",
    "abs_error": 1.1,
    "rel_error": 0.0127,
    "tvd": null,
    "covered": null,
    "hit": null,
-   "hash": "b12411aad757ca28d3c6049da7afe77b3c6563f55e24a7d374a76c5663e41658"
+   "hash": "b12411aad757ca28d3c6049da7afe77b3c6563f55e24a7d374a76c5663e41658",
+   "firmness": null
   },
   {
    "subject": "NCIS: New York",
@@ -33,15 +36,18 @@
    "high": null,
    "happened": 81.6,
    "happened_distribution": null,
-   "outcome_class": "panel",
+   "outcome_class": "our own count",
    "called_on": "2026-10-30",
    "settled_on": "2026-11-05",
+   "due_on": "",
+   "check": "",
    "abs_error": 2.3,
    "rel_error": 0.0282,
    "tvd": null,
    "covered": null,
    "hit": null,
-   "hash": "1c240fcda97a6c04ee154746a7d61e2dca46a25f8bba6856cbfda7a39bc01b8b"
+   "hash": "1c240fcda97a6c04ee154746a7d61e2dca46a25f8bba6856cbfda7a39bc01b8b",
+   "firmness": null
   },
   {
    "subject": "NCIS: New York",
@@ -57,12 +63,15 @@
    "outcome_class": "published",
    "called_on": "2026-10-30",
    "settled_on": "2026-11-05",
+   "due_on": "",
+   "check": "",
    "abs_error": 210000.0,
    "rel_error": 0.0205,
    "tvd": null,
    "covered": null,
    "hit": null,
-   "hash": "c61f921f94533ec2b8c2f5a21de764b62f82fcf082830e5e23dced97dbd8ea59"
+   "hash": "c61f921f94533ec2b8c2f5a21de764b62f82fcf082830e5e23dced97dbd8ea59",
+   "firmness": null
   },
   {
    "subject": "Nevada 4th District voters",
@@ -78,12 +87,15 @@
    "outcome_class": "certified result",
    "called_on": "2026-10-30",
    "settled_on": "2026-11-04",
+   "due_on": "",
+   "check": "",
    "abs_error": 0.3,
    "rel_error": 0.0132,
    "tvd": null,
    "covered": null,
    "hit": true,
-   "hash": "f26bad6103e7c7bb036eccce03c2c1aac2d42f568a830048e45179fa00827e7e"
+   "hash": "f26bad6103e7c7bb036eccce03c2c1aac2d42f568a830048e45179fa00827e7e",
+   "firmness": null
   },
   {
    "subject": "Ohio potential voters",
@@ -99,12 +111,15 @@
    "outcome_class": "certified result",
    "called_on": "2026-10-30",
    "settled_on": "2026-11-04",
+   "due_on": "",
+   "check": "",
    "abs_error": 400000.0,
    "rel_error": 0.087,
    "tvd": null,
    "covered": null,
    "hit": true,
-   "hash": "9bbf2e13facce4314858f8c9d490a40aa32e0e62c460d54abb7ad31ea495a1e9"
+   "hash": "9bbf2e13facce4314858f8c9d490a40aa32e0e62c460d54abb7ad31ea495a1e9",
+   "firmness": null
   },
   {
    "subject": "Texas likely voters",
@@ -146,12 +161,15 @@
    "outcome_class": "certified result",
    "called_on": "2026-10-30",
    "settled_on": "2026-11-04",
+   "due_on": "",
+   "check": "",
    "abs_error": null,
    "rel_error": null,
    "tvd": 0.5,
    "covered": null,
    "hit": true,
-   "hash": "610ccc5e238fdeb83b076f922d30f6bbe9bc55848807d4af19656c55db4fab56"
+   "hash": "610ccc5e238fdeb83b076f922d30f6bbe9bc55848807d4af19656c55db4fab56",
+   "firmness": null
   }
  ],
  "summary": {
