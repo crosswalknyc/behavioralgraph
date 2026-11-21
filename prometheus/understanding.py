@@ -80,8 +80,11 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'size',                  # how many people an audience holds, a demographic segment counted (the sizing lanes, 2026-11-20, night)
            'multi_ask',             # several questions in one message, each answered through the door in turn (2026-11-20, night)
            'dashboard_issue',       # the dashboard misbehaving (the dashboard_behavior lane; contested since stage 2, keyed 2026-11-20 night)
-           'pricing')               # what does it cost (the pricing lane, 2026-11-20, night)
-SHADOW = ('named_title',)
+           'pricing',               # what does it cost (the pricing lane, 2026-11-20, night)
+           'chat', 'pushback',      # a bare reply, thanks, a no with nothing asked (the short_reply lane, 2026-11-20, night)
+           'cancel',                # a cancel while something is armed (the intake_cancel lane, 2026-11-20, night)
+           'named_title')           # the title a continuation names, read against the thread and the page (the turn gate, 2026-11-20, night)
+SHADOW = ()
 
 # Intents the flipped lanes compete over: a positive reading of one of
 # these (at STAND_DOWN_CONF or better) stands the others down. Anything
@@ -89,6 +92,7 @@ SHADOW = ('named_title',)
 # Understanding (2026-11-20, night).
 _CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance',
                         'exists', 'definition', 'size', 'multi_ask', 'pricing'))
+# cancel is keyed but not contested: a bare "cancel" with nothing armed is still the short-reply gate's to answer
 STAND_DOWN_CONF = 0.75  # a weak reading (a correction, the page, the generic status at 0.7) never stands a lane down
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',

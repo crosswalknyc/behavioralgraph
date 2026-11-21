@@ -2025,7 +2025,9 @@ def ask(user, body, *, via='session'):
     # rewritten to that option and runs as that option.
     if referent_decision is None:
         try:
-            _rewrite, _bare = _bare_reply(body, text, history, has_ctx, uname=uname)
+            # keyed on the Understanding (chat, pushback; 2026-11-20): a confident other reading stands the bare-reply gate down
+            _rewrite, _bare = (_bare_reply(body, text, history, has_ctx, uname=uname)
+                               if (_u_claims(body, 'chat', lambda: True) or _u_claims(body, 'pushback', lambda: True)) else (None, None))
             if _rewrite:
                 text = _rewrite
                 body = dict(body)
