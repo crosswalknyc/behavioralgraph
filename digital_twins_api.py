@@ -3786,6 +3786,13 @@ def dt_get(key):
     if payload.get('pilot_setups'):
         from migration import digital_twin_pilot as PI
         out['pilot_setups'] = PI.public_setups(payload)   # a saved setup's carried cut travels as has_file, never as its storage key
+    try:
+        # an archetype representative who sat in earlier focus groups on this twin says so on the seat card (Jenna 2026-11-20);
+        # only the groups this viewer's company can see count, so the figure is computed per viewer, never stored
+        from migration import digital_twin_room as _RM
+        out['earlier_groups'] = _RM.annotate_earlier_groups(payload, _uname(user))
+    except Exception as e:
+        print(f"[twins] earlier groups skipped: {str(e)[:120]}")
     return _nocache(jsonify({'success': True, 'twin': out, 'summary': DT.view_summary(payload)}))
 
 

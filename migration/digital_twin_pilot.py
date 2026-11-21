@@ -430,6 +430,24 @@ def _trait(twin: dict, key: str, default: float = 50.0) -> float:
         return default
 
 
+def _trait_for(twin: dict, who: Optional[dict], key: str, default: float = 50.0) -> float:
+    """The dial a seat answers on: its archetype's own habits when the
+    seat stands for one (Jenna 2026-11-20: "fix both"), read off the
+    card's ``trait_values`` or the seat's ``archetype.traits``; the
+    twin's when it does not (a quota room is unchanged)."""
+    if isinstance(who, dict):
+        tv = who.get('trait_values') if isinstance(who.get('trait_values'), dict) else None
+        if not tv:
+            arch = who.get('archetype') if isinstance(who.get('archetype'), dict) else {}
+            tv = arch.get('traits') if isinstance(arch.get('traits'), dict) else None
+        if tv and tv.get(key) is not None:
+            try:
+                return float(tv[key])
+            except (TypeError, ValueError):
+                pass
+    return _trait(twin, key, default)
+
+
 def _messy_bp(subject: str, brand: str, category: str, value: float) -> float:
     """4dp, never a .xx00 pin, subject-salted."""
     v = float(value)
@@ -449,11 +467,11 @@ def _tone_fit(card: dict, beat: dict, twin: dict) -> float:
     gender = str(card.get('gender') or '')
     stage = str(card.get('lifecycle_stage') or '')
     ori = str(card.get('orientation') or '')
-    loyal = _trait(twin, 'franchise_loyalty')
-    second = _trait(twin, 'second_screen')
-    binge = _trait(twin, 'binge_vs_appointment')
-    wom = _trait(twin, 'word_of_mouth')
-    trial = _trait(twin, 'trial_speed')
+    loyal = _trait_for(twin, card, 'franchise_loyalty')
+    second = _trait_for(twin, card, 'second_screen')
+    binge = _trait_for(twin, card, 'binge_vs_appointment')
+    wom = _trait_for(twin, card, 'word_of_mouth')
+    trial = _trait_for(twin, card, 'trial_speed')
     fit = 0.0
     if tone == 'funny':
         fit += 8.0 if age < 40 else 3.4
@@ -508,8 +526,8 @@ def seat_dial(twin: dict, seat: dict, beats: list, session_seed: str, media_key:
     when no model watched."""
     card = _card_for(twin, seat, session_seed)
     sid = f"{session_seed}|seat{seat.get('seat')}|{seat.get('name')}"
-    loyal = _trait(twin, 'franchise_loyalty')
-    second = _trait(twin, 'second_screen')
+    loyal = _trait_for(twin, card, 'franchise_loyalty')
+    second = _trait_for(twin, card, 'second_screen')
     age = int(card.get('age') or 35)
     base = 46.0 + (loyal - 50) * 0.18 + (12 if age >= 45 else 0) * 0.22 - (second - 50) * 0.10
     level = base
@@ -621,9 +639,9 @@ def seat_events(twin: dict, seat: dict, beats: list, dial: list, session_seed: s
     movement, shaped by who the seat is."""
     card = _card_for(twin, seat, session_seed)
     sid = f"{session_seed}|seat{seat.get('seat')}|{seat.get('name')}"
-    loyal = _trait(twin, 'franchise_loyalty')
-    second = _trait(twin, 'second_screen')
-    binge = _trait(twin, 'binge_vs_appointment')
+    loyal = _trait_for(twin, card, 'franchise_loyalty')
+    second = _trait_for(twin, card, 'second_screen')
+    binge = _trait_for(twin, card, 'binge_vs_appointment')
     age = int(card.get('age') or 35)
     gender = str(card.get('gender') or '')
     ori = str(card.get('orientation') or '')
@@ -816,7 +834,7 @@ def _is_avid(seat, twin):
         return True
     if stage in ('discovering', 'trying', 'lapsing'):
         return False
-    return _trait(twin, 'franchise_loyalty') >= 60
+    return _trait_for(twin, seat, 'franchise_loyalty') >= 60
 
 
 def _age(seat) -> int:
@@ -1322,7 +1340,7 @@ def _fallback_answers(qs: list, card: dict, twin: dict, series: list, seed: str)
     """The deterministic card for one seat: {qid: oid}."""
     s = _seat_score(card, twin, series, seed)
     habits = ' '.join(card.get('habits') or [])
-    binge = _trait(twin, 'binge_vs_appointment')
+    binge = _trait_for(twin, card, 'binge_vs_appointment')
     out = {}
     # Thresholds sit so an ordinary cut (seat scores around 60) lands near the published
     # norms (excellent about three in ten, total positive about two in three, definitely
@@ -2144,6 +2162,101 @@ def scorecard(twin: dict, roster: list, beats: list, dial: list, events: list,
     }
 
 
+STAGE_LABELS = ('discovering', 'trying', 'in the habit', 'lapsing', 'returning')
+STAGE_WORDS = {'discovering': 'just finding it', 'trying': 'still trying it on', 'in the habit': 'firmly in the habit', 'lapsing': 'drifting away from it lately', 'returning': 'back to it after a break'}
+
+
+def bio_stage(twin: dict, seat: dict, session_seed: str = '') -> str:
+    """The stage a seat's stored bio describes: the one stage whose
+    relationship line (the sentence the card writes for that stage, for
+    this seat) is in the bio. '' when the bio names none, or more than
+    one, or the seat has no bio."""
+    bio = ' '.join(str((seat or {}).get('persona') or '').split()).lower()
+    if not bio:
+        return ''
+    # the bio names its stage in so many words (digital_twin_room: 'just finding it', 'still trying it on', 'firmly in the
+    # habit', 'drifting away from it lately', 'back to it after a break'); the relationship line is the second read
+    said = [st for st, words in STAGE_WORDS.items() if words in bio]
+    if len(said) == 1:
+        return said[0]
+    try:
+        from migration.digital_twin_room import persona_card
+    except Exception:
+        return ''
+    hits = []
+    for st in STAGE_LABELS:
+        try:
+            probe = dict(seat)
+            probe.pop('persona', None)
+            probe['stage'] = st
+            probe['lifecycle_stage'] = st
+            card = persona_card(twin, probe, session_seed or 'stage-probe')
+        except Exception:
+            continue
+        rel = ' '.join(str(card.get('relationship_to_subject') or '').split()).lower().rstrip('.')
+        if rel and rel in bio:
+            hits.append(st)
+    return hits[0] if len(hits) == 1 else ''
+
+
+def relabel_stages(sess: dict, twin: Optional[dict] = None, *, subject: str = '') -> Optional[dict]:
+    """A stored test whose seats carry a stage label that is not the one
+    their bio describes (Jenna 2026-11-20: "fix both"): the label moves
+    to the bio's stage, and the group lines that read the stage (the
+    stage lines, avid and casual) are re-counted from the stored seat
+    dials, people-weighted. The seat dials, the room line, the battery
+    and the scorecard are untouched: nothing is re-run. Idempotent (a
+    stamp on the session). Returns {seats: [(seat, name, was, now)],
+    splits} when a label moved, else None."""
+    if not isinstance(sess, dict) or isinstance(sess.get('stage_relabel'), dict):
+        return None
+    g = sess.get('group') if isinstance(sess.get('group'), dict) else {}
+    roster = [r for r in (g.get('roster') or []) if isinstance(r, dict)]
+    if not roster:
+        return None
+    twin = twin or {}
+    moved = []
+    for r in roster:
+        want = bio_stage(twin, r)
+        have = str(r.get('lifecycle_stage') or r.get('stage') or '')
+        if want and want != have:
+            moved.append((int(r.get('seat') or 0), str(r.get('name') or ''), have, want))
+            r['lifecycle_stage'] = want
+            r['stage'] = want
+        elif want and not r.get('stage'):
+            r['stage'] = want
+    if not moved:
+        return None
+    sd = sess.get('seat_dials') if isinstance(sess.get('seat_dials'), dict) else {}
+    d = sess.get('dial') if isinstance(sess.get('dial'), dict) else {}
+    ts = list(d.get('t') or [])
+    keys = [str(r.get('seat')) for r in roster if str(r.get('seat')) in sd]
+    splits_n = 0
+    if ts and keys and all(len(sd[k] or []) == len(ts) for k in keys):
+        subject = subject or _subject(twin) or str(sess.get('title') or 'test')
+        media_key = str((sess.get('media') or {}).get('hash') or sess.get('id') or '')
+        sw = seat_weights(roster, [x for x in (g.get('segments') or []) if isinstance(x, dict)])
+        fresh = all_splits(roster, {k: sd[k] for k in keys}, twin, subject, media_key, weights=sw)
+        old = d.get('splits') if isinstance(d.get('splits'), dict) else {}
+        out = {}
+        for key, row in old.items():
+            if not isinstance(row, dict):
+                continue
+            if key in fresh and len(fresh[key].get('value') or []) == len(ts):
+                out[key] = dict(row, value=list(fresh[key]['value']), n=fresh[key].get('n', row.get('n')))
+            elif fresh.get(key) is None and (row.get('group') in ('lifecycle', 'fanship')):
+                continue   # a stage or avid line no seat belongs to any more
+            else:
+                out[key] = row
+        for key, row in fresh.items():
+            out.setdefault(key, row)
+        d['splits'] = out
+        splits_n = len(out)
+    sess['stage_relabel'] = {'at': _now(), 'seats': [{'seat': a, 'name': b, 'was': c, 'now': dd} for a, b, c, dd in moved], 'splits': splits_n}
+    sess['updated_at'] = _now()
+    return {'seats': moved, 'splits': splits_n}
+
+
 def dial_is_weighted(sess: dict) -> bool:
     return str(((sess or {}).get('dial') or {}).get('weighting') or '') == DIAL_WEIGHTING
 
@@ -2299,8 +2412,10 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     roster = (session.get('group') or {}).get('roster') or []
     segments = (session.get('group') or {}).get('segments') or []
     cards = {int(r['seat']): _card_for(twin, r, seed) for r in roster}
-    for r in roster:   # the stage on the seat, so splits and the page can read it
+    for r in roster:   # the stage on the seat, one fact for the bio, the dial and the stage lines (Jenna 2026-11-20)
         r['lifecycle_stage'] = cards[int(r['seat'])].get('lifecycle_stage') or r.get('lifecycle_stage') or ''
+        if r['lifecycle_stage']:
+            r['stage'] = r['lifecycle_stage']
     transcript = transcript or an.get('transcript') or session.get('transcript')
     if an.get('transcript') and not session.get('transcript'):
         session['transcript'] = an['transcript']
@@ -3985,7 +4100,8 @@ __all__ = [
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
     'stamp_question', 'question_clock', 'question_split', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
-    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'seat_weights', 'reweight_dial', 'dial_is_weighted', 'DIAL_WEIGHTING', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
+    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'seat_weights', 'reweight_dial', 'dial_is_weighted', 'DIAL_WEIGHTING',
+    'bio_stage', 'relabel_stages', 'STAGE_LABELS', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'auto_stop_due', 'parse_runtime', 'AUTO_STOP_GRACE_S',
     'attach_norms', 'battery_tallies', 'denominator_line', 'headline_read', 'set_norm', 'keyword_genre', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',

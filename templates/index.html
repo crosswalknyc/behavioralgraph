@@ -54548,6 +54548,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (share == null || !isFinite(Number(share))) share = (total > 0 && people > 0) ? Math.round(people / total * 1000) / 10 : null;
                 return { people: people, share: share, total: total };
             }
+            // an archetype representative who sat in earlier focus groups on this twin (Jenna 2026-11-20): the twin carries the
+            // count per seat for this viewer (earlier_groups[session id][seat]); the card prints the one line
+            function earlierGroupsLine(sid, seat) {
+                var eg = ((S.twin || {}).earlier_groups || {})[String(sid || '')] || {}, rec = eg[String(seat)];
+                return rec && rec.line ? String(rec.line) : '';
+            }
             function standsForLine(nm, g, r) {
                 var sf = seatStandsFor(g, r); if (!(sf.people > 0) || !(sf.total > 0)) return '';
                 return esc(nm) + ' stands for ' + fmtN(sf.people) + ' of the ' + fmtN(sf.total) + ' people in this audience' + (sf.share != null ? ' (' + Number(sf.share).toFixed(1) + '%)' : '') + '.';
@@ -56059,7 +56065,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var g = s.group || {}, roster = g.roster || [], r = roster.filter(function(x) { return Number(x.seat) === S.fg.seat; })[0];
                 if (!r) { h.innerHTML = '<p>That seat is not in this room.</p>'; return; }
                 var nm = titleCase(r.name), inRoom = fmtN(g.in_room || roster.length), who = r.gender === 'F' ? 'woman' : (r.gender === 'M' ? 'man' : ''), fq = focusQ();
-                var out = '<div class="head">' + face(r, Number(r.seat) - 1, 64) + '<div style="min-width:0;"><div class="who">' + esc(nm) + ', ' + esc(r.age) + ', ' + esc(titleCase(r.city)) + '</div><div class="stands">Seat ' + esc(r.seat) + ' of ' + inRoom + (who ? SEP + who : '') + '</div>' + (standsForLine(nm, g, r) ? '<div class="stands">' + standsForLine(nm, g, r) + '</div>' : '') + '</div></div>';
+                var out = '<div class="head">' + face(r, Number(r.seat) - 1, 64) + '<div style="min-width:0;"><div class="who">' + esc(nm) + ', ' + esc(r.age) + ', ' + esc(titleCase(r.city)) + '</div><div class="stands">Seat ' + esc(r.seat) + ' of ' + inRoom + (who ? SEP + who : '') + '</div>' + (standsForLine(nm, g, r) ? '<div class="stands">' + standsForLine(nm, g, r) + '</div>' : '') + (earlierGroupsLine(s.id, r.seat) ? '<div class="stands earlier">' + esc(earlierGroupsLine(s.id, r.seat)) + '</div>' : '') + '</div></div>';
                 var tags = '';
                 if (r.segment && (multiSeg(roster) || normQ(r.segment) !== normQ(twinName()))) tags += '<span class="dtw-fg-tag">' + esc(r.segment) + '</span>';
                 var a0 = fq ? (fq.answers || []).filter(function(x) { return Number(x.seat) === Number(r.seat); })[0] : null;
@@ -57086,7 +57092,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 for (var i = 0; i < th.length; i++) { if (Number(th[i][0]) <= now + 0.05) last = th[i]; }
                 var thought = last ? '<p class="dtw-pi-thought"><span class="dtw-muted">' + esc(clockFmt(last[0])) + '</span> ' + esc(last[1]) + '</p>' : '';
                 var stands = standsForLine(nm, (S.pilot || {}).group || {}, r);
-                return head + (stands ? '<p class="dtw-pi-stands">' + stands + '</p>' : '') + thought + body;
+                var earlier = earlierGroupsLine((S.pilot || {}).id, r.seat);
+                return head + (stands ? '<p class="dtw-pi-stands">' + stands + '</p>' : '') + (earlier ? '<p class="dtw-pi-stands earlier">' + esc(earlier) + '</p>' : '') + thought + body;
             }
             function piSayHtml(sl) { return esc(sl.line); }
             function piRoomHasCohorts() {

@@ -1138,7 +1138,10 @@ def derive_archetypes(twin: dict, *, call: Optional[Callable] = None, force: boo
         seen.add(rep['name'])
         g['representative'] = {k: v for k, v in rep.items() if k not in ('archetype', 'people')}
     out = {'version': ARCHETYPE_VERSION, 'computed_at': _now(), 'fingerprint': fp, 'method': method, 'k': len(groups), 'size_people': size,
-           'noun': sk['noun'], 'groups': groups, 'margins': sk['margins'], 'trail': dict(trail, devoted_frac=sk['devoted_frac'])}
+           'noun': sk['noun'], 'groups': groups, 'margins': sk['margins'], 'trail': dict(trail, devoted_frac=sk['devoted_frac']), 'seed': seed}
+    for g in groups:   # the person who stands for each archetype is one person, wherever they sit (Jenna 2026-11-20)
+        if isinstance(g.get('representative'), dict):
+            g['representative']['person_id'] = str(g['id'])
     if isinstance(twin, dict):
         twin['archetypes'] = out
     if log:
@@ -1147,6 +1150,39 @@ def derive_archetypes(twin: dict, *, call: Optional[Callable] = None, force: boo
         except Exception:
             pass
     return out
+
+
+def filter_sig(f: Optional[dict]) -> str:
+    """A short stable signature of a segment's filter (the slice of the
+    audience a cohort is cut to); '' for the whole audience."""
+    f = {k: v for k, v in dict(f or {}).items() if v not in (None, '', [], {}) and k != 'city'}
+    if not f:
+        return ''
+    return hashlib.sha1(json.dumps(f, sort_keys=True, default=str).encode('utf-8')).hexdigest()[:10]
+
+
+def rep_seed(twin: dict, f: Optional[dict] = None) -> str:
+    """The seed every room draws its archetype representatives from
+    (Jenna 2026-11-20: one stable person per archetype, so memory has
+    someone to belong to): the twin's own archetype seed, so a room on
+    the whole audience seats the very people the twin page shows; a
+    cohort cut to a filter adds the filter's signature, so the same
+    conditioned people come back room after room."""
+    arch = (twin or {}).get('archetypes') if isinstance(twin, dict) else {}
+    arch = arch if isinstance(arch, dict) else {}
+    base = str(arch.get('seed') or '')
+    if not base:
+        m = _meta(twin)
+        base = f"arch|{m.get('subject') or m.get('name')}|{arch.get('fingerprint') or fingerprint(twin)}"
+    sig = filter_sig(f)
+    return f"{base}|cut|{sig}" if sig else base
+
+
+def person_id_for(kind_id: str, sig: str = '') -> str:
+    """The stable id of the person who stands for an archetype (or a
+    split or merged part of one) in rooms on the whole audience, or on
+    one cut of it (``sig``)."""
+    return f"{kind_id}@{sig}" if sig else str(kind_id)
 
 
 def ensure_archetypes(twin: dict, *, models=None, usage_extras: Optional[dict] = None, force: bool = False) -> dict:
@@ -1522,14 +1558,19 @@ def assign_labels(kinds: list, cat: str, seed: str, groups: Optional[dict] = Non
     return out
 
 
-def roster_from_kinds(twin: dict, kinds: list, seed: str, start_seat: int = 1) -> list:
+def roster_from_kinds(twin: dict, kinds: list, seed: str, start_seat: int = 1, person_sig: str = '') -> list:
     """One seat per kind: the kind's representative with the kind's
     people, in share order. Across the seats every demographic label is
     a people-weighted quota of the kinds' profiles (``assign_labels``), so
     the room mirrors the audience on gender, party, ethnicity and the
-    rest while each seat still carries its own kind's tilt."""
+    rest while each seat still carries its own kind's tilt. Every seat
+    carries ``person_id`` (Jenna 2026-11-20): the same person stands for
+    an archetype in every room on the audience (``person_sig`` '') and
+    in every room on the same cut of it; a seat that is the twin page's
+    own representative carries that person's face."""
     from migration import digital_twin_panel as P
     roster = []
+    stored = {str(g.get('id')): (g.get('representative') or {}) for g in (((twin or {}).get('archetypes') or {}).get('groups') or []) if isinstance(g, dict)}
     labels = {cat: assign_labels(kinds, cat, seed) for cat, _field in _ROSTER_CATS if cat != 'sexual_orientation'}
     # who is LGBTQ+ is read inside each gender from the kinds that carry that gender: a kind of gay men seats a gay man, a kind of
     # trans women a trans woman; nothing fills one gender first (Jenna 2026-11-17: "it should be based on the archetype")
@@ -1553,10 +1594,17 @@ def roster_from_kinds(twin: dict, kinds: list, seed: str, start_seat: int = 1) -
             rep['occupation'] = 'Retired'
         rep['people'] = int(k.get('people') or 0)
         rep['archetype'] = dict(rep.get('archetype') or {}, share_pct=k.get('share_pct'), people=k.get('people'))
+        rep['person_id'] = person_id_for(str(k.get('id')), person_sig)
+        own = stored.get(str(k.get('id'))) if not person_sig else None
+        if isinstance(own, dict) and own.get('portrait_url') and all(str(own.get(f) or '') == str(rep.get(f) or '') for f in ('name', 'age', 'gender', 'city')):
+            rep['portrait_url'] = own['portrait_url']
+            if own.get('portrait_hash'):
+                rep['portrait_hash'] = own['portrait_hash']
         roster.append(rep)
     return roster
 
 
 __all__ = ['ARCHETYPE_VERSION', 'MIN_K', 'MAX_K', 'MERGE_FLOOR', 'MIN_SHARE_PCT', 'derive_archetypes', 'ensure_archetypes', 'public_groups', 'archetype_lines',
            'archetype_summary_line', 'seat_archetypes', 'roster_from_kinds', 'representative', 'fit_count', 'merge_small', 'skeleton', 'margins',
+           'rep_seed', 'filter_sig', 'person_id_for',
            'fingerprint', 'noun_for', 'scrub_text', 'ARCHETYPE_SYSTEM']

@@ -146,9 +146,14 @@ def _norm(v) -> str:
 
 
 def portrait_hash(seat: dict, style_version: str = STYLE_VERSION) -> str:
-    """sha256 of (name, age, gender, city, segment, style_version), hex."""
+    """sha256 of (name, age, gender, city, segment, style_version), hex.
+    An archetype representative (a seat with ``person_id``, 2026-11-20)
+    is one person wherever they sit: their face is keyed without the
+    segment, the way the twin page keys it, so a room shows the same
+    face the twin page does."""
+    seg = '' if seat.get('person_id') else _norm(seat.get('segment'))
     parts = (_norm(seat.get('name')), str(int(float(seat.get('age') or 0))), _norm(seat_gender(seat)), _norm(seat.get('city')),
-             _norm(seat.get('segment')), str(style_version))
+             seg, str(style_version))
     return hashlib.sha256('|'.join(parts).encode('utf-8')).hexdigest()
 
 

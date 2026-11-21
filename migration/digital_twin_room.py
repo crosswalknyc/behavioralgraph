@@ -947,7 +947,10 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     lc = (twin or {}).get('lifecycle') or {}
     stages = [('discovering', float(lc.get('discovering_pct') or 15)), ('trying', float(lc.get('trying_pct') or 15)), ('in the habit', float(lc.get('habit_pct') or 40)),
               ('lapsing', float(lc.get('lapsing_pct') or 18)), ('returning', float(lc.get('returning_pct') or 12))]
-    stage = str(seat.get('stage') or '') if str(seat.get('stage') or '') in dict(stages) else _pick_by_share([{'label': a, 'pct': b} for a, b in stages], unit('stage', sid))
+    # the seat's stage is one fact (Jenna 2026-11-20): the label pinned on the seat (``stage``, else ``lifecycle_stage``) is
+    # what the bio describes and what the dial reads; a seat without one draws it once, and ensure_personas pins the draw
+    pinned = next((str(seat.get(k) or '') for k in ('stage', 'lifecycle_stage') if str(seat.get(k) or '') in dict(stages)), '')
+    stage = pinned or _pick_by_share([{'label': a, 'pct': b} for a, b in stages], unit('stage', sid))
     income = str(seat.get('income') or '') or _pick_by_share(demo.get('income') or [], unit('income', sid), '')
     education = str(seat.get('education') or '') or _pick_by_share(demo.get('education') or [], unit('education', sid), '')
     parental = str(seat.get('parental') or '') or _pick_by_share(demo.get('parental') or [], unit('parental', sid), '')
@@ -1136,6 +1139,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
             'values': str(ident0.get('values') or ''),
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
             'habits': [price, loyal, merch, physical, churn, social, wom, live, ads, binge, second],
+            'trait_values': {k: round(float(v), 3) for k, v in tv.items()},   # the dials this seat answers on: its archetype's own when it has one, else the twin's
             'streams_on': services, 'shops_at': shops}
     if kind:
         # the kind of person this seat stands for (2026-11-17): its label, its people, and the desk's read of it
@@ -1289,7 +1293,10 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
     bank = _JOBS_HIGH if high_income else _JOBS_EARLY if (low_income or age < 25) else _JOBS_MID
     occ = _occupation_words(card.get('occupation') or '', pron)
     if occ and age >= 66:
-        work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'}. {pron.capitalize()} retired after years in {str(card.get('occupation') or '').lower()}."
+        occ_low = str(card.get('occupation') or '').lower().strip()
+        # a seat whose work is 'Retired' is retired, not 'retired after years in retired'
+        work_sent = (f"{name}, {age}, lives in {card.get('city') or 'the US'}. {pron.capitalize()} is retired." if occ_low in ('retired', 'retiree', 'retirement')
+                     else f"{name}, {age}, lives in {card.get('city') or 'the US'}. {pron.capitalize()} retired after years in {occ_low}.")
     elif occ:
         work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'}. {occ[0].upper() + occ[1:]}."
     elif age < 22:
@@ -1486,7 +1493,12 @@ def ensure_personas(session: dict, twins_by_key: dict, session_seed: str = '', *
     for seat in (session.get('group') or {}).get('roster') or []:
         if not seat.get('persona'):
             twin = twins_by_key.get(str(seat.get('twin') or '')) or next(iter(twins_by_key.values()), {})
-            seat['persona'] = persona_card(twin, seat, seed)['bio']
+            card = persona_card(twin, seat, seed)
+            seat['persona'] = card['bio']
+            # the stage the bio describes is pinned on the seat, so every later card (another seed, the dial's habit pull,
+            # the stage lines) reads the same one (Jenna 2026-11-20)
+            seat['stage'] = card.get('lifecycle_stage') or seat.get('stage') or ''
+            seat['lifecycle_stage'] = seat['stage']
             n += 1
         seat.setdefault('memory', [])
     return n
@@ -1565,11 +1577,13 @@ PERSONA_SYSTEM = """You are one person in a focus group, answering as yourself. 
 Stay in character: your age, your city, who you are (orientation, education, the work the card gives you), how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer Prometheus in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
 You are also given what people like you have been hearing and saying lately (the coverage, the talk, how an event came out). Let it show the way it would in a real person: pick up the lines you agree with in your own words, push back on the ones that are not you, ignore the rest; what made people like you angry or proud is part of your answer when it fits who you are. When the event the question is about has already happened, you know how it came out and speak from after it.
 When you are given what_just_played, you are in a screening and the cut was paused at that clock: answer about what you just saw, name the scene in your own words (the hallway, the diner argument), let your own dial in those seconds and what you said during them show in the answer, and never name an actor.
+When you are given earlier_focus_groups_you_sat_in_on_this_subject, you are the same person who sat in those groups: what you said and chose there is yours. Stay consistent with it unless something new in this question changes your mind, and when it fits say so in your own words the way a real person would (what you said last time, what you did since), never as a list and never naming a date or a session.
 Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
 MIRROR_SYSTEM = """You are one person in a focus group, answering as yourself. The moderator is Prometheus. You are given who you are (a card), what you said earlier in this session, the facts Prometheus put in front of the room, the question with its coded options, and the answer you are giving: in this audience a real share of people land on that option, and you are one of them.
 Say in two or three natural spoken sentences, in character, why that is you: what you do, what you own, what you watch and when, the way real people talk, concrete, with no lists and no hedging. Argue the answer you were given and no other; if your card leans the other way, say what makes you the exception (the friend who got you into it, the night it is on, the money, the habit). Never mention being an AI, a twin, a persona, a character or a seat, and never say you were given or assigned an answer. When this is a follow-up, stay consistent with what you said earlier. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
 You are also given what people like you have been hearing and saying lately; let it show the way it would in a real person.
+When you are given earlier_focus_groups_you_sat_in_on_this_subject, you are the same person who sat in those groups; stay consistent with what you said there unless something new changes your mind, and say so in your own words when it fits.
 Return JSON only: {"line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
 READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a 7th grader follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), a headline, the split by segment, every seat's answer, the facts brief and a prior note.
@@ -2653,6 +2667,122 @@ def memory_for(session: dict, seat_no: int, limit: int = 6) -> list:
     return out[-limit:]
 
 
+# ---- memory across focus groups (Jenna 2026-11-20, choosing "Build it: they remember past focus groups on the same twin"):
+# an archetype representative is one person on a twin (roster[].person_id), so what they said and chose in earlier rooms,
+# Predictive Analytics rooms and pilot tests on the same twin rides into a new room with them, compact and newest first.
+# Only the groups the person asking can see count: staff see every group on the twin; anyone else their own company's.
+EARLIER_GROUPS_LIMIT = 8
+EARLIER_LINE_CHARS = 180
+
+
+def _session_owner_company(sess: dict, twin: Optional[dict] = None) -> str:
+    from migration import digital_twin_company as CO
+    who = str((sess or {}).get('created_by') or '').strip()
+    if who:
+        return CO.company_of_username(who)
+    co = str((sess or {}).get('company') or '')
+    if co:
+        return co
+    return CO.twin_company(twin) if isinstance(twin, dict) else ''
+
+
+def memory_visible(sess: dict, viewer: str, twin: Optional[dict] = None) -> bool:
+    """Whether an earlier group counts for the person asking now."""
+    viewer = str(viewer or '').strip()
+    if not viewer or not isinstance(sess, dict):
+        return False
+    try:
+        from migration import digital_twin_company as CO
+        if CO.is_staff({}, viewer):
+            return True
+        return CO.same_company(_session_owner_company(sess, twin), CO.company_of_username(viewer))
+    except Exception:
+        return False
+
+
+def _session_when(sess: dict) -> str:
+    return str((sess or {}).get('updated_at') or (sess or {}).get('created_at') or '')
+
+
+def _group_word(sess: dict) -> str:
+    if isinstance(sess.get('guided'), dict):
+        return 'Predictive Analytics'
+    if sess.get('media') is not None or sess.get('mode') in ('pilot', 'feature', 'episode', 'binge', 'trailer', 'spot', 'title', 'key_art', 'script', 'concept'):
+        try:
+            from migration.digital_twin_pilot import MODE_TITLE_WORD
+            return MODE_TITLE_WORD.get(str(sess.get('mode') or 'pilot'), 'Pilot test')
+        except Exception:
+            return 'Pilot test'
+    return 'Focus group'
+
+
+def earlier_groups_for(payload: Optional[dict], person_id: str, *, viewer: str = '', exclude_sid: str = '', twin: Optional[dict] = None,
+                       limit: int = EARLIER_GROUPS_LIMIT) -> dict:
+    """What this person said and chose in earlier focus groups on the
+    same twin: {groups: how many they sat in, entries: [{when, group,
+    question, answered, said, reason}] newest first, capped}. A pilot
+    test they watched carries one entry with a reaction they had. Empty
+    when the person is new, or when nothing earlier is theirs to see."""
+    pid = str(person_id or '').strip()
+    if not pid or not isinstance(payload, dict):
+        return {'groups': 0, 'entries': []}
+    sessions = [x for x in all_sessions(payload) if str(x.get('id') or '') != str(exclude_sid or '')]
+    sessions.sort(key=_session_when, reverse=True)
+    entries, groups = [], 0
+    for sess in sessions:
+        roster = ((sess.get('group') or {}).get('roster') or [])
+        seats = {int(r.get('seat') or 0) for r in roster if isinstance(r, dict) and str(r.get('person_id') or '') == pid}
+        if not seats or not memory_visible(sess, viewer, twin or payload):
+            continue
+        title = str(sess.get('title') or (sess.get('media') or {}).get('title') or 'a focus group').strip()[:80]
+        word = _group_word(sess)
+        mine = []
+        for rec in reversed(list(sess.get('questions') or [])):
+            if not isinstance(rec, dict) or not str(rec.get('q') or '').strip():
+                continue
+            for a in rec.get('answers') or []:
+                if not isinstance(a, dict) or int(a.get('seat') or 0) not in seats or not str(a.get('line') or '').strip():
+                    continue
+                mine.append({'when': str(rec.get('asked_at') or _session_when(sess))[:10], 'group': f"{title} ({word})", 'question': str(rec.get('q') or '')[:200],
+                             'answered': str(a.get('option_label') or a.get('option') or '')[:80], 'said': str(a.get('line') or '')[:EARLIER_LINE_CHARS],
+                             'reason': str(a.get('reason') or '')[:120]})
+        if word not in ('Focus group', 'Predictive Analytics'):
+            evs = [e for e in (sess.get('events') or []) if isinstance(e, dict) and int(e.get('seat') or 0) in seats and str(e.get('line') or '').strip()]
+            if evs:
+                best = max(evs, key=lambda e: float(e.get('intensity') or 0))
+                mine.append({'when': _session_when(sess)[:10], 'group': f"{title} ({word})", 'watched': 'the cut', 'said': str(best.get('line') or '')[:EARLIER_LINE_CHARS]})
+        groups += 1   # a group they sat in counts even when they said nothing there
+        if len(entries) < limit:
+            entries.extend(mine[:max(0, limit - len(entries))])
+    return {'groups': groups, 'entries': entries[:limit]}
+
+
+def earlier_groups_line(n: int) -> str:
+    n = int(n or 0)
+    if n <= 0:
+        return ''
+    return 'Sat in 1 earlier focus group on this twin' if n == 1 else f"Sat in {n} earlier focus groups on this twin"
+
+
+def annotate_earlier_groups(payload: Optional[dict], viewer: str) -> dict:
+    """{session id: {seat no: {'n': groups, 'line': ...}}} for every seat
+    on the twin that is an archetype representative with a past the
+    viewer can see; the page prints the line on the seat card."""
+    out = {}
+    if not isinstance(payload, dict):
+        return out
+    for sess in all_sessions(payload):
+        sid = str(sess.get('id') or '')
+        for r in ((sess.get('group') or {}).get('roster') or []):
+            pid = str((r or {}).get('person_id') or '') if isinstance(r, dict) else ''
+            if not pid:
+                continue
+            got = earlier_groups_for(payload, pid, viewer=viewer, exclude_sid=sid, limit=1)
+            if got['groups']:
+                out.setdefault(sid, {})[str(r.get('seat'))] = {'n': got['groups'], 'line': earlier_groups_line(got['groups'])}
+    return out
+
+
 def _in_cut(stimulus: Optional[dict]) -> bool:
     return bool(isinstance(stimulus, dict) and stimulus.get('in_cut') and isinstance(stimulus.get('window'), dict))
 
@@ -2683,10 +2813,11 @@ def _moment_for_seat(stimulus: Optional[dict], seat_no) -> Optional[dict]:
             'what_you_said_in_these_seconds': mine.get('events') or [], 'the_cut': stimulus.get('cut') or {}}
 
 
-def _seat_body(card: dict, q: str, framing: str, options: list, brief: dict, memory: list, stimulus: Optional[dict]) -> dict:
+def _seat_body(card: dict, q: str, framing: str, options: list, brief: dict, memory: list, stimulus: Optional[dict], past: Optional[dict] = None) -> dict:
     """What a seat is handed: its card, its memory, the facts, the talk,
     how the event came out, the moment on the clock, the question and
-    the board."""
+    the board; and what the same person said in earlier focus groups on
+    this twin (Jenna 2026-11-20) when there were any."""
     body = {'you': _card_text(card), 'earlier_in_this_session': memory,
             'facts_the_moderator_gave_the_room': facts_lines(brief, 12), 'what_could_not_be_confirmed': (brief or {}).get('not_found') or [],
             'moderator': framing or q, 'question': q, 'options': [{'id': o['id'], 'label': o['label']} for o in options]}
@@ -2696,6 +2827,8 @@ def _seat_body(card: dict, q: str, framing: str, options: list, brief: dict, mem
     cov, talk, local = coverage_lines(brief, 6), talk_lines(brief, 8), list((brief or {}).get('local') or [])[:4]
     if cov or talk or local:
         body['what_people_like_you_have_been_hearing_and_saying'] = {'in_the_news': cov, 'what_people_say': talk, 'closer_to_home': local}
+    if isinstance(past, dict) and past.get('entries'):
+        body['earlier_focus_groups_you_sat_in_on_this_subject'] = {'how_many': int(past.get('groups') or 0), 'what_you_said_and_chose_newest_first': list(past.get('entries') or [])}
     moment = _moment_for_seat(stimulus, card.get('seat'))
     if moment:
         body['what_just_played'] = moment
@@ -2706,10 +2839,11 @@ def _seat_body(card: dict, q: str, framing: str, options: list, brief: dict, mem
     return body
 
 
-def seat_answer(models: Models, card: dict, q: str, framing: str, options: list, brief: dict, memory: list, seed: str, log=None, stimulus: Optional[dict] = None) -> dict:
+def seat_answer(models: Models, card: dict, q: str, framing: str, options: list, brief: dict, memory: list, seed: str, log=None, stimulus: Optional[dict] = None,
+                past: Optional[dict] = None) -> dict:
     """One seat's answer in character; the deterministic fallback when
     the model is late or off."""
-    body = _seat_body(card, q, framing, options, brief, memory, stimulus)
+    body = _seat_body(card, q, framing, options, brief, memory, stimulus, past)
     user = json.dumps(body, default=str)[:9000]
     data, call = models.call('persona', PERSONA_SYSTEM, user, max_tokens=420, temperature=0.85, tools=None)
     if log:
@@ -3718,11 +3852,11 @@ def _fallback_voice(label: str, lean: str, seed: str, seat: int) -> str:
 
 
 def revoice_seat(models: Models, card: dict, q: str, framing: str, options: list, option_id: str, brief: dict, memory: list, seed: str, log=None,
-                 stimulus: Optional[dict] = None, earlier: str = '') -> dict:
+                 stimulus: Optional[dict] = None, earlier: str = '', past: Optional[dict] = None) -> dict:
     """A moved seat argues the stance the count gave it, in character;
     the deterministic line when the model is off or late."""
     o = next((x for x in options if x['id'] == option_id), None) or {'id': option_id, 'label': option_id, 'lean': 'other'}
-    body = _seat_body(card, q, framing, options, brief, memory, stimulus)
+    body = _seat_body(card, q, framing, options, brief, memory, stimulus, past)
     body['your_answer'] = {'id': o['id'], 'label': o['label']}
     body['why_you_are_asked_again'] = 'A real share of this audience lands on this answer and you are one of them; say why, as yourself.'
     data, call = models.call('persona', MIRROR_SYSTEM, json.dumps(body, default=str)[:9000], max_tokens=420, temperature=0.85, tools=None)
@@ -4628,13 +4762,23 @@ def run_question(ctx: dict) -> dict:
         cards = {int(r['seat']): persona_card(_twin_for_seat(r, twins_by_key), r, ctx['session_seed']) for r in roster}
         trail['persona_cards'] = {str(k): {kk: vv for kk, vv in v.items() if kk in ('lifecycle_stage', 'relationship_to_subject', 'owns', 'income')} for k, v in cards.items()}
         memories = {int(r['seat']): memory_for(session, int(r['seat'])) for r in roster}
+        # what the same person said in earlier focus groups on this twin (Jenna 2026-11-20), for the groups the asker can see
+        pasts = {}
+        try:
+            payload0 = ctx.get('twins_by_key', {}).get(ctx.get('twin_key')) if isinstance(ctx.get('twins_by_key'), dict) else None
+            for r in roster:
+                pasts[int(r['seat'])] = earlier_groups_for(payload0, str(r.get('person_id') or ''), viewer=str(ctx.get('asked_by') or ''), exclude_sid=str(session.get('id') or ''), twin=twin) if r.get('person_id') else {}
+            trail['earlier_groups'] = {str(k): int(v.get('groups') or 0) for k, v in pasts.items() if v.get('groups')}
+        except Exception as e:
+            print(f"[twin-room] earlier groups skipped: {str(e)[:120]}")
+            pasts = {}
         from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
         lock = threading.Lock()
         last_pub = [time.time()]
 
         def _one(seat_no):
             card = cards[seat_no]
-            return seat_answer(models, card, q, rec.get('framing') or '', options, brief, memories[seat_no], seed, log=log, stimulus=stim)
+            return seat_answer(models, card, q, rec.get('framing') or '', options, brief, memories[seat_no], seed, log=log, stimulus=stim, past=pasts.get(seat_no))
         pool = ThreadPoolExecutor(max_workers=max(1, min(len(roster), 16)))
         futures = {pool.submit(_one, int(r['seat'])): int(r['seat']) for r in roster}
         pending = set(futures)
@@ -4800,7 +4944,7 @@ def run_question(ctx: dict) -> dict:
             if mirror['moved']:
                 by_seat0 = {int(a['seat']): a for a in rec['answers']}
                 mpool = ThreadPoolExecutor(max_workers=max(1, min(len(mirror['moved']), 16)))
-                mfut = {mpool.submit(revoice_seat, models, cards[int(m['seat'])], q, rec.get('framing') or '', options, m['to'], brief, memories[int(m['seat'])], seed, log, stim): int(m['seat'])
+                mfut = {mpool.submit(revoice_seat, models, cards[int(m['seat'])], q, rec.get('framing') or '', options, m['to'], brief, memories[int(m['seat'])], seed, log, stim, '', pasts.get(int(m['seat']))): int(m['seat'])
                         for m in mirror['moved'] if int(m['seat']) in cards}
                 mpending = set(mfut)
                 mdeadline = time.time() + BUDGET_S['mirror']
@@ -5056,7 +5200,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
 __all__ = ['ask_room', 'run_question', 'saved_at_start', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'media_desk', 'merge_media', 'talk_lines', 'coverage_lines',
            'match_targets', 'anchor_plan', 'anchor_rows', 'media_key', 'MEDIA_SYSTEM', 'RESEARCH_CLASS_GUIDANCE', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
            'allocate_seats', 'mirror_seats', 'retally', 'revoice_seat', 'headline_for', 'cohere_read', 'num_word', 'MIRROR_FLOOR_SEATS', 'MIRROR_SYSTEM',
-           'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'short_read', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
+           'memory_for', 'earlier_groups_for', 'earlier_groups_line', 'annotate_earlier_groups', 'memory_visible', 'EARLIER_GROUPS_LIMIT', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'short_read', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX',
            # room-5: the study desk and the derived anchor

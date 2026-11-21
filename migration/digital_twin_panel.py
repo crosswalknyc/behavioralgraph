@@ -735,12 +735,17 @@ def _kinds_roster(twins: list, segs: list, by_key: dict, in_room: int, seed: str
             got[k] -= 1
         return got
 
+    def _rep_seed(s):
+        # one stable person per archetype (Jenna 2026-11-20): the people are drawn from the twin's own seed (plus the cut's
+        # signature when the cohort is a slice of the audience), never from the room's, so the same people come back room after room
+        return A.rep_seed(by_key.get(s['twin']) or {}, s.get('_filter') or s.get('filter') or {})
+
     def _seat(wants):
         out = []
         for s, want in zip(segs, wants):
             t = by_key.get(s['twin']) or {}
             arch = (t.get('archetypes') or {})
-            out.append(A.seat_archetypes(t, arch, s.get('_filter') or s.get('filter') or {}, int(s.get('people') or 0), f"{seed}|{s['label']}", want=want, max_seats=MAX_IN_ROOM))
+            out.append(A.seat_archetypes(t, arch, s.get('_filter') or s.get('filter') or {}, int(s.get('people') or 0), _rep_seed(s), want=want, max_seats=MAX_IN_ROOM))
         return out
 
     kinds_by_seg = _seat(_wants(in_room) if in_room and in_room > 0 else [None] * len(segs))
@@ -752,13 +757,13 @@ def _kinds_roster(twins: list, segs: list, by_key: dict, in_room: int, seed: str
     while sum(len(k) for k in kinds_by_seg) > MAX_IN_ROOM:
         i = max(range(len(kinds_by_seg)), key=lambda j: len(kinds_by_seg[j]))
         s = segs[i]
-        kinds_by_seg[i] = A.fit_count(kinds_by_seg[i], len(kinds_by_seg[i]) - 1, f"{seed}|{s['label']}|cap")
-        kinds_by_seg[i] = A._settle_people(kinds_by_seg[i], int(s.get('people') or 0), f"{seed}|{s['label']}|seg")
+        kinds_by_seg[i] = A.fit_count(kinds_by_seg[i], len(kinds_by_seg[i]) - 1, f"{_rep_seed(s)}|cap")
+        kinds_by_seg[i] = A._settle_people(kinds_by_seg[i], int(s.get('people') or 0), f"{_rep_seed(s)}|seg")
     roster, seat_no = [], 0
     for s, kinds in zip(segs, kinds_by_seg):
         t = by_key.get(s['twin']) or {}
         s['seats'] = len(kinds)
-        for r in A.roster_from_kinds(t, kinds, f"{seed}|{s['label']}", start_seat=seat_no + 1):
+        for r in A.roster_from_kinds(t, kinds, _rep_seed(s), start_seat=seat_no + 1, person_sig=A.filter_sig(s.get('_filter') or s.get('filter') or {})):
             seat_no += 1
             r['seat'] = seat_no
             r['segment'] = s['label']
