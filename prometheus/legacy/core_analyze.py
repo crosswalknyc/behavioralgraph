@@ -880,10 +880,12 @@ def _pm_analyze_core(user, body, text, history):
 
     _t_router = time.monotonic()
     try:
-        import prometheus_router as _pmr
         import prometheus_analysis as _pma_rt
-        _route_d = _pmr.route_ask(
-            text, surface='analyze', has_ctx=bool(ctx),
+        from prometheus import routing as _routing_c, understanding as _und_c
+        # the Understanding decides the route (prometheus.routing, step 3); the older router and its fast-model
+        # classifier only behind PM_LEGACY_ROUTING=1 or when no Understanding is on the ask
+        _route_d = _routing_c.analyze_route(
+            _und_c.on_body(body) or _und_c.current(), text, surface='analyze', has_ctx=bool(ctx),
             mode=str(body.get('mode') or ''),
             has_base=_router_has_base,
             memory_referent=_router_memory_referent,

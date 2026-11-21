@@ -139,7 +139,11 @@ intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`,
 `WIZARD_INTERRUPT`, `VALUATION_REFERENT`, `BRAND_FIT`, `NAMED_SUBJECT`,
 `CAPABILITY`, `PROVENANCE`, `EXISTS`, `DEFINITION`, `SIZE`, `MULTI_ASK`,
 `DASHBOARD_ISSUE`, `PRICING`, `CHAT`, `PUSHBACK`, `CANCEL`, `NAMED_TITLE`).
-`PM_SCREEN_SCOPE=0` restores the old reading of the open
+`PM_LEGACY_ROUTING=1` hands the surface decision and the analyze
+core's route back to the older readers (`understand.decide`,
+`prometheus_router.route_ask` with its fast-model classifier) for one
+release; without it `prometheus.routing` decides both from the
+Understanding (step 3, 2026-11-20). `PM_SCREEN_SCOPE=0` restores the old reading of the open
 screen (what is on screen deciding a subject on an audience noun, a
 pronoun, a row named or the Reader's flag); with it on, the open
 profile or view is the subject only when the reader's own words point

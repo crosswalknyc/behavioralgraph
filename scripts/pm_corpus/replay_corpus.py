@@ -332,6 +332,10 @@ def _service_once(stub, case):
         route = {'analyze': 'page_analysis', 'interpret': 'profile_build', 'deck': 'deck'}.get(core, route)
     hint_out = next((h.get('outcome') for h in reversed(stub.hints) if h.get('outcome')), None)
     base = hint_out or outcome0
+    if core == 'analyze' and raw.get('analysis_read') and str(raw.get('error') or '').startswith('<core:'):
+        # the analyze core's marker shaped for a client sitting in its build flow (service._interpret_shape: success
+        # False + guidance, the reply on `error`): the core answered; the shape is the widget's, not an error
+        base = 'answered'
     cls_out, _d = _ao.classify(surface, raw, status, history=case.get('history') or [], base_outcome=base)
     outcome = cls_out if cls_out in ('empty', 'faulted', 'clarified', 'clarified_repeat', 'proposed', 'confirmed', 'rerouted') else (base or cls_out)
     return {'route': str(route or ''), 'outcome': str(outcome or ''), 'surface': surface,

@@ -3289,11 +3289,23 @@ def ask(user, body, *, via='session'):
     # read of it.
     if forced == 'interpret' and referent_decision is None and not _armed(body):
         try:
+            # the server's own read of the words: the rule ladder as before ('question', 'data_open' and the other
+            # analyze reasons release the forced surface), and (step 3) a confident reading of the Understanding that
+            # is not a build ("wjat does Avid tier mean" at 0.93 in the build flow is a question)
             _own = understand.decide(text, has_ctx=has_ctx, open_tabs=open_tabs)
-            if _own.get('surface') == 'analyze' and str(_own.get('reason') or '') in (
-                    'question', 'subiq_lookup', 'capability_question', 'compare_open',
-                    'data_open'):
-                forced = ''
+            _own_conf = False
+            try:
+                from . import understanding as _und_f, routing as _routing_f
+                _own_u = _und_f.on_body(body)
+                _own_conf = bool(_own_u is not None and not _routing_f.legacy_routing()
+                                 and str(_own_u.action or '') not in ('build', '') and str(_own_u.intent or '') not in _routing_f.INTAKE_INTENTS
+                                 and (str(_own_u.source or '') == 'reader' or float(_own_u.confidence or 0) >= 0.75))
+            except Exception:
+                _own_conf = False
+            if (_own.get('surface') == 'analyze' and str(_own.get('reason') or '') in (
+                    'question', 'subiq_lookup', 'capability_question', 'compare_open', 'data_open')) \
+                    or (_own_conf and str(_own.get('reason') or '') in ('build_or_other', 'default')):
+                forced = ''   # the ladder's weak default yields to a confident reading; a positive build reason (an order, a Subscriber IQ pull) stands
         except Exception as _fx:
             _faults.note('service', _fx)
     # The mirror (Grace Yin 2026-11-10): a client sitting on the analyze
@@ -3319,8 +3331,10 @@ def ask(user, body, *, via='session'):
             _outline = understand.prior_deck_outline(history)
         except Exception:
             _outline = False
-        decision = understand.decide(
-            text, has_ctx=has_ctx, mode=body.get('mode'),
+        # the Understanding decides the surface (prometheus.routing, step 3); the older ladder behind PM_LEGACY_ROUTING=1
+        from . import routing as _routing_s, understanding as _und_s
+        decision = _routing_s.surface(
+            _und_s.on_body(body), text, has_ctx=has_ctx, mode=body.get('mode'),
             extra=body.get('extra'), open_tabs=open_tabs,
             deck_in_flight=bool(body.get('deck_in_flight')),
             prior_outline=_outline)
