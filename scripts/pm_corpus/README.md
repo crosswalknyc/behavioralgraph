@@ -138,7 +138,8 @@ records the same way. The kill switches are environment only:
 intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`,
 `WIZARD_INTERRUPT`, `VALUATION_REFERENT`, `BRAND_FIT`, `NAMED_SUBJECT`,
 `CAPABILITY`, `PROVENANCE`, `EXISTS`, `DEFINITION`, `SIZE`, `MULTI_ASK`,
-`DASHBOARD_ISSUE`, `PRICING`). `PM_SCREEN_SCOPE=0` restores the old reading of the open
+`DASHBOARD_ISSUE`, `PRICING`, `CHAT`, `PUSHBACK`, `CANCEL`, `NAMED_TITLE`).
+`PM_SCREEN_SCOPE=0` restores the old reading of the open
 screen (what is on screen deciding a subject on an audience noun, a
 pronoun, a row named or the Reader's flag); with it on, the open
 profile or view is the subject only when the reader's own words point
