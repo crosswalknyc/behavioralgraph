@@ -61,9 +61,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 
-INDEX = os.path.join(ROOT, 'templates', 'index.html')
 APP = os.path.join(ROOT, 'app.py')
 
 PASS = 0
@@ -132,7 +133,7 @@ def run_node(script: str) -> dict:
     return json.loads(proc.stdout.strip().splitlines()[-1])
 
 
-HTML = open(INDEX, encoding='utf-8').read()
+HTML = _index_page.text(ROOT)
 APP_SRC = open(APP, encoding='utf-8').read()
 
 from migration import event_window as EW  # noqa: E402

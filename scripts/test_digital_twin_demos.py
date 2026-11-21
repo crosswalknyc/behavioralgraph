@@ -14,6 +14,8 @@ import unittest
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 
 from migration import digital_twin_demos as D      # noqa: E402
 from migration import digital_twin_panel as P      # noqa: E402
@@ -53,7 +55,7 @@ class TheList(unittest.TestCase):
         self.assertIn('$100,000 - $149,999', dict((d['key'], d['values']) for d in D.DEMOS)['INCOME'])
 
     def test_the_page_carries_the_same_list(self):
-        html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
+        html = _index_page.text(ROOT)
         m = re.search(r"var DTW_DEMOS = (\[.*?\]);\n", html)
         self.assertTrue(m, 'DTW_DEMOS not found on the page')
         self.assertEqual(json.loads(m.group(1)), D.public_demos())

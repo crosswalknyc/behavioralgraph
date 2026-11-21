@@ -1,0 +1,1452 @@
+        #digitalTwinsIQView {
+            --dtw-page: var(--cw-page, #111F22); --dtw-raised: var(--cw-raised, #1B2E34); --dtw-input: var(--cw-input, #22383F);
+            --dtw-rule: var(--cw-border, #2C4148); --dtw-hair: #22343A; --dtw-ink: #E9E8E1; --dtw-body: #9AA09B; --dtw-mute: #7C878A;
+            --dtw-accent: #C7F23E; --dtw-accent-ink: #0C1618; --dtw-accent-soft: rgba(199,242,62,0.12); --dtw-second: #E682FF; --dtw-tile: #15252A; --dtw-track: rgba(233,232,225,0.09);
+            background: var(--dtw-page); color: var(--dtw-ink); text-transform: none; letter-spacing: 0; line-height: 1.5;
+            font-family: 'Crosswalk Inter', 'Inter 18pt', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body[data-theme="light"] #digitalTwinsIQView { --dtw-page: #E9E8E1; --dtw-raised: #FFFFFF; --dtw-input: #FFFFFF; --dtw-rule: #C9C6BA; --dtw-hair: #DAD7CB; --dtw-ink: #0C1618; --dtw-body: #5C6560; --dtw-mute: #888C89; --dtw-accent: #5E7E12; --dtw-accent-ink: #E9E8E1; --dtw-accent-soft: rgba(94,126,18,0.12); --dtw-second: #8E3FA8; --dtw-track: rgba(12,22,24,0.09); }
+        #digitalTwinsIQView * { text-transform: none; box-sizing: border-box; }
+        #digitalTwinsIQView button, #digitalTwinsIQView input, #digitalTwinsIQView select, #digitalTwinsIQView textarea { font-family: inherit; }
+        #digitalTwinsIQView a { color: inherit; }
+        /* ---- the spine: the selected twin, the actions, the lab rail ---- */
+        #digitalTwinsIQView .dtw-spine { flex: 0 0 auto; padding: 0.95rem 1.5rem 0; border-bottom: 1px solid var(--dtw-rule); background: var(--dtw-page); }
+        #digitalTwinsIQView .dtw-spine-row { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-eyebrow { display: flex; align-items: center; gap: 0.5rem; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--dtw-accent); flex: 0 0 auto; }
+        #digitalTwinsIQView .dtw-spine-name { font-size: 1.75rem; font-weight: 300; letter-spacing: -0.02em; line-height: 1.12; margin: 0.35rem 0 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-spine-facts { display: flex; flex-wrap: wrap; gap: 0.3rem 1.4rem; margin-top: 0.4rem; font-size: 0.8rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-spine-facts b { color: var(--dtw-ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-spine-actions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; flex-wrap: nowrap; justify-content: flex-end; }
+        #digitalTwinsIQView .dtw-segs { display: flex; gap: 0; margin-top: 0.9rem; flex-wrap: wrap; overflow: visible; scrollbar-width: none; row-gap: 2px; }
+        #digitalTwinsIQView .dtw-pi-diag { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 12px; }
+        #digitalTwinsIQView .dtw-pi-diag .dtw-card { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-opts { display: grid; gap: 6px; margin: 6px 0 10px; }
+        #digitalTwinsIQView .dtw-pi-opts input { width: 100%; }
+        #digitalTwinsIQView .dtw-pi-rank { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(233,232,225,0.08); }
+        #digitalTwinsIQView .dtw-pi-rank .r { font-size: 0.72rem; color: var(--dtw-mute); min-width: 1.4em; }
+        #digitalTwinsIQView .dtw-pi-rank .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dtw-accent); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-quote { font-size: 0.82rem; color: var(--dtw-body); margin: 2px 0 0 1.6em; }
+        #digitalTwinsIQView .dtw-pi-cmp { width: 100%; height: 150px; display: block; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-norms-table td.n, #digitalTwinsIQView .dtw-norms-table th.n { text-align: right; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-norms-table .cnt { color: var(--dtw-mute); font-size: 0.72rem; margin-left: 4px; }
+        #digitalTwinsIQView .dtw-segs::-webkit-scrollbar { display: none; }
+        #digitalTwinsIQView .dtw-seg { appearance: none; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--dtw-mute); padding: 0.62rem 0; margin: 0 1.8rem -1px 0; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; white-space: nowrap; transition: color .14s, border-color .14s; }
+        #digitalTwinsIQView .dtw-seg:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-seg.active { color: var(--dtw-ink); border-bottom-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-seg[hidden] { display: none !important; }
+        /* Greenlight's two options (Jenna 2026-10-28): Script read and Concept, picked at the top of the pane. */
+        #digitalTwinsIQView .dtw-gl-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; margin-bottom: 1rem; }
+        #digitalTwinsIQView .dtw-gl-opt { appearance: none; text-align: left; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.95rem 1.1rem 0.9rem; cursor: pointer; color: var(--dtw-body); display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; transition: border-color .14s, background .14s; }
+        #digitalTwinsIQView .dtw-gl-opt:hover { border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-gl-opt.active { border-color: var(--dtw-accent); background: var(--dtw-accent-soft); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-gl-opt .t { font-size: 1rem; font-weight: 600; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-gl-opt .d { font-size: 0.82rem; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-gl-opt .p { font-size: 0.72rem; color: var(--dtw-mute); margin-top: 0.15rem; }
+        #digitalTwinsIQView .dtw-gl-opt.active .p { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-gl-body[hidden] { display: none !important; }
+        @media (max-width: 760px) { #digitalTwinsIQView .dtw-gl-opts { grid-template-columns: 1fr; } }
+        /* Focus Group room pills live in the frozen spine (Jenna 2026-10-27:
+           'in focus group add this to the frozen part not scrollable'). Same
+           row as the tabs, right side; they never scroll with the room. */
+        #digitalTwinsIQView .dtw-spine-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-spine-foot .dtw-segs { flex: 1 1 240px; min-width: 0; }
+        #digitalTwinsIQView .dtw-spine-foot .dtw-fg-acts { flex: 0 1 auto; padding: 0 0 10px; justify-content: flex-end; }
+        #digitalTwinsIQView .dtw-spine-foot .dtw-fg-acts[hidden] { display: none !important; }
+        /* ---- the body ---- */
+        #digitalTwinsIQView .dtw-body { flex: 1 1 0%; min-height: 0; overflow: auto; padding: 1.1rem 1.5rem 3rem; }
+        #digitalTwinsIQView .dtw-pane { display: none; }
+        #digitalTwinsIQView .dtw-pane.active { display: block; }
+        #digitalTwinsIQView .dtw-lab { display: grid; grid-template-columns: minmax(300px, 1fr) 2fr; gap: 1.25rem; align-items: start; }
+        #digitalTwinsIQView .dtw-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+        @media (max-width: 1040px) { #digitalTwinsIQView .dtw-lab, #digitalTwinsIQView .dtw-two { grid-template-columns: 1fr; } }
+        /* ---- cards and type ---- */
+        #digitalTwinsIQView .dtw-card { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 1rem 1.15rem 1.05rem; margin-bottom: 1rem; min-width: 0; }
+        #digitalTwinsIQView .dtw-card-h { display: flex; align-items: flex-start; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.2rem; }
+        #digitalTwinsIQView .dtw-card-h > div:first-child { min-width: 0; flex: 1 1 240px; }
+        #digitalTwinsIQView .dtw-card h3 { margin: 0; font-size: 0.98rem; font-weight: 600; letter-spacing: -0.012em; line-height: 1.3; }
+        #digitalTwinsIQView h4 { margin: 0.9rem 0 0.4rem; font-size: 0.64rem; font-weight: 600; color: var(--dtw-mute); text-transform: uppercase; letter-spacing: 0.14em; }
+        #digitalTwinsIQView .dtw-sub { font-size: 0.78rem; color: var(--dtw-body); margin: 0.15rem 0 0.75rem; line-height: 1.45; }
+        #digitalTwinsIQView .dtw-muted { color: var(--dtw-body); font-size: 0.78rem; line-height: 1.45; }
+        #digitalTwinsIQView .dtw-p { font-size: 0.86rem; line-height: 1.55; margin: 0.3rem 0 0.5rem; }
+        #digitalTwinsIQView .dtw-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        #digitalTwinsIQView .dtw-right { margin-left: auto; }
+        /* ---- section heads (twin page) ---- */
+        #digitalTwinsIQView .dtw-sec { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 1.6rem 0 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-sec h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-sec h3::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-sec em { font-style: normal; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); }
+        #digitalTwinsIQView details.dtw-fold { border-top: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView details.dtw-fold:last-of-type { border-bottom: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView details.dtw-fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.7rem; padding: 0.85rem 0.2rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-ink); user-select: none; }
+        #digitalTwinsIQView details.dtw-fold > summary::-webkit-details-marker { display: none; }
+        #digitalTwinsIQView details.dtw-fold > summary::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--dtw-accent); flex: 0 0 auto; }
+        #digitalTwinsIQView details.dtw-fold > summary .n { font-weight: 500; letter-spacing: 0.1em; color: var(--dtw-mute); font-size: 0.64rem; }
+        #digitalTwinsIQView details.dtw-fold > summary .chev { margin-left: auto; color: var(--dtw-mute); font-size: 0.8rem; transition: transform .15s; }
+        #digitalTwinsIQView details.dtw-fold[open] > summary .chev { transform: rotate(180deg); }
+        /* ---- who makes up this audience (2026-11-19): the kinds, largest first, each with its person ---- */
+        #digitalTwinsIQView .dtw-kinds { margin: 0 0 1.1rem; }
+        #digitalTwinsIQView .dtw-kinds-h { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 10px; }
+        #digitalTwinsIQView .dtw-kinds-line { margin: 6px 0 0; font-size: 1.05rem; line-height: 1.4; font-weight: 300; color: var(--dtw-ink); max-width: 760px; }
+        #digitalTwinsIQView .dtw-kinds-note { font-size: 0.72rem; color: var(--dtw-mute); white-space: nowrap; }
+        #digitalTwinsIQView .dtw-kinds-list { border-top: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView details.dtw-kind { border-bottom: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView details.dtw-kind > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 44px minmax(0, 1fr) 190px 180px 18px; gap: 14px; align-items: center; padding: 10px 4px; }
+        #digitalTwinsIQView details.dtw-kind > summary::-webkit-details-marker { display: none; }
+        #digitalTwinsIQView details.dtw-kind > summary:hover { background: rgba(233,232,225,0.025); }
+        #digitalTwinsIQView .dtw-kind-face { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: color-mix(in srgb, var(--hue, #3B3D38) 55%, #0C1618); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: none; }
+        #digitalTwinsIQView .dtw-kind-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
+        #digitalTwinsIQView .dtw-kind-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        #digitalTwinsIQView .dtw-kind-main .lab { font-size: 0.92rem; font-weight: 600; color: var(--dtw-ink); line-height: 1.3; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-kind-main .who { font-size: 0.76rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-kind-main .who .x { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-kind-n { font-size: 0.78rem; color: var(--dtw-body); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+        #digitalTwinsIQView .dtw-kind-n b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-kind-n i { font-style: normal; color: var(--dtw-ink); font-weight: 600; margin-left: 10px; display: inline-block; min-width: 44px; }
+        #digitalTwinsIQView .dtw-kind-bar { height: 6px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; display: block; }
+        #digitalTwinsIQView .dtw-kind-bar span { display: block; height: 100%; background: var(--dtw-accent); border-radius: 999px; }
+        #digitalTwinsIQView details.dtw-kind > summary .chev { color: var(--dtw-mute); font-size: 0.8rem; transition: transform .15s; }
+        #digitalTwinsIQView details.dtw-kind[open] > summary .chev { transform: rotate(180deg); }
+        #digitalTwinsIQView .dtw-kind-about { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 22px; padding: 4px 4px 14px 62px; }
+        #digitalTwinsIQView .dtw-kind-about > div { font-size: 0.8rem; line-height: 1.45; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-kind-about .k { display: block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); margin-bottom: 2px; }
+        @media (max-width: 900px) { #digitalTwinsIQView details.dtw-kind > summary { grid-template-columns: 44px minmax(0, 1fr) 18px; } #digitalTwinsIQView .dtw-kind-n, #digitalTwinsIQView .dtw-kind-bar { display: none; } #digitalTwinsIQView .dtw-kinds-note { display: none; } }
+        #digitalTwinsIQView details.dtw-fold > .dtw-fold-body { padding: 0.1rem 0.2rem 1.2rem; }
+        /* ---- figures strip ---- */
+        #digitalTwinsIQView .dtw-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 1.2rem; border-top: 1px solid var(--dtw-rule); border-bottom: 1px solid var(--dtw-rule); margin: 0.6rem 0 0.9rem; }
+        #digitalTwinsIQView .dtw-fig { padding: 0.75rem 0 0.8rem; min-width: 0; }
+        #digitalTwinsIQView .dtw-fig .k { font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; line-height: 1.3; }
+        #digitalTwinsIQView .dtw-fig .v { font-size: 1.4rem; font-weight: 300; letter-spacing: -0.015em; margin-top: 0.25rem; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fig .v.lead { color: var(--dtw-accent); font-weight: 400; }
+        #digitalTwinsIQView .dtw-fig .s { font-size: 0.7rem; color: var(--dtw-body); margin-top: 0.2rem; }
+        #digitalTwinsIQView .dtw-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.7rem 1.2rem; margin: 0.5rem 0 0.9rem; }
+        #digitalTwinsIQView .dtw-kv .k { font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-kv .v { font-size: 0.84rem; line-height: 1.4; margin-top: 0.15rem; }
+        /* ---- controls ---- */
+        #digitalTwinsIQView .dtw-btn { appearance: none; display: inline-flex; align-items: center; gap: 0.4rem; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-ink); border-radius: 999px; padding: 0.5rem 0.95rem; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; text-decoration: none; line-height: 1.2; white-space: nowrap; transition: border-color .12s, color .12s; }
+        #digitalTwinsIQView .dtw-btn:hover { border-color: var(--dtw-accent); color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-btn-primary { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-btn-primary:hover { color: var(--dtw-accent-ink); filter: brightness(1.05); }
+        #digitalTwinsIQView .dtw-btn:disabled { opacity: 0.45; cursor: default; filter: none; }
+        /* ---- busy state (Jenna 2026-11-05: 'something needs to show an indication that it is working'). dtwBusy() puts .dtw-busy on
+           the clicked control: a Signal Green ring spinner (Olive on the light ground), the working label, siblings held; .dtw-busy-line is the
+           stage line under the row. CSS only, no images. */
+        @keyframes dtwSpin { to { transform: rotate(360deg); } }
+        #digitalTwinsIQView .dtw-spin { display: inline-block; width: 0.85em; height: 0.85em; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; vertical-align: -0.12em; margin-right: 0.4rem; color: var(--dtw-accent); animation: dtwSpin .7s linear infinite; }
+        #digitalTwinsIQView .dtw-busy, #digitalTwinsIQView .dtw-busy:hover, #digitalTwinsIQView button.dtw-busy:disabled { display: inline-flex; align-items: center; gap: 0.4rem; background: transparent; color: var(--dtw-accent); border-color: var(--dtw-accent); opacity: 1; filter: none; cursor: progress; pointer-events: none; }
+        #digitalTwinsIQView .dtw-busy > .dtw-spin { margin-right: 0; }
+        #digitalTwinsIQView .dtw-fg-send.dtw-busy, #digitalTwinsIQView .dtw-fg-send.working.dtw-busy { background: transparent; color: var(--dtw-accent); box-shadow: inset 0 0 0 1px var(--dtw-accent); }
+        #digitalTwinsIQView a.dtw-held { opacity: 0.45; pointer-events: none; }
+        #digitalTwinsIQView .dtw-busy-line { flex: 0 0 100%; font-size: 0.76rem; color: var(--dtw-body); padding: 0.45rem 0 0; min-height: 1.1em; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-busy-line.err, #digitalTwinsIQView .dtw-status.err, #digitalTwinsIQView .dtw-pi-note.err, #digitalTwinsIQView .dtw-fg-saved.err, #digitalTwinsIQView .dtw-fg-note.err { color: var(--dtw-ink); }
+        @media (prefers-reduced-motion: reduce) { #digitalTwinsIQView .dtw-spin { animation-duration: 1.8s; } }
+        #digitalTwinsIQView .dtw-btn-sm { padding: 0.36rem 0.7rem; font-size: 0.6rem; }
+        #digitalTwinsIQView .dtw-link { appearance: none; background: transparent; border: 0; padding: 0; color: var(--dtw-body); font-size: 0.72rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+        #digitalTwinsIQView .dtw-link:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-clip { appearance: none; display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px dashed var(--dtw-rule); color: var(--dtw-body); border-radius: 999px; padding: 0.38rem 0.75rem; font-size: 0.7rem; cursor: pointer; }
+        #digitalTwinsIQView .dtw-clip:hover { color: var(--dtw-ink); border-color: var(--dtw-body); }
+        #digitalTwinsIQView label.dtw-field { display: block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); margin: 0.75rem 0 0.3rem; }
+        #digitalTwinsIQView input.dtw-in, #digitalTwinsIQView select.dtw-in, #digitalTwinsIQView textarea.dtw-in { width: 100%; background: var(--dtw-input); border: 1px solid var(--dtw-rule); color: var(--dtw-ink); border-radius: 8px; padding: 0.5rem 0.6rem; font-size: 0.82rem; line-height: 1.35; }
+        #digitalTwinsIQView input.dtw-in:focus, #digitalTwinsIQView select.dtw-in:focus, #digitalTwinsIQView textarea.dtw-in:focus { outline: none; border-color: var(--dtw-accent); }
+        #digitalTwinsIQView input.dtw-in::placeholder, #digitalTwinsIQView textarea.dtw-in::placeholder { color: var(--dtw-mute); }
+        #digitalTwinsIQView textarea.dtw-in { min-height: 76px; resize: vertical; }
+        #digitalTwinsIQView select.dtw-in option { background: var(--dtw-raised); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+        #digitalTwinsIQView .dtw-row2 label.dtw-field { margin-top: 0.75rem; }
+        #digitalTwinsIQView .dtw-join { display: flex; gap: 0.5rem; }
+        #digitalTwinsIQView .dtw-join .dtw-in:last-child { max-width: 140px; }
+        #digitalTwinsIQView .dtw-lab-run { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+        #digitalTwinsIQView .dtw-price { font-size: 0.72rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-status { font-size: 0.76rem; color: var(--dtw-body); padding: 0.45rem 0 0; min-height: 1.1em; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-on { font-size: 0.74rem; color: var(--dtw-body); margin-top: 0.1rem; }
+        #digitalTwinsIQView .dtw-on b { color: var(--dtw-ink); font-weight: 500; }
+        #digitalTwinsIQView .dtw-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.4rem 0; }
+        #digitalTwinsIQView .dtw-chip { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-body); border-radius: 999px; padding: 0.26rem 0.7rem; font-size: 0.7rem; cursor: pointer; line-height: 1.3; }
+        #digitalTwinsIQView .dtw-chip:hover { color: var(--dtw-ink); border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-chip.on { border-color: var(--dtw-accent); color: var(--dtw-ink); background: var(--dtw-accent-soft); }
+        #digitalTwinsIQView .dtw-tag { display: inline-block; border: 1px solid var(--dtw-rule); color: var(--dtw-mute); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; vertical-align: middle; max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; text-align: left; }
+        #digitalTwinsIQView .dtw-toggle { display: inline-flex; border: 1px solid var(--dtw-rule); border-radius: 999px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-toggle button { appearance: none; background: transparent; border: 0; color: var(--dtw-body); padding: 0.3rem 0.75rem; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; }
+        #digitalTwinsIQView .dtw-toggle button.on { background: var(--dtw-accent-soft); color: var(--dtw-ink); }
+        /* ---- data ---- */
+        #digitalTwinsIQView .dtw-bar { display: grid; grid-template-columns: minmax(90px, 34%) 1fr minmax(64px, auto); align-items: center; gap: 0.6rem; font-size: 0.76rem; margin: 0.26rem 0; }
+        #digitalTwinsIQView .dtw-bar > span:first-child { overflow-wrap: anywhere; line-height: 1.35; }
+        #digitalTwinsIQView .dtw-bar .t { height: 6px; background: var(--dtw-track); border-radius: 999px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-bar .f { height: 100%; background: var(--dtw-accent); border-radius: 999px; }
+        #digitalTwinsIQView .dtw-bar .f.alt { background: var(--dtw-second); }
+        #digitalTwinsIQView .dtw-bar .n { text-align: right; color: var(--dtw-body); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        #digitalTwinsIQView table.dtw-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        #digitalTwinsIQView table.dtw-table th { text-align: left; color: var(--dtw-mute); font-weight: 600; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em; padding: 0.4rem 0.5rem 0.4rem 0; border-bottom: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView table.dtw-table td { padding: 0.42rem 0.5rem 0.42rem 0; border-bottom: 1px solid var(--dtw-hair); vertical-align: top; }
+        #digitalTwinsIQView table.dtw-table tr:last-child td { border-bottom: 0; }
+        #digitalTwinsIQView td.num, #digitalTwinsIQView th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; padding-left: 0.5rem; }
+        #digitalTwinsIQView svg.dtw-band { width: 100%; height: 170px; display: block; }
+        #digitalTwinsIQView .dtw-gauge { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; margin: 0.5rem 0 0.2rem; }
+        #digitalTwinsIQView .dtw-gauge .big { font-size: 2.6rem; font-weight: 300; color: var(--dtw-accent); letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-gauge .say { font-size: 0.9rem; font-weight: 500; line-height: 1.35; max-width: 56ch; }
+        /* ---- library (cover wall) ---- */
+        #digitalTwinsIQView .dtw-lib-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; margin: 0 0 0.75rem; }
+        #digitalTwinsIQView .dtw-lib-bar .dtw-chips { margin: 0; }
+        #digitalTwinsIQView .dtw-lib-search { width: min(240px, 100%); }
+        #digitalTwinsIQView .dtw-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+        #digitalTwinsIQView #dtwTwinPage { margin-top: 2.4rem; }
+        #digitalTwinsIQView .dtw-export { padding: 0.2rem 0 1.5rem; gap: 0.65rem; }
+        #digitalTwinsIQView .dtw-assign { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; }
+        #digitalTwinsIQView .dtw-assign select { max-width: 240px; }
+        #digitalTwinsIQView .dtw-assign .dtw-muted { font-size: 0.6rem; }
+        #digitalTwinsIQView .dtw-cover { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--dtw-rule); padding: 22px 22px 24px; background: #081113; color: #E9E8E1; display: flex; flex-direction: column; cursor: pointer; min-width: 0; }
+        #digitalTwinsIQView .dtw-cover:hover { border-color: #9AA09B; }
+        #digitalTwinsIQView .dtw-cover.on { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-cover .body { position: relative; }
+        #digitalTwinsIQView .dtw-cover h2 { position: relative; z-index: 1; margin: 0; font-size: 22px; line-height: 26px; font-weight: 600; color: #E9E8E1; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-cover .fig { position: relative; z-index: 1; margin-top: 12px; font-size: 20px; line-height: 24px; font-weight: 600; color: #E9E8E1; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-cover.on .fig { color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-cover .fig span { display: block; font-size: 11.5px; font-weight: 400; color: #9AA09B; margin-top: 2px; }
+        #digitalTwinsIQView .dtw-cover .foot { position: relative; z-index: 1; margin-top: 10px; margin-right: 88px; font-size: 11.5px; color: #9AA09B; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-cover .open { position: absolute; right: 16px; bottom: 16px; height: 26px; padding: 0 12px; border-radius: 999px; background: var(--dtw-accent); color: #0C1618; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; display: flex; align-items: center; z-index: 2; }
+        #digitalTwinsIQView .dtw-cover.build { border-style: dashed; }
+        #digitalTwinsIQView .dtw-cover.build:hover { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-cover.build p { position: relative; margin: 10px 0 0; font-size: 11.5px; line-height: 16px; color: #9AA09B; }
+        #digitalTwinsIQView .dtw-cover .dtw-x { appearance: none; position: absolute; top: 10px; right: 10px; z-index: 3; background: transparent; border: 1px solid transparent; color: #9AA09B; border-radius: 999px; width: 26px; height: 26px; line-height: 1; font-size: 1rem; cursor: pointer; opacity: 0; transition: opacity .12s, border-color .12s, color .12s; }
+        #digitalTwinsIQView .dtw-cover:hover .dtw-x, #digitalTwinsIQView .dtw-cover.on .dtw-x, #digitalTwinsIQView .dtw-cover .dtw-x:focus { opacity: 1; }
+        #digitalTwinsIQView .dtw-cover .dtw-x:hover { border-color: #E9E8E1; color: #E9E8E1; }
+        @media (hover: none) { #digitalTwinsIQView .dtw-cover .dtw-x { opacity: 0.7; } }
+        #digitalTwinsIQView .dtw-cover .dtw-confirm { position: absolute; inset: 0; z-index: 4; margin: 0; padding: 16px 18px; background: #081113; align-content: center; }
+        #digitalTwinsIQView .dtw-cover.confirming { cursor: default; }
+        /* ---- the Twins library, editorial (2026-11-19): every twin an entry with the same six things on it ---- */
+        #digitalTwinsIQView { --dtw-lb-room: var(--dtw-second); --dtw-lb-pilot: #B7B3D8; --dtw-lb-run: #3358FF; }
+        body[data-theme="light"] #digitalTwinsIQView { --dtw-lb-pilot: #3358FF; --dtw-lb-run: #8E3FA8; }
+        #digitalTwinsIQView .dtw-cap { font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-mute); white-space: nowrap; }
+        #digitalTwinsIQView .dtw-cap.on { color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-lib-head { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 40px; align-items: end; padding: 4px 0 22px; }
+        #digitalTwinsIQView .dtw-lib-lede .dtw-eyebrow em { font-style: normal; color: var(--dtw-mute); letter-spacing: 0.1em; }
+        #digitalTwinsIQView .dtw-lib-title { margin: 10px 0 0; font-size: 2.6rem; font-weight: 200; letter-spacing: -0.025em; line-height: 1.08; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-lib-intro { margin: 10px 0 0; font-size: 0.9rem; line-height: 1.5; color: var(--dtw-body); max-width: 560px; }
+        #digitalTwinsIQView .dtw-lib-find { display: flex; align-items: center; margin-top: 20px; width: 360px; max-width: 100%; border-bottom: 1px solid var(--dtw-body); padding-bottom: 6px; }
+        #digitalTwinsIQView .dtw-lib-find input { flex: 1; appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding: 0; margin: 0; font-size: 13px; color: var(--dtw-ink); outline: none; }
+        #digitalTwinsIQView .dtw-lib-find input::placeholder { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-lib-find input::-webkit-search-cancel-button { -webkit-appearance: none; }
+        #digitalTwinsIQView .dtw-lib-find:focus-within { border-bottom-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-lib-build { padding: 18px 20px 16px; border: 1px solid var(--dtw-accent); border-radius: 4px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-lib-build:hover { background: var(--dtw-accent-soft); }
+        #digitalTwinsIQView .dtw-lib-build .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+        #digitalTwinsIQView .dtw-lib-build .price { font-size: 13px; color: var(--dtw-ink); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-lib-build p { margin: 8px 0 0; font-size: 12.5px; line-height: 18px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-lib-build .dtw-lb { margin-top: 12px; }
+        #digitalTwinsIQView .dtw-lib-list { margin-bottom: 1.4rem; }
+        #digitalTwinsIQView .dtw-lib-cols { display: grid; grid-template-columns: 44px 190px minmax(0, 1fr); gap: 0 22px; padding: 0 0 8px; }
+        #digitalTwinsIQView .dtw-lib-cols .r { display: flex; justify-content: space-between; gap: 10px; }
+        #digitalTwinsIQView .dtw-lib-end { border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-empty { padding: 28px 0; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-empty .stand, #digitalTwinsIQView .dtw-lib-learn .stand { margin: 0 0 16px; font-size: 18px; font-weight: 300; line-height: 27px; color: var(--dtw-ink); letter-spacing: -0.005em; max-width: 720px; }
+        #digitalTwinsIQView .dtw-lib-wait { font-size: 13px; color: var(--dtw-mute); padding: 18px 0 8px; }
+        /* the entry */
+        #digitalTwinsIQView .dtw-entry { position: relative; display: grid; grid-template-columns: 44px 190px minmax(0, 1fr); gap: 0 22px; align-items: center; padding: 20px 0; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-entry .no { font-size: 11px; color: var(--dtw-accent); letter-spacing: 0.14em; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-entry .kinds .bar { display: flex; gap: 1px; height: 7px; border-radius: 2px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-entry .kinds .bar span { display: block; min-width: 1px; }
+        #digitalTwinsIQView .dtw-entry .kinds .line { font-size: 10.5px; color: var(--dtw-mute); margin-top: 7px; line-height: 14px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        #digitalTwinsIQView .dtw-entry .kinds .line b { color: var(--dtw-body); font-weight: 500; }
+        #digitalTwinsIQView .dtw-entry .main { min-width: 0; }
+        #digitalTwinsIQView .dtw-entry .name-row { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+        #digitalTwinsIQView .dtw-entry .name { appearance: none; background: transparent; border: 0; padding: 0; margin: 0; text-align: left; font-size: 26px; font-weight: 300; letter-spacing: -0.015em; line-height: 30px; color: var(--dtw-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; min-width: 0; flex: 0 1 auto; }
+        #digitalTwinsIQView .dtw-entry .name:hover { color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-entry .kind { font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); white-space: nowrap; flex: none; }
+        #digitalTwinsIQView .dtw-entry .kind.talent { color: var(--dtw-second); }
+        #digitalTwinsIQView .dtw-entry .kind.content { color: var(--dtw-lb-run); }
+        #digitalTwinsIQView .dtw-entry .kind.group { color: var(--dtw-lb-pilot); }
+        #digitalTwinsIQView .dtw-entry .kind.cur { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-entry .built { font-size: 11.5px; color: var(--dtw-mute); white-space: nowrap; flex: none; }
+        #digitalTwinsIQView .dtw-lib-learn .built { margin: -8px 0 14px; font-size: 12px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-entry .facts { margin-left: auto; font-size: 12px; color: var(--dtw-body); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+        #digitalTwinsIQView .dtw-entry .acts { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-entry .acts .sep { width: 1px; height: 18px; background: var(--dtw-hair); margin: 0 10px; }
+        /* the buttons: color does the work */
+        #digitalTwinsIQView .dtw-lb { appearance: none; display: inline-flex; align-items: center; height: 30px; padding: 0 13px; border-radius: 7px; border: 0; background: var(--dtw-track); color: var(--dtw-ink); font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; cursor: pointer; text-decoration: none; line-height: 1; transition: background 0.15s, color 0.15s; }
+        #digitalTwinsIQView .dtw-lb i { font-style: normal; margin-left: 8px; font-size: 12px; }
+        #digitalTwinsIQView .dtw-lb em { font-style: normal; margin-left: 5px; opacity: 0.65; }
+        #digitalTwinsIQView .dtw-lb.look i { font-size: 8px; transition: transform 0.15s; position: relative; top: -1px; }
+        #digitalTwinsIQView .dtw-lb.look:hover { background: color-mix(in srgb, var(--dtw-ink) 16%, transparent); }
+        #digitalTwinsIQView .dtw-lb.look.on, #digitalTwinsIQView .dtw-lb.look.on:hover { background: var(--dtw-accent); color: var(--dtw-accent-ink); }
+        #digitalTwinsIQView .dtw-lb.look.on i { transform: rotate(180deg); }
+        #digitalTwinsIQView .dtw-lb.go.room { color: var(--dtw-lb-room); background: color-mix(in srgb, var(--dtw-lb-room) 14%, transparent); }
+        #digitalTwinsIQView .dtw-lb.go.room:hover { background: color-mix(in srgb, var(--dtw-lb-room) 26%, transparent); }
+        #digitalTwinsIQView .dtw-lb.go.pilot { color: var(--dtw-lb-pilot); background: color-mix(in srgb, var(--dtw-lb-pilot) 14%, transparent); }
+        #digitalTwinsIQView .dtw-lb.go.pilot:hover { background: color-mix(in srgb, var(--dtw-lb-pilot) 26%, transparent); }
+        #digitalTwinsIQView .dtw-lb.go.pa { color: var(--dtw-accent); background: var(--dtw-accent-soft); }
+        #digitalTwinsIQView .dtw-lb.go.pa:hover { background: color-mix(in srgb, var(--dtw-accent) 26%, transparent); }
+        #digitalTwinsIQView .dtw-lb.link { background: transparent; padding: 0; height: auto; color: var(--dtw-accent); border-radius: 0; }
+        #digitalTwinsIQView .dtw-lb.link:hover { text-decoration: underline; text-underline-offset: 4px; }
+        #digitalTwinsIQView .dtw-lb.link.quiet { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-lb.link i { margin-left: 4px; }
+        /* the open panel */
+        #digitalTwinsIQView .dtw-lib-panel { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 0 22px; padding: 6px 0 30px; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-panel .side { font-size: 9.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); writing-mode: vertical-rl; transform: rotate(180deg); justify-self: start; align-self: start; margin-top: 10px; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-lib-panel .inner { min-width: 0; }
+        #digitalTwinsIQView .dtw-lib-learn { padding-top: 16px; }
+        #digitalTwinsIQView .dtw-lib-learn .top { display: grid; grid-template-columns: 1.25fr 1fr; gap: 48px; }
+        #digitalTwinsIQView .dtw-lib-learn .col { min-width: 0; }
+        #digitalTwinsIQView .dtw-lib-learn .kinds { margin-top: 26px; }
+        #digitalTwinsIQView .dtw-lib-learn .kinds .dtw-kinds { margin: 0; }
+        #digitalTwinsIQView .dtw-lib-sec { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-sec .n { font-size: 11px; color: var(--dtw-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-twinpage-h { margin: 1.2rem 0 0.9rem; padding-bottom: 8px; }
+        #digitalTwinsIQView .dtw-lib-stat { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-sec + .dtw-lib-stat { border-top: 0; }
+        #digitalTwinsIQView .dtw-lib-stat .v { font-size: 28px; font-weight: 200; letter-spacing: -0.02em; color: var(--dtw-ink); font-variant-numeric: tabular-nums; line-height: 1; }
+        #digitalTwinsIQView .dtw-lib-stat .l { font-size: 12.5px; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-lib-stat .s { font-size: 11px; color: var(--dtw-mute); margin-left: 8px; }
+        #digitalTwinsIQView .dtw-lib-links { display: flex; gap: 22px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--dtw-hair); flex-wrap: wrap; align-items: baseline; }
+        #digitalTwinsIQView .dtw-lib-links.first { border-top: 0; padding-top: 0; margin-top: 12px; }
+        #digitalTwinsIQView .dtw-lib-past .head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 16px 0 8px; }
+        #digitalTwinsIQView .dtw-lib-past .head .t { font-size: 18px; font-weight: 300; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-lib-past .head .n { font-size: 11.5px; color: var(--dtw-mute); text-align: right; }
+        #digitalTwinsIQView .dtw-lib-item { display: grid; grid-template-columns: 90px 170px minmax(0, 1fr) auto; gap: 18px; align-items: baseline; padding: 16px 0; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-item .d { font-size: 22px; font-weight: 200; color: var(--dtw-ink); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-lib-item .d small { font-size: 12px; color: var(--dtw-mute); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500; margin-left: 5px; }
+        #digitalTwinsIQView .dtw-lib-item .ty { display: inline-flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-body); white-space: nowrap; }
+        #digitalTwinsIQView .dtw-lib-item .ty::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--dtw-mute)); flex: none; }
+        #digitalTwinsIQView .dtw-lib-item .b { min-width: 0; }
+        #digitalTwinsIQView .dtw-lib-item .t { font-size: 15px; font-weight: 500; color: var(--dtw-ink); line-height: 20px; }
+        #digitalTwinsIQView .dtw-lib-item .l { font-size: 12.5px; color: var(--dtw-body); margin-top: 3px; line-height: 17px; }
+        #digitalTwinsIQView .dtw-lib-item .l .call { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--c, var(--dtw-accent)); margin-right: 8px; }
+        #digitalTwinsIQView .dtw-lib-item.empty .t { font-size: 13px; color: var(--dtw-mute); font-weight: 400; }
+        #digitalTwinsIQView .dtw-lib-item.empty .ty { color: var(--dtw-mute); }
+        /* an item opened in place (2026-11-20): the line stays, its detail sits right under it, the way back in at the foot */
+        #digitalTwinsIQView .dtw-lib-item.open { border-top-color: var(--c, var(--dtw-accent)); }
+        #digitalTwinsIQView .dtw-lib-item.open .t { color: var(--c, var(--dtw-ink)); }
+        #digitalTwinsIQView .dtw-lib-item .dtw-lb.link.on { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-lib-item .dtw-lb.link i.c { font-size: 8px; position: relative; top: -1px; margin-left: 7px; }
+        #digitalTwinsIQView .dtw-lib-detail { margin: 0 0 10px; padding: 12px 18px 16px 20px; border-left: 2px solid var(--c, var(--dtw-accent)); border-radius: 0 12px 12px 0; background: color-mix(in srgb, var(--dtw-raised) 72%, transparent); }
+        #digitalTwinsIQView .dtw-lib-detail .inner { min-width: 0; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-card { background: transparent; border: 0; border-top: 1px solid var(--dtw-hair); border-radius: 0; padding: 12px 0 4px; margin: 0; }
+        #digitalTwinsIQView .dtw-lib-detail .inner > [data-dtw-run-id] > .dtw-card:first-child { border-top: 0; padding-top: 2px; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-two { gap: 0 28px; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-figs { margin: 8px 0 10px; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-lib-sec { margin-top: 2px; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-lib-pa p { font-size: 13.5px; line-height: 20px; color: var(--dtw-ink); margin: 8px 0 0; max-width: 78ch; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-lib-pa p b { font-weight: 600; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-lib-pa .dtw-pa-nums { margin: 8px 0 0; }
+        #digitalTwinsIQView .dtw-lib-facts { font-size: 12px; color: var(--dtw-body); margin-top: 8px; }
+        #digitalTwinsIQView .dtw-lib-seats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 0 2px; }
+        #digitalTwinsIQView .dtw-lib-seats .dtw-kind-face { width: 30px; height: 30px; font-size: 10px; }
+        #digitalTwinsIQView .dtw-lib-seats .dtw-lib-facts { margin: 0 0 0 6px; }
+        #digitalTwinsIQView .dtw-lib-q { padding: 12px 0 10px; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-q:first-of-type { border-top: 0; }
+        #digitalTwinsIQView .dtw-lib-q .qt { display: flex; gap: 10px; align-items: baseline; font-size: 14px; font-weight: 500; line-height: 19px; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-lib-q .qt .n { font-size: 10.5px; color: var(--dtw-mute); letter-spacing: 0.12em; font-variant-numeric: tabular-nums; flex: none; }
+        #digitalTwinsIQView .dtw-lib-q .rd { margin: 8px 0 0; font-size: 12.5px; line-height: 18px; color: var(--dtw-body); max-width: 72ch; }
+        #digitalTwinsIQView .dtw-lib-q .rd b { color: var(--dtw-ink); font-weight: 500; }
+        #digitalTwinsIQView .dtw-lib-detail .dtw-pi-money { margin-top: 10px; }
+        #digitalTwinsIQView .dtw-lib-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-lib-acts .dtw-lb.link { margin-left: 10px; }
+        #digitalTwinsIQView .dtw-lib-acts .dtw-lb.link.quiet { margin-left: auto; }
+        /* delete, as on the cards: a quiet cross on hover, the confirm over the entry */
+        #digitalTwinsIQView .dtw-entry .dtw-x { appearance: none; position: absolute; top: 16px; right: 0; z-index: 3; background: transparent; border: 1px solid transparent; color: var(--dtw-mute); width: 22px; height: 22px; border-radius: 50%; font-size: 15px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+        #digitalTwinsIQView .dtw-entry:hover .dtw-x, #digitalTwinsIQView .dtw-entry .dtw-x:focus, #digitalTwinsIQView .dtw-entry.confirming .dtw-x { opacity: 1; }
+        #digitalTwinsIQView .dtw-entry .dtw-x:hover { border-color: var(--dtw-ink); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-entry .dtw-confirm { position: absolute; inset: 0; z-index: 4; margin: 0; padding: 16px 18px; background: var(--dtw-page); align-content: center; }
+        #digitalTwinsIQView .dtw-entry.confirming .name, #digitalTwinsIQView .dtw-entry.confirming .acts { pointer-events: none; }
+        @media (hover: none) { #digitalTwinsIQView .dtw-entry .dtw-x { opacity: 0.7; } }
+        @media (max-width: 1180px) {
+            #digitalTwinsIQView .dtw-entry .facts { display: none; }
+            #digitalTwinsIQView .dtw-lib-cols .r .dtw-cap:last-child { display: none; }
+        }
+        @media (max-width: 1040px) {
+            #digitalTwinsIQView .dtw-lib-head { grid-template-columns: 1fr; gap: 20px; align-items: start; }
+            #digitalTwinsIQView .dtw-lib-cols { display: none; }
+            #digitalTwinsIQView .dtw-entry, #digitalTwinsIQView .dtw-lib-panel { grid-template-columns: 34px minmax(0, 1fr); gap: 0 14px; }
+            #digitalTwinsIQView .dtw-entry .kinds { grid-column: 2; grid-row: 2; margin-top: 12px; max-width: 320px; }
+            #digitalTwinsIQView .dtw-entry .main { grid-column: 2; grid-row: 1; }
+            #digitalTwinsIQView .dtw-entry .no { grid-row: 1; align-self: start; margin-top: 10px; }
+            #digitalTwinsIQView .dtw-lib-learn .top { grid-template-columns: 1fr; gap: 24px; }
+            #digitalTwinsIQView .dtw-lib-item { grid-template-columns: 70px minmax(0, 1fr); gap: 8px 14px; }
+            #digitalTwinsIQView .dtw-lib-item .ty, #digitalTwinsIQView .dtw-lib-item .dtw-lb { grid-column: 2; }
+        }
+        #digitalTwinsIQView .dtw-lib-bar .dtw-chip i { font-style: normal; color: var(--dtw-mute); margin-left: 4px; }
+        #digitalTwinsIQView .dtw-export .dtw-confirm { width: 100%; }
+        #digitalTwinsIQView .dtw-twin-card { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.85rem 0.95rem 0.8rem; cursor: pointer; min-width: 0; }
+        #digitalTwinsIQView .dtw-hero { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-hero img { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 1px solid var(--dtw-rule); flex: 0 0 auto; }
+        #digitalTwinsIQView .dtw-run { border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 0.6rem 0.8rem; margin: 0.45rem 0; cursor: pointer; transition: border-color .12s; }
+        #digitalTwinsIQView .dtw-run:hover { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-run.on { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-run .q { font-weight: 500; font-size: 0.84rem; line-height: 1.35; }
+        #digitalTwinsIQView .dtw-run .m { font-size: 0.74rem; color: var(--dtw-body); margin-top: 0.2rem; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-roomrow .dtw-x { appearance: none; background: transparent; border: 1px solid transparent; color: var(--dtw-mute); border-radius: 999px; width: 26px; height: 26px; line-height: 1; font-size: 1rem; cursor: pointer; opacity: 0; flex: 0 0 auto; transition: opacity .12s, border-color .12s, color .12s; }
+        #digitalTwinsIQView .dtw-roomrow:hover .dtw-x, #digitalTwinsIQView .dtw-roomrow.on .dtw-x, #digitalTwinsIQView .dtw-roomrow .dtw-x:focus { opacity: 1; }
+        #digitalTwinsIQView .dtw-roomrow .dtw-x:hover { border-color: var(--dtw-body); color: var(--dtw-ink); }
+        @media (hover: none) { #digitalTwinsIQView .dtw-roomrow .dtw-x { opacity: 0.7; } }
+        /* Duplicate a room (Jenna 2026-11-04): a plain pill beside the delete mark on every row under Rooms. */
+        #digitalTwinsIQView .dtw-roomrow .dtw-roomdup { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-mute); border-radius: 999px; font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer; flex: 0 0 auto; align-self: center; white-space: nowrap; transition: border-color .12s, color .12s; }
+        #digitalTwinsIQView .dtw-roomrow .dtw-roomdup:hover, #digitalTwinsIQView .dtw-roomrow .dtw-roomdup:focus-visible { border-color: var(--dtw-ink); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-confirm { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.55rem; font-size: 0.76rem; color: var(--dtw-body); line-height: 1.4; }
+        #digitalTwinsIQView .dtw-confirm > span { flex: 1 1 200px; }
+        #digitalTwinsIQView .dtw-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.8rem; }
+        #digitalTwinsIQView .dtw-plan { background: var(--dtw-page); border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 0.8rem 0.9rem; min-width: 0; }
+        #digitalTwinsIQView .dtw-plan .big { font-size: 1.35rem; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin: 0.2rem 0 0.1rem; }
+        /* ---- spend engine ---- */
+        #digitalTwinsIQView .dtw-settings { display: flex; gap: 0.6rem 1rem; align-items: center; flex-wrap: wrap; padding: 0.6rem 0 0.2rem; }
+        #digitalTwinsIQView .dtw-settings .k { font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-settings input.dtw-in { width: 84px; padding: 0.3rem 0.5rem; font-size: 0.76rem; }
+        #digitalTwinsIQView .dtw-days { display: flex; gap: 0.35rem; overflow-x: auto; padding: 0.2rem 0 0.4rem; margin: 0.3rem 0 0.6rem; scrollbar-width: thin; }
+        #digitalTwinsIQView .dtw-day { flex: 0 0 auto; min-width: 58px; text-align: center; border: 1px solid var(--dtw-rule); border-radius: 8px; padding: 0.35rem 0.4rem; font-size: 0.66rem; color: var(--dtw-body); cursor: pointer; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-day:hover { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-day.on { border-color: var(--dtw-accent); background: var(--dtw-accent-soft); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-day .d { font-weight: 600; font-size: 0.8rem; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-day.pend .d::after { content: ' \2022'; color: var(--dtw-second); }
+        #digitalTwinsIQView .dtw-move { border-left: 3px solid var(--dtw-second); padding: 0.5rem 0.75rem; margin: 0.5rem 0; background: var(--dtw-page); border-radius: 0 8px 8px 0; font-size: 0.8rem; line-height: 1.45; }
+        #digitalTwinsIQView .dtw-move.ok { border-left-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-move .w { font-weight: 600; }
+        /* ---- focus group iq console: option F (2026-10-27, Jenna: 'love it go for it'), the header as a circle row (Jenna, same day) ----
+           A row of the room's seats as circular portraits above the room title and the question, each ringed in its answer's color once
+           answered, name and 'age, city' under it; the thread on the left (the question as a Prometheus-style message, the answers as
+           messages, the read as the closing message, the next probes as chips, the composer pinned under it); the tally on the right (one
+           stacked bar, what the room knew, two voices, the split by segment); a seat's bio as a popover under its portrait; the saved rooms
+           and the room builder behind Rooms and New room in the frozen spine; with no room open, the landing (the claim, the three steps,
+           the saved rooms as cards, no placeholder faces). */
+        #digitalTwinsIQView { --dtw-s1: #C7F23E; --dtw-s2: #E682FF; --dtw-s3: #3358FF; --dtw-s4: #B7B3D8; --dtw-s5: #3B3D38; --dtw-cbody: #A8AFA9; --dtw-clabel: #9BAAAC; --dtw-ink2: #081113; }
+        body[data-theme="light"] #digitalTwinsIQView { --dtw-s1: #5E7E12; --dtw-s2: #8E3FA8; --dtw-cbody: #5C6560; --dtw-clabel: #5C6466; }
+        /* Landing still pages in .dtw-body. An open room scrolls as a page: the twin name, the tabs and the seats go away.
+           It freezes at the question (and the room pills), then the thread and the split each scroll on their own
+           (Jenna 2026-10-27: 'allow this page to scroll to where it stops and freezes here'; later: 'It's not freezing
+           at the right place anymore now it's freezing the whole top'). */
+        #digitalTwinsIQView .dtw-body.is-fg { padding: 0.85rem 1.5rem 1rem; }
+        #digitalTwinsIQView.is-fg-room { overflow: auto !important; }
+        #digitalTwinsIQView.is-fg-room > .dtw-spine { flex: 0 0 auto; }
+        #digitalTwinsIQView.is-fg-room > .dtw-body { flex: 0 0 auto; height: auto; min-height: 0; overflow: visible; }
+        #digitalTwinsIQView.is-fg-room .dtw-spine-foot .dtw-fg-acts { display: none !important; }
+        #digitalTwinsIQView .dtw-body.is-fg-room { overflow: visible; display: block; height: auto; padding: 0.75rem 1.5rem 0.55rem; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-pane-fg.active { display: block; height: auto; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { height: auto; min-height: 0; overflow: visible; }
+        #digitalTwinsIQView .dtw-fg-dock { display: none; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: end; position: sticky; top: 0; z-index: 8; flex: 0 0 auto; background: var(--dtw-page); padding: 2px 0 10px; margin: 0; border-bottom: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock.stuck { box-shadow: 0 -18px 0 0 var(--dtw-page); }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-htext { grid-column: 1; grid-row: 1; min-width: 0; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { grid-column: 2; grid-row: 1; display: flex; justify-content: flex-end; padding: 0; margin-bottom: -7px; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 8px; overflow: visible; z-index: 1; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-htext { margin-top: 0; }
+        /* the room block sizes to its text and stops at the full height (Jenna 2026-11-17: on first open the ask bar is in the screen, right under
+           the seated line; the block only drops to the full-height column once the thread outgrows it, and then the thread scrolls) */
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { max-height: var(--dtw-main-h, 58vh); overflow: hidden; align-items: stretch; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main > * { min-height: 0; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { max-height: var(--dtw-main-h, 58vh); overflow: hidden; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-stream { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 8px; scrollbar-width: thin; overscroll-behavior: contain; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-composer { position: relative; bottom: auto; z-index: 2; flex: 0 0 auto; padding: 10px 0 2px; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { position: static; align-self: stretch; max-height: var(--dtw-main-h, 58vh); overflow: hidden; }
+        /* the room redesign (Jenna 2026-11-18): the chat is the page, the split stays beside it, Responses and What the room knew fold under
+           the split, the sixteen faces sit below them; the strip above the thread steps aside so the faces live in one place */
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero .dtw-fg-seatrow { display: none; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { padding-bottom: 0; }
+        #digitalTwinsIQView .dtw-fg-fold { border-top: 1px solid var(--dtw-rule); margin-top: 12px; padding-top: 6px; }
+        #digitalTwinsIQView .dtw-fg-foldh { appearance: none; background: transparent; border: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 0; margin: 0; color: var(--dtw-ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+        #digitalTwinsIQView .dtw-fg-foldh .n { font-size: 11px; color: var(--dtw-clabel); font-weight: 400; margin-left: 8px; }
+        #digitalTwinsIQView .dtw-fg-foldh .chev { width: 7px; height: 7px; border-right: 1.5px solid var(--dtw-mute); border-bottom: 1.5px solid var(--dtw-mute); transform: rotate(-45deg); transition: transform .15s; flex: none; margin-right: 3px; }
+        #digitalTwinsIQView .dtw-fg-fold.open .dtw-fg-foldh .chev { transform: rotate(45deg); }
+        #digitalTwinsIQView .dtw-fg-foldb { padding: 2px 0 6px; }
+        #digitalTwinsIQView .dtw-fg-foldb .dtw-fg-sec { margin-top: 6px; }
+        #digitalTwinsIQView .dtw-fg-roomsec { border-top: 1px solid var(--dtw-rule); margin-top: 12px; padding-top: 12px; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini { --seat-pitch: 54; --circ: 38px; gap: 6px 2px; margin-top: 8px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-seat { padding: 4px 0 0; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-circ .ini { font-size: 12px; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-seat .nm { font-size: 10.5px; line-height: 13px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini .dtw-fg-seat .ag { display: none; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-field { min-height: 60px; border-radius: 10px; border-color: var(--dtw-accent); padding-left: 18px; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-field input { font-size: 15px; padding: 14px 0; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-composer { padding-top: 12px; }
+        #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; min-width: 0; width: 100%; gap: 10px; }
+        #digitalTwinsIQView .dtw-fg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-height: 24px; flex: 0 0 auto; }
+        #digitalTwinsIQView .dtw-fg-top .dtw-eyebrow { color: var(--dtw-body); font-weight: 400; letter-spacing: 0.25em; font-size: 10px; min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-act { appearance: none; height: 26px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--dtw-rule); color: var(--dtw-ink); background: transparent; font-size: 11.5px; font-weight: 400; letter-spacing: 0; text-transform: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; line-height: 1; text-decoration: none; white-space: nowrap; transition: border-color .12s; }
+        #digitalTwinsIQView .dtw-fg-act:hover { border-color: var(--dtw-body); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-act b { font-weight: 600; color: var(--dtw-body); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-act.go { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); font-weight: 600; }
+        /* Close room (Jenna 2026-10-27: 'you should have a way to exit/close a room'): the quiet control at the far right of the header row */
+        #digitalTwinsIQView .dtw-fg-act.close { margin-left: 4px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-act.close .x { font-size: 15px; line-height: 1; margin-top: -1px; }
+        #digitalTwinsIQView .dtw-fg-act.close:hover { color: var(--dtw-ink); }
+        /* the one-line note after a close */
+        #digitalTwinsIQView .dtw-fg-toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 8px); background: var(--dtw-raised); color: var(--dtw-ink); border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 9px 16px; font-size: 12px; line-height: 16px; box-shadow: 0 10px 28px rgba(8,17,19,.35); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 2147481999; max-width: min(92vw, 560px); text-align: center; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-toast.show { opacity: 1; transform: translate(-50%, 0); }
+        #digitalTwinsIQView .dtw-fg-toastact { appearance: none; margin-left: 12px; background: transparent; border: 1px solid var(--dtw-ink); border-radius: 999px; color: var(--dtw-ink); font: inherit; font-size: 11.5px; font-weight: 600; padding: 3px 10px; cursor: pointer; }
+        /* the Rooms drawer: which twin's rooms, so a reader moves to another twin's rooms from here */
+        #digitalTwinsIQView .dtw-fg-twinrow { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 11.5px; color: var(--dtw-body); flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-twinsel { width: auto; max-width: 100%; padding: 0.3rem 0.5rem; font-size: 0.76rem; }
+        #digitalTwinsIQView .dtw-fg-saved { font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-saved:empty { display: none; }
+        /* the band (Jenna 2026-10-27: 'put the pics in circles above the title and put their name, age, location attached and if you click you
+           get their bio'): a row of circular portraits on the Graphite ground, each ringed in its answer's color once answered, the name and
+           'age, city' under it, then the room title, the question and the meta line (the stage line while a question runs) in the same type. */
+        #digitalTwinsIQView .dtw-fg-hero { position: relative; flex: 0 0 auto; padding: 2px 0 12px; border-bottom: 1px solid var(--dtw-rule); min-height: 0; }
+        #digitalTwinsIQView .dtw-fg-seatrow { --seat-pitch: 108; --circ: 64px; display: grid; grid-template-columns: repeat(12, minmax(0, 124px)); gap: 4px 8px; justify-content: start; }
+        #digitalTwinsIQView .dtw-fg-seat { appearance: none; background: transparent; border: 0; padding: 6px 2px 2px; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; color: inherit; cursor: pointer; text-align: center; min-width: 0; width: 100%; font-family: inherit; border-radius: 10px; }
+        #digitalTwinsIQView .dtw-fg-seat:focus-visible { outline: none; }
+        #digitalTwinsIQView .dtw-fg-circ { position: relative; width: var(--circ); height: var(--circ); border-radius: 50%; background: var(--hue, #3358FF); box-shadow: 0 0 0 3px var(--edge, transparent); display: flex; align-items: center; justify-content: center; margin: 3px 3px 7px; flex: none; color: #E9E8E1; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; transition: box-shadow .12s; }
+        #digitalTwinsIQView .dtw-fg-seat:hover .dtw-fg-circ { filter: brightness(1.08); }
+        #digitalTwinsIQView .dtw-fg-circ .ini { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        #digitalTwinsIQView .dtw-fg-circ img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 25%; display: block; }
+        #digitalTwinsIQView .dtw-fg-circ .mark { position: absolute; right: -4px; top: -4px; width: 16px; height: 16px; border-radius: 50%; background: var(--dtw-ink); box-shadow: 0 0 0 2px var(--dtw-page); z-index: 2; }
+        #digitalTwinsIQView .dtw-fg-circ .mark::after { content: ''; position: absolute; left: 4px; top: 4px; width: 6px; height: 3.5px; border-left: 1.6px solid var(--dtw-page); border-bottom: 1.6px solid var(--dtw-page); transform: rotate(-45deg) translate(1px, -1px); }
+        #digitalTwinsIQView .dtw-fg-circ .mark.wait { background: var(--dtw-page); border: 1.5px solid var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-circ .mark.wait::after { display: none; }
+        #digitalTwinsIQView .dtw-fg-seat.pending .dtw-fg-circ img, #digitalTwinsIQView .dtw-fg-seat.pending .dtw-fg-circ .ini { opacity: .45; }
+        #digitalTwinsIQView .dtw-fg-seat.sel .dtw-fg-circ, #digitalTwinsIQView .dtw-fg-seat:focus-visible .dtw-fg-circ { box-shadow: 0 0 0 3px var(--edge, var(--dtw-page)), 0 0 0 5px var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-seat .nm { font-size: 12px; line-height: 15px; font-weight: 600; color: var(--dtw-ink); overflow-wrap: anywhere; max-width: 100%; }
+        #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10.5px; line-height: 14px; color: var(--dtw-mute); overflow-wrap: anywhere; max-width: 100%; }
+        #digitalTwinsIQView .dtw-fg-htext { position: relative; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-fg-rt { font-size: 19px; line-height: 24px; color: var(--dtw-ink); font-weight: 600; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-rtwrap { display: flex; align-items: baseline; gap: 10px; max-width: 100%; }
+        #digitalTwinsIQView .dtw-pi-exit { margin-left: auto; align-self: center; flex: none; }
+        #digitalTwinsIQView input.dtw-fg-rt { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--dtw-ink); font: inherit; font-size: 19px; line-height: 24px; font-weight: 600; padding: 0 0 1px; margin: 0; width: auto; field-sizing: content; max-width: min(100%, 42rem); min-width: 8rem; outline: none; }
+        #digitalTwinsIQView input.dtw-fg-rt:hover { border-bottom-color: var(--dtw-rule); }
+        #digitalTwinsIQView input.dtw-fg-rt:focus { border-bottom-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-rt-edit { appearance: none; background: transparent; border: 0; padding: 0; margin: 0; font: inherit; font-size: 11px; line-height: 15px; color: var(--dtw-mute); cursor: pointer; flex: none; }
+        #digitalTwinsIQView .dtw-fg-rt-edit:hover, #digitalTwinsIQView .dtw-fg-rtwrap:focus-within .dtw-fg-rt-edit { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-fq { font-size: 23px; line-height: 28px; color: var(--dtw-ink); font-weight: 300; letter-spacing: -0.01em; margin-top: 3px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-fq b { font-weight: 700; }
+        #digitalTwinsIQView .dtw-fg-fm { font-size: 11.5px; line-height: 15px; color: var(--dtw-body); margin-top: 5px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 0; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-fm b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-sep { display: inline-block; margin: 0 8px; opacity: .8; }
+        #digitalTwinsIQView .dtw-fg-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dtw-ink); box-shadow: 0 0 0 3px var(--dtw-track); margin-right: 8px; flex: none; animation: dtwPulse 1.5s ease-in-out infinite; }
+        @keyframes dtwPulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
+        /* the thread and the tally */
+        #digitalTwinsIQView .dtw-fg-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); gap: 20px; align-items: start; }
+        #digitalTwinsIQView .dtw-fg-chat { display: flex; flex-direction: column; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-stream { padding: 4px 8px 6px 0; }
+        #digitalTwinsIQView .dtw-fg-msgs { display: flex; flex-direction: column; gap: 9px; }
+        #digitalTwinsIQView .dtw-fg-modav { width: 28px; height: 28px; border-radius: 50%; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); display: flex; align-items: center; justify-content: center; flex: none; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-modav svg { width: 12px; height: 12px; display: block; fill: currentColor; }
+        #digitalTwinsIQView .dtw-fg-qmsg, #digitalTwinsIQView .dtw-fg-msg, #digitalTwinsIQView .dtw-fg-readmsg { display: flex; gap: 12px; align-items: flex-start; }
+        #digitalTwinsIQView .dtw-fg-qmsg > div, #digitalTwinsIQView .dtw-fg-msg > div { min-width: 0; flex: 1 1 auto; }
+        #digitalTwinsIQView .dtw-fg-qt { font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); margin-top: 1px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-qt .qm { color: var(--dtw-mute); margin-left: 8px; font-size: 11.5px; }
+        #digitalTwinsIQView .dtw-fg-qt .fr { color: var(--dtw-body); margin-top: 3px; font-size: 12px; line-height: 16px; }
+        #digitalTwinsIQView .dtw-fg-qt .nt { color: var(--dtw-mute); margin-top: 3px; font-size: 11.5px; line-height: 15px; }
+        #digitalTwinsIQView .dtw-fg-earlier { appearance: none; background: transparent; border: 0; width: 100%; display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 600; color: var(--dtw-accent); padding: 0 0 0 40px; cursor: pointer; text-align: left; font-family: inherit; }
+        #digitalTwinsIQView .dtw-fg-earlier::after { content: ''; flex: 1; height: 1px; background: var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-fg-earlier:hover { text-decoration: underline; }
+        #digitalTwinsIQView .dtw-fg-faceb { position: relative; appearance: none; border: 0; padding: 0; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--hue, #3358FF); color: #E9E8E1; font-weight: 600; font-size: 12px; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; flex: none; cursor: pointer; vertical-align: middle; }
+        #digitalTwinsIQView .dtw-fg-faceb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
+        #digitalTwinsIQView .dtw-fg-faceb.s24 { width: 24px; height: 24px; font-size: 9px; }
+        #digitalTwinsIQView .dtw-fg-faceb.s64 { width: 64px; height: 64px; font-size: 20px; }
+        #digitalTwinsIQView .dtw-fg-faceb.on { box-shadow: 0 0 0 2px var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-nm { display: flex; align-items: center; gap: 8px 10px; font-size: 12px; line-height: 16px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-nm b { color: var(--dtw-ink); font-weight: 600; cursor: pointer; }
+        #digitalTwinsIQView .dtw-fg-nm .ag { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-tag { min-height: 18px; padding: 1px 8px 1px 7px; border-radius: 999px; border: 1px solid var(--dtw-rule); display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--dtw-body); line-height: 14px; overflow-wrap: anywhere; max-width: 100%; text-align: left; }
+        #digitalTwinsIQView .dtw-fg-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+        #digitalTwinsIQView .dtw-fg-bubbles { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; padding: 2px 0 4px; }
+        #digitalTwinsIQView .dtw-fg-bcol { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+        #digitalTwinsIQView .dtw-fg-bcol.r { padding-top: 34px; }
+        #digitalTwinsIQView .dtw-fg-ab { display: flex; gap: 10px; align-items: flex-start; }
+        #digitalTwinsIQView .dtw-fg-bcol.r .dtw-fg-ab { flex-direction: row-reverse; }
+        #digitalTwinsIQView .dtw-fg-ab .card { position: relative; flex: 1 1 auto; min-width: 0; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 14px; padding: 10px 13px 11px; transition: border-color .15s; }
+        #digitalTwinsIQView .dtw-fg-ab:hover .card { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-ab .card::before { content: ''; position: absolute; top: 13px; left: -6px; width: 10px; height: 10px; background: var(--dtw-raised); border-left: 1px solid var(--dtw-rule); border-bottom: 1px solid var(--dtw-rule); transform: rotate(45deg); transition: border-color .15s; }
+        #digitalTwinsIQView .dtw-fg-bcol.r .dtw-fg-ab .card::before { left: auto; right: -6px; transform: rotate(-135deg); }
+        #digitalTwinsIQView .dtw-fg-ab:hover .card::before { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-ab .dtw-fg-tx { margin-top: 6px; }
+        #digitalTwinsIQView .dtw-fg-tx { font-size: 12.5px; line-height: 17px; color: var(--dtw-body); margin-top: 2px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-bubble { background: var(--dtw-raised); border-radius: 10px; padding: 11px 14px; flex: 1 1 auto; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-bubble .lab { font-size: 11px; color: var(--dtw-ink); font-weight: 600; line-height: 14px; }
+        #digitalTwinsIQView .dtw-fg-bubble .lab span { color: var(--dtw-mute); font-weight: 400; margin-left: 8px; }
+        #digitalTwinsIQView .dtw-fg-bubble p { margin: 5px 0 0; font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); font-weight: 300; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-bubble p b { font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-bubble .note { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--dtw-rule); font-size: 11.5px; line-height: 15px; color: var(--dtw-cbody); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-bubble .note b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-nextp { display: flex; align-items: center; gap: 8px; padding-left: 40px; font-size: 11.5px; color: var(--dtw-mute); flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-chip { appearance: none; min-height: 22px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--dtw-rule); color: var(--dtw-body); background: transparent; font-size: 11px; font-family: inherit; display: inline-flex; align-items: center; line-height: 14px; cursor: pointer; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+        #digitalTwinsIQView .dtw-fg-chip:hover { color: var(--dtw-ink); border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-chip.on { background: var(--dtw-raised); color: var(--dtw-ink); border-color: var(--dtw-s5); }
+        #digitalTwinsIQView .dtw-fg-nextp .dtw-fg-chip { color: var(--dtw-ink); border-color: var(--dtw-s5); }
+        #digitalTwinsIQView .dtw-fg-probe { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-probe .tx { font-size: 12.5px; color: var(--dtw-ink); overflow-wrap: anywhere; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-working { display: flex; align-items: center; gap: 8px; padding-left: 40px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-working .dtw-fg-pulse { margin-right: 0; background: var(--dtw-ink); box-shadow: 0 0 0 3px var(--dtw-track); }
+        #digitalTwinsIQView .dtw-fg-working.slow .dtw-fg-pulse { animation-duration: 3s; background: var(--dtw-mute); box-shadow: none; }
+        #digitalTwinsIQView .dtw-fg-failed { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-left: 40px; font-size: 12.5px; color: var(--dtw-ink); line-height: 17px; }
+        #digitalTwinsIQView .dtw-fg-failed::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--dtw-s2); flex: none; }
+        #digitalTwinsIQView .dtw-fg-old { appearance: none; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid var(--dtw-hair); padding: 8px 0 2px; display: flex; gap: 12px; align-items: flex-start; color: inherit; cursor: pointer; font-family: inherit; }
+        #digitalTwinsIQView .dtw-fg-old:first-child { border-top: 0; }
+        #digitalTwinsIQView .dtw-fg-old .body { flex: 1 1 auto; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-old .qt { font-size: 12.5px; line-height: 17px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-old .qt .qm { color: var(--dtw-mute); margin-left: 8px; font-size: 11.5px; }
+        #digitalTwinsIQView .dtw-fg-old .dtw-fg-stack { margin-top: 6px; height: 6px; max-width: 420px; }
+        #digitalTwinsIQView .dtw-fg-old .dtw-fg-stack i { border-right-color: var(--dtw-page); }
+        #digitalTwinsIQView .dtw-fg-lolli { margin-top: 8px; max-width: 520px; display: grid; grid-template-columns: minmax(0, 190px) minmax(80px, 1fr) 38px; column-gap: 12px; row-gap: 5px; align-items: center; }
+        #digitalTwinsIQView .dtw-fg-lolli .lb { font-size: 11.5px; line-height: 15px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-lolli .tr { position: relative; height: 11px; }
+        #digitalTwinsIQView .dtw-fg-lolli .tr::before { content: ''; position: absolute; left: 0; right: 0; top: 5px; border-top: 1px dashed var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-fg-lolli .ln { position: absolute; left: 0; top: 4.5px; height: 2px; border-radius: 1px; }
+        #digitalTwinsIQView .dtw-fg-lolli .dt { position: absolute; top: 0.5px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; }
+        #digitalTwinsIQView .dtw-fg-lolli .vl { font-size: 11.5px; line-height: 15px; font-weight: 600; color: var(--dtw-ink); text-align: right; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-old .chev { color: var(--dtw-mute); font-size: 12px; margin-top: 2px; transition: transform .15s; flex: none; }
+        #digitalTwinsIQView .dtw-fg-old.open .chev { transform: rotate(180deg); }
+        #digitalTwinsIQView .dtw-fg-empty-t { padding: 10px 0 10px 40px; font-size: 12.5px; line-height: 17px; color: var(--dtw-body); }
+        /* content in the room (Jenna 2026-11-05): the strip of what the room was shown sits above the question bar. One bar
+           (Jenna 2026-11-16): content is added from the clip inside the question field, not from a second row of inputs. */
+        #digitalTwinsIQView .dtw-fg-addc { margin-bottom: 8px; border: 1px dashed var(--dtw-rule); border-radius: 8px; padding: 8px 10px; background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-fg-addc.over { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-assets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-fg-assets:empty { display: none; }
+        #digitalTwinsIQView .dtw-fg-asset { appearance: none; position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 4px 26px 4px 4px; border-radius: 8px; border: 1px solid var(--dtw-rule); background: var(--dtw-page); color: var(--dtw-ink); font-family: inherit; font-size: 11.5px; line-height: 14px; cursor: pointer; max-width: 260px; text-align: left; }
+        #digitalTwinsIQView .dtw-fg-asset.ready:hover, #digitalTwinsIQView .dtw-fg-asset.on { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-asset .th { flex: none; width: 54px; height: 38px; border-radius: 5px; background: var(--dtw-raised); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-asset .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        #digitalTwinsIQView .dtw-fg-asset .th svg { width: 26px; height: 20px; display: block; }
+        #digitalTwinsIQView .dtw-fg-asset .body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        #digitalTwinsIQView .dtw-fg-asset .lb { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fg-asset .st { color: var(--dtw-mute); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+        #digitalTwinsIQView .dtw-fg-asset.failed .st { color: #E682FF; }
+        #digitalTwinsIQView .dtw-fg-asset .x { position: absolute; right: 4px; top: 4px; width: 16px; height: 16px; border-radius: 999px; border: 0; background: transparent; color: var(--dtw-mute); font-size: 13px; line-height: 16px; cursor: pointer; padding: 0; }
+        #digitalTwinsIQView .dtw-fg-asset .x:hover { color: var(--dtw-ink); background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-fg-composer > .dtw-fg-assets { margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-fg-field.has-attach { padding-left: 7px; gap: 10px; }
+        #digitalTwinsIQView .dtw-fg-field.over { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-attach { flex: none; width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--dtw-rule); color: var(--dtw-body); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        #digitalTwinsIQView .dtw-fg-attach:hover, #digitalTwinsIQView .dtw-fg-attach:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-body); outline: none; }
+        #digitalTwinsIQView .dtw-fg-attach svg { width: 15px; height: 15px; display: block; }
+        #digitalTwinsIQView .dtw-fg-ard { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dtw-rule); display: grid; gap: 5px; font-size: 12px; line-height: 16px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-ard b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-ard .pics { display: flex; gap: 6px; margin: 2px 0 4px; }
+        #digitalTwinsIQView .dtw-fg-ard .pics img { height: 72px; width: auto; max-width: 128px; object-fit: cover; border-radius: 5px; background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-popout .dtw-fg-addc { margin: 8px 0; }
+        /* the composer: the kind chips above the field, Ask the room as the one Signal Green button */
+        #digitalTwinsIQView .dtw-fg-composer { position: sticky; bottom: -1rem; z-index: 6; padding: 10px 0 calc(1rem + 2px); background: var(--dtw-page); border-top: 1px solid var(--dtw-rule); }
+        /* ---- theater (2026-11-18, the approved design): the run over the table while a Predictive Analytics room runs for you ---- */
+        #digitalTwinsIQView.is-theater .dtw-spine { opacity: .55; transition: opacity .35s ease; }
+        #digitalTwinsIQView.is-theater .dtw-spine:hover, #digitalTwinsIQView.is-theater .dtw-spine:focus-within { opacity: 1; }
+        #digitalTwinsIQView .dtw-th { position: relative; padding: 6px 0 8px; }
+        #digitalTwinsIQView .dtw-th-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-th-head b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-th-badge { display: inline-flex; align-items: center; gap: 7px; min-height: 24px; padding: 0 11px 0 9px; border-radius: 999px; background: var(--dtw-accent); color: var(--dtw-accent-ink); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+        #digitalTwinsIQView .dtw-th-badge .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; background: var(--dtw-accent-ink); box-shadow: 0 0 0 2px rgba(12,22,24,0.25); }
+        #digitalTwinsIQView .dtw-th-stage { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--dtw-ink); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-th-stage .dtw-fg-pulse { margin-right: 8px; }
+        #digitalTwinsIQView .dtw-th-tl { display: flex; gap: 12px; margin-top: 14px; }
+        #digitalTwinsIQView .dtw-th-q { flex: 1 1 0; min-width: 0; }
+        #digitalTwinsIQView .dtw-th-q.wait { opacity: .45; }
+        #digitalTwinsIQView .dtw-th-q .ln { display: flex; align-items: center; gap: 8px; }
+        #digitalTwinsIQView .dtw-th-q .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--dtw-s5); flex: none; }
+        #digitalTwinsIQView .dtw-th-q.done .dot { background: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-q.now .dot { background: var(--dtw-ink); box-shadow: 0 0 0 4px var(--dtw-track); animation: dtwPulse 1.6s ease-in-out infinite; }
+        #digitalTwinsIQView .dtw-th-q .bar { flex: 1; height: 2px; background: var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-th-q.done .bar { background: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-q .lv { margin-top: 7px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-q.wait .lv { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-th-q .qt { margin-top: 3px; font-size: 11px; line-height: 14px; color: var(--dtw-ink); max-height: 42px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-th-q.wait .qt { color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-th-q .ld { margin-top: 3px; font-size: 10.5px; line-height: 14px; color: var(--dtw-body); display: flex; align-items: center; gap: 6px; min-height: 14px; }
+        #digitalTwinsIQView .dtw-th-q .ld .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; }
+        #digitalTwinsIQView .dtw-th-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; margin-top: 18px; align-items: start; }
+        #digitalTwinsIQView .dtw-th-side { display: flex; flex-direction: column; gap: 14px; padding-top: 6px; }
+        #digitalTwinsIQView .dtw-th-split .k, #digitalTwinsIQView .dtw-th-justin .k { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-th-srow { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--dtw-body); margin-top: 6px; }
+        #digitalTwinsIQView .dtw-th-srow .l { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-th-srow b { color: var(--dtw-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-th-srow .dtw-fg-rowspin { width: 9px; height: 9px; }
+        #digitalTwinsIQView .dtw-th-note { margin-top: 8px; font-size: 10.5px; line-height: 15px; color: var(--dtw-mute); display: flex; align-items: center; gap: 6px; }
+        #digitalTwinsIQView .dtw-th-note .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; }
+        #digitalTwinsIQView .dtw-th-justin { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px; }
+        #digitalTwinsIQView .dtw-th-justin .row { display: flex; gap: 10px; align-items: flex-start; }
+        #digitalTwinsIQView .dtw-th-justin .who { font-size: 11.5px; font-weight: 600; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-th-justin .tx { font-size: 11.5px; line-height: 16px; color: var(--dtw-body); margin-top: 3px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-th-face { position: relative; width: 58px; height: 58px; border-radius: 50%; overflow: hidden; background: var(--hue, #3358FF); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex: none; }
+        #digitalTwinsIQView .dtw-th-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
+        #digitalTwinsIQView .dtw-th-face.s { width: 34px; height: 34px; font-size: 12px; box-shadow: 0 0 0 2px var(--ring, var(--dtw-accent)); }
+        #digitalTwinsIQView .dtw-th-stagewrap { position: relative; width: 100%; aspect-ratio: 1.55 / 1; min-height: 480px; max-height: 680px; }
+        #digitalTwinsIQView .dtw-th-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; overflow: visible; filter: drop-shadow(0 24px 40px rgba(0,0,0,0.45)); }
+        #digitalTwinsIQView .dtw-th-svg .top { stroke: #2A434B; stroke-width: 1; }
+        #digitalTwinsIQView .dtw-th-svg .edge { stroke: rgba(233,232,225,0.06); stroke-width: 1; }
+        #digitalTwinsIQView .dtw-th-svg .rim path { fill: none; stroke-width: 5; stroke-linecap: round; opacity: .5; transition: stroke .4s ease, opacity .4s ease; }
+        #digitalTwinsIQView .dtw-th-svg .rim path.on { opacity: 1; stroke-width: 6; }
+        #digitalTwinsIQView .dtw-th-tcopy { position: absolute; left: 25%; right: 25%; top: 50%; transform: translateY(-50%); text-align: center; z-index: 2; }
+        #digitalTwinsIQView .dtw-th-tcopy .k { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-th-tcopy .q { margin-top: 6px; font-size: 14.5px; line-height: 20px; font-weight: 500; color: var(--dtw-ink); overflow-wrap: anywhere; max-height: 100px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-th-tcopy.talk .q { font-size: 12.5px; line-height: 17px; font-weight: 400; color: var(--dtw-body); max-height: 51px; }
+        #digitalTwinsIQView .dtw-th-tcopy .n { margin-top: 8px; font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-th-floor { display: flex; gap: 14px; align-items: flex-start; text-align: left; margin-top: 14px; padding: 12px 14px; background: rgba(12,22,24,0.55); border: 1px solid rgba(233,232,225,0.08); border-radius: 14px; }
+        #digitalTwinsIQView .dtw-th-floor .dtw-th-face.m { width: 52px; height: 52px; font-size: 16px; box-shadow: 0 0 0 3px var(--dtw-page), 0 0 0 6px var(--ring, var(--dtw-accent)); }
+        #digitalTwinsIQView .dtw-th-floor .t { min-width: 0; }
+        #digitalTwinsIQView .dtw-th-floor .who { font-size: 11px; font-weight: 600; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-th-floor .who .when { color: var(--dtw-mute); font-weight: 400; }
+        #digitalTwinsIQView .dtw-th-floor .tx { font-size: 13px; line-height: 18px; color: var(--dtw-ink); margin-top: 3px; overflow-wrap: anywhere; max-height: 72px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-th-mod { position: absolute; left: 50%; top: 9%; transform: translate(-50%, -50%); width: 34px; height: 34px; border-radius: 50%; background: var(--dtw-ink); color: var(--dtw-page); display: flex; align-items: center; justify-content: center; z-index: 3; }
+        #digitalTwinsIQView .dtw-th-mod svg { width: 14px; height: 14px; fill: currentColor; display: block; }
+        #digitalTwinsIQView .dtw-th-seat { position: absolute; transform: translate(-50%, -50%); width: 92px; text-align: center; cursor: pointer; z-index: 2; }
+        #digitalTwinsIQView .dtw-th-seat:focus-visible { outline: none; }
+        #digitalTwinsIQView .dtw-th-seat .dtw-th-face { margin: 0 auto; filter: grayscale(.6) brightness(.55); transition: filter .3s ease, box-shadow .3s ease; }
+        #digitalTwinsIQView .dtw-th-seat.on .dtw-th-face { filter: none; box-shadow: 0 0 0 3px var(--dtw-page), 0 0 0 6px var(--ring); }
+        #digitalTwinsIQView .dtw-th-seat.sel .dtw-th-face, #digitalTwinsIQView .dtw-th-seat:focus-visible .dtw-th-face { box-shadow: 0 0 0 3px var(--dtw-page), 0 0 0 5px var(--dtw-ink); filter: none; }
+        #digitalTwinsIQView .dtw-th-seat b { display: block; margin-top: 7px; font-size: 12px; line-height: 15px; font-weight: 600; color: var(--dtw-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-th-seat.on b { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-th-seat .ag { display: block; font-size: 10px; line-height: 13px; color: var(--dtw-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .8; }
+        #digitalTwinsIQView .dtw-th-seat .chip { position: absolute; left: 50%; top: -11px; transform: translateX(-50%); background: var(--ring); color: var(--dtw-accent-ink); font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; z-index: 3; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-th-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); }
+        @media (max-width: 980px) { #digitalTwinsIQView .dtw-th-body { grid-template-columns: 1fr; } #digitalTwinsIQView .dtw-th-stagewrap { aspect-ratio: 1.2 / 1; } #digitalTwinsIQView .dtw-th-tl { flex-wrap: wrap; } #digitalTwinsIQView .dtw-th-q { flex: 1 1 140px; } }
+        #digitalTwinsIQView .dtw-fg-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-fg-kinds .dtw-fg-chip { min-height: 20px; font-size: 10.5px; padding: 1px 8px; }
+        #digitalTwinsIQView .dtw-fg-opts { display: block; margin-bottom: 8px; min-height: 48px; }
+        #digitalTwinsIQView .dtw-fg-field { min-height: 44px; border-radius: 6px; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); display: flex; align-items: center; padding: 0 6px 0 16px; gap: 12px; }
+        #digitalTwinsIQView .dtw-fg-field:focus-within { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-field input { flex: 1 1 auto; min-width: 0; background: transparent; border: 0; outline: none; color: var(--dtw-ink); font-size: 13px; padding: 10px 0; line-height: 1.3; }
+        #digitalTwinsIQView .dtw-fg-field input::placeholder { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-send { appearance: none; height: 32px; padding: 0 16px; border-radius: 999px; background: var(--dtw-accent); color: var(--dtw-accent-ink); font-size: 11px; font-weight: 700; font-family: inherit; display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; white-space: nowrap; flex: none; }
+        #digitalTwinsIQView .dtw-fg-send .arr { width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-top: 1.5px solid currentColor; transform: rotate(45deg); }
+        #digitalTwinsIQView .dtw-fg-send:disabled, #digitalTwinsIQView .dtw-fg-send.working { background: var(--dtw-s5); color: #E9E8E1; cursor: progress; }
+        #digitalTwinsIQView .dtw-fg-send.working .arr { display: none; }
+        #digitalTwinsIQView .dtw-fg-live { font-size: 11.5px; color: var(--dtw-body); margin-top: 6px; line-height: 15px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-live:empty { display: none; }
+        /* the tally, pinned while the thread scrolls */
+        #digitalTwinsIQView .dtw-fg-tally { background: var(--dtw-raised); border-radius: 10px; padding: 12px 16px 14px; display: flex; flex-direction: column; position: sticky; top: 0; align-self: start; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-tally > * { flex: none; }
+        /* Question picker (Jenna 2026-10-27): every question asked, the split and the voices follow the one you pick. */
+        #digitalTwinsIQView .dtw-fg-qpick { display: flex; flex-direction: column; gap: 5px; padding: 0 0 10px; margin: 0 0 4px; }
+        #digitalTwinsIQView .dtw-fg-qpick label { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-clabel); }
+        #digitalTwinsIQView .dtw-fg-qpick select.dtw-in { width: 100%; min-height: 34px; padding: 0.35rem 1.8rem 0.35rem 0.7rem; font-size: 12px; line-height: 1.3; }
+        #digitalTwinsIQView .dtw-fg-tally > .dtw-fg-tally-in { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+        #digitalTwinsIQView .dtw-fg-th { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 10px; font-size: 13px; font-weight: 600; color: var(--dtw-ink); line-height: 18px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-th span { font-size: 11px; color: var(--dtw-clabel); font-weight: 400; }
+        #digitalTwinsIQView .dtw-fg-stack { margin-top: 5px; height: 11px; border-radius: 999px; overflow: hidden; display: flex; background: var(--dtw-s5); }
+        #digitalTwinsIQView .dtw-fg-stack i { display: block; height: 100%; border-right: 2px solid var(--dtw-raised); flex: none; }
+        #digitalTwinsIQView .dtw-fg-stack i:last-child { border-right: 0; }
+        #digitalTwinsIQView .dtw-fg-lrow { display: flex; align-items: flex-start; gap: 9px; margin-top: 4px; }
+        #digitalTwinsIQView .dtw-fg-lrow .dtw-fg-dot { margin-top: 4px; width: 7px; height: 7px; }
+        #digitalTwinsIQView .dtw-fg-lrow .body { flex: 1 1 auto; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-lrow .l1 { display: flex; align-items: baseline; gap: 4px 10px; font-size: 11.5px; line-height: 15px; color: var(--dtw-cbody); flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-lrow .l1 .lab { flex: 1 1 150px; min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-lrow .l1 b { color: var(--dtw-ink); font-weight: 600; font-size: 12px; min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-lrow.lead .l1 .lab { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-lrow .det { font-size: 10.5px; color: var(--dtw-clabel); font-variant-numeric: tabular-nums; }
+        /* still tallying (Jenna 2026-11-18): the dot pulses, a spinner sits where the percent will land, the bar shimmers */
+        #digitalTwinsIQView .dtw-fg-lrow.live .dtw-fg-dot { animation: dtwPulse 1.5s ease-in-out infinite; }
+        #digitalTwinsIQView .dtw-fg-lrow.live .lab, #digitalTwinsIQView .dtw-fg-lrow.live .det { color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-lrow.live .det { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; }
+        #digitalTwinsIQView .dtw-fg-rowspin { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--dtw-mute); border-right-color: transparent; animation: dtwSpin 0.9s linear infinite; flex: none; }
+        #digitalTwinsIQView .dtw-fg-th.live .t { font-size: 13px; color: var(--dtw-ink); font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
+        #digitalTwinsIQView .dtw-fg-th.live .t .dtw-fg-pulse { margin: 0; width: 6px; height: 6px; box-shadow: 0 0 0 2px var(--dtw-track); }
+        #digitalTwinsIQView .dtw-fg-stack.live { position: relative; }
+        #digitalTwinsIQView .dtw-fg-stack.live i { opacity: 0.55; }
+        #digitalTwinsIQView .dtw-fg-stack.live::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(233,232,225,0.22) 50%, transparent 100%); background-size: 200% 100%; animation: dtwFgShimmer 1.6s linear infinite; }
+        @keyframes dtwFgShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+        @media (prefers-reduced-motion: reduce) { #digitalTwinsIQView .dtw-fg-stack.live::after { animation-duration: 4s; } #digitalTwinsIQView .dtw-fg-rowspin { animation-duration: 2.4s; } }
+        #digitalTwinsIQView .dtw-fg-lrow .ctx { font-size: 10.5px; color: var(--dtw-clabel); line-height: 14px; margin-top: 1px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-sec { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-fg-fact { display: flex; gap: 9px; font-size: 11px; line-height: 14px; color: var(--dtw-cbody); margin-top: 3px; }
+        #digitalTwinsIQView .dtw-fg-fact .num { color: var(--dtw-clabel); font-weight: 300; width: 16px; flex: none; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-fact span:last-child { min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-vtwo { display: flex; gap: 14px; margin-top: 5px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-vmini { flex: 1 1 150px; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-vmini .who { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--dtw-ink); font-weight: 600; line-height: 15px; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-vmini .who > span { min-width: 0; overflow-wrap: anywhere; cursor: pointer; }
+        #digitalTwinsIQView .dtw-fg-vmini .who span span { color: var(--dtw-clabel); font-weight: 400; }
+        #digitalTwinsIQView .dtw-fg-vmini q { display: block; margin-top: 4px; font-size: 11px; line-height: 14px; color: var(--dtw-cbody); quotes: "\201C" "\201D"; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-vmini .why { display: block; margin-top: 3px; font-size: 10.5px; line-height: 14px; color: var(--dtw-clabel); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-seg { margin-top: 6px; }
+        #digitalTwinsIQView .dtw-fg-seg .l1 { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--dtw-cbody); line-height: 14px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-seg .l1 b { color: var(--dtw-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-seg .dtw-fg-stack { height: 8px; margin-top: 3px; }
+        #digitalTwinsIQView .dtw-fg-tally .dtw-fg-quiet { font-size: 11.5px; line-height: 15px; color: var(--dtw-cbody); margin-top: 6px; overflow-wrap: anywhere; }
+        /* the seat: who they are, as a popover under the portrait that was clicked */
+        #digitalTwinsIQView .dtw-fg-pop { position: absolute; z-index: 30; width: 360px; max-width: calc(100% - 16px); background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 10px; box-shadow: 0 14px 40px rgba(8,17,19,.45); display: none; }
+        #digitalTwinsIQView .dtw-fg-pop.open { display: block; }
+        #digitalTwinsIQView .dtw-fg-pop .arrow { position: absolute; top: -7px; left: 40px; width: 12px; height: 12px; background: var(--dtw-raised); border-left: 1px solid var(--dtw-rule); border-top: 1px solid var(--dtw-rule); transform: rotate(45deg); }
+        #digitalTwinsIQView .dtw-fg-pop.up .arrow { top: auto; bottom: -7px; transform: rotate(225deg); }
+        #digitalTwinsIQView .dtw-fg-pop.side-r .arrow { left: -7px; transform: rotate(-45deg); }
+        #digitalTwinsIQView .dtw-fg-pop.side-l .arrow { left: auto; right: -7px; transform: rotate(135deg); }
+        #digitalTwinsIQView .dtw-fg-pop-in { padding: 14px; max-height: var(--pop-max, 60vh); overflow: auto; scrollbar-width: thin; border-radius: 10px; }
+        #digitalTwinsIQView .dtw-fg-pop .head { display: flex; gap: 12px; align-items: center; padding-right: 22px; }
+        #digitalTwinsIQView .dtw-fg-pop .who { font-size: 13px; color: var(--dtw-ink); font-weight: 600; line-height: 17px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-pop .stands { font-size: 11.5px; color: var(--dtw-clabel); line-height: 15px; margin-top: 2px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-pop .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        #digitalTwinsIQView .dtw-fg-pop h5 { margin: 12px 0 4px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-pop h5 span { letter-spacing: 0.1em; font-weight: 500; }
+        #digitalTwinsIQView .dtw-fg-pop p { margin: 4px 0 0; font-size: 12px; line-height: 16px; color: var(--dtw-cbody); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-pop .said { border-top: 1px solid var(--dtw-hair); padding: 7px 0 2px; margin-top: 6px; }
+        #digitalTwinsIQView .dtw-fg-pop .said .q { font-size: 10.5px; color: var(--dtw-clabel); line-height: 14px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-pop .said .dtw-fg-tag { margin-top: 5px; }
+        #digitalTwinsIQView .dtw-fg-pop .said .line { font-size: 12px; line-height: 16px; color: var(--dtw-cbody); margin-top: 4px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-pop .said .why { font-size: 11px; color: var(--dtw-clabel); margin-top: 3px; line-height: 14px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-pop .close { position: absolute; right: 8px; top: 7px; appearance: none; background: transparent; border: 0; width: 24px; height: 24px; color: var(--dtw-mute); font-size: 16px; line-height: 24px; text-align: center; cursor: pointer; border-radius: 50%; font-family: inherit; z-index: 2; }
+        #digitalTwinsIQView .dtw-fg-pop .close:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-pop .pacts { display: flex; gap: 8px; margin-top: 12px; }
+        /* the no-room state: the band as a placeholder, the directions once */
+        /* ---- the landing, no room open (Jenna 2026-10-27: 'CAN you redesign this page to look better I dont like the circles'): a product
+           entry page with no placeholder faces. The claim, one subline and the primary action; the three steps with the session line as a
+           footnote; the saved rooms as cards, each with three real portraits of its seats; the Prometheus examples as a small block. */
+        #digitalTwinsIQView .dtw-fg-land { padding: 2px 2px 14px; display: flex; flex-direction: column; gap: 18px; }
+        #digitalTwinsIQView .dtw-fg-land-hero { padding: 8px 0 0; max-width: 860px; }
+        #digitalTwinsIQView .dtw-fg-land-h { margin: 0; font-size: 28px; line-height: 34px; font-weight: 300; letter-spacing: -0.012em; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-land-h b { font-weight: 700; }
+        #digitalTwinsIQView .dtw-fg-land-sub { margin: 8px 0 0; font-size: 13.5px; line-height: 19px; color: var(--dtw-body); max-width: 660px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-land-sub b { color: var(--dtw-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-land-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+        #digitalTwinsIQView .dtw-fg-land-acts .dtw-fg-act { height: 32px; padding: 0 16px; font-size: 12.5px; }
+        #digitalTwinsIQView .dtw-fg-land-acts select.dtw-in { width: auto; min-width: 240px; height: 32px; padding: 0 34px 0 14px; border-radius: 999px; border-color: var(--dtw-accent); font-size: 12.5px; line-height: 30px; }
+        #digitalTwinsIQView .dtw-fg-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        #digitalTwinsIQView .dtw-fg-step { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 12px 14px 13px; min-width: 0; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 1px 8px; align-content: start; }
+        #digitalTwinsIQView .dtw-fg-step .n { grid-row: 1 / span 2; font-size: 11px; line-height: 18px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-step b { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-step span:not(.n) { font-size: 12px; line-height: 17px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-land-foot { font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); margin-top: -9px; display: flex; gap: 4px 14px; flex-wrap: wrap; align-items: center; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-land-foot .dtw-link { font-size: 11.5px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-land-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
+        #digitalTwinsIQView .dtw-fg-land-head h3 { margin: 0; font-size: 15px; line-height: 20px; font-weight: 600; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-land-head span { font-size: 11.5px; color: var(--dtw-mute); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        #digitalTwinsIQView .dtw-fg-card { position: relative; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); padding: 12px 14px 12px; cursor: pointer; min-width: 0; display: flex; flex-direction: column; gap: 6px; transition: border-color .12s; text-align: left; }
+        #digitalTwinsIQView .dtw-fg-card:hover, #digitalTwinsIQView .dtw-fg-card:focus-visible { border-color: var(--dtw-body); outline: none; }
+        #digitalTwinsIQView .dtw-fg-card.empty { background: transparent; }
+        #digitalTwinsIQView .dtw-fg-faces { display: flex; align-items: center; height: 36px; }
+        #digitalTwinsIQView .dtw-fg-cface { position: relative; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--hue, #3358FF); color: #E9E8E1; font-weight: 600; font-size: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--dtw-raised); flex: none; }
+        #digitalTwinsIQView .dtw-fg-card.empty .dtw-fg-cface, #digitalTwinsIQView .dtw-fg-card.empty .dtw-fg-cmore { box-shadow: 0 0 0 2px var(--dtw-page); }
+        #digitalTwinsIQView .dtw-fg-cface + .dtw-fg-cface, #digitalTwinsIQView .dtw-fg-cface + .dtw-fg-cmore { margin-left: -10px; }
+        #digitalTwinsIQView .dtw-fg-cface img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
+        #digitalTwinsIQView .dtw-fg-cmore { position: relative; height: 36px; min-width: 36px; padding: 0 9px; border-radius: 999px; background: var(--dtw-input); color: var(--dtw-body); font-size: 11px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--dtw-raised); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-card .t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--dtw-ink); overflow-wrap: anywhere; padding-right: 24px; }
+        #digitalTwinsIQView .dtw-fg-card .q { font-size: 12.5px; line-height: 17px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-card .m { font-size: 11px; line-height: 15px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: center; }
+        #digitalTwinsIQView .dtw-fg-card .m .dtw-link { font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-card .m .dtw-link:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-card .del { position: absolute; top: 8px; right: 8px; appearance: none; background: transparent; border: 1px solid transparent; color: var(--dtw-mute); border-radius: 999px; width: 26px; height: 26px; line-height: 1; font-size: 16px; cursor: pointer; opacity: 0; transition: opacity .12s, border-color .12s; display: flex; align-items: center; justify-content: center; padding: 0; }
+        #digitalTwinsIQView .dtw-fg-card:hover .del, #digitalTwinsIQView .dtw-fg-card:focus-within .del { opacity: 1; }
+        #digitalTwinsIQView .dtw-fg-card .del:hover { border-color: var(--dtw-body); color: var(--dtw-ink); }
+        @media (hover: none) { #digitalTwinsIQView .dtw-fg-card .del { opacity: .7; } }
+        #digitalTwinsIQView .dtw-fg-card .dtw-confirm { margin-top: 2px; font-size: 11.5px; }
+        #digitalTwinsIQView .dtw-fg-card .dtw-confirm .dtw-fg-act { height: 24px; padding: 0 10px; font-size: 11px; }
+        #digitalTwinsIQView .dtw-fg-land-pm { border-top: 1px solid var(--dtw-rule); padding-top: 14px; }
+        #digitalTwinsIQView .dtw-fg-land-pm .k { font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-fg-land-pm .dtw-fg-chip { margin: 0 6px 6px 0; }
+        /* the Rooms drawer and the New room drawer (the drawer component How to uses) */
+        #digitalTwinsIQView .dtw-drawer-rooms { width: min(440px, 94vw); }
+        #digitalTwinsIQView .dtw-drawer-new { width: min(520px, 94vw); }
+        #digitalTwinsIQView .dtw-fg-group { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-mute); padding: 16px 0 7px; border-bottom: 1px solid var(--dtw-rule); margin-bottom: 4px; }
+        #digitalTwinsIQView .dtw-fg-group::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--dtw-accent); flex: none; }
+        #digitalTwinsIQView .dtw-fg-group.quiet::before { background: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-rooms .dtw-run .q { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-rooms .dtw-run .q .dtw-fg-tag { font-size: 10px; }
+        #digitalTwinsIQView .dtw-fg-note { font-size: 12px; color: var(--dtw-body); min-height: 1em; margin-top: 10px; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-fg-price { font-size: 0.74rem; color: var(--dtw-body); margin-top: 0.6rem; line-height: 1.4; }
+        /* on a short window (a laptop at 800 px tall) the circles step down so the row keeps the thread and the composer in view */
+        @media (max-height: 860px) and (min-width: 1101px) {
+            #digitalTwinsIQView .dtw-fg-seatrow { --seat-pitch: 100; --circ: 52px; gap: 2px 6px; }
+            #digitalTwinsIQView .dtw-fg-circ { font-size: 15px; margin: 3px 3px 6px; }
+            #digitalTwinsIQView .dtw-fg-seat .nm { font-size: 11.5px; line-height: 14px; }
+            #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10px; line-height: 13px; }
+            #digitalTwinsIQView .dtw-fg-fq { font-size: 21px; line-height: 26px; }
+        }
+        /* under about 1100 px the row becomes two rows of smaller circles and the tally sits under the thread */
+        @media (max-width: 1100px) {
+            #digitalTwinsIQView .dtw-fg-seatrow { --seat-pitch: 88; --circ: 48px; gap: 2px 6px; }
+            #digitalTwinsIQView .dtw-fg-circ { font-size: 14px; }
+            #digitalTwinsIQView .dtw-fg-circ .mark { width: 14px; height: 14px; }
+            #digitalTwinsIQView .dtw-fg-circ .mark::after { left: 3px; top: 3px; }
+            #digitalTwinsIQView .dtw-fg-seat .nm { font-size: 11px; line-height: 14px; }
+            #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10px; line-height: 13px; }
+            #digitalTwinsIQView .dtw-fg-fq { font-size: 19px; line-height: 24px; }
+            #digitalTwinsIQView .dtw-fg-main { display: block; }
+            #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { display: flex; flex-direction: column; overflow: hidden; }
+            #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { flex: 1 1 52%; min-height: 200px; height: auto; }
+            #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { flex: 1 1 40%; min-height: 160px; height: auto; margin-top: 10px; }
+            #digitalTwinsIQView .dtw-fg-steps { grid-template-columns: minmax(0, 1fr); }
+            #digitalTwinsIQView .dtw-fg-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            #digitalTwinsIQView .dtw-fg-land-h { font-size: 24px; line-height: 30px; }
+            #digitalTwinsIQView .dtw-fg-tally { position: static; margin-top: 14px; }
+        }
+        @media (max-width: 760px) { #digitalTwinsIQView .dtw-fg-cards { grid-template-columns: minmax(0, 1fr); } }
+        /* ---- how to drawer ---- */
+        #digitalTwinsIQView .dtw-scrim { position: fixed; inset: 0; background: rgba(12,22,24,0.55); display: none; z-index: 2147482000; }
+        #digitalTwinsIQView .dtw-scrim.open { display: block; }
+        #digitalTwinsIQView .dtw-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(580px, 94vw); background: var(--dtw-raised); color: var(--dtw-ink); border-left: 1px solid var(--dtw-rule); transform: translateX(102%); transition: transform .2s ease; z-index: 2147482001; overflow: auto; padding: 1.3rem 1.6rem 2.5rem; box-shadow: -20px 0 50px rgba(0,0,0,0.3); }
+        #digitalTwinsIQView .dtw-drawer.open { transform: none; }
+        #digitalTwinsIQView .dtw-drawer h2 { margin: 0.3rem 0 0.5rem; font-size: 1.45rem; font-weight: 300; letter-spacing: -0.02em; }
+        #digitalTwinsIQView .dtw-drawer h3 { margin: 1.3rem 0 0.35rem; font-size: 0.95rem; font-weight: 600; }
+        #digitalTwinsIQView .dtw-drawer .dtw-p b { font-weight: 600; }
+        #digitalTwinsIQView .dtw-drawer .ex { display: inline-block; background: var(--dtw-input); border: 1px solid var(--dtw-rule); border-radius: 8px; padding: 0.32rem 0.6rem; font-size: 0.76rem; margin: 0.2rem 0.3rem 0.2rem 0; cursor: pointer; }
+        #digitalTwinsIQView .dtw-drawer .ex:hover { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-drawer-x { position: absolute; top: 1rem; right: 1.1rem; }
+        /* ---- Build a twin, the walkthrough (Jenna 2026-10-27: 'walk someone thru how to do it') ---- */
+        #digitalTwinsIQView .dtw-drawer-build { width: min(660px, 96vw); }
+        #digitalTwinsIQView .dtw-bw-rail { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0.9rem 0 1.1rem; }
+        #digitalTwinsIQView .dtw-bw-rail button { appearance: none; background: transparent; border: 0; padding: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); cursor: default; font-family: inherit; }
+        #digitalTwinsIQView .dtw-bw-rail button .n { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--dtw-rule); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 0; }
+        #digitalTwinsIQView .dtw-bw-rail button.done { color: var(--dtw-body); cursor: pointer; }
+        #digitalTwinsIQView .dtw-bw-rail button.done .n { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-bw-rail button.on { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-bw-rail button.on .n { border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-bw-rail .sep { width: 14px; height: 1px; background: var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-bw-q { font-size: 1.3rem; font-weight: 300; letter-spacing: -0.015em; line-height: 1.25; margin: 0 0 0.3rem; }
+        #digitalTwinsIQView .dtw-bw-sub { font-size: 0.8rem; color: var(--dtw-body); line-height: 1.45; margin: 0 0 0.9rem; }
+        #digitalTwinsIQView .dtw-bw-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+        #digitalTwinsIQView .dtw-bw-opt { appearance: none; text-align: left; background: var(--dtw-input); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 14px 15px 13px; cursor: pointer; color: var(--dtw-ink); font-family: inherit; transition: border-color .12s; min-height: 136px; display: flex; flex-direction: column; gap: 6px; }
+        #digitalTwinsIQView .dtw-bw-opt:hover, #digitalTwinsIQView .dtw-bw-opt.on { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-bw-opt .k { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-bw-opt b { font-size: 0.98rem; font-weight: 600; line-height: 1.3; }
+        #digitalTwinsIQView .dtw-bw-opt span { font-size: 0.78rem; color: var(--dtw-body); line-height: 1.42; }
+        #digitalTwinsIQView .dtw-bw-opt span.built { font-size: 0.72rem; color: var(--dtw-mute); margin-top: -2px; }
+        #digitalTwinsIQView .dtw-bw-group { margin: 0.85rem 0 0; }
+        #digitalTwinsIQView .dtw-bw-group .k { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); margin: 0 0 0.35rem; display: flex; justify-content: space-between; gap: 8px; }
+        #digitalTwinsIQView .dtw-bw-group .k em { font-style: normal; font-weight: 400; letter-spacing: 0; text-transform: none; }
+        #digitalTwinsIQView .dtw-bw-group .dtw-chips { margin: 0; }
+        #digitalTwinsIQView .dtw-chips-cols { align-items: flex-start; }
+        #digitalTwinsIQView .dtw-chipcol { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+        #digitalTwinsIQView .dtw-bw-share { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-bw-share input.dtw-in { width: 58px; margin: 0; padding: 0.24rem 0.4rem; text-align: right; font-size: 0.76rem; }
+        #digitalTwinsIQView .dtw-bw-share i { font-style: normal; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-bw-shareline { font-size: 0.7rem; line-height: 1.4; color: var(--dtw-mute); margin-top: 0.35rem; }
+        #digitalTwinsIQView .dtw-bw-shareline.err { color: var(--dtw-second); }
+        #digitalTwinsIQView .dtw-bw-list { margin-top: 8px; max-height: 300px; overflow: auto; border: 1px solid var(--dtw-rule); border-radius: 10px; scrollbar-width: thin; }
+        #digitalTwinsIQView .dtw-bw-list:empty { display: none; }
+        #digitalTwinsIQView .dtw-bw-row { appearance: none; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--dtw-hair); padding: 9px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--dtw-ink); font-family: inherit; font-size: 0.82rem; }
+        #digitalTwinsIQView .dtw-bw-row:last-child { border-bottom: 0; }
+        #digitalTwinsIQView .dtw-bw-row:hover, #digitalTwinsIQView .dtw-bw-row.on { background: var(--dtw-accent-soft); }
+        #digitalTwinsIQView .dtw-bw-row .c { margin-left: auto; font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); white-space: nowrap; }
+        #digitalTwinsIQView .dtw-bw-row.new { color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-bw-row.quiet { color: var(--dtw-mute); cursor: default; font-size: 0.76rem; }
+        #digitalTwinsIQView .dtw-bw-pick { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--dtw-accent); border-radius: 10px; background: var(--dtw-accent-soft); font-size: 0.82rem; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-bw-pick b { font-weight: 600; }
+        #digitalTwinsIQView .dtw-bw-pick .dtw-link { margin-left: auto; flex: none; }
+        #digitalTwinsIQView .dtw-bw-line { font-size: 0.86rem; line-height: 1.45; margin-top: 0.9rem; padding: 10px 12px; border-radius: 10px; background: var(--dtw-input); border: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-bw-line b { font-weight: 600; }
+        #digitalTwinsIQView .dtw-bw-stepper { display: inline-flex; align-items: center; border: 1px solid var(--dtw-rule); border-radius: 999px; overflow: hidden; margin: 0.2rem 0 0.6rem; }
+        #digitalTwinsIQView .dtw-bw-stepper button { appearance: none; background: transparent; border: 0; color: var(--dtw-ink); width: 44px; height: 40px; font-size: 20px; cursor: pointer; font-family: inherit; line-height: 1; }
+        #digitalTwinsIQView .dtw-bw-stepper button:disabled { opacity: .35; cursor: default; }
+        #digitalTwinsIQView .dtw-bw-stepper input { width: 64px; text-align: center; background: transparent; border: 0; border-left: 1px solid var(--dtw-rule); border-right: 1px solid var(--dtw-rule); color: var(--dtw-ink); font-size: 1.2rem; font-weight: 300; height: 40px; font-variant-numeric: tabular-nums; font-family: inherit; }
+        #digitalTwinsIQView .dtw-bw-stepper input:focus { outline: none; }
+        #digitalTwinsIQView .dtw-bw-seats { display: flex; flex-wrap: wrap; gap: 5px; margin: 0.4rem 0 0.2rem; }
+        #digitalTwinsIQView .dtw-bw-seat { width: 22px; height: 22px; border-radius: 50%; background: var(--dtw-track); }
+        #digitalTwinsIQView .dtw-bw-seat.inc { background: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-bw-seat.extra { background: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-bw-sum { border-top: 1px solid var(--dtw-rule); margin-top: 0.4rem; }
+        #digitalTwinsIQView .dtw-bw-sum .r { display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--dtw-hair); font-size: 0.82rem; }
+        #digitalTwinsIQView .dtw-bw-sum .r .k { color: var(--dtw-mute); font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; flex: 0 0 110px; padding-top: 3px; }
+        #digitalTwinsIQView .dtw-bw-sum .r .v { flex: 1 1 auto; line-height: 1.4; min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-bw-sum .r .v .dtw-link { margin-left: 8px; }
+        #digitalTwinsIQView .dtw-bw-price { margin-top: 0.9rem; padding: 12px 14px; border-radius: 12px; background: var(--dtw-input); border: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-bw-price .r { display: flex; justify-content: space-between; gap: 12px; font-size: 0.82rem; padding: 4px 0; }
+        #digitalTwinsIQView .dtw-bw-price .r span { color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-bw-price .r span i { font-style: normal; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-bw-price .r b { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-bw-price .r.total { border-top: 1px solid var(--dtw-rule); margin-top: 6px; padding-top: 9px; font-size: 0.9rem; }
+        #digitalTwinsIQView .dtw-bw-price .r.total span { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-bw-price .m { font-size: 0.74rem; color: var(--dtw-body); line-height: 1.45; margin-top: 6px; }
+        #digitalTwinsIQView .dtw-bw-nav { display: flex; align-items: center; gap: 10px; margin-top: 1.2rem; }
+        #digitalTwinsIQView .dtw-bw-nav .dtw-right { margin-left: auto; }
+        #digitalTwinsIQView .dtw-bw-err { color: var(--dtw-second); font-size: 0.8rem; margin-top: 0.6rem; line-height: 1.4; }
+        /* ---- Predictive Analytics (2026-11-18): the walk-through and the report ---- */
+        #digitalTwinsIQView .dtw-pa-wrap { max-width: 980px; }
+        #digitalTwinsIQView .dtw-pa-hero { margin-bottom: 4px; }
+        #digitalTwinsIQView .dtw-pa-rail { margin: 1.1rem 0 1rem; }
+        #digitalTwinsIQView .dtw-pa-twins { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+        #digitalTwinsIQView .dtw-pa-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+        #digitalTwinsIQView .dtw-pa-kinds .dtw-fg-chip { min-height: 28px; padding: 3px 12px; font-size: 12.5px; }
+        #digitalTwinsIQView textarea.dtw-pa-goal { min-height: 84px; font-size: 1rem; line-height: 1.45; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pa-qs { display: flex; flex-direction: column; gap: 8px; }
+        #digitalTwinsIQView .dtw-pa-q, #digitalTwinsIQView .dtw-pa-rq { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); min-width: 0; }
+        #digitalTwinsIQView .dtw-pa-rq { grid-template-columns: 112px minmax(0, 1fr); padding: 14px 14px 12px; margin-bottom: 10px; }
+        #digitalTwinsIQView .dtw-pa-rq.settles { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-pa-q.now { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-pa-q.wait { opacity: .62; }
+        #digitalTwinsIQView .dtw-pa-q.failed { border-style: dashed; }
+        #digitalTwinsIQView .dtw-pa-qn { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+        #digitalTwinsIQView .dtw-pa-qn .n { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--dtw-rule); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--dtw-body); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pa-q.done .dtw-pa-qn .n { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-pa-qn .lvl { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); line-height: 14px; }
+        #digitalTwinsIQView .dtw-pa-qn .lvl.micro { color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-pa-qbody { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+        #digitalTwinsIQView .dtw-pa-qtext { font-size: 14px; line-height: 20px; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-rq .dtw-pa-qtext { font-size: 15px; font-weight: 600; }
+        #digitalTwinsIQView input.dtw-pa-qin { font-size: 14px; padding: 0.45rem 0.6rem; }
+        #digitalTwinsIQView .dtw-pa-opts { display: flex; flex-wrap: wrap; gap: 4px; }
+        #digitalTwinsIQView .dtw-pa-tests, #digitalTwinsIQView .dtw-pa-read { font-size: 12.5px; line-height: 18px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-lead { font-size: 12.5px; line-height: 18px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pa-lead b { color: var(--dtw-ink); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pa-drop { appearance: none; background: transparent; border: 0; color: var(--dtw-mute); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; align-self: flex-start; }
+        #digitalTwinsIQView .dtw-pa-drop:hover { color: var(--dtw-second); }
+        #digitalTwinsIQView .dtw-pa-progress { display: flex; align-items: center; gap: 12px; margin: 0.2rem 0 0.9rem; font-size: 12.5px; color: var(--dtw-body); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pa-progress .t { flex: 1 1 auto; height: 6px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; }
+        #digitalTwinsIQView .dtw-pa-progress .f { height: 100%; background: var(--dtw-accent); border-radius: 999px; transition: width .4s ease; }
+        #digitalTwinsIQView .dtw-pa-earlier { margin-top: 1.6rem; }
+        #digitalTwinsIQView .dtw-pa-card .t { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pa-card .m { margin-top: 6px; font-size: 11.5px; color: var(--dtw-mute); display: flex; gap: 6px; align-items: center; }
+        #digitalTwinsIQView .dtw-pa-call { display: inline-flex; align-items: center; min-height: 20px; padding: 1px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; border: 1px solid var(--dtw-rule); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pa-call.yes { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-pa-call.no { background: var(--dtw-second); color: #fff; border-color: var(--dtw-second); }
+        #digitalTwinsIQView .dtw-pa-report { padding-top: 4px; }
+        #digitalTwinsIQView .dtw-pa-h { margin: 8px 0 4px; font-size: 26px; line-height: 32px; font-weight: 300; letter-spacing: -0.012em; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-asked { font-size: 12.5px; color: var(--dtw-mute); margin-bottom: 10px; }
+        #digitalTwinsIQView .dtw-pa-outcome { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; margin: 14px 0 6px; padding: 18px; border-radius: 14px; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-pa-callbox { display: flex; flex-direction: column; gap: 6px; justify-content: center; padding: 14px; border-radius: 12px; background: var(--dtw-input); border: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-pa-callbox .k { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pa-callbox b { font-size: 26px; line-height: 30px; font-weight: 700; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-callbox.yes b { color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-pa-callbox.no b { color: var(--dtw-second); }
+        #digitalTwinsIQView .dtw-pa-outbody { min-width: 0; }
+        #digitalTwinsIQView .dtw-pa-outbody p { margin: 0 0 8px; font-size: 13.5px; line-height: 20px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-outbody p.lead { font-size: 17px; line-height: 24px; color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pa-nums { margin: 4px 0 10px; padding: 0 0 0 18px; font-size: 13px; line-height: 19px; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pa-nums li { margin: 0 0 3px; }
+        #digitalTwinsIQView .dtw-pa-kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-top: 1px solid var(--dtw-hair); font-size: 13px; line-height: 19px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pa-kv .k { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); padding-top: 3px; }
+        #digitalTwinsIQView .dtw-pa-sect { margin-top: 1.6rem; }
+        #digitalTwinsIQView .dtw-pa-split { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 4px; }
+        #digitalTwinsIQView .dtw-pa-srow { display: grid; grid-template-columns: minmax(80px, 160px) minmax(0, 1fr) 150px; gap: 10px; align-items: center; font-size: 12.5px; }
+        #digitalTwinsIQView .dtw-pa-srow .l { color: var(--dtw-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pa-srow .t { height: 8px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; }
+        #digitalTwinsIQView .dtw-pa-srow .f { height: 100%; border-radius: 999px; }
+        #digitalTwinsIQView .dtw-pa-srow .v { color: var(--dtw-ink); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pa-srow .v i { font-style: normal; font-weight: 400; color: var(--dtw-mute); margin-left: 6px; }
+        #digitalTwinsIQView .dtw-pa-voices { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pa-voice { font-size: 12.5px; line-height: 18px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-voice b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pa-seats { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+        #digitalTwinsIQView .dtw-pa-seat { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 12px 8px 10px; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); min-width: 0; }
+        #digitalTwinsIQView .dtw-pa-face { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; background: hsl(var(--hue, 200) 28% 32%); color: #fff; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+        #digitalTwinsIQView .dtw-pa-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        #digitalTwinsIQView .dtw-pa-seat b { font-size: 12.5px; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-seat span { font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pa-seat em { font-style: normal; font-size: 11px; line-height: 15px; color: var(--dtw-body); margin-top: 3px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pa-seat i { font-style: normal; font-size: 10.5px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pa-acts { margin-top: 1.4rem; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pa-acts.top { margin: 12px 0 2px; padding-bottom: 12px; border-bottom: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-pa-acts .dtw-right { margin-left: auto; }
+        #digitalTwinsIQView .dtw-pa-outmsg .dtw-fg-bubble p { margin: 6px 0; }
+        #digitalTwinsIQView .dtw-pa-outacts { margin-top: 8px; }
+        @media (max-width: 760px) { #digitalTwinsIQView .dtw-pa-outcome { grid-template-columns: 1fr; } #digitalTwinsIQView .dtw-pa-q, #digitalTwinsIQView .dtw-pa-rq { grid-template-columns: 1fr; } #digitalTwinsIQView .dtw-pa-srow { grid-template-columns: minmax(60px, 110px) minmax(0, 1fr) 110px; } }
+        #digitalTwinsIQView .dtw-bw-prog { margin-top: 1rem; }
+        #digitalTwinsIQView .dtw-bw-prog .stage { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; margin: 0.6rem 0; }
+        #digitalTwinsIQView .dtw-bw-prog .bar { height: 6px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; }
+        #digitalTwinsIQView .dtw-bw-prog .bar i { display: block; height: 100%; width: 30%; background: var(--dtw-accent); border-radius: 999px; animation: dtwBwSlide 1.6s ease-in-out infinite; }
+        @keyframes dtwBwSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+        @media (max-width: 640px) { #digitalTwinsIQView .dtw-bw-opts { grid-template-columns: 1fr; } }
+        /* the moderator is Prometheus (Jenna 2026-10-27): its name sits over every question it puts to the room */
+        #digitalTwinsIQView .dtw-fg-mod { display: block; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; margin-bottom: 2px; }
+
+        #digitalTwinsIQView .dtw-pi { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr); gap: 20px; align-items: start; }
+        #digitalTwinsIQView .dtw-pi-stage { position: relative; background: #081113; border: 1px solid var(--dtw-rule); border-radius: 12px; overflow: hidden; min-height: 220px; }
+        #digitalTwinsIQView .dtw-pi-stage video { width: 100%; display: block; max-height: 420px; background: #081113; }
+        #digitalTwinsIQView .dtw-pi-stage iframe.dtw-pi-frame { width: 100%; height: 420px; border: 0; display: block; background: #081113; }
+        #digitalTwinsIQView .dtw-pi-open { margin-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-slatebtns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        #digitalTwinsIQView .dtw-pi-slatebtns .dtw-pi-open { margin-top: 6px; }
+        #digitalTwinsIQView .dtw-pi-slate { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #E9E8E1; padding: 24px; text-align: center; }
+        #digitalTwinsIQView .dtw-pi-slate .t { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+        #digitalTwinsIQView .dtw-pi-slate .c { font-size: 42px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+        #digitalTwinsIQView .dtw-pi-slate .s { font-size: 12px; color: #9AA09B; }
+        #digitalTwinsIQView .dtw-pi-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-clock { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-note { font-size: 12px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pi-dialwrap { position: relative; height: 132px; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-dialwrap canvas { width: 100%; height: 100%; display: block; }
+        #digitalTwinsIQView .dtw-pi-dialnum { position: absolute; right: 10px; top: 8px; font-size: 22px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--dtw-ink); pointer-events: none; }
+        /* the ticker under the dial (2026-11-05): the runtime across the width, a mark every minute, the playhead or the stop point */
+        #digitalTwinsIQView .dtw-pi-ticker { position: relative; height: 26px; margin: 3px 0 2px; user-select: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .ax { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-pi-ticker .tk { position: absolute; top: 0; width: 1px; height: 5px; margin-left: -0.5px; background: var(--dtw-mute); opacity: 0.5; pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .tk.maj { height: 9px; opacity: 0.9; }
+        #digitalTwinsIQView .dtw-pi-ticker .lb { position: absolute; top: 11px; transform: translateX(-50%); font-size: 10px; line-height: 12px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .lb.l0 { transform: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .lb.lend { transform: translateX(-100%); }
+        #digitalTwinsIQView .dtw-pi-ticker .hit { position: absolute; top: 0; height: 100%; appearance: none; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; border-radius: 4px; }
+        #digitalTwinsIQView .dtw-pi-ticker .hit:hover, #digitalTwinsIQView .dtw-pi-ticker .hit:focus-visible { background: rgba(233,232,225,0.07); outline: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .hit.on { background: rgba(199,242,62,0.12); box-shadow: inset 0 2px 0 #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-ticker .ph { position: absolute; top: -3px; width: 2px; height: 13px; margin-left: -1px; background: var(--dtw-ink); pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .ph.stop { background: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-ticker .ph.rp { background: #C7F23E; top: -5px; height: 16px; }
+        /* ---- the replay of a finished test (2026-11-19): the transport, the scrubber, the moment under the playhead ---- */
+        #digitalTwinsIQView .dtw-pi-transport { gap: 6px; }
+        #digitalTwinsIQView .dtw-pi-transport .dtw-pi-note { margin-right: 4px; }
+        #digitalTwinsIQView .dtw-pi-tb { appearance: none; height: 28px; min-width: 28px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--dtw-rule); background: transparent; color: var(--dtw-ink); font: inherit; font-size: 11.5px; font-variant-numeric: tabular-nums; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-tb:hover { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pi-tb:focus-visible { outline: none; border-color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-tb svg { width: 11px; height: 11px; fill: currentColor; display: block; }
+        #digitalTwinsIQView .dtw-pi-tb.rate { min-width: 38px; font-weight: 600; letter-spacing: 0.02em; }
+        #digitalTwinsIQView .dtw-pi-tplay { min-width: 96px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+        #digitalTwinsIQView .dtw-pi-tplay svg { width: 10px; height: 10px; fill: currentColor; display: block; }
+        #digitalTwinsIQView .dtw-pi-tdur { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dtw-mute); margin-left: -3px; }
+        #digitalTwinsIQView .dtw-pi-scrub { position: relative; height: 18px; margin: 6px 0 0; cursor: pointer; touch-action: none; outline: none; user-select: none; }
+        #digitalTwinsIQView .dtw-pi-scrub .tr { position: absolute; left: 0; right: 0; top: 7px; height: 4px; border-radius: 2px; background: var(--dtw-track); overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-scrub .tr i { display: block; height: 100%; width: 0; background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-scrub .mk { position: absolute; inset: 0; pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev { position: absolute; top: 12px; width: 2px; height: 6px; margin-left: -1px; border-radius: 1px; opacity: 0.6; background: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.love, #digitalTwinsIQView .dtw-pi-scrub .ev.wow { background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.laugh { background: #E682FF; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.lean-in { background: #3358FF; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.confuse { background: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-scrub .ev.check-out { background: #7C878A; }
+        #digitalTwinsIQView .dtw-pi-scrub .qm { position: absolute; top: 0; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-scrub .hd { position: absolute; top: 2px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #C7F23E; box-shadow: 0 0 0 2px var(--dtw-page); pointer-events: none; transition: transform 0.08s; }
+        #digitalTwinsIQView .dtw-pi-scrub:hover .hd, #digitalTwinsIQView .dtw-pi-scrub:focus-visible .hd, #digitalTwinsIQView .dtw-pi-scrub.drag .hd { transform: scale(1.2); }
+        #digitalTwinsIQView .dtw-pi-scrub:focus-visible .tr { box-shadow: 0 0 0 1px rgba(199,242,62,0.55); }
+        #digitalTwinsIQView .dtw-pi-now { border: 1px solid var(--dtw-rule); border-radius: 12px; background: var(--dtw-raised); padding: 12px 14px 10px; display: grid; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-now .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-now .at { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #C7F23E; font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-now .at span { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-now .dial { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-now .dial .v { font-size: 26px; font-weight: 300; color: var(--dtw-ink); font-variant-numeric: tabular-nums; line-height: 1; }
+        #digitalTwinsIQView .dtw-pi-now .dial .d { font-size: 11px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-now .dial .d.up { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-now .dial .d.dn { color: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-now .grp { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dtw-body); margin-left: 8px; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-now .grp i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+        #digitalTwinsIQView .dtw-pi-now .grp b { color: var(--dtw-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-now .scene .cap { font-size: 14px; line-height: 20px; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-now .scene .dlg { font-size: 12.5px; line-height: 18px; color: var(--dtw-body); margin-top: 3px; }
+        #digitalTwinsIQView .dtw-pi-now .scene .dlg b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-now .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 10px 20px; border-top: 1px solid var(--dtw-rule); padding-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-now .cols .dtw-pi-h { margin-bottom: 4px; }
+        #digitalTwinsIQView .dtw-pi-nowrow { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--dtw-ink); min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-nowrow .circwrap { flex: 0 0 auto; display: inline-flex; align-self: flex-start; }
+        #digitalTwinsIQView .dtw-pi-nowface { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 10.5px; position: relative; overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-nowface img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+        #digitalTwinsIQView .dtw-pi-nowrow .nm { font-weight: 600; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-nowrow .dl { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-nowrow .dl.up { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-nowrow .dl.dn { color: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-nowrow .txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+        #digitalTwinsIQView .dtw-pi-nowrow .who { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-nowrow .k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-nowrow .ln { color: var(--dtw-body); font-size: 12px; line-height: 16px; min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-now .ask { font-size: 12px; line-height: 16px; color: var(--dtw-body); margin-top: 6px; }
+        #digitalTwinsIQView .dtw-pi-now .ask b { color: var(--dtw-ink); font-weight: 600; }
+        @media (max-width: 980px) { #digitalTwinsIQView .dtw-pi-now .cols { grid-template-columns: 1fr; } }
+        .dtw-pi-tip { position: fixed; z-index: 1200; max-width: 320px; min-width: 200px; background: #15252A; color: #E9E8E1; border: 1px solid rgba(233,232,225,0.14); border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 16px; box-shadow: 0 10px 28px rgba(0,0,0,0.38); pointer-events: none; font-family: 'Crosswalk Inter', Inter, system-ui, sans-serif; text-transform: none; letter-spacing: normal; font-weight: 400; text-align: left; }
+        body[data-theme="light"] .dtw-pi-tip { background: #FFFFFF; color: #0C1618; border-color: #C9C6BA; box-shadow: 0 10px 28px rgba(12,22,24,0.18); }
+        .dtw-pi-tip .k { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; align-items: baseline; }
+        .dtw-pi-tip .k b { font-weight: 600; }
+        .dtw-pi-tip .k .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
+        .dtw-pi-tip .m { color: #9AA09B; font-size: 11px; margin-top: 2px; }
+        body[data-theme="light"] .dtw-pi-tip .m { color: #5C6560; }
+        .dtw-pi-tip .r { margin-top: 6px; }
+        .dtw-pi-tip .r.wait { color: #9AA09B; }
+        .dtw-pi-tip .lean { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 10px; line-height: 16px; font-weight: 600; background: rgba(233,232,225,0.12); color: inherit; white-space: nowrap; }
+        .dtw-pi-tip .lean.warm { background: rgba(199,242,62,0.2); color: #C7F23E; }
+        body[data-theme="light"] .dtw-pi-tip .lean.warm { color: #5E7E12; }
+        .dtw-pi-tip .lean.cool { background: rgba(183,179,216,0.22); color: #B7B3D8; }
+        body[data-theme="light"] .dtw-pi-tip .lean.cool { color: #8E3FA8; }
+        .dtw-pi-tip .lean.split { background: rgba(230,130,255,0.18); color: #E682FF; }
+        body[data-theme="light"] .dtw-pi-tip .lean.split { color: #8E3FA8; }
+        /* the chat lit for one minute (a click on the ticker or the dial): the lines from that minute full, the rest dimmed */
+        #digitalTwinsIQView .dtw-pi-thread.minute-on .dtw-pi-seatrow.remark { opacity: 0.38; transition: opacity 0.15s; }
+        #digitalTwinsIQView .dtw-pi-thread.minute-on .dtw-pi-seatrow.remark.minute-hit { opacity: 1; background: rgba(199,242,62,0.08); box-shadow: inset 2px 0 0 #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-rail { position: relative; height: 28px; margin-top: 8px; background: var(--dtw-track); border-radius: 999px; }
+        #digitalTwinsIQView .dtw-pi-mark { position: absolute; top: 4px; width: 10px; height: 20px; margin-left: -5px; border: 0; border-radius: 3px; cursor: pointer; padding: 0; }
+        #digitalTwinsIQView .dtw-pi-mark.love, #digitalTwinsIQView .dtw-pi-mark.wow { background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-mark.laugh { background: #E682FF; }
+        #digitalTwinsIQView .dtw-pi-mark.lean-in { background: #3358FF; }
+        #digitalTwinsIQView .dtw-pi-mark.confuse { background: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-mark.check-out { background: #7C878A; }
+        #digitalTwinsIQView .dtw-pi-playhead { position: absolute; top: 0; width: 2px; height: 28px; background: var(--dtw-ink); margin-left: -1px; pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-seats { display: flex; flex-wrap: wrap; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-seat { appearance: none; background: transparent; border: 0; padding: 0; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: inherit; font-family: inherit; }
+        #digitalTwinsIQView .dtw-pi-seat .circ { width: 44px; height: 44px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; position: relative; overflow: hidden; box-shadow: 0 0 0 2px var(--edge, transparent); }
+        #digitalTwinsIQView .dtw-pi-seat .circ img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+        #digitalTwinsIQView .dtw-pi-seat .nm { font-size: 11px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-seat .ag { font-size: 10px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-voices { display: flex; flex-direction: column; gap: 8px; }
+        #digitalTwinsIQView .dtw-pi-voice { font-size: 13px; line-height: 17px; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-voice .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-list { display: flex; flex-direction: column; gap: 8px; }
+        #digitalTwinsIQView .dtw-pi-row { appearance: none; width: 100%; text-align: left; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 10px 12px; color: inherit; font-family: inherit; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-row.on { border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-rowwrap { position: relative; }
+        /* Room for the Delete pill. The .dtw-pi-setup rule below sets
+           `padding` shorthand at equal specificity and later in the
+           sheet, which reset this to 10px and ran the title straight
+           under the button (Jenna 2026-11-03). Naming the setup
+           scope here outranks it. The pill is 49px wide and sits
+           10px off the right edge, so 66px leaves a real gap. The
+           Duplicate pill (Jenna 2026-11-04) sits under it and is
+           wider, about 66px, so the row now clears 84px. */
+        #digitalTwinsIQView .dtw-pi-rowwrap .dtw-pi-row,
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-rowwrap .dtw-pi-row { padding-right: 84px; min-height: 64px; }
+        #digitalTwinsIQView .dtw-pi-rowdel, #digitalTwinsIQView .dtw-pi-rowdup { position: absolute; right: 10px; top: 10px; appearance: none; background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; color: var(--dtw-mute); font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-rowdup { top: 34px; }
+        #digitalTwinsIQView .dtw-pi-rowdel:hover, #digitalTwinsIQView .dtw-pi-rowdel:focus-visible,
+        #digitalTwinsIQView .dtw-pi-rowdup:hover, #digitalTwinsIQView .dtw-pi-rowdup:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-del { align-self: center; flex: none; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-del:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-row .h { font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-row .m { font-size: 12px; color: var(--dtw-body); margin-top: 2px; }
+        #digitalTwinsIQView .dtw-pi-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-score { border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 12px; }
+        #digitalTwinsIQView .dtw-pi-score .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-score .v { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; margin-top: 4px; }
+        @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-grid { grid-template-columns: 1fr; } #digitalTwinsIQView .dtw-pi-scores { grid-template-columns: 1fr; } }
+        #digitalTwinsIQView .dtw-pi-wm { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+        #digitalTwinsIQView .dtw-pi-wm .tag { position: absolute; left: 4%; top: 6%; font-size: 11px; letter-spacing: 0.08em; color: rgba(233,232,225,0.46); text-shadow: 0 0 3px rgba(0,0,0,0.65); white-space: nowrap; transition: transform 2.6s ease; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-wm.b { opacity: 0.2; background-repeat: repeat; }
+        #digitalTwinsIQView .dtw-pi-prep { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); margin-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-prep .bar { height: 4px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-prep .bar i { display: block; height: 100%; width: 38%; background: #C7F23E; animation: dtwPiPrep 1.6s ease-in-out infinite alternate; }
+        @keyframes dtwPiPrep { from { transform: translateX(-30%); } to { transform: translateX(240%); } }
+        #digitalTwinsIQView .dtw-pi-splitbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pi-splitbar select { max-width: 180px; }
+        #digitalTwinsIQView .dtw-pi-on { font-size: 12px; color: var(--dtw-body); margin-top: 6px; min-height: 16px; }
+        #digitalTwinsIQView .dtw-pi-probes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-probe { appearance: none; border: 1px solid var(--dtw-rule); background: var(--dtw-raised); color: var(--dtw-ink); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; cursor: pointer; font-family: inherit; }
+        #digitalTwinsIQView .dtw-pi-probe.valley { border-color: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-probe.peak { border-color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-probe .c { font-variant-numeric: tabular-nums; color: var(--dtw-mute); margin-right: 5px; }
+        #digitalTwinsIQView .dtw-pi-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-table th, #digitalTwinsIQView .dtw-pi-table td { padding: 6px 8px; border-bottom: 1px solid var(--dtw-rule); text-align: right; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-table th { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-table th:first-child, #digitalTwinsIQView .dtw-pi-table td:first-child { text-align: left; }
+        #digitalTwinsIQView .dtw-pi-table tr.money td { font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-table tr.sub td { color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pi-table td.n { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-guide { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-guide .g { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 17px; }
+        #digitalTwinsIQView .dtw-pi-guide .g .c { font-variant-numeric: tabular-nums; color: var(--dtw-mute); min-width: 38px; }
+        #digitalTwinsIQView .dtw-pi-guide .g button { margin-left: auto; }
+        #digitalTwinsIQView .dtw-pi-money { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+        #digitalTwinsIQView .dtw-pi-money .m { border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 12px; }
+        #digitalTwinsIQView .dtw-pi-money.fc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #digitalTwinsIQView .dtw-pi-fc-act { font-size: 11px; color: var(--dtw-body); margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pi-fc-act b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-money .m .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-money .m .v { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pi-money .m .n { font-size: 11px; color: var(--dtw-body); margin-top: 2px; }
+        #digitalTwinsIQView .dtw-pi-switch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dtw-body); margin: 10px 0 0; text-transform: none; letter-spacing: 0; line-height: 16px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-switch input[type="checkbox"] { width: 14px; height: 14px; flex: 0 0 14px; margin: 0; padding: 0; accent-color: #C7F23E; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-togs { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-togs .dtw-pi-switch { margin-top: 0; }
+        /* the setup screen in the control room shape: past tests left, the cut center, the room and Start right */
+        #digitalTwinsIQView .dtw-pi-setup { display: grid; grid-template-columns: 212px minmax(0, 1fr) 300px; gap: 18px; align-items: start; margin-top: 14px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.side { gap: 0; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.side > .dtw-pi-h { margin-bottom: 2px; }
+        #digitalTwinsIQView .dtw-pi-setup label.dtw-field { margin-top: 0.7rem; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-list { margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-row { padding: 8px 10px; background: transparent; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-row .m { font-size: 11px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-lab-run { margin-top: 14px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-details { margin-top: 12px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-details summary { cursor: pointer; font-size: 12px; }
+        @media (max-width: 1180px) {
+          #digitalTwinsIQView .dtw-pi-setup { grid-template-columns: minmax(0, 1fr) 300px; }
+          #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.tests { grid-column: 1 / -1; }
+          #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.tests .dtw-pi-list { display: flex; flex-wrap: wrap; gap: 8px; }
+          #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.tests .dtw-pi-row { flex: 1 1 240px; width: auto; }
+        }
+        @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-setup { grid-template-columns: 1fr; } }
+        /* the calm player (the approved mockup): one title line, the cut, the dial, the moments; everything else folds under the grid */
+        #digitalTwinsIQView .dtw-pi-topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-room .dtw-pi-stage { min-height: 280px; }
+        #digitalTwinsIQView .dtw-pi-topbar .meta { flex: 1 1 200px; min-width: 0; font-size: 12px; color: var(--dtw-body); display: flex; gap: 4px 12px; flex-wrap: wrap; align-items: center; }
+        #digitalTwinsIQView .dtw-pi-topbar .dtw-pi-controls { margin-top: 0; }
+        #digitalTwinsIQView .dtw-pi-slate .s:empty { display: none; }
+        #digitalTwinsIQView .dtw-pi-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 11px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pi-legend .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+        /* cohorts (2026-11-02): the builder rows in the setup form, the cohort tag on a seat, the cohort chips under the dial */
+        #digitalTwinsIQView .dtw-pi-cohorts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
+        #digitalTwinsIQView .dtw-pi-cohort { display: grid; grid-template-columns: minmax(0, 1fr) 56px; grid-template-areas: 'name seats' 'comp comp' 'pick pick'; gap: 4px 6px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
+        /* a cohort's demographics are picked from the standard list (2026-11-03): chips on the row, an inline picker under it */
+        #digitalTwinsIQView .dtw-pi-coh-demos { grid-area: comp; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-height: 26px; }
+        #digitalTwinsIQView .dtw-pi-coh-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 2px 8px 2px 9px; font-size: 11px; color: var(--dtw-ink); background: var(--dtw-raised); line-height: 16px; }
+        #digitalTwinsIQView .dtw-pi-coh-chip .k { color: var(--dtw-mute); font-size: 10px; letter-spacing: 0.04em; }
+        #digitalTwinsIQView .dtw-pi-coh-chip button { appearance: none; border: 0; background: transparent; color: var(--dtw-mute); font: inherit; font-size: 13px; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-coh-chip button:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-coh-add { appearance: none; border: 1px dashed var(--dtw-rule); background: transparent; border-radius: 999px; color: var(--dtw-body); font: inherit; font-size: 11px; padding: 3px 10px; cursor: pointer; line-height: 16px; }
+        #digitalTwinsIQView .dtw-pi-coh-add:hover, #digitalTwinsIQView .dtw-pi-coh-add.on { color: var(--dtw-ink); border-color: var(--dtw-ink); border-style: solid; }
+        #digitalTwinsIQView .dtw-pi-coh-empty { font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-demo-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(8, 17, 19, 0.62); display: flex; align-items: center; justify-content: center; padding: 16px; }
+        #digitalTwinsIQView .dtw-demo-panel { width: min(820px, 100%); max-height: 88vh; overflow: auto; scrollbar-width: thin; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 14px; padding: 18px 22px 16px; box-shadow: 0 24px 70px rgba(8, 17, 19, 0.55); }
+        #digitalTwinsIQView .dtw-demo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+        #digitalTwinsIQView .dtw-demo-head h3 { margin: 0; font-size: 16px; }
+        #digitalTwinsIQView .dtw-demo-head .dtw-eyebrow { margin-bottom: 2px; }
+        #digitalTwinsIQView .dtw-demo-words { font-size: 12.5px; color: var(--dtw-body); min-height: 18px; margin: 2px 0 12px; }
+        #digitalTwinsIQView .dtw-demo-words b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; }
+        @media (max-width: 720px) { #digitalTwinsIQView .dtw-demo-grid { grid-template-columns: 1fr; } }
+        #digitalTwinsIQView .dtw-pi-dcat { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
+        #digitalTwinsIQView .dtw-pi-dcat .k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); line-height: 13px; }
+        #digitalTwinsIQView .dtw-pi-dcat .pills { display: flex; flex-wrap: wrap; gap: 5px; }
+        #digitalTwinsIQView .dtw-pill { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-body); border-radius: 999px; padding: 3px 9px; font: inherit; font-size: 11px; line-height: 15px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pill:hover { color: var(--dtw-ink); border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pill.on { border-color: var(--dtw-accent); color: var(--dtw-ink); background: var(--dtw-accent-soft); }
+        #digitalTwinsIQView .dtw-pi-dcat-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 14px; font-size: 11.5px; color: var(--dtw-mute); flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-dcat-foot .acts { display: flex; gap: 8px; }
+        #digitalTwinsIQView .dtw-pi-cohort:last-of-type { border-bottom: 0; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-in { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-name { grid-area: name; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-seats { grid-area: seats; text-align: center; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-comp { grid-area: comp; }
+        #digitalTwinsIQView .dtw-pi-cohort-head { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 6px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); margin-top: 6px; }
+        #digitalTwinsIQView .dtw-pi-cohort-custom { margin: 2px 0 4px; }
+        #digitalTwinsIQView .dtw-pi-cohort-custom .dtw-in { width: 96px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who .cohort { color: var(--dtw-mute); font-weight: 500; }
+        #digitalTwinsIQView .dtw-pi-legend .coh { white-space: nowrap; }
+        /* the dial views (2026-11-03): Room, Cohorts, People; a cohort chip cuts the dial to that cohort */
+        #digitalTwinsIQView .dtw-pi-views { display: inline-flex; border: 1px solid var(--dtw-rule); border-radius: 999px; overflow: hidden; margin-right: 4px; }
+        #digitalTwinsIQView .dtw-pi-views button { background: transparent; border: 0; color: var(--dtw-mute); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; padding: 3px 9px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-views button + button { border-left: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-pi-views button.on { background: var(--dtw-accent-soft); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-legend button.coh { background: transparent; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-legend button.coh.dim { opacity: 0.38; }
+        #digitalTwinsIQView .dtw-pi-legend button.coh.cut { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-legend .hint { color: var(--dtw-mute); }
+        @media (max-width: 600px) { #digitalTwinsIQView .dtw-pi-views { max-width: 100%; } #digitalTwinsIQView .dtw-pi-views button { padding: 6px 11px; } }
+        #digitalTwinsIQView .dtw-pi-seatrow.pinned { background: rgba(233,232,225,0.07); box-shadow: inset 2px 0 0 var(--coh, var(--hue, #3358FF)); }
+        #digitalTwinsIQView .dtw-pi-biocard .dtw-pi-thought { margin: 0 0 8px; padding: 6px 8px; border-left: 2px solid var(--coh, var(--hue, #3358FF)); background: rgba(233,232,225,0.04); font-style: normal; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-byco { margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
+        #digitalTwinsIQView .dtw-pi-byco b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-marks { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
+        #digitalTwinsIQView .dtw-pi-mk { appearance: none; border: 1px solid var(--dtw-rule); background: var(--dtw-raised); color: var(--dtw-ink); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; cursor: pointer; font-family: inherit; opacity: 0.45; }
+        #digitalTwinsIQView .dtw-pi-mk.seen { opacity: 1; }
+        #digitalTwinsIQView .dtw-pi-mk .c { font-variant-numeric: tabular-nums; color: var(--dtw-mute); margin-right: 5px; }
+        #digitalTwinsIQView .dtw-pi-mk.peak { border-color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-mk.valley { border-color: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-gsel { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px dotted var(--dtw-body); color: var(--dtw-ink); font: inherit; font-size: 11px; line-height: 14px; padding: 0 0 1px; margin: 0; width: auto; field-sizing: content; max-width: 170px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-gsel option { background: var(--dtw-raised); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-sugg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+        #digitalTwinsIQView .dtw-pi-sugg:empty { display: none; }
+        #digitalTwinsIQView .dtw-pi-askrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-askrow select.dtw-in { width: auto; flex: 0 0 auto; padding: 6px 8px; font-size: 12px; }
+        #digitalTwinsIQView .dtw-pi-foot { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; }
+        #digitalTwinsIQView .dtw-pi-foot .dtw-actions { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-foot .dtw-pi-switch { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-more { border-top: 1px solid var(--dtw-rule); margin-top: 12px; padding-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-more > summary { cursor: pointer; font-size: 12px; color: var(--dtw-body); list-style: none; display: flex; align-items: center; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-more > summary::-webkit-details-marker { display: none; }
+        #digitalTwinsIQView .dtw-pi-more > summary::before { content: ''; width: 6px; height: 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; flex: 0 0 auto; }
+        #digitalTwinsIQView .dtw-pi-more[open] > summary::before { transform: rotate(45deg); }
+        #digitalTwinsIQView .dtw-pi-more > summary .n { color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-protect { font-size: 12px; color: var(--dtw-body); margin-top: 8px; }
+        @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-money { grid-template-columns: 1fr; } }
+        /* Pilot Testing control room (Jenna 2026-10-30): scores left, the cut and the dial center, the room and the ask right. One screen, nothing waits under the fold. */
+        #digitalTwinsIQView .dtw-pi-room { display: grid; grid-template-columns: 212px minmax(0, 1fr) 280px; gap: 18px; align-items: start; margin-top: 12px; }
+        #digitalTwinsIQView .dtw-pi-col { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-col.side { border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 14px; background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-pi-h { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+        #digitalTwinsIQView .dtw-pi-h .n { letter-spacing: 0; text-transform: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-stat .v { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--dtw-ink); line-height: 1.1; }
+        #digitalTwinsIQView .dtw-pi-stat .v.up { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-stat .k { font-size: 11px; color: var(--dtw-body); margin-top: 2px; line-height: 14px; }
+        #digitalTwinsIQView .dtw-pi-fn { font-size: 11px; color: var(--dtw-mute); line-height: 14px; }
+        /* saved setups (2026-11-03): the form kept under a name, reopened later */
+        #digitalTwinsIQView .dtw-pi-editing { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 2px; padding: 8px 12px; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); font-size: 12px; }
+        #digitalTwinsIQView .dtw-pi-editing b { font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-editing .sp { flex: 1; }
+        #digitalTwinsIQView .dtw-pi-restored { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 11.5px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-restored button, #digitalTwinsIQView .dtw-pi-editing button.lnk { appearance: none; background: transparent; border: 0; padding: 0; color: var(--dtw-ink); font: inherit; font-size: inherit; text-decoration: underline; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-filehint { font-size: 11px; color: var(--dtw-mute); margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pi-col.tests .dtw-pi-h + .dtw-pi-h { margin-top: 14px; }
+        #digitalTwinsIQView .dtw-pi-hr { height: 1px; background: var(--dtw-rule); margin: 4px 0; }
+        #digitalTwinsIQView .dtw-pi-bars { display: flex; flex-direction: column; gap: 8px; }
+        #digitalTwinsIQView .dtw-pi-bar .l { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--dtw-body); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-bar .t { height: 5px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; margin-bottom: 3px; }
+        #digitalTwinsIQView .dtw-pi-bar .t i { display: block; height: 100%; border-radius: 999px; background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-bar .t.n i { background: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-other { appearance: none; width: 100%; text-align: left; background: transparent; border: 0; padding: 4px 0; color: var(--dtw-ink); font-family: inherit; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+        #digitalTwinsIQView .dtw-pi-other .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-other .n { color: var(--dtw-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-other:hover .t, #digitalTwinsIQView .dtw-pi-other:focus-visible .t { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-seatlist { display: flex; flex-direction: column; gap: 1px; }
+        /* The room as a chat thread (Jenna, 2026-11-02): every remark up to the playhead, wrapped in full, in a thread that scrolls;
+           the seated roster is a strip of portraits above it once the room starts talking. */
+        #digitalTwinsIQView .dtw-pi-thread { display: flex; flex-direction: column; gap: 1px; max-height: clamp(260px, 56vh, 640px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 6px; min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; padding: 0 3px; }
+        #digitalTwinsIQView .dtw-pi-strip .dtw-pi-chip { padding: 0; margin: 0; gap: 0; flex: none; width: 30px; border-radius: 50%; }
+        #digitalTwinsIQView .dtw-pi-seatrow { position: relative; display: flex; gap: 9px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border-radius: 10px; outline: none; }
+        #digitalTwinsIQView .dtw-pi-seatrow:hover, #digitalTwinsIQView .dtw-pi-seatrow:focus-within { background: rgba(233,232,225,0.05); }
+        #digitalTwinsIQView .dtw-pi-seatrow .circ { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; position: relative; overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-seatrow .circ img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+        /* the photo is the one thing in the room that opens who they are (Jenna 2026-11-04: a click, never a hover) */
+        #digitalTwinsIQView .dtw-pi-seatrow .circ[role="button"], #digitalTwinsIQView .dtw-pi-chip { cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-seatrow .circ[role="button"]:focus-visible, #digitalTwinsIQView .dtw-pi-chip:focus-visible { outline: 2px solid #3358FF; outline-offset: 1px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .txt { min-width: 0; flex: 1 1 auto; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who .nm { min-width: 0; flex: 1 1 auto; white-space: normal; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who .c { flex: none; color: var(--dtw-mute); font-weight: 500; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-seatrow .say { font-size: 11.5px; color: var(--dtw-body); line-height: 15px; margin-top: 1px; white-space: normal; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-seatrow.now { background: rgba(199,242,62,0.06); }
+        #digitalTwinsIQView .dtw-pi-working { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
+        #digitalTwinsIQView .dtw-pi-working .dtw-fg-pulse { margin-right: 0; }
+        #digitalTwinsIQView .dtw-pi-seatrow.lit .say { color: var(--dtw-ink); }
+        /* the cohort ring (2026-11-03): the seat's cohort color, the same as its line on the dial and the legend */
+        #digitalTwinsIQView .dtw-pi-seatrow.coh .circ { box-shadow: 0 0 0 2px var(--dtw-raised), 0 0 0 4px var(--coh); }
+        #digitalTwinsIQView .dtw-pi-seatrow.coh .who .cohort { color: var(--coh); }
+        #digitalTwinsIQView .dtw-pi-strip .dtw-pi-chip.coh { margin: 3px; }
+        #digitalTwinsIQView .dtw-pi-seatlist { padding-left: 2px; }
+        /* Ask the room lands in the chat (Jenna, 2026-11-04): the question as a Prometheus line, each seat's answer as its
+           remark, then one short Prometheus line with the read; under the ask box only the controls and the question list. */
+        #digitalTwinsIQView .dtw-pi-seatrow.prom .circ { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); color: var(--dtw-ink); box-sizing: border-box; }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom .circ svg { width: 12px; height: 12px; display: block; fill: currentColor; }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom .who .nm { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom.ask .say { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom.read .say { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-seatrow.ans .say { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-qlist { display: flex; flex-direction: column; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-qitem { appearance: none; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid var(--dtw-hair); padding: 6px 2px; color: var(--dtw-ink); font: inherit; font-size: 12px; line-height: 16px; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+        #digitalTwinsIQView .dtw-pi-qitem:first-child { border-top: 0; }
+        #digitalTwinsIQView .dtw-pi-qitem:hover .t, #digitalTwinsIQView .dtw-pi-qitem:focus-visible .t { color: #C7F23E; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-pi-qitem:hover .t, body[data-theme="light"] #digitalTwinsIQView .dtw-pi-qitem:focus-visible .t { color: #5E7E12; }
+        #digitalTwinsIQView .dtw-pi-qitem .c { flex: none; color: var(--dtw-mute); font-variant-numeric: tabular-nums; font-size: 11px; }
+        #digitalTwinsIQView .dtw-pi-qitem .t { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-qitem .n { flex: none; color: var(--dtw-mute); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+        /* the record of one question (the split with the tally, the read, the voices, what the room knew, what people were
+           saying): one card per window, over the page, opened from the question list under the ask box */
+        #digitalTwinsIQView .dtw-pi-recscrim { display: none; position: fixed; inset: 0; z-index: 13; background: rgba(12,22,24,0.55); }
+        #digitalTwinsIQView .dtw-pi-recscrim.on { display: block; }
+        #digitalTwinsIQView .dtw-pi-reccard { display: none; position: fixed; z-index: 14; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(600px, 94vw); max-height: 84vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 14px 16px 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.5); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; scrollbar-width: thin; }
+        #digitalTwinsIQView .dtw-pi-reccard.on { display: block; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-pi-reccard { background: #FFFFFF; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd { display: flex; align-items: flex-start; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd > div { flex: 1 1 auto; min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; margin-bottom: 3px; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd .q { font-size: 14px; font-weight: 600; line-height: 19px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-reccard .x { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; color: var(--dtw-mute); font: inherit; font-size: 11px; padding: 2px 9px; cursor: pointer; flex: none; }
+        #digitalTwinsIQView .dtw-pi-reccard .x:hover, #digitalTwinsIQView .dtw-pi-reccard .x:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-reccard .rd { margin-top: 4px; font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-reccard .fr { margin-top: 4px; font-size: 11.5px; line-height: 15px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-reccard .dtw-fg-qpick { margin-top: 10px; padding-bottom: 4px; }
+        #digitalTwinsIQView .dtw-pi-reccard .dtw-pi-thread { max-height: none; overflow: visible; padding: 0; margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pi-reccard .dtw-pi-probes { margin-top: 12px; }
+        /* the test bar locks at the top of the body while the page scrolls under it */
+        #digitalTwinsIQView .dtw-pi-head { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -1rem -1.15rem 0; padding: 0.7rem 1.15rem 0.65rem; background: var(--dtw-raised); border-bottom: 1px solid var(--dtw-hair); border-radius: 12px 12px 0 0; }
+        /* the body's top padding shows through above a stuck bar; a page-colored strip covers it */
+        #digitalTwinsIQView .dtw-pi-head::before { content: ''; position: absolute; left: -1px; right: -1px; bottom: 100%; height: 1.2rem; background: var(--dtw-page); }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-l { display: flex; align-items: baseline; gap: 10px; flex: 1 1 240px; min-width: 0; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-l .dtw-eyebrow { align-self: center; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-fg-rtwrap { flex: 1 1 auto; min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-controls { margin-top: 0; flex: 0 1 auto; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-r { display: flex; gap: 6px; align-items: center; margin-left: auto; flex: none; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-exit, #digitalTwinsIQView .dtw-pi-head .dtw-pi-del { margin-left: 0; }
+        #digitalTwinsIQView .dtw-pi-reveal { display: none; align-items: center; gap: 4px; font-size: 11px; color: var(--dtw-mute); background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 2px 9px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-reveal:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView.dtw-focus .dtw-pi-reveal { display: inline-flex; }
+        #digitalTwinsIQView .dtw-spine { max-height: 60vh; transition: max-height .22s ease, opacity .16s ease, padding .22s ease; }
+        #digitalTwinsIQView.dtw-focus .dtw-spine { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; overflow: hidden; border-bottom-width: 0; pointer-events: none; }
+        /* the room in its own window */
+        #digitalTwinsIQView .dtw-pi-pop { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dtw-mute); background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 1px 8px; cursor: pointer; font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-pop:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-col.room.popped .dtw-pi-fn { margin: 8px 0 10px; }
+        #digitalTwinsIQView.dtw-popout { height: 100vh; min-height: 0; overflow: hidden; }
+        #digitalTwinsIQView.dtw-popout .dtw-body { padding: 10px 12px 10px; flex: 1 1 0%; min-height: 0; box-sizing: border-box; overflow: hidden; }
+        #digitalTwinsIQView.dtw-popout .dtw-card { margin: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-room { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); align-items: stretch; margin-top: 0; flex: 1 1 auto; min-height: 0; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-col.side.room { border: 0; padding: 0; background: transparent; min-height: 0; height: auto; overflow: hidden; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-seatlist { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-seatlist .dtw-pi-thread { max-height: none; flex: 1 1 auto; min-height: 120px; }
+        #digitalTwinsIQView.dtw-popout #dtwPiThread { max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+        /* the who-they-are card (2026-11-04): one per window, placed on the viewport by piBioPlace. A seat in the room and a
+           seat's own line on the dial open it; a remark in the chat never does. The seat's cohort color is its left edge. */
+        #digitalTwinsIQView .dtw-pi-biocard { display: none; position: fixed; left: -9999px; top: 0; width: 320px; max-height: 420px; overflow-y: auto; overflow-x: hidden; z-index: 12; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px 12px 16px; box-shadow: 0 12px 32px rgba(0,0,0,0.45), inset 3px 0 0 var(--coh, var(--hue, #3358FF)); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; }
+        #digitalTwinsIQView .dtw-pi-biocard.on { display: block; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-pi-biocard { background: #FFFFFF; }
+        #digitalTwinsIQView .dtw-pi-biocard h6 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-biocard h6 .cohort { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--coh, var(--dtw-mute)); }
+        #digitalTwinsIQView .dtw-pi-biocard .dtw-pi-stands { margin: -2px 0 8px; font-size: 11.5px; line-height: 15px; color: var(--dtw-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-biocard p { margin: 0 0 8px; }
+        #digitalTwinsIQView .dtw-pi-biocard p:last-child { margin-bottom: 0; }
+        @media (max-width: 1180px) {
+          #digitalTwinsIQView .dtw-pi-room { grid-template-columns: minmax(0, 1fr) 280px; }
+          #digitalTwinsIQView .dtw-pi-col.scores { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; }
+          #digitalTwinsIQView .dtw-pi-col.scores .dtw-pi-hr, #digitalTwinsIQView .dtw-pi-col.scores .dtw-pi-h, #digitalTwinsIQView .dtw-pi-col.scores .dtw-pi-fn { grid-column: 1 / -1; }
+        }
+        @media (max-width: 860px) {
+          #digitalTwinsIQView .dtw-pi-room { grid-template-columns: 1fr; }
+          #digitalTwinsIQView .dtw-pi-col.scores { grid-template-columns: 1fr; }
+          #digitalTwinsIQView .dtw-pi-biocard { width: min(320px, 82vw); }
+        }

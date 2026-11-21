@@ -13,6 +13,8 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('DTIQ_ROOM_HOST', '0')
 
@@ -95,8 +97,7 @@ class ReaderSurfaces(unittest.TestCase):
         self.assertIn('archetype representative', text)
 
     def test_the_page(self):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            html = fh.read()
+        html = _index_page.text(ROOT)   # the page with its split files inlined back
         a = html.index('var DTW_HIDDEN_TABS'); b = html.index('function renderPilotConsole()')
         page = html[a:b]
         # reader strings only: code comments stripped

@@ -15,6 +15,8 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 
@@ -123,8 +125,7 @@ class Duplicate(unittest.TestCase):
         self.assertIn('ensure_personas', body)
         self.assertIn('save_twin', body)
         self.assertNotIn('\u2014', body)
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            page = fh.read()
+        page = _index_page.text(ROOT)   # the page with its split files inlined back
         self.assertIn('window.dtwPanelDuplicate', page)
         self.assertIn("'/duplicate'", page)
         self.assertIn('title="Duplicate this room"', page)

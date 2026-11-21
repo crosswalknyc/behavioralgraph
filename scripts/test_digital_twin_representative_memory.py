@@ -27,6 +27,8 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 
@@ -215,8 +217,7 @@ class Memory(unittest.TestCase):
         self.assertEqual(ann['r1']['1']['line'], 'Sat in 2 earlier focus groups on this twin')
         self.assertNotIn('2', ann.get('r1', {}), 'a person with no past has no line')
         self.assertEqual(RM.annotate_earlier_groups(tw, 'b1').get('r3', {}).get('1', {}).get('n'), None, 'the Globex viewer sees no Acme past')
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            page = fh.read()
+        page = _index_page.text(ROOT)   # the page with its split files inlined back
         self.assertIn('function earlierGroupsLine(sid, seat)', page)
         self.assertIn("earlierGroupsLine(s.id, r.seat) ? '<div class=\"stands earlier\">'", page)
         self.assertIn("earlierGroupsLine((S.pilot || {}).id, r.seat)", page)

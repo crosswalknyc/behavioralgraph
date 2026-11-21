@@ -4,6 +4,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 
 from migration import digital_twins as DT
 
@@ -95,8 +97,7 @@ def test_hidden_for_now_tabs():
     for hidden in ('launch', 'spend', 'norms', 'greenlight', 'trailer', 'titles'):
         assert hidden not in ids, hidden
     assert ids and set(ids) <= {'twin', 'predict', 'panel', 'pilot'}
-    html = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             'templates', 'index.html'), encoding='utf-8').read()
+    html = _index_page.text(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     assert "var DTW_HIDDEN_TABS = ['greenlight', 'launch', 'trailer', 'titles', 'norms'];" in html
     for tab in DT.HIDDEN_TABS:
         assert f'<button type="button" hidden class="dtw-seg" data-tab="{tab}"' in html, tab
@@ -106,8 +107,7 @@ def test_hidden_for_now_tabs():
 
 
 def test_index_hides_denied_tabs():
-    html = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             'templates', 'index.html'), encoding='utf-8').read()
+    html = _index_page.text(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     assert 'window.__allowedDigitalTwinsTabs' in html
     assert 'window.dtwTabAllowed' in html
     assert 'window.dtwApplyTabGrant' in html

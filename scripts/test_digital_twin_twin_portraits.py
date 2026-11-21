@@ -21,6 +21,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 sys.path.insert(0, HERE)
@@ -118,8 +120,7 @@ class TwinPage(unittest.TestCase):
         # Jenna 2026-11-19: 'this should just fall in the dropdown, not at the bottom of the page'. The whole section
         # renders inside the entry's Learn more (libLearn calls kindsSection); the twin page below the list no longer
         # prepends it and only renders when asked for (See the full twin).
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            html = fh.read()
+        html = _index_page.text(ROOT)   # the page with its split files inlined back
         self.assertIn('function kindsSection(t)', html)
         self.assertIn('Who makes up this audience', html)
         self.assertEqual(html.count('kindsSection('), 2, 'one definition, one caller')

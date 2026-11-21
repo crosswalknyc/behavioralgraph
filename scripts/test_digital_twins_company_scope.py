@@ -17,6 +17,8 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 
 from migration import digital_twin_company as CO  # noqa: E402
@@ -434,8 +436,7 @@ class Frontend(unittest.TestCase):
     def test_index_has_the_assign_control_and_no_spine_dropdowns(self):
         # Jenna 2026-11-17 ('remove these drop downs'): the company filter and the twin switcher left the Twins tab spine; the
         # staff scope still rides the list call (?company=) and the assign control stays on the twin page
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            html = fh.read()
+        html = _index_page.text(ROOT)   # the page with its split files inlined back
         self.assertNotIn('id="dtwCompanyFilter"', html)
         self.assertNotIn('id="dtwTwinSwitch"', html)
         self.assertNotIn('dtwCompanyFilterChange', html)

@@ -30,6 +30,8 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
@@ -464,8 +466,7 @@ class Csv(unittest.TestCase):
 
 class Buttons(unittest.TestCase):
     def _index(self) -> str:
-        with open(os.path.join(ROOT, 'templates', 'index.html'), 'r', encoding='utf-8') as fh:
-            return fh.read()
+        return _index_page.text(ROOT)   # the page with its split files inlined back (2026-11-20)
 
     def test_the_test_page_offers_one_report_per_format(self):
         src = self._index()

@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 
 
 def _fn(page, name):
@@ -27,8 +30,7 @@ def _fn(page, name):
 class BioOpensOnClick(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            cls.page = fh.read()
+        cls.page = _index_page.text(ROOT)   # the page with its split files inlined back
 
     def test_hover_follows_the_line_and_opens_nothing(self):
         over = _fn(self.page, 'piSeatRowOver')

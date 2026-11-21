@@ -20,6 +20,8 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 for p in (ROOT, HERE):
     if p not in sys.path:
         sys.path.insert(0, p)
@@ -373,8 +375,7 @@ class Labels(unittest.TestCase):
         self.assertTrue(any('the procedural pilot norm of' in l for l in sess['scorecard']['norm_lines']), sess['scorecard']['norm_lines'])
 
     def test_the_page_carries_the_compare_to_field_and_the_route(self):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            html = fh.read()
+        html = _index_page.text(ROOT)   # the page with its split files inlined back
         m = re.search(r"var PI_GENRES = \[([^\]]*)\];", html)
         self.assertIsNotNone(m)
         page_genres = [x.strip().strip("'") for x in m.group(1).split(',')]

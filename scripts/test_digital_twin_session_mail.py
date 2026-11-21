@@ -27,6 +27,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
@@ -529,7 +531,7 @@ class Api(unittest.TestCase):
 # -------------------------------------------------------------------- page
 class Page(unittest.TestCase):
     def test_the_page_hints_and_the_room_deep_link(self):
-        src = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
+        src = _index_page.text(ROOT)
         self.assertIn("'/panel/' + sid + '/presence'", src)
         self.assertIn("navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))", src)
         self.assertIn("window.addEventListener('pagehide'", src)

@@ -38,7 +38,8 @@ import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INDEX = os.path.join(ROOT, 'templates', 'index.html')
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 APP = os.path.join(ROOT, 'app.py')
 
 OPEN = '<script id="cw-stale-tab-refresh">'
@@ -46,8 +47,7 @@ JINJA = "{{ (app_build_version or '')|tojson }}"
 
 
 def _block():
-    with open(INDEX, encoding='utf-8') as f:
-        src = f.read()
+    src = _index_page.text(ROOT)   # the page with its split files inlined back; the refresh script is inline, the Digital Twins hold hook is in its split file
     start = src.index(OPEN) + len(OPEN)
     return src, src[start:src.index('</script>', start)]
 

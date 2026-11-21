@@ -14,6 +14,8 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 
@@ -245,8 +247,7 @@ class Copy(unittest.TestCase):
         self.assertEqual(DT.PULL_TYPES['digital_twin_pilot'], 'Digital Twins IQ Pilot Testing')   # the label stays for old ledger rows
 
     def test_tab_id_on_the_page(self):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            page = fh.read()
+        page = _index_page.text(ROOT)   # the page with its split files inlined back
         self.assertIn('data-tab="pilot"', page)
         self.assertIn('id="dtwTabPilot"', page)
         self.assertIn('Pilot Testing', page)
@@ -738,8 +739,7 @@ class Security(unittest.TestCase):
         self.assertIn(rec['media_undo_key'], s3.objs)
 
     def test_watermark_and_signed_link_on_the_page(self):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            page = fh.read()
+        page = _index_page.text(ROOT)   # the page with its split files inlined back
         self.assertIn('dtw-pi-wm a', page)
         self.assertIn('dtw-pi-wm b', page)
         self.assertIn('pointer-events: none', page[page.find('.dtw-pi-wm {'):page.find('.dtw-pi-wm {') + 200])
@@ -793,8 +793,7 @@ class Seams(unittest.TestCase):
 
 class UIStrings(unittest.TestCase):
     def test_pilot_page_copy_is_clean(self):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            page = fh.read()
+        page = _index_page.text(ROOT)   # the page with its split files inlined back
         start = page.find('function hasMedia(s)')
         end = page.find('window.dtwPilotRename')
         self.assertGreater(start, 0)
@@ -1068,8 +1067,7 @@ class Duplicate(unittest.TestCase):
                      'duplicate_room', 'attach_setup_media', 'public_setups', "body.get('setup_id')"):
             self.assertIn(must, api, must)
         self.assertNotIn('\u2014', api)
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            page = fh.read()
+        page = _index_page.text(ROOT)   # the page with its split files inlined back
         for must in ('Duplicate this test', 'Duplicate this setup', 'Duplicate this room', 'dtwPilotDuplicateId', 'dtwPilotDuplicateSetup', 'dtwPilotDuplicate()',
                      'dtwPanelDuplicate', 'dtw-pi-rowdup', 'dtw-roomdup', 'body.setup_id', 'function piSetupMedia', 'dtwPilotDropSetupMedia'):
             self.assertIn(must, page, must)

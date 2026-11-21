@@ -55,6 +55,13 @@ Checks performed
     us on 2026-08-24 with commit 8c746970. Uses the LOCAL refs cache
     only (no ``git fetch``) so pre-commit stays fast; pre-push fetches
     origin/main itself before invoking the validator with strict mode.
+8.  Split files (``SPLIT_FILES``, since 2026-11-20): the blocks that
+    left the page for static/ exist, are at least their size floor,
+    carry no Jinja, are referenced by the page exactly once, and parse
+    under ``node --check``. Checks 4, 6 and 7 read the page together
+    with these files (the anchors may sit in a split file; the shrink
+    checks compare the bundle), so a split is a move, not a loss.
+    ``--split-files`` prints the registered paths for the pre-push hook.
 
 Exit codes
 ----------
@@ -260,6 +267,26 @@ FORBIDDEN_ANCHORS: list[tuple[str, str]] = [
      "must not hide every IQ view for Prometheus-only seats with files"),
 ]
 
+# Blocks that left index.html for their own static file, loaded by the page
+# at the exact spot the inline block used to sit (the front-end split, Jenna
+# 2026-10-14; the Digital Twins IQ CSS and JS, Jenna 2026-11-20: SPLIT). Each
+# row: the URL the page references, the file in this repo, the kind of block,
+# and the smallest size the file can honestly be. The REQUIRED_ANCHORS above
+# are searched across the page AND these files (an anchor has to exist
+# somewhere the browser loads, and several of the Digital Twins anchors live
+# in its script); each file must exist, be at least its floor, carry no
+# Jinja (static files are served as they are, never rendered), and be
+# referenced by the page exactly once; a .js file must parse under node.
+# The shrink checks compare the BUNDLE (page + these files), so moving a
+# block out is not read as the stale-working-tree clobber it is meant to
+# catch, while a page that lost a block for no file still is.
+SPLIT_FILES: list[tuple[str, str, str, int]] = [
+    ("/static/digital-twins/digital-twins.css",
+     "static/digital-twins/digital-twins.css", "style", 100_000),
+    ("/static/digital-twins/digital-twins.js",
+     "static/digital-twins/digital-twins.js", "script", 400_000),
+]
+
 
 # ---- IMPLEMENTATION --------------------------------------------------------
 
@@ -274,27 +301,97 @@ def find_index_html() -> Path | None:
     return None
 
 
+def repo_root(path: Path) -> Path:
+    """The directory that holds templates/ and static/ for this index.html."""
+    return path.resolve().parent.parent
+
+
+def split_file_paths(path: Path) -> list[tuple[str, Path, str, int]]:
+    """(page reference, file on disk, kind, size floor) for every split file,
+    located next to the given index.html."""
+    root = repo_root(path)
+    return [(ref, root / rel, kind, floor) for ref, rel, kind, floor in SPLIT_FILES]
+
+
+def read_split_sources(path: Path) -> dict[str, str]:
+    """The text of every split file that exists on disk, keyed by reference."""
+    out: dict[str, str] = {}
+    for ref, fp, _kind, _floor in split_file_paths(path):
+        if fp.is_file():
+            out[ref] = fp.read_text(encoding="utf-8", errors="replace")
+    return out
+
+
+def check_split_files(path: Path, src: str) -> list[str]:
+    """Each split file exists, is at least its floor, carries no Jinja, and
+    is referenced by the page exactly once."""
+    errs: list[str] = []
+    for ref, fp, kind, floor in split_file_paths(path):
+        n_ref = src.count(ref)
+        if n_ref != 1:
+            errs.append(f"split {kind} {ref!r} is referenced {n_ref}x by the page (must be exactly once)")
+        if not fp.is_file():
+            errs.append(f"split {kind} file missing: {fp} (the page references {ref!r}); "
+                        f"the block it holds would never load")
+            continue
+        size = fp.stat().st_size
+        if size < floor:
+            errs.append(f"split {kind} file {fp.name} is {size:,} bytes, under its {floor:,}-byte floor "
+                        f"(truncated or emptied)")
+        text = fp.read_text(encoding="utf-8", errors="replace")
+        if "{{" in text or "{%" in text:
+            errs.append(f"split {kind} file {fp.name} carries Jinja; static files are served unrendered")
+    return errs
+
+
+def _size_at(ref: str, git_path: str) -> int | None:
+    try:
+        out = subprocess.run(
+            ["git", "cat-file", "-s", f"{ref}:{git_path}"],
+            capture_output=True, check=True, text=True, timeout=5,
+        )
+        return int(out.stdout.strip())
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError, OSError):
+        return None
+
+
+def bundle_size_at(ref: str, path: Path) -> int | None:
+    """Size of the front-end bundle (index.html plus every split file that
+    exists) at a git ref. None when the page itself is not at that ref or
+    git is not reachable. A split file absent at the ref (a commit before
+    the split) counts as 0, so a split reads as a move, not a shrink."""
+    rel = str(path)
+    for prefix_page in (rel, rel.replace("bg-webapp/", "", 1)):
+        page = _size_at(ref, prefix_page)
+        if page is None:
+            continue
+        prefixed = prefix_page.startswith("bg-webapp/")
+        total = page
+        for _r, split_rel, _k, _f in SPLIT_FILES:
+            gp = ("bg-webapp/" + split_rel) if prefixed else split_rel
+            total += _size_at(ref, gp) or 0
+        return total
+    return None
+
+
+def bundle_size_on_disk(path: Path, page_bytes: int) -> int:
+    total = page_bytes
+    for _ref, fp, _kind, _floor in split_file_paths(path):
+        if fp.is_file():
+            total += fp.stat().st_size
+    return total
+
+
 def head_size_bytes(path: Path) -> int | None:
-    """Return the size of the file at HEAD (previous committed version).
+    """Return the size of the front-end bundle at HEAD (previous committed
+    version): index.html plus the split files that exist there.
 
     Returns None if there is no HEAD version (initial commit, unknown
     file), or if git isn't reachable. Callers must handle None as a
     "no comparison possible" signal, not a failure.
     """
     try:
-        rel = str(path)
-        # Try from cwd first; then try bg-webapp/-relative if we're in
-        # the parent repo where the file path is prefixed.
-        for git_path in (rel, rel.replace("bg-webapp/", "", 1)):
-            try:
-                out = subprocess.run(
-                    ["git", "show", f"HEAD:{git_path}"],
-                    capture_output=True, check=True,
-                )
-                return len(out.stdout)
-            except subprocess.CalledProcessError:
-                continue
-        return None
+        return bundle_size_at("HEAD", path)
     except Exception:
         return None
 
@@ -328,11 +425,15 @@ def check_script_tag_balance(src: str) -> str | None:
     return None
 
 
-def check_required_anchors(src: str) -> list[str]:
-    """Return a list of error messages, one per missing required anchor."""
+def check_required_anchors(src: str, split_sources: dict[str, str] | None = None) -> list[str]:
+    """Return a list of error messages, one per missing required anchor.
+
+    An anchor counts as present when it is on the page or in one of the
+    split files the page loads (``split_sources``: reference -> text)."""
     errs: list[str] = []
+    extra = list((split_sources or {}).values())
     for anchor, desc in REQUIRED_ANCHORS:
-        if anchor not in src:
+        if anchor not in src and not any(anchor in t for t in extra):
             errs.append(f"missing required anchor {anchor!r} ({desc})")
     return errs
 
@@ -433,6 +534,25 @@ def check_inline_js_syntax(src: str) -> tuple[str | None, str | None]:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def check_split_js_syntax(path: Path) -> tuple[list[str], str | None]:
+    """``node --check`` on every split .js file that exists (the Digital
+    Twins IQ script left the inline blocks on 2026-11-20, so the inline
+    check above no longer sees it). Returns (errors, warning)."""
+    node = shutil.which("node")
+    if node is None:
+        return ([], None)   # the inline check already warned once about node
+    errs: list[str] = []
+    for ref, fp, kind, _floor in split_file_paths(path):
+        if kind != "script" or not fp.is_file():
+            continue
+        result = subprocess.run([node, "--check", str(fp)], capture_output=True, text=True)
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()[:1500]
+            errs.append(f"split script {fp.name} fails `node --check`; the browser would halt the "
+                        f"Digital Twins IQ page at parse.\n{stderr}")
+    return (errs, None)
+
+
 def check_shrink_vs_head(cur_bytes: int, head_bytes: int) -> str | None:
     """Return a WARNING message (not error) if the file shrank sharply.
 
@@ -452,7 +572,8 @@ def check_shrink_vs_head(cur_bytes: int, head_bytes: int) -> str | None:
 
 
 def origin_main_size_bytes(path: Path) -> int | None:
-    """Return the size of the file at ``origin/main`` (local refs only).
+    """Return the size of the front-end bundle at ``origin/main`` (local
+    refs only): index.html plus the split files that exist there.
 
     Uses the LOCAL refs cache only - does NOT ``git fetch`` so
     pre-commit stays fast (< 500 ms). Callers who need up-to-date
@@ -462,21 +583,7 @@ def origin_main_size_bytes(path: Path) -> int | None:
     isn't reachable.
     """
     try:
-        rel = str(path)
-        # Try both possible prefixes so this works from the submodule
-        # root (templates/index.html) or from the parent repo
-        # (bg-webapp/templates/index.html).
-        for git_path in (rel, rel.replace("bg-webapp/", "", 1)):
-            try:
-                out = subprocess.run(
-                    ["git", "cat-file", "-s", f"origin/main:{git_path}"],
-                    capture_output=True, check=True, text=True, timeout=5,
-                )
-                return int(out.stdout.strip())
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
-                    ValueError):
-                continue
-        return None
+        return bundle_size_at("origin/main", path)
     except Exception:
         return None
 
@@ -513,6 +620,14 @@ def check_shrink_vs_origin_main(cur_bytes: int, origin_bytes: int) -> str | None
 
 
 def main() -> int:
+    if "--split-files" in sys.argv[1:]:
+        # The pre-push hook asks the tip's validator which files travel with
+        # the page, so it can extract them next to index.html and sum the
+        # bundle the same way this file does.
+        for _ref, rel, _kind, _floor in SPLIT_FILES:
+            print(rel)
+        return 0
+
     path = find_index_html()
     if path is None:
         print("[validate] templates/index.html not found from cwd - "
@@ -544,7 +659,9 @@ def main() -> int:
     if err:
         errors.append(err)
 
-    errors.extend(check_required_anchors(src))
+    split_sources = read_split_sources(path)
+    errors.extend(check_split_files(path, src))
+    errors.extend(check_required_anchors(src, split_sources))
     errors.extend(check_forbidden_anchors(src))
 
     js_err, js_warn = check_inline_js_syntax(src)
@@ -552,10 +669,16 @@ def main() -> int:
         errors.append(js_err)
     if js_warn:
         warnings.append(js_warn)
+    split_js_errs, _ = check_split_js_syntax(path)
+    errors.extend(split_js_errs)
 
+    # The shrink checks read the BUNDLE (page + split files), so a block
+    # that moved into its own file is a move, not a shrink; a page that
+    # lost a block with no file to show for it still trips them.
+    bundle_bytes = bundle_size_on_disk(path, len(src_bytes))
     head_bytes = head_size_bytes(path)
     if head_bytes is not None:
-        warn = check_shrink_vs_head(len(src_bytes), head_bytes)
+        warn = check_shrink_vs_head(bundle_bytes, head_bytes)
         if warn:
             warnings.append(warn)
 
@@ -566,7 +689,7 @@ def main() -> int:
     # and a materially smaller tree is a clobber, not a refactor.
     origin_bytes = origin_main_size_bytes(path)
     if origin_bytes is not None:
-        msg = check_shrink_vs_origin_main(len(src_bytes), origin_bytes)
+        msg = check_shrink_vs_origin_main(bundle_bytes, origin_bytes)
         if msg:
             if os.environ.get("VALIDATE_STRICT_SHRINK") == "1":
                 errors.append("(strict-shrink) " + msg)
@@ -591,7 +714,8 @@ def main() -> int:
 
     js_status = "JS parses" if shutil.which("node") else "JS check skipped (no node)"
     print(f"[validate] OK ({len(REQUIRED_ANCHORS)} anchors present, "
-          f"tags balanced, ends with </html>, {js_status})")
+          f"tags balanced, ends with </html>, {js_status}, "
+          f"{len(SPLIT_FILES)} split files in place)")
     return 0
 
 

@@ -13,6 +13,8 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 
 from migration import digital_twins as DT  # noqa: E402
@@ -48,12 +50,8 @@ class BuilderName(unittest.TestCase):
         self.assertEqual(DT.annotate_builders(None, USERS), None)
 
 
-PAGE = os.path.join(ROOT, 'templates', 'index.html')
-
-
 def _page():
-    with open(PAGE, encoding='utf-8') as fh:
-        return fh.read()
+    return _index_page.text(ROOT)   # the page with its split files inlined back (2026-11-20)
 
 
 def _fn(src, name):

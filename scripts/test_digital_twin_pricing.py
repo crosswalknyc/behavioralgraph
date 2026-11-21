@@ -25,6 +25,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
@@ -658,8 +660,7 @@ class ChatAndAdmin(unittest.TestCase):
         self.assertEqual(out['status'], 'Enterprise: $20,000 a month, 12-month term, through 2027-11-05.')
 
     def test_page_copy_and_partner_docs_carry_the_card(self):
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            page = fh.read()
+        page = _index_page.text(ROOT)   # the page with its split files inlined back
         for s in ('id="dtwPnTier"', 'id="dtwPiTier"', 'dtwPanelUpgrade', 'dtwPilotUpgrade', 'S.card = d.group_card', "/upgrade', { method: 'POST'",
                   'Digital Twins focus group or pilot test (one group, 1-40 questions)', '$750 a group for 1-20 questions or $1,000 for 1-40; $500 / $750 on a $5,000 package deposit'):
             self.assertIn(s, page, s)

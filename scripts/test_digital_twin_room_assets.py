@@ -46,6 +46,8 @@ import zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+import _index_page  # noqa: E402  (the page with its split files inlined back, 2026-11-20)
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 
@@ -556,8 +558,7 @@ class Routes(Setup):
         self.assertEqual(RR._MODULE_KINDS['room_asset'], 'prometheus.room_asset_job')
         from prometheus import room_asset_job as RJ
         self.assertEqual(RJ.KIND, 'room_asset')
-        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
-            html = fh.read()
+        html = _index_page.text(ROOT)   # the page with its split files inlined back
         for want in ('function assetsStripHtml(', 'window.dtwPanelAssetAdd', 'window.dtwPanelAssetUrl', 'window.dtwPanelAssetOpen', 'function scheduleAssetPoll(', 'Add content',
                      "'Ask about ' + ready[0].label + ', ' + ready[1].label + ' or both.'", "assetsStripHtml(s, true)", 'asset_read: \'Content read\''):
             self.assertIn(want, html)

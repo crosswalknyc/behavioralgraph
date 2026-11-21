@@ -69,6 +69,31 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
     echo "[pre-push] validating $html_path at $local_ref ($local_sha)..."
 
+    # The split files that travel with the page (scripts/validate_index_html.py
+    # SPLIT_FILES, since 2026-11-20: the Digital Twins IQ CSS and JS). Asked of
+    # the tip's validator so a push that adds a split is judged by its own
+    # list. Paths are repo-relative to the page's root (static/...).
+    html_prefix="${html_path%templates/index.html}"
+    split_files=""
+    if git cat-file -e "${local_sha}:${html_prefix}scripts/validate_index_html.py" 2>/dev/null; then
+        split_files=$(git show "${local_sha}:${html_prefix}scripts/validate_index_html.py" \
+            | python3 - --split-files 2>/dev/null || true)
+    fi
+
+    # Size of the front-end bundle at a sha: the page plus every split file
+    # that exists there. A block that moved into its own file is a move, not
+    # a shrink; a page that lost a block with no file to show for it still is.
+    bundle_size() {
+        local sha="$1" total page f s
+        page=$(git cat-file -s "${sha}:${html_path}" 2>/dev/null || echo 0)
+        total=$page
+        for f in $split_files; do
+            s=$(git cat-file -s "${sha}:${html_prefix}${f}" 2>/dev/null || echo 0)
+            total=$(( total + s ))
+        done
+        echo "$total"
+    }
+
     # -- Layer 1: shrink-vs-origin/main hard block ------------------------
     # Only meaningful for pushes to main / dev. For feature-branch pushes
     # we still run the structural validator below but skip the shrink
@@ -80,8 +105,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
             # this doesn't slow pushes when the network is fine.
             git fetch --quiet origin main 2>/dev/null || true
 
-            pushed_size=$(git cat-file -s "${local_sha}:${html_path}" 2>/dev/null || echo 0)
-            origin_size=$(git cat-file -s "origin/main:${html_path}" 2>/dev/null || echo 0)
+            pushed_size=$(bundle_size "$local_sha")
+            origin_size=$(bundle_size "origin/main")
 
             if [ "$origin_size" -gt 0 ] && [ "$pushed_size" -lt "$origin_size" ]; then
                 shrink=$(( (origin_size - pushed_size) * 100 / origin_size ))
@@ -91,8 +116,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
                     echo ""
                     echo "  ref:         $local_ref -> $remote_ref"
                     echo "  pushed sha:  $local_sha"
-                    echo "  pushed size: $pushed_size bytes"
-                    echo "  origin/main: $origin_size bytes"
+                    echo "  pushed size: $pushed_size bytes (page + split files)"
+                    echo "  origin/main: $origin_size bytes (page + split files)"
                     echo "  shrink:      ${shrink}% smaller"
                     echo ""
                     echo "  This is the classic 'stale working tree clobber'"
@@ -127,6 +152,17 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
     mkdir -p "$tmp_dir/templates"
     git show "${local_sha}:${html_path}" > "$tmp_dir/templates/index.html"
+
+    # The split files sit next to the page in the scratch dir too, so the
+    # tip's validator can read the anchors that live in them and check the
+    # page references each one exactly once. A tip that references a split
+    # file it does not carry fails here, as it should.
+    for f in $split_files; do
+        if git cat-file -e "${local_sha}:${html_prefix}${f}" 2>/dev/null; then
+            mkdir -p "$tmp_dir/$(dirname "$f")"
+            git show "${local_sha}:${html_prefix}${f}" > "$tmp_dir/$f"
+        fi
+    done
 
     # Use the tip's validator so any new anchors added in this push are
     # enforced against it (self-consistent check).
