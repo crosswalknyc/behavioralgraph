@@ -1084,7 +1084,7 @@ def bound_words(text, history=None, page='', current=None, reading=None):
 
 
 # ----------------------------------------------------------------- the continuation
-def stand_down(out, text, history=None, page=''):
+def stand_down(out, text, history=None, page='', understanding_title=None):
     """A continuation that carries the last deliverable's subject (a
     re-run on another window, a different cut of the last read, a
     correction) stands down when the words name another title:
@@ -1104,6 +1104,19 @@ def stand_down(out, text, history=None, page=''):
         deliv = out.get('deliverable') if isinstance(out.get('deliverable'), dict) else {}
         carried = str(out.get('subject') or deliv.get('subject') or '').strip()
         t = ' '.join(str(text or '').split())
+        # the Understanding's own reading of the title the words name (it compared the words against the thread's
+        # carried subject and the page); when the named_title flip is live, a title it read wins and a title it did
+        # not read is still the gate's own call (2026-11-20, night)
+        u_title = ' '.join(str(understanding_title or '').split())
+        if u_title and carried and title_key(u_title) != title_key(carried):
+            params = dict(out.get('params') or {})
+            if kind == 'correction':
+                params.update(named_title=u_title, carried=carried, by='understanding')
+                out.update(subject=u_title, params=params)
+            else:
+                params.update(named_title=u_title, carried=carried, was=kind, by='understanding')
+                out.update(kind='named_other', subject=u_title, params=params)
+            return out
         if kind == 'correction':
             try:
                 from . import subject_rules as _sr

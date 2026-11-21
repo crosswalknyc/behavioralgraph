@@ -426,7 +426,16 @@ def classify(text, history, reading=None, page=''):
     out = _classify(text, history, reading, page)
     try:
         from . import named_title as _nt
-        out = _nt.stand_down(out, text, history, page)
+        u_title = None
+        try:
+            from . import understanding as _und
+            if _und.flipped('named_title'):
+                _u = _und.current()
+                if _u is not None and (not _u.text_key or _und.text_key(text) == _u.text_key):
+                    u_title = _u.named_title or ''
+        except Exception:
+            u_title = None
+        out = _nt.stand_down(out, text, history, page, understanding_title=u_title)
     except Exception:
         pass
     return out

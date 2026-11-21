@@ -220,7 +220,8 @@ class Claims(unittest.TestCase):
     def test_flipped_intents_are_the_four(self):
         for n in ('wayfinding', 'status', 'send_file_order', 'insight_ask'):
             self.assertTrue(U.flipped(n), n)
-        self.assertFalse(U.flipped('named_title'))     # shadow
+        self.assertTrue(U.flipped('named_title'))      # the last shadow intent moved (2026-11-20, night)
+        self.assertEqual(U.SHADOW, ())
         self.assertFalse(U.flipped('analyze'))
 
     def test_agree_runs_and_marks(self):
@@ -329,6 +330,21 @@ class Claims(unittest.TestCase):
         if U.on_body(b).intent == 'dashboard_issue':
             self.assertTrue(U.claims(b, 'dashboard_issue', lambda: True))
             self.assertFalse(U.claims(b, 'wayfinding', lambda: True))
+
+    def test_bare_replies_and_cancels_are_keyed(self):
+        for q, want in (('yes', 'chat'), ('Approve', 'chat'), ('no, not that', 'pushback'), ('cancel', 'cancel'), ('thanks!', 'chat')):
+            b = U.attach({'text': q}, U.features(q, None, [{'role': 'agent', 'text': 'On Harbor Lights: 1,284,113 US viewers.'}], {}))
+            u = U.on_body(b)
+            self.assertEqual(u.intent, want, (q, u.evidence))
+            self.assertTrue(U.claims(b, want, lambda: True), q)
+        for name in ('chat', 'pushback', 'cancel'):
+            self.assertTrue(U.flipped(name), name)
+        # a bare cancel with nothing armed is still the bare-reply gate's (cancel is keyed, not contested); a bare yes stands nothing down
+        c = U.attach({'text': 'cancel'}, U.features('cancel', None, [], {}))
+        self.assertTrue(U.claims(c, 'chat', lambda: True))
+        self.assertTrue(U.claims(c, 'cancel', lambda: True))
+        y = U.attach({'text': 'yes'}, U.features('yes', None, [], {}))
+        self.assertTrue(U.claims(y, 'status', lambda: True))
 
     def test_a_weak_reading_never_stands_a_lane_down(self):
         b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])

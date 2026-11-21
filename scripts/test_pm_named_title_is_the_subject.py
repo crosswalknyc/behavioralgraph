@@ -547,7 +547,7 @@ class TheWiring(unittest.TestCase):
         guards = _read_src('prometheus', 'guards.py')
         self.assertIn('_nt.say_left_out(raw)', guards)
         self.assertIn('_nt.tidy(v)', guards)
-        self.assertIn("_nt.stand_down(out, text, history, page)", _read_src('prometheus', 'continuation.py'))
+        self.assertIn("_nt.stand_down(out, text, history, page, understanding_title=u_title)", _read_src('prometheus', 'continuation.py'))   # the Understanding's title rides in (2026-11-20)
         self.assertIn("_nt.bound_words(text, history, page, s", _read_src('prometheus', 'subject_rules.py'))
         self.assertIn("_nt.bucket_fits(question, held, subject)", _read_src('insights_ledger.py'))
 
