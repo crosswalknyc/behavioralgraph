@@ -88,7 +88,7 @@ SHADOW = ('named_title',)
 # else is "no position taken". Grows with each class moved onto the
 # Understanding (2026-11-20, night).
 _CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance',
-                        'exists', 'definition', 'size', 'multi_ask'))
+                        'exists', 'definition', 'size', 'multi_ask', 'pricing'))
 STAND_DOWN_CONF = 0.75  # a weak reading (a correction, the page, the generic status at 0.7) never stands a lane down
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',

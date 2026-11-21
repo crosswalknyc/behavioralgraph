@@ -321,6 +321,15 @@ class Claims(unittest.TestCase):
         one = U.on_body(U.attach({'text': OWN_ORDER}, U.features(OWN_ORDER, None, [], {})))
         self.assertEqual(one.intent, 'status')
 
+    def test_pricing_and_dashboard_issue_are_keyed(self):
+        for name in ('pricing', 'dashboard_issue', 'status'):
+            self.assertTrue(U.flipped(name), name)
+        d = 'the profile dropdown is empty and the page will not load'
+        b = U.attach({'text': d}, U.features(d, None, [], {}))
+        if U.on_body(b).intent == 'dashboard_issue':
+            self.assertTrue(U.claims(b, 'dashboard_issue', lambda: True))
+            self.assertFalse(U.claims(b, 'wayfinding', lambda: True))
+
     def test_a_weak_reading_never_stands_a_lane_down(self):
         b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])
         u = U.on_body(b)

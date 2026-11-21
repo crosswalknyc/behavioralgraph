@@ -2816,7 +2816,7 @@ def ask(user, body, *, via='session'):
     # surface, a decline on another and an answer on the third.
     if referent_decision is None and not _armed(body):
         try:
-            _is_price = bool(host.pricing_question(text)) if host.has('pricing_question') else False
+            _is_price = _u_claims(body, 'pricing', lambda: bool(host.pricing_question(text)) if host.has('pricing_question') else False)   # keyed (2026-11-20)
         except Exception:
             _is_price = False
         if _is_price:
