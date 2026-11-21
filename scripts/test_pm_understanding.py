@@ -308,6 +308,19 @@ class Claims(unittest.TestCase):
         # the house sample is a definition, never a sizing
         self.assertEqual(U.on_body(U.attach({'text': 'how big is your sample'}, U.features('how big is your sample', None, [], {}))).intent, 'definition')
 
+    def test_multi_ask_is_read_and_keyed(self):
+        # several questions in one message, each answered through the door in turn; a status question inside it
+        # does not take the whole message (2026-11-20, night)
+        q = '1. is my Harbor Lights profile done? 2. where is the deck for it?'
+        b = U.attach({'text': q}, U.features(q, None, [], {}))
+        u = U.on_body(b)
+        self.assertEqual(u.intent, 'multi_ask', u.evidence)
+        self.assertTrue(U.claims(b, 'multi_ask', lambda: True))
+        self.assertFalse(U.claims(b, 'status', lambda: True))
+        self.assertTrue(U.flipped('multi_ask'))
+        one = U.on_body(U.attach({'text': OWN_ORDER}, U.features(OWN_ORDER, None, [], {})))
+        self.assertEqual(one.intent, 'status')
+
     def test_a_weak_reading_never_stands_a_lane_down(self):
         b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])
         u = U.on_body(b)

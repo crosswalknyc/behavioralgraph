@@ -77,7 +77,8 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'provenance',            # where a figure came from, two figures squared, the unprojected count, US or global (2026-11-20, night)
            'exists',                # is X in the library, what do we hold on X, the roster (the catalog lanes, 2026-11-20, night)
            'definition',            # what a term, a figure or a method means; the house sample; a brief's own terms (2026-11-20, night)
-           'size')                  # how many people an audience holds, a demographic segment counted (the sizing lanes, 2026-11-20, night)
+           'size',                  # how many people an audience holds, a demographic segment counted (the sizing lanes, 2026-11-20, night)
+           'multi_ask')             # several questions in one message, each answered through the door in turn (2026-11-20, night)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
@@ -85,7 +86,7 @@ SHADOW = ('named_title',)
 # else is "no position taken". Grows with each class moved onto the
 # Understanding (2026-11-20, night).
 _CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance',
-                        'exists', 'definition', 'size'))
+                        'exists', 'definition', 'size', 'multi_ask'))
 STAND_DOWN_CONF = 0.75  # a weak reading (a correction, the page, the generic status at 0.7) never stands a lane down
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',
@@ -208,6 +209,8 @@ _OWN_ORDER_RX = re.compile(
     r"is\s+(?:it|this|that|the\s+\w+(?:\s+\w+)?)\s+(?:done|ready|finished|complete|live)\b|where(?:'s|\s+is|\s+are)\s+my\b|when\s+will\s+(?:it|my|this|the)\b|"
     r"status\s+(?:of|on|update)|did\s+(?:it|my|the\s+\w+)\s+(?:run|finish|land|go\s+through|work)|that\s+i\s+(?:asked|ordered|requested)|"
     r"i\s+(?:don'?t|do\s+not|can'?t|cannot)\s+see\s+(?:it|my|the\s+\w+\s+i)|waiting\s+(?:on|for)\b|how\s+long\s+(?:until|till|before|will)|eta\b)", re.I)
+# "if I ran a Profile IQ, what would my sample size be": a hypothetical, never the reader's own order
+_HYPOTHETICAL_RX = re.compile(r"\b(?:if|when|should|suppose|supposing|say|imagine|assuming)\s+(?:i|we)\s+(?:ran|run|asked|ordered|requested|queued|paid|approved)\b", re.I)
 _PAGE_RX = re.compile(r"\b(?:this|that|these|those|here|on\s+screen|the\s+open\s+(?:profile|page|read|file)|this\s+(?:audience|profile|page|read|file|group))\b", re.I)
 _PEOPLE_RX = re.compile(
     r"\b(?:how\s+many|how\s+much|what\s+(?:share|percent|%)|who\s+(?:are|is|skews?|watch|buy|use)|audience|viewers?|fans?|customers?|users?|buyers?|shoppers?|"
@@ -323,6 +326,7 @@ def _definition_kind(text, history=None):
                      ('meta', lambda: mod('service').meta_check(text)),
                      ('drilldown', lambda: mod('drilldown').looks_like_drilldown(text) or mod('drilldown').looks_like_definition(text)),
                      ('view', lambda: mod('methodology_answers').is_view_definition_question(text)),
+                     ('methodology', lambda: bool(mod('methodology_answers').answer(text))),   # one methodology question, or a numbered list of them
                      ('method', lambda: bool(mod('how_computed').answer(text))),   # the lane's own test: a method, a where, an about
                      ('sample', lambda: mod('guards').is_sample_size_ask(text))):
         if _safe(fn, False):
@@ -505,7 +509,7 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         sc.no_build = bool(no_build)
         sc.armed_step = _armed_step(body)
         wiz_open = bool(f.get('wizard_open')) and not f.get('cancel') and not sc.armed_step
-        sc.own_order = bool(_OWN_ORDER_RX.search(t))
+        sc.own_order = bool(_OWN_ORDER_RX.search(t)) and not _HYPOTHETICAL_RX.search(t)
         sc.feature = bool(f.get('directions')) or (bool(f.get('wayfinding')) and not sc.own_order)
         sc.page = bool(_points_at_screen(t)) and bool(ctx)
         sc.people = bool(_PEOPLE_RX.search(t))
@@ -587,15 +591,9 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             intent, action, conf = 'send_file_order', 'send', 0.85
         elif f.get('dashboard_issue') and not sc.own_order:
             intent, action, conf = 'dashboard_issue', 'answer', 0.8
-        elif f.get('wayfinding') or f.get('directions') or f.get('wait') or f.get('deliverable') or (
-                (f.get('status_fast') or f.get('status')) and sc.own_order):
-            # where-is on a feature is directions; the reader's own order, delivery or wait is status. A bare status
-            # shape with no own-order words ("where can I find retention curves on this site") is read below, after
-            # the provenance and definition answers that sit ahead of the status lanes in the walk (2026-11-20, night)
-            if sc.own_order or f.get('wait') or (f.get('deliverable') and not f.get('directions')):
-                intent, action, conf = 'status', 'status', 0.85 if sc.own_order else 0.75
-            else:
-                intent, action, conf = 'wayfinding', 'open', 0.85 if f.get('directions') else 0.75
+        elif (f.get('wayfinding') or f.get('directions')) and not (sc.own_order or f.get('wait') or (f.get('deliverable') and not f.get('directions'))):
+            # where-is on a feature is directions (the wayfinding lane sits ahead of everything below in the walk)
+            intent, action, conf = 'wayfinding', 'open', 0.85 if f.get('directions') else 0.75
         elif f.get('provenance') and not f.get('brief'):
             # where a figure came from, two figures squared, the count in the data, US or global: answered from the
             # record, never a read; a brief that names titles is the read lane's whole (2026-11-20, night)
@@ -609,21 +607,30 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             intent, action, conf = ('offer_reply', 'approve', 0.8) if f.get('offer_open') else ('chat', 'answer', 0.7)
         elif f.get('pricing'):
             intent, action, conf = 'pricing', 'answer', 0.8
-        elif f.get('multi') and len(f['multi']) > 1:
-            intent, action, conf = 'multi_ask', 'answer', 0.75
-        elif f.get('catalog') in ('exists', 'roster') and not f.get('brief') and not f.get('capability'):
-            # is X in the library, what do we hold on X, the roster of a title: the catalog answers from the shelf,
-            # no model call (the catalog_exists and catalog lanes, 2026-11-20, night); "is there any X measurement
-            # available in Crosswalk" is a question about the product (capability), not the shelf
-            intent, action, conf = 'exists', 'answer', 0.8
         elif f.get('sizing') == 'segment' and not f.get('brief'):
             # a joint demographic segment counted ("how many people in your database are blue-collar men 30 to 55 ..."):
             # the segment lane sits ahead of every definition answer in the walk (2026-11-20, night)
             intent, action, conf = 'size', 'answer', 0.75
         elif (f.get('sample_size') or (f.get('definition') and f.get('definition') != 'drilldown')) and not f.get('brief'):
-            # what a term, a figure or a method means, the house sample, a check on the last answer: answered from the
-            # house glossary and the thread, never a read (2026-11-20, night)
+            # what a term, a figure or a method means (one, or a numbered list of them), the house sample, a check on
+            # the last answer: answered from the house glossary and the thread, never a read; these lanes sit ahead of
+            # the multi_ask split in the walk (2026-11-20, night)
             intent, action, conf = 'definition', 'answer', 0.75
+        elif f.get('multi') and len(f['multi']) > 1 and not f.get('brief'):
+            # several questions in one message: each answered through the door in turn (the multi_ask lane sits ahead
+            # of the status, catalog and sizing lanes in the walk)
+            intent, action, conf = 'multi_ask', 'answer', 0.75
+        elif (sc.own_order and (f.get('status') or f.get('status_fast') or f.get('deliverable'))) or f.get('wait') \
+                or (f.get('deliverable') and not f.get('directions')):
+            # the reader's own order, delivery or wait is status. A bare status shape with no own-order words ("where
+            # can I find retention curves on this site") is read below, after the catalog and sizing answers that sit
+            # ahead of the status lanes in the walk (2026-11-20, night)
+            intent, action, conf = 'status', 'status', 0.85 if sc.own_order else 0.75
+        elif f.get('catalog') in ('exists', 'roster') and not f.get('brief') and not f.get('capability'):
+            # is X in the library, what do we hold on X, the roster of a title: the catalog answers from the shelf,
+            # no model call (the catalog_exists and catalog lanes, 2026-11-20, night); "is there any X measurement
+            # available in Crosswalk" is a question about the product (capability), not the shelf
+            intent, action, conf = 'exists', 'answer', 0.8
         elif (f.get('sizing') == 'audience' or f.get('catalog') == 'size') and not f.get('brief'):
             # how many people an audience holds: the sizing lanes (2026-11-20, night)
             intent, action, conf = 'size', 'answer', 0.75

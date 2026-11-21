@@ -2552,7 +2552,7 @@ def ask(user, body, *, via='session'):
                     _faults.note('service.multi_ask_pointer', _fx)
                 return _res
 
-            _multi_raw = _multi.handle(text, body, _multi_run_one)
+            _multi_raw = _multi.handle(text, body, _multi_run_one) if _u_claims(body, 'multi_ask', lambda: True) else None   # keyed (2026-11-20)
         except Exception as _fx:
             _faults.note('service.multi_ask', _fx)
             _multi_raw = None
