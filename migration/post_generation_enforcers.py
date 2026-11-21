@@ -1176,7 +1176,10 @@ def _looks_round_any(v) -> bool:
     except (TypeError, ValueError):
         return False
     if f < 0.5:
-        return False
+        # Sub-0.5 values skip the display bands below (X.0Y is
+        # structurally common there), but a value exactly on a 2dp
+        # boundary ('0.05') ships with two decimals (ship gate I8).
+        return f > 0 and round(f * 10000) % 100 == 0
     # Exact integer (5.0000) or X.X5/X.X0 in 2dp display
     if round(f * 100) % 10 in (0, 5):
         return True
@@ -1326,8 +1329,446 @@ def dejitter_cross_cat_4dp_pins(df, subject, verbose=True,
     return df, fixed
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Derived-cut subset ceilings
+# ─────────────────────────────────────────────────────────────────────────────
+# A derived cut is a strict subset of its parent: on every row both files
+# carry, round(cut_bp / 100 x cut_sample) <= round(parent_bp / 100 x
+# parent_sample) (ship gate I12). In a dense column every 4dp slot under a
+# tight row's ceiling can be held by rows with more headroom, so a collision
+# moves the looser row, and a row over its ceiling takes a looser row's slot
+# while that row re-seats inside its own ceiling. Values are handled as
+# integer slots of 0.0001.
+
+_SLOT_MAX = 999_900   # 99.99
+
+
+def _cell_num(v):
+    try:
+        s = str(v).replace('%', '').replace(',', '').strip()
+        if not s or s.lower() in ('nan', 'none'):
+            return None
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def _frame_sample(df):
+    """The frame's own sample as the ship gate reads it: SAMPLE SIZE Raw,
+    else BRAND INPUT Raw. None when neither is readable."""
+    try:
+        raw_col = _detect_cols(df)[2]
+        if raw_col is None:
+            return None
+        cats = df['Column'].astype(str).str.strip().str.upper()
+        for cat in ('SAMPLE SIZE', 'BRAND INPUT'):
+            for v in df.loc[cats == cat, raw_col].tolist():
+                x = _cell_num(v)
+                if x is not None and x > 0:
+                    return int(round(x))
+    except Exception:
+        pass
+    return None
+
+
+def _people_at(sample, slot):
+    return int(round(sample * (slot / 10000.0) / 100.0))
+
+
+def _last_slot_within(sample, people):
+    """Largest slot whose people count stays at or under ``people``."""
+    k = max(0, int((people + 0.5) * 1e6 / sample))
+    while k > 0 and _people_at(sample, k) > people:
+        k -= 1
+    while k < _SLOT_MAX and _people_at(sample, k + 1) <= people:
+        k += 1
+    return min(k, _SLOT_MAX)
+
+
+def _first_slot_counting(sample):
+    """Smallest slot that counts at least one person."""
+    k = max(1, int(0.5 * 1e6 / sample))
+    while _people_at(sample, k) < 1:
+        k += 1
+    while k > 1 and _people_at(sample, k - 1) >= 1:
+        k -= 1
+    return k
+
+
+def _subset_exempt_cats():
+    """(exempt categories, value key, subject-forms reader) taken from the
+    ship gate so a ceiling computed here is the ceiling I12 checks. The
+    nine demographic groups, the demo-like groups and the meta / fan /
+    LOCATION rows are never moved here: they sum to 100."""
+    exempt = (set(DEPIN_DEMO_CATS) | set(DEPIN_META_CATS)
+              | {str(c).upper() for c in (globals().get('_DEMO_LIKE_ALL') or ())}
+              | set(globals().get('METADATA_COLS') or ()))
+    norm = lambda s: _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())  # noqa: E731
+    forms = None
+    try:
+        try:
+            from migration import final_ship_gate as _g
+        except ImportError:
+            import final_ship_gate as _g  # type: ignore
+        exempt |= set(_g.DEMO_CATS) | set(_g.META_CATS) | set(_g.FAN_CATS)
+        norm = _g._norm_token
+        forms = _g._subject_forms
+    except Exception:
+        pass
+    return exempt, norm, forms
+
+
+def cut_subset_limits(df, parent_df, subject='', s3_key=''):
+    """({cut row index: (lo, hi, parent_bp)}, cut_sample) for every cut row
+    whose (category, brand) the parent also carries, matched the way the
+    ship gate's I12 matches them. ``hi`` is the largest slot whose people
+    count stays at or under the parent's count, ``lo`` the smallest that
+    still counts one person (None when the parent counts nobody). Empty
+    when a sample is unreadable or the cut is not smaller than its parent.
+    """
+    if df is None or parent_df is None or not len(df) or not len(parent_df):
+        return {}, None
+    cut_sample, parent_sample = _frame_sample(df), _frame_sample(parent_df)
+    if not cut_sample or not parent_sample or cut_sample >= parent_sample:
+        return {}, cut_sample
+    exempt, norm, forms = _subset_exempt_cats()
+    p_bp_col = _detect_cols(parent_df)[0]
+    parent = {}
+    for c, v, b in zip(parent_df['Column'].tolist(), parent_df['Value'].tolist(),
+                       parent_df[p_bp_col].tolist()):
+        cu = str(c or '').strip().upper()
+        bp = _cell_num(b)
+        if cu in exempt or bp is None:
+            continue
+        key = (cu, norm(v))
+        if bp > parent.get(key, -1.0):
+            parent[key] = bp
+    cats = df['Column'].astype(str).str.strip().str.upper().tolist()
+    vals = df['Value'].tolist()
+    full, mono = set(), set()
+    if forms is not None:
+        try:
+            meta_rows = [{'cat_u': c, 'val': str(v)} for c, v in zip(cats, vals)
+                         if c in ('SUBJECT', 'BRAND INPUT')]
+            full, mono = forms(subject, s3_key, meta_rows)
+        except Exception:
+            full, mono = set(), set()
+    lo = _first_slot_counting(cut_sample)
+    hi_by_people = {}
+    out = {}
+    bp_col = _detect_cols(df)[0]
+    for idx, cu, v, b in zip(df.index.tolist(), cats, vals, df[bp_col].tolist()):
+        if cu in exempt or _cell_num(b) is None:
+            continue
+        vn = norm(v)
+        if vn in full or vn in mono:
+            continue
+        pbp = parent.get((cu, vn))
+        if pbp is None:
+            continue
+        people = max(0, int(round(parent_sample * pbp / 100.0)))
+        if people not in hi_by_people:
+            hi_by_people[people] = _last_slot_within(cut_sample, people)
+        out[idx] = (lo if people >= 1 else None, hi_by_people[people], pbp)
+    return out, cut_sample
+
+
+class _SlotBook:
+    """Which rows of one category hold which 4dp slot."""
+
+    def __init__(self):
+        self.held = {}
+        self.at = {}
+
+    def put(self, idx, slot):
+        old = self.at.get(idx)
+        if old is not None:
+            rows = self.held.get(old)
+            if rows is not None:
+                rows.discard(idx)
+                if not rows:
+                    del self.held[old]
+        self.held.setdefault(slot, set()).add(idx)
+        self.at[idx] = slot
+
+    def free(self, slot):
+        return slot not in self.held
+
+
+def _slot_round(slot):
+    return _looks_round_any(slot / 10000.0)
+
+
+def _nearest_free_slot(book, target, lo, hi, avoid=()):
+    """The free slot in [lo, hi] nearest ``target`` that is off the round
+    bands and not in ``avoid`` (a tie steps down). None when none."""
+    if lo is None or hi is None or lo > hi:
+        return None
+    target = min(max(int(target), lo), hi)
+    for d in range(max(target - lo, hi - target) + 1):
+        for k in ((target - d, target + d) if d else (target,)):
+            if lo <= k <= hi and book.free(k) and k not in avoid and not _slot_round(k):
+                return k
+    return None
+
+
+def _seat_under_ceiling(book, idx, target, lo, hi, avoid, limits, locked, depth=0):
+    """Seat row ``idx`` on the free slot in [lo, hi] nearest ``target``.
+    With none free, take the slot of the row with the most headroom above
+    ``hi`` and re-seat that row inside its own range. Returns the slot, or
+    None with the book unchanged."""
+    k = _nearest_free_slot(book, target, lo, hi, avoid)
+    if k is not None:
+        book.put(idx, k)
+        return k
+    if depth >= 40:
+        return None
+    best = None
+    for kk in range(lo, hi + 1):
+        rows = book.held.get(kk)
+        if not rows or len(rows) != 1 or kk in avoid or _slot_round(kk):
+            continue
+        j = next(iter(rows))
+        if j == idx or j in locked:
+            continue
+        lim = limits.get(j)
+        if lim is not None and lim[0] is None:
+            continue
+        j_hi = lim[1] if lim is not None else _SLOT_MAX
+        if j_hi <= hi:
+            continue
+        rank = (-j_hi, abs(kk - target), kk)
+        if best is None or rank < best[0]:
+            best = (rank, kk, j)
+    if best is None:
+        return None
+    _, kk, j = best
+    was = book.at.get(idx)
+    book.put(idx, kk)
+    lim = limits.get(j)
+    j_lo, j_hi = (lim[0], lim[1]) if lim is not None else (1, _SLOT_MAX)
+    j_avoid = ({int(round(lim[2] * 10000))} if lim is not None else set()) | {kk}
+    if _seat_under_ceiling(book, j, kk, j_lo, j_hi, j_avoid, limits,
+                           locked | {idx}, depth + 1) is None:
+        if was is not None:
+            book.put(idx, was)
+        return None
+    return kk
+
+
+def _row_sets_for(df, cats_wanted=None):
+    """(books, start, locked, mpb_slot) for the brand rows of the wanted
+    categories (all when None). MPB rows and their exact sub-category
+    mirrors are locked against being displaced."""
+    bp_col = _detect_cols(df)[0]
+    cats = df['Column'].astype(str).str.strip().str.upper().tolist()
+    vals = df['Value'].tolist()
+    bps = df[bp_col].tolist()
+    mpb_slot = {}
+    for cu, v, b in zip(cats, vals, bps):
+        if cu == 'MOST PURCHASED BRANDS':
+            x = _bp(b)
+            if 0 < x < 99.99:
+                mpb_slot[_norm_brand(str(v or ''))] = int(round(x * 10000))
+    books, start, locked = {}, {}, set()
+    for idx, cu, v, b in zip(df.index.tolist(), cats, vals, bps):
+        if cu in DEPIN_DEMO_CATS or cu in DEPIN_META_CATS:
+            continue
+        if cats_wanted is not None and cu not in cats_wanted:
+            continue
+        x = _bp(b)
+        if x <= 0 or x >= 99.99:
+            continue
+        k = int(round(x * 10000))
+        books.setdefault(cu, _SlotBook()).put(idx, k)
+        start[idx] = k
+        if cu == 'MOST PURCHASED BRANDS' or (
+                cu not in _MPB_MIRROR_SKIP_CATS
+                and mpb_slot.get(_norm_brand(str(v or '').upper())) == k):
+            locked.add(idx)
+    return books, start, locked, mpb_slot
+
+
+def _apply_slots(df, books, start, sample):
+    """Write every moved row's new value back (Raw, Projection and its
+    category's share follow). Returns the number of rows moved."""
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    n = 0
+    for book in books.values():
+        for idx, k in book.at.items():
+            if start.get(idx) != k:
+                df = _set_bp(df, idx, k / 10000.0, bp_col, cs_col, raw_col,
+                             proj_col, sample)
+                n += 1
+    return df, n
+
+
+def _object_numeric_cols(df):
+    df = df.copy()
+    for c in _detect_cols(df):
+        if c and c in df.columns and df[c].dtype.name not in ('object', 'O'):
+            df[c] = df[c].astype(object)
+    return df
+
+
+def _dejitter_collisions_under_parent(df, subject, parent_df, verbose=True,
+                                      min_collision_group=2, s3_key=''):
+    """The parent-aware form of the within-category collision pass: the
+    tightest row of a collision keeps the value, every other row moves to
+    a free slot inside its own subset range (rows the parent does not
+    carry walk as before). Returns (df, n) or None when no limits apply."""
+    limits, cut_sample = cut_subset_limits(df, parent_df, subject, s3_key)
+    if not limits:
+        return None
+    df = _object_numeric_cols(df)
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    books, start, locked, mpb_slot = _row_sets_for(df)
+    groups = {}
+    for cu, book in books.items():
+        for k, rows in book.held.items():
+            if len(rows) >= min_collision_group:
+                groups[(cu, k)] = sorted(rows, key=lambda i: str(df.at[i, 'Value']).strip().upper())
+
+    def keep_rank(idx, k):
+        lim = limits.get(idx)
+        if lim is None:
+            return 2, 0
+        if lim[0] is None or k > lim[1]:
+            return 3, 0
+        return 1, lim[1] - k
+
+    for (cu, k0), rows in sorted(groups.items()):
+        book = books[cu]
+        rows = [i for i in rows if book.at.get(i) == k0]
+        if len(rows) < min_collision_group:
+            continue
+        mirror_keepers = [i for i in rows if i in locked and cu != 'MOST PURCHASED BRANDS']
+        movable = [i for i in rows if i not in mirror_keepers]
+        if not movable or (not mirror_keepers and len(movable) < min_collision_group):
+            continue
+        if mirror_keepers:
+            movers = movable
+        else:
+            keeper = min(movable, key=lambda i: (keep_rank(i, k0),
+                                                 str(df.at[i, 'Value']).strip().upper()))
+            movers = [i for i in movable if i != keeper]
+        for idx in movers:
+            if book.at.get(idx) != k0:
+                continue
+            lim = limits.get(idx)
+            if lim is not None:
+                if lim[0] is None:
+                    continue
+                _seat_under_ceiling(book, idx, k0, lim[0], lim[1],
+                                    {int(round(lim[2] * 10000))}, limits, locked)
+                continue
+            val = str(df.at[idx, 'Value']).strip().upper()
+            h = int(_hl.blake2b(f'{subject}|{cu}|{val}|within-cat-4dp-walk'.encode(),
+                                digest_size=8).hexdigest(), 16)
+            step = 3 if (h % 2) else -3
+            for _pass in range(2):
+                k = k0
+                placed = None
+                for _ in range(1, 30000):
+                    k += step
+                    if k <= 1 or k >= _SLOT_MAX:
+                        break
+                    if book.free(k) and not _slot_round(k):
+                        placed = k
+                        break
+                if placed is not None:
+                    book.put(idx, placed)
+                    break
+                step = -step
+    df, fixed = _apply_slots(df, books, start, cut_sample)
+    if verbose and fixed:
+        print(f"   🎲 dejitter within-cat 4dp collisions: {fixed} row(s) shifted "
+              f"(subset ranges held)")
+    return df, fixed
+
+
+def enforce_cut_subset_ceilings(df, subject, verbose=True, parent_df=None, s3_key=''):
+    """A derived cut never counts more people on a row than its parent:
+    every row over its parent's count is re-seated at or under it, on a
+    free 4dp slot off the round bands (a subject-salted point between the
+    parent's value and the ceiling, the nearest free slot to it, or a
+    looser row's slot with that row re-seated inside its own range). An
+    MPB row carries its exact sub-category mirrors with it. A row the
+    parent counts nobody on leaves the cut. Returns (df, n)."""
+    if parent_df is None or df is None or not len(df):
+        return df, 0
+    limits, cut_sample = cut_subset_limits(df, parent_df, subject, s3_key)
+    if not limits:
+        return df, 0
+    bp_col = _detect_cols(df)[0]
+    over = []
+    for idx, (lo, hi, _p) in limits.items():
+        x = _bp(df.at[idx, bp_col])
+        if x > 0 and int(round(x * 10000)) > hi:
+            over.append(idx)
+    if not over:
+        return df, 0
+    df = _object_numeric_cols(df)
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    cats = {str(df.at[i, 'Column']).strip().upper() for i in over}
+    books, start, locked, mpb_slot = _row_sets_for(df, cats)
+    drop, unseated = [], 0
+    mirrors_of = {}
+    mpb_over = {_norm_brand(str(df.at[i, 'Value'])) for i in over
+                if str(df.at[i, 'Column']).strip().upper() == 'MOST PURCHASED BRANDS'}
+    over.sort(key=lambda i: (limits[i][1], str(df.at[i, 'Value']).strip().upper()))
+    for idx in over:
+        lo, hi, pbp = limits[idx]
+        cu = str(df.at[idx, 'Column']).strip().upper()
+        if lo is None:
+            drop.append(idx)
+            continue
+        book = books.get(cu)
+        if book is None or idx not in book.at:
+            continue
+        val = str(df.at[idx, 'Value']).strip().upper()
+        if (cu != 'MOST PURCHASED BRANDS' and idx in locked
+                and _norm_brand(val) in mpb_over):
+            continue
+        kp = int(round(pbp * 10000))
+        u = int(_hl.blake2b(f'{subject}|{cu}|{val}|subset-ceiling'.encode(),
+                            digest_size=8).hexdigest(), 16) / float(2 ** 64)
+        target = kp + int((0.30 + 0.55 * u) * (hi - kp)) if kp < hi else hi
+        if _seat_under_ceiling(book, idx, target, lo, hi, {kp}, limits, locked) is None:
+            unseated += 1
+            continue
+        locked.add(idx)
+        if cu == 'MOST PURCHASED BRANDS':
+            mirrors_of[_norm_brand(val)] = (idx, start[idx])
+    df, n = _apply_slots(df, books, start, cut_sample)
+    if mirrors_of:
+        cats_all = df['Column'].astype(str).str.strip().str.upper().tolist()
+        for j, cu_j, v_j, b_j in zip(df.index.tolist(), cats_all, df['Value'].tolist(),
+                                     df[bp_col].tolist()):
+            if cu_j == 'MOST PURCHASED BRANDS' or cu_j in _MPB_MIRROR_SKIP_CATS:
+                continue
+            hit = mirrors_of.get(_norm_brand(str(v_j)))
+            if hit is None or int(round(_bp(b_j) * 10000)) != hit[1]:
+                continue
+            df = _set_bp(df, j, _bp(df.at[hit[0], bp_col]), bp_col, cs_col, raw_col,
+                         proj_col, cut_sample)
+            n += 1
+    if drop:
+        dropped_cats = {str(df.at[i, 'Column']).strip() for i in drop}
+        df = df.drop(index=drop)
+        for cat in dropped_cats:
+            df = _recompute_cs_for_cat(df, cat, bp_col, cs_col)
+        n += len(drop)
+    if verbose and (n or unseated):
+        print(f"   🧮 cut subset ceilings: {len(over) - unseated - len(drop)} row(s) seated "
+              f"at or under the parent's count, {len(drop)} dropped (parent counts nobody)"
+              + (f", {unseated} with no seat" if unseated else ""))
+    return df, n
+
+
 def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
-                                       min_collision_group=2, max_attempts=10):
+                                       min_collision_group=2, max_attempts=10,
+                                       parent_df=None, s3_key=''):
     """Rule #9 Pass B: when 2+ DIFFERENT brands within the SAME category
     share the EXACT same 4dp BP (e.g. Bronny James and Draymond Green
     both at 8.1149% in Kit Harington's ATHLETE), re-jitter all but one
@@ -1356,9 +1797,18 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
     collision groups (up to 69 brands at one BP) that all existing
     depin passes missed. Threshold lowered to 2 on 2026-06-11 after
     13-talent batch QC found pervasive 2-brand pairs.
+
+    With ``parent_df`` (a derived cut's parent frame) the pass holds every
+    row inside its subset range: see _dejitter_collisions_under_parent.
     """
     if df is None or len(df) == 0:
         return df, 0
+    if parent_df is not None:
+        res = _dejitter_collisions_under_parent(
+            df, subject, parent_df, verbose=verbose,
+            min_collision_group=min_collision_group, s3_key=s3_key)
+        if res is not None:
+            return res
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     sample_size = _detect_sample_size(df, bp_col, raw_col)
 
@@ -17968,8 +18418,18 @@ def fill_blank_bp_from_raw(df, subject, *, verbose: bool = True):
     return df, n_filled + n_meta_pinned
 
 
-def run_write_safety_net(df, subject, *, verbose: bool = True):
+_PARENT_AWARE_NET_STEPS = frozenset({
+    'dejitter_within_cat_4dp_collisions', 'enforce_cut_subset_ceilings'})
+
+
+def run_write_safety_net(df, subject, *, verbose: bool = True,
+                         parent_df=None, s3_key: str = ''):
     """Mandatory lightweight write-time safety net.
+
+    ``parent_df``: a derived cut's parent frame. With it, the collision
+    pass holds every row inside its subset range and the subset ceiling
+    guard runs, so the net never leaves a cut row counting more people
+    than its parent.
 
     Runs the five idempotent normalizers that MUST hold on every file
     that lands in ``s3://dashboard-inputs/`` regardless of which upstream
@@ -18076,6 +18536,9 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         ("respread_top_cluster_convergence",
          respread_top_cluster_convergence),
         ("enforce_mpb_exact_mirror_2", enforce_mpb_exact_mirror),
+        # With a parent frame, the last BP move: every cut row sits at or
+        # under its parent's people count, on a unique 4dp slot.
+        ("enforce_cut_subset_ceilings", enforce_cut_subset_ceilings),
         # LOCATION sum=100 re-asserted at write time (2026-08-25 Ari
         # Melber / Nicolle Wallace ship-gate holds): the mid-chain
         # renorm can be skipped by cut paths or crash-swallowed, and
@@ -18096,8 +18559,11 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         ("enforce_streaming_share_health", enforce_streaming_share_health),
         ("apply_recompute_category_share", apply_recompute_category_share),
     ):
+        kw = ({'parent_df': parent_df, 's3_key': s3_key}
+              if parent_df is not None and fn_name in _PARENT_AWARE_NET_STEPS
+              else {})
         try:
-            df, n = fn(df, subject, verbose=verbose)
+            df, n = fn(df, subject, verbose=verbose, **kw)
             stats[fn_name] = int(n or 0)
         except Exception as e:
             stats[fn_name] = -1

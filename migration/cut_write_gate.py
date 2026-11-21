@@ -146,7 +146,8 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
             df, n_coll = enforce_no_collisions(df, parent_df, subject)
             report['post_polish_collisions_broken'] = int(n_coll or 0)
             if n_coll:
-                df, _ = run_write_safety_net(df, subject, verbose=False)
+                df, _ = run_write_safety_net(df, subject, verbose=False,
+                                             parent_df=parent_df, s3_key=out_key)
         except Exception as e:
             report['post_polish_collisions_broken'] = -1
             print(f'   ⚠ cut-write-gate collision recheck failed '

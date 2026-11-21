@@ -254,6 +254,38 @@ def _is_avid_cut_basename(s3_key: str) -> bool:
     return "AVID" in base.split(" - ", 1)[1].upper()
 
 
+def _subset_parent_frame(s3_key, s3, tu_source_key=None, cache=None,
+                         verbose=True):
+    """(parent frame, label) a derived cut is held under: the caller's TU
+    source, else the parent the ship gate's I12 resolves for an Avid key.
+    (None, None) for a Total Universe or when nothing resolves. ``cache``
+    (a dict) keeps the answer for the rest of the write."""
+    if cache is not None and "df" in cache:
+        return cache["df"], cache.get("label")
+    df_parent, label = None, None
+    if tu_source_key:
+        df_parent = _load_tu_source(tu_source_key, s3)
+        label = tu_source_key if df_parent is not None else None
+    if df_parent is None and _is_avid_cut_basename(s3_key):
+        try:
+            try:
+                from migration.final_ship_gate import _resolve_parent_tu
+            except ImportError:
+                from final_ship_gate import _resolve_parent_tu  # type: ignore
+            parent_key, parent_body = _resolve_parent_tu(
+                s3_key, s3, verbose=verbose)
+            if parent_body:
+                df_parent = pd.read_csv(io.BytesIO(parent_body), dtype=object,
+                                        keep_default_na=False)
+                label = parent_key
+        except Exception as e:
+            print(f"  [profile_writer] subset parent resolution failed "
+                  f"({type(e).__name__}: {e})")
+    if cache is not None:
+        cache["df"], cache["label"] = df_parent, label
+    return df_parent, label
+
+
 # Ship-gate invariant classes with a safe DETERMINISTIC fixer. Only
 # these ever trigger the fix-and-regate pass below; every judgment-
 # required class (I1 rogue pins, I5 demo sums, I9 hidden brands, ...)
@@ -302,7 +334,8 @@ def _detect_ladder_rows(df):
 
 
 def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
-                            tu_source_key=None, sort=True, verbose=True):
+                            tu_source_key=None, sort=True, verbose=True,
+                            parent_cache=None):
     """Deterministic fix-and-regate ahead of the blocking ship gate
     (2026-08-26 Danny Go - Avid Fan incident: the fresh-build avid path
     shipped 299 rows whose Raw out-counted the parent TU; the gate's
@@ -429,23 +462,12 @@ def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
     if any(v.get("code") == "I12" for v in fixable):
         # I12 (avid subset raws): enforce_avid_subset_coherence caps
         # out-counting rows vs the resolved parent, raw-verified.
-        df_parent = None
-        parent_label = None
-        if tu_source_key:
-            df_parent = _load_tu_source(tu_source_key, s3)
-            parent_label = tu_source_key
+        df_parent, parent_label = _subset_parent_frame(
+            s3_key, s3, tu_source_key=tu_source_key, cache=parent_cache,
+            verbose=verbose)
         if df_parent is None:
-            try:
-                parent_key, parent_body = _resolve_parent_tu(
-                    s3_key, s3, verbose=verbose)
-                if parent_body:
-                    df_parent = pd.read_csv(
-                        io.BytesIO(parent_body), dtype=object,
-                        keep_default_na=False)
-                    parent_label = parent_key
-            except Exception as e:
-                print(f"  [profile_writer] I12 parent resolution "
-                      f"failed ({e}); subset fix skipped")
+            print("  [profile_writer] I12 parent did not resolve; subset "
+                  "fix skipped")
         if df_parent is not None:
             try:
                 try:
@@ -825,9 +847,14 @@ def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
                   f"({type(e).__name__}: {e}); gate keeps the verdict")
 
     # Recompute the downstream chain from the corrected BPs, re-sort,
-    # re-assert numeric formats, re-append baseline columns.
+    # re-assert numeric formats, re-append baseline columns. A cut keeps
+    # its parent here so no row leaves at more people than the parent's.
     try:
-        df, _ = _rwsn_gate(df, subject, verbose=False)
+        _net_parent, _ = _subset_parent_frame(
+            s3_key, s3, tu_source_key=tu_source_key, cache=parent_cache,
+            verbose=False)
+        df, _ = _rwsn_gate(df, subject, verbose=False, parent_df=_net_parent,
+                           s3_key=s3_key)
     except Exception as e:
         print(f"  [profile_writer] post-fix safety net raised "
               f"({type(e).__name__}: {e})")
@@ -866,10 +893,12 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
     The terminal gate that follows this pass is report-only, so even a
     non-converging remainder publishes (it is never a rebuild)."""
     last_summary = None
+    parent_cache = {}
     for _round in range(_MAX_GATE_AUTOFIX_ROUNDS):
         df, summary = _ship_gate_autofix_once(
             df, subject, s3_key, s3,
             tu_source_key=tu_source_key, sort=sort, verbose=verbose,
+            parent_cache=parent_cache,
         )
         if summary:
             last_summary = summary
@@ -1035,6 +1064,7 @@ def write_profile_csv(
                   f"({type(e).__name__}: {e}); continuing")
 
     # 3. TU-vs-Avid coherence
+    df_tu = None
     if tu_source_key:
         try:
             from migration.tu_avid_coherence import enforce_tu_avid_coherence
@@ -1101,7 +1131,7 @@ def write_profile_csv(
                 run_write_safety_net,
             )
         df, safety_stats = run_write_safety_net(
-            df, subject, verbose=verbose,
+            df, subject, verbose=verbose, parent_df=df_tu, s3_key=s3_key,
         )
         n_safety_net_changes = sum(
             v for v in safety_stats.values() if isinstance(v, int) and v > 0

@@ -1097,7 +1097,8 @@ def enforce_no_collisions(df_avid, df_baseline, subject: str):
                 avid_bp + (1 if (k % 2) else -1) * (0.0007 * (k // 2 + 1)),
                 4,
             )
-            if 0.0005 < cand < 99.99 and cand != base4:
+            if (0.0005 < cand < 99.99 and cand != base4
+                    and abs(cand - round(cand, 2)) >= 0.00005):
                 df_avid.at[idx, bp_col] = (
                     f"{cand:.4f}%" if _had_pct else f"{cand:.4f}")
                 # Update raw/proj from sample/us_pop (best-effort: they'll
