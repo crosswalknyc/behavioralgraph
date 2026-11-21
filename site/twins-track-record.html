@@ -139,8 +139,8 @@
     <div class="eyebrow"><span class="n">02</span> How a call is scored</div>
     <h2 class="h-l">Three steps, the same for every count.</h2>
     <div class="steps" style="margin-top:28px">
-      <div class="c"><div class="k">1. The call is dated</div><p>When a room publishes a split or a pilot test publishes a week-one figure, the record keeps the question, the audience, the figure and its range, and the time, with a hash of all of it. The hash cannot be made after the fact.</p></div>
-      <div class="c"><div class="k">2. The outcome lands</div><p>A certified result, a published figure, or our own count of what the audience did is written next to the call. A count made after the outcome was already known is marked and never scored.</p></div>
+      <div class="c"><div class="k">1. The call is dated</div><p>A call goes on this record before its result exists: the question, the audience, the figure and its range, the day the result is due and what will settle it, with a hash of all of it. A call is never rewritten; a later read is a new, dated row.</p></div>
+      <div class="c"><div class="k">2. The outcome lands</div><p>Every day the record checks the calls that came due. A certified result, a published figure, or our own count of what the audience did is written next to the call. A call made after its result was knowable is marked and never scored.</p></div>
       <div class="c"><div class="k">3. The miss is kept</div><p>How far the figure was off, whether the outcome fell inside the range given, and whether the side we called was the side that won. The misses stay on the page. A scored miss is worth more than a soft number.</p></div>
     </div>
   </div>
@@ -206,7 +206,19 @@
     return '';
   }
   function stat(b, s) { return '<div class="s"><b>' + b + '</b><span>' + s + '</span></div>'; }
-  fetch('assets/data/twins-track-record.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (doc) {
+  // the record read live from the app (the dashboard drawer reads the same rows); the committed file is the fallback
+  function load() {
+    return fetch('/site/api/twins-track-record', { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('live record ' + r.status);
+      return r.json();
+    }).then(function (doc) {
+      if (!doc || doc.success === false || !doc.rows) throw new Error('live record empty');
+      return doc;
+    }).catch(function () {
+      return fetch('assets/data/twins-track-record.json', { cache: 'no-store' }).then(function (r) { return r.json(); });
+    });
+  }
+  load().then(function (doc) {
     var rows = doc.rows || [];
     var sm = doc.summary || {};
     var stats = document.getElementById('stats');

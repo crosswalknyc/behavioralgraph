@@ -447,34 +447,34 @@ def hd_known(sc: dict) -> bool:
 
 
 def _ledger_rows(s3, twin: dict, sess: dict, out: dict, show: str) -> None:
-    """The forecast's figures on the outcome ledger (2026-11-17): one row
-    per measure, keyed to the session, so a re-read updates the row and
-    the hash still dates the first call; an actual on the record lands as
-    the outcome. A forecast made after the title aired is post hoc."""
+    """The forecast's calls on the outcome ledger: the week-one audience,
+    the season completion and the return in week two, each keyed to the
+    session with what settles it (``digital_twin_calls``, 2026-11-20). A
+    call is frozen when it is made: a re-read after the title aired is a
+    later read on the record, never a rewrite, and the daily check settles
+    the first call. A forecast first made once the title has aired is
+    post hoc."""
+    from migration import digital_twin_calls as CALLS
     from migration import digital_twin_ledger as LG
     sid = str(sess.get('id') or '')
     if not sid or not isinstance(out.get('episode'), dict):
         return
-    base = int(out.get('base_people') or 0)
     cal = out.get('calibration') or {}
-    post_hoc = bool((out.get('actual') or {}).get('week_one_audience')) and any((a.get('show') or '') == show for a in (cal.get('anchors') or []))
+    act = out.get('actual') or {}
+    aired = CALLS.iso_day(act.get('aired'))
+    post_hoc = (bool(act.get('week_one_audience')) and any((a.get('show') or '') == show for a in (cal.get('anchors') or []))) or bool(aired and aired <= CALLS.today_iso())
     basis = {'anchor_status': cal.get('scope'), 'firmness': {'word': (out.get('firmness') or {}).get('word')}}
-    ep = out['episode']
     twin_key = str(_meta(twin).get('key') or '')
     company = LG.twin_company_of(twin, twin_key)
-    rows = []
-    if base > 0 and ep.get('week_one_audience'):
-        rows.append(LG.record_prediction(s3, 'forecast', show, {'point': ep['week_one_audience'], 'low': ep.get('low'), 'high': ep.get('high'), 'unit': 'people'},
-                                         measure='week_one_audience', twin_key=twin_key, session_id=sid, question='Week-one audience if released', question_kind='forecast',
-                                         audience_class='title', method_version=f"forecast-{VERSION}", basis=basis, post_hoc=post_hoc, company=company))
-    ser = out.get('series') or {}
-    if ser.get('season_completion_pct') is not None:
-        rows.append(LG.record_prediction(s3, 'forecast', show, {'point': ser['season_completion_pct'], 'unit': 'pct'}, measure='season_completion_pct', twin_key=twin_key, session_id=sid,
-                                         question='Share of episode viewers who watch through the finale', question_kind='forecast', audience_class='title', method_version=f"forecast-{VERSION}",
-                                         basis=basis, post_hoc=post_hoc, company=company))
-    act = out.get('actual') or {}
-    if act.get('week_one_audience') and rows and rows[0]:
-        LG.record_outcome(s3, rows[0]['id'], value=act['week_one_audience'], source_class='published', note=str(act.get('note') or '')[:200])
+    try:
+        from migration import digital_twin_counted as COUNT
+        has = COUNT.has_title
+    except Exception:
+        has = None
+    for c in CALLS.forecast_calls(twin, sess, out, aired_on=aired, content_map_has=has):
+        LG.record_prediction(s3, c['kind'], show, c['prediction'], measure=c['measure'], twin_key=twin_key, session_id=sid, question=c['question'],
+                             question_kind=c['question_kind'], audience_class='title', method_version=f"forecast-{VERSION}", basis=basis, post_hoc=post_hoc,
+                             company=company, call=c['call'], created_by=str(sess.get('created_by') or ''))
 
 
 def record_actual(s3, twin: dict, sess: dict, *, people: int, measure: str, aired: str = '', note: str = '', episode=None, ledger: Optional[dict] = None, save: bool = True) -> dict:

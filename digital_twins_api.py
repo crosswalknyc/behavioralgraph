@@ -3516,15 +3516,47 @@ def dt_track_record():
         rows = LG.public_rows(s3, limit=limit, site=False, company=company, staff=scoped_staff)
         open_rows = LG.open_rows(s3, limit=limit, company=company, staff=scoped_staff)
         sm = LG.summary(s3, scope=True, company=company, staff=scoped_staff)
-    public_summary = {'calls_scored': sm.get('n_scored'), 'hit_rate': sm.get('hit_rate'), 'mean_relative_miss': sm.get('mean_rel_error'), 'coverage': sm.get('coverage'),
-                      'by_kind': {k: {'n': v.get('n'), 'hit_rate': v.get('hit_rate'), 'mean_relative_miss': v.get('mean_rel_error'), 'mean_tvd': v.get('mean_tvd')} for k, v in (sm.get('by_kind') or {}).items()},
-                      'as_of': sm.get('as_of')}
+    public_summary = _record_summary(sm)
+    mine = CO.caller_company(user, _uname(user))
+    for r in open_rows:
+        # a client adds its own result to its own open calls (Jenna 2026-11-20); staff can add to any
+        r['can_add'] = bool(staff or (not r.get('house') and r.get('company') and CO.same_company(r.get('company'), mine)))
     if not staff:
         for r in rows + open_rows:
             r.pop('company', None)      # a seat sees its own rows and the public record; the company name adds nothing it does not know
     return _nocache(jsonify({'success': True, 'rows': rows, 'open': open_rows, 'summary': public_summary, 'staff': staff, 'company': company or '',
                              'public_url': 'https://www.crosswalknyc.com/twins-track-record.html',
-                             'line': 'Every call the twins made before its outcome, next to what happened. The hash on each row dates the call.'}))
+                             'line': 'Every call the twins made before its result, next to what happened. The hash on each row dates the call.'}))
+
+
+def _record_summary(sm: dict) -> dict:
+    return {'calls_scored': sm.get('n_scored'), 'hit_rate': sm.get('hit_rate'), 'mean_relative_miss': sm.get('mean_rel_error'), 'coverage': sm.get('coverage'),
+            'by_kind': {k: {'n': v.get('n'), 'hit_rate': v.get('hit_rate'), 'mean_relative_miss': v.get('mean_rel_error'), 'mean_tvd': v.get('mean_tvd')} for k, v in (sm.get('by_kind') or {}).items()},
+            'as_of': sm.get('as_of')}
+
+
+_PUBLIC_DROP = ('company', 'twin_key', 'session_id', 'id', 'public', 'house', 'logged', 'options', 'scored_as')
+
+
+@bp.route('/site/api/twins-track-record', methods=['GET'])
+def dt_public_track_record():
+    """The public track record, read live from the ledger (Jenna
+    2026-11-20): the website's page fetches this, so it and the
+    dashboard drawer always agree. Only the public rows (Crosswalk calls
+    logged before their result, the backfilled calls, client calls an
+    admin released), never a company, a key or a source name. No sign-in;
+    a short cache."""
+    from migration import digital_twin_ledger as LG
+    s3 = _s3()
+    try:
+        rows = [{k: v for k, v in r.items() if k not in _PUBLIC_DROP} for r in LG.public_rows(s3, limit=500, site=True)]
+        doc = {'success': True, 'as_of': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'rows': rows, 'summary': _record_summary(LG.summary(s3, site=True))}
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'The record could not be read right now.'}), 503
+    resp = jsonify(doc)
+    resp.headers['Cache-Control'] = 'public, max-age=300'
+    return resp
 
 
 @bp.route(f'{PREFIX}/ledger/<rid>/release', methods=['POST'])
@@ -3541,6 +3573,9 @@ def dt_ledger_release(rid):
     rec = LG.release(_s3(), str(rid), bool(body.get('public')))
     if not rec:
         return jsonify({'success': False, 'error': 'no such row'}), 404
+    if body.get('public') and not rec.get('public'):
+        return jsonify({'success': False, 'error': 'This call cannot go on the public record: a Crosswalk call goes there only when it was logged before its result, '
+                                                   'and a call made after its result was knowable never does.'}), 409
     return _nocache(jsonify({'success': True, 'id': rec['id'], 'public': bool(rec.get('public'))}))
 
 
@@ -3576,12 +3611,91 @@ def dt_ledger_outcome(rid):
         return jsonify({'success': False, 'error': 'admin only'}), 403
     from migration import digital_twin_ledger as LG
     body = request.get_json(silent=True) or {}
+    have = LG.load_record(_s3(), str(rid))
+    if not have:
+        return jsonify({'success': False, 'error': 'no such row'}), 404
     rec = LG.record_outcome(_s3(), str(rid), body.get('value'), distribution=body.get('distribution') if isinstance(body.get('distribution'), list) else None,
                             happened=body.get('happened'), winner=body.get('winner'), source_class=str(body.get('source_class') or ''), note=str(body.get('note') or ''),
                             observed_at=str(body.get('observed_at') or ''))
     if not rec:
-        return jsonify({'success': False, 'error': 'no such row'}), 404
+        return jsonify({'success': False, 'error': 'This call is already scored, or it is not a call. A scored call is never revised.'}), 409
     return _nocache(jsonify({'success': True, 'record': rec}))
+
+
+@bp.route(f'{PREFIX}/ledger/log', methods=['POST'])
+def dt_ledger_log():
+    """Staff: put a room question or a forecast on the record on purpose,
+    before its result (Jenna 2026-11-20: "Only calls we deliberately log
+    before the result"), with the day its result is knowable, the check
+    that settles it, what is measured and how it is scored. A Crosswalk
+    call logged this way is public; a client's stays private until an
+    admin releases it. A call whose result is already knowable is
+    refused."""
+    user, err = _gate()
+    if err:
+        return err
+    if not CO.is_staff(user, _uname(user)):
+        return jsonify({'success': False, 'error': 'staff only'}), 403
+    from migration import digital_twin_calls as CALLS
+    s3 = _s3()
+    rec, error, code = CALLS.log_on_purpose(s3, request.get_json(silent=True) or {}, by=_uname(user), load_twin=lambda k: DT.load_twin(s3, k))
+    if not rec:
+        return jsonify({'success': False, 'error': error}), code
+    return _nocache(jsonify({'success': True, 'id': rec['id'], 'public': bool(rec.get('public')), 'due_on': (rec.get('call') or {}).get('due_at')}))
+
+
+@bp.route(f'{PREFIX}/ledger/<rid>/result', methods=['POST'])
+def dt_ledger_result(rid):
+    """A client adds its own result to one of its own open calls (Jenna
+    2026-11-20: the Add your result button); staff can add to any. The
+    call is scored at once and stays private unless an admin releases
+    it. A scored call is never revised."""
+    user, err = _gate()
+    if err:
+        return err
+    from migration import digital_twin_calls as CALLS
+    from migration import digital_twin_ledger as LG
+    s3 = _s3()
+    rec = LG.load_record(s3, str(rid))
+    if not rec or not LG.is_call(rec):
+        return jsonify({'success': False, 'error': 'call not found'}), 404
+    staff = CO.is_staff(user, _uname(user))
+    if not staff:
+        mine = CO.caller_company(user, _uname(user))
+        if LG.is_house(rec) or not rec.get('company') or not CO.same_company(rec.get('company'), mine):
+            return jsonify({'success': False, 'error': 'call not found'}), 404
+    if rec.get('outcome'):
+        return jsonify({'success': False, 'error': 'This call is already scored. A scored call is never revised.'}), 409
+    if rec.get('post_hoc'):
+        return jsonify({'success': False, 'error': 'This call was made after its result was knowable, so it is not scored.'}), 409
+    body = request.get_json(silent=True) or {}
+    comp = str((rec.get('call') or {}).get('comparator') or ('winner' if (rec.get('prediction') or {}).get('call') and not (rec.get('prediction') or {}).get('point') else 'number'))
+    kw = {'source_class': 'client', 'note': str(body.get('note') or '')[:200], 'observed_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+    value = None
+    if comp == 'winner':
+        opts = [str(d.get('label')) for d in (rec.get('prediction') or {}).get('distribution') or [] if isinstance(d, dict)]
+        win = str(body.get('winner') or '').strip()
+        if not win or (opts and win not in opts):
+            return jsonify({'success': False, 'error': 'Pick the option that won.'}), 400
+        kw['winner'] = win
+    elif comp == 'yes_no':
+        if body.get('happened') is None:
+            return jsonify({'success': False, 'error': 'Say whether it happened.'}), 400
+        kw['happened'] = bool(body.get('happened'))
+    elif comp == 'split':
+        dist = [d for d in body.get('distribution') or [] if isinstance(d, dict) and d.get('label') is not None and d.get('pct') is not None]
+        if not dist:
+            return jsonify({'success': False, 'error': 'Give the share for each option.'}), 400
+        kw['distribution'] = dist
+    else:
+        try:
+            value = float(str(body.get('value')).replace(',', '').replace('%', '').strip())
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Enter the number your own results show.'}), 400
+    out = LG.record_outcome(s3, str(rid), value, **kw)
+    if not out:
+        return jsonify({'success': False, 'error': 'The result could not be added.'}), 409
+    return _nocache(jsonify({'success': True, 'id': out['id'], 'scored': True, 'settled_on': CALLS.today_iso()}))
 
 
 @bp.route(f'{PREFIX}/ledger/backfill', methods=['POST'])

@@ -72,8 +72,9 @@ class Page(unittest.TestCase):
         # the search haystack carries the builder and the qualifier
         lib = html[html.index('function renderLibrary()'):html.index('function pad2(i)')]
         self.assertIn('[r.name, r.subject, r.built_by, twinQualifier(r)].join', lib)
-        # the pickers: the spine switch and the room's second twin, Rooms on, the pilot's other twins, the Predictive Analytics audience step
-        self.assertEqual(html.count("esc(twinOptionLabel(r))"), 5, 'five option pickers name a twin through twinOptionLabel')
+        # the pickers: the spine switch and the room's second twin, Rooms on, the pilot's other twins, the Predictive Analytics audience step,
+        # and the Track record's Log a call form (2026-11-20)
+        self.assertEqual(html.count("esc(twinOptionLabel(r))"), 6, 'six option pickers name a twin through twinOptionLabel')
         pa = html[html.index('function paStepAudience(p)'):html.index('function paStepQuestion(p)')]
         self.assertIn("twinQualifier(r) ? '<span class=\"built\">'", pa)
         self.assertNotIn("esc(r.name || r.subject) + '</option>'", html)

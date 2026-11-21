@@ -33,6 +33,23 @@ The first rows are the calls the house made before their outcomes on the
 2026 midterms and the NCIS: New York premiere (``backfill_known``),
 marked ``backfilled`` with the dates they were made public.
 
+What a call is (Jenna 2026-11-20: "Only questions with a real result to
+check"): every record carries a ``status``. ``call`` is a question with a
+real result to check, and it carries what settles it (``call``: the date
+its result is knowable, the check, what is measured, how it is scored;
+``migration/digital_twin_calls``). ``not_a_call`` and ``folded`` rows
+stay in storage for audit and never reach a reader, a summary or the
+firmness layer; ``revision`` is a later prediction on a call already
+made. A call is frozen when it is made: a different prediction never
+replaces it, it becomes a new dated revision row and the first one
+keeps its hash and date. An outcome, once written, is never revised.
+
+Who reads what (Jenna 2026-11-20: "Only calls we deliberately log
+before the result; practice rooms stay internal"): a Crosswalk row is
+public only when it was logged on purpose before its result
+(``logged``) or is one of the backfilled calls; a client's row is its
+company's alone until an admin releases it; staff read everything.
+
 Nothing here raises into a room or a build: every public function
 catches and logs; a ledger that cannot be written leaves the product
 untouched.
@@ -49,9 +66,42 @@ S3_BUCKET = 'dashboard-inputs'
 LEDGER_PREFIX = 'system/digital_twins/ledger/'
 RECORDS_PREFIX = LEDGER_PREFIX + 'records/'
 INDEX_KEY = LEDGER_PREFIX + 'index.json'
-VERSION = 1
+VERSION = 2
 KINDS = ('forecast', 'room_count', 'scorecard', 'call')
+STATUSES = ('call', 'not_a_call', 'folded', 'revision')
+# the type of result a reader sees beside a settled call; never a source name
+OUTCOME_LABELS = {'certified result': 'certified result', 'certified': 'certified result', 'published': 'published', 'on file': 'published',
+                  'panel': 'our own count', 'counted': 'our own count', 'our own count': 'our own count',
+                  'client': 'client results', 'client results': 'client results'}
+CHECK_LABELS = {'counted': 'our own count', 'published': 'a published result', 'certified': 'a certified result', 'client': 'your own results'}
 _MEM: dict = {'records': {}, 'index': None}     # the in-memory ledger when no S3 is given
+
+
+def outcome_label(source_class) -> str:
+    c = str(source_class or '').strip().lower()
+    if not c:
+        return ''
+    return OUTCOME_LABELS.get(c, 'published')
+
+
+def _status(row) -> str:
+    s = str((row or {}).get('status') or 'call')
+    return s if s in STATUSES else 'call'
+
+
+def is_call(row) -> bool:
+    return _status(row) == 'call'
+
+
+def _public_allowed(row) -> bool:
+    """A house row reaches the public record only when it was logged on
+    purpose before its result, or is a backfilled call; a client row
+    only when an admin released it (``public``)."""
+    if (row or {}).get('post_hoc') or not is_call(row):
+        return False
+    if is_house(row):
+        return bool(row.get('logged') or row.get('backfilled'))
+    return True
 
 
 def _now():
@@ -125,7 +175,9 @@ def _index_row(rec: dict) -> dict:
             'post_hoc': bool(rec.get('post_hoc')), 'backfilled': bool(rec.get('backfilled')), 'public': bool(rec.get('public')),
             'company': str(rec.get('company') or ''), 'house': is_house(rec),
             'abs_error': sc.get('abs_error'), 'rel_error': sc.get('rel_error'), 'tvd': sc.get('tvd'), 'covered': sc.get('covered'), 'brier': sc.get('brier'),
-            'hit': sc.get('hit'), 'anchor_status': (rec.get('basis') or {}).get('anchor_status'), 'firmness': ((rec.get('basis') or {}).get('firmness') or {}).get('word')}
+            'hit': sc.get('hit'), 'anchor_status': (rec.get('basis') or {}).get('anchor_status'), 'firmness': ((rec.get('basis') or {}).get('firmness') or {}).get('word'),
+            'status': _status(rec), 'logged': bool(rec.get('logged')), 'due_at': (rec.get('call') or {}).get('due_at'), 'resolver': (rec.get('call') or {}).get('resolver'),
+            'created_by': str(rec.get('created_by') or ''), 'revises': str(rec.get('revises') or '')}
 
 
 def _save(s3, rec: dict) -> dict:
@@ -257,13 +309,20 @@ def is_house(rec: dict) -> bool:
 
 
 def visible(row: dict, *, company: Optional[str] = None, staff: bool = False) -> bool:
-    """Who may read a row (2026-11-17): staff read everything; a seat
-    reads the house's public record and its own company's calls. A
-    client's room or test never shows to another company."""
+    """Who may read a row: staff read everything; a seat reads the
+    public record and its own company's calls (2026-11-17). A Crosswalk
+    practice room never shows to a client (Jenna 2026-11-20): a house
+    row is on the public record only when it was logged on purpose
+    before its result, or is a backfilled call. A row that is not a call
+    (or a revision) reaches no reader but staff."""
     if staff:
         return True
-    if row.get('public') or is_house(row):
+    if not is_call(row):
+        return False
+    if row.get('public') and _public_allowed(row):
         return True
+    if is_house(row):
+        return False
     if company and row.get('company'):
         try:
             from migration import digital_twin_company as CO
@@ -276,58 +335,131 @@ def visible(row: dict, *, company: Optional[str] = None, staff: bool = False) ->
 def record_prediction(s3, kind: str, subject: str, prediction: dict, *, measure: str = '', twin_key: str = '', session_id: str = '', question_id: str = '',
                       question: str = '', question_kind: str = '', audience_class: str = '', method_version: str = '', basis: Optional[dict] = None,
                       post_hoc: bool = False, public: Optional[bool] = None, created_at: str = '', backfilled: bool = False, note: str = '',
-                      company: str = '', house: Optional[bool] = None) -> Optional[dict]:
+                      company: str = '', house: Optional[bool] = None, logged: bool = False, logged_by: str = '', call: Optional[dict] = None,
+                      created_by: str = '', status: str = 'call') -> Optional[dict]:
     """A prediction on the ledger. ``prediction`` carries any of point /
     low / high / unit, distribution [{label, pct}], probability, call.
-    Idempotent per (kind, subject, session, question, measure): a repeat
-    updates the row and keeps the first created_at and hash unless the
-    prediction itself changed. ``company`` is the twin's company; a house
-    row (Crosswalk's own twins, the backfilled calls) is public by
-    default, a client's row is not until an admin releases it
-    (``release``). Never raises."""
+    Idempotent per (kind, subject, session, question, measure). A call is
+    frozen when it is made (Jenna 2026-11-20): the same prediction again
+    returns the row as it was; a different one never replaces it and is
+    written as a revision with its own date, so the first call keeps its
+    hash and its date. ``call`` is what settles it (the due date, the
+    check, the measure, how it is scored). ``company`` is the twin's
+    company. A Crosswalk row is public only when it was logged on purpose
+    (``logged``) or backfilled; a client's row is private until an admin
+    releases it (``release``). Never raises."""
     try:
         kind = kind if kind in KINDS else 'call'
         rid = record_id(kind, subject, session_id, question_id, measure)
         have = load_record(s3, rid)
         pred = {k: v for k, v in (prediction or {}).items() if v is not None}
-        if have and _canon(have.get('prediction')) == _canon(pred) and not have.get('outcome'):
-            return have     # the same prediction already on the ledger
-        company = str(company or (have or {}).get('company') or '')
+        if have:
+            if _canon(have.get('prediction')) == _canon(pred):
+                if call and not have.get('call') and not have.get('outcome'):
+                    return update_call(s3, rid, call=call) or have      # what it is measured against can still be added
+                return have
+            return _revision(s3, have, pred, created_at=created_at, post_hoc=post_hoc, basis=basis, note=note)
+        company = str(company or '')
         if house is None:
-            house = is_house({'company': company, 'backfilled': backfilled}) if (company or backfilled) else bool((have or {}).get('house'))
-        if public is None:
-            public = bool((have or {}).get('public')) if have and 'public' in have else bool(house)
+            house = is_house({'company': company, 'backfilled': backfilled}) if (company or backfilled) else False
+        status = status if status in STATUSES else 'call'
         rec = {'id': rid, 'version': VERSION, 'kind': kind, 'subject': str(subject or ''), 'twin_key': str(twin_key or ''), 'session_id': str(session_id or ''),
                'question_id': str(question_id or ''), 'question': ' '.join(str(question or '').split())[:400], 'measure': str(measure or ''),
                'question_kind': str(question_kind or ''), 'audience_class': str(audience_class or ''), 'method_version': str(method_version or ''),
-               'prediction': pred, 'basis': dict(basis or {}), 'created_at': created_at or (have or {}).get('created_at') or _now(),
-               'post_hoc': bool(post_hoc), 'public': bool(public) and not post_hoc, 'backfilled': bool(backfilled), 'note': str(note or '')[:400],
-               'company': company, 'house': bool(house), 'outcome': (have or {}).get('outcome'), 'score': None}
-        if have and have.get('outcome') and _canon(have.get('prediction')) != _canon(pred):
-            # a prediction revised after its outcome landed is a new row, never a rewrite of a scored one
-            rec['id'] = rid + '_r' + hashlib.sha256(_canon(pred).encode()).hexdigest()[:4]
-            rec['outcome'], rec['created_at'] = None, created_at or _now()
-            rec['note'] = (rec['note'] + ' Revised after the outcome was recorded; the scored row stands.').strip()
-            rec['public'] = False
+               'prediction': pred, 'basis': dict(basis or {}), 'created_at': created_at or _now(),
+               'post_hoc': bool(post_hoc), 'backfilled': bool(backfilled), 'note': str(note or '')[:400],
+               'company': company, 'house': bool(house), 'outcome': None, 'score': None, 'status': status,
+               'logged': bool(logged), 'logged_by': str(logged_by or '')[:80], 'logged_at': (_now() if logged else ''),
+               'call': dict(call) if isinstance(call, dict) else None, 'created_by': str(created_by or '')[:80], 'checks': {}}
+        wanted = bool(public) if public is not None else bool(backfilled or (logged and house))
+        rec['public'] = wanted and _public_allowed(rec)
         rec['hash'] = record_hash(rec)
-        if rec.get('outcome'):
-            rec['score'] = score(rec['prediction'], rec['outcome'])
         return _save(s3, rec)
     except Exception as e:
         print(f"[twin-ledger] record_prediction failed: {str(e)[:160]}")
         return None
 
 
-def record_outcome(s3, rid: str, value=None, *, distribution: Optional[list] = None, happened: Optional[bool] = None, winner: Optional[str] = None,
-                   source_class: str = '', note: str = '', observed_at: str = '') -> Optional[dict]:
-    """The outcome on a record, scored. Never raises."""
+def _revision(s3, have: dict, pred: dict, *, created_at: str = '', post_hoc: bool = False, basis: Optional[dict] = None, note: str = '') -> Optional[dict]:
+    """A later prediction on a call already made: its own row, its own
+    date and hash, never public, never scored; the first call stands."""
+    rid = str(have.get('id') or '') + '_r' + hashlib.sha256(_canon(pred).encode()).hexdigest()[:4]
+    ex = load_record(s3, rid)
+    if ex:
+        return ex
+    rec = {k: v for k, v in have.items() if k not in ('hash', 'outcome', 'score', 'checks')}
+    rec.update({'id': rid, 'prediction': pred, 'created_at': created_at or _now(), 'post_hoc': bool(post_hoc or have.get('post_hoc')), 'public': False,
+                'logged': False, 'logged_by': '', 'logged_at': '', 'outcome': None, 'score': None, 'status': 'revision', 'revises': have.get('id'),
+                'basis': dict(basis) if isinstance(basis, dict) else dict(have.get('basis') or {}), 'checks': {},
+                'note': (str(note or '') + ' A later read of a call already on the record; the first call stands.').strip()[:400]})
+    rec['hash'] = record_hash(rec)
+    return _save(s3, rec)
+
+
+_META_FIELDS = ('created_by', 'status_reason', 'folded_into', 'logged_by')
+
+
+def update_call(s3, rid: str, *, call: Optional[dict] = None, checks: Optional[dict] = None, status: Optional[str] = None,
+                logged: Optional[bool] = None, public: Optional[bool] = None, post_hoc: Optional[bool] = None, **meta) -> Optional[dict]:
+    """What a call is measured against, its check trail, its status and
+    who it belongs to. Never touches the prediction, the date, the hash
+    or a written outcome. A row only ever becomes post hoc, never the
+    other way. Never raises."""
     try:
         rec = load_record(s3, rid)
         if not rec:
             return None
+        if isinstance(call, dict):
+            cur = dict(rec.get('call') or {})
+            cur.update({k: v for k, v in call.items() if v is not None})
+            rec['call'] = cur
+        if isinstance(checks, dict):
+            cur = dict(rec.get('checks') or {})
+            cur.update(checks)
+            rec['checks'] = cur
+        if status in STATUSES:
+            rec['status'] = status
+        if logged:
+            rec['logged'] = True
+            rec['logged_at'] = rec.get('logged_at') or _now()
+        if post_hoc:
+            rec['post_hoc'] = True
+        for k in _META_FIELDS:
+            if k in meta and meta[k] is not None:
+                rec[k] = str(meta[k])[:200]
+        if public is not None:
+            rec['public'] = bool(public)
+        rec['public'] = bool(rec.get('public')) and _public_allowed(rec)
+        return _save(s3, rec)
+    except Exception as e:
+        print(f"[twin-ledger] update_call failed: {str(e)[:160]}")
+        return None
+
+
+def _same_outcome(a: dict, b: dict) -> bool:
+    keys = ('value', 'distribution', 'happened', 'winner')
+    return _canon({k: (a or {}).get(k) for k in keys}) == _canon({k: (b or {}).get(k) for k in keys})
+
+
+def record_outcome(s3, rid: str, value=None, *, distribution: Optional[list] = None, happened: Optional[bool] = None, winner: Optional[str] = None,
+                   source_class: str = '', note: str = '', observed_at: str = '') -> Optional[dict]:
+    """The outcome on a call, scored. An outcome is written once: the
+    same outcome again returns the row, a different one is refused (a
+    miss is never revised). A row that is not a call is never scored.
+    Never raises."""
+    try:
+        rec = load_record(s3, rid)
+        if not rec or not is_call(rec):
+            return None
         out = {'value': _num(value), 'distribution': [{'label': r.get('label'), 'pct': _num(r.get('pct'))} for r in (distribution or []) if isinstance(r, dict)] or None,
                'happened': happened, 'winner': winner, 'source_class': str(source_class or '')[:60], 'note': str(note or '')[:400], 'observed_at': observed_at or _now()}
-        rec['outcome'] = {k: v for k, v in out.items() if v is not None and v != []}
+        out = {k: v for k, v in out.items() if v is not None and v != []}
+        if rec.get('outcome'):
+            if _same_outcome(rec['outcome'], out):
+                return rec
+            print(f"[twin-ledger] outcome on {rid} already written; a different one is refused")
+            return None
+        rec['outcome'] = out
         rec['score'] = score(rec.get('prediction') or {}, rec['outcome'])
         return _save(s3, rec)
     except Exception as e:
@@ -359,19 +491,21 @@ def restamp(s3) -> int:
         rec['house'] = is_house({'company': comp, 'backfilled': rec.get('backfilled')})
         if not rec['house']:
             rec['public'] = False
+        rec['public'] = bool(rec.get('public')) and _public_allowed(rec)
         _save(s3, rec)
         n += 1
     return n
 
 
 def release(s3, rid: str, public: bool) -> Optional[dict]:
-    """An admin puts a row on the public record, or takes it off. A post
-    hoc row can never be public. Never raises."""
+    """An admin puts a client's call on the public record, or takes it
+    off. A post hoc row can never be public, and neither can a Crosswalk
+    row that was not logged on purpose before its result. Never raises."""
     try:
         rec = load_record(s3, rid)
         if not rec:
             return None
-        rec['public'] = bool(public) and not rec.get('post_hoc')
+        rec['public'] = bool(public) and _public_allowed(rec)
         return _save(s3, rec)
     except Exception as e:
         print(f"[twin-ledger] release failed: {str(e)[:160]}")
@@ -412,9 +546,9 @@ def summary(s3, *, kind: str = '', question_kind: str = '', audience_class: str 
     a reader may see (``company`` / ``staff``); with ``site`` only the
     public ones. The firmness layer reads it unscoped (every scored row
     teaches it)."""
-    rows = [r for r in (load_index(s3).get('records') or []) if not r.get('post_hoc') and (include_backfilled or not r.get('backfilled'))]
+    rows = [r for r in (load_index(s3).get('records') or []) if is_call(r) and not r.get('post_hoc') and (include_backfilled or not r.get('backfilled'))]
     if site:
-        rows = [r for r in rows if r.get('public')]
+        rows = [r for r in rows if r.get('public') and _public_allowed(r)]
     elif scope:
         rows = [r for r in rows if visible(r, company=company, staff=staff)]
     if kind:
@@ -518,24 +652,27 @@ def _row_view(rec: dict) -> dict:
     pred, out = rec.get('prediction') or {}, rec.get('outcome') or {}
     sc = rec.get('score') or {}
     fb = ((rec.get('basis') or {}).get('firmness') or {})
+    cl = rec.get('call') or {}
     return {'id': rec.get('id'), 'subject': rec.get('subject'), 'what': rec.get('question') or rec.get('measure'), 'kind': rec.get('kind'), 'unit': pred.get('unit'),
             'said': pred.get('point') if pred.get('point') is not None else (pred.get('call') or (pred.get('distribution') or [{}])[0].get('label')),
             'said_distribution': pred.get('distribution'), 'low': pred.get('low'), 'high': pred.get('high'),
             'happened': out.get('value') if out.get('value') is not None else (out.get('winner') or (out.get('distribution') or [{}])[0].get('label')),
-            'happened_distribution': out.get('distribution'), 'outcome_class': out.get('source_class'),
+            'happened_distribution': out.get('distribution'), 'outcome_class': outcome_label(out.get('source_class')),
             'called_on': str(rec.get('created_at') or '')[:10], 'settled_on': str(out.get('observed_at') or '')[:10],
+            'due_on': str(cl.get('due_at') or '')[:10], 'check': CHECK_LABELS.get(str(cl.get('resolver') or ''), ''), 'scored_as': str(cl.get('comparator') or ''),
+            'options': [d.get('label') for d in (pred.get('distribution') or []) if isinstance(d, dict) and d.get('label')][:8],
             'abs_error': sc.get('abs_error'), 'rel_error': sc.get('rel_error'), 'tvd': sc.get('tvd'), 'covered': sc.get('covered'), 'hit': sc.get('hit'), 'hash': rec.get('hash'),
-            'company': str(rec.get('company') or ''), 'house': is_house(rec), 'public': bool(rec.get('public')), 'firmness': fb.get('word') if isinstance(fb, dict) else None,
-            'twin_key': rec.get('twin_key'), 'session_id': rec.get('session_id')}
+            'company': str(rec.get('company') or ''), 'house': is_house(rec), 'public': bool(rec.get('public')) and _public_allowed(rec), 'logged': bool(rec.get('logged')),
+            'firmness': fb.get('word') if isinstance(fb, dict) else None, 'twin_key': rec.get('twin_key'), 'session_id': rec.get('session_id')}
 
 
 def open_rows(s3, limit: int = 200, *, company: Optional[str] = None, staff: bool = False) -> list:
     """The calls still waiting on their outcome, newest first: what was
     said and when, dated by the hash. Scoped to what the reader may
-    see; never a post hoc row."""
+    see; never a post hoc row, never a row that is not a call."""
     rows = []
     for r in reversed(load_index(s3).get('records') or []):
-        if r.get('has_outcome') or r.get('post_hoc') or not visible(r, company=company, staff=staff):
+        if not is_call(r) or r.get('has_outcome') or r.get('post_hoc') or not visible(r, company=company, staff=staff):
             continue
         rec = load_record(s3, r['id']) or {}
         if rec:
@@ -555,10 +692,10 @@ def public_rows(s3, limit: int = 200, *, company: Optional[str] = None, staff: b
     of the outcome."""
     rows = []
     for r in reversed(load_index(s3).get('records') or []):
-        if not r.get('has_outcome') or r.get('post_hoc'):
+        if not is_call(r) or not r.get('has_outcome') or r.get('post_hoc'):
             continue
         if site:
-            if not r.get('public'):
+            if not (r.get('public') and _public_allowed(r)):
                 continue
         elif not visible(r, company=company, staff=staff):
             continue
@@ -571,5 +708,6 @@ def public_rows(s3, limit: int = 200, *, company: Optional[str] = None, staff: b
     return rows
 
 
-__all__ = ['VERSION', 'KINDS', 'record_prediction', 'record_outcome', 'record_id', 'record_hash', 'score', 'tvd', 'summary', 'history_for', 'find',
-           'load_record', 'load_index', 'rebuild_index', 'backfill_known', 'public_rows', 'open_rows', 'release', 'visible', 'is_house', 'twin_company_of', 'restamp', 'reset_memory']
+__all__ = ['VERSION', 'KINDS', 'STATUSES', 'OUTCOME_LABELS', 'CHECK_LABELS', 'record_prediction', 'record_outcome', 'update_call', 'record_id', 'record_hash',
+           'score', 'tvd', 'summary', 'history_for', 'find', 'load_record', 'load_index', 'rebuild_index', 'backfill_known', 'public_rows', 'open_rows', 'release',
+           'visible', 'is_house', 'is_call', 'outcome_label', 'twin_company_of', 'restamp', 'reset_memory']

@@ -572,6 +572,13 @@ def _run(s3, payload, key, sess, plan_doc, job_id, *, username, twins_by_key, vo
                                'subject': _subject(payload), 'goal': plan_doc.get('goal'), 'done': total, 'total': total})
         out = outcome(sess, plan_doc, call=outcome_call)
         g['outcome'] = {k: v for k, v in out.items() if k != 'method'}
+        try:   # the final question is a call only when the business question names a real result and a date (Jenna 2026-11-20)
+            from migration import digital_twin_calls as CALLS
+            row = CALLS.record_guided(s3, payload, key, sess, plan_doc, username=username)
+            if row:
+                g['call_id'] = row.get('id')
+        except Exception as e:
+            print(f"[twin-guided] call skipped: {str(e)[:120]}")
         g['status'] = 'done'
         g['stage'] = 'Done'
         g['finished_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())

@@ -4372,34 +4372,32 @@ def attach_firmness(rec: dict, roster: list, priors: Optional[dict], twin: dict,
     return rec['firmness']
 
 
-def ledger_row_for_question(s3, twin: dict, session: dict, rec: dict, twin_key: str = '') -> Optional[dict]:
-    """The published split on the outcome ledger as a room_count row:
-    the distribution over the options, the question, the anchor status
-    and the firmness word. A question answered on a counted result is
-    post hoc (the outcome was known) and never counts toward the record.
-    A rating or a probe has no outcome to score and is not recorded."""
+def ledger_row_for_question(s3, twin: dict, session: dict, rec: dict, twin_key: str = '', *, call: Optional[dict] = None, logged: bool = False,
+                            logged_by: str = '', created_by: str = '') -> Optional[dict]:
+    """A room question on the outcome ledger as a call, only when an admin
+    logs it on purpose with what settles it (``call``; Jenna 2026-11-20).
+    The distribution over the options, the question, the anchor status
+    and the firmness word ride on the row. A question answered on a
+    counted result is post hoc (the outcome was known) and never counts
+    toward the record. A rating or a probe has no outcome to score and is
+    not recorded."""
+    from migration import digital_twin_calls as CALLS
     from migration import digital_twin_ledger as LG
     kind = str(rec.get('kind') or '')
-    if kind in ('rating', 'probe') or not rec.get('options'):
+    if kind in ('rating', 'probe') or not rec.get('options') or not isinstance(call, dict):
         return None
-    opts = [o for o in rec['options'] if isinstance(o, dict) and o.get('label')]
-    if not opts:
+    pred = CALLS.room_prediction(rec)
+    if not pred:
         return None
     trail = rec.get('trail') or {}
     status = str(trail.get('anchor_status') or '')
-    lead = max(opts, key=lambda o: float(o.get('pct') or 0))
-    pred = {'distribution': [{'label': o['label'], 'pct': float(o.get('pct') or 0)} for o in opts], 'point': float(lead.get('pct') or 0), 'unit': 'pct'}
     fb = rec.get('firmness') or {}
-    lead_r = (fb.get('lead') or {}) if isinstance(fb, dict) else {}
-    if lead_r.get('low_pct') is not None:
-        pred['low'], pred['high'] = lead_r['low_pct'], lead_r['high_pct']
-    if rec.get('yes_pct') is not None:
-        pred['probability'] = round(float(rec['yes_pct']) / 100.0, 4)
-    return LG.record_prediction(s3, 'room_count', str(_meta(twin).get('subject') or _twin_name(twin)), pred, measure=f"share:{str(lead.get('label') or '')[:60]}",
+    return LG.record_prediction(s3, 'room_count', str(_meta(twin).get('subject') or _twin_name(twin)), pred, measure=f"share:{str(pred.get('call') or '')[:60]}",
                                 twin_key=twin_key or str(_meta(twin).get('key') or ''), session_id=str(session.get('id') or ''), question_id=str(rec.get('id') or ''),
                                 question=str(rec.get('q') or ''), question_kind=kind, audience_class=subject_class(twin), method_version=ROOM_VERSION,
                                 basis={'anchor_status': status, 'firmness': {'word': fb.get('word') if isinstance(fb, dict) else None}}, post_hoc=(status == 'result'),
-                                company=LG.twin_company_of(twin, twin_key or str(_meta(twin).get('key') or '')))
+                                company=LG.twin_company_of(twin, twin_key or str(_meta(twin).get('key') or '')), call=call, logged=logged, logged_by=logged_by,
+                                created_by=created_by or str(session.get('created_by') or ''))
 
 
 def chat_lines(session: dict, rec: dict) -> list:
@@ -5055,10 +5053,8 @@ def run_question(ctx: dict) -> dict:
     trail.update({'models': tot['models'], 'tokens': tot['tokens'], 'searches': tot['searches'], 'cost_usd': tot['cost_usd'], 'calls': tot['calls'], 'version': ROOM_VERSION})
     timings['total_s'] = round(time.time() - ctx['t0'], 2)
     rec['finished_at'] = _now()
-    try:   # the count on the outcome ledger (2026-11-17): scored later against what happened; a count on a result already known is post hoc
-        ledger_row_for_question(s3, twin, session, rec, twin_key=ctx.get('twin_key') or '')
-    except Exception as e:
-        print(f"[twin-room] ledger skipped: {str(e)[:120]}")
+    # a room answer stays in the room (Jenna 2026-11-20: "Only questions with a real result to check"); it reaches the record only
+    # when an admin logs it on purpose before its result, or as the final question of a Predictive Analytics run that names one
     try:
         refresh_memory(session)
     except Exception:

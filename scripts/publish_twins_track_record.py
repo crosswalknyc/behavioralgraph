@@ -34,7 +34,9 @@ BANNED = ('synthetic', 'synth', 'model', 'estimat', 'research', 'panel', 'nielse
 
 def build(s3) -> dict:
     from migration import digital_twin_ledger as LG
-    rows = [{k: v for k, v in r.items() if k not in ('company', 'twin_key', 'session_id', 'id', 'public', 'house')} for r in LG.public_rows(s3, limit=500, site=True)]
+    # the page reads the record live (/site/api/twins-track-record, 2026-11-20); this file is its fallback
+    rows = [{k: v for k, v in r.items() if k not in ('company', 'twin_key', 'session_id', 'id', 'public', 'house', 'logged', 'options', 'scored_as')}
+            for r in LG.public_rows(s3, limit=500, site=True)]
     sm = LG.summary(s3, site=True)
     doc = {'as_of': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'rows': rows,
            'summary': {'calls_scored': sm.get('n_scored'), 'hit_rate': sm.get('hit_rate'), 'mean_relative_miss': sm.get('mean_rel_error'), 'coverage': sm.get('coverage'),
