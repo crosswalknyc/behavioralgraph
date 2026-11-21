@@ -373,9 +373,17 @@ class MutatorsReturnDocuments(unittest.TestCase):
         self.assertEqual(problems, [], '\n'.join(problems))
 
     def test_bpiq_grant_mutator_returns_the_doc(self):
+        # The requester's grant rides the ownership stamp since bb556eb7 (2026-11-19): the job calls
+        # _stamp_bpiq_ownership, whose users.json mutator hands back the doc when it wrote and None when not.
         src = _legacy_view()   # stage 5: chat.py plus its extracted cores
         self.assertNotIn(".get(username)) or None)", src)
-        self.assertIn('def _grant_doc(data):', src)
+        self.assertIn('_stamp_bpiq_ownership(out_key, username)', src)
+        app_src = _read(os.path.join(ROOT, 'app.py'))
+        self.assertNotIn(".get(username)) or None)", app_src)
+        m = re.search(r'def _stamp_bpiq_ownership\(s3_key, username\):.*?\n    def _mutate\(data\):(.*?)\n    try:', app_src, re.S)
+        self.assertTrue(m, '_stamp_bpiq_ownership and its _mutate are in app.py')
+        self.assertIn('return data if wrote else None', m.group(1))
+        self.assertNotIn('return True', m.group(1))
 
 
 class WizardDraftIsServerSide(unittest.TestCase):

@@ -291,18 +291,23 @@ class TheShareFieldsAreThere(unittest.TestCase):
     def setUpClass(cls):
         cls.src, _ = _block()
 
-    def test_every_group_draws_a_share_row_under_its_picks(self):
+    def test_every_picked_pill_carries_its_share_box_and_the_group_its_line(self):
+        # Jenna 2026-11-17: 'have the share appear right below the thing you select instead of under all of it'
+        # (6f811b90): a picked pill carries its own share box; the group keeps one hint / error line.
         self.assertIn('pick any, then set a share if you want one', self.src)
-        self.assertIn('bwShareRow(g[0])', self.src)
+        self.assertIn('bwShareInput(g[0], o)', self.src)
+        self.assertIn('bwShareLine(g[0])', self.src)
+        self.assertNotIn('bwShareRow(', self.src)
         self.assertNotIn('<em>pick any</em>', self.src)
 
-    def test_the_field_is_a_percent_beside_the_pick(self):
-        m = re.search(r'function bwShareRow\(cat\) \{.*?\n            \}', self.src, re.S)
+    def test_the_field_is_a_percent_under_the_pick(self):
+        m = re.search(r'function bwShareInput\(cat, v\) \{.*?\n            \}', self.src, re.S)
         self.assertTrue(m)
         row = m.group(0)
         self.assertIn('oninput="dtwBwShare(this)"', row)
         self.assertIn('<i>%</i>', row)
         self.assertIn('in percent', row)
+        self.assertIn('data-v="', row)
 
 
 @unittest.skipUnless(shutil.which('node'), 'node not available')

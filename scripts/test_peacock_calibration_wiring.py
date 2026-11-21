@@ -70,7 +70,12 @@ s_svod = src('SVOD_Churn_Attribution.py')
 i_file, i_over = s_svod.find('_pk_scale.calibrate('), s_svod.find("# Explicit override always wins (CLI --reach-us flag)")
 check('from migration import peacock_actuals as _pk_scale' in s_svod and 0 < i_file < i_over, 'Subscriber IQ reach, ahead of the explicit override')
 s_chat = _legacy_view()
-check('_pk_scale.block(text, mr, base)' in s_chat and 'from prometheus import peacock_scale as _pk_scale' in s_chat, 'the Prometheus measurement pass is handed the block')
+# Since the knowledge layer (stage 3, 2026-11-20) the read core hands the Peacock block to prometheus.knowledge.read_blocks
+# as pk=_pk_scale.block, and read_blocks calls it with (text, mr, base) ahead of the first model call.
+s_know = src('prometheus', 'knowledge.py')
+check('from prometheus import peacock_scale as _pk_scale' in s_chat and 'pk=_pk_scale.block' in s_chat
+      and 'def read_blocks(text, mr, base, *, pk=None' in s_know and '(pk, (text, mr, base))' in s_know,
+      'the Prometheus measurement pass is handed the block (through the knowledge layer, called with text, mr, base)')
 check(s_chat.count('\n') <= 19_900, 'the legacy chat stays under its line ceiling', str(s_chat.count('\n')))
 check('peacock_actuals' in src('prometheus', 'peacock_scale.py'), 'the Prometheus block is built from the shared module')
 s_tr = src('scripts', 'trends_scrapers', 'stream_estimates.py')
