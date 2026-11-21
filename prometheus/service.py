@@ -1052,7 +1052,7 @@ def ask(user, body, *, via='session'):
         _own_hist = [t for t in history if not (isinstance(t, dict) and t.get('carried'))]
         if not _own_hist:
             _ireset.on_fresh_thread(uname, tid, _own_hist)
-        if _ireset.is_cancel_text(text) or body.get('intake_cancel'):
+        if _u_claims(body, 'cancel', lambda: _ireset.is_cancel_text(text)) or body.get('intake_cancel'):   # keyed (2026-11-20)
             _ic_armed = _ireset.armed(uname, tid, body=body, history=history)
             if _ic_armed:
                 _res = _ireset.drop_all(uname, tid, close_offers=True, body=body, history=history)
