@@ -73,12 +73,16 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'valuation_referent',    # words after a delivered valuation that point at it (its deck, its dates, a re-run) are about it
            'brand_fit',             # which brands suit a talent is a read on the talent's audience, never a valuation (Jenna 2026-11-20)
            'named_subject',         # a subject the words name outranks the open page and the user's memory in the read (Emma Crouchen 2026-11-20)
-           'capability')            # a question about the product itself is product knowledge, never a subject read (Liz 2026-11-20)
+           'capability',            # a question about the product itself is product knowledge, never a subject read (Liz 2026-11-20)
+           'provenance')            # where a figure came from, two figures squared, the unprojected count, US or global (2026-11-20, night)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
-# these stands the others down. Anything else is "no position taken".
-_CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue'))
+# these (at STAND_DOWN_CONF or better) stands the others down. Anything
+# else is "no position taken". Grows with each class moved onto the
+# Understanding (2026-11-20, night).
+_CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance'))
+STAND_DOWN_CONF = 0.7   # a weak reading (a correction, the page) never stands a lane down
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',
                               'definition', 'capability', 'study_question', 'provenance', 'brand_fit'))
@@ -285,7 +289,28 @@ def _features(text, ctx, history, body):
     # a Brand Partnership step is waiting on this thread and the message answers it (a question typed there is a
     # question, per the intake guard): the turn is the wizard's, as it is today
     put('wizard_open', lambda: mod('bpiq_wizard').last_agent_is_wizard(history) and not mod('intake_guard').is_question_shaped(text))
+    # a brief that sizes the people around named titles is one read, whole (prometheus.read_brief); the keyword lanes stand aside for it
+    put('brief', lambda: mod('read_brief').is_brief(text))
+    put('provenance', lambda: _provenance_kind(text))
     return out
+
+
+def _provenance_kind(text):
+    """Which provenance lane the words are for, in the lane walk's own
+    order: 'reconcile' (two or more figures that must agree), 'us_scope'
+    (US or global), 'number' (where one figure came from), 'unprojected'
+    (the count in the data behind a projected figure), 'question' (the
+    general how-do-you-know). '' when none."""
+    def mod(name):
+        return __import__(f'prometheus.{name}', fromlist=['x'])
+    for kind, fn in (('reconcile', lambda: mod('reconcile_lane').wants_reconcile(text)),
+                     ('us_scope', lambda: mod('us_scope').wants_us_scope(text)),
+                     ('number', lambda: bool(mod('number_provenance').detect(text))),
+                     ('unprojected', lambda: mod('unprojected').wants_unprojected(text)),
+                     ('question', lambda: mod('guards').is_provenance_question(text))):
+        if _safe(fn, False):
+            return kind
+    return ''
 
 
 _READ_INTENTS = frozenset(('analyze', 'analyze_page', 'insight_ask', 'brand_fit', 'compare', 'definition', 'multi_ask',
@@ -465,9 +490,9 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         for name in ('wayfinding', 'directions', 'status_fast', 'status', 'wait', 'deliverable', 'insight', 'reader_will_share',
                      'send_order', 'send_file', 'dashboard_issue', 'cancel', 'order', 'multi', 'sample_size', 'capability',
                      'rerun_words', 'correction_words', 'pushback_only', 'send_words', 'build_verb', 'thanks', 'bare_reply',
-                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open'):
+                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance'):
             if f.get(name):
-                ev.append(name if name != 'wizard' else 'wizard:' + str(f[name]))
+                ev.append(name if name not in ('wizard', 'provenance') else name + ':' + str(f[name]))
         # a delivered valuation in the thread is what the words point at (prometheus.valuation_referent): its deck,
         # its figures, a re-run on corrected dates. Read on the reader's own words when the order gate rewrote them.
         vref = None
@@ -531,6 +556,10 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
                 intent, action, conf = 'wayfinding', 'open', 0.85 if f.get('directions') else 0.75
             else:
                 intent, action, conf = 'status', 'status', 0.7
+        elif f.get('provenance') and not f.get('brief'):
+            # where a figure came from, two figures squared, the count in the data, US or global: answered from the
+            # record, never a read; a brief that names titles is the read lane's whole (2026-11-20, night)
+            intent, action, conf = 'provenance', 'answer', 0.8
         elif f.get('pushback_only'):
             intent, action, conf = 'pushback', 'answer', 0.8
         elif f.get('thanks'):
@@ -706,7 +735,7 @@ def claims(body, name, fallback):
         if ok:
             _mark(body, u)
         return ok
-    if u.intent in _CONTESTED:
+    if u.intent in _CONTESTED and float(u.confidence or 0) >= STAND_DOWN_CONF:
         if _fb():
             _mark(body, u)   # the lane wanted the ask and stood down on the Understanding's reading: a keyed decision
         return False

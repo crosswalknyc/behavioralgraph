@@ -189,7 +189,7 @@ class Wiring(unittest.TestCase):
         with open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8') as fh:
             src = fh.read()
         self.assertLess(src.index('# lane: us_scope'), src.index('# lane: number_provenance'))
-        self.assertIn("_uss.answer(text, history, ctx=ctx) if _uss.wants_us_scope(text) else None", src)
+        self.assertIn("_uss.answer(text, history, ctx=ctx) if _u_claims(body, 'provenance', lambda: _uss.wants_us_scope(text)) else None", src)   # keyed on the Understanding (provenance, 2026-11-20)
 
     def test_continuation_reads_it_as_a_question_about_the_answer(self):
         out = C.classify(JAY_Q, HISTORY, None, 'Paramount+')

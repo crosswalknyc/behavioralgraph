@@ -399,7 +399,7 @@ class ServiceWiring(unittest.TestCase):
         with open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8') as fh:
             src = fh.read()
         self.assertLess(src.index('# lane: reconcile'), src.index('# lane: number_provenance'))
-        self.assertIn("_rcl.answer(text, history, ctx=ctx) if _rcl.wants_reconcile(text) else None", src)
+        self.assertIn("_rcl.answer(text, history, ctx=ctx) if _u_claims(body, 'provenance', lambda: _rcl.wants_reconcile(text)) else None", src)   # keyed on the Understanding (provenance, 2026-11-20)
 
     def test_sizing_declines_a_reconcile_ask(self):
         self.assertFalse(SZ.wants_sizing(JAY_Q))

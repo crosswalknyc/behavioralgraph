@@ -1762,7 +1762,7 @@ def ask(user, body, *, via='session'):
     if not _armed(body) and not _is_order:
         try:
             from . import reconcile_lane as _rcl
-            _rc_raw = _rcl.answer(text, history, ctx=ctx) if _rcl.wants_reconcile(text) else None
+            _rc_raw = _rcl.answer(text, history, ctx=ctx) if _u_claims(body, 'provenance', lambda: _rcl.wants_reconcile(text)) else None
         except Exception as _fx:
             _faults.note('service.reconcile_lane', _fx)
             _rc_raw = None
@@ -1794,7 +1794,7 @@ def ask(user, body, *, via='session'):
     if not _armed(body) and not _is_order:
         try:
             from . import us_scope as _uss
-            _us_raw = _uss.answer(text, history, ctx=ctx) if _uss.wants_us_scope(text) else None
+            _us_raw = _uss.answer(text, history, ctx=ctx) if _u_claims(body, 'provenance', lambda: _uss.wants_us_scope(text)) else None
         except Exception as _fx:
             _faults.note('service.us_scope', _fx)
             _us_raw = None
@@ -1853,7 +1853,7 @@ def ask(user, body, *, via='session'):
     if not _armed(body) and not _is_order:
         try:
             from . import number_provenance as _np
-            _np_raw = _np.answer(text, history)
+            _np_raw = _np.answer(text, history) if _u_claims(body, 'provenance', lambda: bool(_np.detect(text))) else None
         except Exception as _fx:
             _faults.note('service.number_provenance', _fx)
             _np_raw = None
@@ -1882,7 +1882,7 @@ def ask(user, body, *, via='session'):
     if not _armed(body) and not _is_order:
         try:
             from . import unprojected as _unp
-            _unp_raw = _unp.answer(text, history, ctx=ctx) if _unp.wants_unprojected(text) else None
+            _unp_raw = _unp.answer(text, history, ctx=ctx) if _u_claims(body, 'provenance', lambda: _unp.wants_unprojected(text)) else None
         except Exception as _fx:
             _faults.note('service.unprojected', _fx)
             _unp_raw = None
@@ -2429,7 +2429,7 @@ def ask(user, body, *, via='session'):
         return env, 200
     # lane: standing
     if referent_decision is None and not _armed(body) and not _is_order:
-        _standing = _standing_answer(text, user=user, uname=uname, ctx=ctx, correction=bool(body.get('_pm_correction')))
+        _standing = _standing_answer(text, user=user, uname=uname, ctx=ctx, correction=bool(body.get('_pm_correction')), body=body)
         if _standing is None:
             # A journey-figure question reads from the delivered journey
             # first (Jenna 2026-10-14: two different numbers for one
@@ -3607,7 +3607,7 @@ def _direct_answer(text, *, user=None, uname='', ctx=None, history=None):
     return None
 
 
-def _standing_answer(text, user=None, uname='', ctx=None, correction=False):
+def _standing_answer(text, user=None, uname='', ctx=None, correction=False, body=None):
     """Three answers that come before any executor or lane (2026-10-14):
     behavior with no digital trace (linear TV, in-store, foot traffic,
     radio) is declined with the nearest measurable read instead of being
@@ -3683,7 +3683,7 @@ def _standing_answer(text, user=None, uname='', ctx=None, correction=False):
         _faults.note('service.how_computed', _fx)
     try:
         from . import guards as _g
-        if _g.is_provenance_question(text):
+        if _u_claims(body, 'provenance', lambda: _g.is_provenance_question(text)):
             try:
                 host.ask_hint(route='provenance', outcome='answered')
             except Exception:

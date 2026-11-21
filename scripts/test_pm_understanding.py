@@ -252,6 +252,36 @@ class Claims(unittest.TestCase):
         self.assertTrue(U.claims(s, 'send_file_order', lambda: True))
         self.assertFalse(U.claims(s, 'insight_ask', lambda: True))
 
+    def test_provenance_is_read_and_keyed(self):
+        # where a figure came from, two figures squared, the count in the data, US or global (the four provenance
+        # lanes): read as provenance, keyed; a brief that names titles is the read lane's whole (2026-11-20, night)
+        hist = [{'role': 'agent', 'text': 'On Harbor Lights: 12,004,203 US viewers in the trailing year.'}]
+        for q in ('where does the 12,004,203 come from?',
+                  'your two counts for Harbor Lights were 4,287,316 and 7.1M, please reconcile them',
+                  'are these numbers US only or global?',
+                  'what is the unprojected count behind the 12,004,203?'):
+            b = U.attach({'text': q}, U.features(q, None, hist, {}))
+            u = U.on_body(b)
+            self.assertEqual(u.intent, 'provenance', (q, u.evidence))
+            self.assertTrue(any(str(e).startswith('provenance:') for e in u.evidence), q)
+            self.assertTrue(U.claims(b, 'provenance', lambda: True), q)
+            self.assertFalse(U.claims(b, 'status', lambda: True), q)        # a flipped lane that wanted it stands down
+        self.assertTrue(U.flipped('provenance'))
+        brief = ('Please size the fan audience for two novels in one run: Harbor Lights by Ann Example and The Quiet Shore by '
+                 'Jo Sample, each calendar year from 2019 through 2026, split by source, with the unprojected panelist count '
+                 'for each figure, and send it as a CSV.')
+        ub = U.on_body(U.attach({'text': brief}, U.features(brief, None, [], {})))
+        self.assertNotEqual(ub.intent, 'provenance', ub.evidence)
+
+    def test_a_weak_reading_never_stands_a_lane_down(self):
+        b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])
+        u = U.on_body(b)
+        if u.intent in U._CONTESTED and u.confidence < U.STAND_DOWN_CONF:
+            self.assertTrue(U.claims(b, 'status', lambda: True))
+        u.intent, u.confidence = 'provenance', 0.5
+        b2 = U.attach({'text': b['text']}, u)
+        self.assertTrue(U.claims(b2, 'status', lambda: True))   # below the floor: no position taken
+
     def test_rewritten_words_take_no_position(self):
         # a lane rewrote the text after the reading (a typed option, the turn gate's re-bind): the lane's own
         # predicate decides again, the stale reading neither claims nor stands anything down

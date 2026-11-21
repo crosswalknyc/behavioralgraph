@@ -231,7 +231,7 @@ class Wiring(unittest.TestCase):
             src = fh.read()
         self.assertLess(src.index('# lane: number_provenance'), src.index('# lane: unprojected'))
         self.assertLess(src.index('# lane: unprojected'), src.index('# lane: reader'))
-        self.assertIn("_unp.answer(text, history, ctx=ctx) if _unp.wants_unprojected(text) else None", src)
+        self.assertIn("_unp.answer(text, history, ctx=ctx) if _u_claims(body, 'provenance', lambda: _unp.wants_unprojected(text)) else None", src)   # keyed on the Understanding (provenance, 2026-11-20)
 
 
 class ServiceEndToEnd(unittest.TestCase):
