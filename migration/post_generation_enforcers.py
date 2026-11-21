@@ -1418,13 +1418,15 @@ def _subset_exempt_cats():
     return exempt, norm, forms
 
 
-def cut_subset_limits(df, parent_df, subject='', s3_key=''):
+def cut_subset_limits(df, parent_df, subject='', s3_key='', location=False):
     """({cut row index: (lo, hi, parent_bp)}, cut_sample) for every cut row
     whose (category, brand) the parent also carries, matched the way the
     ship gate's I12 matches them. ``hi`` is the largest slot whose people
     count stays at or under the parent's count, ``lo`` the smallest that
     still counts one person (None when the parent counts nobody). Empty
     when a sample is unreadable or the cut is not smaller than its parent.
+    LOCATION sits out with the groups that sum to 100; ``location`` reads
+    the LOCATION rows alone.
     """
     if df is None or parent_df is None or not len(df) or not len(parent_df):
         return {}, None
@@ -1432,13 +1434,17 @@ def cut_subset_limits(df, parent_df, subject='', s3_key=''):
     if not cut_sample or not parent_sample or cut_sample >= parent_sample:
         return {}, cut_sample
     exempt, norm, forms = _subset_exempt_cats()
+
+    def _take(cu):
+        return cu == 'LOCATION' if location else cu not in exempt
+
     p_bp_col = _detect_cols(parent_df)[0]
     parent = {}
     for c, v, b in zip(parent_df['Column'].tolist(), parent_df['Value'].tolist(),
                        parent_df[p_bp_col].tolist()):
         cu = str(c or '').strip().upper()
         bp = _cell_num(b)
-        if cu in exempt or bp is None:
+        if not _take(cu) or bp is None:
             continue
         key = (cu, norm(v))
         if bp > parent.get(key, -1.0):
@@ -1458,7 +1464,7 @@ def cut_subset_limits(df, parent_df, subject='', s3_key=''):
     out = {}
     bp_col = _detect_cols(df)[0]
     for idx, cu, v, b in zip(df.index.tolist(), cats, vals, df[bp_col].tolist()):
-        if cu in exempt or _cell_num(b) is None:
+        if not _take(cu) or _cell_num(b) is None:
             continue
         vn = norm(v)
         if vn in full or vn in mono:
@@ -1508,6 +1514,20 @@ def _nearest_free_slot(book, target, lo, hi, avoid=()):
     for d in range(max(target - lo, hi - target) + 1):
         for k in ((target - d, target + d) if d else (target,)):
             if lo <= k <= hi and book.free(k) and k not in avoid and not _slot_round(k):
+                return k
+    return None
+
+
+def _common_free_slot(books, target, lo, hi, avoid=()):
+    """The slot in [lo, hi] nearest ``target`` that is free in every book,
+    off the round bands and not in ``avoid``. None when none."""
+    if lo is None or hi is None or lo > hi:
+        return None
+    target = min(max(int(target), lo), hi)
+    for d in range(max(target - lo, hi - target) + 1):
+        for k in ((target - d, target + d) if d else (target,)):
+            if (lo <= k <= hi and k not in avoid and not _slot_round(k)
+                    and all(b.free(k) for b in books)):
                 return k
     return None
 
@@ -1687,83 +1707,238 @@ def _dejitter_collisions_under_parent(df, subject, parent_df, verbose=True,
     return df, fixed
 
 
-def enforce_cut_subset_ceilings(df, subject, verbose=True, parent_df=None, s3_key=''):
-    """A derived cut never counts more people on a row than its parent:
-    every row over its parent's count is re-seated at or under it, on a
-    free 4dp slot off the round bands (a subject-salted point between the
-    parent's value and the ceiling, the nearest free slot to it, or a
-    looser row's slot with that row re-seated inside its own range). An
-    MPB row carries its exact sub-category mirrors with it. A row the
-    parent counts nobody on leaves the cut. Returns (df, n)."""
-    if parent_df is None or df is None or not len(df):
-        return df, 0
-    limits, cut_sample = cut_subset_limits(df, parent_df, subject, s3_key)
-    if not limits:
+def _hold_location_under_parent(df, subject, parent_df, s3_key=''):
+    """The LOCATION rows of a derived cut at or under their parent's people
+    counts, summing to 100: a market over its ceiling comes down to a
+    subject-salted point just under it (one the parent counts nobody in
+    reads 0), and the difference spreads over the markets with room in
+    proportion to their share, none past its own ceiling. Returns (df, n)."""
+    limits, cut_sample = cut_subset_limits(df, parent_df, subject, s3_key, location=True)
+    if not limits or not cut_sample:
         return df, 0
     bp_col = _detect_cols(df)[0]
-    over = []
-    for idx, (lo, hi, _p) in limits.items():
-        x = _bp(df.at[idx, bp_col])
-        if x > 0 and int(round(x * 10000)) > hi:
-            over.append(idx)
-    if not over:
+    loc = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+    rows = [i for i in df.index[loc] if _cell_num(df.at[i, bp_col]) is not None]
+    start = {i: max(0, int(round(_cell_num(df.at[i, bp_col]) * 10000))) for i in rows}
+    total = sum(start.values())
+    if total <= 0:
+        return df, 0
+    cap = {i: limits[i][1] if i in limits else _SLOT_MAX for i in rows}
+    over = [i for i in rows if start[i] > cap[i]]
+    if not over and abs(total - 1_000_000) < 5_000:
+        return df, 0
+    new = {i: float(start[i]) for i in rows}
+    for i in over:
+        lo, hi, _p = limits[i]
+        if lo is None:
+            new[i] = 0.0
+            continue
+        val = str(df.at[i, 'Value']).strip().upper()
+        u = int(_hl.blake2b(f'{subject}|LOCATION|{val}|location-ceiling'.encode(),
+                            digest_size=8).hexdigest(), 16) / float(2 ** 64)
+        new[i] = float(max(lo, hi - int((0.02 + 0.10 * u) * (hi - lo))))
+    held = set(over)
+    for _ in range(60):
+        gap = 1_000_000 - sum(new.values())
+        if abs(gap) < 1e-6:
+            break
+        room = [i for i in rows if i not in held and new[i] > 0
+                and (gap < 0 or cap[i] - new[i] > 1e-9)]
+        weight = sum(new[i] for i in room)
+        if not room or weight <= 0:
+            break
+        for i in room:
+            new[i] = min(cap[i], max(0.0, new[i] + gap * new[i] / weight))
+    slots = {i: min(int(round(new[i])), cap[i]) for i in rows}
+    resid = 1_000_000 - sum(slots.values())
+    order = sorted((i for i in rows if slots[i] > 0 and i not in held),
+                   key=lambda i: (slots[i] - cap[i], str(df.at[i, 'Value'])))
+    while resid and order:
+        moved = False
+        for i in order:
+            if resid > 0 and slots[i] < cap[i]:
+                slots[i] += 1
+                resid -= 1
+                moved = True
+            elif resid < 0 and slots[i] > 1:
+                slots[i] -= 1
+                resid += 1
+                moved = True
+            if not resid:
+                break
+        if not moved:
+            break
+    changed = [i for i in rows if slots[i] != start[i]]
+    if not changed:
         return df, 0
     df = _object_numeric_cols(df)
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
-    cats = {str(df.at[i, 'Column']).strip().upper() for i in over}
-    books, start, locked, mpb_slot = _row_sets_for(df, cats)
+    for i in changed:
+        df = _set_bp(df, i, slots[i] / 10000.0, bp_col, cs_col, raw_col, proj_col,
+                     cut_sample)
+    return df, len(changed)
+
+
+def enforce_cut_subset_ceilings(df, subject, verbose=True, parent_df=None, s3_key=''):
+    """A derived cut never counts more people on a row than its parent.
+    Every row over its parent's count is re-seated at or under it on a
+    free 4dp slot off the round bands (a subject-salted point between the
+    parent's value and the ceiling, the nearest free slot to it, or a
+    looser row's slot with that row re-seated inside its own range). An
+    MPB row and its exact sub-category mirrors move as one, under the
+    lowest of their ceilings and on a slot free in each of their columns.
+    The LOCATION rows are held the same way and re-sum to 100. A row the
+    parent counts nobody on leaves the cut. Returns (df, n)."""
+    if parent_df is None or df is None or not len(df):
+        return df, 0
+    df, n_loc = _hold_location_under_parent(df, subject, parent_df, s3_key)
+    limits, cut_sample = cut_subset_limits(df, parent_df, subject, s3_key)
+    bp_col = _detect_cols(df)[0]
+    over = [idx for idx, (lo, hi, _p) in limits.items()
+            if _bp(df.at[idx, bp_col]) > 0 and int(round(_bp(df.at[idx, bp_col]) * 10000)) > hi]
+    if not over:
+        if verbose and n_loc:
+            print(f"   🧮 cut subset ceilings: {n_loc} LOCATION row(s) held under the "
+                  f"parent's count, summing to 100")
+        return df, n_loc
+    df = _object_numeric_cols(df)
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    cats_u = df['Column'].astype(str).str.strip().str.upper()
+    mpb_row = {}
+    for idx in df.index[cats_u == 'MOST PURCHASED BRANDS']:
+        x = _bp(df.at[idx, bp_col])
+        if 0 < x < 99.99:
+            nb = _norm_brand(str(df.at[idx, 'Value']))
+            if nb not in mpb_row or x > _bp(df.at[mpb_row[nb], bp_col]):
+                mpb_row[nb] = idx
+    mpb_k = {nb: int(round(_bp(df.at[m, bp_col]) * 10000)) for nb, m in mpb_row.items()}
+    fam_of = {m: nb for nb, m in mpb_row.items()}
+    fam_rows = {nb: [m] for nb, m in mpb_row.items()}
+    for idx, cu in zip(df.index.tolist(), cats_u.tolist()):
+        if (cu == 'MOST PURCHASED BRANDS' or cu in _MPB_MIRROR_SKIP_CATS
+                or cu in DEPIN_DEMO_CATS or cu in DEPIN_META_CATS):
+            continue
+        nb = _norm_brand(str(df.at[idx, 'Value']))
+        if nb in mpb_k and int(round(_bp(df.at[idx, bp_col]) * 10000)) == mpb_k[nb]:
+            fam_of[idx] = nb
+            fam_rows[nb].append(idx)
+    over_set = set(over)
+    books, start, _locked, _ = _row_sets_for(df)
+    floor = _first_slot_counting(cut_sample)
     drop, unseated = [], 0
-    mirrors_of = {}
-    mpb_over = {_norm_brand(str(df.at[i, 'Value'])) for i in over
-                if str(df.at[i, 'Column']).strip().upper() == 'MOST PURCHASED BRANDS'}
-    over.sort(key=lambda i: (limits[i][1], str(df.at[i, 'Value']).strip().upper()))
-    for idx in over:
-        lo, hi, pbp = limits[idx]
-        cu = str(df.at[idx, 'Column']).strip().upper()
-        if lo is None:
-            drop.append(idx)
-            continue
-        book = books.get(cu)
-        if book is None or idx not in book.at:
-            continue
-        val = str(df.at[idx, 'Value']).strip().upper()
-        if (cu != 'MOST PURCHASED BRANDS' and idx in locked
-                and _norm_brand(val) in mpb_over):
-            continue
-        kp = int(round(pbp * 10000))
-        u = int(_hl.blake2b(f'{subject}|{cu}|{val}|subset-ceiling'.encode(),
-                            digest_size=8).hexdigest(), 16) / float(2 ** 64)
-        target = kp + int((0.30 + 0.55 * u) * (hi - kp)) if kp < hi else hi
-        if _seat_under_ceiling(book, idx, target, lo, hi, {kp}, limits, locked) is None:
+
+    def _salted(cu, val, tag):
+        return int(_hl.blake2b(f'{subject}|{cu}|{val}|{tag}'.encode(),
+                               digest_size=8).hexdigest(), 16) / float(2 ** 64)
+
+    def _uid(j):
+        return fam_of.get(j, ('row', j))
+
+    def _members(u):
+        rows = fam_rows[u] if not isinstance(u, tuple) else [u[1]]
+        return [j for j in rows if j not in drop and cats_u[j] in books
+                and j in books[cats_u[j]].at]
+
+    def _range(rows):
+        lims = [limits[j] for j in rows if j in limits]
+        if any(l[0] is None for l in lims):
+            return None, None
+        if not lims:
+            return floor, _SLOT_MAX
+        return max(l[0] for l in lims), min(l[1] for l in lims)
+
+    def _avoid(rows):
+        return {int(round(limits[j][2] * 10000)) for j in rows if j in limits}
+
+    def _seat(rows, target, lo, hi, avoid, moving, depth=0):
+        """Seat a unit (one row, or an MPB row with its exact mirrors) on
+        one slot in [lo, hi] free in each member's column. With none free,
+        take the slot of a unit with more headroom and re-seat that unit
+        inside its own range. Returns the slot, or None (nothing moved)."""
+        held = [(books[cats_u[j]], j) for j in rows]
+        k = _common_free_slot([bk for bk, _ in held], target, lo, hi, avoid)
+        if k is not None:
+            for bk, j in held:
+                bk.put(j, k)
+            return k
+        if depth >= 12:
+            return None
+        best = None
+        for kk in range(lo, hi + 1):
+            if kk in avoid or _slot_round(kk):
+                continue
+            blockers, ok = set(), True
+            for bk, _j in held:
+                rs = bk.held.get(kk)
+                if not rs:
+                    continue
+                u = _uid(next(iter(rs)))
+                if len(rs) != 1 or u in moving:
+                    ok = False
+                    break
+                blockers.add(u)
+            if not ok or not blockers:
+                continue
+            ranges = [_range(_members(u)) for u in blockers]
+            if any(r[1] is None or r[1] <= hi for r in ranges):
+                continue
+            rank = (-min(r[1] for r in ranges), abs(kk - target), kk)
+            if best is None or rank < best[0]:
+                best = (rank, kk, blockers)
+        if best is None:
+            return None
+        _, kk, blockers = best
+        snap = {j: books[cats_u[j]].at[j] for u in blockers for j in _members(u)}
+        snap.update({j: books[cats_u[j]].at[j] for j in rows})
+        for u in blockers:
+            bm = _members(u)
+            blo, bhi = _range(bm)
+            if _seat(bm, kk, blo, bhi, _avoid(bm) | {kk}, moving | {u}, depth + 1) is None:
+                for j, s in snap.items():
+                    books[cats_u[j]].put(j, s)
+                return None
+        for bk, j in held:
+            bk.put(j, kk)
+        return kk
+
+    units = []
+    for u in sorted({_uid(i) for i in over}, key=str):
+        rows = fam_rows[u] if not isinstance(u, tuple) else [u[1]]
+        gone = [j for j in rows if j in limits and limits[j][0] is None]
+        drop.extend(gone)
+        if not isinstance(u, tuple) and mpb_row[u] in gone:
+            units += [('row', j) for j in rows if j not in gone and j in over_set]
+        elif len(gone) < len(rows):
+            units.append(u)
+    order = []
+    for u in units:
+        rows = _members(u)
+        lo, hi = _range(rows)
+        if rows and lo is not None:
+            order.append((hi, str(u), u, rows, lo))
+    for hi, _name, u, rows, lo in sorted(order, key=lambda t: (t[0], t[1])):
+        tight = min((j for j in rows if j in limits), key=lambda j: limits[j][1])
+        kp = int(round(limits[tight][2] * 10000))
+        name = u if not isinstance(u, tuple) else str(df.at[u[1], 'Value']).strip().upper()
+        cu = 'MOST PURCHASED BRANDS' if not isinstance(u, tuple) else cats_u[u[1]]
+        frac = _salted(cu, name, 'subset-ceiling')
+        target = kp + int((0.30 + 0.55 * frac) * (hi - kp)) if kp < hi else hi
+        if _seat(rows, target, lo, hi, _avoid(rows), {u}) is None:
             unseated += 1
-            continue
-        locked.add(idx)
-        if cu == 'MOST PURCHASED BRANDS':
-            mirrors_of[_norm_brand(val)] = (idx, start[idx])
     df, n = _apply_slots(df, books, start, cut_sample)
-    if mirrors_of:
-        cats_all = df['Column'].astype(str).str.strip().str.upper().tolist()
-        for j, cu_j, v_j, b_j in zip(df.index.tolist(), cats_all, df['Value'].tolist(),
-                                     df[bp_col].tolist()):
-            if cu_j == 'MOST PURCHASED BRANDS' or cu_j in _MPB_MIRROR_SKIP_CATS:
-                continue
-            hit = mirrors_of.get(_norm_brand(str(v_j)))
-            if hit is None or int(round(_bp(b_j) * 10000)) != hit[1]:
-                continue
-            df = _set_bp(df, j, _bp(df.at[hit[0], bp_col]), bp_col, cs_col, raw_col,
-                         proj_col, cut_sample)
-            n += 1
     if drop:
+        drop = sorted(set(drop))
         dropped_cats = {str(df.at[i, 'Column']).strip() for i in drop}
         df = df.drop(index=drop)
         for cat in dropped_cats:
             df = _recompute_cs_for_cat(df, cat, bp_col, cs_col)
         n += len(drop)
-    if verbose and (n or unseated):
+    if verbose and (n or unseated or n_loc):
         print(f"   🧮 cut subset ceilings: {len(over) - unseated - len(drop)} row(s) seated "
               f"at or under the parent's count, {len(drop)} dropped (parent counts nobody)"
+              + (f", {n_loc} LOCATION row(s) re-summed" if n_loc else "")
               + (f", {unseated} with no seat" if unseated else ""))
-    return df, n
+    return df, n + n_loc
 
 
 def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
