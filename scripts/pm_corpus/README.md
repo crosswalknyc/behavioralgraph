@@ -155,6 +155,27 @@ stretch of real traffic you want in the gate. Each build is a new stamp;
 file of a run on `main` against the same stamp; keep that file and name
 it in the stage's report.
 
+### Current corpus and baselines (2026-11-20, 23:56Z)
+
+Corpus `20261120_235645`: 1,159 asks from 30 seats over 30 days, every
+ask through 22:56Z on 2026-11-20 (the day's 112 asks included), twelve
+turns of thread per case (837 with thread context, 561 with a reading).
+Built with `REGRESSION_TEST_MODE` unset. Baselines on `main` at
+bg-webapp `6b4b4892`, kept in `~/.cache/crosswalk_replay/results/`:
+
+| mode | file | same / drift / regressed / fail | class agreement |
+|---|---|---|---|
+| service | `20261120_235949.json` | 311 / 791 / 45 / 11 | 76.4% |
+| door | `20261121_000130.json` | 320 / 809 / 20 / 0 | 77.7% |
+
+The Understanding's shadow grade on that corpus (live / recorded, by
+class) is the before line for moving the remaining classes onto it:
+read 83.2 / 86.5, wizard 88.3 / 58.3, build 88.3 / 83.9, page_analysis
+67.0 / 72.3, multi_ask 71.1 / 94.7, deck 87.0 / 73.9, capability 75.0 /
+25.0, status 73.3 / 46.7, provenance 61.5 / 0.0, offer 91.7 / 16.7, order
+100 / 91.7, sizing 80.0 / 100, send_file 88.9 / 88.9, short_reply 83.3 /
+83.3, catalog 50.0 / 0.0, definition 66.7 / 33.3.
+
 ## Adding a fixture
 
 A fixture is one line in `fixtures/sanitized_cases.jsonl` in the case
