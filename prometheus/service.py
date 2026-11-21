@@ -1300,7 +1300,7 @@ def ask(user, body, *, via='session'):
         try:
             from . import dashboard_behavior as _dbq
             _dbq_cs = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
-            if _dbq.is_dashboard_question(text):
+            if _u_claims(body, 'dashboard_issue', lambda: _dbq.is_dashboard_question(text)):   # keyed (2026-11-20)
                 _dbq_raw = _dbq.answer(text, uname=uname, user=user, ctx=ctx, history=history, thread_id=tid or '', host=host)
         except Exception as _fx:
             _faults.note('service.dashboard_behavior', _fx)

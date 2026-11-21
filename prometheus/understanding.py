@@ -78,7 +78,9 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'exists',                # is X in the library, what do we hold on X, the roster (the catalog lanes, 2026-11-20, night)
            'definition',            # what a term, a figure or a method means; the house sample; a brief's own terms (2026-11-20, night)
            'size',                  # how many people an audience holds, a demographic segment counted (the sizing lanes, 2026-11-20, night)
-           'multi_ask')             # several questions in one message, each answered through the door in turn (2026-11-20, night)
+           'multi_ask',             # several questions in one message, each answered through the door in turn (2026-11-20, night)
+           'dashboard_issue',       # the dashboard misbehaving (the dashboard_behavior lane; contested since stage 2, keyed 2026-11-20 night)
+           'pricing')               # what does it cost (the pricing lane, 2026-11-20, night)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
