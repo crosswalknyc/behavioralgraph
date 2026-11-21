@@ -286,6 +286,17 @@ class Claims(unittest.TestCase):
         w = U.on_body(U.attach({'text': 'is there any awareness for the film Harbor Lights'}, U.features('is there any awareness for the film Harbor Lights', None, [], {})))
         self.assertNotEqual(w.intent, 'exists')
 
+    def test_definition_is_read_and_keyed(self):
+        # what a term or a method means, the house sample: answered from the glossary and the thread (2026-11-20, night)
+        for q in ('how big is your sample', 'what does Avid tier mean on this brief', 'give me the math behind how you would calculate a retention curve',
+                  'can we discuss the exact pull first?'):
+            b = U.attach({'text': q}, U.features(q, None, [], {}))
+            u = U.on_body(b)
+            self.assertEqual(u.intent, 'definition', (q, u.evidence))
+            self.assertTrue(U.claims(b, 'definition', lambda: True), q)
+            self.assertFalse(U.claims(b, 'status', lambda: True), q)
+        self.assertTrue(U.flipped('definition'))
+
     def test_a_weak_reading_never_stands_a_lane_down(self):
         b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])
         u = U.on_body(b)

@@ -75,7 +75,8 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'named_subject',         # a subject the words name outranks the open page and the user's memory in the read (Emma Crouchen 2026-11-20)
            'capability',            # a question about the product itself is product knowledge, never a subject read (Liz 2026-11-20)
            'provenance',            # where a figure came from, two figures squared, the unprojected count, US or global (2026-11-20, night)
-           'exists')                # is X in the library, what do we hold on X, the roster (the catalog lanes, 2026-11-20, night)
+           'exists',                # is X in the library, what do we hold on X, the roster (the catalog lanes, 2026-11-20, night)
+           'definition')            # what a term, a figure or a method means; the house sample; a brief's own terms (2026-11-20, night)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
@@ -83,8 +84,8 @@ SHADOW = ('named_title',)
 # else is "no position taken". Grows with each class moved onto the
 # Understanding (2026-11-20, night).
 _CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance',
-                        'exists'))
-STAND_DOWN_CONF = 0.7   # a weak reading (a correction, the page) never stands a lane down
+                        'exists', 'definition'))
+STAND_DOWN_CONF = 0.75  # a weak reading (a correction, the page, the generic status at 0.7) never stands a lane down
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',
                               'definition', 'capability', 'study_question', 'provenance', 'brand_fit'))
@@ -301,7 +302,29 @@ def _features(text, ctx, history, body):
     put('provenance', lambda: _provenance_kind(text))
     # the catalog lanes: ('exists' | 'size' | 'roster', subject) when the words ask what the library holds
     put('catalog', lambda: (mod('catalog_lane').parse(text) or (None, None))[0])
+    put('definition', lambda: _definition_kind(text, history))
     return out
+
+
+def _definition_kind(text, history=None):
+    """Which definition lane the words are for, in the lane walk's own
+    order: 'term' (a term or line on the thread's own brief), 'discussion'
+    (talk the pull through before it runs; the brief is in the thread), 'meta' (a check on the last
+    answer), 'drilldown' (a number on the open journey / a KPI), 'view'
+    (what counts as a view), 'method' (how a figure is worked out),
+    'sample' (how big the house sample is). '' when none."""
+    def mod(name):
+        return __import__(f'prometheus.{name}', fromlist=['x'])
+    for kind, fn in (('term', lambda: mod('brief_terms').is_term_question(text) and bool(mod('brief_terms').brief_in_thread(history))),
+                     ('discussion', lambda: mod('pull_discussion').wants_discussion(text)),
+                     ('meta', lambda: mod('service').meta_check(text)),
+                     ('drilldown', lambda: mod('drilldown').looks_like_drilldown(text) or mod('drilldown').looks_like_definition(text)),
+                     ('view', lambda: mod('methodology_answers').is_view_definition_question(text)),
+                     ('method', lambda: bool(mod('how_computed').answer(text))),   # the lane's own test: a method, a where, an about
+                     ('sample', lambda: mod('guards').is_sample_size_ask(text))):
+        if _safe(fn, False):
+            return kind
+    return ''
 
 
 def _provenance_kind(text):
@@ -499,9 +522,9 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         for name in ('wayfinding', 'directions', 'status_fast', 'status', 'wait', 'deliverable', 'insight', 'reader_will_share',
                      'send_order', 'send_file', 'dashboard_issue', 'cancel', 'order', 'multi', 'sample_size', 'capability',
                      'rerun_words', 'correction_words', 'pushback_only', 'send_words', 'build_verb', 'thanks', 'bare_reply',
-                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance', 'catalog'):
+                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance', 'catalog', 'definition'):
             if f.get(name):
-                ev.append(name if name not in ('wizard', 'provenance', 'catalog') else name + ':' + str(f[name]))
+                ev.append(name if name not in ('wizard', 'provenance', 'catalog', 'definition') else name + ':' + str(f[name]))
         # a delivered valuation in the thread is what the words point at (prometheus.valuation_referent): its deck,
         # its figures, a re-run on corrected dates. Read on the reader's own words when the order gate rewrote them.
         vref = None
@@ -561,14 +584,15 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             intent, action, conf = 'send_file_order', 'send', 0.85
         elif f.get('dashboard_issue') and not sc.own_order:
             intent, action, conf = 'dashboard_issue', 'answer', 0.8
-        elif f.get('wayfinding') or f.get('status_fast') or f.get('status') or f.get('wait') or f.get('deliverable'):
-            # where-is on a feature is directions; the reader's own order, delivery or wait is status
+        elif f.get('wayfinding') or f.get('directions') or f.get('wait') or f.get('deliverable') or (
+                (f.get('status_fast') or f.get('status')) and sc.own_order):
+            # where-is on a feature is directions; the reader's own order, delivery or wait is status. A bare status
+            # shape with no own-order words ("where can I find retention curves on this site") is read below, after
+            # the provenance and definition answers that sit ahead of the status lanes in the walk (2026-11-20, night)
             if sc.own_order or f.get('wait') or (f.get('deliverable') and not f.get('directions')):
                 intent, action, conf = 'status', 'status', 0.85 if sc.own_order else 0.75
-            elif f.get('wayfinding') or f.get('directions'):
-                intent, action, conf = 'wayfinding', 'open', 0.85 if f.get('directions') else 0.75
             else:
-                intent, action, conf = 'status', 'status', 0.7
+                intent, action, conf = 'wayfinding', 'open', 0.85 if f.get('directions') else 0.75
         elif f.get('provenance') and not f.get('brief'):
             # where a figure came from, two figures squared, the count in the data, US or global: answered from the
             # record, never a read; a brief that names titles is the read lane's whole (2026-11-20, night)
@@ -589,8 +613,12 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             # no model call (the catalog_exists and catalog lanes, 2026-11-20, night); "is there any X measurement
             # available in Crosswalk" is a question about the product (capability), not the shelf
             intent, action, conf = 'exists', 'answer', 0.8
-        elif f.get('sample_size'):
+        elif (f.get('sample_size') or f.get('definition')) and not f.get('brief'):
+            # what a term, a figure or a method means, the house sample, a check on the last answer: answered from the
+            # house glossary and the thread, never a read (2026-11-20, night)
             intent, action, conf = 'definition', 'answer', 0.75
+        elif f.get('status_fast') or f.get('status'):
+            intent, action, conf = 'status', 'status', 0.7   # the generic status shape, nothing else read
         elif f.get('capability'):
             intent, action, conf = 'capability', 'answer', 0.7
         elif f.get('correction_words') and history:

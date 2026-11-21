@@ -614,7 +614,7 @@ class Wiring(unittest.TestCase):
         # the brief, the reader still typed an order: the lane and the intake's net both read the typed words.
         src = _read('prometheus', 'service.py')
         lane = src[src.index('# lane: brief_terms'):src.index('# lane: product_facts')]
-        self.assertIn('_bt.answer(_typed, history) if _bt.is_term_question(_typed) else None', lane)
+        self.assertIn("_bt.answer(_typed, history) if _u_claims(body, 'definition', lambda: _bt.is_term_question(_typed)) else None", lane)   # keyed on the Understanding (definition, 2026-11-20)
         self.assertLess(src.index('_typed = text'), src.index('# lane: brief_terms'))
         net = _read('prometheus', 'followup_refine.py')
         self.assertIn('typed = _bt.typed_this_turn(text)', net)

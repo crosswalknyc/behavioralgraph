@@ -2176,7 +2176,8 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _armed(body):
         try:
             from . import pull_discussion as _pd
-            _pd_raw = _pd.answer(text, uname, tid, history, ctx, host=host, user=user)
+            _pd_raw = (_pd.answer(text, uname, tid, history, ctx, host=host, user=user)
+                       if _u_claims(body, 'definition', lambda: _pd.wants_discussion(text)) else None)
         except Exception as e:
             _faults.note('service.pull_discussion', e)
             _pd_raw = None
@@ -2208,7 +2209,7 @@ def ask(user, body, *, via='session'):
             # the reader's own words this turn, never a question the gate carried forward: "run it" after a note
             # re-runs the thread's last ask, and when that ask was this question the order is still an order
             from . import brief_terms as _bt
-            _bt_raw = _bt.answer(_typed, history) if _bt.is_term_question(_typed) else None
+            _bt_raw = _bt.answer(_typed, history) if _u_claims(body, 'definition', lambda: _bt.is_term_question(_typed)) else None
         except Exception as _fx:
             _faults.note('service.brief_terms', _fx)
             _bt_raw = None
@@ -2420,7 +2421,7 @@ def ask(user, body, *, via='session'):
     # repeats a pending confirm (Emmet at Kartel got the same "Do you mean
     # for ..." back to it, 2026-10-15). It answers the question the reader
     # is waiting on, through the door again, with a one-line lead.
-    if referent_decision is None and not body.get('_meta_replay') and meta_check(text):
+    if referent_decision is None and not body.get('_meta_replay') and _u_claims(body, 'definition', lambda: meta_check(text)):
         prev = last_user_question(history)
         if prev:
             _rb = {k: v for k, v in body.items() if k not in _ARMED_BODY_KEYS and k not in _ANALYZE_PASSTHROUGH and k != 'extra'}
@@ -3213,7 +3214,8 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _armed(body) and not _is_order:
         try:
             from . import drilldown as _dd
-            _dd_raw = _dd.answer(text, uname, ctx=ctx, tid=tid) if (_dd.looks_like_drilldown(text) or _dd.looks_like_definition(text)) else None
+            _dd_raw = (_dd.answer(text, uname, ctx=ctx, tid=tid)
+                       if _u_claims(body, 'definition', lambda: _dd.looks_like_drilldown(text) or _dd.looks_like_definition(text)) else None)
         except Exception as e:
             _faults.note('service.drill_down_lane', e)
             _dd_raw = None
@@ -3669,7 +3671,7 @@ def _standing_answer(text, user=None, uname='', ctx=None, correction=False, body
         # data; prometheus.methodology_answers). Never a read, a build or
         # a chip.
         from . import methodology_answers as _ma
-        _ma_raw = _ma.answer(text, host=host)
+        _ma_raw = _ma.answer(text, host=host) if _u_claims(body, 'definition', lambda: True) else None
         if _ma_raw:
             try:
                 host.ask_hint(route='methodology', outcome='answered')
@@ -3687,7 +3689,7 @@ def _standing_answer(text, user=None, uname='', ctx=None, correction=False, body
         # never a build, a quote, a read or a which-audience question
         # (prometheus.how_computed).
         from . import how_computed as _hc
-        _hc_raw = _hc.answer(text, ctx, correction=correction)
+        _hc_raw = _hc.answer(text, ctx, correction=correction) if _u_claims(body, 'definition', lambda: True) else None
         if _hc_raw:
             try:
                 host.ask_hint(route='how_computed', outcome='answered',
