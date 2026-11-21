@@ -610,6 +610,21 @@ def lane_markers(source=None):
     return [m.group(1) for m in re.finditer(r"^\s*# lane: ([a-z_]+)\s*$", src, re.M)]
 
 
+def _roster_yields(body, text, ctx):
+    """A roster-shaped ask that names its audience ("from the Wicked Tuna viewers, which brands under-index"), or
+    reads as which brands suit one, is a read on that audience: the roster offer and the catalog's roster answer
+    stand aside (a named subject wins; keyed on the exists flip, 2026-11-20). A bare roster ask reads exists."""
+    try:
+        from . import understanding as _und
+        u = _und.on_body(body)
+        if not _und.flipped('exists') or u is None:
+            return False
+        page = str(((ctx or {}).get('primary') or {}).get('name') or '') if isinstance(ctx, dict) else ''
+        return bool(u.intent == 'brand_fit' or _und.named_subject(u, text, page))
+    except Exception:
+        return False
+
+
 def _u_claims(body, name, fallback):
     """Whether a lane keyed on the Understanding runs (prometheus.understanding.claims, rebuild stage 2,
     2026-11-20). The lane's own predicate decides when the step is off, not flipped for this intent, or
@@ -2565,7 +2580,7 @@ def ask(user, body, *, via='session'):
             from . import catalog_lane as _cl0
             _p0 = _cl0.parse(text)
             _exists_ask = bool(_p0 and _p0[0] == 'exists')
-            _cat0 = _cl0.answer(text, ctx) if _exists_ask else None
+            _cat0 = _cl0.answer(text, ctx) if _u_claims(body, 'exists', lambda: _exists_ask) else None
         except Exception as e:
             _faults.note('service.catalog_exists', e)
             _cat0 = None
@@ -3003,7 +3018,8 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _armed(body):
         try:
             from . import catalog_lane as _cl
-            _cat = _cl.answer(text, ctx)
+            _cat = (_cl.answer(text, ctx)   # keyed: a confident other reading stands it down; a roster ask that names its audience is a read
+                    if _u_claims(body, 'exists', lambda: not (_cl.roster_ask(text) and _roster_yields(body, text, ctx))) else None)
         except Exception as e:
             _faults.note('service.catalog_lane', e)
             _cat = None
@@ -3746,6 +3762,8 @@ def _standing_answer(text, user=None, uname='', ctx=None, correction=False, body
         # the Reader spends a call on it (2026-10-15, Emmet at Kartel).
         from . import catalog_lane as _cl
         _ro = _cl.roster_ask(text)
+        if _ro and body is not None and _roster_yields(body, text, ctx):
+            _ro = None   # the ask names its audience: a read on it, never the roster of brands we hold
         if _ro:
             try:
                 host.ask_hint(route='roster_offer', outcome='answered')

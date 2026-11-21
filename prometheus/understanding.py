@@ -74,14 +74,16 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'brand_fit',             # which brands suit a talent is a read on the talent's audience, never a valuation (Jenna 2026-11-20)
            'named_subject',         # a subject the words name outranks the open page and the user's memory in the read (Emma Crouchen 2026-11-20)
            'capability',            # a question about the product itself is product knowledge, never a subject read (Liz 2026-11-20)
-           'provenance')            # where a figure came from, two figures squared, the unprojected count, US or global (2026-11-20, night)
+           'provenance',            # where a figure came from, two figures squared, the unprojected count, US or global (2026-11-20, night)
+           'exists')                # is X in the library, what do we hold on X, the roster (the catalog lanes, 2026-11-20, night)
 SHADOW = ('named_title',)
 
 # Intents the flipped lanes compete over: a positive reading of one of
 # these (at STAND_DOWN_CONF or better) stands the others down. Anything
 # else is "no position taken". Grows with each class moved onto the
 # Understanding (2026-11-20, night).
-_CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance'))
+_CONTESTED = frozenset(('wayfinding', 'status', 'send_file_order', 'insight_ask', 'dashboard_issue', 'capability', 'provenance',
+                        'exists'))
 STAND_DOWN_CONF = 0.7   # a weak reading (a correction, the page) never stands a lane down
 # intents a waiting wizard step yields to when the words are read with confidence (prometheus.wizard_interrupt)
 WIZARD_YIELDS_TO = frozenset(('status', 'wayfinding', 'send_file_order', 'insight_ask', 'dashboard_issue', 'pricing', 'exists',
@@ -209,6 +211,11 @@ _PEOPLE_RX = re.compile(
     r"\b(?:how\s+many|how\s+much|what\s+(?:share|percent|%)|who\s+(?:are|is|skews?|watch|buy|use)|audience|viewers?|fans?|customers?|users?|buyers?|shoppers?|"
     r"subscribers?|listeners?|players?|members?|households?|people|demograph|over[- ]?index|index(?:es)?|penetration|churn|retention|reach|overlap|"
     r"watched|streamed|bought|purchased|shop(?:ped|s)?|visited|engag)", re.I)
+# "from the wicked tuna viewers, which brands ...": an audience named in lower case before the question (the binder
+# reads capitalised names; the Reader has not run yet when the roster offer would answer)
+_AUDIENCE_PHRASE_RX = re.compile(
+    r"\b(?:from|of|among|for|in|within|across)\s+(?:the\s+)?[a-z0-9][a-z0-9'&.+-]*(?:\s+[a-z0-9][a-z0-9'&.+-]*){0,4}\s+"
+    r"(?:viewers|fans|audience|listeners|subscribers|shoppers|buyers|users|customers|readers|players|members|watchers)\b", re.I)
 _RERUN_RX = re.compile(r"\b(?:again|re-?run|rerun|same\s+(?:thing|read|one|question|analysis)|one\s+more\s+time|redo|repeat\s+(?:it|that|the))\b", re.I)
 _CORRECTION_RX = re.compile(r"^\W*(?:no\b|not\s+(?:that|what|this)|wrong|that'?s\s+not|i\s+(?:said|meant|asked\s+for)|why\s+(?:do|did|are)\s+you\s+keep)", re.I)
 _PUSHBACK_ONLY_RX = re.compile(r"^\W*(?:(?:no|nope|not\s+that|that'?s\s+not\s+(?:it|right|what\s+i\s+meant|what\s+i\s+asked)|wrong|"
@@ -292,6 +299,8 @@ def _features(text, ctx, history, body):
     # a brief that sizes the people around named titles is one read, whole (prometheus.read_brief); the keyword lanes stand aside for it
     put('brief', lambda: mod('read_brief').is_brief(text))
     put('provenance', lambda: _provenance_kind(text))
+    # the catalog lanes: ('exists' | 'size' | 'roster', subject) when the words ask what the library holds
+    put('catalog', lambda: (mod('catalog_lane').parse(text) or (None, None))[0])
     return out
 
 
@@ -490,9 +499,9 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         for name in ('wayfinding', 'directions', 'status_fast', 'status', 'wait', 'deliverable', 'insight', 'reader_will_share',
                      'send_order', 'send_file', 'dashboard_issue', 'cancel', 'order', 'multi', 'sample_size', 'capability',
                      'rerun_words', 'correction_words', 'pushback_only', 'send_words', 'build_verb', 'thanks', 'bare_reply',
-                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance'):
+                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance', 'catalog'):
             if f.get(name):
-                ev.append(name if name not in ('wizard', 'provenance') else name + ':' + str(f[name]))
+                ev.append(name if name not in ('wizard', 'provenance', 'catalog') else name + ':' + str(f[name]))
         # a delivered valuation in the thread is what the words point at (prometheus.valuation_referent): its deck,
         # its figures, a re-run on corrected dates. Read on the reader's own words when the order gate rewrote them.
         vref = None
@@ -504,6 +513,10 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             vref = None
         if vref:
             ev.append('valuation_ref:' + str(vref.get('kind') or ''))
+        # "which brands do you cover" asks for the roster we hold, not which brands suit an audience: a roster ask that
+        # names no audience of its own is the catalog's (2026-11-20, night)
+        roster_bare = bool(f.get('catalog') == 'roster' and f.get('brand_fit') and _words_subject(t, history, ctx) is None
+                           and not _AUDIENCE_PHRASE_RX.search(t))
         u.evidence = ev
         # ---- the reconciler: hard rules first, then the contested pairs, then the rest
         intent, action, conf = 'analyze', 'answer', 0.6
@@ -536,7 +549,7 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             # should this be on?" on "a 3-5 word description for CW prometheus versus AI")
             intent, action, conf = 'capability', 'answer', 0.9
             ev.append('product:' + str(f['product_question'])[:16])
-        elif f.get('brand_fit') and flipped('brand_fit') and not f.get('wizard_start') and not f.get('insight'):
+        elif f.get('brand_fit') and flipped('brand_fit') and not f.get('wizard_start') and not f.get('insight') and not roster_bare:
             # which brands suit a talent, with pitch angles: a read on the talent's audience; it names no pairing to
             # value, so it is never the valuation's and an open order yields to it (Jenna 2026-11-20, her own seat)
             intent, action, conf = 'brand_fit', 'answer', 0.85
@@ -571,6 +584,11 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             intent, action, conf = 'pricing', 'answer', 0.8
         elif f.get('multi') and len(f['multi']) > 1:
             intent, action, conf = 'multi_ask', 'answer', 0.75
+        elif f.get('catalog') in ('exists', 'roster') and not f.get('brief') and not f.get('capability'):
+            # is X in the library, what do we hold on X, the roster of a title: the catalog answers from the shelf,
+            # no model call (the catalog_exists and catalog lanes, 2026-11-20, night); "is there any X measurement
+            # available in Crosswalk" is a question about the product (capability), not the shelf
+            intent, action, conf = 'exists', 'answer', 0.8
         elif f.get('sample_size'):
             intent, action, conf = 'definition', 'answer', 0.75
         elif f.get('capability'):

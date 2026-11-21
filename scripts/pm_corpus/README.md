@@ -137,7 +137,7 @@ records the same way. The kill switches are environment only:
 `PM_UNDERSTANDING=0` for the step, `PM_U_OFF_<INTENT>=1` for one flipped
 intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`,
 `WIZARD_INTERRUPT`, `VALUATION_REFERENT`, `BRAND_FIT`, `NAMED_SUBJECT`,
-`CAPABILITY`, `PROVENANCE`). `PM_SCREEN_SCOPE=0` restores the old reading of the open
+`CAPABILITY`, `PROVENANCE`, `EXISTS`). `PM_SCREEN_SCOPE=0` restores the old reading of the open
 screen (what is on screen deciding a subject on an audience noun, a
 pronoun, a row named or the Reader's flag); with it on, the open
 profile or view is the subject only when the reader's own words point

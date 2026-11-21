@@ -273,6 +273,19 @@ class Claims(unittest.TestCase):
         ub = U.on_body(U.attach({'text': brief}, U.features(brief, None, [], {})))
         self.assertNotEqual(ub.intent, 'provenance', ub.evidence)
 
+    def test_exists_is_read_and_keyed(self):
+        # is X in the library / do we have a profile for X: the catalog answers from the shelf (2026-11-20, night)
+        for q in ('do we have a profile for Harbor Lights?', 'is there a Harbor Lights profile in the library', 'do you have anything on Northwind Sports'):
+            b = U.attach({'text': q}, U.features(q, None, [], {}))
+            u = U.on_body(b)
+            self.assertEqual(u.intent, 'exists', (q, u.evidence))
+            self.assertTrue(U.claims(b, 'exists', lambda: True), q)
+            self.assertFalse(U.claims(b, 'status', lambda: True), q)
+        self.assertTrue(U.flipped('exists'))
+        # a world question is not a shelf question
+        w = U.on_body(U.attach({'text': 'is there any awareness for the film Harbor Lights'}, U.features('is there any awareness for the film Harbor Lights', None, [], {})))
+        self.assertNotEqual(w.intent, 'exists')
+
     def test_a_weak_reading_never_stands_a_lane_down(self):
         b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])
         u = U.on_body(b)
@@ -372,6 +385,17 @@ class ThroughTheDoor(unittest.TestCase):
         live = self._ask(FEATURE, view='profileIQ', subject='Example Brand')
         self.assertEqual(live['route'], 'wayfinding')
         self.assertIn('flip=1', live['u'])
+
+    def test_a_named_audience_is_never_the_roster(self):
+        # "from the <audience>, which brands under-index" names its audience: a read on it, never the roster offer
+        # (a named subject wins; the exists flip, 2026-11-20)
+        q = 'from the Example Sports viewers which brands that are outdoor and workwear under-index'
+        live = self._ask(q)
+        self.assertNotEqual(live['route'], 'roster_offer', live['reply'][:200])
+        self.assertNotIn('roster', live['reply'].lower())
+        bare = self._ask('which brands do you cover')
+        self.assertEqual(bare['route'], 'roster_offer', bare['reply'][:200])     # a roster ask that names nothing is the catalog's
+        self.assertIn('intent=exists', bare['u'])
 
     def test_insight_ask_never_reads_as_a_send(self):
         live = self._ask(INSIGHT, reading={'intent': 'command', 'confidence': 0.9, 'subjects': [{'as_written': 'Example Brand', 'catalog': '', 'kind': 'brand'}]})

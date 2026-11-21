@@ -56,7 +56,7 @@ _ROUTE_EXACT = {
     'bpiq_wizard': 'wizard', 'bpiq': 'wizard', 'brand_partnership': 'wizard', 'jiq': 'wizard',
     'journey': 'wizard', 'digital_journey': 'wizard', 'fw': 'wizard', 'flywheel': 'wizard',
     'aiq': 'wizard', 'attribution': 'wizard', 'digital_twin': 'wizard', 'twin': 'wizard', 'intake': 'wizard',
-    'roster_offer': 'wizard', 'journey_drilldown': 'wizard', 'journey_file': 'wizard', 'journey_dataset': 'wizard',
+    'journey_drilldown': 'wizard', 'journey_file': 'wizard', 'journey_dataset': 'wizard',
     # builds
     'profile_build': 'build', 'interpret': 'build', 'new_build': 'build', 'existing_match': 'build',
     'derive_cut': 'build', 'time_shifted_refresh': 'build', 'cut_needs_parent': 'build', 'subscriber_iq': 'build',
@@ -107,7 +107,7 @@ _ROUTE_EXACT = {
     'insight_ask': 'insight', 'insight': 'insight',
     # library
     'catalog_lookup': 'catalog', 'catalog': 'catalog', 'catalog_exists': 'catalog', 'discovery': 'catalog',
-    'subiq_library': 'catalog',
+    'subiq_library': 'catalog', 'roster_offer': 'catalog',   # what the shelf holds for a kind of subject (2026-11-20)
     # numbers
     'provenance': 'provenance', 'number_provenance': 'provenance', 'unprojected': 'provenance',
     'reconcile': 'provenance', 'us_scope': 'provenance',
