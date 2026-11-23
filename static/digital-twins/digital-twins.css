@@ -235,7 +235,25 @@
         #digitalTwinsIQView .dtw-lib-build .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
         #digitalTwinsIQView .dtw-lib-build .price { font-size: 13px; color: var(--dtw-ink); font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-lib-build p { margin: 8px 0 0; font-size: 12.5px; line-height: 18px; color: var(--dtw-body); }
-        #digitalTwinsIQView .dtw-lib-build .dtw-lb { margin-top: 12px; }
+        #digitalTwinsIQView .dtw-lib-build .acts { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-lib-build .acts .dtw-lb { margin-top: 0; }
+        #digitalTwinsIQView .dtw-lib-build .dtw-lb.link.tutorial { color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-lib-build .dtw-lb.link.tutorial:hover { color: var(--dtw-ink); text-decoration: underline; text-underline-offset: 4px; }
+        #digitalTwinsIQView .dtw-lib-build .dtw-lb.link.tutorial .play { font-style: normal; font-size: 8px; margin: 0 7px 0 0; color: var(--dtw-accent); position: relative; top: -1px; }
+        /* the tutorial pop-up (2026-11-23): on the body, so it sits over everything; the house colors are literal here */
+        .dtw-tutorial { position: fixed; inset: 0; z-index: 12000; display: none; align-items: center; justify-content: center; padding: 20px; font-family: 'Crosswalk Inter', 'Inter 18pt', Inter, system-ui, sans-serif; }
+        .dtw-tutorial.open { display: flex; }
+        .dtw-tutorial .dtw-tut-scrim { position: absolute; inset: 0; background: rgba(12, 22, 24, 0.86); }
+        .dtw-tutorial .dtw-tut-dialog { position: relative; width: min(1100px, 94vw); background: #0C1618; border: 1px solid #2C4148; border-radius: 14px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); overflow: hidden; }
+        .dtw-tutorial .dtw-tut-head { display: flex; align-items: baseline; gap: 12px; padding: 12px 14px 10px 18px; }
+        .dtw-tutorial .dtw-tut-eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #C7F23E; }
+        .dtw-tutorial .dtw-tut-title { flex: 1; min-width: 0; font-size: 14px; color: #E9E8E1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dtw-tutorial .dtw-tut-close { appearance: none; flex: none; align-self: center; width: 30px; height: 30px; border-radius: 50%; border: 1px solid #2C4148; background: transparent; color: #9AA09B; font-size: 18px; line-height: 1; cursor: pointer; }
+        .dtw-tutorial .dtw-tut-close:hover, .dtw-tutorial .dtw-tut-close:focus { color: #E9E8E1; border-color: #E9E8E1; outline: none; }
+        .dtw-tutorial .dtw-tut-frame { background: #000; }
+        .dtw-tutorial video { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 110px); background: #000; }
+        body.dtw-tut-open { overflow: hidden; }
+        @media (max-width: 640px) { .dtw-tutorial { padding: 0; align-items: flex-end; } .dtw-tutorial .dtw-tut-dialog { width: 100vw; border-radius: 14px 14px 0 0; border-left: 0; border-right: 0; } }
         #digitalTwinsIQView .dtw-lib-list { margin-bottom: 1.4rem; }
         #digitalTwinsIQView .dtw-lib-cols { display: grid; grid-template-columns: 44px 190px minmax(0, 1fr); gap: 0 22px; padding: 0 0 8px; }
         #digitalTwinsIQView .dtw-lib-cols .r { display: flex; justify-content: space-between; gap: 10px; }

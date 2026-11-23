@@ -119,7 +119,7 @@ import time
 import traceback
 import uuid
 
-from flask import Blueprint, Response, g, jsonify, request, session
+from flask import Blueprint, Response, g, jsonify, redirect, request, session
 
 import internal_copies as _internal_copies
 
@@ -542,6 +542,43 @@ def _attach_portraits(payload, key, sess):
 
 
 # -------------------------------------------------------------- routes
+# ---------------------------------------------------------------- tutorials (Jenna 2026-11-23: a Tutorial link beside Start on the
+# Build a new twin card opens the seating video in a pop-up). The files live in S3, never on the app's disk (Render's filesystem is
+# ephemeral); a signed-in seat is redirected to a short-lived presigned URL, and S3 answers the player's Range requests so seeking works.
+TUTORIALS = {
+    'seating': {'video': 'system/tutorials/Crosswalk_Digital_Twins_Seating_Tutorial.mp4',
+                'poster': 'system/tutorials/Crosswalk_Digital_Twins_Seating_Tutorial.jpg',
+                'title': 'How to seat your panel'},
+}
+TUTORIAL_URL_TTL_S = 900
+
+
+@bp.route(f'{PREFIX}/tutorial/<name>.<ext>', methods=['GET'])
+def dt_tutorial(name, ext):
+    """A tutorial's video (.mp4) or poster (.jpg) for a signed-in seat: a
+    302 to a presigned S3 URL good for fifteen minutes. 401 with nobody
+    signed in, 404 for a tutorial we do not hold."""
+    user, err = _gate()
+    if err:
+        return err
+    rec = TUTORIALS.get(str(name or '').strip().lower())
+    part = {'mp4': 'video', 'jpg': 'poster'}.get(str(ext or '').strip().lower())
+    if not rec or not part:
+        return jsonify({'success': False, 'error': 'No such tutorial.'}), 404
+    url = ''
+    try:
+        s3 = _s3()
+        url = str(s3.generate_presigned_url('get_object', Params={'Bucket': DT.S3_BUCKET, 'Key': rec[part]}, ExpiresIn=TUTORIAL_URL_TTL_S) or '')
+    except Exception:
+        traceback.print_exc()
+        url = ''
+    if not url:
+        return jsonify({'success': False, 'error': 'The tutorial is not available right now.'}), 503
+    resp = redirect(url, code=302)
+    resp.headers['Cache-Control'] = 'private, no-store'
+    return resp
+
+
 @bp.route(f'{PREFIX}/list', methods=['GET'])
 def dt_list():
     user, err = _gate()

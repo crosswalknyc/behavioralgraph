@@ -2984,8 +2984,51 @@
                 if (on) dtwRoomsOpen(false); else S.roomSeed = null;
                 drawer('dtwNewRoomDrawer', 'dtwNewRoomScrim', on, function() { syncInputCards(); renderPrices(); var st = el('dtwPnStatus'); if (st) st.textContent = S.key ? '' : 'Pick a twin on the Twins tab first.'; try { dtwPnSeatsNote(); } catch (_) {} var t = el('dtwPnTitle'); if (t) { t.value = ''; setTimeout(function() { try { t.focus(); } catch (_) {} }, 120); } });
             };
+            // ---- the tutorial pop-up (Jenna 2026-11-23: a Tutorial link beside Start on the Build a new twin card opens the seating
+            // video). One overlay on the body, built on first use: a Graphite scrim, the video at 16:9 with native controls and its poster,
+            // playing on open (the click is the gesture). Close, Escape and a click on the scrim close it; closing pauses and rewinds;
+            // focus moves to the close button and back to the link. The video and poster come through the app's tutorial route.
+            var TUTORIALS = { seating: { title: 'How to seat your panel' } };
+            var tutFrom = null;
+            function tutorialEl() {
+                var d = el('dtwTutorial');
+                if (d) return d;
+                d = document.createElement('div'); d.id = 'dtwTutorial'; d.className = 'dtw-tutorial'; d.setAttribute('aria-hidden', 'true');
+                d.innerHTML = '<div class="dtw-tut-scrim" data-tut-scrim="1"></div>'
+                    + '<div class="dtw-tut-dialog" role="dialog" aria-modal="true" aria-labelledby="dtwTutorialTitle">'
+                    + '<div class="dtw-tut-head"><span class="dtw-tut-eyebrow">Tutorial</span><span class="dtw-tut-title" id="dtwTutorialTitle"></span>'
+                    + '<button type="button" class="dtw-tut-close" id="dtwTutorialClose" aria-label="Close the tutorial" onclick="dtwTutorialClose()">&#215;</button></div>'
+                    + '<div class="dtw-tut-frame"><video id="dtwTutorialVideo" controls playsinline preload="metadata"></video></div></div>';
+                d.addEventListener('click', function(ev) { var t = ev.target; if (t && t.getAttribute && t.getAttribute('data-tut-scrim')) dtwTutorialClose(); });
+                document.body.appendChild(d);
+                return d;
+            }
+            window.dtwTutorialOpen = function(name, from) {
+                name = String(name || 'seating'); var rec = TUTORIALS[name] || TUTORIALS.seating;
+                var d = tutorialEl(), v = el('dtwTutorialVideo'), t = el('dtwTutorialTitle');
+                tutFrom = from || (document.activeElement && document.activeElement !== document.body ? document.activeElement : null);
+                if (t) t.textContent = rec.title || '';
+                if (v) {
+                    var src = '/api/digital-twins/tutorial/' + encodeURIComponent(name) + '.mp4';
+                    if (v.getAttribute('src') !== src) { v.setAttribute('poster', '/api/digital-twins/tutorial/' + encodeURIComponent(name) + '.jpg'); v.setAttribute('src', src); try { v.load(); } catch (_) {} }
+                }
+                d.classList.add('open'); d.setAttribute('aria-hidden', 'false');
+                try { document.body.classList.add('dtw-tut-open'); } catch (_) {}
+                if (v) { try { var pr = v.play(); if (pr && pr.catch) pr.catch(function() {}); } catch (_) {} }
+                var c = el('dtwTutorialClose'); if (c) { try { c.focus(); } catch (_) {} }
+            };
+            window.dtwTutorialClose = function() {
+                var d = el('dtwTutorial'); if (!d || !d.classList.contains('open')) return;
+                var v = el('dtwTutorialVideo');
+                if (v) { try { v.pause(); } catch (_) {} try { v.currentTime = 0; } catch (_) {} }
+                d.classList.remove('open'); d.setAttribute('aria-hidden', 'true');
+                try { document.body.classList.remove('dtw-tut-open'); } catch (_) {}
+                var back = tutFrom; tutFrom = null;
+                if (back && back.focus) { try { back.focus(); } catch (_) {} }
+            };
             document.addEventListener('keydown', function(e) {
                 if (e.key !== 'Escape') return;
+                var tut = el('dtwTutorial'); if (tut && tut.classList.contains('open')) { dtwTutorialClose(); return; }
                 var p = el('dtwSeatPop'); if (p && p.classList.contains('open')) { dtwSeatOpen(null); return; }
                 var bd = el('dtwBuildDrawer'); if (bd && bd.classList.contains('open')) { dtwBuildOpen(false); return; }
                 var td = el('dtwRecordDrawer'); if (td && td.classList.contains('open')) { dtwRecordOpen(false); return; }

@@ -51307,7 +51307,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <div class="dtw-lib-build" role="button" tabindex="0" onclick="dtwBuildTwin()" onkeydown="if(event.key==='Enter'){dtwBuildTwin();}">
                             <div class="top"><span class="dtw-cap on">Build a new twin</span><span class="price" id="dtwLibPrice"></span></div>
                             <p>From a profile we hold, a group you shape, or a list of links. Prometheus walks you through it.</p>
-                            <span class="dtw-lb go pa">Start<i>&rarr;</i></span>
+                            <div class="acts"><span class="dtw-lb go pa">Start<i>&rarr;</i></span><button type="button" class="dtw-lb link tutorial" onclick="event.stopPropagation(); dtwTutorialOpen('seating', this)" onkeydown="event.stopPropagation()" aria-haspopup="dialog"><i class="play" aria-hidden="true">&#9654;</i>Tutorial</button></div>
                         </div>
                     </div>
                     <div id="dtwLibrary" class="dtw-lib-list"></div>
