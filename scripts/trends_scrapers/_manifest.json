@@ -65,6 +65,7 @@
     "iq_ranker_board.py",
     "iq_ranker_wiki_audience.py",
     "iq_rankers_signal_daily.py",
+    "lane_launcher.py",
     "lens_relevance.py",
     "lg_channels.py",
     "libby_trends.py",

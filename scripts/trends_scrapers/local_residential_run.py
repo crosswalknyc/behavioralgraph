@@ -27,8 +27,15 @@ order:
 
 `--skip-coverage` scrapes only, for a scraper smoke test.
 
-Install as a launchd job (runs daily at 9am + on wake):
+Install as a launchd job (runs daily at 8am + on wake):
     python3 -m scripts.trends_scrapers.local_residential_run --install-launchd
+
+The job runs from its own checkout of main at
+~/.crosswalk/trends_lane/bg-webapp (cloned on install, .env linked
+beside it), started by lane_launcher.py, which moves that copy to
+origin/main before every run. Installing from any other checkout still
+points the job at that private copy, never at the checkout you ran it
+from (2026-11-23).
 
 Uninstall the launchd job:
     python3 -m scripts.trends_scrapers.local_residential_run --uninstall-launchd
@@ -56,6 +63,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger('local_residential_run')
 
@@ -482,11 +490,13 @@ def _launchd_plist_body(repo_root: Path, python_bin: str) -> str:
     <key>Label</key>
     <string>{LAUNCHD_LABEL}</string>
 
+    <!-- lane_launcher.py moves this private copy to origin/main and
+         then starts the lane, so the job always runs what is
+         published (2026-11-23). -->
     <key>ProgramArguments</key>
     <array>
         <string>{python_bin}</string>
-        <string>-m</string>
-        <string>scripts.trends_scrapers.local_residential_run</string>
+        <string>{repo_root}/scripts/trends_scrapers/lane_launcher.py</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -516,7 +526,7 @@ def _launchd_plist_body(repo_root: Path, python_bin: str) -> str:
     </dict>
 
     <!-- If Mac was asleep at 8am, fire when it wakes. Also fires at
-         agent-load time so `--install-launchd` runs the batch once
+         agent-load time so installing runs the batch once
          immediately for smoke testing. -->
     <key>RunAtLoad</key>
     <true/>
@@ -531,13 +541,57 @@ def _launchd_plist_body(repo_root: Path, python_bin: str) -> str:
 """
 
 
+# The job runs from its own checkout, never from a working copy people
+# edit (2026-11-23: the shared ~/Desktop/finished_codes/bg-webapp had
+# fallen 1,075 commits behind main and the lane ran that old code).
+LANE_DIR = Path.home() / '.crosswalk' / 'trends_lane'
+LANE_ROOT = LANE_DIR / 'bg-webapp'
+
+
+def _ensure_lane_copy(source_root: Path) -> Optional[Path]:
+    """The private checkout the job runs from, cloned from this
+    checkout's origin when missing, with the repo-root .env linked
+    beside it. None when it cannot be set up."""
+    git = shutil.which('git') or '/usr/bin/git'
+    try:
+        LANE_DIR.mkdir(parents=True, exist_ok=True)
+        if not (LANE_ROOT / '.git').exists():
+            url = subprocess.run([git, '-C', str(source_root), 'remote', 'get-url', 'origin'],
+                                 capture_output=True, text=True).stdout.strip()
+            if not url:
+                logger.warning("no origin remote in %s to clone the lane copy from",
+                               source_root)
+                return None
+            proc = subprocess.run([git, 'clone', '-q', '--depth', '1', '--branch', 'main',
+                                   '--single-branch', url, str(LANE_ROOT)],
+                                  capture_output=True, text=True)
+            if proc.returncode != 0:
+                logger.warning("could not clone the lane copy: %s", proc.stderr.strip()[:300])
+                return None
+            logger.info("cloned the lane copy -> %s", LANE_ROOT)
+        env_link = LANE_DIR / '.env'
+        src_env = source_root.parent / '.env'
+        if not env_link.exists() and src_env.exists() and src_env.resolve() != env_link:
+            env_link.symlink_to(src_env.resolve())
+            logger.info("linked %s -> %s", env_link, src_env.resolve())
+        return LANE_ROOT
+    except Exception as e:
+        logger.warning("lane copy setup failed: %s", e)
+        return None
+
+
 def _install_launchd() -> int:
-    repo_root = Path(__file__).resolve().parents[2]
+    source_root = Path(__file__).resolve().parents[2]
+    repo_root = _ensure_lane_copy(source_root)
+    if repo_root is None:
+        logger.warning("not installing: the job must run from %s, not from %s",
+                       LANE_ROOT, source_root)
+        return 1
     python_bin = shutil.which('python3') or sys.executable
     plist_path = _launchd_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     plist_path.write_text(_launchd_plist_body(repo_root, python_bin))
-    logger.info("wrote plist -> %s", plist_path)
+    logger.info("wrote plist -> %s (runs from %s)", plist_path, repo_root)
 
     # Load the plist. bootstrap uses the modern launchctl syntax; fall
     # back to load for older macOS.
