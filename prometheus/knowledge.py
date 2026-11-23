@@ -635,6 +635,24 @@ def leave_size(subject, question, cap, *, window: Optional[dict] = None, source:
         _PENDING['size|' + _pending_key(subject, question)] = {'cap': cap, 'window': window or {}, 'source': source, 'ts': now}
 
 
+def saved_people(subject, window=None) -> Optional[int]:
+    """US people in the audience size saved for a subject
+    (migration/saved_subject_size: a decision of record, the estimates
+    table, the saved-size table, a record anchor) when its window fits the
+    read's; None otherwise. Never raises."""
+    try:
+        from migration import saved_subject_size as _ss
+        got = _ss.lookup(subject)
+        if not got:
+            return None
+        bw = _ss.parse_window(window) if isinstance(window, dict) and window.get('start') else None
+        if not _ss.window_ok(bw, got.get('window')):
+            return None
+        return int(got['us'])
+    except Exception:
+        return None
+
+
 def peek_size(subject, question) -> Optional[dict]:
     with _PENDING_LOCK:
         return _PENDING.get('size|' + _pending_key(subject, question))
@@ -912,7 +930,8 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
             except Exception:
                 pass
         changed = _twin.changed_windows((st['twin'] or {}).get('window') or {}, ask.get('window') or {}) if st['twin'] else None
-        if researched and not h.get('profile'):
+        unheld = bool(researched and not h.get('profile'))   # a subject we hold no profile on (the build offer reads this, 2026-11-23)
+        if unheld:
             ask['size_needed'] = True
         r = research(ask, claude_json, tools, changed_windows=changed or None)
         if r.get('block'):
@@ -921,6 +940,11 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         if researched:
             cap = _twin.anchor_low_people(r.get('anchors') or [])
             cap_source = 'research' if cap else ''
+            _saved = saved_people(ask.get('subject'), ask.get('window')) if unheld else None
+            if _saved:
+                # the size already saved for the subject binds the read, so
+                # later answers and builds land on one figure (2026-11-23)
+                cap, cap_source = _saved, 'saved'
         elif isinstance(h.get('profile'), dict) and _twin.same_name(h['profile'].get('subject') or ask.get('subject'), ask.get('subject') or ''):
             cap = _num(h['profile'].get('audience_size'))
             cap_source = 'profile' if cap else ''
@@ -940,7 +964,10 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         base['_knowledge'] = {'key': ask_key(ask), 'twin': (st['twin'] or {}).get('ref'), 'valuation': (bound or {}).get('ref'),
                               'anchors': len(r.get('anchors') or []), 'events': len(r.get('events') or []),
                               'cached': bool(r.get('cached')), 'marks': marks_of(h, r)[:60],
-                              'named_subject': named, 'borrowed_base': base_subject if borrowed else '', 'size_cap': cap, 'size_source': cap_source}
+                              'named_subject': named, 'borrowed_base': base_subject if borrowed else '', 'size_cap': cap, 'size_source': cap_source,
+                              'subject': str(ask.get('subject') or named or ''), 'unheld': unheld,
+                              'size_window': {'start': str((ask.get('window') or {}).get('start') or ''),
+                                              'end': str((ask.get('window') or {}).get('end') or '')}}
         if isinstance(stages, dict):
             stages['knowledge'] = int((time.monotonic() - t0) * 1000)
         return '\n\n'.join(p for p in parts if p)
@@ -1007,5 +1034,5 @@ def valuation_events(inputs: dict, changed_windows: list, claude_json=None, tool
 __all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored', 'research', 'anchors_block',
            'facts_block', 'marks_of', 'leave_twin', 'take_twin', 'peek_twin', 'hold_pending', 'read_blocks', 'insight_blocks',
            'leave_valuation', 'peek_valuation', 'bind_after', 'inline_window', 'valuation_for_read', 'world_block',
-           'understanding_on_request', 'named_subject', 'base_is_borrowed', 'leave_size', 'peek_size',
+           'understanding_on_request', 'named_subject', 'base_is_borrowed', 'leave_size', 'peek_size', 'saved_people',
            'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS']

@@ -479,7 +479,7 @@ class SameContractEverywhere(unittest.TestCase):
 
     def test_the_worker_lands_the_thread_before_the_job_reads_done(self):
         src = _legacy_fn('_pm_run_read_job')
-        land_at = src.index("_pm_append_read_to_history(pm_user, job_id, payload, held=held")
+        land_at = src.index("_pm_append_read_to_history(pm_user, job_id, _chat, held=held")   # the chat copy (2026-11-23, the build offer)
         done_at = src.index("_pm_read_status_write(job_id, _done)")
         self.assertLess(land_at, done_at)
 

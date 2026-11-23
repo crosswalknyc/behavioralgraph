@@ -896,6 +896,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _C._pm_panel_refund(panel_charge)
     if isinstance(panel_charge, dict) and panel_charge.get('included') and payload.get('success') and payload.get('reply'):
         payload['reply'] = __import__('prometheus.priced_read', fromlist=['with_included_line']).with_included_line(payload['reply'])
+    payload = __import__('prometheus.build_offer', fromlist=['with_offer']).with_offer(payload, base=base, user=_pm_user, question=text, history=history, held=_sync_held)   # a read on a subject we do not hold ends with the build offer (Jenna 2026-11-23)
     try:
         if not payload.pop('_held', False):
             _C._pm_csv_point(payload.get('profile'), text,

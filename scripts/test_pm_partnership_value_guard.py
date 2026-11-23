@@ -450,7 +450,8 @@ def test_e_read_never_prices_a_partnership():
     legacy = _legacy_view()
     check("a finished read passes the guard before it lands in the thread",
           "partnership_value', fromlist=['guard_read']).guard_read(payload, question=text, history=history)" in legacy
-          and legacy.index("fromlist=['guard_read']") < legacy.index('_pm_append_read_to_history(pm_user, job_id, payload'))
+          and legacy.index("fromlist=['guard_read']") < legacy.index("with_offer(payload, base=base, user=pm_user")
+          < legacy.index('_pm_append_read_to_history(pm_user, job_id, _chat'))
     check("chat.py stays under its line ratchet", _chat_py_lines() < 19900)
 
 

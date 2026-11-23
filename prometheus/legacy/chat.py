@@ -11182,10 +11182,11 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         __import__('prometheus.partnership_value', fromlist=['guard_read']).guard_read(payload, question=text, history=history)   # a partnership's dollar value is the valuation's to state (Jenna 2026-11-11)
         __import__('prometheus.reply_truth', fromlist=['finish_read']).finish_read(payload, question=text)   # a read claims nothing it has no record of (2026-11-11)
         _stages = payload.pop('_stages_ms', None)
+        _chat = __import__('prometheus.build_offer', fromlist=['with_offer']).with_offer(payload, base=base, user=pm_user, question=text, history=history, job_id=job_id, thread_id=str(head.get('thread_id') or ''), via=head.get('via'), held=held, probe=probe)   # a read on a subject we do not hold ends with the build offer in the chat copy only; emails carry the read alone (Jenna 2026-11-23)
         if payload.get('success'):
             _done = {**head,
                      'status': 'held' if held else 'done',
-                     'finished_at': time.time(), 'payload': payload}
+                     'finished_at': time.time(), 'payload': _chat}
             if isinstance(_stages, dict) and _stages:
                 _done['stages_ms'] = _stages
             if isinstance(_verify, dict) and _verify:
@@ -11206,7 +11207,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             # widget's own copy is the fallback, not the other way round.
             if panel_charge and not held and payload.get('data_floor') == 'before':
                 _pm_panel_refund(panel_charge)   # the read was refused at the data floor: nothing is charged (Jenna 2026-11-18)
-            _pm_append_read_to_history(pm_user, job_id, payload, held=held, started_at=head.get('started_at'))
+            _pm_append_read_to_history(pm_user, job_id, _chat, held=held, started_at=head.get('started_at'))
             _pm_read_status_write(job_id, _done)
             _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
                              via=__import__('prometheus.service', fromlist=['job_doc_field']).job_doc_field(job_id, 'via'))

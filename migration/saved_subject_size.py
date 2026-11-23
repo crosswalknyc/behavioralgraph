@@ -19,7 +19,12 @@ Where a saved size lives (first found wins)
    audits read (most sit 2x to 12x above their subject's Gen Pop row);
    they never size a build. ``WINDOWS`` dates an entry, ``ALIASES`` names
    the other ways the subject is written.
-3. The Prometheus anchor store (``system/pm_anchors/``): a record-sourced
+3. The saved-size table (``system/saved_subject_sizes.json``): the size a
+   read on a subject we do not hold found, saved by
+   migration/unheld_subjects (2026-11-23, Jenna approved building profiles
+   for subjects people ask about that we do not hold). The first size
+   saved for a subject stands.
+4. The Prometheus anchor store (``system/pm_anchors/``): a record-sourced
    audience anchor named for the subject on the subject's own document.
    The largest one is the whole audience (the others are groups in it).
 
@@ -78,6 +83,7 @@ PANEL = 10_000_000
 PANEL_TO_US = US_POP / PANEL
 BUCKET = 'dashboard-inputs'
 ANCHOR_PREFIX = 'system/pm_anchors/'
+TABLE_KEY = 'system/saved_subject_sizes.json'
 CACHE_TTL_S = 300
 FRESH = ('new_build', 'cut_needs_parent', '')
 WINDOW_LEN_RATIO = (0.8, 1.25)   # a window this close in length measures the same year
@@ -112,6 +118,7 @@ _cache_lock = threading.Lock()
 LEDGER_FOR_TESTS = None
 ANCHOR_STORE_FOR_TESTS = None
 ANCHORS_FOR_TESTS = None
+STORE_FOR_TESTS = None      # an S3-like store for the saved-size table and the anchor documents
 
 
 def _hermetic():
@@ -184,6 +191,23 @@ def projected(sample) -> int:
 
 def sample_for(people) -> int:
     return int(round(float(people) / PANEL_TO_US))
+
+
+def sample_near(people):
+    """The messy count in the data nearest a number of US people (the
+    projection of the count lands within a few hundred people of it), or
+    None when the audience is under the smallest sample a build carries."""
+    try:
+        s = sample_for(people)
+    except (TypeError, ValueError):
+        return None
+    if s < MIN_TU:
+        return None
+    s = min(s, MAX_TU)
+    for d in (0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8, 9, -9, 11, -11):
+        if MIN_TU <= s + d <= MAX_TU and is_messy(s + d):
+            return s + d
+    return None
 
 
 # --------------------------------------------------------------- windows
@@ -430,18 +454,34 @@ def from_ledger(subject):
             'window': (ws, we) if ws and we else None, 'subject': str(bucket.get('subject') or subject)}
 
 
-def _anchor_keys(subject):
+def anchor_ask_keys(subject):
+    """The anchor store's ask keys a saved size is read back from: the
+    subject's any-window audience documents for the read and the insight
+    (prometheus.knowledge.ask_key's shape)."""
     try:
         il = _ledger()
         subj = il.fold_subject(subject).replace(' ', '_')[:80] or il.subject_key(subject)
     except Exception:
         subj = re.sub(r'[^a-z0-9]+', '_', fold(subject)).strip('_')[:80]
-    for product in ('read', 'insight'):
-        k = f"{subj}|{product}|audience|any|any|"
+    return [f"{subj}|{product}|audience|any|any|" for product in ('read', 'insight')]
+
+
+def _anchor_keys(subject):
+    for k in anchor_ask_keys(subject):
         yield f"{ANCHOR_PREFIX}{hashlib.sha1(k.encode()).hexdigest()[:20]}.json"
 
 
+def _store_json(key):
+    try:
+        obj = STORE_FOR_TESTS.get_object(Bucket=BUCKET, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
 def _load_anchor_doc(key):
+    if STORE_FOR_TESTS is not None:
+        return _store_json(key)
     if ANCHOR_STORE_FOR_TESTS is not None:
         return ANCHOR_STORE_FOR_TESTS.get(key)
     if _hermetic():
@@ -452,6 +492,43 @@ def _load_anchor_doc(key):
         return json.loads(obj['Body'].read().decode('utf-8'))
     except Exception:
         return None
+
+
+def _load_table():
+    if STORE_FOR_TESTS is not None:
+        return _store_json(TABLE_KEY)
+    if _hermetic():
+        return None
+    try:
+        import boto3
+        obj = boto3.client('s3').get_object(Bucket=BUCKET, Key=TABLE_KEY)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def from_saved_table(subject):
+    want = core(subject)
+    if not want:
+        return None
+    doc = _load_table()
+    for key, e in ((doc or {}).get('subjects') or {}).items():
+        if not isinstance(e, dict):
+            continue
+        names = [e.get('name') or key] + list(e.get('aliases') or [])
+        if want != key and want not in {core(n) for n in names}:
+            continue
+        try:
+            tu = int(e.get('sample') or 0)
+        except (TypeError, ValueError):
+            return None
+        if not (MIN_TU <= tu <= MAX_TU) or not is_messy(tu):
+            return None
+        w = e.get('window')
+        return {'tu': tu, 'us': projected(tu), 'source': 'saved_table', 'ref': str(key),
+                'window': (str(w[0]), str(w[1])) if isinstance(w, (list, tuple)) and len(w) >= 2 else None,
+                'subject': str(e.get('name') or subject)}
+    return None
 
 
 def from_anchor_store(subject):
@@ -504,7 +581,7 @@ def lookup(subject):
         if hit and now - hit[0] < CACHE_TTL_S:
             return dict(hit[1]) if hit[1] else None
     found = None
-    for fn in (from_ledger, from_estimates, from_anchor_store):
+    for fn in (from_ledger, from_estimates, from_saved_table, from_anchor_store):
         try:
             found = fn(subject)
         except Exception:
@@ -854,6 +931,7 @@ def for_check(subject, window, tu, avid, text='', log=print):
 
 
 __all__ = ['fold', 'core', 'is_messy', 'parse_window', 'window_ok', 'explicit_size_in_text', 'user_set_size',
-           'mark_user_set', 'from_estimates', 'from_ledger', 'from_anchor_store', 'lookup', 'clear_cache',
+           'mark_user_set', 'from_estimates', 'from_ledger', 'from_saved_table', 'from_anchor_store', 'lookup',
+           'clear_cache', 'sample_near', 'anchor_ask_keys',
            'settle', 'holds', 'apply_to_draft', 'settle_for_spec_step', 'spec_step', 'spec_markers', 'apply_to_spec',
            'for_check']

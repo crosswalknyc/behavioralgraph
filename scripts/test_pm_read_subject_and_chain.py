@@ -144,7 +144,9 @@ def test_borrowed_base_is_researched():
         base = dict(PINTEREST)
         led = {'block': 'PINTEREST STORED FIGURES: 48% of Pinterest users shop beauty', 'exact': None,
                'entries': [{'k': 'pinterest|beauty', 'ts': 1.0, 'route': 'read'}]}
-        with mock.patch.object(_il, 'consult', fake_consult):
+        # the research path on its own: a size saved for the subject binds the read instead
+        # (2026-11-23), held by scripts/test_unheld_subjects.py in the parent repo
+        with mock.patch.object(_il, 'consult', fake_consult), mock.patch.object(K, 'saved_people', lambda *a, **k: None):
             blk = K.read_blocks(EMMA, {}, base, pk=None, saved=None, catalog=lambda s: f'CATALOG ROWS FOR {s}',
                                 claude_json=claude_json, tools=None, history=[], body=None, led=led)
         kn = base.get('_knowledge') or {}
