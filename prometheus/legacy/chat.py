@@ -6177,6 +6177,7 @@ _PM_CLASSIFY_CANDIDATES = (
 
 
 _PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify', 'reader_notes', 'crosstab_ties'))
+_PM_FAST_SURFACES = frozenset(('pm_knowledge_research', 'pm_valuation_events'))   # the interpret model first, the analysis chain behind it; the winner never cached as the analysis model (prometheus.read_speed, 2026-11-23)
 
 
 _pm_resolved_classify = {'name': None}
@@ -6280,8 +6281,10 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
     # falls through to the full analyze chain, so classification can
     # never break.
     _is_classify = surface in _PM_CLASSIFY_SURFACES
+    _is_fast = (not _is_classify) and surface in _PM_FAST_SURFACES and os.environ.get('PM_RESEARCH_TIER', 'fast').strip().lower() != 'strong'
     for _tp in tool_plans:
         for m in (_pm_classify_chain() if _is_classify
+                  else ([_SYNTH_CHAT_INTERPRET_MODEL] + _pm_model_chain()) if _is_fast
                   else _pm_model_chain()):
             result = _H._run_nflx_claude_agent(
                 system_prompt=system_prompt, user_prompt=user_prompt,
@@ -6298,7 +6301,7 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                             print(f"[prometheus] classify model "
                                   f"resolved: {m}")
                             _pm_resolved_classify['name'] = m
-                    elif not _is_classify \
+                    elif not _is_classify and not _is_fast \
                             and _pm_resolved_model['name'] != m:
                         print(f"[prometheus] analysis model resolved: {m}")
                         _pm_resolved_model['name'] = m

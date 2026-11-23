@@ -1208,10 +1208,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # 2026-08-27 and the fragment crashed coherence enforcement.
     _stage_note('researching')
     _t_stage = time.monotonic()
+    from prometheus import read_speed as _speed
+    _model_tools = _speed.model_tools(base, pma.WEB_SEARCH_TOOL, anchors_block=anchors_block, ledger_block=_rm_led_block, stages=stages)   # web search only with nothing in hand on the subject (2026-11-23)
     result = _C._pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
                              user_prompt, max_tokens=11000,
                              temperature=0.4, usage_extras=pm_ppu,
-                             tools=[pma.WEB_SEARCH_TOOL])
+                             tools=_model_tools or None)
     stages['model'] = int((time.monotonic() - _t_stage) * 1000)
     try:
         from claude_client import last_call_stats as _pm_lcs
@@ -1274,7 +1276,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         res, data = _read_repair.coherent(   # a grid is shaped and completed; a reply with no figures is salvaged, then run once more (2026-11-18, Liz)
             data, question=text, subject=str(base.get('subject') or ''), log=lambda _m: print(f"[pm-loop] read repair: {_m}"),
             enforce=lambda _d: pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(_d, so_what=_is_so_what, multi=_multi_qs, plan=_is_plan, **_ah_ctx), _ds_series),
-            again=lambda _blk: _C._pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT, user_prompt + '\n\n' + _blk, max_tokens=11000, temperature=0.2, usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL]),
+            again=lambda _blk: _C._pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT, user_prompt + '\n\n' + _blk, max_tokens=11000, temperature=0.2, usage_extras=pm_ppu, tools=_model_tools or None),
             note=lambda _why: _H._chatbot_error_email('brief-chat/complete', _why, user_email=pm_user, payload={'question': text[:300], 'subject': base.get('subject')}),
             facts=lambda _gp: _grid_facts.platform_facts(_gp, _H.s3_client, _H.S3_BUCKET, _C._profile_catalog_for_chat(), pma))   # the comparison row reads the service's own profile and the US baseline
         # a creator-fit read is held to the subject's universe (the catalog's
@@ -1392,14 +1394,21 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
               f"{verdict.get('findings')}")
         revised_ok = False
         _last_draft, _last_verdict = (data, res, reply, fam0), verdict
+        _resc0 = _speed.rescue_first(pmv, _last_draft, verdict, stages, base_lookup=_v_lookup, question=text,   # the deterministic rescue before any revise call (2026-11-23)
+                                     prior_entries=_C._pm_verify_prior_entries(res, fam0, led), bound_facts=_purchase_facts, family=fam0)
+        if _resc0:
+            data, res, reply, fam0, verdict, _n_resc = _resc0
+            verify_revised = revised_ok = _pm_auto_corrected = True
         try:
+            if revised_ok:
+                raise _speed.SkipRevise()
             rev_prompt = (user_prompt + '\n\n'
                           + pmv.render_findings_block(
                               verdict.get('findings') or []))
             result2 = _C._pm_claude_json(
                 pma.REASONED_METRICS_SYSTEM_PROMPT, rev_prompt,
                 max_tokens=11000, temperature=0.2,
-                usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])
+                usage_extras=pm_ppu, tools=None)   # the findings carry the measured figures; no web search on a revise (2026-11-23)
             if result2.get('success'):
                 data2 = result2.get('data') or {}
                 if isinstance(data2, list):
@@ -1423,6 +1432,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                     else:
                         verdict = verdict2
                         _last_draft = (data2, res2, reply2, fam2)
+        except _speed.SkipRevise:
+            pass
         except Exception:
             traceback.print_exc()
         if not revised_ok:
@@ -1437,7 +1448,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 result3 = _C._pm_claude_json(
                     pma.REASONED_METRICS_SYSTEM_PROMPT, rev_prompt2,
                     max_tokens=11000, temperature=0.1,
-                    usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])
+                    usage_extras=pm_ppu, tools=None)   # the corrective block names the measured figures (2026-11-23)
                 if result3.get('success'):
                     data3 = result3.get('data') or {}
                     if isinstance(data3, list):
