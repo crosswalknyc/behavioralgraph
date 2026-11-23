@@ -502,6 +502,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 _led_nb = il.consult(subject=subj_name, question=text)
                 _exact_nb = (_led_nb or {}).get('exact')
                 if _exact_nb and _C._pm_replay_rejected_in_thread(_exact_nb, history):
+                    __import__('prometheus.corrections', fromlist=['learn_from_rejected_entry']).learn_from_rejected_entry(_pm_user, __import__('prometheus.thread_scope', fromlist=['current_thread_id']).current_thread_id(), history, _exact_nb)   # the pushed-back words are set aside for good (2026-11-23)
                     _exact_nb = None   # the reader already said no to these words (2026-11-04)
                 if _exact_nb and _exact_nb.get('reply'):
                     _C._pm_ask_hint(outcome='answered', subject=subj_name)
@@ -729,6 +730,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # FAST read came back verbatim after "Samsung TV Plus isn't even in
     # the data"). It still rides the constraint block; the ask runs fresh.
     if exact and _C._pm_replay_rejected_in_thread(exact, history):
+        try:
+            from prometheus import corrections as _corr, thread_scope as _ts_corr
+            _corr.learn_from_rejected_entry(_pm_user, _ts_corr.current_thread_id(), history, exact)   # the pushed-back words are set aside for good (2026-11-23)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         exact = None
     # The same question re-asked minutes after a replay means the stored
     # read did not satisfy; it runs fresh, as on the analyze path

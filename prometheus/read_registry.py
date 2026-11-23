@@ -127,6 +127,14 @@ def inflight(s3, bucket, read_prefix, user, text, now=None):
         return None
 
 
+def _set_aside(reply):
+    try:
+        import insights_ledger as _il
+        return bool(_il.reply_set_aside(reply))
+    except Exception:
+        return False
+
+
 def recent(s3, bucket, read_prefix, user, text, now=None):
     """The caller's read on this question inside the day: {'status': 'done',
     'job_id', 'reply', 'followups', 'finished_at', 'question'} when it
@@ -151,6 +159,8 @@ def recent(s3, bucket, read_prefix, user, text, now=None):
             return None        # a read that could not run never replays; the ask runs fresh (2026-11-04)
         if status.get('corrected_at') or status.get('retired'):
             return None        # a read corrected in place is never handed back as the same read (2026-11-10)
+        if reply and _set_aside(reply):
+            return None        # words a correction set aside never replay from a job payload either (2026-11-23)
         if st == 'done' and reply:
             return {'status': 'done', 'job_id': str(ent['job_id']), 'reply': reply, 'subject': subject,
                     'followups': [f for f in (payload.get('followups') or []) if isinstance(f, str)][:6],

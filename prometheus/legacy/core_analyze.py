@@ -642,6 +642,17 @@ def _pm_analyze_core(user, body, text, history):
     if any(rx.search(text or '') for rx in _C._PM_WRONG_ANSWER_RES):
         _C._pm_forward_user_feedback(_fb_user, text, 'wrong_answer')
         _prev_q = _C._pm_prev_user_question(history, text)
+        # Learn from the correction (Jenna 2026-11-23): the wrong answer's
+        # ledger row is retired, its words set aside, a figure the reader
+        # gave is recorded for the subject and window, and a sanitized
+        # fixture candidate goes to the staff-only queue (prometheus.corrections).
+        try:
+            from prometheus import corrections as _corr, thread_scope as _ts_corr
+            _corr.learn_from_reader(_fb_user, _ts_corr.current_thread_id(), history, text,
+                                    view=str(((body.get('page_context') or {}).get('view_context') or {}).get('view_id') or ''),
+                                    job_doc_loader=_C._pm_read_job_doc)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         if _prev_q:
             # The rejected question joins the nightly regression set
             # (Jenna 2026-09-30) with the complaint and the on-screen
@@ -1207,10 +1218,17 @@ def _pm_analyze_core(user, body, text, history):
             _led_exact = None
     except Exception:
         traceback.print_exc()
+    _led_rejected = bool(_led_exact and _led_exact.get('reply') and _C._pm_replay_rejected_in_thread(_led_exact, history))
+    if _led_rejected:
+        try:   # the pushed-back words are set aside for good (2026-11-23, prometheus.corrections)
+            from prometheus import corrections as _corr, thread_scope as _ts_corr
+            _corr.learn_from_rejected_entry(_pm_user, _ts_corr.current_thread_id(), history, _led_exact)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
     if _led_exact and _led_exact.get('reply') and _led_same_subject \
             and _led_subj and not mode and not _pm_skip_replay \
             and not _C._pm_replay_repeat_block(_pm_user, text) \
-            and not _C._pm_replay_rejected_in_thread(_led_exact, history):
+            and not _led_rejected:
         _replay_subj = _led.get('subject') or _led_subj
         _C._pm_ask_hint(route='ledger_replay', outcome='answered',
                      subject=_replay_subj)

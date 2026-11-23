@@ -1360,8 +1360,8 @@ def reply_set_aside(text):
     here so they do not hand the same words back. The conversation
     itself is never changed. Never raises."""
     try:
-        sig = _reply_sig(text)
-        if not sig:
+        want = set(reply_sigs(text))
+        if not want:
             return False
         doc = _load_index()
         now = time.time()
@@ -1374,13 +1374,147 @@ def reply_set_aside(text):
                 for e in (sub.get('entries') or []):
                     if not isinstance(e, dict) or not e.get('reply'):
                         continue
-                    (gone if e.get('retired') else live).add(_reply_sig(e.get('reply')))
-            sigs = frozenset(gone - live - {''})
+                    (gone if e.get('retired') else live).update(reply_sigs(e.get('reply')))
+            # the words a correction set aside outright (no row needed): the
+            # registry wins over a live row that still carries them
+            try:
+                registry = {str(r.get('sig')) for r in (_load_set_aside().get('replies') or []) if isinstance(r, dict) and r.get('sig')}
+            except Exception:
+                registry = set()
+            sigs = frozenset(((gone - live) | registry) - {''})
             with _cache_lock:
                 _set_aside_cache.update(doc=doc, ts=now, sigs=sigs)
-        return sig in sigs
+        return bool(want & sigs)
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Learn from every correction (Jenna 2026-11-23): the words a reader or a
+# staff member called wrong leave replay even when no ledger row carried
+# them (a generated read that never banked, a job payload), and the entry
+# that did carry them is retired by its words.
+# ---------------------------------------------------------------------------
+SET_ASIDE_KEY = LEDGER_PREFIX + 'set_aside.json'
+_SET_ASIDE_MAX = 4000
+_set_aside_registry = {'doc': None, 'ts': 0.0}
+
+
+def _strip_reply_leads(text):
+    """The words of a reply without the leads a landing or a replay adds
+    around them ('Same read as earlier', the already-reported line), so
+    the thread's copy and the ledger's copy give one signature."""
+    t = str(text or '')
+    t = re.sub(r"^\s*Same read as earlier[^\n]*\n+", '', t)
+    t = re.sub(r"\n+\s*(?:Already reported|These figures were already reported)[^\n]*\s*$", '', t)
+    return t
+
+
+def reply_sigs(text):
+    """The signatures these words are known by: as given and without the
+    leads. '' entries dropped."""
+    out = []
+    for v in (text, _strip_reply_leads(text)):
+        s_ = _reply_sig(v)
+        if s_ and s_ not in out:
+            out.append(s_)
+    return out
+
+
+def _load_set_aside(force=False):
+    now = time.time()
+    with _cache_lock:
+        doc = _set_aside_registry['doc']
+        if not force and doc is not None and now - _set_aside_registry['ts'] < _INDEX_TTL_S:
+            return doc
+    try:
+        resp = _client().get_object(Bucket=S3_BUCKET, Key=SET_ASIDE_KEY)
+        doc = json.loads(resp['Body'].read().decode('utf-8'))
+        doc = doc if isinstance(doc, dict) else {}
+    except Exception:
+        doc = {}
+    doc.setdefault('replies', [])
+    with _cache_lock:
+        _set_aside_registry.update(doc=doc, ts=now)
+    return doc
+
+
+def set_aside_reply(text, *, subject='', question='', window_start='', window_end='', by='', reason='', job_id=''):
+    """Register the words as set aside: `reply_set_aside` says True for
+    them from now on, on every replay path, whether or not a ledger row
+    ever carried them. Idempotent on the signature. Returns the number of
+    signatures added. Never raises."""
+    sigs = reply_sigs(text)
+    if not sigs:
+        return 0
+    stamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    added = {'n': 0}
+
+    def _mut(doc):
+        doc = doc if isinstance(doc, dict) else {}
+        rows = [r for r in (doc.get('replies') or []) if isinstance(r, dict)]
+        have = {r.get('sig') for r in rows}
+        for sg in sigs:
+            if sg in have:
+                continue
+            rows.append({'sig': sg, 'subject': str(subject or '')[:120], 'q': str(question or '')[:300],
+                         'ws': str(window_start or '')[:12], 'we': str(window_end or '')[:12],
+                         'by': str(by or 'correction')[:40], 'reason': str(reason or '')[:200],
+                         'job_id': str(job_id or '')[:40], 'head': ' '.join(str(text or '').split())[:160], 'ts': stamp})
+            added['n'] += 1
+        if not added['n']:
+            return None
+        doc['replies'] = rows[-_SET_ASIDE_MAX:]
+        return doc
+
+    try:
+        from migration.s3_json_state import update_json as _upd
+        _upd(S3_BUCKET, SET_ASIDE_KEY, _mut, default={'replies': []}, s3=_client())
+    except Exception as e:
+        print(f"[insights-ledger] set_aside_reply failed: {e}")
+        return 0
+    with _cache_lock:
+        _set_aside_registry.update(doc=None, ts=0.0)
+        _set_aside_cache.update(doc=None, ts=0.0, sigs=frozenset())
+    return added['n']
+
+
+def set_aside_rows(limit=200):
+    """The newest set-aside rows (staff view)."""
+    return list((_load_set_aside().get('replies') or [])[-int(limit):])
+
+
+def retire_by_reply(text, by='correction', note=''):
+    """Every live entry whose reply is these words (by signature, leads
+    stripped) is stamped retired. Returns the retired entries (copies:
+    k, subject, family, ws, we, q, route). Never raises."""
+    sigs = set(reply_sigs(text))
+    if not sigs:
+        return []
+    hits = []
+    stamp = {'by': str(by or 'correction')[:40], 'note': str(note or '')[:160],
+             'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+
+    def _mut(doc):
+        found = False
+        for sk, sub in (doc.get('subjects') or {}).items():
+            for e in (sub.get('entries') or []):
+                if not isinstance(e, dict) or e.get('retired') or not e.get('reply'):
+                    continue
+                if sigs & set(reply_sigs(e.get('reply'))):
+                    e['retired'] = dict(stamp)
+                    hits.append({k: e.get(k) for k in ('k', 'subject', 'family', 'ws', 'we', 'q', 'route', 'wl')})
+                    found = True
+        return doc if found else None
+
+    try:
+        _update_index(_mut)
+    except Exception as e:
+        print(f"[insights-ledger] retire_by_reply failed: {e}")
+    if hits:
+        with _cache_lock:
+            _set_aside_cache.update(doc=None, ts=0.0, sigs=frozenset())
+    return hits
 
 
 def retire_entries_for_record(subject, metric_family, exclude_routes=()):
@@ -3304,6 +3438,11 @@ def _exact_if_fresh(e):
     7-day ask does not churn daily."""
     if not e:
         return None
+    try:
+        if e.get('reply') and reply_set_aside(e.get('reply')):
+            return None          # words a correction set aside never replay (2026-11-23)
+    except Exception:
+        pass
     q = f"{e.get('q') or ''} {e.get('wl') or ''}"
     # the subject's own name is not a window ("USA Today" read as the
     # rolling word "today" and its banked answers aged out of replay)
@@ -3785,6 +3924,7 @@ def metrics_from_study(study):
 
 __all__ = ['consult', 'persist', 'make_entry', 'render_block',
            'find_exact', 'find_semantic', 'is_offer_reply', 'is_retired_surface_reply', 'reply_set_aside', 'metrics_from_study',
+           'set_aside_reply', 'set_aside_rows', 'retire_by_reply', 'reply_sigs', 'SET_ASIDE_KEY',
            'replay_eligible', 'fresh_run_requested',
            'entry_key', 'canon_family', 'subject_key',
            'normalize_question', 'normalize_subject',
