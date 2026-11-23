@@ -299,7 +299,17 @@ def _subset_parent_frame(s3_key, s3, tu_source_key=None, cache=None,
 # input, not a mechanical row fix.
 _AUTOFIX_GATE_CODES = ("I1", "I2", "I3", "I5", "I8", "I9", "I10",
                        "I11", "I12", "I13", "I14", "I15", "I16", "I17",
-                       "I18", "I19", "I20")
+                       "I18", "I19", "I20", "I21")
+
+
+def _fix_us_superset(df, subject, s3_key, s3, verbose=True):
+    """I21: hold every row of the subject's US profile inside a worldwide
+    file at no fewer people (migration/global_profiles). (df, n)."""
+    try:
+        from migration.global_profiles import fix_us_superset
+    except ImportError:
+        from global_profiles import fix_us_superset  # type: ignore
+    return fix_us_superset(df, subject, s3_key, s3, verbose=verbose)
 
 
 def _detect_ladder_rows(df):
@@ -846,6 +856,21 @@ def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
             print(f"  [profile_writer] I1 rogue-pin fix raised "
                   f"({type(e).__name__}: {e}); gate keeps the verdict")
 
+    if any(v.get("code") == "I21" for v in fixable):
+        # I21 worldwide superset (Jenna 2026-11-23): every US row inside
+        # the worldwide file at no fewer people, the lift reasoned per
+        # row at the low end (near-zero salted fallback). Runs last so no
+        # fixer above can pull a lifted row back under its US people.
+        try:
+            df, _n21 = _fix_us_superset(df, subject, s3_key, s3,
+                                        verbose=verbose)
+            n_fixed += int(_n21 or 0)
+            print(f"  [profile_writer] I21 worldwide superset fix: "
+                  f"{_n21} row(s) set")
+        except Exception as e:
+            print(f"  [profile_writer] I21 worldwide superset fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+
     # Recompute the downstream chain from the corrected BPs, re-sort,
     # re-assert numeric formats, re-append baseline columns. A cut keeps
     # its parent here so no row leaves at more people than the parent's.
@@ -858,6 +883,17 @@ def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
     except Exception as e:
         print(f"  [profile_writer] post-fix safety net raised "
               f"({type(e).__name__}: {e})")
+    if any(v.get("code") == "I21" for v in fixable):
+        # The safety net's de-jitter is direction-blind: hold the floor
+        # again on its output (cached reasoning, no new calls; the fixer
+        # recomputes the chain arithmetic itself).
+        try:
+            df, _n21b = _fix_us_superset(df, subject, s3_key, s3,
+                                         verbose=False)
+            n_fixed += int(_n21b or 0)
+        except Exception as e:
+            print(f"  [profile_writer] I21 floor re-hold raised "
+                  f"({type(e).__name__}: {e})")
     if sort:
         try:
             df = _sort_within_category(df)

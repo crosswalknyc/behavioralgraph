@@ -116,6 +116,20 @@ Invariants asserted (each returns structured violations):
                            fixed: the correct title URL is a research
                            judgment; the gate quarantines with a clear
                            reason instead.
+  I21 worldwide superset  worldwide files only (MARKET: GLOBAL), the
+                           subject's US profile resolvable: every row of
+                           the US profile sits in the worldwide file with
+                           at least its US people (brand rows, the US
+                           profile's own cities, every US demographic
+                           bucket inside the worldwide bucket that holds
+                           it). Jenna 2026-11-23: the global file
+                           "should encompass everything from the us cut
+                           PLUS all other countries". Read through the
+                           pure functions of migration/global_profiles
+                           (no enforcer code); fixed in place by the
+                           writer's autofix pass (fix_us_superset).
+                           Fail-open, with a log line, when there is no
+                           US profile or it cannot be read.
 
 Gate behavior: `run_final_ship_gate(df_or_bytes, s3_key, subject)`.
 On violations the caller's upload MUST NOT happen: the gate writes the
@@ -2524,6 +2538,80 @@ def _check_i20(rows, s3_key):
     return out
 
 
+_I21_US_CACHE = {}       # us key -> (read at, rows)
+_I21_TTL = 120.0
+
+
+def _check_i21(rows, subject, s3_key, s3_client, verbose):
+    """I21 worldwide superset (Jenna 2026-11-23, Guinness - Global): a
+    worldwide file holds every row of the subject's US profile at no
+    fewer people. People level (Projection), never the share."""
+    out = []
+    try:
+        from migration import global_profiles as _gp
+    except ImportError:
+        try:
+            import global_profiles as _gp  # type: ignore
+        except ImportError:
+            return out
+    if not _gp.is_global_rows([(r["cat"], r["val"]) for r in rows],
+                              s3_key):
+        return out
+    keys = [k for k, _lm in _list_root_csvs(s3_client)]
+    uk = _gp.us_counterpart_key(s3_key, subject, keys)
+    if not uk:
+        if verbose:
+            print(f"[ship-gate] I21: no US profile for "
+                  f"{_display_name(s3_key)}; worldwide superset check "
+                  f"skipped")
+        return out
+    hit = _I21_US_CACHE.get(uk)
+    if hit and time.time() - hit[0] < _I21_TTL:
+        urows = hit[1]
+    else:
+        try:
+            body = _s3(s3_client).get_object(
+                Bucket=BUCKET, Key=uk)["Body"].read()
+        except Exception as e:
+            if verbose:
+                print(f"[ship-gate] I21: US profile {uk} could not be "
+                      f"read ({type(e).__name__}: {e}); check skipped")
+            return out
+        _, urows = _parse_rows(body)
+        _I21_US_CACHE[uk] = (time.time(), urows)
+    if not urows or _gp.is_global_rows(
+            [(r["cat"], r["val"]) for r in urows]):
+        return out
+    hidden = _load_hidden_norms(verbose=False)
+    is_hidden = None
+    if hidden:
+        try:
+            from migration.hostmap_norm import norm_key
+        except ImportError:
+            try:
+                from hostmap_norm import norm_key  # type: ignore
+            except ImportError:
+                norm_key = _norm_token
+        is_hidden = lambda v: norm_key(v) in hidden  # noqa: E731
+    found = _gp.superset_findings(
+        [(r["cat"], r["val"], _num(r["proj_s"])) for r in rows],
+        [(r["cat"], r["val"], _num(r["proj_s"])) for r in urows],
+        is_hidden=is_hidden)
+    lines, extra = _gp.gate_messages(found)
+    for where, value, plain in lines:
+        out.append(_v("I21", "worldwide superset", where, value, plain))
+    if extra:
+        out.append(_v(
+            "I21", "worldwide superset", "(additional rows)", str(extra),
+            f"{extra} more row(s) of the US profile are not held at "
+            f"their US people in this worldwide file.",
+        ))
+    if out and verbose:
+        print(f"[ship-gate] I21: {_gp.owed(found)} shortfall(s) against "
+              f"the US profile {uk}")
+    return out
+
+
 def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                                 s3_client=None, verbose=True):
     """Run all invariants read-only. Returns (violations, meta).
@@ -2590,6 +2678,8 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
     violations += _safe("I18", _check_i18, rows, subject, s3_key)
     violations += _safe("I19", _check_i19, rows, subject, s3_key)
     violations += _safe("I20", _check_i20, rows, s3_key)
+    violations += _safe("I21", _check_i21, rows, subject, s3_key,
+                        s3_client, verbose)
 
     meta = {"n_rows": len(rows), "sample": sample,
             "is_cut": _is_cut_key(s3_key)}
