@@ -226,6 +226,20 @@ def _parse_bp(v):
         return None
 
 
+def _drop_geo_demo_rows(df):
+    """COUNTRY and '<DEMO> | <Country>' rows of a worldwide profile (GLOBAL PROFILE
+    CONTRACT, 2026-11-23) are geo-demographic rows, never behavioral categories."""
+    try:
+        from migration.international_profiles import is_geo_demo_column
+        if 'Column' in df.columns:
+            m = df['Column'].map(is_geo_demo_column).astype(bool)
+            if m.any():
+                return df[~m].reset_index(drop=True)
+    except Exception:
+        pass
+    return df
+
+
 def load_profile_df(s3_client, bucket, s3_key):
     """Fetch a profile CSV from S3, ETag-revalidated. Returns (df, etag).
 
@@ -248,7 +262,7 @@ def load_profile_df(s3_client, bucket, s3_key):
     resp = s3_client.get_object(Bucket=bucket, Key=s3_key)
     etag = (resp.get('ETag') or '').strip('"')
     content = resp['Body'].read().decode('utf-8', 'replace')
-    df = pd.read_csv(io.StringIO(content)).fillna('')
+    df = _drop_geo_demo_rows(pd.read_csv(io.StringIO(content)).fillna(''))
     try:
         df.attrs['s3_key'] = s3_key   # a named group of brands is kept per profile (prometheus.category_reach)
     except Exception:

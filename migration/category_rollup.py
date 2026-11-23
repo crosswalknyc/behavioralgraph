@@ -335,9 +335,13 @@ def profile_rows(df, subject=None):
             if k:
                 own.add(k)
     out = {}
+    try:
+        from migration.international_profiles import is_geo_demo_column as _is_geo
+    except ImportError:
+        _is_geo = lambda c: False  # noqa: E731
     for col, val, raw in zip(df['Column'], df['Value'], df[bp]):
         cu = norm_cat(col)
-        if not cu or cu in SKIP_COLS:
+        if not cu or cu in SKIP_COLS or _is_geo(col):
             continue
         p = _num(raw)
         if p is None or p <= 0:

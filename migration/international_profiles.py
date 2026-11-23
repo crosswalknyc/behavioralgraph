@@ -708,6 +708,18 @@ def detect_country_from_pairs(pairs) -> str | None:
     undetectable (treat None as US).
     """
     income_vals, edu_vals, eth_vals, loc_vals = [], [], [], []
+    pairs = list(pairs)
+    for cat, val in pairs:
+        # The engine's MARKET tag on SAMPLE SIZE is the deterministic switch
+        # (GLOBAL PROFILE CONTRACT section 0): a tagged file is that market
+        # whatever its buckets read. A US file never carries the tag.
+        if str(cat or "").strip().upper() == "SAMPLE SIZE":
+            m = re.search(r"\|\s*MARKET:\s*([^|]+)", str(val or ""), re.I)
+            if m:
+                tagged = normalize_country(m.group(1).strip())
+                if tagged != "US":
+                    return tagged
+            break
     for cat, val in pairs:
         cu = str(cat or "").strip().upper()
         v = str(val or "")
@@ -789,3 +801,101 @@ def detect_profile_country(df) -> str | None:
 def frame_is_international(df) -> bool:
     """True when the frame carries an unambiguous non-US signature."""
     return detect_profile_country(df) is not None
+
+
+# ---------------------------------------------------------------------------
+# Worldwide profiles country by country (GLOBAL PROFILE CONTRACT, Jenna
+# 2026-11-23: "a worldwide summary, then country by country in each
+# country's own terms; countries = every country with >= 3% of the
+# audience, plus Rest of world"). COUNTRY carries the share of the
+# audience by country; '<DEMO> | <Country>' carries one country's own
+# demographics in its own nomenclature, each block its own 100.
+# ---------------------------------------------------------------------------
+
+COUNTRY_COLUMN = "COUNTRY"
+REST_OF_WORLD = "Rest of world"
+COUNTRY_MIN_SHARE = 3.0
+BLOCK_DEMOS = ("AGE", "GENDER", "ETHNICITY", "INCOME", "EDUCATION", "OCCUPATION", "RELATIONSHIP",
+               "PARENTAL_STATUS", "SEXUAL_ORIENTATION")
+BLOCK_REQUIRED = ("AGE", "GENDER", "ETHNICITY", "INCOME", "EDUCATION")
+_BLOCK_RX = re.compile(r"^(" + "|".join(BLOCK_DEMOS) + r") \| (.+)$", re.I)
+
+
+def country_block(column):
+    """(DEMO, Country) for a per-country demographic Column
+    ('AGE | United Kingdom' -> ('AGE', 'United Kingdom')), else None. The
+    one predicate every enforcer, gate and reader uses (contract section 5)."""
+    m = _BLOCK_RX.match(str(column or "").strip())
+    return (m.group(1).upper(), m.group(2).strip()) if m else None
+
+
+def is_geo_demo_column(column) -> bool:
+    """COUNTRY or a '<DEMO> | <Country>' block: geo-demographic rows, never
+    brands (no hostmap gate, no hidden strip, no mirror, no Gen Pop, no US
+    bands; each block and COUNTRY is its own 100)."""
+    c = str(column or "").strip()
+    return c.upper() == COUNTRY_COLUMN or country_block(c) is not None
+
+
+# One plain English name per country for COUNTRY Values (never USA, UK, UAE).
+_COUNTRY_CANON = {
+    "USA": "United States", "US": "United States", "UNITEDSTATES": "United States",
+    "UNITEDSTATESOFAMERICA": "United States", "AMERICA": "United States",
+    "UK": "United Kingdom", "UNITEDKINGDOM": "United Kingdom", "GREATBRITAIN": "United Kingdom",
+    "BRITAIN": "United Kingdom", "ENGLAND": "United Kingdom", "SCOTLAND": "United Kingdom",
+    "WALES": "United Kingdom", "NORTHERNIRELAND": "United Kingdom", "GB": "United Kingdom",
+    "UAE": "United Arab Emirates", "UNITEDARABEMIRATES": "United Arab Emirates",
+    "IVORYCOAST": "Ivory Coast", "COTEDIVOIRE": "Ivory Coast",
+    "CZECHIA": "Czech Republic", "CZECHREPUBLIC": "Czech Republic",
+    "TURKEY": "Turkey", "TURKIYE": "Turkey", "KOREA": "South Korea", "SOUTHKOREA": "South Korea",
+    "TRINIDAD": "Trinidad and Tobago", "TRINIDADANDTOBAGO": "Trinidad and Tobago",
+    "DRCONGO": "DR Congo", "HONGKONG": "Hong Kong", "STLUCIA": "St Lucia",
+}
+
+
+def canonical_country(name) -> str:
+    """The COUNTRY Value for a country name or a LOCATION tail ('USA' ->
+    'United States', 'UK' -> 'United Kingdom', 'Lagos, Nigeria' ->
+    'Nigeria'); '' when it is not a country we know."""
+    s = str(name or "").strip()
+    if "," in s:
+        s = s.rsplit(",", 1)[1].strip()
+    f = _fold(s)
+    if not f:
+        return ""
+    if f in _COUNTRY_CANON:
+        return _COUNTRY_CANON[f]
+    if f in _WORLD_COUNTRY_NAMES:
+        return " ".join(w if w.lower() in ("and", "of") else w[:1].upper() + w[1:] for w in s.split())
+    return ""
+
+
+# Per-country block schemas: the country's own nomenclature and a
+# census-shaped default the deterministic fallback uses when nothing could
+# be reasoned (the build reasons every block; the US block is the US
+# profile's own demographics). Labels for the US are the shipped US file's.
+_US_BLOCK_SCHEMA = {
+    "AGE": {"17 AND UNDER": 1.9, "18-24": 11.8, "25-34": 17.6, "35-44": 16.9,
+            "45-54": 15.6, "55-64": 16.2, "65 OR OLDER": 20.0},
+    "GENDER": {"FEMALE": 50.4, "MALE": 48.6, "NON-BINARY": 0.6, "TRANS FEMALE": 0.2,
+               "TRANS MALE": 0.2},
+    "ETHNICITY": {"WHITE": 58.9, "HISPANIC OR LATINO": 19.1, "BLACK OR AFRICAN AMERICAN": 12.6,
+                  "ASIAN": 6.1, "ANOTHER RACE/ETHNICITY": 3.3},
+    "INCOME": {"LESS THAN $25,000": 17.4, "$25,000 - $49,999": 18.3, "$50,000 - $74,999": 16.2,
+               "$75,000 - $99,999": 12.6, "$100,000 - $149,999": 16.1,
+               "$150,000 - $249,999": 12.9, "$250,000 OR MORE": 6.5},
+    "EDUCATION": {"HIGH SCHOOL OR LESS": 36.9, "SOME COLLEGE / ASSOCIATE DEGREE": 28.4,
+                  "BACHELORS DEGREE": 21.6, "GRADUATE OR PROFESSIONAL DEGREE": 13.1},
+}
+_BLOCK_SCHEMAS = {"UNITEDSTATES": lambda: _US_BLOCK_SCHEMA,
+                  "UNITEDKINGDOM": lambda: country_demo_schema("UK"),
+                  "GERMANY": lambda: country_demo_schema("GERMANY")}
+
+
+def block_schema(country) -> dict:
+    """{DEMO: {label: default share}} for a COUNTRY Value in its own terms; the worldwide
+    country-neutral schema when no country schema is registered (never empty)."""
+    f = _fold(canonical_country(country) or country)
+    make = _BLOCK_SCHEMAS.get(f)
+    sch = make() if make else None
+    return sch or country_demo_schema(GLOBAL) or {}

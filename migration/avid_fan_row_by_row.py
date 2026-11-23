@@ -1377,10 +1377,17 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
             bp = (min(n4, feas) if not raw_ok else n4) - step
         return round(max(bp, 0.0001), 4)
 
+    try:
+        from migration.international_profiles import is_geo_demo_column as _is_geo
+    except ImportError:
+        try:
+            from international_profiles import is_geo_demo_column as _is_geo  # type: ignore
+        except ImportError:
+            _is_geo = lambda c: False  # noqa: E731
     for idx in df_avid.index:
         cu = str(df_avid.at[idx, "Column"]).strip().upper()
-        if cu in _skip_cats:
-            continue
+        if cu in _skip_cats or _is_geo(cu):
+            continue                     # COUNTRY / '<DEMO> | <Country>': demographics, never subset-capped
         vu = str(df_avid.at[idx, "Value"]).strip().upper()
         if not vu:
             continue

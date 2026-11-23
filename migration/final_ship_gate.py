@@ -130,6 +130,20 @@ Invariants asserted (each returns structured violations):
                            writer's autofix pass (fix_us_superset).
                            Fail-open, with a log line, when there is no
                            US profile or it cannot be read.
+  I22 country blocks      files carrying COUNTRY or '<DEMO> | <Country>'
+                           rows (GLOBAL PROFILE CONTRACT, 2026-11-23):
+                           COUNTRY and each block sum to 100 +/- 0.02,
+                           no country twice, a block's country has a
+                           COUNTRY row, every country with blocks has
+                           AGE / GENDER / ETHNICITY / INCOME / EDUCATION,
+                           Category Share = BP, COUNTRY Raw = sample x
+                           share, a block's Raw = its COUNTRY Raw x
+                           share, Projection = Raw x the file's own
+                           ratio. Every other invariant reads the file
+                           WITHOUT these rows (they are geo-demographic
+                           rows, never brands). Fixed in place by the
+                           writer's autofix pass (put_back_geo +
+                           ensure_geo_contract).
 
 Gate behavior: `run_final_ship_gate(df_or_bytes, s3_key, subject)`.
 On violations the caller's upload MUST NOT happen: the gate writes the
@@ -2538,6 +2552,29 @@ def _check_i20(rows, s3_key):
     return out
 
 
+def _check_i22(rows):
+    """I22 country blocks (GLOBAL PROFILE CONTRACT): COUNTRY and every
+    '<DEMO> | <Country>' block its own 100 with the contract's chain."""
+    try:
+        from migration import global_profiles as _gp
+    except ImportError:
+        try:
+            import global_profiles as _gp  # type: ignore
+        except ImportError:
+            return []
+    found = _gp.geo_findings([(r["cat"], r["val"], r["bp_s"], r["raw_s"],
+                               r["proj_s"], r.get("cs_s", ""))
+                              for r in rows])
+    out = [_v("I22", "country blocks", w, val, plain)
+           for w, val, plain in found[:25]]
+    if len(found) > 25:
+        out.append(_v("I22", "country blocks", "(additional rows)",
+                      str(len(found) - 25),
+                      f"{len(found) - 25} more country row(s) break the "
+                      f"same rules."))
+    return out
+
+
 _I21_US_CACHE = {}       # us key -> (read at, rows)
 _I21_TTL = 120.0
 
@@ -2639,6 +2676,16 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                    "(Column / Value / Brand Penetration).")], {}
 
     violations = []
+    all_rows = rows
+    try:
+        from migration.international_profiles import is_geo_demo_column as _is_geo
+    except ImportError:
+        try:
+            from international_profiles import is_geo_demo_column as _is_geo  # type: ignore
+        except ImportError:
+            _is_geo = None
+    if _is_geo is not None and any(_is_geo(r["cat"]) for r in rows):
+        rows = [r for r in rows if not _is_geo(r["cat"])]
 
     def _safe(label, fn, *args, **kwargs):
         try:
@@ -2680,6 +2727,8 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
     violations += _safe("I20", _check_i20, rows, s3_key)
     violations += _safe("I21", _check_i21, rows, subject, s3_key,
                         s3_client, verbose)
+    if all_rows is not rows:
+        violations += _safe("I22", _check_i22, all_rows)
 
     meta = {"n_rows": len(rows), "sample": sample,
             "is_cut": _is_cut_key(s3_key)}

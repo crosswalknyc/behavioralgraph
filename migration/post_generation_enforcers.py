@@ -6617,6 +6617,13 @@ def recompute_raw_and_projection(df, subject, verbose=True):
 
     bp_actual = df[bp_col].apply(_num)
     valid = bp_actual.notna()
+    _gp = _geo_tools()
+    if _gp is not None:
+        # COUNTRY / '<DEMO> | <Country>' rows carry the contract's own chain
+        # (a block's Raw = its COUNTRY row's Raw x share), never sample x BP.
+        _gm = _gp._geo_mask(df)
+        if _gm is not None:
+            valid = valid & ~_gm
     cells = 0
 
     # Raw first (rounded integer), Proj FROM the rounded Raw.
@@ -13001,7 +13008,35 @@ def enforce_qc_standing_anchors(df, subject, verbose=True):
     return df, changes
 
 
-def run_all_enforcers(df, subject, brand_category=None, verbose=True,
+def _geo_tools():
+    """migration.global_profiles, for setting COUNTRY / '<DEMO> | <Country>' rows aside (GLOBAL
+    PROFILE CONTRACT, 2026-11-23); None when it is not importable (the frame then passes as is)."""
+    try:
+        from migration import global_profiles as _gp
+    except ImportError:
+        try:
+            import global_profiles as _gp  # type: ignore
+        except ImportError:
+            return None
+    return _gp
+
+
+def run_all_enforcers(df, subject, *args, **kwargs):
+    """Run every enforcer in order. Returns (df, total_changes). COUNTRY and
+    '<DEMO> | <Country>' rows (GLOBAL PROFILE CONTRACT, 2026-11-23) are set
+    aside first and put back after, each its own 100: no enforcer reads a
+    country's demographics as brands."""
+    gp = _geo_tools()
+    held = None
+    if gp is not None:
+        df, held = gp.set_aside_geo(df)
+    df, n = _run_all_enforcers_core(df, subject, *args, **kwargs)
+    if held is not None:
+        df = gp.put_back_geo(df, held, subject)
+    return df, n
+
+
+def _run_all_enforcers_core(df, subject, brand_category=None, verbose=True,
                        target_year=None, follower_ceiling=None,
                        keep_avid_row=False, carriage_doc=None,
                        account_holder=None):
@@ -18617,7 +18652,24 @@ _PARENT_AWARE_NET_STEPS = frozenset({
     'dejitter_within_cat_4dp_collisions', 'enforce_cut_subset_ceilings'})
 
 
-def run_write_safety_net(df, subject, *, verbose: bool = True,
+def run_write_safety_net(df, subject, *args, **kwargs):
+    """Mandatory lightweight write-time safety net (see the core below).
+    COUNTRY and '<DEMO> | <Country>' rows are set aside and put back, each
+    its own 100 with the contract's chain (GLOBAL PROFILE CONTRACT)."""
+    gp = _geo_tools()
+    held = None
+    if gp is not None:
+        df, held = gp.set_aside_geo(df)
+        pdf = kwargs.get("parent_df")
+        if pdf is not None:
+            kwargs["parent_df"] = gp.set_aside_geo(pdf)[0]
+    df, stats = _run_write_safety_net_core(df, subject, *args, **kwargs)
+    if held is not None:
+        df = gp.put_back_geo(df, held, subject)
+    return df, stats
+
+
+def _run_write_safety_net_core(df, subject, *, verbose: bool = True,
                          parent_df=None, s3_key: str = ''):
     """Mandatory lightweight write-time safety net.
 
@@ -19043,7 +19095,17 @@ class PrePublishGateError(Exception):
         )
 
 
-def run_pre_publish_gate(df, subject, *, project_name: str = '',
+def run_pre_publish_gate(df, subject, *args, **kwargs):
+    """Final defect scan before save (see the core below), read on the brands
+    and plain demographics only: COUNTRY and '<DEMO> | <Country>' rows have
+    their own ship-gate check (I22)."""
+    gp = _geo_tools()
+    if gp is not None:
+        df = gp.set_aside_geo(df)[0]
+    return _run_pre_publish_gate_core(df, subject, *args, **kwargs)
+
+
+def _run_pre_publish_gate_core(df, subject, *, project_name: str = '',
                          raise_on_fail: bool = True, verbose: bool = True):
     """Final defect scan before save. Returns list of defect strings.
 

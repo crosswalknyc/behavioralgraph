@@ -299,7 +299,20 @@ def _subset_parent_frame(s3_key, s3, tu_source_key=None, cache=None,
 # input, not a mechanical row fix.
 _AUTOFIX_GATE_CODES = ("I1", "I2", "I3", "I5", "I8", "I9", "I10",
                        "I11", "I12", "I13", "I14", "I15", "I16", "I17",
-                       "I18", "I19", "I20", "I21")
+                       "I18", "I19", "I20", "I21", "I22")
+
+
+def _geo_tools():
+    """migration.global_profiles (COUNTRY / '<DEMO> | <Country>' rows set aside and put back;
+    GLOBAL PROFILE CONTRACT, 2026-11-23), or None when it is not importable."""
+    try:
+        from migration import global_profiles as _gp
+    except ImportError:
+        try:
+            import global_profiles as _gp  # type: ignore
+        except ImportError:
+            return None
+    return _gp
 
 
 def _fix_us_superset(df, subject, s3_key, s3, verbose=True):
@@ -447,6 +460,14 @@ def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
         df = _strip_gp(df)
     except Exception:
         _append_gp = None
+
+    # The fixers below work on brands and the plain demographics; COUNTRY
+    # and '<DEMO> | <Country>' rows sit out and come back re-held to the
+    # contract (I22: each its own 100, the contract's chain).
+    _geo = _geo_tools()
+    _geo_held = None
+    if _geo is not None:
+        df, _geo_held = _geo.set_aside_geo(df)
 
     n_fixed = 0
     if any(v.get("code") == "I17" for v in fixable):
@@ -894,6 +915,18 @@ def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
         except Exception as e:
             print(f"  [profile_writer] I21 floor re-hold raised "
                   f"({type(e).__name__}: {e})")
+    if _geo_held is not None:
+        try:
+            if any(v.get("code") == "I22" for v in fixable):
+                _us_key, _us_df = _geo.load_us_counterpart(s3_key, subject, s3)
+                _geo_held, _n22 = _geo.ensure_geo_contract(
+                    df, _geo_held, subject, us_df=_us_df, verbose=verbose)
+                n_fixed += int(_n22 or 0)
+            df = _geo.put_back_geo(df, _geo_held, subject)
+        except Exception as e:
+            print(f"  [profile_writer] country blocks re-hold raised "
+                  f"({type(e).__name__}: {e})")
+            df = _geo.put_back_geo(df, _geo_held, subject, normalize=False)
     if sort:
         try:
             df = _sort_within_category(df)
@@ -1047,6 +1080,14 @@ def write_profile_csv(
         df = strip_genpop_columns(df)
     except Exception as e:
         print(f"  [profile_writer] genpop-column strip skipped: {e}")
+
+    # COUNTRY and '<DEMO> | <Country>' rows (GLOBAL PROFILE CONTRACT,
+    # 2026-11-23) sit out every pass below and come back, each its own
+    # 100, right before the fix-and-regate at 6.8 (which reads them).
+    _geo = _geo_tools()
+    _geo_held = None
+    if _geo is not None:
+        df, _geo_held = _geo.set_aside_geo(df)
 
     # 1. Enforcer chain (canonical set from run_all_enforcers). If
     #    year is provided, run_all_enforcers threads it to the
@@ -1535,6 +1576,9 @@ def write_profile_csv(
         df = append_genpop_columns(df, s3_client=s3, verbose=verbose)
     except Exception as e:
         print(f"  [profile_writer] genpop baseline append skipped: {e}")
+
+    if _geo_held is not None:
+        df = _geo.put_back_geo(df, _geo_held, subject)
 
     # 6.8 Deterministic fix-and-regate (2026-08-26 Danny Go mandate:
     # the gate must FIX fixable violations in real time and publish,

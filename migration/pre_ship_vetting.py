@@ -2719,7 +2719,28 @@ def vet_before_publish(df, body, subject, s3_key, *, category=None,
     body the mechanical gate just approved, runs the reasoned review,
     and re-serializes when an autofix changed the frame. Returns
     (df, body, report). PreShipVettingError propagates; every other
-    failure returns the inputs unchanged."""
+    failure returns the inputs unchanged. COUNTRY and '<DEMO> | <Country>'
+    rows (GLOBAL PROFILE CONTRACT) are not reviewed as categories: they
+    are set aside for the review and come back unchanged."""
+    _held = None
+    try:
+        try:
+            from migration import global_profiles as _gp
+        except ImportError:
+            import global_profiles as _gp  # type: ignore
+        _df_in, _held = _gp.set_aside_geo(df)
+    except Exception:
+        _gp, _df_in = None, df
+    if _held is not None:
+        df_r, body_r, rep_r = vet_before_publish(
+            _df_in, None, subject, s3_key, category=category, s3_client=s3_client,
+            enforce=enforce, sort_fn=sort_fn, verbose=verbose)
+        df_out = _gp.put_back_geo(df_r, _held, subject, normalize=False)
+        if df_r is _df_in:
+            return df, body, rep_r
+        buf = io.StringIO()
+        df_out.to_csv(buf, index=False)
+        return df_out, buf.getvalue().encode("utf-8"), rep_r
     try:
         df2, report = run_pre_ship_vetting(
             df, subject, s3_key, category=category, s3_client=s3_client,

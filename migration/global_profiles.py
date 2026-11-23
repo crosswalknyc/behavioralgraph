@@ -648,11 +648,15 @@ def enforce_us_superset(df, us_df, subject, *, s3_key="", category="", reason_fn
     """Hold every row of the US profile inside the worldwide frame at the people level, in place.
     Returns (df, stats). Never raises: on any internal error the frame comes back unchanged."""
     stats = {"lifted": 0, "added": 0, "cities": 0, "metros_folded": 0, "demo": 0, "reasoned": 0, "fallback": 0}
+    main, held = set_aside_geo(df)           # COUNTRY / '<DEMO> | <Country>' rows are never lifted as brands
     try:
-        return _enforce(df, us_df, subject, s3_key, category, reason_fn, is_hidden, stats, verbose)
+        out, stats = _enforce(main, us_df, subject, s3_key, category, reason_fn, is_hidden, stats, verbose)
     except Exception as e:  # pragma: no cover - fail-safe
         print(f"   [global-superset] skipped ({type(e).__name__}: {e})")
         return df, stats
+    if held is None:
+        return out, stats
+    return put_back_geo(out, held, subject, normalize=False), stats
 
 
 def _enforce(df, us_df, subject, s3_key, category, reason_fn, is_hidden, stats, verbose):
@@ -1100,3 +1104,298 @@ def hidden_predicate():
         except ImportError:
             norm_key = _norm
     return lambda v: norm_key(v) in hidden
+
+
+# ---------------------------------------------------------------------------
+# COUNTRY and '<DEMO> | <Country>' rows (GLOBAL PROFILE CONTRACT): set aside
+# for the enforcers, put back each its own 100 with the contract's chain
+# ---------------------------------------------------------------------------
+
+def _geo_mask(df):
+    try:
+        return df["Column"].map(_ip.is_geo_demo_column).astype(bool)
+    except Exception:
+        return None
+
+
+def set_aside_geo(df):
+    """(frame without COUNTRY / '<DEMO> | <Country>' rows, the rows set aside or None). The
+    enforcers, the safety net and the gate's fixers work on brands and the plain demographics;
+    these rows never pass through them."""
+    if df is None or "Column" not in getattr(df, "columns", []):
+        return df, None
+    m = _geo_mask(df)
+    if m is None or not m.any():
+        return df, None
+    return df[~m].copy(), df[m].copy()
+
+
+def _ratio(df, raw, proj):
+    """BRAND INPUT projection / BRAND INPUT raw (the file's own ratio; contract section 1)."""
+    for meta in ("BRAND INPUT", "SAMPLE SIZE"):
+        r = df[df["Column"].astype(str).str.strip().str.upper() == meta]
+        if len(r):
+            s, u = _num(r.iloc[0][raw]), _num(r.iloc[0][proj])
+            if s and u:
+                return s, u / s
+    return None, None
+
+
+def _renorm_100(vals, salt):
+    """{key: share} -> shares summing to exactly 100 at 4dp, none on a .XX00 boundary, none twice
+    (subject-salted micro-jitter on the residual). Shares already clean come back unchanged."""
+    keys = list(vals)
+    if not keys:
+        return {}
+    clean = {k: round(float(vals[k] or 0.0), 4) for k in keys}
+    def ok(d):
+        return (abs(sum(d.values()) - 100.0) < 0.00005 and len(set(d.values())) == len(d)
+                and not any(_on_2dp(v) for v in d.values() if v > 0))
+    if ok(clean):
+        return clean
+    tot = sum(max(v, 0.0) for v in clean.values())
+    out = {k: round(max(clean[k], 0.0) * 100.0 / tot, 4) if tot > 0 else round(100.0 / len(keys), 4) for k in keys}
+    order = sorted(keys, key=lambda k: (-out[k], str(k)))
+    resid = round(100.0 - sum(out.values()), 4)
+    j = 0
+    while abs(resid) >= 0.00005 and j < 100000:
+        d = 0.0001 if resid > 0 else -0.0001
+        k = order[j % len(order)]
+        if out[k] + d > 0:
+            out[k] = round(out[k] + d, 4)
+            resid = round(resid - d, 4)
+        j += 1
+    for _round in range(6):
+        seen, bad = set(), []
+        for k in order:
+            if out[k] > 0 and (_on_2dp(out[k]) or out[k] in seen):
+                bad.append(k)
+            seen.add(out[k])
+        if not bad:
+            break
+        for k in bad:
+            step = 0.0001 if _unit(salt, k, _round) < 0.5 else -0.0001
+            donor = next((d for d in order if d != k and out[d] - step > 0
+                          and not _on_2dp(round(out[d] - step, 4))), None)
+            if donor is None:
+                continue
+            out[k] = round(out[k] + step, 4)
+            out[donor] = round(out[donor] - step, 4)
+    return out
+
+
+def normalize_geo(df, subject=""):
+    """In place on a full frame: COUNTRY and each block to exactly 100, Category Share = BP,
+    Raw and Projection per the contract (COUNTRY Raw = sample x share; a block's Raw = its
+    COUNTRY row's Raw x share; Projection = Raw x the file's own ratio), Gen Pop and Index blank."""
+    if df is None or "Column" not in df.columns:
+        return df
+    m = _geo_mask(df)
+    if m is None or not m.any():
+        return df
+    bp, cs, raw, proj, gpp, idx = _cols(df)
+    if not (bp and raw and proj):
+        return df
+    S, ratio = _ratio(df, raw, proj)
+    df = df.copy()
+    groups = {}
+    for i in df.index[m]:
+        groups.setdefault(str(df.at[i, "Column"]).strip(), []).append(i)
+    for col, ix in groups.items():
+        vals = _renorm_100({i: _num(df.at[i, bp]) or 0.0 for i in ix}, f"{subject}|{col}")
+        for i, v in vals.items():
+            df.at[i, bp] = _fmt(v)
+    country_raw = {}
+    for i in [i for c, ix in groups.items() if c.upper() == _ip.COUNTRY_COLUMN for i in ix]:
+        b = _num(df.at[i, bp]) or 0.0
+        r = int(round((S or 0.0) * b / 100.0))
+        df.at[i, raw] = str(r)
+        df.at[i, proj] = str(int(round(r * (ratio or 0.0))))
+        country_raw[_norm(df.at[i, "Value"])] = r
+    for col, ix in groups.items():
+        cb = _ip.country_block(col)
+        if not cb:
+            continue
+        base = country_raw.get(_norm(cb[1]), 0)
+        for i in ix:
+            b = _num(df.at[i, bp]) or 0.0
+            r = int(round(base * b / 100.0))
+            df.at[i, raw] = str(r)
+            df.at[i, proj] = str(int(round(r * (ratio or 0.0))))
+    for i in df.index[m]:
+        if cs:
+            df.at[i, cs] = df.at[i, bp]
+        for c in (gpp, idx):
+            if c:
+                df.at[i, c] = ""
+    return df
+
+
+_DEMO_ORDER = {d: n for n, d in enumerate(_ip.BLOCK_DEMOS)}
+
+
+def put_back_geo(df, held, subject="", *, normalize=True):
+    """The set-aside rows back in the frame, right after the plain demographics and LOCATION:
+    COUNTRY first, then each country's blocks (the United States first, then by share), each
+    block in demographic order. With ``normalize`` the contract's sums and chain are re-held."""
+    import pandas as pd
+    if held is None or len(held) == 0:
+        return df
+    held = held.reindex(columns=df.columns, fill_value="")
+    bp = next((c for c in df.columns if str(c).startswith("Brand Penetration")), None)
+    share = {}
+    for c, v, b in zip(held["Column"], held["Value"], held[bp] if bp else [None] * len(held)):
+        if str(c).strip().upper() == _ip.COUNTRY_COLUMN:
+            share[_norm(v)] = _num(b) or 0.0
+    def _key(row):
+        col, val = str(row["Column"]).strip(), str(row["Value"])
+        b = _num(row[bp]) if bp else 0.0
+        if col.upper() == _ip.COUNTRY_COLUMN:
+            return (0, 0, 0, -(b or 0.0), val)
+        cb = _ip.country_block(col) or ("", "")
+        ctry = _norm(cb[1])
+        first = 0 if ctry in ("UNITEDSTATES",) else (2 if ctry == _norm(_ip.REST_OF_WORLD) else 1)
+        return (1, first, -share.get(ctry, 0.0), cb[1], _DEMO_ORDER.get(cb[0], 99), -(b or 0.0))
+    held = held.assign(_k=[_key(r) for _, r in held.iterrows()]).sort_values("_k", kind="stable").drop(columns="_k")
+    cu = df["Column"].astype(str).str.strip().str.upper()
+    anchor = [n for n, c in enumerate(cu) if c in DEMO_COLS or c == "LOCATION"]
+    meta = [n for n, c in enumerate(cu) if c in META_COLS]
+    at = (anchor[-1] + 1) if anchor else ((meta[-1] + 1) if meta else len(df))
+    out = pd.concat([df.iloc[:at], held, df.iloc[at:]], ignore_index=True)
+    return normalize_geo(out, subject) if normalize else out
+
+
+def geo_findings(rows):
+    """Contract shortfalls on (Column, Value, BP, Raw, Projection, Category Share) rows of a whole
+    file: [(where, value, plain), ...]. Empty when the file carries no COUNTRY or block rows."""
+    geo = [r for r in rows if _ip.is_geo_demo_column(r[0])]
+    if not geo:
+        return []
+    out = []
+    S = ratio = None
+    for c, v, b, rw, pj, _cs in rows:
+        if str(c).strip().upper() in ("BRAND INPUT", "SAMPLE SIZE"):
+            if _num(rw) and _num(pj):
+                S, ratio = _num(rw), _num(pj) / _num(rw)
+                break
+    country = {}
+    seen_c = set()
+    groups = {}
+    for c, v, b, rw, pj, cs in geo:
+        groups.setdefault(str(c).strip(), []).append((v, _num(b), _num(rw), _num(pj), _num(cs)))
+        if str(c).strip().upper() == _ip.COUNTRY_COLUMN:
+            n = _norm(v)
+            if n in seen_c:
+                out.append((f"COUNTRY / {v}", "twice", f"{v} appears twice in COUNTRY."))
+            seen_c.add(n)
+            country[n] = (_num(rw) or 0.0)
+    if groups and not seen_c:
+        out.append(("COUNTRY", "missing", "The file carries per-country demographics but no COUNTRY rows."))
+    for col, items in groups.items():
+        tot = sum(x[1] or 0.0 for x in items)
+        if abs(tot - 100.0) > 0.02:
+            out.append((col, f"{tot:.4f}", f"{col} totals {tot:.2f}% instead of 100%."))
+        cb = _ip.country_block(col)
+        base = (S or 0.0) if not cb else country.get(_norm(cb[1]))
+        if cb and base is None and _norm(cb[1]) != _norm(_ip.REST_OF_WORLD):
+            out.append((col, "no country", f"{col} has no COUNTRY row for {cb[1]}."))
+            continue
+        for v, b, rw, pj, cs in items:
+            if b is None or rw is None or pj is None:
+                out.append((f"{col} / {v}", "blank", f"{v} in {col} is missing one of its numbers."))
+                continue
+            want = round((base or 0.0) * b / 100.0)
+            if abs(rw - want) > 1 or (ratio and abs(pj - round(rw * ratio)) > 1):
+                out.append((f"{col} / {v}", f"raw={rw:,.0f}", f"{v} in {col}: its counts do not follow from "
+                            f"its share of {'the audience' if not cb else cb[1]}."))
+            if cs is not None and abs(cs - b) > 0.0001:
+                out.append((f"{col} / {v}", f"share={cs}", f"{v} in {col}: Category Share should equal its share."))
+    have = {}
+    for col in groups:
+        cb = _ip.country_block(col)
+        if cb:
+            have.setdefault(_norm(cb[1]), (cb[1], set()))[1].add(cb[0])
+    for n, (name, demos) in have.items():
+        if n == _norm(_ip.REST_OF_WORLD):
+            continue
+        miss = [d for d in _ip.BLOCK_REQUIRED if d not in demos]
+        if miss:
+            out.append((f"{', '.join(miss)} | {name}", "missing",
+                        f"{name} has per-country demographics but no {', '.join(miss)} block."))
+    return out
+
+
+def country_rows_from_location(df, us_people=None, *, min_share=None):
+    """COUNTRY rows from the frame's own LOCATION (each country's cities summed; the United
+    States at ``us_people`` when given), every country at or above 3% plus Rest of world, as
+    (Value, share) pairs summing to 100."""
+    bp, _cs, raw, proj, _g, _i = _cols(df)
+    S, U = _sample_and_universe(df, bp, raw, proj)
+    min_share = _ip.COUNTRY_MIN_SHARE if min_share is None else min_share
+    shares = {}
+    for c, v, b in zip(df["Column"], df["Value"], df[bp]):
+        if str(c).strip().upper() != "LOCATION":
+            continue
+        name = _ip.canonical_country(v) or ("United States" if "," not in str(v) else "")
+        if name:
+            shares[name] = shares.get(name, 0.0) + (_num(b) or 0.0)
+    if us_people and U:
+        shares["United States"] = us_people / U * 100.0
+    keep = {k: v for k, v in shares.items() if v >= min_share}
+    rest = max(0.0, 100.0 - sum(keep.values()))
+    out = sorted(keep.items(), key=lambda kv: (kv[0] != "United States", -kv[1]))
+    out.append((_ip.REST_OF_WORLD, rest))
+    return out
+
+
+def ensure_geo_contract(df_main, held, subject, *, us_df=None, verbose=True):
+    """The deterministic floor under I22 (no hold): COUNTRY rows when a file carries blocks without
+    them (from LOCATION), and every required block for each country that has blocks (the US
+    profile's own demographics for the United States when it is at hand, else the country's own
+    schema defaults). Returns (held, n_added). Sums and chain are re-held by put_back_geo."""
+    import pandas as pd
+    if held is None or len(held) == 0:
+        return held, 0
+    cols = list(held.columns)
+    bp = next((c for c in cols if str(c).startswith("Brand Penetration")), None)
+    cu = held["Column"].astype(str).str.strip().str.upper()
+    n = 0
+    rows = []
+    if not (cu == _ip.COUNTRY_COLUMN).any():
+        us_people = None
+        if us_df is not None:
+            _b, _c, r_, p_, _g, _i = _cols(us_df)
+            _s, us_people = _sample_and_universe(us_df, _b, r_, p_)
+        for name, share in country_rows_from_location(df_main, us_people):
+            row = {c: "" for c in cols}
+            row.update({"Column": _ip.COUNTRY_COLUMN, "Value": name, bp: _fmt(share)})
+            rows.append(row)
+            n += 1
+    have = {}
+    for c in held["Column"].astype(str):
+        cb = _ip.country_block(c)
+        if cb:
+            have.setdefault(cb[1], set()).add(cb[0])
+    for country, demos in have.items():
+        if _norm(country) == _norm(_ip.REST_OF_WORLD):
+            continue
+        for demo in _ip.BLOCK_REQUIRED:
+            if demo in demos:
+                continue
+            src = None
+            if us_df is not None and _norm(country) == "UNITEDSTATES":
+                ub = next((c for c in us_df.columns if str(c).startswith("Brand Penetration")), None)
+                src = {str(v).strip(): _num(b) or 0.0 for c, v, b in zip(us_df["Column"], us_df["Value"], us_df[ub])
+                       if str(c).strip().upper() == demo}
+            if not src:
+                src = dict(_ip.block_schema(country).get(demo) or {})
+            for label, share in src.items():
+                row = {c: "" for c in cols}
+                row.update({"Column": f"{demo} | {country}", "Value": label, bp: _fmt(float(share))})
+                rows.append(row)
+            n += 1
+    if rows:
+        held = pd.concat([held, pd.DataFrame(rows, columns=cols)], ignore_index=True)
+        if verbose:
+            print(f"   [country-blocks] {subject}: {n} COUNTRY row(s) / block(s) filled at the floor")
+    return held, n

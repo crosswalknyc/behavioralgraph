@@ -35,7 +35,37 @@ sample fractions are owned by the cut engines themselves).
 from __future__ import annotations
 
 
-def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
+def _geo_tools():
+    """migration.global_profiles (COUNTRY / '<DEMO> | <Country>' rows set aside and put back;
+    GLOBAL PROFILE CONTRACT, 2026-11-23), or None when it is not importable."""
+    try:
+        from migration import global_profiles as _gp
+    except ImportError:
+        try:
+            import global_profiles as _gp  # type: ignore
+        except ImportError:
+            return None
+    return _gp
+
+
+def finalize_cut_for_upload(df, subject, *args, **kwargs):
+    """The shared terminal invariant chain on a derived-cut frame (the core
+    below). A cut of a worldwide file carries its own COUNTRY and
+    '<DEMO> | <Country>' rows for the cut's people: they are set aside for
+    the chain and put back, each its own 100 (GLOBAL PROFILE CONTRACT)."""
+    gp = _geo_tools()
+    held = None
+    if gp is not None:
+        df, held = gp.set_aside_geo(df)
+        if kwargs.get("parent_df") is not None:
+            kwargs["parent_df"] = gp.set_aside_geo(kwargs["parent_df"])[0]
+    df, report = _finalize_cut_for_upload_core(df, subject, *args, **kwargs)
+    if held is not None:
+        df = gp.put_back_geo(df, held, subject)
+    return df, report
+
+
+def _finalize_cut_for_upload_core(df, subject, *, parent_df=None, out_key='',
                             verbose=True, ship_gate=True,
                             _skip_parent_counts=False):
     """Run the shared terminal invariant chain on a derived-cut frame.

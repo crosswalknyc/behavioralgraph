@@ -431,6 +431,13 @@ def load_profile(profile_key, host=None):
     bx = _engine()
     host = _host(host)
     df = _frame(host, profile_key)
+    try:   # COUNTRY / '<DEMO> | <Country>' rows of a worldwide profile are not categories
+        from migration.international_profiles import is_geo_demo_column
+        _gm = df['Column'].map(is_geo_demo_column).astype(bool)
+        if _gm.any():
+            df = df[~_gm].reset_index(drop=True)
+    except Exception:
+        pass
     try:
         gdf = _frame(host, GENPOP_KEY)
     except Exception:
