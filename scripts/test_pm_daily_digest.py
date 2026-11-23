@@ -371,6 +371,9 @@ class TheWindow(unittest.TestCase):
         put(s3, dd.LAST_KEY, {'until': '2026-11-19T20:00:00Z'})   # too long ago: back to 24 hours
         since, until = dd.window(now=now, s3=s3)
         self.assertEqual(since, now - dt.timedelta(hours=24))
+        # a start handed in stands on its own; the end defaults to now
+        doc = dd.collect(s3=s3, ses=FakeSES([]), since=dt.datetime(2026, 11, 20, 15, 0, tzinfo=UTC), now=now)
+        self.assertEqual((doc['since'], doc['until']), ('2026-11-20T15:00:00Z', '2026-11-23T15:00:00Z'))
         d0, d1 = dd.window(day='2026-10-22')
         self.assertEqual((d0, d1), (dt.datetime(2026, 10, 22, tzinfo=UTC), dt.datetime(2026, 10, 23, tzinfo=UTC)))
 

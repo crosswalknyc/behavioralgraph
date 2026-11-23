@@ -633,8 +633,12 @@ def collect(day=None, s3=None, ses=None, now=None, since=None, until=None):
     if s3 is None:
         import boto3
         s3 = boto3.client('s3', region_name='us-east-2')
-    if since is None or until is None:
-        since, until = window(now=now, s3=s3, day=day)
+    if day:
+        since, until = window(day=day)
+    else:
+        until = until or now or _utcnow()
+        if since is None:
+            since, _ = window(now=until, s3=s3)
     if ses is None and os.environ.get('REGRESSION_TEST_MODE') != '1' and os.environ.get('PM_DIGEST_SES', '1') != '0':
         try:
             import boto3
