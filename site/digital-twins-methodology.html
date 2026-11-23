@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Twins IQ methodology: how Crosswalk builds a twin and seats a room | Crosswalk</title>
+<meta name="description" content="How Crosswalk builds a digital twin from 5+ years of observed behavior on 10 million US people, seats one archetype representative per archetype in a room, counts the people behind each answer, scores every count, and tests a pilot on the dial.">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+<link rel="canonical" href="https://www.crosswalknyc.com/digital-twins-methodology.html">
+<link rel="icon" type="image/svg+xml" href="assets/logos/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Crosswalk">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://www.crosswalknyc.com/digital-twins-methodology.html">
+<meta property="og:title" content="Digital Twins IQ methodology: how Crosswalk builds a twin and seats a room | Crosswalk">
+<meta property="og:description" content="How Crosswalk builds a digital twin from 5+ years of observed behavior on 10 million US people, seats one archetype representative per archetype in a room, counts the people behind each answer, scores every count, and tests a pilot on the dial.">
+<meta property="og:image" content="https://www.crosswalknyc.com/assets/images/og-digital-twins.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Digital Twins IQ methodology: how Crosswalk builds a twin and seats a room | Crosswalk">
+<meta name="twitter:description" content="How Crosswalk builds a digital twin from 5+ years of observed behavior on 10 million US people, seats one archetype representative per archetype in a room, counts the people behind each answer, scores every count, and tests a pilot on the dial.">
+<meta name="twitter:image" content="https://www.crosswalknyc.com/assets/images/og-digital-twins.png">
+<script type="application/ld+json" data-seo="site">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "WebPage",
+   "@id": "https://www.crosswalknyc.com/digital-twins-methodology.html#webpage",
+   "url": "https://www.crosswalknyc.com/digital-twins-methodology.html",
+   "name": "Digital Twins IQ methodology: how Crosswalk builds a twin and seats a room | Crosswalk",
+   "description": "How Crosswalk builds a digital twin from 5+ years of observed behavior on 10 million US people, seats one archetype representative per archetype in a room, counts the people behind each answer, scores every count, and tests a pilot on the dial.",
+   "isPartOf": {
+    "@id": "https://www.crosswalknyc.com/#website"
+   },
+   "breadcrumb": {
+    "@id": "https://www.crosswalknyc.com/digital-twins-methodology.html#breadcrumb"
+   },
+   "inLanguage": "en-US",
+   "datePublished": "2026-11-23",
+   "dateModified": "2026-11-23",
+   "about": {
+    "@id": "https://www.crosswalknyc.com/digital-twins.html#service"
+   },
+   "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+     "h1",
+     ".answer"
+    ]
+   }
+  },
+  {
+   "@type": "BreadcrumbList",
+   "@id": "https://www.crosswalknyc.com/digital-twins-methodology.html#breadcrumb",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "Home",
+     "item": "https://www.crosswalknyc.com/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "Digital twins",
+     "item": "https://www.crosswalknyc.com/digital-twins.html"
+    },
+    {
+     "@type": "ListItem",
+     "position": 3,
+     "name": "Methodology",
+     "item": "https://www.crosswalknyc.com/digital-twins-methodology.html"
+    }
+   ]
+  },
+  {
+   "@type": "Organization",
+   "@id": "https://www.crosswalknyc.com/#organization",
+   "name": "Crosswalk Technologies, Inc.",
+   "alternateName": [
+    "Crosswalk",
+    "Crosswalk Technologies",
+    "Crosswalk NYC"
+   ],
+   "legalName": "Crosswalk Technologies, Inc.",
+   "description": "Crosswalk is an opted-in consumer panel of 30 million people worldwide, 10 million of them in the US. It reads what audiences actually do across their entire digital life, and Digital Twins IQ builds a digital twin of each US panelist from observed behavior.",
+   "slogan": "Noise to knowledge.",
+   "url": "https://www.crosswalknyc.com/",
+   "logo": "https://www.crosswalknyc.com/assets/logos/crosswalk-logo-black.png",
+   "sameAs": [
+    "https://www.linkedin.com/company/crosswalk-technologies"
+   ],
+   "email": "hello@crosswalknyc.com",
+   "telephone": "+1-818-231-2610",
+   "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "23465 Civic Center Way Bldg 9",
+    "addressLocality": "Malibu",
+    "addressRegion": "CA",
+    "postalCode": "90265",
+    "addressCountry": "US"
+   },
+   "knowsAbout": [
+    {
+     "@type": "Thing",
+     "name": "Digital twin audiences",
+     "sameAs": "https://en.wikipedia.org/wiki/Digital_twin",
+     "url": "https://www.crosswalknyc.com/what-is-a-digital-twin-audience.html"
+    },
+    {
+     "@type": "Thing",
+     "name": "Synthetic data for market research",
+     "sameAs": "https://en.wikipedia.org/wiki/Synthetic_data",
+     "url": "https://www.crosswalknyc.com/synthetic-data-market-research.html"
+    },
+    {
+     "@type": "Thing",
+     "name": "Behavioral consumer panels",
+     "sameAs": "https://en.wikipedia.org/wiki/Clickstream",
+     "url": "https://www.crosswalknyc.com/behavioral-panel.html"
+    },
+    {
+     "@type": "Thing",
+     "name": "AI focus groups",
+     "url": "https://www.crosswalknyc.com/ai-focus-groups.html"
+    },
+    {
+     "@type": "Thing",
+     "name": "Audience measurement",
+     "sameAs": "https://en.wikipedia.org/wiki/Audience_measurement"
+    },
+    {
+     "@type": "Thing",
+     "name": "Marketing attribution",
+     "sameAs": "https://en.wikipedia.org/wiki/Attribution_(marketing)"
+    },
+    {
+     "@type": "Thing",
+     "name": "Streaming subscriber behavior"
+    },
+    {
+     "@type": "Thing",
+     "name": "Pilot testing for television and film"
+    }
+   ],
+   "areaServed": {
+    "@type": "Country",
+    "name": "United States"
+   }
+  },
+  {
+   "@type": "Service",
+   "@id": "https://www.crosswalknyc.com/digital-twins.html#service",
+   "name": "Digital Twins IQ",
+   "alternateName": [
+    "Twin IQ",
+    "Crosswalk Digital Twins",
+    "Crosswalk synthetic audiences"
+   ],
+   "serviceType": "Digital twin audience simulation and synthetic data built from observed consumer behavior",
+   "url": "https://www.crosswalknyc.com/digital-twins.html",
+   "provider": {
+    "@id": "https://www.crosswalknyc.com/#organization"
+   }
+  },
+  {
+   "@type": "Article",
+   "@id": "https://www.crosswalknyc.com/digital-twins-methodology.html#article",
+   "headline": "How Crosswalk builds a digital twin and reads what it will do.",
+   "description": "How Crosswalk builds a digital twin from 5+ years of observed behavior on 10 million US people, seats one archetype representative per archetype in a room, counts the people behind each answer, scores every count, and tests a pilot on the dial.",
+   "url": "https://www.crosswalknyc.com/digital-twins-methodology.html",
+   "mainEntityOfPage": {
+    "@id": "https://www.crosswalknyc.com/digital-twins-methodology.html#webpage"
+   },
+   "author": {
+    "@id": "https://www.crosswalknyc.com/#organization"
+   },
+   "publisher": {
+    "@id": "https://www.crosswalknyc.com/#organization"
+   },
+   "datePublished": "2026-11-23",
+   "dateModified": "2026-11-23",
+   "inLanguage": "en-US",
+   "image": "https://www.crosswalknyc.com/assets/images/og-digital-twins.png",
+   "about": {
+    "@id": "https://www.crosswalknyc.com/digital-twins.html#service"
+   },
+   "isAccessibleForFree": true
+  },
+  {
+   "@type": "FAQPage",
+   "@id": "https://www.crosswalknyc.com/digital-twins-methodology.html#faq",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "What is a Crosswalk digital twin built from?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "From what real people did. The Crosswalk panel sees the entire digital life of 10 million opted-in US consumers, day by day since January 2021. A twin rests on that history over the past 5+ years. No surveys, no interviews, no language model guessing at a type of person."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How many people sit in a Digital Twins IQ focus group?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "One for each archetype in the audience, usually 12 to 16 and never fewer than 12. You do not pick the number. The true number of archetypes in your audience decides it."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How is the count weighted?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Each answer carries the people behind its seat. A seat that stands for 16.6 million people counts for more than one that stands for 3.6 million. Shares add to 100% and people add to the room."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What do firm, leaning and early mean?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "They say how far the real number could sit from the count. Firm is within about 5 points. Leaning is within about 12. Early is a wide range, up to about 20 points, and the room still gives a verdict."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How accurate are Crosswalk's digital twins?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Every call is dated before the result and scored when it lands, and the misses stay on the record. As of November 17, 2026, six public calls were scored. All three winner calls were right, and the counts landed within 3.2% of the result on average."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Will the same question give the same answer?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Yes, on the same day, in any room on that twin. The responses rest on historical actions, not guesses. A month later the result may differ because the panel's behavior moved during that month."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What can Pilot Testing watch?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "A pilot, an episode, an ad, a feature or a run of episodes. Upload an MP4, MOV, WebM or M4V from 15 seconds to 4 hours, or paste a link to where it plays."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Is any individual identified?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. Identity is kept apart from behavior, and Prometheus never answers about one person. It answers about the group that person is counted with. Clients receive group statistics projected to the US population."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
+<link rel="stylesheet" href="assets/css/crosswalk.css">
+<link rel="stylesheet" href="assets/css/learn.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<section class="band dark glow learn-hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow"><span class="n">Methodology</span> Digital Twins IQ</div>
+      <h1 class="h-l">How Crosswalk builds a digital twin and reads what it will do.</h1>
+      <p class="answer">Digital Twins IQ lets you ask an audience before you decide. A twin is built from what real people did over 5+ years. It is made of 12 to 16 <b>archetypes</b>, the groups inside the audience. A focus group seats one person for each archetype. You ask the room anything, and the count adds up the real people behind each answer. Every count carries a range and a confidence score. Every call is dated before the result and scored when it lands.</p>
+      <p class="meta">Published November 2026 by Crosswalk Technologies, Inc. · <a href="assets/docs/Crosswalk_Digital_Twins_IQ_Methodology_2026_11.pdf">Download the methodology as a PDF</a> · <a href="twins-track-record.html">See the public track record</a></p>
+    </div>
+    <div class="facts">
+      <div class="k">The method in numbers</div>
+      <div class="f"><b class="acc">10M</b><span>Opted-in US people whose entire digital life the panel sees. 30M worldwide.</span></div>
+      <div class="f"><b>5+ years</b><span>Of day-by-day behavior behind every twin, recorded since January 2021.</span></div>
+      <div class="f"><b>12 to 16</b><span>Archetypes inside a twin, each with one person who speaks for it. Never fewer than 12.</span></div>
+      <div class="f"><b>3 words</b><span>Firm, leaning or early. How far the real number could sit from the count.</span></div>
+      <div class="f"><b>3.2%</b><span>Average miss on the first six scored public calls, three winners called right out of three.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="band light">
+  <div class="wrap body-grid">
+    <article class="art">
+      <h2 id="what">1. What a twin is</h2>
+      <p class="answer">A twin is an audience you can ask questions. It stands in for real people. You ask it what you would ask them, and it answers from what those people have done.</p>
+      <p>It can be the people who watch a show, use a service, follow a star or buy a brand. It can also be a group you shape yourself, such as women 25 to 44 in Dallas.</p>
+      <p>No twin is one average person. It is made of the archetypes inside the audience, usually 12 to 16 of them. Each archetype has one person who stands for it, the archetype representative. The people in all the archetypes add up to the whole audience.</p>
+      <div class="ex">
+        <p class="who">Example: the Amazon Prime Video twin</p>
+        <p>128,116,302 US subscribers, 16 archetypes. The largest is "older regulars on sport and crime series": 16,572,733 people, 12.9% of the twin, with Devin, 65, from Tampa standing for them. Next come "Thursday night football people" (15,200,112 people) and "under-35 fans of The Boys and Fallout" (14,605,258 people).</p>
+      </div>
+      <h3>How we find the archetypes</h3>
+      <ol>
+        <li>We sort the audience by stage with the subject: just found it, trying it, in the habit, drifting away, or back after a break.</li>
+        <li>We sort it again by stage of life: under 35, 35 to 54, and 55 and older.</li>
+        <li>People in the habit split again into the most devoted and the regulars.</li>
+        <li>The groups are fitted so they match the audience's own mix of ages and stages.</li>
+        <li>An archetype smaller than 2.5% of the audience joins the archetype closest to it. If fewer than 12 are left, the largest split again, for example by gender or by age.</li>
+        <li>Each archetype gets a plain name in the subject's own words, and a person to speak for it in a room.</li>
+      </ol>
+      <p class="so-what"><b>What this means.</b> When you ask a twin a question, every archetype in the audience answers.</p>
+
+      <h2 id="build">2. How we build a twin</h2>
+      <p class="answer">Every twin starts from real behavior. Crosswalk sees the entire digital life of 10 million opted-in US consumers. That means what they watch and stream, what they search and buy, and every other step online. A twin takes shape from their history over the past 5+ years.</p>
+      <h3>Three ways to build one</h3>
+      <ul>
+        <li><b>From a profile we hold.</b> The audience of a show, a star, a service or a brand. If we do not have it yet, we build it first, usually in under an hour.</li>
+        <li><b>A group you shape.</b> Pick gender, age, income, ethnicity and where they live. You can set the percentage shares yourself.</li>
+        <li><b>From a list of links.</b> Paste or upload links to a show page, a channel, a feed or an article. The twin is the people who went there.</li>
+      </ul>
+      <h3>What every twin carries</h3>
+      <ul>
+        <li><b>Who they are.</b> Gender, age, ethnicity, income, education, kids at home and relationship. Where they live, the services they use, what they buy and the people they follow.</li>
+        <li><b>How they respond.</b> Twelve habits, each a dial from 0 to 100. A 50 is an ordinary US audience. Each archetype carries its own version of these habits.</li>
+        <li><b>Where they are with it.</b> Five stages: just found it, trying it, in the habit, drifting away, and back after a break. Every archetype sits at one of them.</li>
+      </ul>
+      <table>
+        <thead><tr><th>Habit (0 to 100, 50 is an ordinary US audience)</th><th>Prime Video twin</th></tr></thead>
+        <tbody>
+          <tr><td>Finds things through social, not search</td><td>45.4</td></tr>
+          <tr><td>Binges rather than watching on a schedule</td><td>52.3</td></tr>
+          <tr><td>Reacts to price</td><td>57.9</td></tr>
+          <tr><td>Likely to cancel when the title ends</td><td>39.2</td></tr>
+          <tr><td>Comes back for the next entry</td><td>64.3</td></tr>
+          <tr><td>Buys the product</td><td>69.6</td></tr>
+          <tr><td>Phone in hand while watching</td><td>56.1</td></tr>
+          <tr><td>Shows up in person</td><td>42.3</td></tr>
+          <tr><td>Follows the people behind it</td><td>37.4</td></tr>
+          <tr><td>Sits through ads</td><td>56.7</td></tr>
+          <tr><td>Tries a new title fast</td><td>54.5</td></tr>
+          <tr><td>Tells other people</td><td>59.2</td></tr>
+        </tbody>
+      </table>
+      <p class="so-what"><b>What this means.</b> A twin's answers rest on 5+ years of what its people actually did.</p>
+
+      <h2 id="room">3. How we seat a room</h2>
+      <p class="answer">A focus group seats one person for each archetype. You never pick how many people are seated. The true number of archetypes in your audience decides it. Most rooms seat 12 to 16, and never fewer than 12.</p>
+      <ul>
+        <li><b>Never fewer than 12.</b> When a twin has fewer than 12 archetypes, we go deeper to find more nuance and split them, so the room still has 12 voices.</li>
+        <li><b>Seats have a bio and a memory.</b> Click a seat to read who they stand in for. Each seat remembers what it said earlier in the room, and in past groups you have used them in, just like a real person would.</li>
+        <li><b>The room looks like the real audience.</b> Gender, age and the rest follow the audience by its people. A twin that is 72% women seats about 9 women out of 12.</li>
+        <li><b>Each answer counts for the people behind it.</b> A seat standing for 16.6 million people counts for more than one standing for 3.6 million.</li>
+      </ul>
+      <h3>A question in a room runs in four steps</h3>
+      <ol>
+        <li><b>The room gets the facts.</b> Before anyone answers, the room learns what you plan to ask about. It learns what it is, when it came out, where it plays, and anything else the seats would naturally know. It also learns how similar things did before with each archetype.</li>
+        <li><b>Each seat answers in character.</b> It speaks for two or three sentences, from who it is and its known history. It gives an answer, then says how sure it is from 1 to 5, and why.</li>
+        <li><b>The count adds up people.</b> Each answer carries the people behind its seat. Shares add to 100% and people add to the room.</li>
+        <li><b>You get the read.</b> A short paragraph in plain words, the voices that tell the story, and two suggested questions worth asking next.</li>
+      </ol>
+      <div class="ex">
+        <p class="who">Example: one question in the Prime Video room, November 18, 2026</p>
+        <p>The room was asked which option would excite them most if it finally became a show. The lead answer was "a game I play." 9 of 16 seats picked it. Those seats stand for 61.8% of the audience. The room's count was 63.1%, or 80,841,387 people, with a range of 51.2% to 75.0% (leaning).</p>
+        <p>Kenji, 33, New York, picked the game. "A game I play, no contest, because Fallout did exactly that for me."</p>
+        <p>Devin, 65, Tampa, did not. "A game means nothing to me at my age."</p>
+      </div>
+      <p>Ask the same question the same day and you get the same count. The group's responses are based on historical actions, not guesses.</p>
+      <p class="so-what"><b>What this means.</b> Big archetypes weigh more, but small ones still count.</p>
+
+      <h2 id="history">4. How the past shapes what comes next</h2>
+      <p class="answer">Each archetype representative answers from what the people it represents did before. A twin is a record of its people's actions over the past 5+ years. That history is what each seat answers from.</p>
+      <p>It starts with where people are with the subject being studied. As in real life, archetype representatives sit at different levels of engagement with it. Then come their habits. Does this archetype cancel when a show ends? Do they come back for the next season? These habits come from what the people really did, and they shape every answer.</p>
+      <h3>What the room leans on, in order</h3>
+      <ol>
+        <li><b>History.</b> The first step is always the twin's overall behavioral history, to understand who they are.</li>
+        <li><b>Similar behavior.</b> What this audience did with this exact thing in the past.</li>
+        <li><b>A nearby audience is the check.</b> How a close audience acted with the same thing.</li>
+        <li><b>Similar things add context.</b> A boxed set, a price rise, a second season, a new service.</li>
+        <li><b>Habits fill in the rest.</b> Their historical habits cover what is left.</li>
+      </ol>
+      <p>Forecasts learn from real results. How many viewers a show got, how many books sold, which people engaged with a piece of content, how an election turned out, and more. Ask the same thing the same day and the room gives the same count, in any room on that twin. Ask a month later and the result may differ, based on what the panel did during that month.</p>
+
+      <h3>Predictive Analytics plans the questions from wide to narrow</h3>
+      <p>Bring one business question. Prometheus writes the plan, runs the room for you, and hands back the verdict with a full report. The question can take any shape: If I do X, will Y happen? Will X win? Should I do X? What will they pay?</p>
+      <p>The plan has 5 to 8 questions in three steps. The big picture comes first: where the audience stands today. Then closer in: what pulls them and what holds them back. Last comes the question itself, put to every archetype representative. Planning is free, and you can edit or drop any question before it runs. The report gives the verdict, the numbers behind it, why, who drove it, what would change it, and what to ask next.</p>
+      <div class="ex">
+        <p class="who">Example: the Prime Video run, November 18, 2026</p>
+        <p>The business question: which piece of IP that no one has licensed yet would get a person to pay for Prime Video? The verdict: a new weeknight live sports package. 55.7% of the audience, 71,335,955 people, picked it. That is about 4 times the 14.1% who said nothing on the list would get them to pay.</p>
+      </div>
+
+      <h3>Every count comes with a range and a confidence score</h3>
+      <table>
+        <thead><tr><th>Word</th><th>What it allows around the count</th><th>What it means</th></tr></thead>
+        <tbody>
+          <tr><td>Firm</td><td>Within about 5 points</td><td>The room is sure of this one.</td></tr>
+          <tr><td>Leaning</td><td>Within about 12 points</td><td>A lean, not a lock.</td></tr>
+          <tr><td>Early</td><td>A wide range, up to about 20 points</td><td>The room still gives a verdict.</td></tr>
+        </tbody>
+      </table>
+      <h3>We write down every call before the result is known</h3>
+      <p>We date each call before the result is in. When it lands, we score it, and a miss stays on the record. The full record is public on the <a href="twins-track-record.html">track record page</a>.</p>
+      <table>
+        <thead><tr><th>What we called</th><th>We said</th><th>What happened</th><th>The miss</th></tr></thead>
+        <tbody>
+          <tr><td>Texas Senate: who wins</td><td>Talarico 54.6%, Paxton 43.3%</td><td>Talarico 55.1%, Paxton 43.0%</td><td>Right winner; within 0.5 points</td></tr>
+          <tr><td>Nevada 4th District: the margin</td><td>By 23.0 points</td><td>By 22.7 points</td><td>0.3 points</td></tr>
+          <tr><td>Ohio governor: turnout and winner</td><td>4.2M of 7.9M; the winner</td><td>About 4.6M; the winner</td><td>8.7% under; right winner</td></tr>
+          <tr><td>NCIS: New York, week-one audience</td><td>10.04M</td><td>10.25M</td><td>2.0% under</td></tr>
+          <tr><td>NCIS: New York, share who finish the pilot</td><td>83.9%</td><td>81.6%</td><td>2.3 points over</td></tr>
+          <tr><td>NCIS: New York, share back for episode two</td><td>85.7%</td><td>86.8%</td><td>1.1 points under</td></tr>
+        </tbody>
+      </table>
+      <p>As of November 17, 2026: six calls scored, all three calls on a winner right, and counts within 3.2% of the result on average. Each row was dated ahead of its outcome.</p>
+      <p class="so-what"><b>What this means.</b> Confidence in every response, and a public record you can check.</p>
+
+      <h2 id="pilot">5. How pilot testing works</h2>
+      <p class="answer">Pilot Testing puts the archetype representatives in front of your cut. They watch it, react to it, and answer questions about it as it plays. When the cut ends, every seat fills out the card a network uses to judge a pilot.</p>
+      <ol>
+        <li><b>Set up the test.</b> Name it and pick the kind: a pilot, an episode, an ad, a feature or a run of episodes. Add the cast list and choose which archetype representatives sit in the room.</li>
+        <li><b>Add the cut.</b> Upload a file (MP4, MOV, WebM or M4V, from 15 seconds to 4 hours), or paste a link to where it plays.</li>
+        <li><b>The cut splits into scenes.</b> A new scene starts where the picture changes. For each one we note who and what is on screen, what is said and when, and where it goes quiet.</li>
+        <li><b>Faces tell us who is on screen.</b> Facial recognition matches actors to your cast list. A face gets a name only when it matches someone on your list. Nobody off your list is ever named.</li>
+        <li><b>The room watches act by act.</b> Each seat watches in character and turns its dial based on how its archetype has responded to things like this before.</li>
+        <li><b>You ask questions as it plays.</b> A guide puts questions at the turns of the story. You can add to the moderator's questions at any second. Each question carries the last 75 seconds of what played.</li>
+        <li><b>The scorecard comes last.</b> Overall rating, would recommend, would finish the episode, would watch a second episode, how soon, and against expectations. Each share counts the people behind the seats and carries its own range and word.</li>
+      </ol>
+      <p>Next to every top number sits the norm: what tests of the same kind usually score. A scored test also carries a forecast. It gives the week-one audience and the share who would finish the season. It shows the share on another device while it plays. And it counts how many would sign up to a platform to watch it, or come back as a lapsed viewer.</p>
+
+      <h2 id="dial">6. How the dial works</h2>
+      <p class="answer">Each seat turns a dial from 0 to 100 as it watches. The dial goes up when a scene lands for that archetype representative. It goes down when a scene drags, confuses or loses them.</p>
+      <ul>
+        <li><b>A reading every few seconds.</b> Every 2 seconds on a short cut and every 4 on a long one. A 43-minute pilot gives 706 readings per seat.</li>
+        <li><b>Each seat moves on its own.</b> A devoted fan and a new member can feel the same scene in very different ways. The rest of the room does not pull a seat along.</li>
+        <li><b>The room's line counts each seat by its people.</b> A seat that stands for more people moves the line more. Groups (women and men, age groups, the five stages, avid and casual) each get their own line.</li>
+        <li><b>Reactions are marked on the clock.</b> Loved it, laughed, leaned in, lost, checked out and wow, each with its second and a line in the seat's own words.</li>
+        <li><b>Run it back after the test.</b> Play, pause, jump 10 seconds, play at 2x or 4x, or drag to any second. At each second you see the scene, every group's dial, who moved most, and what was said.</li>
+      </ul>
+      <h3>What moves a seat's line</h3>
+      <ul>
+        <li>Habits set the start. A seat starts higher when it is loyal to the show or 45 and older. A phone in hand while watching starts it lower.</li>
+        <li>Most of each move is the person's own reaction to the scene, about 70%. The rest is the pull of their habits.</li>
+        <li>The type of scene matters. Tender scenes lift seats that are women, LGBTQ+ or 45 and older. Funny scenes lift seats under 40. Action lifts men under 40.</li>
+        <li>Stage pushes the whole line. In the habit lifts every scene; drifting away pulls every scene down.</li>
+        <li>Time on screen alone never lifts a seat. A cameo can be the best part of a show.</li>
+      </ul>
+      <p class="so-what"><b>What this means.</b> You can find the second a scene won the room, or lost it.</p>
+
+      <h2 id="files">7. What you get</h2>
+      <p class="answer">Every read comes back as files you can share. What you see on the page is in the files too, so the work travels into your own decks and plans.</p>
+      <ul>
+        <li><b>Twins:</b> the twin page, with a CSV, a PDF and a deck.</li>
+        <li><b>Focus Group IQ:</b> each room as a CSV and a PDF: every question, split, read and voice.</li>
+        <li><b>Predictive Analytics:</b> the report as a page and a PDF, with the raw data as a CSV.</li>
+        <li><b>Pilot Testing:</b> the scorecard, the report as a PDF and a deck, and the raw data as a CSV.</li>
+      </ul>
+      <p>When you finish a session in a room, Prometheus emails you the room's PDF read with a link back to the room. The words we use are defined in the <a href="digital-twins-glossary.html">Digital Twins IQ glossary</a>.</p>
+
+      <h2 id="privacy">8. Privacy</h2>
+      <p class="answer">Each twin stands in for real people who chose to be counted. Identity is kept apart from behavior. Prometheus never answers about one person. It answers about the group a person is counted with, and every projected figure carries its base.</p>
+      <p>Read more on <a href="panel.html">how the panel works</a> and in the <a href="privacy-policy-1.html">Privacy Policy</a>.</p>
+
+      <p class="cite">Cite this page: Crosswalk Technologies, Inc. (2026). <i>Digital Twins IQ methodology: how Crosswalk builds a digital twin, seats it in a room, and reads what it will do.</i> <code>https://www.crosswalknyc.com/digital-twins-methodology.html</code></p>
+    </article>
+    <aside class="toc">
+      <div class="k">On this page</div>
+      <a href="#what">1. What a twin is</a>
+      <a href="#build">2. How we build a twin</a>
+      <a href="#room">3. How we seat a room</a>
+      <a href="#history">4. How the past shapes what comes next</a>
+      <a href="#pilot">5. How pilot testing works</a>
+      <a href="#dial">6. How the dial works</a>
+      <a href="#files">7. What you get</a>
+      <a href="#privacy">8. Privacy</a>
+    </aside>
+  </div>
+</section>
+
+<section class="band light" style="padding-top:0">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">FAQ</span> Questions people ask about the method</div>
+    <h2 class="h-m" style="max-width:24ch;margin:12px 0 28px">The methodology, in plain words.</h2>
+    <div class="faq">
+      <div class="item"><h3>What is a Crosswalk digital twin built from?</h3><p>From what real people did. The Crosswalk panel sees the entire digital life of 10 million opted-in US consumers, day by day since January 2021. A twin rests on that history over the past 5+ years. No surveys, no interviews, no language model guessing at a type of person.</p></div>
+      <div class="item"><h3>How many people sit in a Digital Twins IQ focus group?</h3><p>One for each archetype in the audience, usually 12 to 16 and never fewer than 12. You do not pick the number. The true number of archetypes in your audience decides it.</p></div>
+      <div class="item"><h3>How is the count weighted?</h3><p>Each answer carries the people behind its seat. A seat that stands for 16.6 million people counts for more than one that stands for 3.6 million. Shares add to 100% and people add to the room.</p></div>
+      <div class="item"><h3>What do firm, leaning and early mean?</h3><p>They say how far the real number could sit from the count. Firm is within about 5 points. Leaning is within about 12. Early is a wide range, up to about 20 points, and the room still gives a verdict.</p></div>
+      <div class="item"><h3>How accurate are Crosswalk's digital twins?</h3><p>Every call is dated before the result and scored when it lands, and the misses stay on the record. As of November 17, 2026, six public calls were scored. All three winner calls were right, and the counts landed within 3.2% of the result on average.</p></div>
+      <div class="item"><h3>Will the same question give the same answer?</h3><p>Yes, on the same day, in any room on that twin. The responses rest on historical actions, not guesses. A month later the result may differ because the panel's behavior moved during that month.</p></div>
+      <div class="item"><h3>What can Pilot Testing watch?</h3><p>A pilot, an episode, an ad, a feature or a run of episodes. Upload an MP4, MOV, WebM or M4V from 15 seconds to 4 hours, or paste a link to where it plays.</p></div>
+      <div class="item"><h3>Is any individual identified?</h3><p>No. Identity is kept apart from behavior, and Prometheus never answers about one person. It answers about the group that person is counted with. Clients receive group statistics projected to the US population.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">Read next</span> More on digital twins and the panel</div>
+    <div class="related">
+      <a href="what-is-a-digital-twin-audience.html"><div class="k">Guide</div><div class="t">What is a digital twin audience?</div><div class="d">The plain-English definition, how it differs from a persona, and what a twin can answer.</div></a>
+      <a href="synthetic-respondents-vs-behavioral-twins.html"><div class="k">Comparison</div><div class="t">Synthetic respondents vs behavioral digital twins</div><div class="d">Survey twins, interview twins, LLM personas and behavior-built twins, side by side.</div></a>
+      <a href="ai-focus-groups.html"><div class="k">Guide</div><div class="t">How an AI focus group works</div><div class="d">Seats, archetypes, people-weighted counts and what a room can and cannot tell you.</div></a>
+      <a href="behavioral-panel.html"><div class="k">The panel</div><div class="t">What is a behavioral panel?</div><div class="d">How 10 million opted-in US people are counted, and what clients receive.</div></a>
+      <a href="synthetic-data-market-research.html"><div class="k">Guide</div><div class="t">Synthetic data in market research</div><div class="d">What it is, the three ways it gets made, and how to check it before you trust it.</div></a>
+      <a href="digital-twins-glossary.html"><div class="k">Glossary</div><div class="t">Digital Twins IQ glossary</div><div class="d">Twin, archetype, seat, room, the count, the dial, the norm and the rest.</div></a>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:40px;flex-wrap:wrap"><a class="btn btn-green" href="company.html#contact">Talk to us about digital twins</a><a class="btn btn-ghost" href="digital-twins.html">See Digital Twins IQ</a><a class="btn btn-ghost" href="twins-track-record.html">Read the track record</a></div>
+  </div>
+</section>
+
+<div id="foot"></div>
+<script src="assets/js/crosswalk.js"></script>
+</body>
+</html>

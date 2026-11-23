@@ -19,9 +19,17 @@ For every indexable page it sets, in <head>:
     BreadcrumbList on inner pages, Service on product pages. A page
     that carries its own JSON-LD (digital-twins.html) keeps it.
 
+  * on a learn page (kind="learn" in PAGES: the digital twins, synthetic
+    data and panel reads added 2026-11-23) also Article, FAQPage read from
+    the page's own FAQ items, DefinedTermSet read from a glossary, the
+    Organization with what it knows about, and the Digital Twins IQ
+    service, so an AI assistant can quote the page and name the author.
+
 Then it writes sitemap.xml (one URL per indexable page, lastmod from
-git), robots.txt, and llms.txt (a plain summary for AI assistants). Pages marked noindex and the redirect stubs are
-left alone and kept out of the sitemap.
+git), robots.txt (every AI crawler named and allowed), llms.txt (a plain
+summary for AI assistants) and llms-full.txt (the full text of the
+digital twins, synthetic data and panel pages as markdown). Pages marked
+noindex and the redirect stubs are left alone and kept out of the sitemap.
 
 Idempotent: a second run changes nothing. No em dashes anywhere.
 """
@@ -102,8 +110,53 @@ PAGES = {
         kind="product", name="Fin IQ"),
     "digital-twins.html": dict(
         title="Digital Twins and Synthetic Data from Real Behavior | Crosswalk",
-        description="Twin IQ builds a digital twin of each of the 10 million US people in the Crosswalk panel, from observed behavior, not surveys. Test a plan, a title, or a price first.",
-        kind="product", name="Twin IQ", crumb_label="Digital twins",
+        description="Digital Twins IQ builds a digital twin of each of the 10 million US people in the Crosswalk panel, from observed behavior, not surveys. Test a plan, a title, or a price first.",
+        kind="product", name="Digital Twins IQ", crumb_label="Digital twins",
+        og_image="assets/images/og-digital-twins.png"),
+    # Learn pages (2026-11-23): long-form reads written so an AI assistant
+    # can quote them. Article + FAQPage JSON-LD is generated from the page
+    # body below (kind="learn"); each sits under Digital twins in the crumb.
+    "digital-twins-methodology.html": dict(
+        title="Digital Twins IQ methodology: how Crosswalk builds a twin and seats a room | Crosswalk",
+        description="How Crosswalk builds a digital twin from 5+ years of observed behavior on 10 million US people, seats one archetype representative per archetype in a room, counts the people behind each answer, scores every count, and tests a pilot on the dial.",
+        kind="learn", name="Digital Twins IQ methodology", published="2026-11-23",
+        crumb=[("Digital twins", "digital-twins.html"), ("Methodology", "digital-twins-methodology.html")],
+        og_image="assets/images/og-digital-twins.png"),
+    "what-is-a-digital-twin-audience.html": dict(
+        title="What is a digital twin audience? A plain-English guide | Crosswalk",
+        description="A digital twin audience is a working copy of a real group of people you can ask questions. How Crosswalk builds one from observed behavior, what it is made of, what you can ask it, and how you know it is right.",
+        kind="learn", name="What is a digital twin audience?", published="2026-11-23",
+        crumb=[("Digital twins", "digital-twins.html"), ("What is a digital twin audience?", "what-is-a-digital-twin-audience.html")],
+        og_image="assets/images/og-digital-twins.png"),
+    "synthetic-data-market-research.html": dict(
+        title="Synthetic data in market research: what it is and how to check it | Crosswalk",
+        description="Synthetic data is research produced rather than collected from a live respondent. The three ways it gets made, why buyers use it, six checks before you trust a synthetic number, and how Crosswalk's behavior-built twins answer them.",
+        kind="learn", name="Synthetic data in market research", published="2026-11-23",
+        crumb=[("Digital twins", "digital-twins.html"), ("Synthetic data", "synthetic-data-market-research.html")],
+        og_image="assets/images/og-digital-twins.png"),
+    "behavioral-panel.html": dict(
+        title="What is a behavioral panel? How Crosswalk's 10 million person US panel works | Crosswalk",
+        description="A behavioral panel counts what people do instead of asking. How Crosswalk's opted-in panel of 30 million people (10 million in the US) records an entire digital life under one ID, projects to the country, and protects every panelist.",
+        kind="learn", name="What is a behavioral panel?", published="2026-11-23",
+        crumb=[("The panel", "panel.html"), ("What is a behavioral panel?", "behavioral-panel.html")],
+        og_image="assets/images/og-crosswalk.png"),
+    "synthetic-respondents-vs-behavioral-twins.html": dict(
+        title="Synthetic respondents vs behavioral digital twins: how to tell them apart | Crosswalk",
+        description="Interview twins, survey twins, model-built personas, census-built populations and behavior-built digital twins, side by side: what each is built from, what it predicts, how it is checked, and when to use which.",
+        kind="learn", name="Synthetic respondents vs behavioral digital twins", published="2026-11-23",
+        crumb=[("Digital twins", "digital-twins.html"), ("Synthetic respondents vs behavioral twins", "synthetic-respondents-vs-behavioral-twins.html")],
+        og_image="assets/images/og-digital-twins.png"),
+    "ai-focus-groups.html": dict(
+        title="AI focus groups: how a room of digital twins answers a question | Crosswalk",
+        description="An AI focus group seats one archetype representative per archetype, usually 12 to 16. How a question runs, why the count is people-weighted rather than a show of hands, how firm each count is, and what a room can and cannot tell you.",
+        kind="learn", name="How an AI focus group works", published="2026-11-23",
+        crumb=[("Digital twins", "digital-twins.html"), ("AI focus groups", "ai-focus-groups.html")],
+        og_image="assets/images/og-digital-twins.png"),
+    "digital-twins-glossary.html": dict(
+        title="Digital Twins IQ glossary: digital twin, archetype, seat, room, confidence score and more | Crosswalk",
+        description="Short plain-English definitions of the words Crosswalk uses for digital twins, synthetic data and the behavioral panel: twin, archetype, archetype representative, seat, room, the count, confidence score, the dial, the norm, penetration, index and more.",
+        kind="learn", name="Digital Twins IQ glossary", published="2026-11-23",
+        crumb=[("Digital twins", "digital-twins.html"), ("Glossary", "digital-twins-glossary.html")],
         og_image="assets/images/og-digital-twins.png"),
     "twins-track-record.html": dict(
         title="Digital Twins: How We Score Ourselves | Crosswalk",
@@ -175,14 +228,32 @@ PAGES = {
 # One sentence about the company, used everywhere a machine reads who we are
 # (Organization JSON-LD, llms.txt). Keep the panel sizes in step with the pages.
 ORG_DESCRIPTION = (
-    "Crosswalk is an opted-in consumer panel of 30 million people worldwide, 10 million of them in the US. It reads what audiences actually do across their entire digital life, and Twin IQ builds a digital twin of each US panelist from observed behavior."
+    "Crosswalk is an opted-in consumer panel of 30 million people worldwide, 10 million of them in the US. It reads what audiences actually do across their entire digital life, and Digital Twins IQ builds a digital twin of each US panelist from observed behavior."
 )
+# What the company is an authority on, as the machines read it. Each entry
+# names a concept and, where one exists, its public reference page, so an
+# assistant can tie "Crosswalk" to the topic it already knows.
+ORG_KNOWS_ABOUT = [
+    {"@type": "Thing", "name": "Digital twin audiences", "sameAs": "https://en.wikipedia.org/wiki/Digital_twin",
+     "url": ORIGIN + "/what-is-a-digital-twin-audience.html"},
+    {"@type": "Thing", "name": "Synthetic data for market research", "sameAs": "https://en.wikipedia.org/wiki/Synthetic_data",
+     "url": ORIGIN + "/synthetic-data-market-research.html"},
+    {"@type": "Thing", "name": "Behavioral consumer panels", "sameAs": "https://en.wikipedia.org/wiki/Clickstream",
+     "url": ORIGIN + "/behavioral-panel.html"},
+    {"@type": "Thing", "name": "AI focus groups", "url": ORIGIN + "/ai-focus-groups.html"},
+    {"@type": "Thing", "name": "Audience measurement", "sameAs": "https://en.wikipedia.org/wiki/Audience_measurement"},
+    {"@type": "Thing", "name": "Marketing attribution", "sameAs": "https://en.wikipedia.org/wiki/Attribution_(marketing)"},
+    {"@type": "Thing", "name": "Streaming subscriber behavior"},
+    {"@type": "Thing", "name": "Pilot testing for television and film"},
+]
 ORG = {
     "@type": "Organization",
     "@id": ORIGIN + "/#organization",
     "name": "Crosswalk Technologies, Inc.",
-    "alternateName": "Crosswalk",
+    "alternateName": ["Crosswalk", "Crosswalk Technologies", "Crosswalk NYC"],
+    "legalName": "Crosswalk Technologies, Inc.",
     "description": ORG_DESCRIPTION,
+    "slogan": "Noise to knowledge.",
     "url": ORIGIN + "/",
     "logo": ORIGIN + "/assets/logos/crosswalk-logo-black.png",
     "sameAs": ["https://www.linkedin.com/company/crosswalk-technologies"],
@@ -196,6 +267,19 @@ ORG = {
         "postalCode": "90265",
         "addressCountry": "US",
     },
+    "knowsAbout": ORG_KNOWS_ABOUT,
+    "areaServed": {"@type": "Country", "name": "United States"},
+}
+# The digital twins product as one node every learn page points at.
+TWINS_SERVICE_ID = ORIGIN + "/digital-twins.html#service"
+TWINS_SERVICE = {
+    "@type": "Service",
+    "@id": TWINS_SERVICE_ID,
+    "name": "Digital Twins IQ",
+    "alternateName": ["Twin IQ", "Crosswalk Digital Twins", "Crosswalk synthetic audiences"],
+    "serviceType": "Digital twin audience simulation and synthetic data built from observed consumer behavior",
+    "url": ORIGIN + "/digital-twins.html",
+    "provider": {"@id": ORIGIN + "/#organization"},
 }
 WEBSITE = {
     "@type": "WebSite",
@@ -222,10 +306,35 @@ _CHARSET_RE = re.compile(r'<meta[^>]*charset[^>]*>', re.I)
 _DESC_RE = re.compile(r'<meta[^>]*name="description"[^>]*content="([^"]*)"', re.I)
 _P_RE = re.compile(r"<p[^>]*>(.*?)</p>", re.I | re.S)
 _STRIP_TAGS = re.compile(r"<[^>]+>")
+_H1_RE = re.compile(r"<h1[^>]*>(.*?)</h1>", re.I | re.S)
+_FAQ_ITEM_RE = re.compile(r'<div class="item">\s*<h3>(.*?)</h3>\s*<p>(.*?)</p>', re.I | re.S)
+_TERM_RE = re.compile(r'<div class="term"(?: id="([^"]*)")?>\s*<dt>(.*?)</dt>\s*<dd>(.*?)</dd>', re.I | re.S)
 
 
 def _attr(s: str) -> str:
     return htmllib.escape(s, quote=True)
+
+
+def _text(fragment: str) -> str:
+    """Visible words of an HTML fragment, one line, entities resolved."""
+    t = re.sub(r"<small>.*?</small>", "", fragment, flags=re.I | re.S)
+    t = htmllib.unescape(_STRIP_TAGS.sub("", t))
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def page_h1(html: str) -> str:
+    m = _H1_RE.search(html)
+    return _text(m.group(1)) if m else ""
+
+
+def faq_pairs(html: str) -> list[tuple[str, str]]:
+    """(question, answer) for every FAQ item on the page."""
+    return [(_text(q), _text(a)) for q, a in _FAQ_ITEM_RE.findall(html)]
+
+
+def glossary_terms(html: str) -> list[tuple[str, str, str]]:
+    """(anchor, term, definition) for every glossary entry on the page."""
+    return [(aid or "", _text(dt), _text(dd)) for aid, dt, dd in _TERM_RE.findall(html)]
 
 
 def is_stub(html: str) -> bool:
@@ -348,6 +457,46 @@ def finish_page(name: str, html: str) -> str:
             }
             graph.append(page_node)
             graph.append({"@type": "BreadcrumbList", "@id": url + "#breadcrumb", "itemListElement": items})
+            if kind == "learn":
+                # A long-form read: the article, its FAQ, and (on the
+                # glossary) the defined terms, each tied to the digital
+                # twins service and the organization so an assistant
+                # can quote the page and know who wrote it.
+                published = spec.get("published") or date.today().isoformat()
+                modified = _git_lastmod(name, _sitemap_lastmods().get(url, ""), _shallow_commits())
+                if modified < published:
+                    modified = published
+                headline = page_h1(html) or title.split("|")[0].strip()
+                page_node.update({
+                    "datePublished": published, "dateModified": modified,
+                    "about": {"@id": TWINS_SERVICE_ID},
+                    "speakable": {"@type": "SpeakableSpecification", "cssSelector": ["h1", ".answer"]},
+                })
+                graph.append(ORG)
+                graph.append(TWINS_SERVICE)
+                graph.append({
+                    "@type": "Article", "@id": url + "#article", "headline": headline[:110],
+                    "description": description, "url": url, "mainEntityOfPage": {"@id": url + "#webpage"},
+                    "author": {"@id": ORIGIN + "/#organization"}, "publisher": {"@id": ORIGIN + "/#organization"},
+                    "datePublished": published, "dateModified": modified, "inLanguage": "en-US",
+                    "image": og_image, "about": {"@id": TWINS_SERVICE_ID},
+                    "isAccessibleForFree": True,
+                })
+                faqs = faq_pairs(html)
+                if faqs:
+                    graph.append({
+                        "@type": "FAQPage", "@id": url + "#faq",
+                        "mainEntity": [{"@type": "Question", "name": q,
+                                        "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faqs],
+                    })
+                terms = glossary_terms(html)
+                if terms:
+                    graph.append({
+                        "@type": "DefinedTermSet", "@id": url + "#terms", "name": headline,
+                        "hasDefinedTerm": [{"@type": "DefinedTerm", "@id": url + ("#" + aid if aid else ""),
+                                            "name": t, "description": d,
+                                            "inDefinedTermSet": {"@id": url + "#terms"}} for aid, t, d in terms],
+                    })
             if kind == "product":
                 page_node["about"] = {"@id": url + "#service"}
                 graph.append({
@@ -427,25 +576,65 @@ def build_sitemap(pages: list[str]) -> str:
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "\n".join(rows) + "\n</urlset>\n")
 
 
+# The crawlers behind the AI assistants, named so each one finds its own
+# token and the site's intent is on the record (2026-11-23). Every one is
+# allowed the whole public site; the two noindex pages stay out for all.
+AI_CRAWLERS = [
+    "GPTBot", "OAI-SearchBot", "ChatGPT-User",            # OpenAI: training, search, live browsing
+    "ClaudeBot", "Claude-SearchBot", "Claude-User", "anthropic-ai",  # Anthropic
+    "PerplexityBot", "Perplexity-User",                   # Perplexity
+    "Google-Extended", "Googlebot",                       # Gemini and AI Overviews, Search
+    "Bingbot", "DuckAssistBot",                           # Copilot (Bing index), DuckDuckGo AI
+    "Applebot", "Applebot-Extended",                      # Apple Intelligence, Siri
+    "Meta-ExternalAgent", "Meta-ExternalFetcher",         # Meta AI
+    "Amazonbot",                                          # Alexa, Rufus
+    "CCBot",                                              # Common Crawl, used in many training sets
+    "cohere-ai", "MistralAI-User", "YouBot", "Bytespider",
+]
+
+
 def build_robots() -> str:
-    lines = ["User-agent: *", "Allow: /"]
+    lines = ["# Crosswalk. Every page here is written to be read, quoted and cited.",
+             f"# Plain-text summaries for AI assistants: {ORIGIN}/llms.txt and {ORIGIN}/llms-full.txt",
+             "", "User-agent: *", "Allow: /"]
     for f in sorted(NOINDEX_FILES):
         lines.append(f"Disallow: /{f}")
         lines.append(f"Disallow: /site/{f}")
-    lines += ["", f"Sitemap: {ORIGIN}/sitemap.xml", ""]
+    lines.append("")
+    for ua in AI_CRAWLERS:
+        lines += [f"User-agent: {ua}", "Allow: /"]
+        for f in sorted(NOINDEX_FILES):
+            lines.append(f"Disallow: /{f}")
+        lines.append("")
+    lines += [f"Sitemap: {ORIGIN}/sitemap.xml", ""]
     return "\n".join(lines)
+
+
+def _llms_row(name: str, pages_spec: dict | None = None) -> str:
+    spec = (pages_spec or PAGES).get(name, {})
+    crumb = spec.get("crumb") or []
+    label = spec.get("name") or (crumb[-1][0] if crumb else _page_label(name, spec.get("title", name)))
+    url = ORIGIN + "/" + ("" if name == "index.html" else name)
+    return f"- [{label}]({url}): {spec.get('description', '').strip()}"
+
+
+LEARN_ORDER = [
+    "digital-twins-methodology.html", "what-is-a-digital-twin-audience.html",
+    "synthetic-data-market-research.html", "synthetic-respondents-vs-behavioral-twins.html",
+    "ai-focus-groups.html", "behavioral-panel.html", "digital-twins-glossary.html",
+]
+
+# The pages whose full text rides in llms-full.txt, in reading order: the
+# digital twins cluster first, then the panel and Prometheus.
+LLMS_FULL_ORDER = ["digital-twins.html", "twins-track-record.html"] + LEARN_ORDER + ["panel.html", "prometheus.html"]
 
 
 def build_llms_txt(pages: list[str]) -> str:
     """llms.txt (llmstxt.org): a plain summary for AI assistants, from PAGES."""
-    def row(name: str) -> str:
-        spec = PAGES.get(name, {})
-        crumb = spec.get("crumb") or []
-        label = spec.get("name") or (crumb[-1][0] if crumb else _page_label(name, spec.get("title", name)))
-        url = ORIGIN + "/" + ("" if name == "index.html" else name)
-        return f"- [{label}]({url}): {spec.get('description', '').strip()}"
+    row = _llms_row
     products = sorted((n for n in pages if PAGES.get(n, {}).get("kind") == "product"),
                       key=lambda n: n != "digital-twins.html")
+    learn = [n for n in LEARN_ORDER if n in pages]
     company = [n for n in ("panel.html", "company.html", "clients.html", "products.html", "join.html")
                if n in pages]
     policies = [n for n in ("privacy-policy-1.html", "terms-of-use.html", "why-we-track.html",
@@ -458,6 +647,17 @@ def build_llms_txt(pages: list[str]) -> str:
         "Crosswalk Technologies, Inc. serves studios, streamers, brands, agencies, and finance teams. "
         "Prometheus answers audience questions in plain English from the same panel. "
         "Clients receive group statistics projected to the US population; no individual is identified.",
+        "",
+        "Key facts: 30 million opted-in people worldwide, 10 million in the US, census matched and projected to 329.9 million Americans. "
+        "One ID per person across phone, laptop and TV. Recorded day by day since January 2021; yesterday's behavior is on file today. "
+        "Digital Twins IQ (also called Twin IQ) builds a digital twin of any audience from 5+ years of observed behavior; a twin is made of 12 to 16 archetypes; "
+        "a focus group seats one archetype representative per archetype; every count carries a range and a confidence score (firm, leaning or early); "
+        "every call is dated before its outcome and scored on a public track record.",
+        "",
+        f"The full text of the digital twins, synthetic data and panel pages is at {ORIGIN}/llms-full.txt.",
+        "",
+        "## Learn: digital twins, synthetic data and the behavioral panel",
+        *[row(n) for n in learn],
         "",
         "## Products",
         *[row(n) for n in products],
@@ -473,6 +673,85 @@ def build_llms_txt(pages: list[str]) -> str:
         "",
     ]
     return "\n".join(out)
+
+
+_BLOCK_RE = re.compile(
+    r"<(h1|h2|h3|p|li|dt|dd|figcaption|th|td|tr)(?:\s[^>]*)?>(.*?)</\1>|<(/?)(table|ul|ol|tr)(?:\s[^>]*)?>",
+    re.I | re.S)
+
+
+def page_markdown(name: str, html: str) -> str:
+    """The page body as plain markdown: headings, paragraphs, lists and
+    tables, in page order, without the nav, scripts or styles."""
+    body = html.split("<body", 1)[1] if "<body" in html else html
+    body = re.sub(r"<(script|style|aside)[^>]*>.*?</\1>", "", body, flags=re.I | re.S)
+    body = re.sub(r'<section class="band dark">\s*<div class="wrap">\s*<div class="eyebrow"><span class="n">Read next</span>.*?</section>', "", body, flags=re.I | re.S)
+    out: list[str] = []
+    row: list[str] = []
+    in_head = False
+    for m in _BLOCK_RE.finditer(body):
+        tag = (m.group(1) or m.group(4) or "").lower()
+        if m.group(4):
+            if tag == "table":
+                if m.group(3):  # closing
+                    out.append("")
+                else:
+                    in_head = True
+                continue
+            if tag == "tr":
+                if m.group(3) and row:
+                    out.append("| " + " | ".join(row) + " |")
+                    if in_head:
+                        out.append("|" + "---|" * len(row))
+                        in_head = False
+                    row = []
+                continue
+            continue
+        text = _text(m.group(2))
+        if not text:
+            continue
+        if tag in ("th", "td"):
+            row.append(text.replace("|", "/"))
+        elif tag == "tr":
+            continue
+        elif tag == "h1":
+            out += [f"# {text}", ""]
+        elif tag == "h2":
+            out += ["", f"## {text}", ""]
+        elif tag == "h3":
+            out += ["", f"### {text}", ""]
+        elif tag == "li":
+            out.append(f"- {text}")
+        elif tag == "dt":
+            out += ["", f"**{text}**"]
+        elif tag == "dd":
+            out.append(text)
+        elif tag == "figcaption":
+            out.append(f"_{text}_")
+        else:
+            if text.lower().startswith("cite this page"):
+                continue
+            out += [text, ""]
+    md = "\n".join(out)
+    md = re.sub(r"\n{3,}", "\n\n", md).strip()
+    url = ORIGIN + "/" + name
+    return f"<!-- {url} -->\n\n{md}\n\nSource: {url}\n"
+
+
+def build_llms_full(pages: list[str]) -> str:
+    """llms-full.txt: the whole text of the key pages, in markdown, so an
+    assistant that reads one file gets the method, the definitions and the
+    panel without crawling."""
+    parts = ["# Crosswalk: digital twins, synthetic data and the behavioral panel", "",
+             f"> {ORG_DESCRIPTION}", "",
+             f"This file carries the full text of the pages listed in {ORIGIN}/llms.txt that explain Crosswalk's "
+             "digital twins, synthetic data and behavioral panel. Every page is also live at the address above each section.", ""]
+    for name in LLMS_FULL_ORDER:
+        if name not in pages:
+            continue
+        html = (SITE / name).read_text(encoding="utf-8")
+        parts += ["", "---", "", page_markdown(name, html)]
+    return "\n".join(parts).rstrip() + "\n"
 
 
 def run(check: bool = False) -> int:
@@ -507,6 +786,12 @@ def run(check: bool = False) -> int:
         changes.append("llms.txt")
         if not check:
             lt.write_text(llms, encoding="utf-8")
+    full = build_llms_full(pages)
+    lf = SITE / "llms-full.txt"
+    if not lf.exists() or lf.read_text(encoding="utf-8") != full:
+        changes.append("llms-full.txt")
+        if not check:
+            lf.write_text(full, encoding="utf-8")
     verb = "would change" if check else "updated"
     print(f"[site_seo] {len(pages)} indexable pages; {len(changes)} file(s) {verb}" + (": " + ", ".join(changes) if changes else ""))
     return 1 if (check and changes) else 0
