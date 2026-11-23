@@ -14,6 +14,23 @@ reads today, with the live prices:
   twin_pricing "what does a focus group cost", "how much is a pilot
               test", "digital twins pricing": the per-group card
               (Jenna 2026-11-05, migration/digital_twin_pricing)
+  data_history "how far back can we pull a window", "what is the
+              earliest date", "how much history do you have", "what
+              years do you have", "can I pull 2019": the data's reach,
+              in one plain line, the date read from the one place that
+              defines it (migration.event_window.DATA_FLOOR, through
+              prometheus.data_floor). Jenna 2026-11-23, after Armine
+              Meseldzhyan (Lionsgate) asked "how back can we pull a
+              window" and got the working-on-it line from a read that
+              had started: "this should have answered her you can go
+              back to jan 1 2021". An ask that names a year before
+              the floor is told plainly the window would start on the
+              floor; one that names a covered year is told it is
+              covered. The typo is matched on purpose.
+
+A question any of these answers never starts a read and never gets the
+working-on-it line: ``read_guard`` is the check the read lane and the
+priced classifier run before any work (the same Armine miss).
 
 Boundaries (an order wins over this lane):
   * a bulk order with a names sheet on the thread ("pull profiles for
@@ -37,9 +54,10 @@ import re
 
 from . import rate_card as _rc
 
-__all__ = ['FAMILIES', 'enabled', 'looks_like', 'family_of', 'answer', 'price_fn_for', 'thread_has_names', 'facts', 'positioning_ask', 'positioning_answer', 'POSITIONING_LINES']
+__all__ = ['FAMILIES', 'enabled', 'looks_like', 'family_of', 'answer', 'read_guard', 'price_fn_for', 'thread_has_names', 'facts',
+           'positioning_ask', 'positioning_answer', 'POSITIONING_LINES', 'data_history_ask', 'data_history_answer']
 
-FAMILIES = ('overview', 'bulk_list', 'valuation', 'twin_pricing', 'positioning')
+FAMILIES = ('overview', 'bulk_list', 'valuation', 'twin_pricing', 'positioning', 'data_history')
 _MAX_LEN = 320
 
 _LEAD = r"^\W*(?:(?:hi|hey|hello|ok|okay|so|and|also|prometheus|quick question|one more|one more thing)[,!.:\s]+)*"
@@ -146,6 +164,87 @@ def positioning_answer(text=''):
     return f"Here are three, each five words or fewer:\n\n{lines}\n\n{POSITIONING_WHY}"
 
 
+# data_history: how far back the data goes (Armine Meseldzhyan, Lionsgate, 2026-11-23: "how back can we pull a
+# window" ran as a read and drew the working-on-it line; Jenna: "this should have answered her you can go back
+# to jan 1 2021"). The gate in prometheus.data_floor already answers "how far back does the data go" ahead of
+# every lane; this family is the net under it for the shapes that gate does not read (the typo, "can we pull a
+# window", "how much history", "what years do you have", a bare year after "can I pull"). The date comes from
+# the one place that defines it; nothing here spells it.
+_YR20 = r"20\d{2}"
+_YEAR_TOKEN_RX = re.compile(r"(?<![\d/.$-])(" + _YR20 + r")(?![\d/.%-])")
+_DATA_NOUN = r"(?:data|dataset|history|numbers|records|coverage|windows?|reads?|pulls?|measurement|tracking|information|info|panel)"
+_PULL_VERB = r"(?:pull|go|look|run|reach|see|get|read|query|search|measure|track|take)"
+_WE = r"(?:we|i|you|it|the\s+data|data|that|this|your\s+data|our\s+data)"
+_DATA_HISTORY_RX = re.compile(
+    r"(?:"
+    # "how far back can we pull", "how back can we pull a window" (the typo), "how long back does it go"
+    r"\bhow\s+(?:far\s+|long\s+|much\s+|many\s+(?:years|months)\s+)?back\s+(?:can|could|do|does|did|are|is|will|would|should|may|might)\b"
+    r"|\bhow\s+(?:far|long)\s+(?:back\s+)?(?:does|do|can|could|will|would)\s+(?:the\s+|your\s+|our\s+|this\s+)?" + _DATA_NOUN + r"\b"
+    r"|\bhow\s+(?:far|long)\s+(?:can|could|do|does|will|would)\s+" + _WE + r"\s+(?:" + _PULL_VERB + r"\s+)?back\b"
+    r"|\bhow\s+much\s+(?:history|historical\s+data|back\s+data|data\s+history|lookback|look\s+back)\b"
+    r"|\bhow\s+many\s+years\s+(?:of\s+(?:data|history)|back|do\s+you\s+(?:have|cover|go)|can\s+(?:we|i|you)|does\s+(?:the\s+data|it))\b"
+    r"|\b(?:what(?:'s|\s+is|\s+are)?|which(?:\s+is)?)\s+(?:the\s+|your\s+)?(?:earliest|oldest|first)\s+(?:date|data|day|year|month|window|period|point|start(?:\s+date)?)\b"
+    r"|\b(?:earliest|oldest)\s+(?:date|data|day|year|month|window|period)\s+(?:available|possible|you\s+(?:have|can\s+pull)|we\s+(?:have|can\s+pull)|i\s+can\s+pull|on\s+file|in\s+the\s+data)\b"
+    r"|\bwhat\s+years?\s+(?:do\s+(?:you|we)\s+(?:have|cover|go\s+back\s+to)|(?:are|is)\s+(?:available|covered|in\s+the\s+data|on\s+file)|can\s+(?:we|i)\s+(?:pull|run|get|look\s+at|see|use))\b"
+    r"|\bwhen\s+(?:does|do|did)\s+(?:the\s+|your\s+|our\s+)?(?:data|history|coverage|tracking|records?|measurement)\s+(?:begin|start)\b"
+    r"|\b(?:data|history|coverage)\s+(?:go(?:es)?|went|reach(?:es)?|extends?|stretch(?:es)?)\s+back\b"
+    r"|\b(?:can|could|do|does|is|are|will|would)\s+" + _WE + r"\s+(?:even\s+|only\s+)?(?:go|look|reach|pull|run|get|see|read)\s+back\s+"
+    r"(?:to\s+(?:(?:19|20)\d{2}|\d+\s+years?|the\s+(?:start|beginning)|before|earlier|then)|that\s+far|further|farther|earlier|as\s+far\s+as|before|past|beyond)\b"
+    # a bare year after the asking frame: "can I pull 2019?", "can we pull 2019 data", "could we run a window in 2020"
+    r"|\b(?:can|could)\s+(?:we|i|you)\s+(?:pull|run|get|see|look\s+at|read|do|use|query|access|have)\s+(?:a\s+|any\s+)?(?:(?:window|read|pull|data|numbers|anything|something|figures)\s+(?:in|for|from|back\s+to|as\s+far\s+back\s+as|starting(?:\s+in)?)\s+|(?:data\s+|numbers\s+)?(?:for|from|in)\s+)?" + _YR20 + r"\b"
+    r"|\bis\s+" + _YR20 + r"\s+(?:available|covered|possible|in\s+(?:the\s+)?(?:data|range|window)|on\s+file|too\s+(?:far|early|old))\b"
+    r"|\b(?:do|does)\s+(?:you|we|the\s+data|it)\s+(?:have|cover|include|carry|hold)\s+(?:any\s+)?(?:data\s+|numbers\s+|history\s+)?(?:for|from|in|back\s+to)?\s*" + _YR20 + r"\b"
+    r"|\b(?:do|does)\s+(?:you|we|the\s+data|it)\s+(?:have|carry|hold|keep)\s+(?:any\s+)?(?:historical|older|earlier|past|back)\s+(?:data|history|windows?|years|reads?)\b"
+    r"|\bwhat\s+(?:is|'s)\s+(?:the\s+|your\s+)?(?:data|history|coverage)\s+(?:range|start\s+date|lookback|look\s+back)\b"
+    r")", re.I)
+
+
+def _floor():
+    """(label, sentence, year) from the one place the earliest date lives."""
+    from . import data_floor as _dfl
+    return _dfl.FLOOR_LABEL, _dfl.SENTENCE, int(str(_dfl.FLOOR)[:4])
+
+
+def _years_named(t):
+    """The years the words name as years (a year that only describes the
+    subject, 'came out in 2019', is not one), ascending."""
+    try:
+        from . import inline_dates as _idw
+        told = set(int(y) for y in _idw.described_years(t))
+    except Exception:
+        told = set()
+    return sorted(set(int(y) for y in _YEAR_TOKEN_RX.findall(t)) - told)
+
+
+def data_history_ask(text):
+    """The words ask how far back the data goes. A year-naming frame that
+    also names a subject ('can we pull 2024 data for Netflix') is work,
+    not this question."""
+    t = _clean(text)
+    if not t or len(t) > _MAX_LEN or not _DATA_HISTORY_RX.search(t):
+        return False
+    if _YEAR_TOKEN_RX.search(t) and _names_a_subject(t):
+        return False
+    return True
+
+
+def data_history_answer(text=''):
+    """One plain line: any window from the floor to today, the house
+    sentence, and what that means for a year the words name."""
+    label, sentence, floor_year = _floor()
+    base = f"You can pull any window from {label} to today. {sentence}"
+    years = _years_named(_clean(text))
+    early = [y for y in years if y < floor_year]
+    if early:
+        return f"{base} A window from {early[0]} would start {label}."
+    from datetime import date as _date
+    covered = [y for y in years if floor_year <= y <= _date.today().year]
+    if covered:
+        span = f"{covered[0]}" if len(covered) == 1 else f"{covered[0]} to {covered[-1]}"
+        return f"{base} {span} is covered."
+    return base
+
+
 def enabled():
     return str(os.environ.get('PM_PRODUCT_FACTS', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
 
@@ -176,7 +275,7 @@ def _twin_pricing_ask(t):
 
 
 def family_of(text):
-    """'overview' | 'bulk_list' | 'valuation' | 'twin_pricing' | None."""
+    """'overview' | 'bulk_list' | 'valuation' | 'twin_pricing' | 'positioning' | 'data_history' | None."""
     if not enabled():
         return None
     t = _clean(text)
@@ -186,6 +285,8 @@ def family_of(text):
         return 'overview'
     if positioning_ask(t):
         return 'positioning'
+    if data_history_ask(t):
+        return 'data_history'
     if _STATUS_RX.search(t):
         return None
     if _twin_pricing_ask(t):
@@ -264,6 +365,9 @@ def answer(text, *, price_fn=None, has_names_list=None, included=False):
     fam = family_of(text)
     if not fam:
         return None
+    if fam == 'data_history':
+        # no price in this answer; the line reads the same for every seat
+        return {'reply': data_history_answer(text), 'followups': [], 'family': fam}
     f = facts(price_fn)
     if included:
         f = dict(f, profile=INCLUDED_PHRASE, bp_base=INCLUDED_PHRASE, bp_control=INCLUDED_PHRASE)
@@ -323,3 +427,20 @@ def answer(text, *, price_fn=None, has_names_list=None, included=False):
              f"Every data answer comes with a CSV you can download or have emailed." + lands)
     return {'reply': reply, 'followups': ['Run a profile', 'Value a brand partnership', 'Build a Flywheel', 'How do I pull profiles for a list?'],
             'family': fam}
+
+
+def read_guard(text, *, price_fn=None, username=None):
+    """A question the product facts answer never starts a read and never
+    gets the working-on-it line (Armine Meseldzhyan 2026-11-23: "how
+    back can we pull a window" was handed to the read lane, which
+    promised a job). The read lane and the priced classifier call this
+    before any work: the answer payload to return instead, or None when
+    the words are not one of these questions. Never raises."""
+    try:
+        out = answer(text, price_fn=(price_fn if price_fn is not None else price_fn_for(username)))
+    except Exception:
+        return None
+    if not out:
+        return None
+    return {'success': True, 'action': 'answer', 'reply': out['reply'], 'followups': list(out.get('followups') or []),
+            'offer_deck': False, 'deck_angle': None, 'product_facts': out.get('family') or ''}

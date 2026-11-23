@@ -638,6 +638,14 @@ def classify(text, history=None, ctx=None):
         return None
     if is_product_order(t):
         return None     # a build / journey / cut / deck / valuation order has its own lane and price
+    try:
+        # a question about the product itself (how far back the data goes, what it can do, how a valuation works) is
+        # answered from the product facts, never quoted or run as a read (Armine Meseldzhyan 2026-11-23)
+        from . import product_facts as _pf
+        if _pf.looks_like(t):
+            return None
+    except Exception:
+        pass
     if is_where_watched(t, history, ctx):
         return None     # the free lane (service.py 'where_watched'), never a quote
     if is_adaptation_ask(t):

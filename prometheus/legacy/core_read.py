@@ -122,8 +122,22 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     covering first-party rows."""
     import prometheus_analysis as pma
     import insights_ledger as il
-    _C._pm_ask_hint(route='reasoned_metrics')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
+    # guard: a question the product facts answer never starts a read and never gets the working-on-it line
+    # (Armine Meseldzhyan, Lionsgate, 2026-11-23: "how back can we pull a window" came here, a job was promised and
+    # she was told the answer would come by email; Jenna: "this should have answered her you can go back to jan 1
+    # 2021"). A confirm, a resumed job and the worker running a launched job are past this point on purpose.
+    if not isinstance(panel_confirm, dict) and not isinstance(resume_base, dict) and not inline_job_id:
+        try:
+            from prometheus import product_facts as _pfg
+            _pfg_out = _pfg.read_guard(text, username=_pm_user)
+        except Exception as _fx:
+            _faults.note('core_read.product_facts_guard', _fx)
+            _pfg_out = None
+        if _pfg_out:
+            _C._pm_ask_hint(route='product_facts', outcome='answered')
+            return jsonify(_pfg_out)
+    _C._pm_ask_hint(route='reasoned_metrics')
     _pm_ppu = _C._pm_usage_extras(user)
     # A sizing / cross confirm landed on generate (2026-10-21): charge
     # the quoted price and run the deterministic lane, never a compiled
