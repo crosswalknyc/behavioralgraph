@@ -2634,7 +2634,11 @@
             function fgLeadLine(room) {
                 var g = room.guided || null;
                 if (g) {
-                    if (g.verdict) return '<span class="lead"><b>Verdict:</b> ' + esc(g.verdict) + (g.answer ? '. <span class="rd">' + esc(g.answer) + '</span>' : '') + '</span>';
+                    if (g.verdict) {
+                        // a contest's verdict is the winning option, and the answer often opens on it; say it once
+                        var ans = String(g.answer || ''), dup = !!ans && ans.toLowerCase().indexOf(String(g.verdict).toLowerCase()) === 0;
+                        return '<span class="lead"><b>Verdict:</b> ' + (dup ? esc(ans) : esc(g.verdict) + (ans ? '. <span class="rd">' + esc(ans) + '</span>' : '')) + '</span>';
+                    }
                     if (g.status === 'running') return '<span class="lead mute">' + (g.done || 0) + ' of ' + (g.total || 0) + ' questions answered, the room is still running</span>';
                     if (g.status === 'stopped') return '<span class="lead mute">' + (g.done || 0) + ' of ' + (g.total || 0) + ' questions answered, stopped</span>';
                 }

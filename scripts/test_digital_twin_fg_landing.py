@@ -228,6 +228,9 @@ function landing() { return console_().indexOf('id="dtwFgLanding"') >= 0; }
   var recentArticle = h.slice(h.indexOf('dtw-fgl-room recent'), h.indexOf('</article>', h.indexOf('dtw-fgl-room recent')));
   assert.ok(recentArticle.indexOf('data-sid="room1"') >= 0 && recentArticle.indexOf('Most recent') >= 0 && recentArticle.indexOf('>Continue<i>') >= 0, 'Continue and the marker sit on room1');
   assert.ok(/data-sid="pa1"[\\s\\S]*?<b>Verdict:<\\/b> Leaning yes\\. <span class="rd">Six in ten would pay for a year\\.<\\/span>/.test(h), 'the Predictive Analytics entry reads its verdict');
+  // a contest's verdict is the winning option and the answer opens on it: said once
+  var saved0 = S.runs; S.runs = JSON.parse(JSON.stringify(saved0)); S.runs[0].rooms[1].guided.verdict = 'A new weeknight live sports package'; S.runs[0].rooms[1].guided.answer = 'A new weeknight live sports package is the clear pick at 55.7%.';
+  assert.ok(/<b>Verdict:<\\/b> A new weeknight live sports package is the clear pick at 55\\.7%\\.<\\/span>/.test(fgLandingHtml()), 'the winning option is not said twice'); S.runs = saved0;
   assert.ok(/data-sid="pa1"[\\s\\S]*?tag pa">Predictive Analytics</.test(h) && /data-sid="pa1"[\\s\\S]*?<button type="button" class="t"[^>]*>Will they pay for a year\\?</.test(h), 'the report is marked and titled by its goal');
   assert.ok(/data-sid="room1"[\\s\\S]*?<b>Lead:<\\/b> Price, 50\\.0%/.test(h), 'a room reads its latest lead');
   assert.ok(/data-sid="empty1"[\\s\\S]*?No question asked yet/.test(h), 'an empty room says so and never takes Continue');
