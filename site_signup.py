@@ -111,6 +111,23 @@ _DASHBOARD_PREFIXES = (
     "/set-password", "/api/", "/static/",
 )
 
+# Addresses from the site before this one that search engines and the AI
+# assistants still cite (the 2026-11-23 AEO baseline saw /home-2 cited
+# five times, and it answered 404). Each sends a permanent redirect to
+# the page that replaced it so the old address keeps working and its
+# standing moves to the new one. Extensionless spellings of a live page
+# (/optout, /privacy-policy-1) already resolve in _safe_site_file.
+LEGACY_REDIRECTS = {
+    "/home": "/",
+    "/home-1": "/",
+    "/home-2": "/",
+    "/what-we-do": "/products.html",
+    "/parentalconsent": "/parental-consent.html",
+    "/about-us": "/company.html",
+    "/our-panel": "/panel.html",
+    "/take-action": "/company.html#contact",
+}
+
 
 def _request_host() -> str:
     return (request.host or "").split(":")[0].lower().rstrip(".")
@@ -182,6 +199,9 @@ def serve_marketing_host():
         bare = prefix.rstrip("/")
         if path == bare or path.startswith(prefix):
             return redirect(DASHBOARD_ORIGIN + path + qs, code=302)
+    legacy = LEGACY_REDIRECTS.get(path.rstrip("/").lower() or "/")
+    if legacy:
+        return redirect(CANONICAL_ORIGIN + legacy, code=301)
     return _safe_site_file(path)
 
 
