@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Download Crosswalk IQ</title>
-    <meta name="description" content="Download the Crosswalk IQ desktop companion app for macOS or Windows.">
+    <title>{{ heading }}</title>
+    <meta name="description" content="{{ subtitle }}">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -167,12 +167,9 @@
 <body>
     <div class="wrap">
         <div class="card">
-            <div class="brand">/// CROSSWALK IQ</div>
-            <h1>Download the desktop app</h1>
-            <p class="subtitle">
-                The Crosswalk IQ companion app runs quietly in the background
-                and keeps you signed into your dashboard.
-            </p>
+            <div class="brand">/// {{ brand }}</div>
+            <h1>{{ heading }}</h1>
+            <p class="subtitle">{{ subtitle }}</p>
 
             <a id="primaryDownload" class="primary-btn" href="#">
                 <svg id="primaryIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -185,6 +182,9 @@
                 <span id="secondaryHint">Or download for another platform:</span>
                 <a id="secondaryLink" href="#">Windows</a>
             </p>
+            <p class="secondary" id="intelRow" hidden>
+                <a id="intelLink" href="#">Download for Intel Mac</a>
+            </p>
 
             <div class="meta">
                 <div class="meta-row"><span>Version</span><strong>{{ version }}</strong></div>
@@ -192,39 +192,20 @@
                 <div class="meta-row"><span>Windows</span><strong>10 / 11 (64-bit)</strong></div>
             </div>
 
-            <!--
-              First-run bypass instructions. We ship unsigned installers
-              until Apple/Microsoft code-signing certs are provisioned, so
-              new users hit Gatekeeper (macOS) / SmartScreen (Windows) on
-              first launch. Both sections are hidden by default; the JS
-              at the bottom reveals whichever one matches the detected OS
-              so we don't clutter the page for users on the "wrong" OS.
-              Once the installers are signed + notarized this whole block
-              can be deleted.
-            -->
+            {% if show_mac_trouble %}
             <details class="trouble" id="troubleMac" hidden>
                 <summary>Trouble opening on macOS?</summary>
                 <div class="trouble-body">
-                    <p>If macOS shows <em>"Apple could not verify CrosswalkIQ-Mac.pkg is free of malware"</em>, that's Gatekeeper's default warning for apps not yet notarized by Apple. The installer is safe; here's how to open it:</p>
+                    <p>If macOS says it could not verify <code>{{ mac_file_label }}</code>, open it from System Settings.</p>
                     <ol>
-                        <li>Click <strong>Done</strong> on the warning (not "Move to Trash").</li>
-                        <li>Open <strong>System Settings → Privacy &amp; Security</strong>.</li>
-                        <li>Scroll to the bottom. You'll see a line about the blocked file with an <strong>Open Anyway</strong> button. Click it and authenticate with Touch ID or your password.</li>
-                        <li>Double-click <code>CrosswalkIQ-Mac.pkg</code> again. Click <strong>Open</strong> on the confirmation dialog and the installer will run normally.</li>
+                        <li>Click <strong>Done</strong> on the warning (not Move to Trash).</li>
+                        <li>Open <strong>System Settings, Privacy &amp; Security</strong>.</li>
+                        <li>Scroll to the bottom. Click <strong>Open Anyway</strong> next to the blocked file.</li>
+                        <li>Double-click <code>{{ mac_file_label }}</code> again and click <strong>Open</strong>.</li>
                     </ol>
                 </div>
             </details>
-            <details class="trouble" id="troubleWin" hidden>
-                <summary>Trouble opening on Windows?</summary>
-                <div class="trouble-body">
-                    <p>If Windows shows <em>"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting"</em>, that's the default warning for apps not yet signed with a Microsoft-recognized certificate. The installer is safe; here's how to open it:</p>
-                    <ol>
-                        <li>Click <strong>More info</strong> on the SmartScreen dialog.</li>
-                        <li>Click <strong>Run anyway</strong> at the bottom.</li>
-                        <li>The installer will proceed normally.</li>
-                    </ol>
-                </div>
-            </details>
+            {% endif %}
         </div>
 
         <p class="footer">
@@ -235,21 +216,21 @@
     <script>
         (function () {
             // OS detection: navigator.userAgentData is the modern hint, but
-            // Safari doesn't ship it — fall back to userAgent/platform sniffing.
+            // Safari doesn't ship it. Fall back to userAgent/platform sniffing.
             function detectOS() {
                 var ua = (navigator.userAgent || '').toLowerCase();
                 var plat = (navigator.platform || '').toLowerCase();
                 if (/win/.test(plat) || /windows/.test(ua)) return 'windows';
                 if (/mac/.test(plat) || /macintosh|mac os x/.test(ua)) return 'mac';
                 // iPad now reports macOS in UA; still steer them to Mac since
-                // the pkg installer doesn't run on iPad regardless — but the
-                // download page is honest either way.
+                // the installer does not run on iPad.
                 if (/iphone|ipad|ipod|android/.test(ua)) return 'mobile';
                 return 'unknown';
             }
 
-            var MAC_URL     = {{ mac_url | tojson }};
-            var WINDOWS_URL = {{ windows_url | tojson }};
+            var MAC_URL       = {{ mac_url | tojson }};
+            var WINDOWS_URL   = {{ windows_url | tojson }};
+            var MAC_INTEL_URL = {{ mac_intel_url | tojson }};
             var os = detectOS();
 
             var primary    = document.getElementById('primaryDownload');
@@ -257,16 +238,17 @@
             var secondary  = document.getElementById('secondaryLink');
             var secHint    = document.getElementById('secondaryHint');
             var troubleMac = document.getElementById('troubleMac');
-            var troubleWin = document.getElementById('troubleWin');
+            var intelRow   = document.getElementById('intelRow');
+            var intelLink  = document.getElementById('intelLink');
 
-            // Reveal only the OS-appropriate "Trouble opening?" section
-            // so we don't clutter the page with the wrong bypass steps.
-            function showTrouble(which) {
-                if (which === 'mac' && troubleMac) troubleMac.hidden = false;
-                if (which === 'windows' && troubleWin) troubleWin.hidden = false;
-                if (which === 'both') {
-                    if (troubleMac) troubleMac.hidden = false;
-                    if (troubleWin) troubleWin.hidden = false;
+            function showMacTrouble() {
+                if (troubleMac) troubleMac.hidden = false;
+            }
+
+            function showIntel() {
+                if (MAC_INTEL_URL && intelRow && intelLink) {
+                    intelLink.href = MAC_INTEL_URL;
+                    intelRow.hidden = false;
                 }
             }
 
@@ -275,16 +257,14 @@
                 label.textContent = 'Download for macOS';
                 secondary.href = WINDOWS_URL;
                 secondary.textContent = 'Download for Windows';
-                showTrouble('mac');
+                showMacTrouble();
+                showIntel();
             } else if (os === 'windows') {
                 primary.href = WINDOWS_URL;
                 label.textContent = 'Download for Windows';
                 secondary.href = MAC_URL;
                 secondary.textContent = 'Download for macOS';
-                showTrouble('windows');
             } else if (os === 'mobile') {
-                // Mobile can't install the desktop app; show both options
-                // with a note explaining why the primary button is disabled.
                 primary.href = '#';
                 primary.style.opacity = '0.5';
                 primary.style.cursor = 'not-allowed';
@@ -292,12 +272,14 @@
                 label.textContent = 'Desktop only';
                 secHint.textContent = 'Open this page on your Mac or PC to install. Direct links:';
                 secondary.innerHTML = '<a href="' + MAC_URL + '">macOS</a> · <a href="' + WINDOWS_URL + '">Windows</a>';
+                showIntel();
             } else {
                 primary.href = MAC_URL;
                 label.textContent = 'Download for macOS';
                 secondary.href = WINDOWS_URL;
                 secondary.textContent = 'Download for Windows';
-                showTrouble('both');
+                showMacTrouble();
+                showIntel();
             }
         })();
     </script>

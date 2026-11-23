@@ -5036,46 +5036,93 @@ def public_file(name):
 # ============================================================================
 # DESKTOP APP DOWNLOAD
 # ----------------------------------------------------------------------------
-# Public, no-auth download surface for the Crosswalk IQ desktop app
-# (Mac .pkg / Windows .exe). Files live in a public S3 bucket; we
-# redirect through Flask so:
-#   1. dashboard.crosswalknyc.com/download stays the canonical URL we
-#      hand to people, even if we move off S3 later.
-#   2. we can add per-platform logging / lead capture in one place
-#      without touching client links.
-# The `latest/` prefix gets overwritten each release; the version
-# prefix (e.g. `1.0.0/`) is permanent for auditability.
+# Two public pages, no auth:
+#   /download              dashboard app (Crosswalk IQ companion)
+#   /download/prometheus   Prometheus app
+# Dashboard binaries live in the public S3 bucket. Prometheus binaries
+# live under dashboard-inputs/system/desktop/ and are handed out by
+# /api/prometheus/v1/desktop/download/<platform>.
 # ============================================================================
 
 CROSSWALK_APP_DOWNLOAD = {
-    "version":     "1.0.0",
+    "version":     "1.1.0",
     "s3_base":     "https://crosswalk-downloads.s3.us-east-2.amazonaws.com",
     "mac_key":     "latest/CrosswalkIQ-Mac.pkg",
     "windows_key": "latest/CrosswalkIQ-Windows.exe",
 }
+
+PROMETHEUS_DESKTOP_DOWNLOAD = {
+    "version":   "1.1.0",
+    "mac":       "/api/prometheus/v1/desktop/download/mac",
+    "mac_intel": "/api/prometheus/v1/desktop/download/mac-intel",
+    "windows":   "/api/prometheus/v1/desktop/download/win",
+}
+
 
 def _crosswalk_app_url(platform: str) -> str:
     """Absolute S3 URL for the requested platform ('mac' or 'windows')."""
     key = CROSSWALK_APP_DOWNLOAD["mac_key"] if platform == "mac" else CROSSWALK_APP_DOWNLOAD["windows_key"]
     return f"{CROSSWALK_APP_DOWNLOAD['s3_base']}/{key}"
 
-@app.route('/download')
-def download_page():
-    """Public landing page with OS auto-detection for the Crosswalk IQ desktop app."""
-    return render_template(
-        'download.html',
+
+def _download_page_ctx(which: str) -> dict:
+    """Template vars for download.html. which is 'dashboard' or 'prometheus'."""
+    if which == "prometheus":
+        p = PROMETHEUS_DESKTOP_DOWNLOAD
+        return dict(
+            brand="PROMETHEUS",
+            heading="Download the Prometheus app",
+            subtitle="Ask Prometheus on this computer. Same account as the dashboard.",
+            version=p["version"],
+            mac_url=p["mac"],
+            windows_url=p["windows"],
+            mac_intel_url=p["mac_intel"],
+            mac_file_label="Prometheus-mac.zip",
+            show_mac_trouble=False,
+        )
+    return dict(
+        brand="CROSSWALK",
+        heading="Download the dashboard app",
+        subtitle="The dashboard app keeps you signed in on this computer.",
         version=CROSSWALK_APP_DOWNLOAD["version"],
         mac_url=_crosswalk_app_url("mac"),
         windows_url=_crosswalk_app_url("windows"),
+        mac_intel_url="",
+        mac_file_label="CrosswalkIQ-Mac.pkg",
+        show_mac_trouble=True,
     )
+
+
+@app.route('/download')
+def download_page():
+    """Dashboard app download page. Picks Mac or Windows from the browser."""
+    return render_template('download.html', **_download_page_ctx("dashboard"))
+
+
+@app.route('/download/prometheus')
+def download_prometheus_page():
+    """Prometheus app download page. Picks Mac or Windows from the browser."""
+    return render_template('download.html', **_download_page_ctx("prometheus"))
+
 
 @app.route('/download/mac')
 def download_mac():
     return redirect(_crosswalk_app_url("mac"), code=302)
 
+
 @app.route('/download/windows')
 def download_windows():
     return redirect(_crosswalk_app_url("windows"), code=302)
+
+
+@app.route('/download/prometheus/mac')
+def download_prometheus_mac():
+    return redirect(PROMETHEUS_DESKTOP_DOWNLOAD["mac"], code=302)
+
+
+@app.route('/download/prometheus/windows')
+def download_prometheus_windows():
+    return redirect(PROMETHEUS_DESKTOP_DOWNLOAD["windows"], code=302)
 
 @app.route('/admin')
 @requires_admin
