@@ -133,7 +133,11 @@ def test_fixture_shape_and_digest():
           and line['expected']['never_says'].startswith('Across the full partnership period') and line['reading'] is None and 'candidate_id' not in line)
     committed = (WEB / 'scripts' / 'pm_corpus' / 'fixtures' / 'sanitized_cases.jsonl').read_text(encoding='utf-8')
     keys_committed = set(json.loads(next(l for l in committed.splitlines() if l.startswith('{"id": "fx001"'))).keys())
-    check('its keys are the committed fixtures\' keys plus expected, kind and by', set(line.keys()) - keys_committed <= {'expected', 'kind', 'by', 'note'})
+    check('its keys are the committed fixtures\' keys plus expected, kind, by and the queue row it came from',
+          set(line.keys()) - keys_committed <= {'expected', 'kind', 'by', 'note', 'from_candidate'})
+    plain = F.to_fixture({k: v for k, v in fx.items() if k != 'candidate_id'}, 'fx044', {'route': 'reasoned_metrics', 'outcome': 'answered'})
+    check('a fixture made from a queue row names the row (a minted id, never client text), so a hand commit matches back to the queue; one made from no row names none',
+          line.get('from_candidate') == CAND['id'] and 'candidate_id' not in line and 'from_candidate' not in plain)
     from prometheus import daily_digest as DD
 
     class S3:

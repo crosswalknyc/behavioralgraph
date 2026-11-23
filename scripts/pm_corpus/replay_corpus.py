@@ -7,6 +7,7 @@ before it ships.
     python3 scripts/pm_corpus/replay_corpus.py --corpus latest --baseline ~/.cache/crosswalk_replay/results/<stamp>.json
     python3 scripts/pm_corpus/replay_corpus.py --fixtures            # the committed sanitized set
     python3 scripts/pm_corpus/replay_corpus.py --corpus latest --mode service --limit 200
+    python3 scripts/pm_corpus/replay_corpus.py --corpus queued.jsonl --mode service --strict   # the fixture gate on a file
 
 Two modes, one comparison:
 
@@ -441,7 +442,7 @@ def _entry(case, live, baseline_entry=None):
     return e
 
 
-def summarize(entries, baseline=None):
+def summarize(entries, baseline=None, strict=False):
     by_class = defaultdict(lambda: {k: 0 for k in ('n',) + VERDICTS + ('class_agree',)})
     verdicts = {k: 0 for k in VERDICTS}
     for e in entries:
@@ -509,13 +510,19 @@ def summarize(entries, baseline=None):
             gate['ok'] = False
             gate['reasons'].append(f"{verdicts['fail']} failed replies")
         regressed = [e for e in entries if e['verdict'] == 'regressed']
-        if regressed:
+        if regressed and strict:
+            # the fixture gate (2026-11-23): a fixture whose recorded route regresses fails, the way the
+            # committed set fails its suite; the queued fixtures run under the same rule
+            gate['ok'] = False
+            gate['reasons'].append(f"{len(regressed)} regressed against the recorded route: {', '.join(str(e.get('id')) for e in regressed[:12])}")
+        elif regressed:
             gate['reasons'].append(f"{len(regressed)} regressed against the recorded route (no baseline given; read them)")
     rep['gate'] = gate
+    rep['strict'] = bool(strict)
     return rep
 
 
-def run(cases, *, baseline=None, mode='door', limit=0):
+def run(cases, *, baseline=None, mode='door', limit=0, strict=False):
     cases = list(cases or [])
     if limit:
         cases = cases[:int(limit)]
@@ -526,7 +533,7 @@ def run(cases, *, baseline=None, mode='door', limit=0):
         lives, effects = run_door(cases)
     b_entries = {e.get('id'): e for e in ((baseline or {}).get('entries') or [])}
     entries = [_entry(c, l, b_entries.get(c.get('id'))) for c, l in zip(cases, lives)]
-    rep = summarize(entries, baseline)
+    rep = summarize(entries, baseline, strict=strict)
     rep.update({'mode': mode, 'seconds': int(time.time() - t0), 'side_effects': effects, 'entries': entries,
                 'would_charge': sum(1 for l in lives if l.get('would_charge')),
                 'would_write': sum(1 for l in lives if l.get('would_write'))})
@@ -590,6 +597,7 @@ def main(argv=None):
     ap.add_argument('--classes', default='', help='only cases whose recorded class is in this comma list')
     ap.add_argument('--save', action='store_true', help='write the results file (default when not --fixtures)')
     ap.add_argument('--no-save', action='store_true')
+    ap.add_argument('--strict', action='store_true', help='the fixture gate: a regression against the recorded route fails (no baseline)')
     args = ap.parse_args(argv)
     if args.fetch:
         print('fetched corpus ' + _bc.fetch_from_s3('latest'))
@@ -604,7 +612,7 @@ def main(argv=None):
     if args.baseline:
         with open(os.path.expanduser(args.baseline), encoding='utf-8') as fh:
             baseline = json.load(fh)
-    rep = run(cases, baseline=baseline, mode=args.mode, limit=args.limit)
+    rep = run(cases, baseline=baseline, mode=args.mode, limit=args.limit, strict=args.strict)
     print(render(rep))
     if (args.save or not args.fixtures) and not args.no_save:
         print('results: ' + save(rep))

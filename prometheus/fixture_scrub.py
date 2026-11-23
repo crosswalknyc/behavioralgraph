@@ -327,4 +327,9 @@ def to_fixture(case: dict, fixture_id: str, recorded: Optional[dict] = None) -> 
            'subject': case.get('subject'), 'history': list(case.get('history') or []), 'reading': None,
            'recorded': dict(recorded) if isinstance(recorded, dict) else None, 'seat': 'fx',
            'note': str(case.get('note') or ''), 'expected': dict(case.get('expected') or {}), 'kind': case.get('kind'), 'by': case.get('by')}
+    cid = str(case.get('candidate_id') or case.get('from_candidate') or '').strip()
+    if cid:
+        # the queue row this fixture came from (a minted id, never client text): a fixture later committed by hand is
+        # matched back to its row so the queued replay never runs it twice (2026-11-23)
+        out['from_candidate'] = cid[:40]
     return out

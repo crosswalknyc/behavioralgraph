@@ -114,6 +114,7 @@ _PLAIN_INTENT = {
 _SEVERITY = {'unfinished': 3, 'reversal': 3, 'deck_failure': 3, 'bounce': 2, 'correction': 2, 'misrouted': 2,
              'wizard_captured': 2, 'build_offered': 2, 'which_twice': 1, 'repeat': 1, 'fixture_hand': 1}
 CANDIDATES_INDEX = 'system/pm_replay_corpus/candidates/index.json'
+QUEUED_FIXTURES_LAST = 'system/pm_replay_corpus/queued_fixtures_last.json'    # the last queued-fixture replay (counts only)
 
 
 # ----------------------------------------------------------------- time
@@ -648,6 +649,19 @@ def _fixture_queue(s3, out):
                          f"Candidate {str(r.get('id') or '')} in the fixture queue.", label='staff'))
 
 
+def _fixture_replay(s3):
+    """The last replay of the queued fixtures (the weekly and nightly
+    jobs write system/pm_replay_corpus/queued_fixtures_last.json,
+    2026-11-23): counts and the gate, for the staff line. None when there
+    has been none."""
+    doc = _get(s3, QUEUED_FIXTURES_LAST)
+    if not isinstance(doc, dict) or not doc.get('written_at'):
+        return None
+    out = {k: int(doc.get(k) or 0) for k in ('replayed', 'same', 'drift', 'regressed', 'fail', 'unchecked')}
+    out.update({'ok': bool(doc.get('ok')), 'written_at': str(doc.get('written_at') or '')})
+    return out
+
+
 def collect(day=None, s3=None, ses=None, now=None, since=None, until=None):
     """The window's document. ``day`` (YYYY-MM-DD, UTC) pins one calendar
     day as the older same-day digest did; otherwise the window runs from
@@ -682,6 +696,7 @@ def collect(day=None, s3=None, ses=None, now=None, since=None, until=None):
         _bounces(s3, ses, since, until, items)
         _reversals(s3, since, until, items)
         _fixture_queue(s3, items)
+        doc['fixture_replay'] = _fixture_replay(s3)
     except Exception:
         traceback.print_exc()
     items = _collapse(items)
@@ -793,10 +808,10 @@ def render(doc):
         return ''
     c = counts(doc)
     staff = [it for it in items if it.get('kind') in _STAFF_KINDS]
+    staff_line = _staff_line(staff, doc.get('fixture_replay'), until)
     parts = [f"Prometheus, what went wrong: {span}.",
              f"{len(items)} thing{'s' if len(items) != 1 else ''} to look at, out of {int(doc.get('asks') or 0)} questions from {int(doc.get('users') or 0)} people.", '',
-             'Counts: ' + ', '.join(f"{c[g]} {label}" for g, _k, label in _GROUPS) + '.'
-             + (f" For staff: {len(staff)} fixture candidate{'s' if len(staff) != 1 else ''} for a hand look." if staff else ''), '']
+             'Counts: ' + ', '.join(f"{c[g]} {label}" for g, _k, label in _GROUPS) + '.' + (' ' + staff_line if staff_line else ''), '']
     worst, rest = items[:WORST], items[WORST:]
     parts.append('The worst ten:' if len(items) > WORST else ('The items:' if len(items) > 1 else 'The item:'))
     for i, it in enumerate(worst, 1):
@@ -810,6 +825,24 @@ def render(doc):
                          + (f"  {it['link']}" if it.get('link') else ''))
     parts += ['', 'Nothing in this note went to a user.']
     return '\n'.join(parts)
+
+
+def _staff_line(staff, fixture_replay, until=None):
+    """The staff clause of the Counts line: candidates waiting for a hand
+    look, and how many queued fixtures the last replay ran (2026-11-23),
+    counts only. '' when there is nothing for staff."""
+    bits = []
+    if staff:
+        bits.append(f"{len(staff)} fixture candidate{'s' if len(staff) != 1 else ''} for a hand look.")
+    fr = fixture_replay if isinstance(fixture_replay, dict) else {}
+    n = int(fr.get('replayed') or 0)
+    if n:
+        when = _parse_ts(fr.get('written_at'))
+        recent = bool(when and until and 0 <= (until - when).total_seconds() <= 36 * 3600)
+        where = 'overnight' if recent or not when else f"on {_day_label(when)}"
+        bad = int(fr.get('regressed') or 0) + int(fr.get('fail') or 0)
+        bits.append(f"{n} queued fixture{'s' if n != 1 else ''} replayed {where}, " + ('all passing.' if not bad else f"{bad} regressed."))
+    return ('For staff: ' + ' '.join(bits)) if bits else ''
 
 
 def _covers(doc):
