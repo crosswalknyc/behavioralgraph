@@ -987,7 +987,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"exclusions\": [{\"brand\": \"Hulu\", \"note\": \"excluding current Hulu subscribers\"}, ...] or [] // see SEMANTIC GUARDS #1,\n"
         "  \"universe_mode\": \"churned|sequence\" or null // see SEMANTIC GUARDS #2-3,\n"
         "  \"universe_note\": \"one plain sentence describing the churned/sequence universe\" or null,\n"
-        "  \"country\": \"US\", the country the request scopes to ('UK', 'Canada', 'Germany', ...), or \"Global\" for a worldwide ask // see SEMANTIC GUARDS #6,\n"
+        "  \"country\": \"US\", the country the request scopes to ('UK', 'Canada', 'Germany', ...), or \"Global\" for a worldwide ask (then also \"location_markets\": [{\"market\": \"City, Country\", \"share\": <float>}, ...], the subject's own top world metros, shares summing to 100) // see SEMANTIC GUARDS #6,\n"
         "  \"user_supplied_anchor\": <int or null - a count the USER stated ('we have 2 million subscribers'); see SEMANTIC GUARDS #11>,\n"
         "  \"intensity_note\": \"how an intensity phrase ('binge-watchers', 'superfans') was mapped onto the Avid/TU tiers\" or null,\n"
         "  \"scope_note\": \"how an unmeasurable tier/device scope ('with-ads tier', 'mobile-only') was handled\" or null,\n"

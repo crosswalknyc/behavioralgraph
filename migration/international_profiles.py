@@ -93,7 +93,11 @@ _COUNTRY_ALIASES = {
     "ALL MARKETS": "GLOBAL",
     "GLOBAL FOOTPRINT": "GLOBAL",
     "AROUND THE WORLD": "GLOBAL",
+    "GLOBALLY": "GLOBAL",
+    "ALL COUNTRIES": "GLOBAL",
+    "EVERYWHERE": "GLOBAL",
 }
+GLOBAL = "GLOBAL"
 
 
 def normalize_country(country) -> str:
@@ -113,6 +117,46 @@ def normalize_country(country) -> str:
 def is_international(country) -> bool:
     """True when the (normalized) country is a real non-US market."""
     return normalize_country(country) != "US"
+
+
+def is_global(country) -> bool:
+    """True when the scope is the whole world ('<Subject> - Global')."""
+    return normalize_country(country) == GLOBAL
+
+
+_GLOBAL_NAME_SEGMENT_RE = re.compile(
+    r"^(?:global|worldwide|world-?wide|international)"
+    r"(?:\s+(?:audience|footprint|market|total universe|universe|profile))?$",
+    re.I)
+
+
+def name_is_global(name) -> bool:
+    """True when a deliverable name is a worldwide build: a ' - Global'
+    segment anywhere in its cut chain ('Guinness - Global', 'Guinness -
+    Global - Avid Fan'), or a trailing bare 'Global' / 'Worldwide' token
+    on the entity ('Guinness Global'). A proper name that opens on the
+    word ('Global Citizen', 'International Fencing Federation') is not a
+    scope. The interpret step, the worker and the matching rules read
+    this one rule (Jenna 2026-11-23: labeled '<Subject> - Global')."""
+    nm = re.sub(r"\s+", " ", str(name or "").strip())
+    if not nm:
+        return False
+    parts = [p.strip() for p in nm.split(" - ")]
+    if any(_GLOBAL_NAME_SEGMENT_RE.match(p) for p in parts[1:]):
+        return True
+    head = parts[0].split()
+    return len(head) >= 2 and head[-1].lower() in ("global", "worldwide")
+
+
+def global_display_name(name) -> str:
+    """The deliverable name of a worldwide build: '<Subject> - Global' (the
+    dash form, so it files under its subject the way a cut does; 'Omaze
+    Germany' style names stay for single countries). A name that already
+    carries the marker is returned as is."""
+    nm = re.sub(r"\s+", " ", str(name or "").strip())
+    if not nm or name_is_global(nm):
+        return nm
+    return f"{nm} - Global"
 
 
 # ---------------------------------------------------------------------------

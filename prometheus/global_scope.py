@@ -20,16 +20,51 @@ migration/international_profiles.py.
 """
 from __future__ import annotations
 
-__all__ = ['INTERPRET_RULE_6_GLOBAL', 'INTERPRET_RULE_WHOLE_WORLD', 'DEMO_BUCKETS_NOTE']
+__all__ = ['INTERPRET_RULE_6_GLOBAL', 'INTERPRET_RULE_WHOLE_WORLD', 'DEMO_BUCKETS_NOTE', 'spec_markets']
+
+
+def spec_markets(draft, scrub, subject=''):
+    """The draft's researched world metros as the spec carries them:
+    ``{'location_markets': [{'market': 'City, Country', 'share': float}, ...]}``
+    when the draft holds three or more usable rows, else ``{}``.
+    ``migration.international_profiles.markets_for_spec`` reads the list
+    and lets it win over the generic world list, so a worldwide build
+    shows the subject's own footprint. ``scrub`` is the spec step's own
+    text scrub (chat._spec_from_draft hands its local one in). Never
+    raises."""
+    out = []
+    try:
+        rows = draft.get('location_markets') if isinstance(draft, dict) else None
+        for m in (rows or [])[:60]:
+            if not isinstance(m, dict):
+                continue
+            label = str(m.get('market') or m.get('label') or '').strip()
+            try:
+                share = float(m.get('share'))
+            except (TypeError, ValueError):
+                continue
+            if not label or share <= 0:
+                continue
+            try:
+                label = str(scrub(label, field='location_market', subject=subject, max_len=60, single_line=True) or '').strip()
+            except Exception:
+                label = label[:60]
+            if label:
+                out.append({'market': label, 'share': round(share, 4)})
+    except Exception:
+        return {}
+    return {'location_markets': out} if len(out) >= 3 else {}
 
 DEMO_BUCKETS_NOTE = (
-    "INCOME in US dollars: 'Under $10,000', '$10,000 - $24,999', "
-    "'$25,000 - $49,999', '$50,000 - $99,999', '$100,000+'; EDUCATION: "
-    "'No Formal Qualification', 'Primary School', 'Secondary / High "
-    "School', 'Vocational / Technical', 'Bachelors Degree', 'Postgraduate "
-    "Degree'; ETHNICITY by world region: 'South Asian', 'East Asian', "
-    "'White / European', 'Black / African', 'Hispanic / Latino', "
-    "'Southeast Asian', 'Middle Eastern / North African', 'Mixed / Other'"
+    "INCOME in US dollar equivalents: 'Under US$10,000', 'US$10,000 - "
+    "US$24,999', 'US$25,000 - US$49,999', 'US$50,000 - US$74,999', "
+    "'US$75,000 - US$99,999', 'US$100,000 - US$149,999', 'US$150,000+', "
+    "'Prefer Not to Say'; EDUCATION: 'Secondary School or Less', "
+    "'Vocational or Technical Qualification', 'Bachelors Degree', "
+    "'Masters Degree', 'Doctorate / PhD', 'Prefer Not to Say'; ETHNICITY "
+    "by heritage region: 'Asian Heritage', 'European Heritage', 'African "
+    "Heritage', 'Latin American Heritage', 'Middle Eastern / North "
+    "African Heritage', 'Mixed / Other'"
 )
 
 # appended to SEMANTIC GUARDS #6 (INTERNATIONAL)
@@ -40,10 +75,15 @@ INTERPRET_RULE_6_GLOBAL = (
     "country='Global', subject and name '<Subject> - Global' (the dash "
     "form, e.g. 'Guinness - Global'), universe_anchor = the researched "
     "worldwide audience count (not the US count), tu_demos in the "
-    "worldwide buckets (" + DEMO_BUCKETS_NOTE + "). The deliverable "
-    "carries world cities for LOCATION and global brands and "
-    "publications. A proper name that carries the word ('Global "
-    "Citizen', 'International Fencing Federation') is not a scope.\n"
+    "worldwide buckets (" + DEMO_BUCKETS_NOTE + "), and "
+    "`location_markets`: the subject's own top world metros (25 to 40, "
+    "labeled 'City, Country' such as 'New York, USA', 'London, UK', "
+    "'Berlin, Germany'; shares of its worldwide audience summing to "
+    "100, researched from where the subject really has reach, never "
+    "a generic world list). The deliverable carries those cities for "
+    "LOCATION and global brands and publications. A proper name that "
+    "carries the word ('Global Citizen', 'International Fencing "
+    "Federation') is not a scope.\n"
 )
 
 # appended to the UNIVERSE-QUALIFIER COMPATIBILITY hard rule

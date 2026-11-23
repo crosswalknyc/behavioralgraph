@@ -5079,7 +5079,7 @@ def _spec_from_draft(draft):
     _ctry = str(draft.get('country') or '').strip()
     if _ctry and _ctry.upper() not in ('US', 'USA', 'UNITED STATES'):
         spec['country'] = _scrub(_ctry, field='country', subject=subject,
-                                 max_len=40, single_line=True)
+                                 max_len=40, single_line=True); spec.update(__import__('prometheus.global_scope', fromlist=['spec_markets']).spec_markets(draft, _scrub, subject))   # a worldwide build carries the subject's own researched world metros (2026-11-23)
     if draft.get('intersection_mode') in ('combined', 'separate'):
         spec['intersection_mode'] = draft['intersection_mode']
     if draft.get('intensity_note'):
