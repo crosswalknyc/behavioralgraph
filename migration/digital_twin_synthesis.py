@@ -1857,11 +1857,123 @@ def _index_people(payload: dict) -> dict:
     return {'kinds': int(arch.get('k') or len(groups) or 0), 'noun': str(arch.get('noun') or ''), 'faces': faces, 'shares': shares, 'biggest': biggest, 'reports': reports, 'last_at': last_at}
 
 
+# The Focus Group IQ landing (Jenna 2026-11-23: a fresh click on the tab shows your twins and every past focus group across them)
+# reads the index, never every twin: each entry carries a compact list of the twin's rooms, newest first, capped. Titles, the
+# latest question and the leads pass through the room's own reader scrub before they are written.
+INDEX_ROOMS_CAP = 12
+_VERDICT_WORDS = {'yes': 'Yes', 'lean yes': 'Leaning yes', 'lean no': 'Leaning no', 'no': 'No', 'split': 'Split'}
+_ROOM_FINISHED_STAGES = ('done', 'failed')
+
+
+def _reader_text(s, n: int) -> str:
+    """Reader copy for the index: the room's own scrub (no source names, no
+    banned words, no em or en dashes), the house scrub when the room module
+    is not importable; one line, cut at a word, at most ``n`` characters."""
+    t = re.sub(r'\s+', ' ', str(s or '')).strip()
+    if not t:
+        return ''
+    try:
+        from migration.digital_twin_room import scrub as _room_scrub
+        t = _room_scrub(t)
+    except Exception:
+        try:
+            from migration.digital_twin_copy import strip_calibration_language
+            t = strip_calibration_language(t)
+        except Exception:
+            pass
+        t = scrub_text(t).replace('\u2014', '-').replace('\u2013', '-')
+    t = re.sub(r'\s+', ' ', t).strip()
+    if len(t) > n:
+        cut = t[:n].rsplit(' ', 1)[0].rstrip(' ,;:')
+        t = (cut if len(cut) >= n // 2 else t[:n].rstrip()) + '...'
+    return t
+
+
+def _first_sentences(s, n: int, count: int = 1) -> str:
+    """The first ``count`` sentences of ``s`` (whole sentences, so a read is
+    never cut mid-thought), then the reader scrub and the length cap."""
+    t = re.sub(r'\s+', ' ', str(s or '')).strip()
+    if not t:
+        return ''
+    parts = re.split(r'(?<=[.!?])\s+', t)
+    return _reader_text(' '.join(parts[:max(1, count)]), n)
+
+
+def _question_finished(q: dict) -> bool:
+    return bool(q.get('finished_at')) or str(q.get('stage') or '') in _ROOM_FINISHED_STAGES
+
+
+def _index_room(sess: dict) -> Optional[dict]:
+    """One room as the landing reads it: id, title, when it opened and
+    last moved, how many questions were asked, the latest question, the
+    latest finished question's lead and short read, whether the room is
+    still working, and for a Predictive Analytics room its status and
+    verdict. None for a session with no id."""
+    sid = str(sess.get('id') or '').strip()
+    if not sid:
+        return None
+    qs = [q for q in (sess.get('questions') or []) if isinstance(q, dict) and str(q.get('q') or '').strip()]
+    last = qs[-1] if qs else None
+    finished = [q for q in qs if _question_finished(q) and str(q.get('stage') or '') != 'failed']
+    lead, read_short = None, ''
+    for q in reversed(finished):
+        dist = [d for d in (q.get('distribution') or []) if isinstance(d, dict) and d.get('label') is not None]
+        if dist:
+            top = max(dist, key=lambda d: float(d.get('pct') or 0))
+            try:
+                lead = {'label': _reader_text(top.get('label'), 120), 'pct': round(float(top.get('pct') or 0), 1)}
+            except Exception:
+                lead = {'label': _reader_text(top.get('label'), 120), 'pct': 0.0}
+            read_short = _first_sentences(q.get('read_short') or q.get('read') or '', 240, 1)
+            break
+    g = sess.get('guided') if isinstance(sess.get('guided'), dict) else None
+    guided = None
+    if g is not None:
+        plan = g.get('plan') if isinstance(g.get('plan'), dict) else {}
+        out = g.get('outcome') if isinstance(g.get('outcome'), dict) else None
+        call = str((out or {}).get('call') or '').strip()
+        guided = {'status': str(g.get('status') or ''), 'goal': _reader_text(plan.get('goal') or '', 200),
+                  'done': int(g.get('done') or 0), 'total': int(g.get('total') or len(plan.get('questions') or []) or 0),
+                  'verdict': _reader_text(_VERDICT_WORDS.get(call.lower(), call), 80) if call else '',
+                  'answer': _first_sentences((out or {}).get('answer') or '', 240, 1) if out else ''}
+    stamps = [str(sess.get('updated_at') or ''), str(sess.get('created_at') or '')]
+    if last:
+        stamps += [str(last.get('finished_at') or ''), str(last.get('asked_at') or '')]
+    if g is not None:
+        stamps.append(str(g.get('finished_at') or ''))
+    return {'id': sid, 'title': _reader_text(sess.get('title') or '', 140) or 'Room',
+            'created_at': str(sess.get('created_at') or ''), 'updated_at': max(s for s in stamps) if any(stamps) else '',
+            'questions': len(qs), 'last_q': _reader_text(last.get('q') if last else '', 200),
+            'lead': lead, 'read_short': read_short,
+            'working': bool(qs) and not _question_finished(last),
+            'guided': guided, 'created_by': str(sess.get('created_by') or ''), 'company': str(sess.get('company') or '')}
+
+
+def _index_rooms(payload: dict, cap: int = INDEX_ROOMS_CAP) -> list:
+    """The twin's focus-group rooms for the index, newest activity first,
+    at most ``cap`` of them. Pilot Testing rooms are a different product
+    and stay out."""
+    out = []
+    for sess in payload.get('panel_sessions') or []:
+        if not isinstance(sess, dict):
+            continue
+        try:
+            row = _index_room(sess)
+        except Exception as e:
+            print(f"[twin] index room skipped (non-fatal): {e}")
+            row = None
+        if row:
+            out.append(row)
+    out.sort(key=lambda r: (r.get('updated_at') or '', r.get('created_at') or ''), reverse=True)
+    return out[:max(0, int(cap))]
+
+
 def index_entry(key: str, payload: dict) -> dict:
     m = payload.get('meta') or {}
     people = _index_people(payload)
     return {'key': key, 'name': m.get('name'), 'subject': m.get('subject'), 'subject_kind': m.get('subject_kind'), 'ip_related': bool(m.get('ip_related')),
             'kinds': people['kinds'], 'noun': people['noun'], 'faces': people['faces'], 'shares': people['shares'], 'biggest': people['biggest'], 'reports': people['reports'], 'last_at': people['last_at'],
+            'rooms': _index_rooms(payload),
             'format': m.get('format'), 'platform_home': m.get('platform_home'), 'size_us': m.get('size_us'), 'created_by': m.get('created_by'),
             'created_at': m.get('created_at'), 'updated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'window_start': m.get('window_start'), 'window_end': m.get('window_end'),
@@ -2013,7 +2125,7 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
     return E.simulate(twin, scenario, read_fn=read_fn, created_by=created_by)
 
 
-__all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'remove_from_index', 'index_entry', 'strip_ip_lifetime_value', 'corpus_anchors',
+__all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'remove_from_index', 'index_entry', 'INDEX_ROOMS_CAP', 'strip_ip_lifetime_value', 'corpus_anchors',
            'research_anchors', 'profile_identity', 'find_profile_key', 'hydrate_identity_from_profile', 'queue_profile_for_twin',
            'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
            'demographic_spec', 'demographic_name', 'demographic_identity', 'demographic_shares_error', 'shares_words', 'shares_summary', 'shares_notice', 'spec_as_built', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',

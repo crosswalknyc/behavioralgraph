@@ -192,7 +192,7 @@
             // Every other product view; hidden when this one shows (the dropdown guard does the same on a user pick).
             var HIDE_IDS = ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'flywheelIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView', 'microdramasIQView', 'trendsIQView', 'impactIQView', 'brandTrackingIQView'];
             // Where the reader was (twin and tab) survives a reload, like the product itself (localStorage['bg_last_product']).
-            function remember() { try { localStorage.setItem('bg_dtw_last', JSON.stringify({ key: S.key || '', tab: S.tab || 'twins', glo: S.glOption || 'script', sid: S.session ? S.session.id : '', pid: S.pilot ? S.pilot.id : '' })); } catch (_) {} }
+            function remember() { try { localStorage.setItem('bg_dtw_last', JSON.stringify({ key: S.key || '', tab: S.tab || 'twins', glo: S.glOption || 'script', sid: S.session ? S.session.id : '', pid: S.pilot ? S.pilot.id : '', land: !!(S.tab === 'panel' && !S.session && S.fgLanding) })); } catch (_) {} }
             function isPiTab(tab) { return tab === 'greenlight' || !!PI_HOST[tab]; }
             function remembered() { try { var d = JSON.parse(localStorage.getItem('bg_dtw_last') || 'null'); return d && typeof d === 'object' ? d : null; } catch (_) { return null; } }
             // A deep link: ?view=digitalTwinsIQ&twin=<key>&tab=<tab>, or #digitalTwinsIQ?twin=<key>&tab=<tab>. Read once per page load.
@@ -229,14 +229,16 @@
                     else if (hint && hint.tab) { dtwTab(hint.tab); }
                     else if (fromUrl && known(fromUrl.twin_key)) { dtwOpen(fromUrl.twin_key, null, fromUrl.room || null, null, fromUrl.tab || (fromUrl.room ? 'panel' : null)); }
                     else if (fromUrl && fromUrl.tab) { if (!S.twin && S.runs.length === 1) dtwOpen(S.runs[0].key, null, null, null, fromUrl.tab); else dtwTab(fromUrl.tab); }
-                    else if (mem && known(mem.key)) { if (mem.glo && GL_OPTIONS.indexOf(mem.glo) >= 0) S.glOption = mem.glo; dtwOpen(mem.key, null, isPiTab(mem.tab) ? (mem.pid || mem.sid) : mem.sid, null, mem.tab || null); }
+                    else if (mem && known(mem.key)) { if (mem.glo && GL_OPTIONS.indexOf(mem.glo) >= 0) S.glOption = mem.glo; var memSid = isPiTab(mem.tab) ? (mem.pid || mem.sid) : mem.sid; dtwOpen(mem.key, null, memSid, null, mem.tab || null).then(function() { if (mem.tab === 'panel' && mem.land && !memSid && !S.session) dtwTab('panel'); }); }   // a reload after leaving a room lands again (2026-11-23)
                     else if (!S.twin && S.runs.length === 1) { dtwOpen(S.runs[0].key, null, (mem && mem.key === S.runs[0].key && mem.sid) || null, null, (mem && mem.tab) || null); }
                     else if (mem && mem.tab) { dtwTab(mem.tab); }
                     if (fromUrl && fromUrl.record) { setTimeout(function() { try { dtwRecordOpen(true); } catch (_) {} }, 250); }
                 });
                 if (!S.howto) { api('/how-to').then(function(d) { S.howto = d; renderHowto(); renderEmptyAll(); }).catch(function() {}); }
             };
-            window.dtwTab = function(tab) {
+            // via (2026-11-23): '' for a click on the tab itself; 'open' when a twin, a room or a deep link brought the reader here. A fresh click
+            // on Focus Group IQ with no room open lands on the landing (your twins and every past focus group); arriving at a room never does.
+            window.dtwTab = function(tab, via) {
                 if (tab === 'howto') { dtwHowtoOpen(true); return; }
                 if (GL_OPTIONS.indexOf(tab) >= 0) { S.glOption = tab; tab = 'greenlight'; }
                 // Launch holds the plan and the Spend Engine (2026-11-03): 'spend' lands on Launch with that option picked
@@ -257,7 +259,7 @@
                 syncInputCards();
                 syncFgBody();
                 try { piFocusScroll(); } catch (_) {}
-                if (tab === 'panel') { renderPanelSessions(); if (!S.session || !el('dtwFgHero')) renderPanelConsole(); else fgShown(); }
+                if (tab === 'panel') { if (!via) S.fgLanding = !S.session; renderPanelSessions(); if (!S.session || !el('dtwFgHero')) renderPanelConsole(); else fgShown(); }
                 var piT = tab === 'greenlight' ? (GL_OPTIONS.indexOf(S.glOption) >= 0 ? S.glOption : 'script') : (PI_HOST[tab] ? tab : '');
                 if (piT) { S.piTab = piT; if (S.pilot && piTabFor(S.pilot.mode) !== piT) { S.pilot = null; } if (tab === 'greenlight') syncGreenlightOptions(); renderPilotConsole(); }
                 if (tab === 'norms') { renderNormsTab(); }
@@ -906,6 +908,7 @@
                       S.isStaff = !!d.is_staff; S.canAssign = !!d.can_assign; S.companies = d.companies || []; S.company = d.company || ''; }
                 catch (e) { if (el('dtwLibrary')) el('dtwLibrary').innerHTML = '<div class="dtw-card dtw-muted" style="grid-column:1/-1">' + esc(e.message) + '</div>'; return []; }
                 renderLibrary(); fillTwinSelects(); fillCompanyFilter(); renderPrices(); syncInputCards();
+                if (S.tab === 'panel' && !S.session && S.fgLanding && el('dtwFgLanding')) renderPanelConsole();   // the landing reads the list; a reload redraws it
                 return S.runs;
             };
             function companyOptions(selected) {
@@ -1017,7 +1020,7 @@
             };
             window.dtwTwinRoom = async function(key) {
                 if (S.key !== key) { try { await dtwOpen(key, null, null, null, 'panel'); } catch (_) {} }
-                else dtwTab('panel');
+                else { S.fgLanding = false; dtwTab('panel', 'open'); }   // from the Twins page or the landing's Start: the twin's own room console under the New room drawer, never the landing
                 try { dtwNewRoomOpen(true); } catch (_) {}
             };
             window.dtwTwinPilot = async function(key) {
@@ -1361,6 +1364,7 @@
                 var switched = S.key && S.key !== key;
                 if (switched) S.twinPage = false;
                 S.twin = d.twin; S.key = key; S.summary = d.summary; S.openRun = runId || null; S.session = null; S.pilot = null; S.plan = null; S.spendDay = 1;
+                S.fgLanding = false;   // a twin opened on the tab (a room, a deep link, a session email, the Twins page) shows the room or the twin's own console, never the landing
                 S.twin.runs = productRuns(S.twin);
                 clearPortraitTimers(); try { dtwSeatOpen(null); } catch (_) {}
                 fillTwinSelects(); renderSpine(); renderLibrary(); renderTwin(); syncInputCards();
@@ -1378,7 +1382,7 @@
                 if (S.pilot) { S.piTab = piTabFor(S.pilot.mode); }
                 if (S.pilot || el('dtwPiConsole')) renderPilotConsole();
                 if (S.plan) renderSpend();
-                dtwTab(tab || (S.pilot ? piTabFor(S.pilot.mode) : S.session ? 'panel' : S.plan ? 'spend' : run ? ({'launch': 'launch', 'spend': 'spend'}[run.kind] || 'twins') : 'twins'));
+                dtwTab(tab || (S.pilot ? piTabFor(S.pilot.mode) : S.session ? 'panel' : S.plan ? 'spend' : run ? ({'launch': 'launch', 'spend': 'spend'}[run.kind] || 'twins') : 'twins'), 'open');
                 try { if (typeof _pmWarmScreen === 'function') _pmWarmScreen(); } catch (_) {}
             };
             window.dtwAsk = function() {
@@ -2542,9 +2546,9 @@
                 return acts;
             }
             function syncFgActs() {
-                var on = S.tab === 'panel', room = on && !!S.session;
+                var on = S.tab === 'panel', room = on && !!S.session, landing = on && !room && !!S.fgLanding;
                 var spine = el('dtwFgActs');
-                if (spine) { spine.hidden = !on || room; if (on && !room) spine.innerHTML = actsHtml(null); }
+                if (spine) { spine.hidden = !on || room || landing; if (on && !room && !landing) spine.innerHTML = actsHtml(null); }   // the landing carries its own Start; Rooms and New room belong to an open twin
                 var dock = el('dtwFgDockActs');
                 if (dock) dock.innerHTML = room ? actsHtml(S.session) : '';
             }
@@ -2593,6 +2597,167 @@
                 out += '<div class="dtw-fg-land-pm"><div class="k">Or say it to Prometheus</div>' + examples.map(function(x) { return '<button type="button" class="dtw-fg-chip" onclick="dtwChatFill(\'' + esc(jsq(x)) + '\')">' + esc(x) + '</button>'; }).join('') + '</div>';
                 return out + '</div>';
             }
+            // ---- the Focus Group IQ landing (Jenna 2026-11-23: 'when you click on focus group it should take you to a main focus group landing
+            // page where you can see your twins and open one, see old ones, etc... but if you click focus group from the twins page it would
+            // open an actual room, not tak you to the landing. landig would just be a fresh click on it'; her pick of the mockups: FG10d with
+            // the twins on the left and the groups on the right). Left: the Start (the Select twin dropdown, Build new twin group first, then
+            // Open a room) above every twin the seat can see as a text row with its archetypes bar, its people, its focus-group count and
+            // Open a room. Right: every past focus group across those twins, newest first, numerals and hairlines: title, twin, date,
+            // questions, the latest lead or the verdict, Most recent and Continue on the newest room that can still be picked back up, Open
+            // on each. It reads the library index alone (every entry carries its rooms, capped and scrubbed on the server); no twin is loaded.
+            S.fgLanding = false; S.fgPick = ''; S.fgAll = false;
+            // entries on the landing before Show all
+            var FGL_SHOW = 24;
+            function fgContinuable(room) { return !room.guided && Number(room.questions || 0) > 0; }
+            function fgRoomsAll() {
+                var out = [];
+                (S.runs || []).forEach(function(r) { (r.rooms || []).forEach(function(room) { if (room && room.id) out.push({ room: room, run: r }); }); });
+                out.sort(function(a, b) { return String(b.room.updated_at || b.room.created_at || '').localeCompare(String(a.room.updated_at || a.room.created_at || '')); });
+                return out;
+            }
+            function fgMostRecent(items) { return items.filter(function(it) { return fgContinuable(it.room); })[0] || null; }
+            function fgByLine(r) { var q = twinQualifier(r); var m = / by (.+)$/.exec(q); return m ? m[1] : ''; }
+            function fgTwinLabel(r) { var by = fgByLine(r); return esc(r.name || r.subject || '') + (by ? ' <span class="by">(' + esc(by) + ')</span>' : ''); }
+            function fgRoomCount(r) { var n = (r.rooms || []).length; if (S.isStaff) n = Math.max(n, Number(r.panel_sessions || 0)); return n; }
+            function fgBar(r) {
+                var sh = (r.shares || []).map(Number).filter(function(v) { return v > 0; });
+                return '<div class="bar" aria-hidden="true">' + (sh.length ? sh.map(function(v, i) { return '<span style="flex:' + Math.max(0.25, v).toFixed(2) + ';background:' + (i < 10 ? hueFor(i) : 'var(--dtw-track)') + '"></span>'; }).join('') : '<span style="flex:1;background:var(--dtw-track)"></span>') + '</div>';
+            }
+            function fgTwinRow(r) {
+                var kn = esc(jsq(r.key)), n = fgRoomCount(r), q = twinQualifier(r);
+                return '<div class="dtw-fgl-twin" data-key="' + esc(r.key) + '"><div class="row"><span class="nm">' + esc(r.name || r.subject || 'this twin') + (q ? '<span class="built">' + esc(q) + '</span>' : '') + '</span>'
+                    + '<button type="button" class="dtw-lb link room" onclick="dtwTwinRoom(\'' + kn + '\')">Open a room<i>&rarr;</i></button></div>'
+                    + fgBar(r)
+                    + '<div class="facts">' + (r.kinds ? r.kinds + ' archetypes' + SEP_TXT : '') + (r.size_us ? fmtN(r.size_us) + ' people' : '') + SEP_TXT + n + (n === 1 ? ' focus group' : ' focus groups') + '</div></div>';
+            }
+            // the entry: one past focus group, the way back in on the right
+            function fgLeadLine(room) {
+                var g = room.guided || null;
+                if (g) {
+                    if (g.verdict) return '<span class="lead"><b>Verdict:</b> ' + esc(g.verdict) + (g.answer ? '. <span class="rd">' + esc(g.answer) + '</span>' : '') + '</span>';
+                    if (g.status === 'running') return '<span class="lead mute">' + (g.done || 0) + ' of ' + (g.total || 0) + ' questions answered, the room is still running</span>';
+                    if (g.status === 'stopped') return '<span class="lead mute">' + (g.done || 0) + ' of ' + (g.total || 0) + ' questions answered, stopped</span>';
+                }
+                var ld = room.lead || null;
+                if (ld && ld.label) return '<span class="lead"><b>Lead:</b> ' + esc(ld.label) + ', ' + pct(ld.pct, 1) + (room.read_short ? ' <span class="rd">' + SEP_TXT + esc(room.read_short) + '</span>' : '') + '</span>';
+                if (room.working) return '<span class="lead mute">The room is working on the first question</span>';
+                return '<span class="lead mute">No question asked yet</span>';
+            }
+            function fgEntry(it, i, recent) {
+                var room = it.room, r = it.run, kn = esc(jsq(r.key)), sid = esc(jsq(room.id)), g = room.guided || null, n = Number(room.questions || 0);
+                var title = (g && g.goal) ? g.goal : (room.title || 'Room');
+                var tags = (g ? '<span class="tag pa">Predictive Analytics</span>' : '') + (recent ? '<span class="tag recent">Most recent</span>' : '') + (room.working ? '<span class="tag"><span class="dtw-fg-dot" style="background:var(--dtw-accent)"></span>working</span>' : '');
+                var open = 'dtwLibOpenRoom(\'' + kn + '\', \'' + sid + '\')';
+                return '<article class="dtw-fgl-room' + (recent ? ' recent' : '') + (g ? ' pa' : '') + '" data-key="' + esc(r.key) + '" data-sid="' + esc(room.id) + '">'
+                    + '<span class="no">' + pad2(i) + '</span>'
+                    + '<div class="main"><div class="trow"><button type="button" class="t" title="Open this focus group" onclick="' + open + '">' + esc(title) + '</button>' + tags + '</div>'
+                    + '<div class="meta">' + fgTwinLabel(r) + SEP_TXT + esc(fmtDay(room.updated_at || room.created_at)) + SEP_TXT + n + (n === 1 ? ' question' : ' questions') + '</div>'
+                    + fgLeadLine(room) + '</div>'
+                    + '<button type="button" class="dtw-lb go room" onclick="' + open + '">' + (recent ? 'Continue' : 'Open') + '<i>&rarr;</i></button></article>';
+            }
+            function fgLandingHtml() {
+                var runs = S.runs || [], items = fgRoomsAll(), recent = fgMostRecent(items), pick = runs.filter(function(r) { return r.key === S.fgPick; })[0] || null;
+                if (!pick) S.fgPick = '';
+                var dd = fgDd();
+                var out = '<div class="dtw-fgl" id="dtwFgLanding"><div class="dtw-fgl-side">';
+                // the Start
+                out += '<span class="dtw-cap room">Start a focus group</span><div class="dtw-fgl-start">' + dd.html(pick ? pick.key : '', runs, 'Select twin')
+                    + '<button type="button" class="dtw-lb go room big" id="dtwFgStartBtn"' + (pick ? '' : ' disabled') + ' onclick="dtwFgStart()">Open a room<i>&rarr;</i></button>'
+                    + '<div class="note" id="dtwFgStartNote">' + (runs.length ? 'The first option in the list builds a new twin group.' : 'No twins yet. The first option in the list builds one.') + '</div></div>';
+                // the twins
+                out += '<div class="dtw-fgl-head"><span class="dtw-cap">Your twins</span><span class="n">' + (runs.length || '') + '</span></div><div class="dtw-fgl-twins">'
+                    + (runs.length ? runs.map(fgTwinRow).join('') : '<div class="dtw-fgl-empty">No twins yet. A twin is an audience you can put in a room and ask. Build the first one from a profile we hold, a group you shape, or a list of links.<div><button type="button" class="dtw-lb go pa" onclick="dtwBuildTwin()">Build the first twin<i>&rarr;</i></button></div></div>')
+                    + '<div class="end"></div></div></div>';
+                // the past focus groups
+                var shown = S.fgAll ? items : items.slice(0, FGL_SHOW), more = items.length - shown.length;
+                out += '<div class="dtw-fgl-main"><div class="dtw-fgl-head"><span class="dtw-cap">Past focus groups</span><span class="n">' + (items.length ? items.length + ', newest first.' + (recent ? ' The most recent room is marked; Continue picks it back up.' : '') : '') + '</span></div><div class="dtw-fgl-rooms">';
+                if (!items.length) out += '<div class="dtw-fgl-empty">' + (runs.length ? 'No focus groups yet. Pick a twin on the left and open the first room; it lands here when you ask the first question.' : 'Focus groups land here once a twin has one.') + '</div>';
+                else shown.forEach(function(it, i) { out += fgEntry(it, i + 1, !!recent && it === recent); });
+                if (more > 0) out += '<div class="dtw-fgl-more"><button type="button" class="dtw-lb link" onclick="dtwFgShowAll()">Show all ' + items.length + '<i>&rarr;</i></button></div>';
+                return out + '<div class="end"></div></div></div></div>';
+            }
+            window.dtwFgShowAll = function() { S.fgAll = true; renderPanelConsole(); };
+            window.dtwFgStart = function() {
+                if (!S.fgPick) { var n = el('dtwFgStartNote'); if (n) n.textContent = 'Pick a twin first.'; fgDd().toggle(true); return null; }
+                return dtwTwinRoom(S.fgPick);
+            };
+            // the Start's dropdown: the Predictive Analytics start's control as a reusable piece (ids by prefix): Build new twin group first, a
+            // hairline, every twin the seat can see in one row shape; a search box once the list is long; arrows, Enter, Escape, Home, End, type
+            // to jump; a click outside closes it
+            var DDS = {};
+            window.dtwDd = function(prefix) { return DDS[prefix]; };
+            function ddMake(prefix, onPick) {
+                if (DDS[prefix]) return DDS[prefix];
+                var d = { open: false, active: -1, typed: '', typedAt: 0 };
+                var id = function(part) { return prefix + 'Dd' + part; };
+                d.ids = { dd: id(''), btn: id('Btn'), menu: id('Menu'), list: id('List'), find: id('Find'), none: id('None') };
+                d.opts = function() { var l = el(d.ids.list); return l ? Array.prototype.slice.call(l.querySelectorAll('.dtw-pa-dd-opt')).filter(function(o) { return !o.hidden; }) : []; };
+                d.mark = function(i) {
+                    var opts = d.opts(); if (!opts.length) { d.active = -1; return; }
+                    d.active = Math.max(0, Math.min(opts.length - 1, i));
+                    opts.forEach(function(o, j) { o.classList.toggle('active', j === d.active); });
+                    var l = el(d.ids.list); if (l) l.setAttribute('aria-activedescendant', opts[d.active].id);
+                    try { opts[d.active].scrollIntoView({ block: 'nearest' }); } catch (_) {}
+                };
+                d.toggle = function(on) {
+                    var dd = el(d.ids.dd), m = el(d.ids.menu), b = el(d.ids.btn); if (!dd || !m || !b) return;
+                    on = (on == null) ? !d.open : !!on;
+                    d.open = on; m.hidden = !on; dd.classList.toggle('open', on); b.setAttribute('aria-expanded', on ? 'true' : 'false');
+                    if (on) {
+                        var f = el(d.ids.find); if (f) { f.value = ''; d.filter(''); }
+                        var opts = d.opts(), sel = opts.map(function(o) { return o.classList.contains('on'); }).indexOf(true);
+                        d.mark(sel >= 0 ? sel : (opts.length > 1 && opts[0].getAttribute('data-build') ? 1 : 0));
+                        try { (f || el(d.ids.list)).focus(); } catch (_) {}
+                    } else { d.active = -1; try { b.focus(); } catch (_) {} }
+                };
+                d.pick = function(key) { d.toggle(false); if (key === PA_BUILD_KEY) { dtwBuildOpen(true); return; } onPick(key); };
+                d.hover = function(o) { var opts = d.opts(), i = opts.indexOf(o); if (i >= 0 && i !== d.active) d.mark(i); };
+                d.filter = function(q) {
+                    q = String(q || '').toLowerCase().trim();
+                    var l = el(d.ids.list); if (!l) return;
+                    Array.prototype.slice.call(l.querySelectorAll('.dtw-pa-dd-opt')).forEach(function(o) { o.hidden = !!q && !o.getAttribute('data-build') && String(o.getAttribute('data-hay') || '').indexOf(q) < 0; });
+                    var none = el(d.ids.none);
+                    if (!d.opts().length) { if (!none) { none = document.createElement('div'); none.id = d.ids.none; none.className = 'dtw-pa-dd-none'; none.textContent = 'No twin matches that. The first line builds a new one.'; l.appendChild(none); } }
+                    else if (none) none.remove();
+                    d.mark(q ? 1 : 0);
+                };
+                d.key = function(ev) {
+                    var k = ev.key, inFind = ev.target && ev.target.id === d.ids.find;
+                    if (!d.open) { if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Enter' || k === ' ') { ev.preventDefault(); d.toggle(true); } return; }
+                    if (k === 'Escape') { ev.preventDefault(); ev.stopPropagation(); d.toggle(false); return; }
+                    if (k === 'ArrowDown') { ev.preventDefault(); d.mark(d.active + 1); return; }
+                    if (k === 'ArrowUp') { ev.preventDefault(); d.mark(d.active - 1); return; }
+                    if (k === 'Home') { ev.preventDefault(); d.mark(0); return; }
+                    if (k === 'End') { ev.preventDefault(); d.mark(d.opts().length - 1); return; }
+                    if (k === 'Enter' || (k === ' ' && !inFind)) { ev.preventDefault(); var o = d.opts()[d.active]; if (o) d.pick(o.getAttribute('data-key')); return; }
+                    if (k === 'Tab') { d.toggle(false); return; }
+                    if (!inFind && k && k.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+                        var now = Date.now(); d.typed = (now - d.typedAt < 700 ? d.typed : '') + k.toLowerCase(); d.typedAt = now;
+                        var opts2 = d.opts(), hit = -1;
+                        for (var i = 0; i < opts2.length; i++) { var nm = ((opts2[i].querySelector('.nm') || {}).textContent || '').toLowerCase(); if (nm.indexOf(d.typed) === 0) { hit = i; break; } }
+                        if (hit >= 0) d.mark(hit);
+                    }
+                };
+                // the markup, block form: the picked twin's row on the button (type, name, people), Select twin until one is picked
+                d.html = function(pickedKey, runs, placeholder) {
+                    var cur = (runs || []).filter(function(r) { return r.key === pickedKey; })[0] || null, p = "dtwDd('" + prefix + "')";
+                    return '<div class="dtw-pa-dd' + (cur ? '' : ' nopick') + '" id="' + d.ids.dd + '"><button type="button" class="dtw-pa-dd-btn" id="' + d.ids.btn + '" aria-haspopup="listbox" aria-expanded="false" aria-controls="' + d.ids.list + '" onclick="' + p + '.toggle()" onkeydown="' + p + '.key(event)">'
+                        + (cur ? paTwinRow(cur) : '<span class="nm ph">' + esc(placeholder || 'Select twin') + '</span>') + '<i class="chev" aria-hidden="true">&#9660;</i></button>'
+                        + '<div class="dtw-pa-dd-menu" id="' + d.ids.menu + '" hidden>'
+                        + ((runs || []).length > 7 ? '<input class="dtw-pa-dd-find" id="' + d.ids.find + '" type="search" placeholder="Search twins" autocomplete="off" aria-label="Search twins" oninput="' + p + '.filter(this.value)" onkeydown="' + p + '.key(event)">' : '')
+                        + '<div class="dtw-pa-dd-list" id="' + d.ids.list + '" role="listbox" aria-label="Twins" tabindex="-1" onkeydown="' + p + '.key(event)">'
+                        + '<div class="dtw-pa-dd-opt build" role="option" id="' + d.ids.dd + 'OptBuild" data-key="' + PA_BUILD_KEY + '" data-build="1" data-hay="build new twin group" aria-selected="false" onclick="' + p + '.pick(\'' + PA_BUILD_KEY + '\')" onmousemove="' + p + '.hover(this)"><span class="k"><i class="plus" aria-hidden="true">+</i></span><span class="nm">Build new twin group</span><span class="n">' + esc(twinPrice()) + '</span></div>'
+                        + '<div class="dtw-pa-dd-rule" aria-hidden="true"></div>'
+                        + (runs || []).map(function(r, i) { var on = !!cur && r.key === cur.key; return '<div class="dtw-pa-dd-opt' + (on ? ' on' : '') + '" role="option" id="' + d.ids.dd + 'Opt' + i + '" data-key="' + esc(r.key) + '" data-hay="' + esc(twinOptionLabel(r).toLowerCase()) + '" aria-selected="' + on + '" onclick="' + p + '.pick(\'' + esc(jsq(r.key)) + '\')" onmousemove="' + p + '.hover(this)">' + paTwinRow(r) + '</div>'; }).join('')
+                        + '</div></div></div>';
+                };
+                DDS[prefix] = d;
+                return d;
+            }
+            function fgDd() { return ddMake('dtwFg', function(key) { S.fgPick = key; renderPanelConsole(); var b = el('dtwFgStartBtn'); if (b) { try { b.focus(); } catch (_) {} } }); }
+            document.addEventListener('click', function(e) {
+                Object.keys(DDS).forEach(function(k) { var d = DDS[k]; if (!d.open) return; var dd = el(d.ids.dd); if (dd && e.target && dd.contains && !dd.contains(e.target)) d.toggle(false); });
+            });
             // The console: the seats, then the question dock (pills + title), the thread and the tally.
             // An open room: pills sit on the question dock, the freeze point.
             // ---- the read a person is mailed once their room session ended (Jenna 2026-11-20). The page only hints: 'here' when a room
@@ -2631,7 +2796,7 @@
                 syncFgBody();
                 try { rpTick(); } catch (_) {}
                 var s = S.session;
-                if (!s) { var had = S.fg.sid != null; clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = noRoomHtml(); fgLayoutSeats(); if (had) fgScrollTop(); return; }
+                if (!s) { var had = S.fg.sid != null; clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = S.fgLanding ? fgLandingHtml() : noRoomHtml(); fgLayoutSeats(); if (had) fgScrollTop(); return; }
                 var fresh = S.fg.sid !== s.id;
                 fgReset(s.id);
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
@@ -3188,10 +3353,11 @@
                 clearRoomPoll(); clearPortraitTimers();
                 try { dtwSeatOpen(null); } catch (_) {}
                 S.session = null; S.panelKind = ''; fgReset(null);
+                S.fgLanding = true;   // leaving a room lands (Jenna 2026-11-23); the tab remembers no room, so a click or a reload lands again
                 renderPanelConsole(); renderPanelSessions();
                 try { remember(); } catch (_) {}
                 try { rpTick(); } catch (_) {}
-                fgToast(working ? 'Room closed. The question keeps running; find it under Rooms.' : 'Room closed. Find it under Rooms.');
+                fgToast(working ? 'Room closed. The question keeps running; the room is in the list.' : 'Room closed. It is in the list to pick back up.');
             };
             function fgToast(text, action) {
                 var t = el('dtwFgToast');

@@ -357,6 +357,56 @@ def visible_runs(runs: list, user, company: Optional[str] = None) -> list:
     return [r for r in scoped if can_open(user, str(r.get('key') or ''), r, users_data=data)]
 
 
+# ---- the rooms on an index entry (the Focus Group IQ landing, 2026-11-23). The reader rule is the room's own
+# (digital_twin_room.memory_visible): a client seat sees only its own company's rooms, staff see every room.
+def room_owner_company(room: dict, run: Optional[dict] = None, users_data: Optional[dict] = None) -> str:
+    """Whose company a room belongs to: the seat that opened it, else the
+    company written on it, else the twin's."""
+    from migration import digital_twin_company as CO
+    who = str((room or {}).get('created_by') or '').strip()
+    if who:
+        return CO.company_of_username(who, users_data)
+    co = str((room or {}).get('company') or '').strip()
+    if co:
+        return co
+    return CO.twin_company(None, run, str((run or {}).get('key') or ''), users_data) if isinstance(run, dict) else ''
+
+
+def room_visible(room: dict, run: Optional[dict], user, users_data: Optional[dict] = None) -> bool:
+    """Staff see every room; everyone else their own company's. Fails closed."""
+    if not isinstance(room, dict) or not isinstance(user, dict):
+        return False
+    try:
+        from migration import digital_twin_company as CO
+        uname = str(user.get('username') or user.get('email') or '')
+        if CO.is_staff(user, uname):
+            return True
+        mine = CO.caller_company(user, uname, users_data)
+        return bool(mine) and CO.same_company(room_owner_company(room, run, users_data), mine)
+    except Exception:
+        return False
+
+
+def scope_index_rooms(runs: list, user, users_data: Optional[dict] = None) -> list:
+    """Every entry's ``rooms`` cut to what this seat may see, in place; the
+    company written on a room never leaves the server. Returns the list."""
+    if users_data is None:
+        try:
+            from migration import digital_twin_company as CO
+            users_data = CO.users_data()
+        except Exception:
+            users_data = {}
+    for r in runs or []:
+        if not isinstance(r, dict):
+            continue
+        kept = []
+        for room in (r.get('rooms') or []):
+            if room_visible(room, r, user, users_data):
+                kept.append({k: v for k, v in room.items() if k != 'company'})
+        r['rooms'] = kept
+    return runs
+
+
 DELETED_TWINS_PREFIX = 'system/digital_twins/deleted_twins/'
 DELETED_TWIN_KEEP_DAYS = 30
 BACKUPS_PREFIX = '_backups/'

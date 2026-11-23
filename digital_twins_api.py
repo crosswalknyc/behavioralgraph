@@ -588,6 +588,7 @@ def dt_list():
     staff = CO.is_staff(user, _uname(user))
     vis = DT.visible_runs(runs, user, company=_company_filter(user))
     DT.annotate_builders(vis)    # who built each twin, for the list to tell same-name twins apart
+    DT.scope_index_rooms(vis, user)    # the Focus Group IQ landing's rooms: a client seat sees its own company's, staff every room (2026-11-23)
     try:
         from migration.digital_twin_covers import schedule_missing
         schedule_missing(_s3(), vis)

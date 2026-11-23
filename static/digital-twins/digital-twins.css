@@ -839,6 +839,64 @@
         #digitalTwinsIQView .dtw-fg-land-pm { border-top: 1px solid var(--dtw-rule); padding-top: 14px; }
         #digitalTwinsIQView .dtw-fg-land-pm .k { font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); margin-bottom: 8px; }
         #digitalTwinsIQView .dtw-fg-land-pm .dtw-fg-chip { margin: 0 6px 6px 0; }
+        /* ---- the Focus Group IQ landing (Jenna 2026-11-23, FG10d with the twins on the left): the Start above the twins column at 360px, every
+           past focus group on the right as an editorial list (numerals, hairlines, light type). Orchid (the room color) does the work; no portraits. */
+        #digitalTwinsIQView .dtw-fgl { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 0 52px; align-items: start; padding: 6px 0 20px; }
+        #digitalTwinsIQView .dtw-fgl .dtw-cap.room { color: var(--dtw-lb-room); }
+        #digitalTwinsIQView .dtw-fgl-side, #digitalTwinsIQView .dtw-fgl-main { min-width: 0; }
+        #digitalTwinsIQView .dtw-fgl-start { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+        #digitalTwinsIQView .dtw-fgl-start .dtw-pa-dd-btn { padding: 11px 14px; border-radius: 9px; }
+        #digitalTwinsIQView .dtw-fgl-start .dtw-pa-dd.nopick .dtw-pa-dd-btn { grid-template-columns: minmax(0, 1fr) auto; }
+        #digitalTwinsIQView .dtw-fgl-start .dtw-pa-dd-btn .chev { color: var(--dtw-lb-room); }
+        #digitalTwinsIQView .dtw-fgl-start .dtw-pa-dd-menu { left: 0; right: auto; width: min(620px, calc(100vw - 48px)); }   /* the menu reads wider than the column so a name and its people sit on one line */
+        #digitalTwinsIQView .dtw-fgl-start .dtw-lb.big { height: 40px; width: 100%; justify-content: center; }
+        #digitalTwinsIQView .dtw-fgl-start .dtw-lb.big[disabled] { background: var(--dtw-track); color: var(--dtw-mute); cursor: default; }
+        #digitalTwinsIQView .dtw-fgl-start .note { font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fgl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 22px; }
+        #digitalTwinsIQView .dtw-fgl-main > .dtw-fgl-head { margin-top: 0; }   /* the list's head sits level with the Start's cap */
+        #digitalTwinsIQView .dtw-fgl-head .n { font-size: 11.5px; line-height: 16px; color: var(--dtw-mute); text-align: right; min-width: 0; }
+        #digitalTwinsIQView .dtw-fgl-twins, #digitalTwinsIQView .dtw-fgl-rooms { margin-top: 8px; }
+        #digitalTwinsIQView .dtw-fgl .end { border-top: 1px solid var(--dtw-hair); }
+        /* a twin: the name with the same-name qualifier, Open a room, the archetypes bar, the facts */
+        #digitalTwinsIQView .dtw-fgl-twin { padding: 11px 0; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-fgl-twin .row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+        #digitalTwinsIQView .dtw-fgl-twin .nm { min-width: 0; font-size: 14px; line-height: 18px; color: var(--dtw-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fgl-twin .nm .built { font-size: 11px; color: var(--dtw-mute); margin-left: 8px; }
+        #digitalTwinsIQView .dtw-fgl-twin .dtw-lb.link.room { color: var(--dtw-lb-room); font-size: 9.5px; flex: none; }
+        #digitalTwinsIQView .dtw-fgl-twin .bar { display: flex; gap: 1px; height: 6px; border-radius: 2px; overflow: hidden; margin-top: 7px; }
+        #digitalTwinsIQView .dtw-fgl-twin .bar span { display: block; min-width: 1px; }
+        #digitalTwinsIQView .dtw-fgl-twin .facts { font-size: 11px; line-height: 15px; color: var(--dtw-mute); margin-top: 5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* an entry: numeral, title with its tags, twin and date and questions, the lead or the verdict, the way back in */
+        #digitalTwinsIQView .dtw-fgl-room { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 16px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-fgl-room.recent { box-shadow: inset 3px 0 0 var(--dtw-lb-room); }
+        #digitalTwinsIQView .dtw-fgl-room.recent .no { padding-left: 12px; }
+        #digitalTwinsIQView .dtw-fgl-room .no { font-size: 11px; color: var(--dtw-lb-room); letter-spacing: 0.14em; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fgl-room .main { min-width: 0; }
+        #digitalTwinsIQView .dtw-fgl-room .trow { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+        #digitalTwinsIQView .dtw-fgl-room .t { appearance: none; background: transparent; border: 0; padding: 0; margin: 0; text-align: left; font-family: inherit; font-size: 21px; font-weight: 300; letter-spacing: -0.015em; line-height: 26px; color: var(--dtw-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; cursor: pointer; }
+        #digitalTwinsIQView .dtw-fgl-room .t:hover { color: var(--dtw-lb-room); }
+        #digitalTwinsIQView .dtw-fgl-room .tag { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-body); white-space: nowrap; }
+        #digitalTwinsIQView .dtw-fgl-room .tag.pa { color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fgl-room .tag.recent { color: var(--dtw-lb-room); }
+        #digitalTwinsIQView .dtw-fgl-room .meta, #digitalTwinsIQView .dtw-fgl-room .lead { display: block; font-size: 12.5px; line-height: 17px; color: var(--dtw-body); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fgl-room .meta .by, #digitalTwinsIQView .dtw-fgl-room .lead .rd, #digitalTwinsIQView .dtw-fgl-room .lead.mute { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fgl-room .lead b { font-weight: 500; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fgl-room > .dtw-lb { justify-self: end; height: 28px; }
+        #digitalTwinsIQView .dtw-fgl-more { padding: 14px 0 4px; border-top: 1px solid var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-fgl-more .dtw-lb.link { color: var(--dtw-lb-room); }
+        #digitalTwinsIQView .dtw-fgl-empty { padding: 16px 0 14px; border-top: 1px solid var(--dtw-hair); font-size: 13px; line-height: 19px; color: var(--dtw-body); max-width: 560px; }
+        #digitalTwinsIQView .dtw-fgl-empty > div { margin-top: 12px; }
+        @media (max-width: 1100px) { #digitalTwinsIQView .dtw-fgl { grid-template-columns: 300px minmax(0, 1fr); gap: 0 36px; } }
+        @media (max-width: 860px) {
+            /* the phone stacks the twins above the list */
+            #digitalTwinsIQView .dtw-fgl { grid-template-columns: minmax(0, 1fr); gap: 26px 0; }
+            #digitalTwinsIQView .dtw-fgl-start .dtw-pa-dd-menu { right: 0; width: auto; }
+            #digitalTwinsIQView .dtw-fgl-room { grid-template-columns: 30px minmax(0, 1fr); gap: 4px 12px; }
+            #digitalTwinsIQView .dtw-fgl-room > .dtw-lb { grid-column: 2; justify-self: start; margin-top: 6px; }
+            #digitalTwinsIQView .dtw-fgl-room .trow { flex-wrap: wrap; gap: 4px 10px; }
+            #digitalTwinsIQView .dtw-fgl-room .t { white-space: normal; font-size: 18px; line-height: 23px; }
+            #digitalTwinsIQView .dtw-fgl-room .meta, #digitalTwinsIQView .dtw-fgl-room .lead { white-space: normal; }
+        }
         /* the Rooms drawer and the New room drawer (the drawer component How to uses) */
         #digitalTwinsIQView .dtw-drawer-rooms { width: min(440px, 94vw); }
         #digitalTwinsIQView .dtw-drawer-new { width: min(520px, 94vw); }
