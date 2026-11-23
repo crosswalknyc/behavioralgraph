@@ -1933,17 +1933,13 @@ def _pm_interpret_core(user, body, text, history):
                 return False
 
         _t_router = time.monotonic()
-        import prometheus_router as _pmr
-        _route_d = _pmr.route_ask(
-            text, surface='interpret',
-            has_base=_interp_has_base,
-            classify_fn=lambda _t: _pma_route.classify_ask_semantic(
-                _t, lambda s, u: _C._pm_claude_json(
-                    s, u, max_tokens=200, temperature=0.0,
-                    surface='ask_classify')))
+        from prometheus import routing as _routing_i, understanding as _und_i
+        # the Understanding decides this surface's route as well (prometheus.routing, 2026-11-23): an analysis ask
+        # on a subject with a base on file is the measured read, the rest the build flow; no model is called to route
+        _route_d = _routing_i.analyze_route(
+            _und_i.on_body(body) or _und_i.current(), text, surface='interpret',
+            has_base=_interp_has_base)
         _C._pm_ask_stage('router', t0=_t_router)
-        if _route_d.get('classify_ms'):
-            _C._pm_ask_stage('router_classify', ms=_route_d['classify_ms'])
         _route = __import__('prometheus.build_lane', fromlist=['keep_order_route']).keep_order_route(str(_route_d.get('route') or ''), body, text, hint=_C._pm_ask_hint)   # an order for a profile is never deflected to a read here (2026-11-17)
         if _route == 'not_quantifiable':
             # Graceful decline (2026-08-26): behavior with no digital

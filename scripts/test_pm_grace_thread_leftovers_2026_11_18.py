@@ -96,12 +96,14 @@ READING = reading(('TONY', '', 'title'), SERVICE)
 
 
 def gate(text, rd=None):
-    """The work gate as the door calls it: the Reader's steer first (it
-    may hand over a bound subject), then the gate."""
+    """The work gate as the door calls it: the reading rides the body; a
+    library subject the reading alone would hand over is bound only when
+    it is the base (reader._single_library_subject), never the service
+    the words name as the scope."""
     body = {'reading': rd} if rd else {}
-    st = RD.steer(rd, {'surface': 'analyze', 'reason': 'question'}, text=text) if rd else None
-    if st and st[1]:
-        body['bind_subject'] = st[1]
+    bind = RD._single_library_subject(rd, text) if rd else ''
+    if bind:
+        body['bind_subject'] = bind
     return PR.work_gate(text, [], None, {'username': 'probe'}, body, username='probe', consume=None), body
 
 
@@ -118,7 +120,6 @@ class TheTitleIsTheSubject(unittest.TestCase):
 
     def test_the_service_is_never_handed_over_as_the_subject(self):
         self.assertEqual(RD._single_library_subject(READING, FIRST), '')
-        self.assertIsNone(RD.steer(READING, {'surface': 'analyze', 'reason': 'question'}, text=FIRST))
         for q, rd in (('how many people watched Severance on Apple TV+', reading(('Severance', '', 'title'), ('Apple TV+', 'Apple TV+', 'platform'))),
                       ('demo breakdown of the audience that watched Fallout on Prime Video', reading(('Fallout', '', 'title'), SERVICE)),
                       ('who watched the film Tony on Prime Video', reading(SERVICE)),

@@ -1,11 +1,14 @@
-"""The one server-side decision step.
+"""The rule helpers behind the one server-side decision step.
 
 ``decide`` reads a fresh ask plus the facts a client can report (is a
 profile open, how many tabs, an explicit mode or confirm step) and
-returns which surface runs it and why. It replaces the detector chain
-the dashboard widget used to run in the browser, in the same order, so
-the dashboard, the standalone app, and the API all route an ask the
-same way and a fix here reaches every client at once.
+returns which surface runs it and why, so the dashboard, the standalone
+app, and the API all route an ask the same way and a fix reaches every
+client at once. Since 2026-11-23 the decision itself lives in
+``prometheus.routing.surface`` (the Understanding decides between
+intents; the rules here that are not intents run first in their standing
+order); ``decide`` is the thin wrapper for callers that only have the
+words. The regex ladder this module carried until then is gone.
 
 Pure and fail-safe: every detector is wrapped, and the fallback is the
 interpret flow (which carries its own router and clarify paths), never
@@ -379,269 +382,41 @@ def prior_deck_outline(history):
     return False
 
 
+def dashboard_picker(text, open_tabs=0):
+    """The dashboard picker a typed command opens, as ``(reason, client_hint)``,
+    or None: "analyze this data" is the analyze menu, "compare with the open
+    tabs" the open-tab compare, "compare this against other profiles" the
+    compare picker. A client without that UI runs the analyze surface as is."""
+    t = str(text or '').strip()
+    if _ANALYZE_MENU_RX.match(t):
+        return 'analyze_menu', 'analyze_menu'
+    if _COMPARE_OPEN_RX.match(t) and _OPEN_TABS_RX.search(t) and not _SELECTED_CUTS_RX.search(t):
+        return 'compare_open_tabs', ('compare_open_tabs' if open_tabs else None)
+    if _COMPARE_OTHERS_RX.match(t):
+        return 'compare_others', 'compare_picker'
+    return None
+
+
 def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
            deck_in_flight=False, prior_outline=False):
-    """Route one fresh ask. See the module docstring for the shape.
+    """Route one fresh ask from its words. See the module docstring for the
+    shape. The decision is ``prometheus.routing.surface`` over the
+    Understanding read from the words alone (no model); the ask service
+    hands ``surface`` the ask's own Understanding instead, with the
+    Reader's reading absorbed.
 
-    Every reason the steps below emit is a row in
-    ``prometheus.routing_table.ROWS`` (2026-10-02 RCA): the decision
-    carries the row id as ``row`` so the widget and the ask log speak
-    the same vocabulary. An unknown reason is a contract break: it
-    raises under REGRESSION_TEST_MODE and is logged otherwise."""
-    d = _decide(text, has_ctx=has_ctx, mode=mode, extra=extra,
-                open_tabs=open_tabs, deck_in_flight=deck_in_flight,
-                prior_outline=prior_outline)
-    try:
-        from . import routing_table as _rt
-        row = _rt.row_for(d.get('reason'))
-        d['row'] = row['id'] if row else None
-        if row is None:
-            msg = ('understand.decide emitted a reason with no routing '
-                   'table row: %r' % (d.get('reason'),))
-            if os.environ.get('REGRESSION_TEST_MODE'):
-                raise RuntimeError(msg)
-            print('[understand] ' + msg)
-    except RuntimeError:
-        raise
-    except Exception:
-        d.setdefault('row', None)
-    return d
-
-
-def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
-            deck_in_flight=False, prior_outline=False):
-    t = str(text or '').strip()
-    extra = extra if isinstance(extra, dict) else {}
-    d = {'surface': 'interpret', 'mode': None, 'reason': 'default',
-         'client_hint': None}
-    if not t:
-        d['reason'] = 'empty'
-        return d
-
-    # 0. An explicit analyze step from a client (mode chip, confirm
-    #    payload) is already a decision.
-    if mode and str(mode).strip():
-        d.update(surface='analyze', mode=str(mode).strip().lower(),
-                 reason='explicit_mode')
-        return d
-    if any(extra.get(k) for k in _ANALYZE_EXTRA_KEYS):
-        d.update(surface='analyze', reason='explicit_step')
-        return d
-
-    # 1. Guided tool intakes (attribution, flywheel, journey, brand
-    #    partnership) open on the analyze surface.
-    ti = tool_intent(t)
-    if ti:
-        d.update(surface='analyze', reason='tool_intake:' + ti)
-        return d
-
-    # 2. Deck asks.
-    if looks_like_deck_ask(t, deck_in_flight,
-                           prior_deck_outline=bool(prior_outline)):
-        d.update(surface='deck', reason='deck_ask')
-        return d
-
-    # 2a0. An order is queued, never deflected (Jenna 2026-11-10, Grace
-    #      Yin: "Please queue one Profile IQ: US people who watched
-    #      Fallout Season 2 on Prime Video, Nov 1 2025 - Oct 31 2026.
-    #      Include reach, age and gender split, ... Deliver as a CSV with
-    #      the unprojected panelist count for each figure" was read as a
-    #      dimension split and then taken by the unprojected lane). An
-    #      imperative to queue / run / build / pull a profile is the
-    #      interpret surface, whatever deliverable notes, dates or
-    #      figure words ride behind it (prometheus.orders). Orders for
-    #      the other products keep their own lanes above and below.
-    try:
-        from . import orders as _ord
-        if _ord.is_profile_order(t):
-            d.update(surface='interpret', reason='build_order')
-            return d
-    except Exception:
-        pass
-
-    # 2a. A dataset on an audience is a Profile IQ build (Emmet Riley
-    #     2026-10-26: "Can you help me query a dataset on UVA consumers
-    #     for the unversity of virgina https://www.virginia.edu/" ran as
-    #     a question and drew the $100 custom-read quote). The order
-    #     goes to the build intake; the URL rides as the brand input. A
-    #     question about data we hold ("how much data do you have on X")
-    #     is not an order and never lands here.
-    try:
-        from . import dataset_ask as _dsa
-        if _dsa.is_build_ask(t):
-            d.update(surface='interpret', reason='dataset_build')
-            return d
-    except Exception:
-        pass
-
-    # 2a2. A delivered figure split by a dimension the panel observes
-    #      (device, daypart, geography, demographic) is a derived read on
-    #      the analyze surface with or without a page (2026-10-12, Jenna:
-    #      never page dependent by default; Jordan's device split).
-    try:
-        import prometheus_analysis as _pma
-        if _pma.is_dimension_split_ask(t):
-            d.update(surface='analyze', reason='derived_read')
-            return d
-    except Exception:
-        pass
-
-    # 2a3. A cross of behaviors inside one audience ("Chime users who shop
-    #      at Target and are interested in X", "of Wicked Tuna viewers, how
-    #      many use Hulu and drive a Ford") is a read on the analyze surface
-    #      with or without a page (prometheus.crosstab, Jenna 2026-11-11).
-    #      An order to build a profile or a cut of that group was taken
-    #      above; a bare "how many shop at Target and use Hulu" needs the
-    #      open profile to point at.
-    try:
-        from . import crosstab as _xt
-        _q = _xt.parse(t)
-        if _q and (_q.get('audience') or has_ctx):
-            d.update(surface='analyze', reason='crosstab')
-            return d
-    except Exception:
-        pass
-
-    # 2b. A bare acknowledgement, pick, or refusal with nothing armed
-    #     is not an ask. The surface stays whatever the data state
-    #     says; the ask service answers it without a reasoning pass
-    #     (2026-10-02 audit: "approved" became a fresh build, "no"
-    #     re-asked the open-screen question).
-    kind = guards.bare_reply_kind(t)
-    if kind:
-        d.update(surface='analyze' if has_ctx else 'interpret',
-                 reason='short_reply:' + kind)
-        return d
-
-    # 2c. A capability question with a deterministic answer ("Can I
-    #     cut the existing Apple TV+ profile by quarter?") is answered,
-    #     never drafted. Only fires when guards can answer it, so a
-    #     polite build order ("can you build me a Nike profile") still
-    #     builds.
-    try:
-        if guards.capability_answer(t):
-            d.update(surface='analyze', reason='capability_question')
-            return d
-    except Exception:
-        pass
-
-    # 2c2. A product fact with one fixed answer (how big the Crosswalk
-    #      sample is) is answered, never drafted (2026-10-05 Scott:
-    #      "the size of teh Crosswalk sample audience" became a build
-    #      offer for "Teh Crosswalk Sample").
-    try:
-        if guards.is_sample_size_ask(t):
-            d.update(surface='analyze', reason='product_fact')
-            return d
-    except Exception:
-        pass
-
-    # 2d. "Do you see the X Subscriber IQ?" is a library lookup. It is
-    #     answered from the library and the caller's runs on the
-    #     analyze surface, with or without data open (2026-10-02 Bria:
-    #     it drafted a 10-credit duplicate of a finished read).
-    try:
-        if guards.subiq_lookup_title(t):
-            d.update(surface='analyze', reason='subiq_lookup')
-            return d
-    except Exception:
-        pass
-
-    # 3. Subscriber IQ asks are build requests, even with a profile open.
-    #    A question ABOUT the open Subscriber IQ page, or about what
-    #    the product can do, is a question (2026-10-02 audit: "Is that
-    #    55% of total viewers or of new and reactivated watchers?"
-    #    became a Subscriber IQ draft).
-    subiq = looks_subscriber_iq(t) or looks_ambiguous_churn(t)
-    if subiq and guards.subiq_question_not_build(t, has_ctx=has_ctx):
-        subiq = False
-        if has_ctx:
-            d.update(surface='analyze', reason='question_about_subiq')
-            return d
-        if guards.is_capability_question(t):
-            d.update(surface='analyze', reason='capability_question')
-            return d
-    # A churn / retention / signup QUESTION with no page open is a
-    # question (2026-10-13 audit: "What was monthly churn for Peacock
-    # accounts that signed up in July?" ran as a pull order and asked
-    # for a title). The analyze pass answers it from a held Subscriber
-    # IQ read or prices the read; a pull order still builds.
-    if subiq and not has_ctx and not guards.subiq_is_explicit_pull(t) \
-            and guards.is_question_shaped(t):
-        d.update(surface='analyze', reason='question')
-        return d
-    # A churn / retention TASK without a build order ("analyze the
-    # churn on these two titles and recommend which one gets the
-    # dollars") is analysis, not a 10-credit pull (2026-10-02 RCA).
-    try:
-        if subiq and not guards.subiq_is_explicit_pull(t) \
-                and guards.reads_as_task(t):
-            d.update(surface='analyze', reason='task_not_build')
-            return d
-    except Exception:
-        pass
-
-    # 4. Dashboard pickers (menus the dashboard can open). The surface
-    #    is still analyze for a client without that UI.
-    if _ANALYZE_MENU_RX.match(t):
-        d.update(surface='analyze', reason='analyze_menu',
-                 client_hint='analyze_menu')
-        return d
-    if (_COMPARE_OPEN_RX.match(t) and _OPEN_TABS_RX.search(t)
-            and not _SELECTED_CUTS_RX.search(t)):
-        d.update(surface='analyze', reason='compare_open_tabs',
-                 client_hint='compare_open_tabs' if open_tabs else None)
-        return d
-    if _COMPARE_OTHERS_RX.match(t):
-        d.update(surface='analyze', reason='compare_others',
-                 client_hint='compare_picker')
-        return d
-
-    # 4b. Where a named title is watched (Jay Patel 2026-10-20, "where
-    #     people watched the film mutiny" with Prime Video open drew the
-    #     open-tab confirm). The title in the words is the subject; the
-    #     service's where_watched lane quotes it first ($500, or $100
-    #     for another title in the same frame). With
-    #     or without data open, the page is context at most.
-    try:
-        from . import where_watched as _ww
-        if not subiq and _ww.parse(t) is not None:
-            d.update(surface='analyze', reason='where_watched')
-            return d
-    except Exception:
-        pass
-
-    # 5. Search-journey demand carries its own subject.
-    if not subiq and looks_search_demand(t):
-        d.update(surface='analyze', mode='search_demand',
-                 reason='search_demand')
-        return d
-
-    # 6. A named analysis mode with data open.
-    m = None if subiq else mode_for_text(t)
-    if m and has_ctx:
-        d.update(surface='analyze', mode=m, reason='mode:' + m)
-        return d
-
-    # 7. Question-shaped or data-open asks analyze; the analyze path
-    #    still hands build-shaped asks back to interpret.
-    if not subiq and should_analyze(t, has_ctx):
-        d.update(surface='analyze', reason='question' if not has_ctx
-                 else 'data_open')
-        return d
-
-    # 7b. Build is never the default (2026-10-02 RCA). An imperative
-    #     task that does not order a build ("review these three
-    #     creators and prepare a report on which ... influence
-    #     product purchases") is work for the analysis pass, which
-    #     asks "which ones?" when the referents are unnamed. A short
-    #     bare subject still falls through to interpret.
-    try:
-        if not subiq and guards.reads_as_task(t):
-            d.update(surface='analyze', reason='task_not_build')
-            return d
-    except Exception:
-        pass
-
-    d['reason'] = 'subiq' if subiq else 'build_or_other'
+    Every reason is a row in ``prometheus.routing_table.ROWS`` (2026-10-02
+    RCA): the decision carries the row id as ``row`` so the widget and the
+    ask log speak the same vocabulary. A reason with no routing table row
+    is a contract break: it raises under REGRESSION_TEST_MODE and is
+    logged otherwise (``routing._row``)."""
+    from . import routing as _routing
+    d = _routing.surface(None, text, has_ctx=has_ctx, mode=mode, extra=extra, open_tabs=open_tabs,
+                         deck_in_flight=deck_in_flight, prior_outline=prior_outline)
+    if d.get('row') is None and d.get('reason') not in (None, ''):
+        msg = ('understand.decide emitted a reason with no routing '
+               'table row: %r' % (d.get('reason'),))
+        if os.environ.get('REGRESSION_TEST_MODE'):
+            raise RuntimeError(msg)
+        print('[understand] ' + msg)
     return d

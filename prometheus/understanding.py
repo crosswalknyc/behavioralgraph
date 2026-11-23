@@ -609,8 +609,14 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
                 ev.append('product:' + prod[:12])
             if prod == 'deck':
                 intent, action = 'deck', 'deck'
-            elif prod in ('journey', 'valuation', 'campaign', 'twin'):
-                intent = prod
+            elif prod in ('journey', 'valuation', 'campaign', 'twin', 'bpiq', 'attribution', 'flywheel'):
+                # the order gate names the product its own way ("bpiq", "attribution", "flywheel"); the intake intent
+                # is the Understanding's name for it (2026-11-23: an order for attribution read as a bare order)
+                intent = {'bpiq': 'valuation', 'attribution': 'campaign', 'flywheel': 'campaign'}.get(prod, prod)
+            elif prod == 'read':
+                # an order for a read ("please run one read for ...") is a read: the analyze surface prices or runs
+                # it, never the build flow (2026-11-23, with the one decider)
+                intent, action = 'analyze', 'answer'
         elif f.get('product_question') and not f.get('wizard_start'):
             # a question about Prometheus or Crosswalk itself (what it is, how it differs from an AI tool, a tagline, what it
             # can do, what a product costs): product knowledge, never a subject read (Liz 2026-11-20 drew "Which subject

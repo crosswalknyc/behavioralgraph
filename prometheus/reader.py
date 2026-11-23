@@ -581,7 +581,10 @@ def refers_to_page(reading):
         (s.get('as_written') or '').lower() in ('<page>', 'this', 'that', 'it', 'this audience') for s in (reading or {}).get('subjects') or [])
 
 
-# ------------------------------------------------------------ steer
+# ---------------------------------------------- the one library subject
+# (what a reading hands the read core when it names exactly one held subject that is the base, not an overlap;
+# the steer that used to pick the surface on the reading left on 2026-11-23: the Understanding absorbs the reading
+# before the lanes, prometheus.routing decides)
 _PRODUCT_FOR = {
     'journey': ('a Digital Journey', 'shows the path from a social post, clip or search to the watch, purchase or ticketing visit, step by step', 'Build a Digital Journey'),
     'valuation': ('Brand Partnership IQ', 'values a talent or title against a brand: audience fit, earned media, brand lift and conversion lenses, one dollar figure', 'Value a brand partnership'),
@@ -666,41 +669,6 @@ def _single_library_subject(r, text=''):
             traceback.print_exc()
     return bind
 
-
-def steer(reading, decision, *, has_ctx=False, min_conf=0.7, text=''):
-    """(decision, bind_subject) when a confident reading should pick the
-    surface; None to keep the router's decision. Only overrides the
-    analyze / interpret / deck choice; armed steps never reach here."""
-    try:
-        r = reading if isinstance(reading, dict) else None
-        if not r or float(r.get('confidence') or 0) < min_conf:
-            return None
-        intent = r.get('intent')
-        cur = str((decision or {}).get('surface') or '')
-        want = None
-        if intent in ANALYZE_SET or intent in ('compare', 'pricing', 'definition'):
-            want = 'analyze'
-        elif intent in ('journey', 'valuation', 'campaign'):
-            want = 'analyze'        # the product intake flows live on the analyze surface (2026-10-14)
-        elif intent in BUILD_SET:
-            want = 'interpret'
-        elif intent == 'deck':
-            want = 'deck'
-        if not want or want == cur:
-            # the surface already agrees; still hand over a single library subject
-            bind = ''
-            if want == 'analyze' and intent in ('analyze',) and not refers_to_page(r):
-                bind = _single_library_subject(r, text)
-            return (dict(decision, reason=f"{(decision or {}).get('reason') or 'router'}+reader:{intent}"), bind) if bind else None
-        new = dict(decision or {}, surface=want, reason=f"reader:{intent}", client_hint=None)
-        bind = ''
-        if want == 'analyze' and intent == 'analyze' and not refers_to_page(r):
-            bind = _single_library_subject(r, text)
-        print(f"[reader] steer {cur or '?'} -> {want} ({intent}, {r.get('confidence')})")
-        return new, bind
-    except Exception:
-        traceback.print_exc()
-        return None
 
 
 # ------------------------------------------------------------- grade

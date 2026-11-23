@@ -61,9 +61,9 @@ ROUTES = ('analysis', 'generate', 'search_demand', 'csv_download',
 
 
 def classify_case(pmr, case):
-    """Grade one fixture case through the production router. The
-    fixture flags map 1:1 onto route_ask kwargs; classify_fn stays None
-    so the run is hermetic (no model calls)."""
+    """Grade one fixture case through the production router's rules. The
+    fixture flags map 1:1 onto route_ask kwargs; no model is called to
+    route (the classifier backstop retired 2026-11-23)."""
     surface = str(case.get('surface') or 'analyze').strip().lower()
     text = case.get('input') or ''
     d = pmr.route_ask(
@@ -71,8 +71,7 @@ def classify_case(pmr, case):
         has_ctx=bool(case.get('page_context')),
         mode=case.get('mode'),
         has_base=bool(case.get('has_base', True)),
-        memory_referent=bool(case.get('memory_referent', False)),
-        classify_fn=None)
+        memory_referent=bool(case.get('memory_referent', False)))
     return d.get('route')
 
 

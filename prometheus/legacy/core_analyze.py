@@ -879,8 +879,8 @@ def _pm_analyze_core(user, body, text, history):
         return bool(_nc_refs)
 
     def _router_has_base():
-        # Ground for the classifier backstop: a catalog base for the
-        # named subject, or a stored cross-session referent (the
+        # Ground for a question on a subject we hold: a catalog base for
+        # the named subject, or a stored cross-session referent (the
         # measured-read pass then binds or asks the grounded confirm).
         try:
             if _C._pm_generation_base('', text, prefer_catalog=True):
@@ -891,27 +891,20 @@ def _pm_analyze_core(user, body, text, history):
 
     _t_router = time.monotonic()
     try:
-        import prometheus_analysis as _pma_rt
         from prometheus import routing as _routing_c, understanding as _und_c
-        # the Understanding decides the route (prometheus.routing, step 3); the older router and its fast-model
-        # classifier only behind PM_LEGACY_ROUTING=1 or when no Understanding is on the ask
+        # the Understanding decides the route (prometheus.routing, step 3); the rules that are not intents run first
+        # inside it; no model is called to route (the fast-model classifier retired 2026-11-23)
         _route_d = _routing_c.analyze_route(
             _und_c.on_body(body) or _und_c.current(), text, surface='analyze', has_ctx=bool(ctx),
             mode=str(body.get('mode') or ''),
             has_base=_router_has_base,
             memory_referent=_router_memory_referent,
-            other_subject=lambda: _subject_rules.names_other_subject(text, ctx),   # a named subject that is not the page is never a page analysis (Debi 2026-10-26)
-            classify_fn=lambda _t: _pma_rt.classify_ask_semantic(
-                _t, lambda s, u: _C._pm_claude_json(
-                    s, u, max_tokens=200, temperature=0.0,
-                    surface='ask_classify', usage_extras=_pm_ppu)))
+            other_subject=lambda: _subject_rules.names_other_subject(text, ctx))   # a named subject that is not the page is never a page analysis (Debi 2026-10-26)
     except Exception:
         traceback.print_exc()
         _route_d = {'route': 'analysis' if ctx else 'clarify',
                     'why': 'router_error'}
     _C._pm_ask_stage('router', t0=_t_router)
-    if _route_d.get('classify_ms'):
-        _C._pm_ask_stage('router_classify', ms=_route_d['classify_ms'])
     _route = str(_route_d.get('route') or '')
     # Subscriber IQ asks (and the ambiguous-churn fork) belong to the
     # build surface's promotion machinery: hand the widget a re-route.

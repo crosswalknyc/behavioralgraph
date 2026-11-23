@@ -2,15 +2,17 @@
 """Single server-side router for the dashboard chat assistant
 (2026-08-28, the routing wave of the Prometheus plan).
 
-One function, `route_ask`, decides the route for every ask on both
-chat surfaces (the analyze endpoint and the interpret endpoint), so
-the two no longer carry divergent hard-coded branch orders. The
-composition is cheap deterministic prefilters first (the regex
-detectors that already exist in prometheus_analysis / subiq_intent,
-consolidated in one precedence), then the fast classify model as the
-backstop for genuinely ambiguous asks. Open-profile context is
+One function, `route_ask`, carries the deterministic rules of the route
+for every ask on both chat surfaces (the analyze endpoint and the
+interpret endpoint), so the two never carry divergent hard-coded branch
+orders: the regex detectors that already exist in prometheus_analysis /
+subiq_intent, consolidated in one precedence. Open-profile context is
 DECISIVE: a data question with a profile open can never route to the
-build interpreter or any unmappable fallback.
+build interpreter or any unmappable fallback. Between intents the
+Understanding decides (prometheus.routing.analyze_route, which calls
+this for the rules and then reads the ask's own Understanding); the
+fast classify model that used to be the backstop here was retired on
+2026-11-23 (no model is called to route).
 
 Route vocabulary (mirrors scripts/prometheus_eval_run.py):
 
@@ -48,33 +50,24 @@ PRECEDENCE (top wins; the router unit tests pin this order):
     7. analysis         analyze surface with open data (the default:
                         open-ended "what stands out" asks stay here)
     8. memory_confirm   analyze surface, nothing open, stored referent
-    9. classifier       fast-model backstop for question-shaped asks
-                        the regexes missed, gated on a resolvable base
-                        so a data ask with a base never dead-ends
-   10. clarify          analyze surface, nothing open, nothing stored
+    9. clarify          analyze surface, nothing open, nothing stored
        build_interpret  interpret surface default
 
 `has_base` and `memory_referent` accept a bool OR a zero-argument
 callable (resolved lazily, at most once, only when the decision needs
-them - they can cost an S3 read or a catalog scan). `classify_fn`
-takes the ask text and returns 'analysis' | 'build' | 'cut' | 'other'
-(the classify_ask_semantic contract); pass None to keep the router
-fully deterministic (the hermetic eval does).
+them - they can cost an S3 read or a catalog scan).
 
 The decision dict:
 
     {'route': <route>, 'why': <short reason tag>,
      'subiq_family': str|None, 'fork_subject': str|None,
-     'nq_gate': dict|None,          # classify_quantifiability result
-     'used_classifier': bool, 'classify_kind': str|None,
-     'classify_ms': int}
+     'nq_gate': dict|None}          # classify_quantifiability result
 
 This module imports only prometheus_analysis and subiq_intent (both
 pure text modules): no Flask, no S3, no model client, so it stays
 unit-testable and safe to import anywhere.
 """
 import re
-import time
 
 __all__ = ['route_ask', 'ROUTES']
 
@@ -94,16 +87,14 @@ def _resolve(flag):
 
 
 def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
-              memory_referent=False, classify_fn=None, other_subject=False):
-    """Decide the route for one ask. See the module docstring for the
+              memory_referent=False, other_subject=False):
+    """The rules of the route for one ask. See the module docstring for the
     precedence and the decision-dict shape. Never raises."""
     import prometheus_analysis as pma
     import subiq_intent as si
 
     d = {'route': '', 'why': '', 'subiq_family': None,
-         'fork_subject': None, 'nq_gate': None,
-         'used_classifier': False, 'classify_kind': None,
-         'classify_ms': 0}
+         'fork_subject': None, 'nq_gate': None}
     surface = ('interpret'
                if str(surface or '').strip().lower().startswith('i')
                else 'analyze')
@@ -223,41 +214,18 @@ def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
         # is decided on that subject BEFORE any remembered referent
         # (2026-10-06, Eliot: "are fans of Gunna more likely to buy Under
         # Armour", Gunna profile just landed, was met with "Do you mean
-        # for Politics Girl?"). The classifier arbitrates analysis vs
-        # build vs cut; when it is not available for the ask, a
-        # question naming a held subject reads on it.
-        kind = None
-        if _resolve(has_base):
-            kind = _classify(d, t, pma, has_base, classify_fn)
-            if kind == 'analysis':
-                d.update(route='generate', why='classifier')
-                return d
-            if kind in ('build', 'cut'):
-                d.update(route='build_interpret', why='classifier')
-                return d
-            # A question with a resolvable base never dead-ends on the
-            # classifier's 'other' (2026-10-06: "why does this matter
-            # and what can Brock do to make money" drew "Do you mean
-            # for Gunna?" from memory); it reads on the named base.
-            if not build_shaped and _question_shaped(t):
-                d.update(route='generate', why='named_base')
-                return d
+        # for Politics Girl?"): a question with a resolvable base never
+        # dead-ends (2026-10-06: "why does this matter and what can
+        # Brock do to make money" drew "Do you mean for Gunna?" from
+        # memory); it reads on the named base.
+        if _resolve(has_base) and not build_shaped and _question_shaped(t):
+            d.update(route='generate', why='named_base')
+            return d
         # 8. Grounded confirm from cross-session memory.
         if _resolve(memory_referent):
             d.update(route='memory_confirm', why='memory_referent')
             return d
-        # 9. Classifier backstop: a question-shaped ask the regexes
-        # missed, with a resolvable base, never dead-ends at the
-        # nudge. 'build'/'cut' verdicts hand the ask to the build
-        # flow via the re-route contract.
-        if kind is None:
-            kind = _classify(d, t, pma, has_base, classify_fn)
-        if kind == 'analysis':
-            d.update(route='generate', why='classifier')
-            return d
-        if kind in ('build', 'cut'):
-            d.update(route='build_interpret', why='classifier')
-            return d
+        # 9. Nothing open, nothing stored: the open-something nudge.
         d.update(route='clarify', why='no_context')
         return d
 
@@ -273,14 +241,6 @@ def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
     if det and _resolve(has_base):
         d.update(route='generate', why='analysis_ask')
         return d
-    # 9. Classifier backstop, same base gate as production's semantic
-    # classifier: question-shaped, not an explicit build/cut/deck/
-    # export, base exists.
-    if not det:
-        kind = _classify(d, t, pma, has_base, classify_fn)
-        if kind == 'analysis':
-            d.update(route='generate', why='classifier')
-            return d
     # 10. Default: the normal build-interpret flow.
     d.update(route='build_interpret', why='build_default')
     return d
@@ -294,28 +254,3 @@ def _question_shaped(t):
     t = str(t or '')
     return bool(_QUESTION_RX.match(t)) or '?' in t
 
-
-def _classify(d, t, pma, has_base, classify_fn):
-    """Run the fast-model backstop when it is worth a call: the ask is
-    a candidate (question-shaped, not an explicit build/cut/deck/
-    export) and a base resolves. Records timing + verdict on the
-    decision dict. Returns the kind ('other' when skipped/failed)."""
-    if classify_fn is None:
-        return 'other'
-    try:
-        if not pma.analysis_ask_candidate(t):
-            return 'other'
-    except Exception:
-        return 'other'
-    if not _resolve(has_base):
-        return 'other'
-    t0 = time.monotonic()
-    try:
-        kind = str(classify_fn(t) or 'other').strip().lower()
-    except Exception:
-        kind = 'other'
-    d['classify_ms'] = int((time.monotonic() - t0) * 1000)
-    d['used_classifier'] = True
-    d['classify_kind'] = kind if kind in ('analysis', 'build', 'cut',
-                                          'other') else 'other'
-    return d['classify_kind']

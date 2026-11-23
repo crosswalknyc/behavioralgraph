@@ -83,8 +83,7 @@ class AlsoBaseIsTheNamedAudience(unittest.TestCase):
         self.assertEqual(SR.also_base(q), ("Claire's", 'purchasers', ['Target', 'Walmart', "Kohl's", 'CVS']))
         self.assertTrue(QU.names_other_universe(q, 'Target', page=''))
         self.assertFalse(QU.names_other_universe(q, "Claire's", page=''))
-        dec = {'surface': 'analyze', 'reason': 'question'}
-        self.assertIsNone(RD.steer(KEITH_READING_LIVE, dec, has_ctx=False, text=q))
+        self.assertEqual(RD._single_library_subject(KEITH_READING_LIVE, q), '')
 
     def test_nested_audience_without_a_name_still_binds_the_object(self):
         s = SR.bind("people who also watched Yellowstone", None, '')
@@ -117,27 +116,23 @@ class ALibrarySubjectAfterAlsoIsNotTheBase(unittest.TestCase):
 
 
 class TheReaderNeverHandsOverAnOverlapSubject(unittest.TestCase):
-    """reader.steer binds the reading's one library subject for the read
-    core. Target was Keith's only library match and it was the overlap,
-    not the base: with the words in hand, steer hands over nothing."""
+    """reader._single_library_subject is what a reading hands the read
+    core when it names exactly one library subject. Target was Keith's
+    only library match and it was the overlap, not the base: with the
+    words in hand, the reading hands over nothing. (The steer that used
+    to carry this into the surface_decision lane left on 2026-11-23; the
+    handoff rule itself is unchanged.)"""
 
     def test_keiths_reading_binds_no_library_subject(self):
-        dec = {'surface': 'analyze', 'reason': 'question'}
-        out = RD.steer(KEITH_READING_LIVE, dec, has_ctx=False, text=KEITH_1)
-        self.assertIsNone(out)
+        self.assertEqual(RD._single_library_subject(KEITH_READING_LIVE, KEITH_1), '')
 
     def test_a_reading_whose_one_library_subject_is_the_base_still_binds(self):
         r = {'intent': 'analyze', 'confidence': 0.9, 'flags': [],
              'subjects': [{'as_written': 'Target shoppers', 'catalog': 'Target', 'kind': 'brand'}]}
-        dec = {'surface': 'analyze', 'reason': 'question'}
-        out = RD.steer(r, dec, has_ctx=False, text='How do Target shoppers split by age band?')
-        self.assertIsNotNone(out)
-        self.assertEqual(out[1], 'Target')
+        self.assertEqual(RD._single_library_subject(r, 'How do Target shoppers split by age band?'), 'Target')
 
     def test_without_the_words_the_old_hand_over_stands(self):
-        dec = {'surface': 'analyze', 'reason': 'question'}
-        out = RD.steer(KEITH_READING_LIVE, dec, has_ctx=False)
-        self.assertEqual((out or ('', ''))[1], 'Target')
+        self.assertEqual(RD._single_library_subject(KEITH_READING_LIVE, ''), 'Target')
 
 
 class UnclosedTokenNeverReachesAReader(unittest.TestCase):

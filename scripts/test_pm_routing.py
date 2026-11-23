@@ -2,9 +2,15 @@
 """The surface and the analyze route decided from the Understanding
 (prometheus.routing, rebuild step 3, Jenna 2026-11-20).
 
-- The switch: with PM_LEGACY_ROUTING=1, or with no Understanding on the
-  ask, the older readers (understand.decide, prometheus_router.route_ask)
-  decide exactly as before.
+- One decider (2026-11-23): the older readers are gone. understand.decide
+  is a thin wrapper over routing.surface; prometheus_router.route_ask
+  carries only the rules; there is no switch, no model classifier and no
+  steer on the reading in the surface_decision lane. An ask with no
+  Understanding on it is read from its words.
+- The rules that are not intents keep their rows: a dimension split, a
+  cross of behaviors, a bare reply, a capability question, a product fact,
+  a library lookup, the dashboard pickers, where a title is watched; a
+  short bare subject is still the build flow's.
 - The surface: an explicit mode or step is a decision already; a product
   intake lives on the analyze surface; a deck reading or the deck rule is
   the deck; a Profile IQ order, a dataset on an audience or a build
@@ -47,24 +53,56 @@ def _u(text, ctx=None, history=None, reading=None, **kw):
     return u
 
 
-class TheSwitch(unittest.TestCase):
-    def tearDown(self):
-        os.environ.pop('PM_LEGACY_ROUTING', None)
+class OneDecider(unittest.TestCase):
+    def test_the_switch_and_the_older_readers_are_gone(self):
+        self.assertFalse(hasattr(R, 'legacy_routing'))
+        self.assertFalse(hasattr(PR, '_classify'))
+        self.assertFalse(hasattr(UD, '_decide'))
+        from prometheus import reader as RD
+        self.assertFalse(hasattr(RD, 'steer'))
+        src = open(os.path.join(ROOT, 'prometheus', 'routing.py'), encoding='utf-8').read()
+        self.assertNotIn("environ.get('PM_LEGACY_ROUTING'", src)
+        for rel in (('prometheus', 'legacy', 'core_analyze.py'), ('prometheus', 'legacy', 'core_interpret.py'), ('prometheus', 'service.py')):
+            body = open(os.path.join(ROOT, *rel), encoding='utf-8').read()
+            self.assertNotIn('classify_ask_semantic', body, rel)
+            self.assertNotIn('classify_fn', body, rel)
+            self.assertNotIn('.steer(', body, rel)
 
-    def test_legacy_switch_hands_back_the_older_readers(self):
-        os.environ['PM_LEGACY_ROUTING'] = '1'
-        self.assertTrue(R.legacy_routing())
-        q = 'who watches Harbor Lights'
-        self.assertEqual(R.surface(_u(q), q, has_ctx=False), UD.decide(q, has_ctx=False))
-        self.assertEqual(R.analyze_route(_u(q), q, surface='analyze', has_ctx=False),
-                         PR.route_ask(q, surface='analyze', has_ctx=False))
+    def test_decide_is_the_surface_over_the_words(self):
+        for q, ctx in (('who watches Harbor Lights', False), ('what stands out here', True), ('run a profile on Harbor Lights', False), ('Nike', False)):
+            self.assertEqual(UD.decide(q, has_ctx=ctx), R.surface(None, q, has_ctx=ctx), q)
+            self.assertEqual(R.surface(None, q, has_ctx=ctx), R.surface(_u(q, {'has_ctx': True} if ctx else None), q, has_ctx=ctx), q)
 
-    def test_no_understanding_hands_back_the_older_readers(self):
+    def test_an_ask_with_no_understanding_is_read_from_its_words(self):
         q = 'who watches Harbor Lights'
-        self.assertFalse(R.legacy_routing())
-        self.assertEqual(R.surface(None, q, has_ctx=False), UD.decide(q, has_ctx=False))
-        self.assertEqual(R.analyze_route(None, q, surface='analyze', has_ctx=True)['route'],
-                         PR.route_ask(q, surface='analyze', has_ctx=True)['route'])
+        self.assertEqual(R.surface(None, q, has_ctx=False)['reason'], 'question')
+        self.assertEqual(R.analyze_route(None, q, surface='analyze', has_ctx=True)['route'], 'analysis')
+        self.assertEqual(R.analyze_route(None, 'run a profile on Harbor Lights', surface='analyze', has_ctx=False)['route'], 'build_interpret')
+
+    def test_the_rules_that_are_not_intents_keep_their_rows(self):
+        cases = (('how big is your panel', True, 'analyze', 'product_fact', None),
+                 ('analyze this data', True, 'analyze', 'analyze_menu', 'analyze_menu'),
+                 ('compare with the open tabs', True, 'analyze', 'compare_open_tabs', 'compare_open_tabs'),
+                 ('compare this against other profiles', True, 'analyze', 'compare_others', 'compare_picker'),
+                 ('yes', False, 'interpret', 'short_reply:affirm', None),
+                 ('yes', True, 'analyze', 'short_reply:affirm', None),
+                 ('Pull Subscriber IQ for Starz', False, 'interpret', 'subiq', None),
+                 ('how many Peacock subscribers churned in August?', False, 'analyze', 'question', None),
+                 ('Nike', False, 'interpret', 'build_or_other', None),
+                 ('', False, 'interpret', 'empty', None))
+        for q, ctx, surf, reason, hint in cases:
+            d = UD.decide(q, has_ctx=ctx, open_tabs=2)
+            self.assertEqual((d['surface'], d['reason'], d['client_hint']), (surf, reason, hint), (q, d))
+            self.assertIsNotNone(d['row'], q)
+
+    def test_a_confident_reading_that_is_not_a_build_answers_where_the_ladder_fell_to_interpret(self):
+        q = 'wjat does Avid tier mean'
+        self.assertEqual(UD.decide(q, has_ctx=False)['reason'], 'build_or_other')
+        u = _u(q, reading={'intent': 'definition', 'confidence': 0.93, 'subjects': [], 'flags': []})
+        d = R.surface(u, q, has_ctx=False)
+        self.assertEqual((d['surface'], d['reason']), ('analyze', 'question'))
+        u = _u('Harbor Lights fans', reading={'intent': 'build_profile', 'confidence': 0.9, 'subjects': [{'as_written': 'Harbor Lights', 'kind': 'title'}], 'flags': []})
+        self.assertEqual(R.surface(u, 'Harbor Lights fans', has_ctx=False)['surface'], 'interpret')
 
 
 class TheSurface(unittest.TestCase):
@@ -110,7 +148,7 @@ class TheAnalyzeRoute(unittest.TestCase):
         q = 'what share of this audience is female'
         d = R.analyze_route(_u(q, ctx={'primary': {'name': 'Harbor Lights'}}), q, surface='analyze', has_ctx=True)
         self.assertIn(d['route'], ('analysis', 'generate'))
-        self.assertFalse(d['used_classifier'])
+        self.assertNotIn('used_classifier', d)
         other = R.analyze_route(_u(q), q, surface='analyze', has_ctx=True, other_subject=True)
         self.assertEqual(other['route'], 'generate')                    # an analysis-shaped ask, or a named other subject: the read
         plain = 'tell me about the people here'
@@ -126,7 +164,7 @@ class TheAnalyzeRoute(unittest.TestCase):
         w = 'something about nothing in particular'
         d2 = R.analyze_route(_u(w), w, surface='analyze', has_ctx=False)
         self.assertEqual((d2['route'], d2['why']), ('clarify', 'no_context'))
-        self.assertFalse(d2['used_classifier'])
+        self.assertNotIn('used_classifier', d2)
 
     def test_a_confident_read_with_nothing_open_is_the_read(self):
         q = 'tell me about Harbor Lights viewers'
@@ -134,21 +172,28 @@ class TheAnalyzeRoute(unittest.TestCase):
                             q, surface='analyze', has_ctx=False)
         self.assertEqual((d['route'], d['why']), ('generate', 'understanding:read'))
 
-    def test_the_model_classifier_is_never_called(self):
-        calls = []
+    def test_no_model_is_called_to_route(self):
+        import inspect
+        self.assertNotIn('classify_fn', inspect.signature(R.analyze_route).parameters)
+        self.assertNotIn('classify_fn', inspect.signature(PR.route_ask).parameters)
         q = 'is Harbor Lights popular with younger viewers'
-        R.analyze_route(_u(q), q, surface='analyze', has_ctx=False, has_base=True, classify_fn=lambda t: calls.append(t) or 'analysis')
-        R.analyze_route(_u(q), q, surface='interpret', has_ctx=False, has_base=True, classify_fn=lambda t: calls.append(t) or 'analysis')
-        self.assertEqual(calls, [])
+        self.assertEqual(R.analyze_route(_u(q), q, surface='analyze', has_ctx=False, has_base=True)['route'], 'generate')
+        self.assertEqual(R.analyze_route(_u(q), q, surface='interpret', has_ctx=False, has_base=True)['route'], 'generate')
+        self.assertEqual(R.analyze_route(_u(q), q, surface='interpret', has_ctx=False, has_base=False)['route'], 'build_interpret')
 
 
 class TheWiring(unittest.TestCase):
-    def test_the_two_call_sites_read_the_routing_module(self):
+    def test_the_call_sites_read_the_routing_module(self):
         svc = open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8').read()
         core = open(os.path.join(ROOT, 'prometheus', 'legacy', 'core_analyze.py'), encoding='utf-8').read()
+        interp = open(os.path.join(ROOT, 'prometheus', 'legacy', 'core_interpret.py'), encoding='utf-8').read()
         self.assertIn('_routing_s.surface(', svc)
+        self.assertIn('_routing_f.surface(', svc)        # the forced-interpret release reads the ask's own Understanding
+        self.assertNotIn('understand.decide(', svc)
         self.assertIn('_routing_c.analyze_route(', core)
-        self.assertNotIn('_pmr.route_ask(\n            text, surface=\'analyze\'', core)
+        self.assertIn('_routing_i.analyze_route(', interp)
+        self.assertNotIn('_pmr.route_ask(', core)
+        self.assertNotIn('_pmr.route_ask(', interp)
         src = open(os.path.join(ROOT, 'prometheus', 'routing.py'), encoding='utf-8').read()
         self.assertNotIn('request.json', src)
         self.assertNotIn('\u2014', src)
