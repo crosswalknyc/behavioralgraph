@@ -14,7 +14,7 @@ from flask import jsonify, request, session
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 from prometheus import seams as _seams  # noqa: E402
 
-__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_fresh', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_pm_project_label', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
+__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_fresh', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', 'admin_prometheus_chat', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_pm_project_label', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
 
 
 # The dashboard's display name for a project key (2026-10-22, Scott's
@@ -284,6 +284,61 @@ def api_synth_chat_threads_delete():
                     'threads': sorted(_tp.visible_threads(idx['threads']),
                                       key=lambda t: str(t.get('updated') or ''),
                                       reverse=True)})
+
+
+def _super_admin_gate(fn):
+    """The host's super-admin gate on a route; a host without one (a test
+    harness) gets a route that answers nothing, never an open one."""
+    dec = _H.get('requires_super_admin')
+    if callable(dec):
+        return dec(fn)
+
+    def _closed(*a, **k):
+        return 'Not found', 404
+    _closed.__name__ = fn.__name__
+    return _closed
+
+
+@_H.app.route('/admin/prometheus/chat/<path:owner>/<tid>', methods=['GET'])
+@_super_admin_gate
+def admin_prometheus_chat(owner, tid):
+    """One person's chat, read only, for a super admin (the morning digest
+    links here, Jenna 2026-11-23). Reads the stored turns and renders them
+    as a plain page; marks nothing seen, moves no thread, writes nothing."""
+    from markupsafe import escape as _esc
+    owner = str(owner or '').strip()
+    safe_t = ''.join(c for c in str(tid or '') if c.isalnum() or c in '-_')
+    if not owner or not safe_t:
+        return 'Not found', 404
+    turns = _C._pm_s3_json(_pm_thread_key(owner, safe_t), None)
+    if not isinstance(turns, list):
+        return 'No chat under that name.', 404
+    from prometheus import thread_merge as _tm
+    rows = []
+    for t in turns:
+        if not isinstance(t, dict):
+            continue
+        ep = _tm.turn_epoch(t)
+        when = datetime.fromtimestamp(ep, timezone.utc).strftime('%Y-%m-%d %H:%M UTC') if ep else ''
+        who = 'Prometheus' if str(t.get('role') or '') != 'user' else owner
+        text = str(t.get('text') or '')
+        rows.append(f'<div class="turn {"me" if who == owner else "pm"}"><div class="meta">{_esc(who)} <span>{_esc(when)}</span></div>'
+                    f'<div class="text">{_esc(text)}</div></div>')
+    idx = _C._pm_s3_json(_pm_threads_index_key(owner), None) or {}
+    title = next((str(x.get('title') or '') for x in (idx.get('threads') or []) if isinstance(x, dict) and x.get('id') == safe_t), '') or 'Chat'
+    html = (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">'
+        f'<title>{_esc(title)}: {_esc(owner)}</title>'
+        '<style>body{margin:0;background:#0C1618;color:#E9E8E1;font:15px/1.5 -apple-system,Helvetica,Arial,sans-serif;padding:24px}'
+        '.wrap{max-width:860px;margin:0 auto}h1{font-weight:400;font-size:20px;margin:0 0 4px}.sub{color:#9AA09B;margin-bottom:20px}'
+        '.turn{padding:12px 14px;border-radius:12px;margin:10px 0;white-space:pre-wrap;word-wrap:break-word}'
+        '.turn.me{background:#1B2E34}.turn.pm{background:#15252A;border:1px solid #2C4148}'
+        '.meta{font-size:12px;color:#9AA09B;margin-bottom:6px}.meta span{margin-left:8px;color:#7C878A}</style></head><body><div class="wrap">'
+        f'<h1>{_esc(title)}</h1><div class="sub">{_esc(owner)}, {len(rows)} turns. Read only.</div>'
+        + ''.join(rows) + '</div></body></html>')
+    resp = _H.app.response_class(html, mimetype='text/html')
+    resp.headers['Cache-Control'] = 'private, no-store'
+    return resp
 
 
 def _pm_threads_index_key(username):
