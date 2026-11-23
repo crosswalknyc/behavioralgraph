@@ -1173,21 +1173,30 @@ def _ratio(df, raw, proj):
     return None, None
 
 
-def _renorm_100(vals, salt):
+def _renorm_100(vals, salt, fixed=(), prefer=()):
     """{key: share} -> shares summing to exactly 100 at 4dp, none on a .XX00 boundary, none twice
-    (subject-salted micro-jitter on the residual). Shares already clean come back unchanged."""
+    (the house's round-display jitter, zero-sum). Keys in ``fixed`` never move (the United States
+    row of COUNTRY is the US profile's people); keys in ``prefer`` absorb the residual first (Rest
+    of world). Shares already within a few ten-thousandths of 100 and clean stand as written."""
     keys = list(vals)
     if not keys:
         return {}
     clean = {k: round(float(vals[k] or 0.0), 4) for k in keys}
-    def ok(d):     # a set already within a few ten-thousandths of 100 stands as written (the US block is the US file)
+
+    def ok(d):
         return (abs(sum(d.values()) - 100.0) < 0.0006 and len(set(d.values())) == len(d)
                 and not any(_on_2dp(v) for v in d.values() if v > 0))
     if ok(clean):
         return clean
-    tot = sum(max(v, 0.0) for v in clean.values())
-    out = {k: round(max(clean[k], 0.0) * 100.0 / tot, 4) if tot > 0 else round(100.0 / len(keys), 4) for k in keys}
-    order = sorted(keys, key=lambda k: (-out[k], str(k)))
+    fixed = [k for k in keys if k in set(fixed)]
+    free = [k for k in keys if k not in set(fixed)] or keys
+    out = {k: clean[k] for k in fixed}
+    target = 100.0 - sum(out.values())
+    tot = sum(max(clean[k], 0.0) for k in free)
+    for k in free:
+        out[k] = round(max(clean[k], 0.0) * target / tot, 4) if tot > 0 else round(target / len(free), 4)
+    pref = [k for k in free if k in set(prefer)]
+    order = pref + sorted([k for k in free if k not in set(prefer)], key=lambda k: (-out[k], str(k)))
     resid = round(100.0 - sum(out.values()), 4)
     j = 0
     while abs(resid) >= 0.00005 and j < 100000:
@@ -1241,7 +1250,12 @@ def normalize_geo(df, subject=""):
     for i in df.index[m]:
         groups.setdefault(str(df.at[i, "Column"]).strip(), []).append(i)
     for col, ix in groups.items():
-        vals = _renorm_100({i: _num(df.at[i, bp]) or 0.0 for i in ix}, f"{subject}|{col}")
+        fixed, prefer = (), ()
+        if col.upper() == _ip.COUNTRY_COLUMN:
+            # the United States row is the US profile's people; Rest of world takes the residual
+            fixed = [i for i in ix if _norm(df.at[i, "Value"]) == "UNITEDSTATES"]
+            prefer = [i for i in ix if _norm(df.at[i, "Value"]) == _norm(_ip.REST_OF_WORLD)]
+        vals = _renorm_100({i: _num(df.at[i, bp]) or 0.0 for i in ix}, f"{subject}|{col}", fixed, prefer)
         for i, v in vals.items():
             df.at[i, bp] = _fmt(v)
     country_raw = {}
