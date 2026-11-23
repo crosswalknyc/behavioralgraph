@@ -467,8 +467,13 @@ class TheExits(unittest.TestCase):
         chat = _legacy_view()
         i = chat.index('_rs.shape_finished_read(payload, held)')
         self.assertIn("fromlist=['guard_payload']).guard_payload(payload)", chat[i:i + 400])
-        # the finished read is guarded before it lands in the thread, the job record and the email
-        self.assertLess(i, chat.index('_pm_append_read_to_history(pm_user, job_id, payload, held=held'))
+        # the finished read is guarded before it lands in the thread, the job record and the email: the chat copy that
+        # lands (_chat, the read plus the build offer on a subject we do not hold, 2026-11-23) is derived from the
+        # guarded payload after the guard, and the mail carries the guarded read itself
+        g = chat.index("guard_payload']).guard_payload(payload)", i)
+        c = chat.index("_chat = __import__('prometheus.build_offer', fromlist=['with_offer']).with_offer(payload", g)
+        self.assertLess(c, chat.index('_pm_append_read_to_history(pm_user, job_id, _chat, held=held', c))
+        self.assertLess(c, chat.index('_pm_watch_notify(pm_user, text, payload, payload.get', c))
 
 
 if __name__ == '__main__':

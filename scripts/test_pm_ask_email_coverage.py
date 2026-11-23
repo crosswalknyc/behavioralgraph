@@ -72,12 +72,14 @@ check("happy path still emails question + reply",
 
 # 3. Finished queued reads email the real answer.
 check("finished-read path calls _pm_watch_notify",
-      re.search(r"_pm_append_read_to_history\(pm_user, job_id, payload[^\n]*\)"
+      re.search(r"_pm_append_read_to_history\(pm_user, job_id, _chat[^\n]*\)"
                 r"\s*\n(?:\s*_pm_read_status_write\([^\n]*\)\s*\n)?"
                 r"\s*_pm_watch_notify\(pm_user, text, payload",
                 APP) is not None)   # the append carries held= / started_at= since 2026-10-20 and the status
                                     # document is marked done before the mail since 2026-11-05 (the landing
-                                    # happens once, tab open or not); the notify still follows the append
+                                    # happens once, tab open or not); the notify still follows the append.
+                                    # What lands is the chat copy (_chat: the read plus the build offer on a
+                                    # subject we do not hold, 2026-11-23); the mail carries the read alone
 
 # 4. Placeholder gating: only 'On it.' is skipped. The calm
 #    working-on-it promise must still email.
