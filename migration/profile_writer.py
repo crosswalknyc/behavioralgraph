@@ -923,6 +923,11 @@ def _ship_gate_autofix_once(df, subject, s3_key, s3, *,
                     df, _geo_held, subject, us_df=_us_df, verbose=verbose)
                 n_fixed += int(_n22 or 0)
             df = _geo.put_back_geo(df, _geo_held, subject)
+            # the worldwide AGE / GENDER hold the people the countries place
+            # in each bucket (the US block is the US profile, so this keeps
+            # I21 too)
+            df, _nw = _geo.reconcile_world_with_blocks(df, subject)
+            n_fixed += int(_nw or 0)
         except Exception as e:
             print(f"  [profile_writer] country blocks re-hold raised "
                   f"({type(e).__name__}: {e})")

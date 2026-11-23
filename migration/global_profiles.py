@@ -1148,8 +1148,8 @@ def _renorm_100(vals, salt):
     if not keys:
         return {}
     clean = {k: round(float(vals[k] or 0.0), 4) for k in keys}
-    def ok(d):
-        return (abs(sum(d.values()) - 100.0) < 0.00005 and len(set(d.values())) == len(d)
+    def ok(d):     # a set already within a few ten-thousandths of 100 stands as written (the US block is the US file)
+        return (abs(sum(d.values()) - 100.0) < 0.0006 and len(set(d.values())) == len(d)
                 and not any(_on_2dp(v) for v in d.values() if v > 0))
     if ok(clean):
         return clean
@@ -1399,3 +1399,255 @@ def ensure_geo_contract(df_main, held, subject, *, us_df=None, verbose=True):
         if verbose:
             print(f"   [country-blocks] {subject}: {n} COUNTRY row(s) / block(s) filled at the floor")
     return held, n
+
+
+# ---------------------------------------------------------------------------
+# the build path: COUNTRY and one block per country at >= 3%, in its own terms
+# ---------------------------------------------------------------------------
+
+_BLOCK_SYSTEM = ("You are a senior audience analyst. You describe one country's part of a worldwide digital "
+                 "audience in that country's own demographic terms. Strict JSON only. Shares are percent of "
+                 "that country's audience, up to 4 decimals, never round numbers, each demographic summing "
+                 "to 100.")
+_LABEL_MAX = 60
+
+
+def _world_demo_line(df, bp):
+    parts = []
+    for demo in ("AGE", "GENDER"):
+        rows = [(str(v), _num(b) or 0.0) for c, v, b in zip(df["Column"], df["Value"], df[bp])
+                if str(c).strip().upper() == demo]
+        if rows:
+            parts.append(f"{demo}: " + ", ".join(f"{v} {b:.1f}%" for v, b in rows))
+    return "; ".join(parts)
+
+
+def _block_prompt(ctx, country, people, share):
+    sch = _ip.block_schema(country)
+    registered = _ip.has_block_schema(country)
+    lines = [
+        f"SUBJECT: {ctx['subject']} ({ctx.get('category') or 'profile'}). Worldwide audience: "
+        f"{ctx['universe']:,} people who engaged with it online in the window.",
+        f"THIS COUNTRY: {country}, {people:,} people ({share:.1f}% of the worldwide audience).",
+        f"The worldwide audience reads: {ctx.get('world') or 'n/a'}.",
+    ]
+    if ctx.get("persona"):
+        lines.append(f"Who the audience is: {str(ctx['persona'])[:1200]}")
+    lines.append(f"For the people in {country} only, give each demographic below in {country}'s own terms.")
+    if registered:
+        lines.append("Use EXACTLY these buckets (labels verbatim), a share for every one:")
+        for demo in _ip.BLOCK_DEMOS:
+            if demo in sch:
+                lines.append(f"  {demo}: " + " | ".join(sch[demo]))
+        for demo in _ip.BLOCK_DEMOS:
+            if demo not in sch:
+                lines.append(f"  {demo}: buckets as the worldwide file writes them")
+    else:
+        lines.append(
+            f"Use {country}'s own official census or national survey categories for ETHNICITY, income bands "
+            f"in {country}'s currency with its symbol, the stages of {country}'s own school and college system "
+            "for EDUCATION, AGE as 18-24, 25-34, 35-44, 45-54, 55-64, 65+, GENDER as Male, Female, Non-Binary, "
+            "Prefer Not to Say; OCCUPATION, RELATIONSHIP, PARENTAL_STATUS and SEXUAL_ORIENTATION in plain "
+            "English. 3 to 10 buckets each.")
+    lines.append('Return ONLY: {"AGE": {"<label>": <share>, ...}, "GENDER": {...}, "ETHNICITY": {...}, '
+                 '"INCOME": {...}, "EDUCATION": {...}, "OCCUPATION": {...}, "RELATIONSHIP": {...}, '
+                 '"PARENTAL_STATUS": {...}, "SEXUAL_ORIENTATION": {...}}')
+    return "\n".join(lines)
+
+
+def _clean_block(country, raw_doc):
+    """{DEMO: {label: share}} validated against the country's schema (registered labels enforced:
+    an unknown label is dropped, a missing one rides in at its default), each renormalized to 100."""
+    sch = _ip.block_schema(country)
+    registered = _ip.has_block_schema(country)
+    out = {}
+    for demo in _ip.BLOCK_DEMOS:
+        got = (raw_doc or {}).get(demo) or (raw_doc or {}).get(demo.title()) or {}
+        if not isinstance(got, dict):
+            got = {}
+        vals = {}
+        canon = sch.get(demo) or {}
+        if registered and canon:
+            by = {_norm(k): k for k in canon}
+            for k, v in got.items():
+                lab = by.get(_norm(k))
+                x = _num(v)
+                if lab and x is not None and x >= 0:
+                    vals[lab] = x
+            if vals:
+                for lab, dv in canon.items():
+                    vals.setdefault(lab, dv * 0.25)
+        else:
+            for k, v in list(got.items())[:12]:
+                lab = re.sub(r"\s+", " ", str(k).replace("\u2014", "-").replace("\u2013", "-")).strip()[:_LABEL_MAX]
+                x = _num(v)
+                if lab and x is not None and x >= 0:
+                    vals[lab] = x
+        if not vals and demo in _ip.BLOCK_REQUIRED:
+            vals = dict(canon) if canon else dict((_ip.country_demo_schema(GLOBAL) or {}).get(demo) or {})
+        if vals and sum(vals.values()) > 0:
+            out[demo] = _renorm_100(vals, f"{country}|{demo}")
+    return out
+
+
+def house_block_reason(countries, ctx, verbose=True):
+    """{country: raw {DEMO: {label: share}}} from one model call per country, {} when no model is here."""
+    if not countries or not reasoning_enabled():
+        return {}
+    call = _model_call()
+    if call is None:
+        return {}
+    out = {}
+
+    def _one(n, item):
+        country, people, share = item
+        body = _block_prompt(ctx, country, people, share)
+        for attempt in range(2):
+            try:
+                text = call(_BLOCK_SYSTEM, body, n + attempt)
+                m = re.search(r"\{[\s\S]*\}", str(text or ""))
+                if m:
+                    doc = json.loads(m.group(0))
+                    if isinstance(doc, dict) and doc:
+                        return country, doc
+            except Exception as e:
+                print(f"   [country-blocks] {country}: reasoning error ({type(e).__name__}: {str(e)[:100]})")
+        return country, None
+    with ThreadPoolExecutor(max_workers=max(1, min(6, len(countries)))) as ex:
+        for country, doc in ex.map(lambda a: _one(*a), enumerate(countries)):
+            if doc:
+                out[country] = doc
+    if verbose:
+        print(f"   [country-blocks] reasoned {len(out)} of {len(countries)} country block set(s)")
+    return out
+
+
+def _world_label(demo, label):
+    lu = str(label).strip().upper()
+    if demo == "AGE":
+        return {"17 AND UNDER": "UNDER 18", "65 OR OLDER": "65+"}.get(lu, lu)
+    return lu
+
+
+def reconcile_world_with_blocks(df, subject=""):
+    """Worldwide AGE and GENDER hold at least the people the countries' blocks put in each bucket
+    (people level): a bucket under the countries' sum is lifted, the excess comes from buckets with
+    room, each category back to exactly 100 with the chain recomputed. Returns (df, n_lifted)."""
+    bp, cs, raw, proj, _g, _i = _cols(df)
+    S, U = _sample_and_universe(df, bp, raw, proj)
+    if not (S and U):
+        return df, 0
+    cu = df["Column"].astype(str).str.strip()
+    country_people = {}
+    for c, v, b in zip(cu, df["Value"], df[bp]):
+        if c.upper() == _ip.COUNTRY_COLUMN and _norm(v) != _norm(_ip.REST_OF_WORLD):
+            country_people[_norm(v)] = (_num(b) or 0.0) / 100.0 * U
+    df = df.copy()
+    n = 0
+    for demo in ("AGE", "GENDER"):
+        need = {}
+        for c, v, b in zip(cu, df["Value"], df[bp]):
+            cb = _ip.country_block(c)
+            if cb and cb[0] == demo and _norm(cb[1]) in country_people:
+                w = _world_label(demo, v)
+                need[w] = need.get(w, 0.0) + country_people[_norm(cb[1])] * (_num(b) or 0.0) / 100.0
+        ix = [i for i in df.index if cu.at[i].upper() == demo]
+        if not ix or not need:
+            continue
+        lab = {i: str(df.at[i, "Value"]).strip().upper() for i in ix}
+        share = {i: _num(df.at[i, bp]) or 0.0 for i in ix}
+        floor = {i: _ceil4(need.get(lab[i], 0.0) / U * 100.0) for i in ix}
+        short = [i for i in ix if share[i] < floor[i]]
+        if not short:
+            continue
+        for i in short:
+            share[i] = floor[i]
+            n += 1
+        excess = sum(share.values()) - 100.0
+        room = {i: share[i] - floor[i] for i in ix if i not in short and share[i] > floor[i]}
+        tot = sum(room.values())
+        if excess > 0 and tot > 0:
+            for i, r in room.items():
+                share[i] -= min(r, excess * r / tot)
+        vals = _renorm_100(share, f"{subject}|{demo}|world")
+        for i in ix:
+            if vals[i] < floor[i] - 1e-9:      # the renorm never takes a bucket under its floor
+                vals[i] = floor[i]
+        resid = round(100.0 - sum(vals.values()), 4)
+        if abs(resid) >= 0.00005:
+            free = [i for i in ix if vals[i] + resid >= floor[i]] or ix
+            big = max(free, key=lambda i: vals[i])
+            vals[big] = round(vals[big] + resid, 4)
+        for i in ix:
+            x = vals[i]
+            df.at[i, bp] = _fmt(x)
+            df.at[i, raw] = str(int(round(x / 100.0 * S)))
+            df.at[i, proj] = str(int(round(x / 100.0 * U)))
+            if cs:
+                df.at[i, cs] = _fmt(x)
+    return df, n
+
+
+def add_country_blocks(df, subject, *, us_df=None, persona=None, category="", reason_fn=None, verbose=True):
+    """COUNTRY and one block per country at >= 3% of the audience, in each country's own terms
+    (GLOBAL PROFILE CONTRACT): COUNTRY from the frame's own LOCATION by country, the United States at
+    the US profile's people; the US block is the US profile's own demographics (the same people);
+    every other country reasoned in its own schema (a registered schema's labels enforced, an
+    unregistered country's own census terms), the schema defaults when nothing can be reasoned.
+    Worldwide AGE and GENDER are held at least at the people the blocks place in each bucket.
+    Returns (df, stats). Never raises."""
+    import pandas as pd
+    stats = {"countries": 0, "blocks": 0, "reasoned": 0, "fallback": 0, "us_copied": False, "world_lifted": 0}
+    try:
+        main, _old = set_aside_geo(df)
+        bp, cs, raw, proj, gpp, idx = _cols(main)
+        S, U = _sample_and_universe(main, bp, raw, proj)
+        if not (bp and S and U):
+            return df, stats
+        us_people = None
+        if us_df is not None:
+            ub, _uc, ur, up, _ug, _ui = _cols(us_df)
+            _us_s, us_people = _sample_and_universe(us_df, ub, ur, up)
+        crows = country_rows_from_location(main, us_people)
+        countries = [(name, share) for name, share in crows if name != _ip.REST_OF_WORLD]
+        stats["countries"] = len(countries)
+        rows = [{"Column": _ip.COUNTRY_COLUMN, "Value": name, bp: _fmt(share)} for name, share in crows]
+        blocks = {}
+        if us_df is not None and any(n == "United States" for n, _s in countries):
+            ub = next(c for c in us_df.columns if str(c).startswith("Brand Penetration"))
+            us_block = {}
+            for c, v, b in zip(us_df["Column"], us_df["Value"], us_df[ub]):
+                d = str(c).strip().upper()
+                if d in _ip.BLOCK_DEMOS and _num(b) is not None:
+                    us_block.setdefault(d, {})[str(v).strip()] = _num(b)
+            if all(d in us_block for d in _ip.BLOCK_REQUIRED):
+                blocks["United States"] = us_block
+                stats["us_copied"] = True
+        todo = [(name, int(round(share / 100.0 * U)), share) for name, share in countries if name not in blocks]
+        ctx = {"subject": subject, "category": category, "universe": int(U), "world": _world_demo_line(main, bp),
+               "persona": (persona or {}).get("persona_summary") if isinstance(persona, dict) else persona}
+        got = (reason_fn or house_block_reason)(todo, ctx, verbose) if todo else {}
+        for name, _p, _s in todo:
+            doc = (got or {}).get(name)
+            blocks[name] = _clean_block(name, doc)
+            if doc:
+                stats["reasoned"] += 1
+            else:
+                stats["fallback"] += 1
+        for name, demos in blocks.items():
+            for demo in _ip.BLOCK_DEMOS:
+                for label, share in (demos.get(demo) or {}).items():
+                    rows.append({"Column": f"{demo} | {name}", "Value": label, bp: _fmt(float(share))})
+            stats["blocks"] += sum(1 for d in _ip.BLOCK_DEMOS if demos.get(d))
+        held = pd.DataFrame(rows).reindex(columns=main.columns, fill_value="")
+        out = put_back_geo(main, held, subject)
+        out, stats["world_lifted"] = reconcile_world_with_blocks(out, subject)
+        if verbose:
+            print(f"   [country-blocks] {subject}: COUNTRY {len(crows)} row(s) "
+                  f"({', '.join(f'{n} {s:.1f}%' for n, s in crows)}); {stats['blocks']} block(s), US copied from "
+                  f"the US profile: {stats['us_copied']}; {stats['reasoned']} reasoned, {stats['fallback']} at "
+                  f"the schema defaults; worldwide buckets lifted: {stats['world_lifted']}")
+        return out, stats
+    except Exception as e:  # pragma: no cover - fail-safe
+        print(f"   [country-blocks] skipped ({type(e).__name__}: {e})")
+        return df, stats

@@ -887,9 +887,65 @@ _US_BLOCK_SCHEMA = {
     "EDUCATION": {"HIGH SCHOOL OR LESS": 36.9, "SOME COLLEGE / ASSOCIATE DEGREE": 28.4,
                   "BACHELORS DEGREE": 21.6, "GRADUATE OR PROFESSIONAL DEGREE": 13.1},
 }
+_EN_GENDER = {"Female": 50.3, "Male": 48.9, "Non-Binary": 0.4, "Trans Female": 0.2,
+              "Prefer Not to Say": 0.2}
+_IRELAND_BLOCK_SCHEMA = {   # CSO census groups, euro bands, the Irish school and college stages
+    "AGE": {"18-24": 11.5, "25-34": 15.5, "35-44": 19.0, "45-54": 17.5, "55-64": 14.5, "65+": 22.0},
+    "GENDER": dict(_EN_GENDER),
+    "ETHNICITY": {"White Irish": 76.6, "White Irish Traveller": 0.6, "Any Other White Background": 9.9,
+                  "Black or Black Irish": 1.5, "Asian or Asian Irish": 3.3,
+                  "Other incl. Mixed Background": 2.6, "Not Stated": 5.5},
+    "INCOME": {"Under €20,000": 18.0, "€20,000 - €39,999": 27.0, "€40,000 - €59,999": 22.0,
+               "€60,000 - €99,999": 21.0, "€100,000+": 9.0, "Prefer Not to Say": 3.0},
+    "EDUCATION": {"Lower Secondary or Less": 21.0, "Upper Secondary (Leaving Certificate)": 21.0,
+                  "Post-Leaving Certificate / Technical": 15.0, "Bachelors Degree": 22.0,
+                  "Postgraduate Degree": 17.0, "Prefer Not to Say": 4.0},
+}
+_NIGERIA_BLOCK_SCHEMA = {   # the major ethnic groups, naira bands, WAEC to postgraduate
+    "AGE": {"18-24": 24.0, "25-34": 30.0, "35-44": 21.0, "45-54": 13.0, "55-64": 7.5, "65+": 4.5},
+    "GENDER": {"Male": 50.4, "Female": 49.3, "Prefer Not to Say": 0.3},
+    "ETHNICITY": {"Hausa-Fulani": 30.0, "Yoruba": 15.5, "Igbo": 15.2, "Ijaw": 1.8, "Kanuri": 2.4,
+                  "Ibibio": 1.8, "Tiv": 2.4, "Other Nigerian Ethnic Groups": 30.9},
+    "INCOME": {"Under ₦1,200,000": 38.0, "₦1,200,000 - ₦2,999,999": 27.0, "₦3,000,000 - ₦5,999,999": 17.0,
+               "₦6,000,000 - ₦11,999,999": 10.0, "₦12,000,000+": 5.0, "Prefer Not to Say": 3.0},
+    "EDUCATION": {"Primary School or Less": 20.0, "Secondary School (WAEC/SSCE)": 38.0, "OND / NCE": 13.0,
+                  "HND / Bachelors Degree": 22.0, "Postgraduate Degree": 5.0, "Prefer Not to Say": 2.0},
+}
+_CANADA_BLOCK_SCHEMA = {    # Statistics Canada population groups, CAD bands
+    "AGE": {"18-24": 10.5, "25-34": 16.5, "35-44": 16.5, "45-54": 15.5, "55-64": 17.0, "65+": 24.0},
+    "GENDER": dict(_EN_GENDER),
+    "ETHNICITY": {"White": 69.8, "South Asian": 7.1, "Chinese": 4.7, "Black": 4.3, "Filipino": 2.6,
+                  "Arab": 1.9, "Latin American": 1.6, "Southeast Asian": 1.1, "Indigenous": 5.0,
+                  "Other / Multiple": 1.9},
+    "INCOME": {"Under C$25,000": 14.0, "C$25,000 - C$49,999": 20.0, "C$50,000 - C$74,999": 18.0,
+               "C$75,000 - C$99,999": 15.0, "C$100,000 - C$149,999": 18.0, "C$150,000+": 12.0,
+               "Prefer Not to Say": 3.0},
+    "EDUCATION": {"High School or Less": 34.0, "College / CEGEP / Trades": 32.0, "Bachelors Degree": 22.0,
+                  "Graduate Degree": 10.0, "Prefer Not to Say": 2.0},
+}
+_AUSTRALIA_BLOCK_SCHEMA = {  # ABS ancestry groups, AUD bands
+    "AGE": {"18-24": 11.5, "25-34": 18.0, "35-44": 17.0, "45-54": 16.0, "55-64": 15.0, "65+": 22.5},
+    "GENDER": dict(_EN_GENDER),
+    "ETHNICITY": {"English": 33.0, "Australian": 29.9, "Irish": 9.5, "Scottish": 8.6, "Chinese": 5.5,
+                  "Italian": 4.4, "Indian": 3.1, "Aboriginal and Torres Strait Islander": 3.2, "Other": 2.8},
+    "INCOME": {"Under A$30,000": 18.0, "A$30,000 - A$59,999": 22.0, "A$60,000 - A$89,999": 20.0,
+               "A$90,000 - A$119,999": 15.0, "A$120,000 - A$179,999": 14.0, "A$180,000+": 8.0,
+               "Prefer Not to Say": 3.0},
+    "EDUCATION": {"Year 12 or Less": 35.0, "Certificate / Diploma": 30.0, "Bachelors Degree": 22.0,
+                  "Postgraduate Degree": 11.0, "Prefer Not to Say": 2.0},
+}
 _BLOCK_SCHEMAS = {"UNITEDSTATES": lambda: _US_BLOCK_SCHEMA,
                   "UNITEDKINGDOM": lambda: country_demo_schema("UK"),
-                  "GERMANY": lambda: country_demo_schema("GERMANY")}
+                  "GERMANY": lambda: country_demo_schema("GERMANY"),
+                  "IRELAND": lambda: _IRELAND_BLOCK_SCHEMA,
+                  "NIGERIA": lambda: _NIGERIA_BLOCK_SCHEMA,
+                  "CANADA": lambda: _CANADA_BLOCK_SCHEMA,
+                  "AUSTRALIA": lambda: _AUSTRALIA_BLOCK_SCHEMA}
+
+
+def has_block_schema(country) -> bool:
+    """True when the country's own block schema is registered (else the build reasons its labels)."""
+    return _fold(canonical_country(country) or country) in _BLOCK_SCHEMAS
 
 
 def block_schema(country) -> dict:
