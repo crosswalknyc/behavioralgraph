@@ -59,7 +59,10 @@ from . import pieces as _pieces
 ENV = 'PM_KNOWLEDGE'
 ENV_RESEARCH = 'PM_KNOWLEDGE_RESEARCH'
 ANCHOR_PREFIX = 'system/pm_anchors/'
-ANCHOR_FRESH_S = 14 * 24 * 3600          # anchors on an open window are researched again after two weeks
+ANCHOR_FRESH_S = 14 * 24 * 3600          # anchors on an open window are researched again after two weeks (the default; PM_KNOWLEDGE_ANCHOR_TTL_DAYS)
+ANCHOR_INDEX_PREFIX = 'system/pm_anchors/_by_subject/'   # one small index per subject: which anchor documents it has and their windows
+ENV_ANCHOR_TTL = 'PM_KNOWLEDGE_ANCHOR_TTL_DAYS'
+ENV_RESEARCH_GATE = 'PM_KNOWLEDGE_RESEARCH_GATE'
 PRODUCTS = ('read', 'valuation', 'insight', 'journey', 'profile')
 
 RESEARCH_PROMPT = """You gather outside anchors for one measurement question before it is
@@ -221,6 +224,13 @@ def named_subject(text, ask: Optional[dict] = None, base: Optional[dict] = None)
     return ''
 
 
+_AUDIENCE_NOUNS = frozenset(('audience', 'audiences', 'viewer', 'viewers', 'fan', 'fans', 'subscriber', 'subscribers', 'buyer', 'buyers',
+                             'shopper', 'shoppers', 'listener', 'listeners', 'watcher', 'watchers', 'follower', 'followers', 'customer',
+                             'customers', 'consumer', 'consumers', 'user', 'users', 'player', 'players', 'reader', 'readers', 'member',
+                             'members', 'owner', 'owners', 'the', 'a', 'an', 'of', 'and', 'on', 'in', 'for', 'to', 'with', 'avid', 'casual',
+                             'us', 'people'))
+
+
 def base_is_borrowed(text, named: str, base: Optional[dict]) -> bool:
     """True when the read's base is another subject's profile: the words
     name a subject (`named`), the base is a page, catalog or view base
@@ -237,11 +247,12 @@ def base_is_borrowed(text, named: str, base: Optional[dict]) -> bool:
     if _twin.same_name(named, bs) or _twin.same_name(named, bs.split(' - ')[0]):
         return False
     # the named subject inside the base's own name ('Anne Hathaway' on the
-    # Anne Hathaway x Shiseido valuation, 'Yellowstone' on its avid cut):
-    # the base is the subject's
-    ntoks = [w for w in re.split(r'[^a-z0-9]+', str(named).lower()) if len(w) >= 3]
+    # Anne Hathaway x Shiseido valuation, 'Yellowstone' on its avid cut,
+    # 'Nike fans' with Nike open): the base is the subject's; an audience
+    # noun names the kind of audience, never another subject
+    ntoks = [w for w in re.split(r'[^a-z0-9]+', str(named).lower()) if w and w not in _AUDIENCE_NOUNS]
     btoks = set(re.split(r'[^a-z0-9]+', bs.lower()))
-    if ntoks and all(w in btoks for w in ntoks):
+    if not ntoks or all(w in btoks for w in ntoks):
         return False
     try:
         from . import named_subject as _ns
@@ -269,6 +280,74 @@ def ask_key(ask: dict) -> str:
 
 
 # ------------------------------------------------------------------ held
+_CATALOG_MEMO: dict = {}
+_CATALOG_INFLIGHT: dict = {}
+_CATALOG_MEMO_TTL_S = 60.0
+
+
+def catalog_anchors(name, window=None, products=None, with_ledger=False):
+    """corpus_catalog.anchors_for, memoized for a minute per (subject,
+    window, products): held() and subject_facts() read the same subject
+    in one pass, so the catalog is scanned once (2026-11-23)."""
+    from migration import corpus_catalog as _cc
+    w = window if isinstance(window, dict) else {}
+    key = (_fold(name), str(w.get('start') or ''), str(w.get('end') or ''), tuple(products or ()), bool(with_ledger))
+    now = time.time()
+    with _PENDING_LOCK:
+        hit = _CATALOG_MEMO.get(key)
+        if hit and now - hit[0] < _CATALOG_MEMO_TTL_S:
+            return json.loads(json.dumps(hit[1]))
+        flight = _CATALOG_INFLIGHT.get(key)
+        if flight is None:
+            flight = threading.Event()
+            _CATALOG_INFLIGHT[key] = flight
+            mine = True
+        else:
+            mine = False
+    if not mine:
+        # another lookup on the same subject is scanning right now (the held
+        # and the shared-figures lookups run side by side): wait for its answer
+        flight.wait(timeout=20.0)
+        with _PENDING_LOCK:
+            hit = _CATALOG_MEMO.get(key)
+        if hit:
+            return json.loads(json.dumps(hit[1]))
+    try:
+        out = _cc.anchors_for(name, window=window, products=products, with_ledger=with_ledger)
+        try:
+            with _PENDING_LOCK:
+                if len(_CATALOG_MEMO) > 200:
+                    for k in [k for k, v in _CATALOG_MEMO.items() if now - v[0] > _CATALOG_MEMO_TTL_S]:
+                        _CATALOG_MEMO.pop(k, None)
+                _CATALOG_MEMO[key] = (now, json.loads(json.dumps(out, default=str)))
+        except Exception:
+            pass
+    finally:
+        with _PENDING_LOCK:
+            _CATALOG_INFLIGHT.pop(key, None)
+        flight.set()
+    return out
+
+
+def filter_held_to_valuation(h: dict, bpiq_source_key) -> dict:
+    """held() for a read about one stored valuation: the other valuation
+    files on the subject leave the facts and the block."""
+    if not bpiq_source_key or not isinstance(h, dict):
+        return h
+    try:
+        from migration import corpus_catalog as _cc
+        want = str(bpiq_source_key).split('/')[-1]
+        facts = [f for f in (h.get('facts') or []) if not (isinstance(f, dict) and f.get('product') == 'bpiq'
+                                                          and str(((f.get('source') or {}).get('key')) or f.get('source_key') or '').split('/')[-1] != want)]
+        if len(facts) == len(h.get('facts') or []):
+            return h
+        out = dict(h, facts=facts)
+        out['block'] = _cc.anchors_block({'facts': facts}) if facts else ''
+        return out
+    except Exception:
+        return h
+
+
 def held(subject, window=None, products=None, extra_subjects=(), bpiq_source_key=None) -> dict:
     """The figures the company holds on the subject: the catalog's facts
     (newest first, the ask's window first), the profile-level sizes and
@@ -284,7 +363,7 @@ def held(subject, window=None, products=None, extra_subjects=(), bpiq_source_key
         names = [n for n in dict.fromkeys(names) if n]
         parts = []
         for n in names[:3]:
-            anchors = _cc.anchors_for(n, window=window, products=products, with_ledger=False)
+            anchors = catalog_anchors(n, window=window, products=products, with_ledger=False)
             facts = list(anchors.get('facts') or [])
             if bpiq_source_key:
                 want = str(bpiq_source_key).split('/')[-1]
@@ -412,10 +491,22 @@ def _clean_events(raw) -> list:
     return out[:40]
 
 
+def anchor_ttl_s() -> float:
+    """How long anchors on an open window are read back before a new
+    research call: 30 days unless PM_KNOWLEDGE_ANCHOR_TTL_DAYS says
+    otherwise (2026-11-23: a trailing-year ask moves its window a day at
+    a time, and the anchors do not change with it)."""
+    try:
+        days = float(os.environ.get(ENV_ANCHOR_TTL, '30') or 30)
+    except (TypeError, ValueError):
+        days = 30.0
+    return max(1.0, days) * 86400.0
+
+
 def _fresh(doc: dict, ask_window: dict) -> bool:
     """A saved research document is read back when its window is closed
     (the facts of a finished window do not change) or when it is under
-    two weeks old."""
+    the anchor TTL (30 days by default)."""
     try:
         ts = float(doc.get('saved_ts') or 0)
     except (TypeError, ValueError):
@@ -424,11 +515,71 @@ def _fresh(doc: dict, ask_window: dict) -> bool:
     today = _dt.date.today()
     if end and end < today - _dt.timedelta(days=3):
         return True
-    return bool(ts) and (time.time() - ts) < ANCHOR_FRESH_S
+    return bool(ts) and (time.time() - ts) < anchor_ttl_s()
+
+
+def _subject_index_key(subject) -> str:
+    return f"{ANCHOR_INDEX_PREFIX}{hashlib.sha1(_fold(subject).encode()).hexdigest()[:16]}.json"
+
+
+def _index_anchor_doc(store, ask: dict, key: str, saved_ts: float) -> None:
+    """List a saved anchor document on its subject's index (ETag-guarded
+    when the store supports it), so a later ask on a nearby window finds
+    it without a research call."""
+    try:
+        w = _window_of(ask.get('window'))
+        row = {'key': key, 'product': ask.get('product') or 'read', 'family': ask.get('family') or 'audience',
+               'scope': _fold(ask.get('scope'))[:40], 'window': {'start': w['start'] or '', 'end': w['end'] or ''}, 'saved_ts': saved_ts}
+        ik = _subject_index_key(ask.get('subject'))
+        doc = store.load(ik) if hasattr(store, 'load') else None
+        doc = doc if isinstance(doc, dict) else {'subject': str(ask.get('subject') or ''), 'docs': []}
+        rows = [r for r in (doc.get('docs') or []) if isinstance(r, dict) and r.get('key') != key]
+        rows.append(row)
+        doc['docs'] = rows[-60:]
+        store.save(ik, doc)
+    except Exception as e:
+        print(f"[pm-knowledge] anchor index skipped: {type(e).__name__}: {e}")
+
+
+def _near_saved_anchors(store, ask: dict):
+    """A saved research document on the same subject, product, family and
+    scope whose window is near the ask's (the near-twin window test) and
+    still fresh; None when none. The index is one small document per
+    subject."""
+    try:
+        doc = store.load(_subject_index_key(ask.get('subject'))) if hasattr(store, 'load') else None
+        rows = [r for r in ((doc or {}).get('docs') or []) if isinstance(r, dict)]
+        if not rows:
+            return None
+        w = _window_of(ask.get('window'))
+        want = {'start': w['start'] or '', 'end': w['end'] or ''}
+        best = None
+        for r in rows:
+            if (r.get('product') or 'read') != (ask.get('product') or 'read') or (r.get('family') or 'audience') != (ask.get('family') or 'audience'):
+                continue
+            if (r.get('scope') or '') != _fold(ask.get('scope'))[:40]:
+                continue
+            rw = r.get('window') or {}
+            if want['start'] and rw.get('start'):
+                ok, _why = _twin.windows_near(rw, want)
+                if not ok:
+                    continue
+            elif want['start'] != (rw.get('start') or ''):
+                continue
+            if best is None or float(r.get('saved_ts') or 0) > float(best.get('saved_ts') or 0):
+                best = r
+        if not best:
+            return None
+        saved = store.load(_anchor_doc_key(best['key']))
+        if isinstance(saved, dict) and (saved.get('anchors') or saved.get('events') is not None) and _fresh(saved, ask.get('window') or {}):
+            return saved
+    except Exception as e:
+        print(f"[pm-knowledge] near anchors skipped: {type(e).__name__}: {e}")
+    return None
 
 
 def research(ask: dict, claude_json: Optional[Callable] = None, tools=None, changed_windows=None,
-             store=None, force: bool = False) -> dict:
+             store=None, force: bool = False, call: bool = True) -> dict:
     """Outside research as a step. Returns {'anchors', 'events', 'block',
     'marks', 'cached', 'key'}. The anchor store is read first; one call
     with web search when nothing usable is stored (or `force`); the
@@ -462,10 +613,20 @@ def research(ask: dict, claude_json: Optional[Callable] = None, tools=None, chan
                         saved = store.load(_anchor_doc_key(open_key))
                 except Exception:
                     saved = None
+            if not (isinstance(saved, dict) and (saved.get('anchors') or saved.get('events') is not None)) and not changed_windows:
+                # anchors researched for a nearby window (the trailing year a
+                # day or a week on) are the same anchors: read them back
+                # (2026-11-23, faster answers)
+                near = _near_saved_anchors(store, a)
+                if near:
+                    saved = near
+                    out['near_window'] = True
         if isinstance(saved, dict) and (saved.get('anchors') or saved.get('events') is not None) and _fresh(saved, a.get('window') or {}):
             out['anchors'] = _clean_anchors(saved.get('anchors'))
             out['events'] = _clean_events(saved.get('events'))
             out['cached'] = True
+        elif not call:
+            out['skipped'] = True           # the held and recorded figures already answer; no call (2026-11-23)
         elif research_enabled() and callable(claude_json):
             ask_doc = {
                 'subject': a.get('subject'), 'question': str(a.get('text') or '')[:600],
@@ -505,6 +666,8 @@ def research(ask: dict, claude_json: Optional[Callable] = None, tools=None, chan
                         'sources': [s for s in (raw.get('sources') or []) if isinstance(s, dict)][:20],   # internal only
                         'saved_ts': time.time(), 'saved_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                     })
+                    if not changed_windows:
+                        _index_anchor_doc(store, a, key, time.time())
                 except Exception as e:
                     print(f"[pm-knowledge] anchor save skipped: {type(e).__name__}: {e}")
         for x in out['anchors']:
@@ -807,6 +970,72 @@ def world_block(text, subject='') -> str:
 
 
 # ------------------------------------------------------- the three paths
+def _side_by_side(jobs: dict, timeout_s: float = 25.0) -> dict:
+    """Run independent lookups on threads and collect what finished; a
+    job that raises or outruns the timeout contributes nothing (the read
+    goes on without it). One job runs inline; the switch
+    PM_KNOWLEDGE_PARALLEL=0 runs them in turn."""
+    out = {}
+    names = list(jobs.keys())
+    if len(names) <= 1 or os.environ.get('PM_KNOWLEDGE_PARALLEL', '1').strip().lower() in ('0', 'false', 'no', 'off'):
+        for n in names:
+            try:
+                out[n] = jobs[n]()
+            except Exception as e:
+                print(f"[pm-knowledge] {n} lookup skipped: {type(e).__name__}: {e}")
+        return out
+    from concurrent.futures import ThreadPoolExecutor, wait
+    import contextvars
+    ex = ThreadPoolExecutor(max_workers=min(4, len(names)), thread_name_prefix='pm-knowledge')
+    futs = {}
+    try:
+        for n in names:
+            ctx = contextvars.copy_context()
+            futs[ex.submit(ctx.run, jobs[n])] = n
+        done, pending = wait(list(futs.keys()), timeout=timeout_s)
+        for f in done:
+            n = futs[f]
+            try:
+                out[n] = f.result()
+            except Exception as e:
+                print(f"[pm-knowledge] {n} lookup skipped: {type(e).__name__}: {e}")
+        for f in pending:
+            print(f"[pm-knowledge] {futs[f]} lookup outran {timeout_s:.0f}s; the read goes on without it")
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    return out
+
+
+def research_gate_enabled() -> bool:
+    return os.environ.get(ENV_RESEARCH_GATE, '1').strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def research_needed(text, *, researched=False, h=None, led=None, facts=None, twin=None, changed=None) -> bool:
+    """Whether the read needs a research call. Always for a subject we
+    hold no profile on or read off another base, for a question about
+    the world, and for a near twin whose window changed (the dated events
+    decide the band). Otherwise only when nothing is on file: no profile
+    in the catalog, no stored figures in the ledger, no figures across
+    products. The gate is off under PM_KNOWLEDGE_RESEARCH_GATE=0 (every
+    read researches, as before)."""
+    if not research_gate_enabled():
+        return True
+    if researched:
+        return True
+    try:
+        from . import catalog_lane as _cat
+        if _cat.world_question(text):
+            return True
+    except Exception:
+        pass
+    if twin and changed:
+        return True
+    have_profile = isinstance((h or {}).get('profile'), dict) and bool((h or {}).get('facts'))
+    have_stored = bool([e for e in ((led or {}).get('entries') or []) if isinstance(e, dict) and (e.get('metrics') or e.get('reply'))])
+    have_shared = bool((facts or {}).get('figures')) or bool((facts or {}).get('size'))
+    return not (have_profile or have_stored or have_shared)
+
+
 def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None, stages=None,
                 claude_json=None, tools=None, history=None, body=None, led=None) -> str:
     """The generated read's one block: what the path assembled before
@@ -880,14 +1109,46 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
                 blk = ''
             if blk:
                 parts.append(str(blk))
+        # The independent lookups run side by side (2026-11-23, faster
+        # answers): the valuation on file, the subject's catalog facts, the
+        # shared figures across products and the near twin in the ledger.
+        # Each is fail-safe on its own; a slow one never holds the others.
+        _win = ask.get('window') if (ask.get('window') or {}).get('start') else None
+        _pairing = _pairing_of(text, ask, base, mr)
+
+        def _f_valuation():
+            return valuation_for_read(text, ask, base, mr)
+
+        def _f_held():
+            return held(ask.get('subject'), window=_win)
+
+        def _f_facts():
+            return subject_facts(ask.get('subject') or base_subject, window=_win, pairing=_pairing, attribution=False)
+
+        def _f_twin():
+            if not (_win and ask.get('subject')):
+                return None
+            _led = led if isinstance(led, dict) and led.get('entries') is not None else None
+            if _led is None:
+                import insights_ledger as _il
+                _led = _il.consult(subject=ask.get('subject'), question=text, history=history)
+            return _twin.near_twin_entry({'subject': _led.get('subject') or ask.get('subject'),
+                                          'family': ask.get('family'), 'window': ask.get('window')},
+                                         list(_led.get('entries') or []))
+
+        results = _side_by_side({'valuation': _f_valuation, 'held': _f_held, 'facts': _f_facts, 'twin': _f_twin})
+        bound, others = results.get('valuation') or (None, [])
+        h = results.get('held') or {'subject': ask.get('subject'), 'facts': [], 'profile': None, 'block': '', 'marks': []}
+        sf = results.get('facts') or None
+        st = {'twin': results.get('twin'), 'marks': []}
         # a read about a valuation on file reads that file, for exactly
         # the window asked, and never mixes runs (Jenna 2026-11-20)
-        bound, others = valuation_for_read(text, ask, base, mr)
         if bound:
             vb = _twin.valuation_block(bound, others)
             if vb:
                 parts.append(vb)
             leave_valuation(ask.get('subject') or base.get('subject'), text, bound, others)
+            h = filter_held_to_valuation(h, (bound or {}).get('ref'))
         elif callable(saved):
             try:
                 blk = saved(text, window=ask.get('window')) if (ask.get('window') or {}).get('start') else saved(text)
@@ -897,8 +1158,6 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
                 blk = ''
             if blk:
                 parts.append(str(blk))
-        h = held(ask.get('subject'), window=(ask.get('window') if (ask.get('window') or {}).get('start') else None),
-                 bpiq_source_key=(bound or {}).get('ref'))
         if h.get('block'):
             parts.append(h['block'])
         elif callable(catalog) and not borrowed:
@@ -908,32 +1167,26 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
                 blk = ''
             if blk:
                 parts.append(str(blk))
-        st = {'twin': None, 'marks': []}
-        if (ask.get('window') or {}).get('start') and ask.get('subject'):
-            try:
-                _led = led if isinstance(led, dict) and led.get('entries') is not None else None
-                if _led is None:
-                    import insights_ledger as _il
-                    _led = _il.consult(subject=ask.get('subject'), question=text, history=history)
-                st['twin'] = _twin.near_twin_entry({'subject': _led.get('subject') or ask.get('subject'),
-                                                    'family': ask.get('family'), 'window': ask.get('window')},
-                                                   list(_led.get('entries') or []))
-            except Exception as e:
-                print(f"[pm-knowledge] twin lookup skipped: {type(e).__name__}: {e}")
         if st['twin']:
             tb = _twin.twin_block(st['twin'], ask.get('window'))
             if tb:
                 parts.append(tb)
-        if callable(stage):
-            try:
-                stage('researching')
-            except Exception:
-                pass
         changed = _twin.changed_windows((st['twin'] or {}).get('window') or {}, ask.get('window') or {}) if st['twin'] else None
         unheld = bool(researched and not h.get('profile'))   # a subject we hold no profile on (the build offer reads this, 2026-11-23)
         if unheld:
             ask['size_needed'] = True
-        r = research(ask, claude_json, tools, changed_windows=changed or None)
+        # The research call runs only when the held and recorded figures do
+        # not already answer (2026-11-23): a subject we hold no profile on,
+        # a question about the world, a twin whose window changed (its dated
+        # events decide the band), or a subject with nothing on file. Saved
+        # anchors are still read back without a call.
+        need_call = research_needed(text, researched=researched, h=h, led=led, facts=sf, twin=st['twin'], changed=changed)
+        if need_call and callable(stage):
+            try:
+                stage('researching')
+            except Exception:
+                pass
+        r = research(ask, claude_json, tools, changed_windows=changed or None, call=need_call)
         if r.get('block'):
             parts.append(r['block'])
         cap, cap_source = None, ''
@@ -951,14 +1204,12 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         # one set of figures across products (2026-11-23): the subject's saved
         # size, records, valuations, title universe and campaign ride the read
         # as one block, and the whole audience on file caps every count
-        sf = None
         try:
             # a read bound to one valuation never carries the other runs' totals
             # as binding figures (the valuation block already names them as not
             # this answer, 2026-11-20); the pairing's valuations ride only when
             # no file is bound
-            sf = subject_facts(ask.get('subject') or base_subject, window=(ask.get('window') if (ask.get('window') or {}).get('start') else None),
-                               pairing=(None if bound else _pairing_of(text, ask, base, mr)), attribution=False)
+            sf = sf if isinstance(sf, dict) else {'figures': [], 'ceiling': None, 'block': ''}
             if bound and sf.get('figures'):
                 sf = dict(sf, figures=[x for x in sf['figures'] if x.get('product') != 'bpiq'])
                 sf['block'] = shared_block(sf)
@@ -983,7 +1234,8 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
             parts.append(wb)
         base['_knowledge'] = {'key': ask_key(ask), 'twin': (st['twin'] or {}).get('ref'), 'valuation': (bound or {}).get('ref'),
                               'anchors': len(r.get('anchors') or []), 'events': len(r.get('events') or []),
-                              'cached': bool(r.get('cached')), 'marks': marks_of(h, r)[:60],
+                              'cached': bool(r.get('cached')), 'research_call': bool(need_call and not r.get('cached') and not r.get('skipped')),
+                              'research_skipped': bool(r.get('skipped')), 'near_window': bool(r.get('near_window')), 'marks': marks_of(h, r)[:60],
                               'named_subject': named, 'borrowed_base': base_subject if borrowed else '', 'size_cap': cap, 'size_source': cap_source,
                               'subject': str(ask.get('subject') or named or ''), 'unheld': unheld,
                               'shared_figures': len((sf or {}).get('figures') or []),
@@ -1140,10 +1392,9 @@ def subject_facts(subject, *, window=None, pairing=None, extra_subjects=(), attr
         print(f"[pm-knowledge] saved size skipped: {type(e).__name__}: {e}")
     # 2. the corpus catalog: each product's published figures
     try:
-        from migration import corpus_catalog as _cc
         names = [out['subject']] + [str(x) for x in (extra_subjects or []) if str(x or '').strip()]
         for name in names:
-            cat = _cc.anchors_for(name, window=window)
+            cat = catalog_anchors(name, window=window, with_ledger=False)
             for f in (cat.get('facts') or []):
                 if not isinstance(f, dict) or f.get('product') == 'chat' or f.get('kind') in ('stated_number', 'sample_size'):
                     continue
@@ -1404,4 +1655,5 @@ __all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored
            'leave_valuation', 'peek_valuation', 'bind_after', 'inline_window', 'valuation_for_read', 'world_block',
            'understanding_on_request', 'named_subject', 'base_is_borrowed', 'leave_size', 'peek_size', 'saved_people',
            'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS',
-           'shared_enabled', 'figure_kind', 'subject_facts', 'shared_block', 'cross_hold', 'record_cross_hold', 'ENV_SHARED', 'PEOPLE_KINDS']
+           'shared_enabled', 'figure_kind', 'subject_facts', 'shared_block', 'cross_hold', 'record_cross_hold', 'ENV_SHARED', 'PEOPLE_KINDS',
+           'research_needed', 'research_gate_enabled', 'catalog_anchors', 'filter_held_to_valuation', 'anchor_ttl_s', 'ENV_ANCHOR_TTL', 'ENV_RESEARCH_GATE']

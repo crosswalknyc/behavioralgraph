@@ -352,6 +352,105 @@ def test_no_whole_audience_fallback():
         BJ._chat = lambda: __import__('prometheus.legacy.chat', fromlist=['x'])
 
 
+def test_faster_answers():
+    """Round 2, item 3 (Jenna 2026-11-23): the research call runs only when
+    the held and recorded figures do not answer; anchors are read back
+    across nearby windows and for longer; the independent lookups run side
+    by side; the catalog is scanned once per read."""
+    print('faster answers: the research gate')
+    prof = {'profile': {'subject': 'X', 'audience_size': 1_000_001}, 'facts': [{'kind': 'audience_size'}]}
+    check('a held subject with figures on file needs no research call', not K.research_needed('how big is X', researched=False, h=prof, led={'entries': []}, facts={'figures': [], 'size': None}))
+    check('stored figures in the ledger answer too', not K.research_needed('how big is X', h={'profile': None, 'facts': []}, led={'entries': [{'metrics': [{'name': 'a', 'value': 1}]}]}, facts=None))
+    check('figures across products answer too', not K.research_needed('how big is X', h={}, led={}, facts={'figures': [{'kind': 'reach_people', 'value': 5}], 'size': None}))
+    check('nothing on file: research', K.research_needed('how big is X', h={'profile': None, 'facts': []}, led={'entries': []}, facts={'figures': [], 'size': None}))
+    check('a subject we hold no profile on always researches', K.research_needed('how big is X', researched=True, h=prof, led={'entries': [{'metrics': [1]}]}, facts={'figures': [1]}))
+    check('a question about the world always researches', K.research_needed('is there any awareness for the film Harbor Lights', h=prof, led={'entries': [{'metrics': [1]}]}, facts={'figures': [1]}))
+    check('a near twin whose window changed researches (its dated events decide the band)', K.research_needed('how big is X', h=prof, led={'entries': [{'metrics': [1]}]}, facts={'figures': [1]}, twin={'ref': 'k'}, changed=[{'start': '2026-01-01', 'end': '2026-01-05'}]))
+    os.environ['PM_KNOWLEDGE_RESEARCH_GATE'] = '0'
+    try:
+        check('gate off: every read researches, as before', K.research_needed('how big is X', h=prof, led={'entries': [{'metrics': [1]}]}, facts={'figures': [1]}))
+    finally:
+        os.environ.pop('PM_KNOWLEDGE_RESEARCH_GATE', None)
+    print('faster answers: anchors read back across nearby windows, for longer')
+    store = P.MemoryStore()
+    K.STORE_FOR_TESTS = store
+    calls = []
+
+    def cj(system, user, **kw):
+        calls.append(json.loads(user))
+        return {'success': True, 'data': {'anchors': [{'name': 'US people who engaged with X', 'value': 2_345_679, 'unit': 'people', 'klass': 'audience',
+                                                        'window': {'start': '2025-11-01', 'end': '2026-11-01'}, 'source_type': 'tracker', 'as_of': '2026-11-01'}],
+                                          'events': [], 'sources': []}}
+    try:
+        ask = K.ask_from(None, 'how big is X', {'subject': 'X', 'source': 'panel'}, {'metric_family': 'audience'})
+        ask['window'] = {'start': '2025-11-01', 'end': '2026-11-01'}
+        r1 = K.research(ask, cj, None, store=store)
+        check('the first ask researches and lands on the store with its subject index', len(calls) == 1 and r1['anchors'] and store.load(K._subject_index_key('X')) is not None)
+        ask2 = dict(ask, window={'start': '2025-11-04', 'end': '2026-11-04'})
+        r2 = K.research(ask2, cj, None, store=store)
+        check('three days on, the same anchors are read back with no call', len(calls) == 1 and r2['cached'] and r2.get('near_window') and r2['anchors'][0]['value'] == 2_345_679)
+        ask3 = dict(ask, window={'start': '2026-03-01', 'end': '2026-11-04'})
+        r3 = K.research(ask3, cj, None, store=store)
+        check('a window that is not near researches again', len(calls) == 2)
+        ask4 = dict(ask, window={'start': '2025-11-02', 'end': '2026-11-02'}, family='purchases')
+        r4 = K.research(ask4, cj, None, store=store)
+        check('another family on the same subject is its own research', len(calls) == 3)
+        r5 = K.research(dict(ask, window={'start': '2025-11-05', 'end': '2026-11-05'}), cj, None, store=store, call=False)
+        check('with no call allowed, saved anchors still come back', r5['cached'] and not r5.get('skipped') and len(calls) == 3)
+        r6 = K.research(dict(ask, subject='Never Seen Before Y'), cj, None, store=store, call=False)
+        check('with no call allowed and nothing saved, the step is skipped quietly', r6.get('skipped') and not r6['anchors'] and len(calls) == 3)
+        os.environ['PM_KNOWLEDGE_ANCHOR_TTL_DAYS'] = '45'
+        try:
+            check('the freshness window is thirty days by default and tunable from env', abs(K.anchor_ttl_s() - 45 * 86400) < 1)
+        finally:
+            os.environ.pop('PM_KNOWLEDGE_ANCHOR_TTL_DAYS', None)
+        check('thirty days by default', abs(K.anchor_ttl_s() - 30 * 86400) < 1)
+        check('a saved document twenty days old on an open window is still fresh', K._fresh({'saved_ts': __import__('time').time() - 20 * 86400, 'anchors': [1]}, {'start': '2026-01-01', 'end': '2026-12-31'}))
+    finally:
+        K.STORE_FOR_TESTS = None
+    print('faster answers: side by side, the catalog scanned once')
+    import time as _t
+    t0 = _t.monotonic()
+    out = K._side_by_side({'a': lambda: (_t.sleep(0.3), 'A')[1], 'b': lambda: (_t.sleep(0.3), 'B')[1], 'c': lambda: 1 / 0, 'd': lambda: (_t.sleep(0.3), 'D')[1]})
+    dt = _t.monotonic() - t0
+    check('four lookups run together: three answers, the one that raised contributes nothing, under a second in all', out.get('a') == 'A' and out.get('b') == 'B' and out.get('d') == 'D' and 'c' not in out and dt < 0.9)
+    os.environ['PM_KNOWLEDGE_PARALLEL'] = '0'
+    try:
+        check('the switch runs them in turn with the same answers', K._side_by_side({'a': lambda: 'A', 'b': lambda: 'B'}) == {'a': 'A', 'b': 'B'})
+    finally:
+        os.environ.pop('PM_KNOWLEDGE_PARALLEL', None)
+    from migration import corpus_catalog as CC
+    from unittest import mock
+    n = {'calls': 0}
+
+    def fake_anchors_for(name, window=None, products=None, limit=60, with_ledger=True):
+        n['calls'] += 1
+        return {'subject': name, 'facts': [{'kind': 'audience_size', 'product': 'profile', 'label': 'US audience (projected US people)', 'value': 4_567_891, 'unit': 'people',
+                                           'window': {'start': '2025-01-01', 'end': '2025-12-31'}, 'source': {'key': 'Z_01.csv'}, 'cut': False}], 'marks': []}
+    K._CATALOG_MEMO.clear(); K._FACTS_CACHE.clear()
+    calls2 = []
+    with mock.patch.object(CC, 'anchors_for', fake_anchors_for), mock.patch.object(CC, 'anchors_block', lambda a, max_lines=40: 'CATALOG BLOCK Z'), \
+            mock.patch.object(CC, 'profile_anchor', lambda a, w=None: {'subject': 'Z', 'audience_size': 4_567_891, 'sample_size': 138_462}):
+        base = {'subject': 'Z', 'source': 'catalog', 's3_key': 'Z_01.csv'}
+        blk = K.read_blocks('how many Z fans are women', {'metric_family': 'audience'}, base, pk=None, saved=None, catalog=None,
+                            claude_json=lambda *a, **k: calls2.append(1) or {'anchors': [], 'events': []}, tools=None, history=[], body=None,
+                            led={'block': '', 'exact': None, 'entries': []})
+    kn = base.get('_knowledge') or {}
+    check('a read on a held subject makes no research call and says so on the trail', not calls2 and kn.get('research_skipped') and not kn.get('research_call'))
+    check('the catalog was scanned once for the read (held and the shared figures share it)', n['calls'] == 1)
+    check('the read still carries the catalog block and the figures on file', 'CATALOG BLOCK Z' in blk and 'FIGURES ON FILE FOR Z' in blk)
+    K.take_twin('Z', 'how many Z fans are women')
+    K._CATALOG_MEMO.clear(); K._FACTS_CACHE.clear()
+    calls3 = []
+    with mock.patch.object(CC, 'anchors_for', lambda *a, **k: {'subject': 'Q', 'facts': [], 'marks': []}):
+        base2 = {'subject': 'Harbor Lights', 'source': 'panel'}
+        K.read_blocks('how many people watched Harbor Lights', {'metric_family': 'viewership'}, base2, pk=None, saved=None, catalog=None,
+                      claude_json=lambda *a, **k: calls3.append(1) or {'anchors': [], 'events': []}, tools=None, history=[], body=None,
+                      led={'block': '', 'exact': None, 'entries': []})
+    check('a subject we hold no profile on still researches', len(calls3) == 1 and (base2.get('_knowledge') or {}).get('research_call'))
+    K.take_twin('Harbor Lights', 'how many people watched Harbor Lights')
+
+
 if __name__ == '__main__':
     test_ask_and_key()
     test_research_step_and_store()
@@ -360,5 +459,6 @@ if __name__ == '__main__':
     test_insight_blocks_paths()
     test_valuation_end_to_end()
     test_no_whole_audience_fallback()
+    test_faster_answers()
     print(f"\n{'FAILED ' + str(FAIL) if FAIL else 'ALL PASSED'}")
     sys.exit(1 if FAIL else 0)
