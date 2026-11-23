@@ -94,6 +94,16 @@ def _frame_country(df):
         return None
 
 
+def _us_bands_skip(df, label, verbose=True):
+    """True on an international frame (UK, GERMANY, GLOBAL): US panel
+    canonical bands and US Gen Pop audience ceilings describe US people,
+    so they never re-level a non-US audience."""
+    ctry = _frame_country(df)
+    if ctry and verbose:
+        print(f'   {label}: {ctry} frame - US bands skipped')
+    return bool(ctry)
+
+
 # ============================================================================
 # Hostmap gating (workspace rule #4 — never lift/add a brand that isn't
 # in `reference.host_mapping`). Loaded lazily from disk cache or ClickHouse.
@@ -12107,6 +12117,8 @@ def enforce_brand_share_plausibility(df, subject, verbose=True,
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
         return df, 0
+    if _us_bands_skip(df, 'enforce_brand_share_plausibility', verbose):
+        return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col is None:
         return df, 0
@@ -17092,6 +17104,8 @@ def apply_cp_canonical_normalize(df, subject, verbose=True):
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
         return df, 0
+    if _us_bands_skip(df, 'apply_cp_canonical_normalize', verbose):
+        return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
         return df, 0
@@ -17206,6 +17220,8 @@ def apply_telecom_canonical_normalize(df, subject, verbose=True):
     Idempotent. No cap-down (no pinning). Returns (df, n_rows_lifted).
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    if _us_bands_skip(df, 'apply_telecom_canonical_normalize', verbose):
         return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
@@ -17358,6 +17374,8 @@ def apply_db_canonical_normalize(df, subject, verbose=True):
     Returns (df, n_rows_touched).
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    if _us_bands_skip(df, 'apply_db_canonical_normalize', verbose):
         return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
@@ -17593,6 +17611,8 @@ def apply_porn_canonical_normalize(df, subject, verbose=True):
     Returns (df, n_rows_touched).
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    if _us_bands_skip(df, 'apply_porn_canonical_normalize', verbose):
         return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
