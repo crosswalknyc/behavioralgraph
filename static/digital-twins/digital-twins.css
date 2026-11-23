@@ -964,8 +964,12 @@
         #digitalTwinsIQView .dtw-pa-eyebrow { margin: 8px 0 0; }
         #digitalTwinsIQView .dtw-pa-sent { font-size: 44px; font-weight: 200; letter-spacing: -0.025em; line-height: 1.22; margin-top: 8px; color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pa-sent .w { margin-right: 0.32em; }
+        /* the leading Ask of the full sentence slides in once a twin and a question type are both picked (Jenna 2026-11-23); clip-path keeps the baseline */
+        #digitalTwinsIQView .dtw-pa-sent .w.lead { display: inline-block; vertical-align: baseline; max-width: 0; margin-right: 0; opacity: 0; white-space: nowrap; clip-path: inset(0 0 -0.3em 0); transition: max-width .28s ease, margin-right .28s ease, opacity .28s ease; }
+        #digitalTwinsIQView .dtw-pa-sent .w.lead.in { max-width: 3em; margin-right: 0.32em; opacity: 1; }
         #digitalTwinsIQView .dtw-pa-sent .dtw-pa-dd.inline { display: inline-block; position: relative; vertical-align: baseline; margin-right: 0.32em; }
         #digitalTwinsIQView .dtw-pa-sent .dtw-pa-dd.inline .dtw-pa-dd-btn { display: inline-flex; width: auto; align-items: baseline; gap: 10px; background: transparent; border: 0; border-bottom: 2px solid var(--dtw-accent); border-radius: 0; padding: 0 4px 2px; font: inherit; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pa-sent:not(.full) .dtw-pa-dd.inline .dtw-pa-dd-btn { padding-left: 0; }   /* the ask form starts the line on the dropdown, flush with the margin */
         #digitalTwinsIQView .dtw-pa-sent .dtw-pa-dd.inline .dtw-pa-dd-btn .nm { font-size: inherit; font-weight: 200; line-height: inherit; color: var(--dtw-ink); min-width: 0; }
         #digitalTwinsIQView .dtw-pa-sent .dtw-pa-dd.inline .dtw-pa-dd-btn .nm.ph { color: var(--dtw-mute); }
         #digitalTwinsIQView .dtw-pa-sent .dtw-pa-dd.inline .dtw-pa-dd-btn .chev { font-size: 14px; color: var(--dtw-accent); align-self: center; }

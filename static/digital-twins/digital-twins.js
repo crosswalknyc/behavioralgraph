@@ -2750,7 +2750,17 @@
                 if (noun && noun !== 'people') return name + ' ' + noun;
                 return 'the ' + name + ' audience';
             }
-            function paFresh() { return { step: 0, key: S.key || '', picked: false, goal: '', kind: '', plan: null, sid: '', job: '', report: null, guided: null, busy: false, err: '', runs: null, runsKey: '', pollT: null }; }
+            // the seat's footing for a run, one source (Jenna 2026-11-23: the start's line had said 'Crosswalk seats are never charged' twice,
+            // once inside a parenthesis the quote added and once after it): free (a Crosswalk seat), included (a plan that covers the run), paying
+            function paSeatKind() { var c = groupCard(); if (!c) return 'paying'; if (c.free) return 'free'; if (c.included) return 'included'; return 'paying'; }
+            function paPriceLine() {
+                var k = paSeatKind();
+                if (k === 'free') return 'Planning and the run are free for Crosswalk seats.';
+                if (k === 'included') return 'Planning is free. The run is one room, included with your plan.';
+                return 'Planning is free. The run is one room at your plan rate.';
+            }
+            function paRunNote() { return 'Runs when you approve the plan'; }   // the index's Run row names the state; the price is said once, beside Plan it
+            function paFresh() { return { step: 0, key: S.key || '', picked: false, full: false, goal: '', kind: '', plan: null, sid: '', job: '', report: null, guided: null, busy: false, err: '', runs: null, runsKey: '', pollT: null }; }
             function pa() { if (!S.pa) S.pa = paFresh(); return S.pa; }
             function paRun(key) { return (S.runs || []).filter(function(r) { return r.key === key; })[0] || null; }
             function paTwinName(key) { var r = paRun(key); return r ? (r.name || r.subject || '') : (key === S.key ? twinName() : ''); }
@@ -2763,7 +2773,7 @@
                 if (i === 0) return ((p.picked || p.step >= 2) && p.key) ? (esc(paTwinName(p.key)) + (paPeople(p.key) ? ', ' + fmtN(paPeople(p.key)) + ' people' : '') + (r && r.kinds ? ', ' + r.kinds + ' archetypes' : '')) : 'Select twin';
                 if (i === 1) { var k = PA_KINDS.filter(function(x) { return x[0] === p.kind; })[0]; var typed = (p.goal || '').trim(); return typed ? esc(k ? k[1] : 'In your words') : (k ? esc(k[1]) : 'What you type above'); }
                 if (i === 2) { var qs = ((p.plan || {}).questions || []).length; return qs ? qs + ' questions, from the wide to the narrow' : 'Written for you when you press Plan it'; }
-                if (i === 3) { if (g.status === 'done') return 'Done'; if (g.status === 'stopped') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered, stopped'; if (g.status === 'running') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered'; return 'One room, your plan rate'; }
+                if (i === 3) { if (g.status === 'done') return 'Done'; if (g.status === 'stopped') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered, stopped'; if (g.status === 'running') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered'; return paRunNote(); }
                 return o ? 'Verdict: ' + esc(paCallWord(o)) : 'The verdict, the numbers, who drove it';
             }
             function paIndex(p, compact) {
@@ -2806,8 +2816,12 @@
                 // once picked it names the audience, not the person (Jennifer Beals followers); no example question is pre-filled.
                 var runs = S.runs || [], picked = !!(p.picked && p.key), cur = picked ? (runs.filter(function(r) { return r.key === p.key; })[0] || null) : null;
                 var j = PA_JOIN[p.kind] || PA_JOIN[''];
-                var out = '<div class="dtw-pa-sent">';
-                out += '<span class="w">Ask</span>';
+                // the ask form (Jenna 2026-11-23: 'update wheter to say ask until somthing is selected'; her pick: '[Select twin] ask your question'):
+                // until BOTH a twin and a question type are picked the line reads [Select twin] ask [your question]; with both it is the full
+                // sentence, Ask [Jennifer Beals followers] whether [question]. The dropdown and the slot keep their places; the leading Ask slides in.
+                var full = picked && !!p.kind, wasFull = !!p.full; p.full = full;
+                var out = '<div class="dtw-pa-sent' + (full ? ' full' : '') + '">';
+                out += '<span class="w lead' + (wasFull ? ' in' : '') + '" id="dtwPaLead" aria-hidden="' + (full ? 'false' : 'true') + '"' + (full !== wasFull ? ' data-to="' + (full ? 'in' : 'out') + '"' : '') + '>Ask</span>';
                 out += '<span class="dtw-pa-dd inline" id="dtwPaDd"><button type="button" class="dtw-pa-dd-btn" id="dtwPaDdBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="dtwPaDdList" onclick="dtwPaDdToggle()" onkeydown="dtwPaDdKey(event)">'
                     + '<span class="nm' + (cur ? '' : ' ph') + '">' + esc(cur ? paAudiencePhrase(p.key) : 'Select twin') + '</span><i class="chev" aria-hidden="true">&#9660;</i></button>'
                     + '<div class="dtw-pa-dd-menu" id="dtwPaDdMenu" hidden>'
@@ -2817,16 +2831,15 @@
                     + '<div class="dtw-pa-dd-rule" aria-hidden="true"></div>'
                     + runs.map(function(r, i) { var on = picked && r.key === p.key; return '<div class="dtw-pa-dd-opt' + (on ? ' on' : '') + '" role="option" id="dtwPaDdOpt' + i + '" data-key="' + esc(r.key) + '" data-hay="' + esc(twinOptionLabel(r).toLowerCase()) + '" aria-selected="' + on + '" onclick="dtwPaDdPick(\'' + esc(jsq(r.key)) + '\')" onmousemove="dtwPaDdHover(this)">' + paTwinRow(r) + '</div>'; }).join('')
                     + '</div></div></span>';
-                out += '<span class="w" id="dtwPaJoin">' + esc(j.join) + '</span>';
+                out += '<span class="w" id="dtwPaJoin">' + (full ? esc(j.join) : 'ask') + '</span>';
                 out += '<span class="dtw-pa-goalin" id="dtwPaGoal" contenteditable="plaintext-only" role="textbox" aria-multiline="true" aria-label="Your question" data-ph="your question" oninput="dtwPaGoalInput(this.textContent)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault(); dtwPaNext();}">' + esc(p.goal || '') + '</span>';
                 out += '</div>';
                 // the shape of the question, as flat tinted chips
                 out += '<div class="dtw-pa-shapes"><span class="lbl">The shape of the question</span>' + PA_KINDS.map(function(k) { return '<button type="button" class="dtw-pa-shape' + (k[0] === p.kind ? ' on' : '') + '" onclick="dtwPaKind(\'' + k[0] + '\')">' + esc(k[1]) + '</button>'; }).join('') + '</div>';
                 // Plan it and the price line as one compact block
-                var quote = (groupCard() && groupQuote(groupTierDefault())) || '';
                 var can = picked && !!(p.goal || '').trim();
                 out += '<div class="dtw-pa-startline"><button type="button" class="dtw-lb go pa' + (p.busy ? ' busy' : '') + '" id="dtwPaPlanBtn"' + (can && !p.busy ? '' : ' disabled') + ' onclick="dtwPaNext()">' + (p.busy ? 'Planning' : 'Plan it') + '<i>&rarr;</i></button>'
-                    + '<span class="price">Planning is free. The run is one room at your plan rate' + (quote ? ' (' + esc(String(quote).replace(/^This group runs /, '').replace(/\.$/, '')) + ')' : '') + '; Crosswalk seats are never charged.</span>'
+                    + '<span class="price">' + esc(paPriceLine()) + '</span>'
                     + (p.err ? '<span class="dtw-pa-err">' + esc(p.err) + '</span>' : '') + '</div>';
                 return out + paIndex(p, false) + paEarlier(p);
             }
@@ -2836,7 +2849,7 @@
                 var clause = String(p.goal || '').replace(/\s+/g, ' ').trim();
                 if (!clause) return '';
                 if (/\?$/.test(clause) || /^(if|will|would|should|what|which|who|how|can|could|does|do|is|are|did|when|where|why)\b/i.test(clause)) return clause.charAt(0).toUpperCase() + clause.slice(1);
-                var lead = (PA_JOIN[p.kind] || PA_JOIN['']).lead;
+                var lead = p.kind ? (PA_JOIN[p.kind] || PA_JOIN['']).lead : '';   // no type picked: as typed (Jenna 2026-11-23)
                 return lead ? lead + ' ' + clause.charAt(0).toLowerCase() + clause.slice(1) : clause.charAt(0).toUpperCase() + clause.slice(1);
             }
             // one row of the dropdown: the type, the name with the same-name qualifier, the people
@@ -2917,8 +2930,8 @@
                 out += '<div class="dtw-bw-group"><div class="k">The goal</div><input class="dtw-in" id="dtwPaPlanGoal" value="' + esc(plan.goal || '') + '" oninput="dtwPaEditPlan(\'goal\', this.value)"></div>';
                 out += '<div class="dtw-bw-group"><div class="k">What would count as yes</div><input class="dtw-in" id="dtwPaPlanYes" value="' + esc(plan.success || '') + '" oninput="dtwPaEditPlan(\'success\', this.value)"></div>';
                 out += '<div class="dtw-bw-group"><div class="k">The questions <em>' + qs.length + ', from the wide to the narrow</em></div><div class="dtw-pa-qs">' + qs.map(function(q, i) { return paQRow(q, i, true); }).join('') + '</div></div>';
-                var quote = (groupCard() && groupQuote(groupTierDefault())) || '';
-                out += '<div class="dtw-bw-line">This runs as one room on <b>' + esc(paTwinName(p.key)) + '</b>' + (paPeople(p.key) ? ' (' + fmtN(paPeople(p.key)) + ' people)' : '') + '. ' + esc(quote || 'One group at your plan rate, charged when the room opens.') + ' Each answer lands as it finishes; the outcome and the report land with the last one.</div>';
+                var quote = paSeatKind() === 'free' ? 'The run is free for Crosswalk seats.' : ((groupCard() && groupQuote(groupTierDefault())) || 'One group at your plan rate, charged when the room opens.');
+                out += '<div class="dtw-bw-line">This runs as one room on <b>' + esc(paTwinName(p.key)) + '</b>' + (paPeople(p.key) ? ' (' + fmtN(paPeople(p.key)) + ' people)' : '') + '. ' + esc(quote) + ' Each answer lands as it finishes; the outcome and the report land with the last one.</div>';
                 out += '<div class="dtw-bw-shareline"><button type="button" class="dtw-link" onclick="dtwPaReplan()">Plan it again</button> if this is not the shape you had in mind.</div>';
                 return out + paNav(qs.length >= 2, 'Run it');
             }
@@ -2991,6 +3004,7 @@
                 else if (p.step === 3) out += paRail() + paStepRun(p);
                 else out += paRail() + paReport(p);
                 h.innerHTML = '<div class="dtw-pa-wrap' + (p.step <= 1 ? ' start' : '') + '">' + out + '</div>';
+                var lead = el('dtwPaLead'); if (lead && lead.getAttribute('data-to')) { var to = lead.getAttribute('data-to'); (window.requestAnimationFrame || function(f) { setTimeout(f, 16); })(function() { lead.classList.toggle('in', to === 'in'); }); }
                 if (p.step <= 1 && p.picked && p.key && !p.goal && !paDd.open) { var ge = el('dtwPaGoal'); if (ge) { try { ge.focus(); } catch (_) {} } }
                 if (p.step === 3 && p.guided && p.guided.status === 'running') paSchedulePoll();
             }

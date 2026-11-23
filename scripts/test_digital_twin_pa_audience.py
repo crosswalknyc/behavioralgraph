@@ -17,7 +17,19 @@ type column, the same-name qualifier under the name and the people
 right-aligned. Once picked the control names the audience, not the person
 (Jennifer Beals followers, texas voters as is). No example question is
 pre-filled. The five shapes still swap the connecting words and keep what
-was typed; the index fills in and goes back."""
+was typed; the index fills in and goes back.
+
+The ask form (Jenna 2026-11-23, verbatim: 'update wheter to say ask until
+somthing is selected so that makes more sense and this is confusing'; her
+pick: '[Select twin] ask your question'): until BOTH a twin and a question
+type are picked the line reads [Select twin] ask [your question]; with both
+it is the full sentence, Ask [Jennifer Beals followers] whether [question],
+the leading Ask sliding in. Plan it still needs a twin and a question; with
+no type the question goes to the room as typed. The price line beside Plan it
+is said once, by seat: a seat that pays, 'Planning is free. The run is one
+room at your plan rate.'; a Crosswalk seat, 'Planning and the run are free
+for Crosswalk seats.' (it had read 'at your plan rate (Crosswalk seats are
+never charged); Crosswalk seats are never charged.')."""
 import json
 import os
 import shutil
@@ -61,11 +73,17 @@ class Static(unittest.TestCase):
         self.assertNotIn('function paStepQuestion(p)', js, 'the separate question step is gone; the sentence carries it')
         self.assertNotIn('function paStepAudience(p)', js)
         start = js[js.index('function paStart(p)'):js.index('function paQRow(q, i, editable)')]
-        for need in ('<span class="w">Ask</span>', 'class="dtw-pa-dd inline" id="dtwPaDd"', 'id="dtwPaDdBtn"', 'role="listbox"', 'dtwPaDdPick(', 'dtwPaDdFilter(this.value)',
+        for need in ('class="dtw-pa-dd inline" id="dtwPaDd"', 'id="dtwPaDdBtn"', 'role="listbox"', 'dtwPaDdPick(', 'dtwPaDdFilter(this.value)',
                      "'Select twin'", 'class="dtw-pa-dd-opt build" role="option" id="dtwPaDdOptBuild"', 'data-build="1"', 'Build new twin group', 'class="dtw-pa-dd-rule"', 'esc(twinPrice())',
                      'id="dtwPaJoin"', 'id="dtwPaGoal" contenteditable="plaintext-only"', 'data-ph="your question"', 'dtwPaGoalInput(this.textContent)', 'class="dtw-pa-shape', "dtwPaKind(\\'",
-                     'class="dtw-pa-startline"', 'id="dtwPaPlanBtn"', 'paIndex(p, false)', 'paAudiencePhrase(p.key)'):
+                     'class="dtw-pa-startline"', 'id="dtwPaPlanBtn"', 'paIndex(p, false)', 'paAudiencePhrase(p.key)',
+                     "var full = picked && !!p.kind, wasFull = !!p.full; p.full = full;", '<span class="w lead\' + (wasFull ? \' in\' : \'\') + \'" id="dtwPaLead"', "(full ? esc(j.join) : 'ask')", "'<span class=\"price\">' + esc(paPriceLine()) + '</span>'"):
             self.assertIn(need, start, need)
+        self.assertNotIn('never charged', start, 'the price line is one source, said once')
+        for need in ('function paSeatKind()', 'function paPriceLine()', "if (k === 'free') return 'Planning and the run are free for Crosswalk seats.';", "return 'Planning is free. The run is one room at your plan rate.';",
+                     "var lead = el('dtwPaLead'); if (lead && lead.getAttribute('data-to'))", "var lead = p.kind ? (PA_JOIN[p.kind] || PA_JOIN['']).lead : '';"):
+            self.assertIn(need, js, need)
+        self.assertEqual(js.count('never charged'), 2, 'the room quote keeps its one line (groupQuote) and the comment; nothing else repeats it')
         for gone in ('or build a new twin', 'Not here? Build a new twin', 'dtw-pa-sent-or', 'dtw-pa-dd-foot', 'dtw-pa-build small', 'dtw-pa-sent-build', "dtwTutorialOpen(\\'seating\\', this)", 'dtw-pa-startrow'):
             self.assertNotIn(gone, start, 'building a twin happens from the dropdown only: ' + gone)
         self.assertEqual(start[:start.index('function paGoalValue()')].count('dtwBuildOpen(true)'), 0, 'no build link or card on the start; dtwPaDdPick routes the first option')
@@ -89,7 +107,8 @@ class Static(unittest.TestCase):
                      # the polish (2026-11-23): the start reads to the page's edge, the question slot starts a fresh line when it cannot fit whole,
                      # Plan it is quiet while disabled and lit once it can be pressed, a hairline between twin rows, the phone menu stacks its rows
                      '.dtw-pa-wrap.start { max-width: 1200px; }', '.dtw-pa-goalin { display: inline-block; max-width: 100%;', '.dtw-pa-startline .dtw-lb.go.pa[disabled] { background: var(--dtw-track); color: var(--dtw-mute);',
-                     '.dtw-pa-dd-opt + .dtw-pa-dd-opt { border-top: 1px solid var(--dtw-hair); }', '.dtw-pa-dd .dtw-pa-dd-opt .n { grid-column: 2; text-align: left;'):
+                     '.dtw-pa-dd-opt + .dtw-pa-dd-opt { border-top: 1px solid var(--dtw-hair); }', '.dtw-pa-dd .dtw-pa-dd-opt .n { grid-column: 2; text-align: left;',
+                     '.dtw-pa-sent .w.lead { display: inline-block; vertical-align: baseline; max-width: 0;', '.dtw-pa-sent .w.lead.in { max-width: 3em; margin-right: 0.32em; opacity: 1; }', '.dtw-pa-sent:not(.full) .dtw-pa-dd.inline .dtw-pa-dd-btn { padding-left: 0; }'):
             self.assertIn(need, css, need)
         for gone in ('.dtw-pa-sent-or', '.dtw-pa-dd-foot', '.dtw-pa-build', '.dtw-pa-startrow', '.dtw-pa-pick'):
             self.assertNotIn(gone, css, 'dead CSS from the removed affordances: ' + gone)
@@ -111,13 +130,13 @@ class Behaviour(unittest.TestCase):
 
     def _code(self):
         js = _read(JS)
-        code = '\n'.join(_fn(js, n) for n in ('paHero', 'paStart', 'paTwinRow', 'paGoalValue', 'paGoalText', 'paAudienceNoun', 'paAudiencePhrase', 'paIndexStatus', 'paIndex', 'paRail', 'paEarlier', 'paCallClass', 'paCallWord', 'paRun', 'paTwinName', 'paPeople', 'pa', 'paFresh',
+        code = '\n'.join(_fn(js, n) for n in ('paHero', 'paStart', 'paTwinRow', 'paGoalValue', 'paGoalText', 'paAudienceNoun', 'paAudiencePhrase', 'paSeatKind', 'paPriceLine', 'paRunNote', 'paIndexStatus', 'paIndex', 'paRail', 'paEarlier', 'paCallClass', 'paCallWord', 'paRun', 'paTwinName', 'paPeople', 'pa', 'paFresh', 'paStepPlan', 'paQRow', 'paNav',
                                               'twinKindLabel', 'twinQualifier', 'twinNameShared', 'twinBuiltLine', 'twinOptionLabel', 'twinPrice', 'fmtN', 'fmtDay', 'jsq'))
         for v in ('MONTHS', 'PA_STEPS', 'PA_LEVELS', 'PA_JOIN', 'PA_BUILD_KEY', 'PA_PEOPLE_WORDS', 'SEP'):
             a = js.index('            var ' + v + ' = '); code = js[a:js.index(';\n', a) + 2] + code
         a = js.index('            var PA_KINDS = ['); code = js[a:js.index('];\n', a) + 3] + code
         return ("global.window = global; function esc(x) { return String(x == null ? '' : x).replace(/[&<>\"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; }); }\n"
-                "function el() { return null; } function groupCard() { return null; } function groupQuote() { return ''; } function groupTierDefault() { return ''; } function twinName() { return 'Jennifer Beals'; }\n"
+                "function el() { return null; } function groupCard() { return S.card || null; } function groupTierDefault() { return '20'; } function groupQuote(tier) { var c = groupCard(); if (!c) return ''; if (c.free) return 'Crosswalk seats are never charged.'; return (c.quote && c.quote['20']) || ''; } function twinName() { return 'Jennifer Beals'; }\n"
                 "var paDd = { open: false }; var S = { runs: " + json.dumps(RUNS) + ", key: 'jb', pricing: ['Digital Twin: $750 per twin'], twin: { meta: { size_us: 2776141 }, archetypes: { noun: 'followers' } }, pa: null };\n" + code + "\n")
 
     def test_the_start_waits_for_a_pick_even_with_a_twin_open(self):
@@ -126,19 +145,19 @@ var base = paFresh(); base.runs = [];
 S.pa = Object.assign({}, base, { step: 0, goal: '', kind: '' }); var html = paStart(S.pa);
 var opts = (html.match(/<div class="dtw-pa-dd-opt[^"]*" role="option" id="([^"]+)" data-key="([^"]+)"/g) || []).map(function(m) { return m.match(/data-key="([^"]+)"/)[1]; });
 var first = html.match(/<div class="dtw-pa-dd-opt build" role="option" id="dtwPaDdOptBuild" data-key="__build__" data-build="1"[^>]*onclick="dtwPaDdPick\('__build__'\)"[^>]*><span class="k"><i class="plus" aria-hidden="true">\+<\/i><\/span><span class="nm">Build new twin group<\/span><span class="n">\$750<\/span><\/div><div class="dtw-pa-dd-rule"/);
-console.log(JSON.stringify({ ask: /<span class="w">Ask<\/span>/.test(html), control: (html.match(/dtw-pa-dd-btn[^>]*><span class="nm( ph)?">([^<]+)</) || []).slice(1), keyWasOpen: base.key, picked: !!base.picked,
+console.log(JSON.stringify({ ask: /<span class="w lead" id="dtwPaLead" aria-hidden="true">Ask<\/span>/.test(html) && /id="dtwPaJoin">ask</.test(html) && !/dtw-pa-sent full/.test(html), control: (html.match(/dtw-pa-dd-btn[^>]*><span class="nm( ph)?">([^<]+)</) || []).slice(1), keyWasOpen: base.key, picked: !!base.picked,
   join: (html.match(/id="dtwPaJoin">([^<]+)</) || [])[1], ph: (html.match(/data-ph="([^"]+)"/) || [])[1], opts: opts, first: !!first, selected: (html.match(/aria-selected="true"/g) || []).length,
   quals: (html.match(/class="built">([^<]+)</g) || []).map(function(m) { return m.slice(14, -1); }), rowShape: /<span class="k">Talent<\/span><span class="nm">Jennifer Beals<\/span><span class="n">2,776,141 people<\/span>/.test(html),
   build: { or: /or build a new twin/.test(html), card: /Not here\? Build a new twin|dtw-pa-build|dtwTutorialOpen/.test(html), opens: (html.match(/dtwBuildOpen\(true\)/g) || []).length },
-  planDisabled: /id="dtwPaPlanBtn" disabled/.test(html), startline: /<div class="dtw-pa-startline"><button type="button" class="dtw-lb go pa" id="dtwPaPlanBtn" disabled onclick="dtwPaNext\(\)">Plan it<i>&rarr;<\/i><\/button><span class="price">Planning is free\./.test(html),
+  planDisabled: /id="dtwPaPlanBtn" disabled/.test(html), startline: /<div class="dtw-pa-startline"><button type="button" class="dtw-lb go pa" id="dtwPaPlanBtn" disabled onclick="dtwPaNext\(\)">Plan it<i>&rarr;<\/i><\/button><span class="price">Planning is free\. The run is one room at your plan rate\.<\/span>/.test(html),
   index: (html.match(/class="dtw-pa-ix[^"]*"><span class="n">0(\d)<\/span><span class="t">([^<]+)</g) || []).length, activeRow: (html.match(/class="dtw-pa-ix on[^"]*"><span class="n">0(\d)/) || [])[1], firstStatus: (html.match(/<span class="n">01<\/span><span class="t">Audience<\/span>.*?<span class="s">([^<]+)</) || [])[1], header: (html.match(/<span>five steps([^<]*)<\/span>/) || [])[1],
   words: (html.replace(/<[^>]+>/g, ' ').match(/\b(panel|kinds?|persona|segment|cohort|model|survey)\b/ig) || []) }));
 '''
         got = self._run(node)
-        self.assertTrue(got['ask'])
+        self.assertTrue(got['ask'], 'nothing picked: [Select twin] ask [your question], the leading Ask held out of the line')
         self.assertEqual(got['control'], [' ph', 'Select twin'], 'the control reads Select twin, muted, until the user picks here')
         self.assertEqual((got['keyWasOpen'], got['picked']), ('jb', False), 'an open twin on the page is not a pick')
-        self.assertEqual(got['join'], 'whether')
+        self.assertEqual(got['join'], 'ask')
         self.assertEqual(got['ph'], 'your question', 'no example question is pre-filled')
         self.assertEqual(got['opts'], ['__build__'] + [r['key'] for r in RUNS], 'Build new twin group first, then every visible twin')
         self.assertTrue(got['first'], 'the first option: a plus, Build new twin group, the price muted on the right, then the hairline')
@@ -156,14 +175,16 @@ console.log(JSON.stringify({ ask: /<span class="w">Ask<\/span>/.test(html), cont
     def test_a_pick_names_the_audience(self):
         node = self._code() + r'''
 var base = paFresh(); base.runs = [];
-function ctl(key, goal, twinNoun) { S.key = key; S.twin = twinNoun === undefined ? null : { meta: {}, archetypes: { noun: twinNoun } }; S.pa = Object.assign({}, base, { step: 1, key: key, picked: true, goal: goal || '', kind: '' }); var h = paStart(S.pa);
-  return { nm: (h.match(/dtw-pa-dd-btn[^>]*><span class="nm">([^<]+)</) || [])[1], on: (h.match(/dtw-pa-dd-opt on" role="option" id="dtwPaDdOpt\d+" data-key="([^"]+)"/) || [])[1], listName: (h.match(new RegExp('data-key="' + key + '"[^>]*><span class="k">[^<]*<\/span><span class="nm">([^<]+)<')) || [])[1],
+function ctl(key, goal, twinNoun, kind) { S.key = key; S.twin = twinNoun === undefined ? null : { meta: {}, archetypes: { noun: twinNoun } }; S.pa = Object.assign({}, base, { step: 1, key: key, picked: true, goal: goal || '', kind: kind || '' }); var h = paStart(S.pa);
+  return { nm: (h.match(/dtw-pa-dd-btn[^>]*><span class="nm">([^<]+)</) || [])[1], join: (h.match(/id="dtwPaJoin">([^<]+)</) || [])[1], full: /dtw-pa-sent full/.test(h), leadTo: (h.match(/id="dtwPaLead"[^>]*data-to="([^"]+)"/) || [])[1] || '', on: (h.match(/dtw-pa-dd-opt on" role="option" id="dtwPaDdOpt\d+" data-key="([^"]+)"/) || [])[1], listName: (h.match(new RegExp('data-key="' + key + '"[^>]*><span class="k">[^<]*<\/span><span class="nm">([^<]+)<')) || [])[1],
     planOn: !/id="dtwPaPlanBtn" disabled/.test(h), activeRow: (h.match(/class="dtw-pa-ix on[^"]*"><span class="n">0(\d)/) || [])[1], status: (h.match(/<span class="n">01<\/span><span class="t">Audience<\/span>.*?<span class="s">([^<]+)</) || [])[1], header: (h.match(/<span>five steps([^<]*)<\/span>/) || [])[1] }; }
-var out = { jb: ctl('jb', '', 'followers'), jbTyped: ctl('jb', 'a two-year activewear deal would pay off', 'followers'), pp: ctl('pp', '', 'subscribers'), ppList: ctl('pp0', ''), tx: ctl('tx', '', 'people'), oh: ctl('oh', '', 'voters'), mr: ctl('mr', ''), gg: ctl('gg', '', 'people'), ae: ctl('ae', '', undefined) };
+var out = { jb: ctl('jb', '', 'followers'), jbTyped: ctl('jb', 'a two-year activewear deal would pay off', 'followers'), jbFull: ctl('jb', 'a two-year activewear deal would pay off', 'followers', 'effect'), pp: ctl('pp', '', 'subscribers'), ppList: ctl('pp0', ''), tx: ctl('tx', '', 'people'), oh: ctl('oh', '', 'voters'), mr: ctl('mr', ''), gg: ctl('gg', '', 'people'), ae: ctl('ae', '', undefined) };
 console.log(JSON.stringify(out));
 '''
         got = self._run(node)
-        self.assertEqual(got['jb']['nm'], 'Jennifer Beals followers', 'Ask Jennifer Beals followers whether ...')
+        self.assertEqual(got['jb']['nm'], 'Jennifer Beals followers', 'the audience, not the person')
+        self.assertEqual((got['jb']['join'], got['jb']['full']), ('ask', False), 'a twin but no type: [Jennifer Beals followers] ask [your question]')
+        self.assertEqual((got['jbFull']['join'], got['jbFull']['full'], got['jbFull']['leadTo']), ('whether', True, 'in'), 'a twin and a type: Ask [Jennifer Beals followers] whether [question], the Ask sliding in')
         self.assertEqual(got['pp']['nm'], 'Paramount+ subscribers')
         self.assertEqual(got['ppList']['nm'], 'Paramount+ subscribers', 'the noun comes from the list entry when the twin is not the open one')
         self.assertEqual(got['tx']['nm'], 'texas voters', 'a name that already names people stands as is')
@@ -180,6 +201,7 @@ console.log(JSON.stringify(out));
 var base = paFresh(); base.key = 'jb'; base.picked = true; base.runs = [];
 function join(kind) { S.pa = Object.assign({}, base, { step: 1, goal: 'a two-year activewear deal would pay off', kind: kind }); var h = paStart(S.pa); return { join: (h.match(/id="dtwPaJoin">([^<]+)</) || [])[1], typed: /a two-year activewear deal would pay off<\/span>/.test(h), ph: (h.match(/data-ph="([^"]+)"/) || [])[1], on: (h.match(/class="dtw-pa-shape on"[^>]*>([^<]+)</) || [])[1] || '', status: (h.match(/<span class="n">02<\/span><span class="t">Question<\/span>.*?<span class="s">([^<]+)</) || [])[1], planOn: !/id="dtwPaPlanBtn" disabled/.test(h) }; }
 var out = { none: join(''), effect: join('effect'), contest: join('contest'), go: join('go'), price: join('price'), open: join('open') };
+S.pa = Object.assign({}, base, { goal: 'a two-year activewear deal would pay off', kind: '' }); out.goalNone = paGoalText(S.pa);
 S.pa = Object.assign({}, base, { goal: 'cut wins them over, the Flashdance cut or the Bette Porter cut', kind: 'contest' }); out.goalContest = paGoalText(S.pa);
 S.pa = Object.assign({}, base, { goal: 'a hoodie from her collection, at $45', kind: 'price' }); out.goalPrice = paGoalText(S.pa);
 S.pa = Object.assign({}, base, { goal: 'Will her followers buy a $45 hoodie?', kind: 'open' }); out.goalAsIs = paGoalText(S.pa);
@@ -187,12 +209,13 @@ S.pa = Object.assign({}, base, { goal: 'what it would take for them to see her a
 console.log(JSON.stringify(out));
 '''
         got = self._run(node)
-        self.assertEqual([got[k]['join'] for k in ('none', 'effect', 'contest', 'go', 'price', 'open')], ['whether', 'whether', 'which', 'whether', 'what they would pay for', 'about'])
+        self.assertEqual([got[k]['join'] for k in ('none', 'effect', 'contest', 'go', 'price', 'open')], ['ask', 'whether', 'which', 'whether', 'what they would pay for', 'about'], 'no type picked: the ask form; a type: its own connecting word')
         self.assertTrue(all(got[k]['typed'] for k in ('none', 'effect', 'contest', 'go', 'price', 'open')), 'the typed text survives every shape switch')
         self.assertEqual(set(got[k]['ph'] for k in ('none', 'effect', 'contest', 'go', 'price', 'open')), {'your question'}, 'the empty field says only your question, whatever the shape')
         self.assertEqual(got['contest']['on'], 'Will X win?')
         self.assertEqual(got['contest']['status'], 'Will X win?')
-        self.assertTrue(all(got[k]['planOn'] for k in ('none', 'contest')), 'Plan it is live once there is a question')
+        self.assertTrue(all(got[k]['planOn'] for k in ('none', 'contest')), 'Plan it is live once there is a twin and a question; a type stays optional')
+        self.assertEqual(got['goalNone'], 'A two-year activewear deal would pay off', 'no type picked: the question goes to the room as typed')
         self.assertEqual(got['goalContest'], 'Which cut wins them over, the Flashdance cut or the Bette Porter cut')
         self.assertEqual(got['goalPrice'], 'What they would pay for a hoodie from her collection, at $45')
         self.assertEqual(got['goalAsIs'], 'Will her followers buy a $45 hoodie?', 'a question typed whole goes to the room as written')
@@ -227,6 +250,42 @@ console.log(JSON.stringify(out));
         self.assertEqual((got['report']['on'], got['report']['statuses'][3], got['report']['statuses'][4]), ('5', 'Done', 'Verdict: Leaning yes'))
         self.assertNotIn('2', got['report']['backs'], 'never back into the plan once the room has run')
         self.assertEqual(got['busy']['backs'], [], 'nothing moves while the page is busy')
+
+    def test_the_lead_slides_in_and_out_across_renders(self):
+        node = self._code() + r'''
+var p = Object.assign(paFresh(), { key: 'jb', picked: true, goal: 'x', kind: '' , runs: [] });
+function lead(h) { var m = h.match(/<span class="w lead( in)?" id="dtwPaLead" aria-hidden="(true|false)"( data-to="(in|out)")?>Ask<\/span>/); return m ? { inNow: !!m[1], hidden: m[2], to: m[4] || '' } : null; }
+var a = lead(paStart(p)); p.kind = 'effect'; var b = lead(paStart(p)); var c = lead(paStart(p)); p.kind = ''; var d = lead(paStart(p)); var e = lead(paStart(p));
+console.log(JSON.stringify({ a: a, b: b, c: c, d: d, e: e }));
+'''
+        got = self._run(node)
+        self.assertEqual(got['a'], {'inNow': False, 'hidden': 'true', 'to': ''}, 'the ask form: the lead held out, no transition pending')
+        self.assertEqual(got['b'], {'inNow': False, 'hidden': 'false', 'to': 'in'}, 'the type picked: rendered out, asked to slide in on the next frame (no jump)')
+        self.assertEqual(got['c'], {'inNow': True, 'hidden': 'false', 'to': ''}, 'settled: in')
+        self.assertEqual(got['d'], {'inNow': True, 'hidden': 'true', 'to': 'out'}, 'the type unpicked: rendered in, asked to slide out')
+        self.assertEqual(got['e'], {'inNow': False, 'hidden': 'true', 'to': ''})
+
+    def test_the_price_line_is_said_once_by_seat(self):
+        node = self._code() + r'''
+var plan = { goal: 'g', success: 's', questions: [{ q: 'a', level: 'macro' }, { q: 'b', level: 'mid' }, { q: 'c', level: 'micro' }] };
+function one(card) { S.card = card; var p = Object.assign(paFresh(), { key: 'jb', picked: true, goal: '', kind: '', runs: [] }); var h = paStart(p); var pp = Object.assign(paFresh(), { key: 'jb', picked: true, goal: 'x', kind: 'go', plan: plan, step: 2 }); var ph = paStepPlan(pp);
+  var rx = /never charged|free for Crosswalk seats|plan rate|included with your plan|charged when it opens/gi;
+  return { price: (h.match(/class="price">([^<]+)</) || [])[1], run: (h.match(/<span class="n">04<\/span><span class="t">Run<\/span>.*?<span class="s">([^<]+)</) || [])[1], plan: (ph.match(/dtw-bw-line">(.*?)<\/div>/) || [])[1].replace(/<[^>]+>/g, ''),
+    startMentions: (h.replace(/<[^>]+>/g, ' ').match(rx) || []).length, railMentions: (paIndex(pp, true).replace(/<[^>]+>/g, ' ').match(rx) || []).length,
+    planDup: (function() { var seen = {}, dup = false; (ph.replace(/<[^>]+>/g, ' ').match(rx) || []).forEach(function(m) { m = m.toLowerCase(); if (seen[m]) dup = true; seen[m] = 1; }); return dup; })(), neverCharged: /never charged/.test(h + ph) }; }
+var out = { none: one(null), paying: one({ free: false, quote: { '20': 'This group is one group at $1,200 (1-20 questions, starter), charged when it opens.' } }), free: one({ free: true }), included: one({ free: false, included: true, quote: { '20': 'Included with your plan. This group is one group (1-20 questions) on your plan, with nothing charged when it opens.' } }) };
+S.card = null; console.log(JSON.stringify(out));
+'''
+        got = self._run(node)
+        self.assertEqual(got['paying']['price'], 'Planning is free. The run is one room at your plan rate.')
+        self.assertEqual(got['none']['price'], 'Planning is free. The run is one room at your plan rate.', 'no card yet: the paying line')
+        self.assertEqual(got['free']['price'], 'Planning and the run are free for Crosswalk seats.')
+        self.assertEqual(got['included']['price'], 'Planning is free. The run is one room, included with your plan.')
+        self.assertEqual(set(got[k]['run'] for k in got), {'Runs when you approve the plan'}, 'the index names the state; the price is said beside Plan it only')
+        self.assertEqual(got['free']['plan'], 'This runs as one room on Jennifer Beals (2,776,141 people). The run is free for Crosswalk seats. Each answer lands as it finishes; the outcome and the report land with the last one.')
+        self.assertIn('This group is one group at $1,200 (1-20 questions, starter), charged when it opens.', got['paying']['plan'], 'the plan step carries the quote once, price and tier included')
+        for k in got:
+            self.assertEqual((got[k]['startMentions'], got[k]['railMentions'], got[k]['planDup'], got[k]['neverCharged']), (1, 0, False, False), 'the cost said once on the start, once on the plan step with no phrase repeated, never in the index, never as "never charged": ' + k)
 
     def test_dropdown_keyboard_pick_and_build(self):
         js = _read(JS)
