@@ -1467,13 +1467,10 @@ def _block_prompt(ctx, country, people, share):
         lines.append(f"Who the audience is: {str(ctx['persona'])[:1200]}")
     lines.append(f"For the people in {country} only, give each demographic below in {country}'s own terms.")
     if registered:
-        lines.append("Use EXACTLY these buckets (labels verbatim), a share for every one:")
+        lines.append("Use EXACTLY these buckets, in this order, a share for every one:")
         for demo in _ip.BLOCK_DEMOS:
             if demo in sch:
-                lines.append(f"  {demo}: " + " | ".join(sch[demo]))
-        for demo in _ip.BLOCK_DEMOS:
-            if demo not in sch:
-                lines.append(f"  {demo}: buckets as the worldwide file writes them")
+                lines.append(f"  {demo}: " + " | ".join(f"[{n}] {lab}" for n, lab in enumerate(sch[demo])))
     else:
         lines.append(
             f"Use {country}'s own official census or national survey categories for ETHNICITY, income bands "
@@ -1481,9 +1478,14 @@ def _block_prompt(ctx, country, people, share):
             "for EDUCATION, AGE as 18-24, 25-34, 35-44, 45-54, 55-64, 65+, GENDER as Male, Female, Non-Binary, "
             "Prefer Not to Say; OCCUPATION, RELATIONSHIP, PARENTAL_STATUS and SEXUAL_ORIENTATION in plain "
             "English. 3 to 10 buckets each.")
-    lines.append('Return ONLY: {"AGE": {"<label>": <share>, ...}, "GENDER": {...}, "ETHNICITY": {...}, '
-                 '"INCOME": {...}, "EDUCATION": {...}, "OCCUPATION": {...}, "RELATIONSHIP": {...}, '
-                 '"PARENTAL_STATUS": {...}, "SEXUAL_ORIENTATION": {...}}')
+    if registered:
+        # shares only, in the bucket order above: long labels (currency symbols) never ride in the reply
+        lines.append('Return ONLY: {"AGE": [<share for [0]>, <share for [1]>, ...], "GENDER": [...], ...} '
+                     'with one list per demographic listed above, the shares in the bucket order shown.')
+    else:
+        lines.append('Return ONLY: {"AGE": {"<label>": <share>, ...}, "GENDER": {...}, "ETHNICITY": {...}, '
+                     '"INCOME": {...}, "EDUCATION": {...}, "OCCUPATION": {...}, "RELATIONSHIP": {...}, '
+                     '"PARENTAL_STATUS": {...}, "SEXUAL_ORIENTATION": {...}}')
     return "\n".join(lines)
 
 
@@ -1495,10 +1497,12 @@ def _clean_block(country, raw_doc):
     out = {}
     for demo in _ip.BLOCK_DEMOS:
         got = (raw_doc or {}).get(demo) or (raw_doc or {}).get(demo.title()) or {}
+        canon = sch.get(demo) or {}
+        if isinstance(got, list) and registered and canon and len(got) == len(canon):
+            got = dict(zip(canon, got))           # shares in the schema's bucket order
         if not isinstance(got, dict):
             got = {}
         vals = {}
-        canon = sch.get(demo) or {}
         if registered and canon:
             by = {_norm(k): k for k in canon}
             for k, v in got.items():
