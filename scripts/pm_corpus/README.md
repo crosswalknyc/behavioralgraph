@@ -104,6 +104,11 @@ by class:
   leaked internal token). Always blocks.
 - **unchecked**: a difference the harness cannot judge (state it does
   not carry, a replay fault).
+- **relabeled** (with a baseline): the answer is the baseline's word for
+  word and only the route named differently (an intake turn now logged
+  as its flow instead of the page analysis it ran beside). Reported on
+  its own line; it keeps the baseline's verdict and class agreement and
+  never counts as a change.
 - **class agreement**: the share of cases whose live class is the
   recorded class or its neighbour (`prometheus.intent_classes.near`).
 
@@ -138,7 +143,8 @@ records the same way. The kill switches are environment only:
 intent (`WAYFINDING`, `STATUS`, `SEND_FILE_ORDER`, `INSIGHT_ASK`,
 `WIZARD_INTERRUPT`, `VALUATION_REFERENT`, `BRAND_FIT`, `NAMED_SUBJECT`,
 `CAPABILITY`, `PROVENANCE`, `EXISTS`, `DEFINITION`, `SIZE`, `MULTI_ASK`,
-`DASHBOARD_ISSUE`, `PRICING`, `CHAT`, `PUSHBACK`, `CANCEL`, `NAMED_TITLE`).
+`DASHBOARD_ISSUE`, `PRICING`, `CHAT`, `PUSHBACK`, `CANCEL`, `NAMED_TITLE`,
+`BUILD_FACTS`).
 `PM_LEGACY_ROUTING=1` hands the surface decision and the analyze
 core's route back to the older readers (`understand.decide`,
 `prometheus_router.route_ask` with its fast-model classifier) for one

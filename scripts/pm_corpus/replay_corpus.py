@@ -425,7 +425,19 @@ def _entry(case, live, baseline_entry=None):
         b = baseline_entry.get('live') or {}
         e['baseline'] = {'route': b.get('route'), 'outcome': b.get('outcome'), 'verdict': baseline_entry.get('verdict'),
                          'class': baseline_entry.get('live_class')}
-        e['vs_baseline'] = 'same' if (b.get('route'), b.get('outcome')) == (live.get('route'), live.get('outcome')) else 'changed'
+        same_route = (b.get('route'), b.get('outcome')) == (live.get('route'), live.get('outcome'))
+        same_reply = bool(e['reply']) and e['reply'] == str(baseline_entry.get('reply') or '')[:240]
+        if same_route:
+            e['vs_baseline'] = 'same'
+        elif same_reply:
+            # the answer is the baseline's word for word and only its label moved (an intake turn now logged as its
+            # flow instead of the page analysis it ran beside): a relabel, never a change in what the reader got
+            # (2026-11-23). It keeps the baseline's verdict and class agreement.
+            e['vs_baseline'] = 'relabel'
+            e['verdict'], e['reason'] = str(baseline_entry.get('verdict') or e['verdict']), 'relabel: ' + str(e.get('reason') or '')
+            e['class_agree'] = bool(baseline_entry.get('class_agree'))
+        else:
+            e['vs_baseline'] = 'changed'
     return e
 
 
@@ -491,6 +503,7 @@ def summarize(entries, baseline=None):
                 gate['ok'] = False
                 gate['reasons'].append(f"{cls}: agreement {b.get('agreement')} -> {row['agreement']}")
         rep['changed_vs_baseline'] = sum(1 for e in entries if e.get('vs_baseline') == 'changed')
+        rep['relabeled_vs_baseline'] = sum(1 for e in entries if e.get('vs_baseline') == 'relabel')
     else:
         if verdicts['fail']:
             gate['ok'] = False
@@ -527,7 +540,8 @@ def render(rep):
              f"same {v['same']}, drift {v['drift']}, regressed {v['regressed']}, fail {v['fail']}, unchecked {v['unchecked']}; "
              f"class agreement {rep['agreement']}%"]
     if 'changed_vs_baseline' in rep:
-        lines.append(f"changed against the baseline: {rep['changed_vs_baseline']}")
+        lines.append(f"changed against the baseline: {rep['changed_vs_baseline']}"
+                     + (f"; relabeled (same answer, the route named differently): {rep['relabeled_vs_baseline']}" if rep.get('relabeled_vs_baseline') else ''))
     if rep.get('mode') == 'service':
         lines.append(f"stubs recorded: {rep.get('would_charge', 0)} would charge, {rep.get('would_write', 0)} would write (nothing reached a store)")
     lines.append('by class:')

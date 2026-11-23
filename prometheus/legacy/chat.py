@@ -6637,6 +6637,7 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     Order: the open screen can draft the whole brief; the ask itself is parsed (model, then rules); a prior
     deliverable it points at lends its shape; a complete brief confirms; a partial one asks only for what is
     missing; only an ask that names nothing gets the opener."""
+    _pm_ask_hint(route=flow)   # an intake turn is the flow's in the ask log, never the page analysis it runs beside (2026-11-23)
     if flow == 'brand_partnership':
         uname = (str((user or {}).get('username') or (user or {}).get('email') or '').strip()
                  if isinstance(user, dict) else str(user or '').strip())

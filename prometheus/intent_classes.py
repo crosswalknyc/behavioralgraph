@@ -77,7 +77,7 @@ _ROUTE_EXACT = {
     'sample_size': 'definition', 'sample_check': 'sizing', 'quantifiability_gate': 'page_analysis',
     'document': 'page_analysis', 'document_upload': 'page_analysis', 'study_record': 'definition',
     'help_writing': 'page_analysis', 'brief_terms': 'definition', 'pull_discussion': 'definition',
-    'product_fact': 'definition', 'product_facts': 'definition', 'methodology': 'definition',
+    'product_fact': 'definition', 'product_facts': 'definition', 'methodology': 'definition', 'how_computed': 'definition',
     'definitions': 'definition', 'definition': 'definition', 'us_only_definition': 'definition',
     'standing': 'definition', 'meta_check': 'definition', 'brand_coverage': 'catalog',
     # several questions
@@ -186,9 +186,9 @@ _NEAR = {
     'definition': {'page_analysis', 'provenance', 'capability'},   # a question about the product itself reads as either (2026-11-20)
     'provenance': {'definition'},
     'offer': {'short_reply', 'read', 'sizing', 'cancel'},
-    'short_reply': {'offer', 'continuation'},
+    'short_reply': {'offer', 'continuation', 'cancel'},   # a bare cancel with nothing armed is a short reply (2026-11-23)
     'continuation': {'short_reply', 'read'},
-    'cancel': {'offer'},
+    'cancel': {'offer', 'short_reply'},
     'deck': {'wizard'},      # a valuation's deck is the valuation's
     'capability': {'definition'},
 }

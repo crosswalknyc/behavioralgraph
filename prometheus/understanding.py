@@ -83,7 +83,8 @@ FLIPPED = ('wayfinding', 'status', 'send_file_order', 'insight_ask',
            'pricing',               # what does it cost (the pricing lane, 2026-11-20, night)
            'chat', 'pushback',      # a bare reply, thanks, a no with nothing asked (the short_reply lane, 2026-11-20, night)
            'cancel',                # a cancel while something is armed (the intake_cancel lane, 2026-11-20, night)
-           'named_title')           # the title a continuation names, read against the thread and the page (the turn gate, 2026-11-20, night)
+           'named_title',           # the title a continuation names, read against the thread and the page (the turn gate, 2026-11-20, night)
+           'build_facts')           # what a build was run on or carries (the build_facts lane, 2026-11-23)
 SHADOW = ()
 
 # Intents the flipped lanes compete over: a positive reading of one of
@@ -235,7 +236,22 @@ _SEND_RX = re.compile(r"\b(?:e-?mail|send|forward|mail)\s+(?:me|us|this|that|it|
 _BUILD_VERB_RX = re.compile(r"\b(?:build|run|pull|create|make|set\s+up|start|queue|launch)\b", re.I)
 _THANKS_RX = re.compile(r"^\W*(?:thanks?|thank\s+you|ty|cool|got\s+it|understood|noted|perfect|great|awesome|nice|ok(?:ay)?\s+thanks?)[.! ]*$", re.I)
 _BARE_REPLY_RX = re.compile(r"^\W*(?:yes|yes\s+please|yep|yeah|sure|ok(?:ay)?|approve[d]?|go\s+ahead|do\s+it|run\s+it|proceed|confirm|accept|"
-                            r"no|nope|not\s+now|no\s+thanks|cancel|skip|none|\d{1,2})\W*$", re.I)
+                            r"no|nope|not\s+now|no\s+thanks|cancel|skip|none|other|something\s+else|none\s+of\s+(?:these|those|them)|neither|\d{1,2})\W*$", re.I)
+# a question typed while a Brand Partnership step waits that is about the step's own inputs ("can we narrow the asset
+# scope to lower the cost") is the wizard's turn, not an unrelated question (2026-11-23)
+# an order's shape: the message opens on the verb ("Build a Flywheel", "can you run the journey", "please value Nike x
+# LeBron"); "I tried to run a flywheel" and "Mastercard is partnering with Mr. Beast, I want to understand why" do not
+_IMPERATIVE_RX = re.compile(r"^\W*(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?|please\s+|let'?s\s+|i(?:'d|\s+would)\s+like\s+(?:you\s+)?to\s+|"
+                            r"i\s+(?:want|need)\s+(?:you\s+)?to\s+|go\s+ahead\s+and\s+)?(?:build|run|create|make|set\s+up|start|queue|launch|value|map|pull|generate|kick\s+off|spin\s+up)\b", re.I)
+# the words name a product intake outright, or carry one of its slots: "run a flywheel", "create a digital journey",
+# "the end step is ...", "entry point: watched X on Prime Video" (the host's own intent check fires on looser words,
+# "partnering with", which is a question about a pairing, never the intake)
+_PRODUCT_NOUN_RX = re.compile(r"\b(?:flywheel|digital\s+journey|journey\s+iq|customer\s+journey|twin|digital\s+twins?|attribution\s+iq|attribution\s+(?:study|campaign|run)|"
+                              r"brand\s+partnership\s+iq|valuation|value\s+(?:the|this|a)\s+(?:partnership|pairing|deal))\b", re.I)
+_INTAKE_SLOT_RX = re.compile(r"\b(?:end\s+step|entry\s+point|starting\s+point|start(?:s|ing)?\s+from|ecosystem|attribution\s+window|campaign\s+(?:dates|window)|"
+                             r"the\s+(?:talent|brand)\s+is|first\s+play)\b", re.I)
+_WIZARD_SLOT_RX = re.compile(r"\b(?:(?:the|this|that|its|my|our)\s+(?:assets?|asset\s+scope|scope|cost|price|pricing|quote|window|dates?|date\s+range|"
+                             r"comparison\s+group|matched\s+(?:group|comparison)|card|brief|order|run|read|study)|lower\s+the\s+cost|cheaper|narrow\s+the\s+scope)\b", re.I)
 
 
 def _armed_step(body):
@@ -306,19 +322,25 @@ def _features(text, ctx, history, body):
     put('wizard_start', lambda: mod('bpiq_wizard').is_start(text))
     # a Brand Partnership step is waiting on this thread and the message answers it (a question typed there is a
     # question, per the intake guard): the turn is the wizard's, as it is today
-    put('wizard_open', lambda: mod('bpiq_wizard').last_agent_is_wizard(history) and not mod('intake_guard').is_question_shaped(text))
+    put('wizard_open', lambda: mod('bpiq_wizard').last_agent_is_wizard(history) and (
+        not mod('intake_guard').is_question_shaped(text) or bool(_WIZARD_SLOT_RX.search(text))))
+    # what a build was run on or carries (the build_facts lane); a turn that continues the conversation (a correction, a
+    # why-do-you-keep, "I already pulled the data"), never an order (subject_rules.conversational_turn)
+    put('build_facts', lambda: mod('build_facts').wants(text))
+    put('subject_statement', lambda: mod('thread_subject').statement_subject(text))
+    put('conversational', lambda: mod('subject_rules').conversational_turn(text))
     # a brief that sizes the people around named titles is one read, whole (prometheus.read_brief); the keyword lanes stand aside for it
     put('brief', lambda: mod('read_brief').is_brief(text))
     put('provenance', lambda: _provenance_kind(text))
     # the catalog lanes: ('exists' | 'size' | 'roster', subject) when the words ask what the library holds
     put('catalog', lambda: (mod('catalog_lane').parse(text) or (None, None))[0])
-    put('definition', lambda: _definition_kind(text, history))
+    put('definition', lambda: _definition_kind(text, history, ctx))
     # the sizing lanes: a joint demographic segment counted, or how many people an audience holds
     put('sizing', lambda: 'segment' if mod('segment_sizing').is_segment_ask(text) else ('audience' if mod('sizing_lane').wants_sizing(text) else ''))
     return out
 
 
-def _definition_kind(text, history=None):
+def _definition_kind(text, history=None, ctx=None):
     """Which definition lane the words are for, in the lane walk's own
     order: 'term' (a term or line on the thread's own brief), 'discussion'
     (talk the pull through before it runs; the brief is in the thread), 'meta' (a check on the last
@@ -330,7 +352,10 @@ def _definition_kind(text, history=None):
     for kind, fn in (('term', lambda: mod('brief_terms').is_term_question(text) and bool(mod('brief_terms').brief_in_thread(history))),
                      ('discussion', lambda: mod('pull_discussion').wants_discussion(text)),
                      ('meta', lambda: mod('service').meta_check(text)),
-                     ('drilldown', lambda: mod('drilldown').looks_like_drilldown(text) or mod('drilldown').looks_like_definition(text)),
+                     # a number on the open journey, or a what-does-this-mean the user's journeys can answer; a long analysis brief
+                     # is never one (2026-11-23)
+                     ('drilldown', lambda: len(str(text or '')) <= 300 and (
+                         mod('drilldown').looks_like_drilldown(text) or mod('drilldown').looks_like_definition(text))),
                      ('view', lambda: mod('methodology_answers').is_view_definition_question(text)),
                      ('methodology', lambda: bool(mod('methodology_answers').answer(text))),   # one methodology question, or a numbered list of them
                      ('method', lambda: bool(mod('how_computed').answer(text))),   # the lane's own test: a method, a where, an about
@@ -535,9 +560,10 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
         for name in ('wayfinding', 'directions', 'status_fast', 'status', 'wait', 'deliverable', 'insight', 'reader_will_share',
                      'send_order', 'send_file', 'dashboard_issue', 'cancel', 'order', 'multi', 'sample_size', 'capability',
                      'rerun_words', 'correction_words', 'pushback_only', 'send_words', 'build_verb', 'thanks', 'bare_reply',
-                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance', 'catalog', 'definition', 'sizing'):
+                     'offer_open', 'pricing', 'wizard', 'wizard_start', 'wizard_open', 'brief', 'provenance', 'catalog', 'definition', 'sizing',
+                     'build_facts', 'conversational', 'subject_statement'):
             if f.get(name):
-                ev.append(name if name not in ('wizard', 'provenance', 'catalog', 'definition', 'sizing') else name + ':' + str(f[name]))
+                ev.append(name if name not in ('wizard', 'provenance', 'catalog', 'definition', 'sizing', 'conversational') else name + ':' + str(f[name]))
         # a delivered valuation in the thread is what the words point at (prometheus.valuation_referent): its deck,
         # its figures, a re-run on corrected dates. Read on the reader's own words when the order gate rewrote them.
         vref = None
@@ -549,6 +575,12 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             vref = None
         if vref:
             ev.append('valuation_ref:' + str(vref.get('kind') or ''))
+        if _IMPERATIVE_RX.match(t):
+            ev.append('imperative')   # the message opens on a verb: an order's shape
+        if _PRODUCT_NOUN_RX.search(t):
+            ev.append('product_noun')   # the words name the product intake outright
+        if _INTAKE_SLOT_RX.search(t):
+            ev.append('intake_slot')    # the words carry an intake's own slot
         # "which brands do you cover" asks for the roster we hold, not which brands suit an audience: a roster ask that
         # names no audience of its own is the catalog's (2026-11-20, night)
         roster_bare = bool(f.get('catalog') == 'roster' and f.get('brand_fit') and _words_subject(t, history, ctx) is None
@@ -589,8 +621,16 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             # which brands suit a talent, with pitch angles: a read on the talent's audience; it names no pairing to
             # value, so it is never the valuation's and an open order yields to it (Jenna 2026-11-20, her own seat)
             intent, action, conf = 'brand_fit', 'answer', 0.85
-        elif f.get('wizard') or f.get('wizard_start'):
+        elif f.get('wizard_start') or (f.get('wizard') and (is_order or f.get('order') or _IMPERATIVE_RX.match(t) or _PRODUCT_NOUN_RX.search(t))):
+            # the wizard only on an explicit order (Jenna 2026-11-20): "Build a Flywheel", "Create a digital journey",
+            # "value Nike x LeBron"; "Mastercard is partnering with Mr. Beast, I want to understand why" is a read
             intent, action, conf = (str(f['wizard']) if f.get('wizard') else 'valuation'), 'build', 0.8
+        elif f.get('subject_statement'):
+            # "the subject is the university of virginia": the thread's subject is set and said back (the subject_set lane)
+            intent, action, conf = 'order', 'answer', 0.8
+        elif f.get('build_facts') and not f.get('wizard_start'):
+            # what a build was run on or carries ("was the profile run on all 49 of these inputs"): read from the file
+            intent, action, conf = 'build_facts', 'answer', 0.8
         elif f.get('insight') or (f.get('reader_will_share') and not f.get('send_order')):
             intent, action, conf = 'insight_ask', 'answer', 0.85   # the Lego class: an insight to share, never a send
         elif f.get('send_order') or (f.get('send_file') and not f.get('insight')):
@@ -653,6 +693,9 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             intent, action, conf = 'capability', 'answer', 0.7
         elif f.get('correction_words') and history:
             intent, action, conf = 'continuation_correction', 'answer', 0.65
+        elif f.get('conversational') and history:
+            # "what? I already pulled the data", "why do you keep bringing up X": the turn gate's, never an order
+            intent, action, conf = 'continuation_correction', 'answer', 0.7
         elif f.get('rerun_words') and history and not u.named_title:
             intent, action, conf = 'continuation_rerun', 'answer', 0.65
         elif sc.page and not u.named_title:
@@ -720,6 +763,11 @@ def absorb_reading(u, reading, *, min_conf=0.7):
         hard = u.intent in ('armed', 'cancel', 'order', 'data_floor') or u.scope.no_build and r_int in ('build_profile', 'cut', 'journey', 'valuation', 'campaign', 'tracker', 'twin', 'deck')
         if hard or r_conf < min_conf or r_int not in INTENTS:
             u.source = 'reconciled' if hard else u.source
+            return u
+        if r_int in ('valuation', 'journey', 'campaign', 'twin') \
+                and not any(e in ('order', 'wizard_start', 'imperative', 'product_noun', 'intake_slot') for e in u.evidence) \
+                and u.intent not in ('valuation', 'journey', 'campaign', 'twin'):
+            u.source = 'reconciled'   # the wizard only on an explicit order (Jenna 2026-11-20): a question about a pairing is a read
             return u
         # the contested pairs are settled by the words' scope, never by the reading alone:
         # a reading of status on a feature question stays wayfinding; a reading of command on an insight ask stays insight

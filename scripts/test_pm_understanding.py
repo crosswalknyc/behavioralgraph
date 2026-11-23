@@ -346,6 +346,48 @@ class Claims(unittest.TestCase):
         y = U.attach({'text': 'yes'}, U.features('yes', None, [], {}))
         self.assertTrue(U.claims(y, 'status', lambda: True))
 
+    def test_page_questions_and_the_wizard_only_on_an_order(self):
+        # 2026-11-23: a bare chip answer is a bare reply; a partnership QUESTION is never the valuation intake (the wizard
+        # only on an explicit order, Jenna), while naming the product or a slot of it is; what a build carries reads
+        # build_facts; "I already pulled the data" is the conversation continuing; a subject statement is logged as set
+        self.assertEqual(U.features('Other', None, [], {}).intent, 'chat')
+        q = 'Example Brand is partnering with Example Talent, I want to understand why'
+        u = U.absorb_reading(U.features(q, None, [], {}), {'intent': 'valuation', 'confidence': 0.9, 'subjects': []})
+        self.assertNotEqual(u.intent, 'valuation')
+        slot = U.absorb_reading(U.features('the end step is bought a new drink at Example Diner in the past 6 months', None, [], {}),
+                                {'intent': 'journey', 'confidence': 0.82, 'subjects': []})
+        self.assertEqual(slot.intent, 'journey')
+        self.assertEqual(U.features('was the profile run on all 49 of these inputs or did you just add them to the brand field?', None, [], {}).intent, 'build_facts')
+        self.assertTrue(U.flipped('build_facts'))
+        hist = [{'role': 'agent', 'text': 'Do you want this on Example Brand (open on your screen)?'}]
+        self.assertEqual(U.features('what? I already pulled the data', None, hist, {}).intent, 'continuation_correction')
+        self.assertEqual(U.features('the subject is Example University', None, [], {}).intent, 'order')
+        long_brief = ('Example Show: what is driving the Season 6 lift versus Season 5. GROUND RULES for this query. Panel: the 10M '
+                      'census-matched Gen Pop panel. Report US people who streamed a new episode in the first 35 days, by season, '
+                      'with the share who never played the show before, the top five services, and the week by week curve for both seasons.')
+        self.assertNotEqual(U.features(long_brief, None, [], {}).intent, 'definition')
+
+    def test_page_questions_and_the_wizard_only_on_an_order(self):
+        # 2026-11-23: a bare chip answer is a bare reply; a partnership QUESTION is never the valuation intake (the wizard
+        # only on an explicit order, Jenna), while naming the product or a slot of it is; what a build carries reads
+        # build_facts; "I already pulled the data" is the conversation continuing; a subject statement is logged as set
+        self.assertEqual(U.features('Other', None, [], {}).intent, 'chat')
+        q = 'Example Brand is partnering with Example Talent, I want to understand why'
+        u = U.absorb_reading(U.features(q, None, [], {}), {'intent': 'valuation', 'confidence': 0.9, 'subjects': []})
+        self.assertNotEqual(u.intent, 'valuation')
+        slot = U.absorb_reading(U.features('the end step is bought a new drink at Example Diner in the past 6 months', None, [], {}),
+                                {'intent': 'journey', 'confidence': 0.82, 'subjects': []})
+        self.assertEqual(slot.intent, 'journey')
+        self.assertEqual(U.features('was the profile run on all 49 of these inputs or did you just add them to the brand field?', None, [], {}).intent, 'build_facts')
+        self.assertTrue(U.flipped('build_facts'))
+        hist = [{'role': 'agent', 'text': 'Do you want this on Example Brand (open on your screen)?'}]
+        self.assertEqual(U.features('what? I already pulled the data', None, hist, {}).intent, 'continuation_correction')
+        self.assertEqual(U.features('the subject is Example University', None, [], {}).intent, 'order')
+        long_brief = ('Example Show: what is driving the Season 6 lift versus Season 5. GROUND RULES for this query. Panel: the 10M '
+                      'census-matched Gen Pop panel. Report US people who streamed a new episode in the first 35 days, by season, '
+                      'with the share who never played the show before, the top five services, and the week by week curve for both seasons.')
+        self.assertNotEqual(U.features(long_brief, None, [], {}).intent, 'definition')
+
     def test_a_weak_reading_never_stands_a_lane_down(self):
         b = self._body('no, that is not what I asked for, run the window again', history=[{'role': 'agent', 'text': 'On X: 1.'}])
         u = U.on_body(b)

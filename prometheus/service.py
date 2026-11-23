@@ -1211,7 +1211,8 @@ def ask(user, body, *, via='session'):
     if not _is_order and not _armed(body) and not body.get('_meta_replay'):
         try:
             from . import build_facts as _bfa
-            _bfa_raw = _bfa.answer(text, ctx=ctx, history=history, user=user, uname=uname, host=host)
+            _bfa_raw = (_bfa.answer(text, ctx=ctx, history=history, user=user, uname=uname, host=host)
+                        if _u_claims(body, 'build_facts', lambda: True) else None)   # keyed (2026-11-23)
         except Exception as _fx:
             _faults.note('service.build_facts', _fx)
             _bfa_raw = None

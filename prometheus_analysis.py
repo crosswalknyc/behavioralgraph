@@ -5958,12 +5958,19 @@ def detect_csv_download_intent(text):
     if t.lower() == CSV_OFFER_CHIP.lower():
         return True
     if len(t) > 90:
-        return False
+        # a longer message is an export only when it says so outright ("all of the data pulled for the <study>,
+        # in CSV files ... exported in CSV files") and names no new content (2026-11-23)
+        return bool(len(t) <= 300 and _CSV_EXPORT_LONG_RX.search(t) and not csv_content_ask(t))
     if csv_content_ask(t):
         return False
     if _DOWNLOAD_DEICTIC_RX.match(t):
         return True
     return bool(_CSV_DOWNLOAD_RX.search(t))
+
+
+_CSV_EXPORT_LONG_RX = re.compile(
+    r"\b(?:export(?:ed)?|download(?:ed)?|pull(?:ed)?|deliver(?:ed)?|send|sent|saved?)\b[^.?!]{0,120}?\b(?:in|as|to|into)\s+(?:a\s+|the\s+)?csv(?:\s+files?)?\b"
+    r"|\bin\s+csv\s+files?\b[^.?!]{0,80}?\bexport(?:ed)?\b", re.I)
 
 
 def seat_price_label(amount):

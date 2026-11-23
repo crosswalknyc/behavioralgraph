@@ -1588,6 +1588,8 @@ _PROVENANCE_RX = re.compile(
     r"|\bhow (?:accurate|reliable) (?:is|are) (?:this|that|the|your|these)\b"
     r"|\b(?:your|the|this) methodology\b|\bhow (?:is|was) (?:this|that|the|it) (?:calculated|computed|derived|measured|modell?ed|estimated)\b(?![^.?!]{0,40}\b(?:rate|share|index|figure|conversion|number)\b)"
     r"|\bwhere (?:is|are) (?:this|the|these) (?:data|numbers?) from\b|\bwho (?:collects|measures|provides) (?:this|the|your) data\b"
+    r"|\bwhat (?:data|source|sources|panel|measurement) (?:underpins?|underlies?|backs?|supports?|feeds?|sits? behind|is behind|are behind|drives?) (?:the|these|those|your|crosswalk'?s?|prometheus'?s?)\b"
+    r"|\bwhere (?:do|does) (?:the|your|these|those|crosswalk'?s?) (?:\w+\s+){0,3}(?:estimates?|numbers?|figures?|counts?|data) come from\b"
     # "are any of these figures modeled or imputed rather than directly
     # counted", "how do you detect when someone activated a membership",
     # "how is a play detected" (Grace Yin 2026-11-08: the first came back
