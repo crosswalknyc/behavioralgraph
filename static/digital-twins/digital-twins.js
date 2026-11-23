@@ -2724,32 +2724,52 @@
                 ['open', 'Something else', 'Any question about this audience.', 'What would it take for this audience to see her as a fashion name, not a nostalgia act?']
             ];
             var PA_LEVELS = { macro: 'The big picture', mid: 'Closer in', micro: 'The question itself' };
+            // the sentence's connecting words per shape (Jenna 2026-11-23, PA1 'the sentence you fill in'): Ask [twin] <join> [what you type];
+            // lead is how the typed clause is put to the room when it is not already a question of its own
+            var PA_JOIN = {
+                '': { join: 'whether', ph: 'a two-year activewear deal would pay off', lead: 'Whether' },
+                effect: { join: 'whether', ph: 'a holiday boxed set at Target would get more people to buy season two', lead: 'Whether' },
+                contest: { join: 'which', ph: 'cut wins them over for a Lululemon spot, the Flashdance cut or the Bette Porter cut', lead: 'Which' },
+                go: { join: 'whether', ph: 'we should sign her for a two-year activewear deal', lead: 'Whether' },
+                price: { join: 'what they would pay for', ph: 'a hoodie from her collection, at $45', lead: 'What they would pay for' },
+                open: { join: 'about', ph: 'what it would take for them to see her as a fashion name, not a nostalgia act', lead: '' }
+            };
             function paFresh() { return { step: 0, key: S.key || '', goal: '', kind: '', plan: null, sid: '', job: '', report: null, guided: null, busy: false, err: '', runs: null, runsKey: '', pollT: null }; }
             function pa() { if (!S.pa) S.pa = paFresh(); return S.pa; }
             function paRun(key) { return (S.runs || []).filter(function(r) { return r.key === key; })[0] || null; }
             function paTwinName(key) { var r = paRun(key); return r ? (r.name || r.subject || '') : (key === S.key ? twinName() : ''); }
             function paPeople(key) { var r = paRun(key); return r && r.size_us ? Number(r.size_us) : (key === S.key ? Number(((S.twin || {}).meta || {}).size_us || 0) : 0); }
             function paClearPoll() { var p = pa(); if (p.pollT) { clearTimeout(p.pollT); p.pollT = null; } }
-            function paRail() {
-                var p = pa();
-                return '<div class="dtw-bw-rail dtw-pa-rail">' + PA_STEPS.map(function(n, i) {
-                    var cls = i < p.step ? 'done' : (i === p.step ? 'on' : '');
-                    var back = i < p.step && i <= 2 && !p.busy && !(p.step >= 3 && i >= 2);
-                    return (i ? '<span class="sep"></span>' : '') + '<button type="button" class="' + cls + '"' + (back ? ' onclick="dtwPaGo(' + i + ')"' : '') + '><span class="n">' + (i < p.step ? '&#10003;' : (i + 1)) + '</span>' + esc(n) + '</button>';
-                }).join('') + '</div>';
+            // the five steps as a numbered dot-leader index that fills in as the user goes (PA1); the active step in Signal Green,
+            // every completed step a way back. On the start it sits under the sentence; on Plan, Run and Report it is the rail up top.
+            function paIndexStatus(p, i) {
+                var r = paRun(p.key), g = p.guided || {}, o = (p.report || {}).outcome || null;
+                if (i === 0) return p.key ? (esc(paTwinName(p.key)) + (paPeople(p.key) ? ', ' + fmtN(paPeople(p.key)) + ' people' : '') + (r && r.kinds ? ', ' + r.kinds + ' archetypes' : '')) : 'Pick a twin';
+                if (i === 1) { var k = PA_KINDS.filter(function(x) { return x[0] === p.kind; })[0]; var typed = (p.goal || '').trim(); return typed ? esc(k ? k[1] : 'In your words') : (k ? esc(k[1]) : 'What you type above'); }
+                if (i === 2) { var qs = ((p.plan || {}).questions || []).length; return qs ? qs + ' questions, from the wide to the narrow' : 'Written for you when you press Plan it'; }
+                if (i === 3) { if (g.status === 'done') return 'Done'; if (g.status === 'stopped') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered, stopped'; if (g.status === 'running') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered'; return 'One room, your plan rate'; }
+                return o ? 'Verdict: ' + esc(paCallWord(o)) : 'The verdict, the numbers, who drove it';
             }
+            function paIndex(p, compact) {
+                var active = p.step <= 1 ? (p.key ? 1 : 0) : p.step;
+                var desc = ['The twin whose answer you need.', 'Your business question, in your words.', 'Five to eight questions, from the wide to the narrow.', 'One room, one archetype representative per archetype, one question at a time.', 'The verdict at the top, the numbers under it.'];
+                var rows = PA_STEPS.map(function(n, i) {
+                    var done = i < active;
+                    var back = done && !p.busy && i <= 1 && p.step >= 2;   // back to the start from Plan, Run or Report; never back into a plan once the room runs
+                    var cls = 'dtw-pa-ix' + (i === active ? ' on' : '') + (done ? ' done' : '') + (back ? ' back' : '');
+                    var tag = back ? 'button type="button" onclick="dtwPaGo(' + (i <= 1 ? 1 : i) + ')"' : 'div';
+                    return '<' + tag + ' class="' + cls + '"><span class="n">0' + (i + 1) + '</span><span class="t">' + esc(n) + '</span><span class="d"><span class="w">' + esc(desc[i]) + '</span><span class="lead"></span></span><span class="s">' + paIndexStatus(p, i) + '</span></' + (back ? 'button' : 'div') + '>';
+                }).join('');
+                return '<div class="dtw-pa-index' + (compact ? ' compact' : '') + '">' + (compact ? '' : '<div class="dtw-pa-ixh"><span class="dtw-cap">What happens next</span><span>five steps' + (p.key ? ', the first already done' : '') + '</span></div>') + rows + '</div>';
+            }
+            function paRail() { return paIndex(pa(), true); }
             function paNav(canNext, nextLabel, backTo) {
                 var p = pa(), busy = !!p.busy;
                 return '<div class="dtw-bw-nav">' + (p.step > 0 && backTo !== false ? '<button type="button" class="dtw-btn"' + (busy ? ' disabled' : '') + ' onclick="dtwPaGo(' + (backTo != null ? backTo : p.step - 1) + ')">Back</button>' : '')
                     + (nextLabel ? '<button type="button" class="dtw-btn dtw-btn-primary dtw-right' + (busy ? ' dtw-busy" aria-busy="true"' : '"') + (canNext && !busy ? '' : ' disabled') + ' onclick="dtwPaNext()">' + (busy ? dtwBusyHtml(nextLabel) : esc(nextLabel) + '<span class="arr"></span>') + '</button>' : '')
                     + '</div>' + (p.err ? '<div class="dtw-bw-err">' + esc(p.err) + '</div>' : '');
             }
-            function paHero() {
-                var p = pa(), it = ((S.howto || {}).items || []).filter(function(x) { return x.id === 'predict'; })[0] || {};
-                var quote = (groupCard() && groupQuote(groupTierDefault())) || it.cost || '';
-                return '<div class="dtw-fg-land-hero dtw-pa-hero"><h2 class="dtw-fg-land-h">Ask one business question. <b>Get the answer.</b></h2>'
-                    + '<p class="dtw-fg-land-sub">Pick the audience and say what you need to know. Prometheus plans the room, runs it from the big picture down to the question itself, and writes up the whole process with the call at the top. Planning is free; the run is one room at your plan rate' + (quote ? ' (' + esc(String(quote).replace(/^This group runs /, '').replace(/\.$/, '')) + ')' : '') + '.</p></div>';
-            }
+            function paHero() { return '<div class="dtw-pa-eyebrow dtw-cap on">Predictive Analytics</div>'; }
             function paEarlier(p) {
                 var runs = p.runs;
                 if (!p.key) return '';
@@ -2764,29 +2784,47 @@
                     }).join('') + '</div></div>';
             }
             function paCallClass(o) { var c = String((o || {}).call || '').toLowerCase(); return c === 'yes' || c === 'lean yes' ? 'yes' : (c === 'no' || c === 'lean no' ? 'no' : (c === 'split' ? 'split' : 'pick')); }
-            function paStepAudience(p) {
-                // one dropdown instead of a grid of cards, and Build a new twin beside it (Jenna 2026-11-23: 'lets make these a dropdown
-                // and make not here build a twin more prominent'); the dropdown opens on every twin the seat can see and defaults to the
-                // twin open on the page; picking one does what picking a card did (dtwPaPickTwin opens it, so the header follows)
-                var runs = S.runs || [];
-                var out = '<div class="dtw-bw-q">Who is the audience?</div><div class="dtw-bw-sub">The people whose answer you need. Pick a twin, or build one first.</div>';
-                if (!runs.length) out += '<div class="dtw-bw-line">No twins yet. <button type="button" class="dtw-link" onclick="dtwBuildOpen(true)">Build the first one</button>, then come back here.</div>';
+            function paStart(p) {
+                // PA1 (Jenna 2026-11-23): one line of large light type the user completes. Ask [twin dropdown] <join> [the question typed in place];
+                // the five shapes as flat tinted chips under it; Build a new twin inline after the audience and as the compact card; the index below.
+                var runs = S.runs || [], cur = runs.filter(function(r) { return r.key === p.key; })[0] || null;
+                var j = PA_JOIN[p.kind] || PA_JOIN[''];
+                var out = '<div class="dtw-pa-sent">';
+                out += '<span class="w">Ask</span>';
+                if (!runs.length) out += '<button type="button" class="dtw-pa-sent-build" onclick="dtwBuildOpen(true)">a twin you build first</button>';
                 else {
-                    var cur = runs.filter(function(r) { return r.key === p.key; })[0] || null;
-                    out += '<div class="dtw-pa-pick"><div class="dtw-pa-dd" id="dtwPaDd">'
-                        + '<button type="button" class="dtw-pa-dd-btn" id="dtwPaDdBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="dtwPaDdList" onclick="dtwPaDdToggle()" onkeydown="dtwPaDdKey(event)">'
-                        + (cur ? paTwinRow(cur) : '<span class="k">Twin</span><span class="nm ph">Pick a twin</span><span class="n"></span>') + '<i class="chev" aria-hidden="true">&#9660;</i></button>'
+                    out += '<span class="dtw-pa-dd inline" id="dtwPaDd"><button type="button" class="dtw-pa-dd-btn" id="dtwPaDdBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="dtwPaDdList" onclick="dtwPaDdToggle()" onkeydown="dtwPaDdKey(event)">'
+                        + '<span class="nm' + (cur ? '' : ' ph') + '">' + esc(cur ? (cur.name || cur.subject || '') : 'a twin') + '</span><i class="chev" aria-hidden="true">&#9660;</i></button>'
                         + '<div class="dtw-pa-dd-menu" id="dtwPaDdMenu" hidden>'
                         + (runs.length > 7 ? '<input class="dtw-pa-dd-find" id="dtwPaDdFind" type="search" placeholder="Search twins" autocomplete="off" aria-label="Search twins" oninput="dtwPaDdFilter(this.value)" onkeydown="dtwPaDdKey(event)">' : '')
                         + '<div class="dtw-pa-dd-list" id="dtwPaDdList" role="listbox" aria-label="Twins" tabindex="-1" onkeydown="dtwPaDdKey(event)">'
                         + runs.map(function(r, i) { var on = r.key === p.key; return '<div class="dtw-pa-dd-opt' + (on ? ' on' : '') + '" role="option" id="dtwPaDdOpt' + i + '" data-key="' + esc(r.key) + '" data-hay="' + esc(twinOptionLabel(r).toLowerCase()) + '" aria-selected="' + on + '" onclick="dtwPaDdPick(\'' + esc(jsq(r.key)) + '\')" onmousemove="dtwPaDdHover(this)">' + paTwinRow(r) + '</div>'; }).join('')
-                        + '</div></div></div>'
-                        + '<div class="dtw-pa-build"><div class="top"><span class="dtw-cap on">Not here? Build a new twin</span><span class="price">' + esc(twinPrice()) + '</span></div>'
-                        + '<p>From a profile we hold, a group you shape, or a list of links. It shows up in this list when it is done.</p>'
-                        + '<div class="acts"><button type="button" class="dtw-lb go pa" onclick="dtwBuildOpen(true)">Start<i>&rarr;</i></button><button type="button" class="dtw-lb link tutorial" onclick="dtwTutorialOpen(\'seating\', this)" aria-haspopup="dialog"><i class="play" aria-hidden="true">&#9654;</i>Tutorial</button></div></div>'
-                        + '</div>';
+                        + '<div class="dtw-pa-dd-foot"><button type="button" class="dtw-lb link" onclick="dtwPaDdToggle(false); dtwBuildOpen(true)">Not here? Build a new twin<i>&rarr;</i></button></div></div></div></span>'
+                        + '<button type="button" class="dtw-pa-sent-or" onclick="dtwBuildOpen(true)">or build a new twin</button>';
                 }
-                return out + paNav(!!p.key, 'Next') + paEarlier(p);
+                out += '<span class="w" id="dtwPaJoin">' + esc(j.join) + '</span>';
+                out += '<span class="dtw-pa-goalin" id="dtwPaGoal" contenteditable="plaintext-only" role="textbox" aria-multiline="true" aria-label="Your question" data-ph="' + esc(j.ph) + '" oninput="dtwPaGoalInput(this.textContent)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault(); dtwPaNext();}">' + esc(p.goal || '') + '</span>';
+                out += '</div>';
+                // the shape of the question, as flat tinted chips
+                out += '<div class="dtw-pa-shapes"><span class="lbl">The shape of the question</span>' + PA_KINDS.map(function(k) { return '<button type="button" class="dtw-pa-shape' + (k[0] === p.kind ? ' on' : '') + '" onclick="dtwPaKind(\'' + k[0] + '\')">' + esc(k[1]) + '</button>'; }).join('') + '</div>';
+                // the price line, Plan it, and the compact Build a new twin card
+                var quote = (groupCard() && groupQuote(groupTierDefault())) || '';
+                var can = !!p.key && !!(p.goal || '').trim();
+                out += '<div class="dtw-pa-startrow"><div class="left"><div class="price">Planning is free. The run is one room at your plan rate' + (quote ? ' (' + esc(String(quote).replace(/^This group runs /, '').replace(/\.$/, '')) + ')' : '') + '; Crosswalk seats are never charged.</div>'
+                    + '<div class="acts"><button type="button" class="dtw-lb go pa' + (p.busy ? ' busy' : '') + '" id="dtwPaPlanBtn"' + (can && !p.busy ? '' : ' disabled') + ' onclick="dtwPaNext()">' + (p.busy ? 'Planning' : 'Plan it') + '<i>&rarr;</i></button>' + (p.err ? '<span class="dtw-pa-err">' + esc(p.err) + '</span>' : '') + '</div></div>'
+                    + '<div class="dtw-pa-build small"><div class="top"><span class="dtw-cap on">Not here? Build a new twin</span><span class="price">' + esc(twinPrice()) + '</span></div>'
+                    + '<p>From a profile we hold, a group you shape, or a list of links. It shows up in the list when it is done.</p>'
+                    + '<div class="acts"><button type="button" class="dtw-lb go pa" onclick="dtwBuildOpen(true)">Start<i>&rarr;</i></button><button type="button" class="dtw-lb link tutorial" onclick="dtwTutorialOpen(\'seating\', this)" aria-haspopup="dialog"><i class="play" aria-hidden="true">&#9654;</i>Tutorial</button></div></div></div>';
+                return out + paIndex(p, false) + paEarlier(p);
+            }
+            // the typed clause as the room hears it: as written when it is already a question, else with the shape's lead
+            function paGoalValue() { var g = el('dtwPaGoal'); if (!g) return pa().goal || ''; return String(g.value != null && g.tagName === 'TEXTAREA' ? g.value : g.textContent || ''); }
+            function paGoalText(p) {
+                var clause = String(p.goal || '').replace(/\s+/g, ' ').trim();
+                if (!clause) return '';
+                if (/\?$/.test(clause) || /^(if|will|would|should|what|which|who|how|can|could|does|do|is|are|did|when|where|why)\b/i.test(clause)) return clause.charAt(0).toUpperCase() + clause.slice(1);
+                var lead = (PA_JOIN[p.kind] || PA_JOIN['']).lead;
+                return lead ? lead + ' ' + clause.charAt(0).toLowerCase() + clause.slice(1) : clause.charAt(0).toUpperCase() + clause.slice(1);
             }
             // one row of the dropdown: the type, the name with the same-name qualifier, the people
             function paTwinRow(r) {
@@ -2852,15 +2890,6 @@
                 if (!paDd.open) return;
                 var dd = el('dtwPaDd'); if (dd && e.target && dd.contains && !dd.contains(e.target)) dtwPaDdToggle(false);
             });
-            function paStepQuestion(p) {
-                var kind = PA_KINDS.filter(function(k) { return k[0] === p.kind; })[0] || null;
-                var out = '<div class="dtw-bw-q">What do you need to know?</div><div class="dtw-bw-sub">Say it the way you would to a colleague. Pick the shape that fits, or just type.</div>';
-                out += '<div class="dtw-pa-kinds">' + PA_KINDS.map(function(k) { return '<button type="button" class="dtw-fg-chip' + (k[0] === p.kind ? ' on' : '') + '" onclick="dtwPaKind(\'' + k[0] + '\')">' + esc(k[1]) + '</button>'; }).join('') + '</div>';
-                if (kind) out += '<div class="dtw-bw-shareline">' + esc(kind[2]) + ' For example: ' + esc(kind[3]) + '</div>';
-                out += '<textarea class="dtw-in dtw-pa-goal" id="dtwPaGoal" rows="3" placeholder="' + esc((kind || PA_KINDS[0])[3]) + '" oninput="dtwPaGoalInput(this.value)">' + esc(p.goal) + '</textarea>';
-                out += '<div class="dtw-bw-shareline">Audience: <b>' + esc(paTwinName(p.key)) + '</b>' + (paPeople(p.key) ? ', ' + fmtN(paPeople(p.key)) + ' people' : '') + '. Keep names, prices, titles and dates exactly as you want the room to hear them.</div>';
-                return out + paNav(!!(p.goal || '').trim(), 'Plan the room');
-            }
             function paQRow(q, i, editable) {
                 var lvl = PA_LEVELS[q.level] || '';
                 var opts = (q.options || []).length ? '<div class="dtw-pa-opts">' + q.options.map(function(o) { return '<span class="dtw-fg-chip">' + esc(o) + '</span>'; }).join('') + '</div>' : '';
@@ -2943,14 +2972,13 @@
                 if (S.key && p.key && p.key !== S.key) { paClearPoll(); S.pa = paFresh(); p = S.pa; }
                 if (!p.key && S.key) p.key = S.key;
                 if (p.step === 0 && p.key && p.runsKey !== p.key) paLoadRuns(p.key);
-                var out = paHero() + paRail();
-                if (p.step === 0) out += paStepAudience(p);
-                else if (p.step === 1) out += paStepQuestion(p);
-                else if (p.step === 2) out += paStepPlan(p);
-                else if (p.step === 3) out += paStepRun(p);
-                else out += paReport(p);
+                var out = paHero();
+                if (p.step <= 1) out += paStart(p);
+                else if (p.step === 2) out += paRail() + paStepPlan(p);
+                else if (p.step === 3) out += paRail() + paStepRun(p);
+                else out += paRail() + paReport(p);
                 h.innerHTML = '<div class="dtw-pa-wrap">' + out + '</div>';
-                if (p.step === 1) { var ta = el('dtwPaGoal'); if (ta && !p.goal) { try { ta.focus(); } catch (_) {} } }
+                if (p.step <= 1 && p.key && !p.goal && !paDd.open) { var ge = el('dtwPaGoal'); if (ge) { try { ge.focus(); } catch (_) {} } }
                 if (p.step === 3 && p.guided && p.guided.status === 'running') paSchedulePoll();
             }
             function paLoadRuns(key) {
@@ -2992,8 +3020,8 @@
                 if (S.key !== key) { try { await dtwOpen(key, null, null, null, 'predict'); } catch (_) {} if (pa().key !== key) { pa().key = key; } }
                 renderPredict();
             };
-            window.dtwPaKind = function(k) { var p = pa(); p.kind = p.kind === k ? '' : k; var ta = el('dtwPaGoal'); if (ta) p.goal = ta.value; renderPredict(); };
-            window.dtwPaGoalInput = function(v) { pa().goal = v; var b = document.querySelector('#dtwPaConsole .dtw-bw-nav .dtw-btn-primary'); if (b) b.disabled = !(v || '').trim(); };
+            window.dtwPaKind = function(k) { var p = pa(); p.goal = paGoalValue(); p.kind = p.kind === k ? '' : k; renderPredict(); };
+            window.dtwPaGoalInput = function(v) { var p = pa(); p.goal = String(v || ''); var b = el('dtwPaPlanBtn'); if (b) b.disabled = !(p.key && (p.goal || '').trim()); };
             window.dtwPaEditPlan = function(k, v) { var p = pa(); if (p.plan) p.plan[k] = v; };
             window.dtwPaEditQ = function(i, v) { var p = pa(); if (p.plan && p.plan.questions && p.plan.questions[i]) p.plan.questions[i].q = v; };
             window.dtwPaDropQ = function(i) {
@@ -3005,10 +3033,10 @@
             window.dtwPaReplan = function() { var p = pa(); p.plan = null; p.step = 1; p.err = ''; renderPredict(); };
             window.dtwPaNext = async function() {
                 var p = pa(); if (p.busy) return;
-                if (p.step === 0) { if (!p.key) return; p.step = 1; renderPredict(); return; }
+                if (p.step === 0) { if (!p.key) return; p.step = 1; }   // the start covers both: fall through to planning
                 if (p.step === 1) {
-                    var ta = el('dtwPaGoal'); if (ta) p.goal = ta.value;
-                    var goal = (p.goal || '').replace(/\s+/g, ' ').trim(); if (!goal) return;
+                    p.goal = paGoalValue();
+                    var goal = paGoalText(p); if (!goal) return;
                     p.busy = true; p.err = ''; renderPredict();
                     try { var d = await api('/' + p.key + '/guided/plan', { method: 'POST', body: JSON.stringify({ goal: goal, kind: p.kind || '' }) }); p.plan = d.plan; p.step = 2; }
                     catch (e) { p.err = dtwSafeErr(e, 'The plan did not come back. Try again in a moment.'); }
