@@ -20573,6 +20573,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                     {% endif %}
                                 </div>
                                 <span class="user-name">{{ username }}</span>
+                                <span class="user-chip-caret" aria-hidden="true">&#9662;</span>
                             </div>
                             <div class="user-dropdown" id="userDropdown">
                                 <div class="user-dropdown-inner">
@@ -27607,6 +27608,22 @@ https://www.instagram.com/p/..."></textarea>
             color: #9AA09B !important;
         }
         body[data-theme="light"] .user-name { color: #5C6560 !important; }
+        /* The chip opens a menu, so it carries a caret that flips when the
+           menu is open. :has() reads the open class off the sibling panel;
+           where it is unsupported the caret simply does not turn. */
+        .user-chip-caret {
+            font-size: 9px !important;
+            line-height: 1 !important;
+            color: #7C878A !important;
+            transition: transform 0.18s ease !important;
+            transform-origin: 50% 55% !important;
+        }
+        body[data-theme="light"] .user-chip-caret { color: #888C89 !important; }
+        .user-menu-clickable:hover .user-chip-caret { color: #9AA09B !important; }
+        body[data-theme="light"] .user-menu-clickable:hover .user-chip-caret { color: #5C6560 !important; }
+        .user-menu-hover-wrap:has(.user-dropdown.open) .user-chip-caret {
+            transform: rotate(180deg) !important;
+        }
 
         /* ---- Product picker ------------------------------------------- */
         .view-nav-label {
