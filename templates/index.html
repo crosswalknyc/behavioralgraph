@@ -69281,18 +69281,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      rows: rows };
         }
 
-        // Films rows show rank + title only, in the site's own order.
+        // Films rows: rank + title in each source's own order, plus the
+        // showtimes and theaters that rank a theater chain's list.
         function _tiqExportRowsFilms(cards, tabLabel) {
             var src = cards.films_ticketing || {};
             var rows = [];
-            ['fandango', 'cinemark', 'amc', 'regal'].forEach(function(k) {
+            _tiqFilmsKeys(src).forEach(function(k) {
                 var s = src[k];
                 if (!s || !s.available) return;
                 (s.items || []).forEach(function(it, i) {
-                    rows.push({ Tab: tabLabel, Section: s.label || k, Rank: i + 1, Title: it.title || '' });
+                    var n = Number(it.showtimes), t = Number(it.theaters);
+                    rows.push({ Tab: tabLabel, Section: s.label || k, Rank: i + 1, Title: it.title || '',
+                                'Showtimes Today': (isFinite(n) && n > 0) ? n : '',
+                                Theaters: (isFinite(t) && t > 0) ? t : '' });
                 });
             });
-            return { cols: ['Tab', 'Section', 'Rank', 'Title'], rows: rows };
+            return { cols: ['Tab', 'Section', 'Rank', 'Title', 'Showtimes Today', 'Theaters'], rows: rows };
         }
 
         function _tiqExportRowsWatchlist(tabLabel) {
@@ -72471,19 +72475,58 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                    card + '</div>';
         }
 
+        // Films tab (2026-11-23): one pill per source. The four national
+        // ticket sites first, then the theater chains by how many
+        // theaters they run (theater_chains.py), then anything else the
+        // snapshot carries. A chain row also says how many showtimes and
+        // theaters the film has today, which is what ranks it.
+        function _tiqFilmsKeys(sources) {
+            var order = ['fandango', 'amc', 'regal', 'cinemark',
+                'marcus', 'bbtheatres', 'alamo', 'harkins', 'malco', 'emagine',
+                'santikos', 'cinepolis', 'landmark', 'megaplex', 'smg', 'galaxy',
+                'showcase', 'epic', 'marquee'];
+            sources = sources || {};
+            var all = Object.keys(sources).filter(function(k) { return k !== 'atom'; });
+            return order.filter(function(k) { return sources[k]; })
+                .concat(all.filter(function(k) { return order.indexOf(k) === -1; }));
+        }
+
+        function _tiqFilmsShowLine(it) {
+            var n = Number(it && it.showtimes);
+            if (!isFinite(n) || n <= 0) return '';
+            var t = Number(it.theaters);
+            var txt = n.toLocaleString('en-US') + (n === 1 ? ' showtime' : ' showtimes') + ' today';
+            if (isFinite(t) && t > 0) {
+                txt += ' at ' + t.toLocaleString('en-US') + (t === 1 ? ' theater' : ' theaters');
+            }
+            return '<div class="tiq-row-meta">' + _tiqEsc(txt) + '</div>';
+        }
+
         function renderTIQFilms(sources) {
-            var keys = ['fandango', 'cinemark', 'amc', 'regal'];
-            var present = keys.filter(function(k) { return sources[k]; });
-            if (!present.length) {
+            sources = sources || {};
+            var keys = _tiqFilmsKeys(sources);
+            if (!keys.length) {
                 return '<div class="tiq-empty">Film ticketing data is warming up. Check back later.</div>';
+            }
+            var T = window.__trendsIQ;
+            if (!T.activeFilm || keys.indexOf(T.activeFilm) === -1) {
+                T.activeFilm = keys.find(function(k) { return (sources[k] || {}).available; }) || keys[0];
             }
             var subheader =
                 '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
-                'Ticketing Demand Rank by Site' +
+                'Top films at each ticket site and theater chain' +
                 '</div>';
-            var cards = present.map(function(k) {
+            var tabs = keys.map(function(k) {
+                var s = sources[k] || {};
+                var active = (k === T.activeFilm) ? ' active' : '';
+                var unavail = !s.available ? ' unavailable' : '';
+                return '<div class="tiq-social-tab' + active + unavail + '" data-tiq-film-tab="' + _tiqEsc(k) + '"' +
+                       ' onclick="setTrendsIQFilm(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
+            }).join('');
+            var panels = keys.map(function(k) {
                 var s = sources[k] || {};
                 var items = s.items || [];
+                var active = (k === T.activeFilm) ? ' active' : '';
                 var body;
                 if (!s.available || !items.length) {
                     body = '<div class="tiq-placeholder">' +
@@ -72491,7 +72534,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                            '<div>Loading&hellip;</div>' +
                            '</div>';
                 } else {
-                    body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                    body = (s.sub ? '<div class="tiq-card-sub" style="margin:2px 0 10px;">' + _tiqEsc(s.sub) + '</div>' : '') +
+                           '<div class="tiq-headline-list" style="max-height:640px;overflow-y:auto;">' +
                            items.map(function(it, i) {
                                var img = _tiqPosterCell(it.image, it.title);
                                var titleLine = it.url
@@ -72504,19 +72548,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                       _tiqCrossPlatformBadge(it) +
                                       _tiqActions('film', k, filmKey, filmKey, 'National') +
                                       '</div>' +
+                                      _tiqFilmsShowLine(it) +
                                       '</div></div>';
                            }).join('') +
                            '</div>';
                 }
-                return '<div class="tiq-card">' +
+                return '<div class="tiq-social-panel' + active + '" data-tiq-film="' + _tiqEsc(k) + '">' +
+                       '<div class="tiq-card">' +
                        '<h4>' + _tiqEsc(s.label || k) + '</h4>' +
                        body +
-                       '</div>';
+                       '</div></div>';
             }).join('');
-            return subheader +
-                   '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
-                   cards + '</div>';
+            return subheader + '<div class="tiq-social-tabs">' + tabs + '</div>' + panels;
         }
+
+        window.setTrendsIQFilm = function(key) {
+            window.__trendsIQ.activeFilm = key;
+            document.querySelectorAll('#trendsIQPanels [data-tiq-film-tab]').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-tiq-film-tab') === key);
+            });
+            document.querySelectorAll('#trendsIQPanels [data-tiq-film]').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-tiq-film') === key);
+            });
+            if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
+        };
 
         var _tiqFastOrder = ['roku', 'tubi', 'pluto', 'amazon'];
 

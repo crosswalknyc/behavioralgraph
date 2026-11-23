@@ -1,5 +1,9 @@
 """
-Film-ticketing scraper - top movies on Fandango, Cinemark, AMC, and Regal.
+Film-ticketing scraper - top movies on Fandango, Cinemark, AMC, and Regal,
+plus fifteen theater chains (2026-11-23, theater_chains.py: Marcus, B&B,
+Alamo Drafthouse, Harkins, Malco, Emagine, Santikos, Cinepolis, Landmark,
+Megaplex, Studio Movie Grill, Galaxy, Showcase, EPIC, Marquee), each
+ranked by its own showtimes today across its US theaters.
 
 Aggregates the "now-playing / in-theaters" listings from the 4 biggest
 US movie-ticketing platforms into a single snapshot the dashboard
@@ -99,7 +103,7 @@ def _clean_title(raw: str) -> str:
         return ''
     s = _html.unescape(raw).strip()
     s = re.sub(r'\s+', ' ', s)
-    # Fandango stamps `(2026)` on every title; keep it for now — the
+    # Fandango stamps `(2026)` on every title; keep it for now - the
     # frontend gets a slightly cleaner-looking chart if we strip it,
     # but keeping it disambiguates re-releases (Moana (2026) vs
     # Moana (2016)) which studios do surface separately.
@@ -115,10 +119,10 @@ def _is_title(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Fandango — Movies In Theaters (server-rendered, popularity order)
+# Fandango - Movies In Theaters (server-rendered, popularity order)
 # ---------------------------------------------------------------------------
 # The list order on `/movies-in-theaters` is what Fandango merchandises
-# as "what to see now" — driven by their editorial + a live sales-density
+# as "what to see now" - driven by their editorial + a live sales-density
 # signal for the current week. Higher-anticipated / higher-selling titles
 # rise to the top of the grid. Structure inside each poster-card:
 #
@@ -332,7 +336,7 @@ def _fetch_fandango(limit: int = 25) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Cinemark — Now Showing (server-rendered)
+# Cinemark - Now Showing (server-rendered)
 # ---------------------------------------------------------------------------
 # The `/movies` page renders each movie inside a `<div class="card__movie">`.
 # There are usually TWO anchors per card:
@@ -553,7 +557,7 @@ def _parse_generic_movie_list(html: str, host_prefix: str,
             before = html[max(0, m.start() - 2000):m.start()]
             img_m = img_src_re.search(before)
         image = img_m.group(1) if img_m else ''
-        # Some sites (AMC) inline srcset — take the first URL.
+        # Some sites (AMC) inline srcset - take the first URL.
         if ' ' in image:
             image = image.split(' ', 1)[0]
         seen_slugs.add(slug)
@@ -569,7 +573,7 @@ def _parse_generic_movie_list(html: str, host_prefix: str,
 
 
 # ---------------------------------------------------------------------------
-# AMC Theatres — Now Playing
+# AMC Theatres - Now Playing
 # ---------------------------------------------------------------------------
 # `www.amctheatres.com/movies` returns 403 to plain requests and returns
 # a 4KB Akamai bot-challenge shell body to Playwright regardless of
@@ -1104,7 +1108,7 @@ def _fetch_amc(limit: int = 25,
 
 
 # ---------------------------------------------------------------------------
-# Regal Cinemas — All Movies in Theatres
+# Regal Cinemas - All Movies in Theatres
 # ---------------------------------------------------------------------------
 # 403 on plain requests. Playwright + stealth passes. Regal's page is
 # server-rendered Next.js and inlines the "Now Playing" list as a JSON
@@ -1272,6 +1276,26 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
                                if _wanted('amc')   else ([], ''))
     regal_items, regal_sub = (_fetch_regal(limit=25) if _wanted('regal') else ([], ''))
 
+    # The last snapshot: a chain that cannot be read today keeps its
+    # last list, and a run limited by `only` keeps every source it did
+    # not read instead of publishing them empty.
+    previous: dict = {}
+    try:
+        from ._base import read_snapshot
+        previous = ((read_snapshot('film_ticketing') or {}).get('sources') or {})
+    except Exception as e:
+        logger.info("film_ticketing: last snapshot unavailable (%s)", e)
+
+    # Theater chains (2026-11-23): Marcus, B&B, Alamo, Harkins and the
+    # rest, each ranked by its own showtimes today. theater_chains.py.
+    chain_sources: dict = {}
+    try:
+        from .theater_chains import CHAIN_KEYS, fetch_chains
+        if not only or 'chains' in only or any(k in only for k in CHAIN_KEYS):
+            chain_sources = fetch_chains(only=only, previous=previous)
+    except Exception as e:
+        logger.warning("film_ticketing: theater chains skipped (%s)", e)
+
     # AMC's SSR HTML does not expose poster URLs, so its rows ship
     # with `image=''`. Fandango / Cinemark / Regal all DO expose
     # posters. For every AMC title that also appears on any of those
@@ -1296,13 +1320,7 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
             if k in poster_by_key:
                 row['image'] = poster_by_key[k]
 
-    return {
-        # Mirror Fandango as the "national" list because it has the
-        # broadest US theater reach (~40% of US ticketing volume).
-        'national': fandango_items[:30] or cinemark_items[:30],
-        'available': bool(fandango_items or cinemark_items or amc_items
-                          or regal_items),
-        'sources': {
+    sources = {
             'fandango': {
                 'label':     'Fandango',
                 'sub':       'What people are buying tickets to right now on Fandango.',
@@ -1331,7 +1349,25 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
                 'items':     regal_items,
                 'available': bool(regal_items),
             },
-        },
+    }
+    sources.update(chain_sources)
+    if only:
+        for key, panel in previous.items():
+            if not isinstance(panel, dict) or key in only or key in chain_sources:
+                continue
+            if key not in sources or not (sources[key].get('items') or []):
+                sources[key] = panel
+
+    national = fandango_items[:30] or cinemark_items[:30]
+    if not national and only:
+        national = ((sources.get('fandango') or {}).get('items') or [])[:30] or \
+                   ((sources.get('cinemark') or {}).get('items') or [])[:30]
+    return {
+        # Mirror Fandango as the "national" list because it has the
+        # broadest US theater reach (~40% of US ticketing volume).
+        'national': national,
+        'available': any((p or {}).get('items') for p in sources.values()),
+        'sources': sources,
     }
 
 
@@ -1341,7 +1377,9 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Film-ticketing scraper')
     p.add_argument('--only', default='',
                     help='comma-separated source keys: '
-                          'fandango,cinemark,amc,regal')
+                          'fandango,cinemark,amc,regal, any chain key '
+                          '(marcus, harkins, ...) or chains for all of them; '
+                          'sources left out keep their last list')
     p.add_argument('--dry-run', action='store_true',
                     help='print results without writing an S3 snapshot')
     args = p.parse_args()

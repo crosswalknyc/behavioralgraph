@@ -9980,7 +9980,13 @@ def _compute_fused_trending(cards: dict, limit: int = _FUSE_TOP_N) -> list[dict]
                  url=it.get('url'), image=it.get('image'))
 
     # ---------------- Films (theatrical ticketing) ----------------
+    # The four national ticket sites only. The theater chain cards
+    # (group 'chain', 2026-11-23) list the same films fifteen more
+    # times, and the fuse adds a title's score across panels, so
+    # counting them would lift every film above every other category.
     for src_slug, panel in (cards.get('films_ticketing') or {}).items():
+        if (panel or {}).get('group') == 'chain':
+            continue
         items = (panel or {}).get('items') or []
         max_i = min(len(items), 20)
         panel_label = (panel or {}).get('label') or src_slug
@@ -14135,8 +14141,8 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False,
                                   for k in (goodreads_trending or {}))),
             'comics':        sum(len(((comics_charts.get(k) or {}).get('items') or []))
                                   for k in ('amazon_kindle', 'apple_comics', 'libby_comics')),
-            'films':         sum(len(((film_sources.get(k) or {}).get('items') or []))
-                                  for k in ('fandango', 'cinemark', 'amc', 'regal', 'atom')),
+            'films':         sum(len(((p or {}).get('items') or []))
+                                  for p in (film_sources or {}).values()),
             # Broadway currently ships one panel (Show Rank).
             # Sum across every panel key so a future add-on rail
             # (e.g. Off-Broadway) picks up the badge automatically.
