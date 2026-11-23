@@ -112,7 +112,8 @@ _PLAIN_INTENT = {
     'cancel': 'a cancel', 'order': 'an order', 'other': 'something else',
 }
 _SEVERITY = {'unfinished': 3, 'reversal': 3, 'deck_failure': 3, 'bounce': 2, 'correction': 2, 'misrouted': 2,
-             'wizard_captured': 2, 'build_offered': 2, 'which_twice': 1, 'repeat': 1}
+             'wizard_captured': 2, 'build_offered': 2, 'which_twice': 1, 'repeat': 1, 'fixture_hand': 1}
+CANDIDATES_INDEX = 'system/pm_replay_corpus/candidates/index.json'
 
 
 # ----------------------------------------------------------------- time
@@ -627,6 +628,26 @@ def _reversals(s3, since, until, out):
                 out.append(_item('reversal', t, who, question or desc, f"A charge of {amount or 'the pull'} was reversed: {_clean(desc, 120) or 'the work did not finish'}.", tid, jid))
 
 
+def _fixture_queue(s3, out):
+    """Fixture candidates from corrections that failed the weekly scrub
+    (a real-looking name, address or id survived the invented stand-ins)
+    wait in the queue for a hand look (2026-11-23). The line carries the
+    candidate id and the counts by kind, never a value."""
+    idx = _get(s3, CANDIDATES_INDEX)
+    if not isinstance(idx, dict):
+        return
+    for r in idx.get('candidates') or []:
+        if not isinstance(r, dict) or r.get('status') != 'needs_hand':
+            continue
+        hits = r.get('hits') if isinstance(r.get('hits'), dict) else {}
+        kinds = ', '.join(f"{int(v)} {k.replace('_', ' ')}" for k, v in hits.items() if v)
+        t = _parse_ts(r.get('checked_at') or r.get('created')) or _utcnow()
+        out.append(_item('fixture_hand', t, 'staff', '',
+                         f"A replay fixture from a {str(r.get('by') or 'reader')} correction ({str(r.get('kind') or 'wrong answer').replace('_', ' ')}) "
+                         f"needs a hand look before it can be committed: {kinds or 'an identifier'} survived the scrub. "
+                         f"Candidate {str(r.get('id') or '')} in the fixture queue.", label='staff'))
+
+
 def collect(day=None, s3=None, ses=None, now=None, since=None, until=None):
     """The window's document. ``day`` (YYYY-MM-DD, UTC) pins one calendar
     day as the older same-day digest did; otherwise the window runs from
@@ -660,6 +681,7 @@ def collect(day=None, s3=None, ses=None, now=None, since=None, until=None):
         _deck_failures(s3, recs, since, until, items)
         _bounces(s3, ses, since, until, items)
         _reversals(s3, since, until, items)
+        _fixture_queue(s3, items)
     except Exception:
         traceback.print_exc()
     items = _collapse(items)
@@ -705,6 +727,7 @@ _GROUPS = (('unfinished', ('unfinished',), 'answers never finished'),
            ('deck_failures', ('deck_failure',), 'decks or files that failed'),
            ('bounces', ('bounce',), 'emails that bounced'),
            ('reversals', ('reversal',), 'charges reversed'))
+_STAFF_KINDS = ('fixture_hand',)       # staff items: listed under their own line, never in the counts of what went wrong
 
 
 def _items_of(doc):
@@ -734,6 +757,8 @@ def _line(it, full):
     label = str(it.get('label') or 'asked')
     if label == 'email to':
         head = f"{when}  email to {who}" if when else f"email to {who}"
+    elif label == 'staff':
+        head = f"{when}  for staff" if when else 'for staff'
     else:
         head = f"{when}  {who}" if when else who
     if not q:
@@ -767,9 +792,11 @@ def render(doc):
     if not items:
         return ''
     c = counts(doc)
+    staff = [it for it in items if it.get('kind') in _STAFF_KINDS]
     parts = [f"Prometheus, what went wrong: {span}.",
              f"{len(items)} thing{'s' if len(items) != 1 else ''} to look at, out of {int(doc.get('asks') or 0)} questions from {int(doc.get('users') or 0)} people.", '',
-             'Counts: ' + ', '.join(f"{c[g]} {label}" for g, _k, label in _GROUPS) + '.', '']
+             'Counts: ' + ', '.join(f"{c[g]} {label}" for g, _k, label in _GROUPS) + '.'
+             + (f" For staff: {len(staff)} fixture candidate{'s' if len(staff) != 1 else ''} for a hand look." if staff else ''), '']
     worst, rest = items[:WORST], items[WORST:]
     parts.append('The worst ten:' if len(items) > WORST else ('The items:' if len(items) > 1 else 'The item:'))
     for i, it in enumerate(worst, 1):
