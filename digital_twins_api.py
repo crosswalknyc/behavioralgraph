@@ -548,7 +548,7 @@ def _attach_portraits(payload, key, sess):
 TUTORIALS = {
     'seating': {'video': 'system/tutorials/Crosswalk_Digital_Twins_Seating_Tutorial.mp4',
                 'poster': 'system/tutorials/Crosswalk_Digital_Twins_Seating_Tutorial.jpg',
-                'title': 'How to seat your panel'},
+                'title': 'How to seat your focus group'},
 }
 TUTORIAL_URL_TTL_S = 900
 

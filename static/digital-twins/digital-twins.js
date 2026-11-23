@@ -2988,7 +2988,7 @@
             // video). One overlay on the body, built on first use: a Graphite scrim, the video at 16:9 with native controls and its poster,
             // playing on open (the click is the gesture). Close, Escape and a click on the scrim close it; closing pauses and rewinds;
             // focus moves to the close button and back to the link. The video and poster come through the app's tutorial route.
-            var TUTORIALS = { seating: { title: 'How to seat your panel' } };
+            var TUTORIALS = { seating: { title: 'How to seat your focus group' } };   // panel is a reader-banned word; the Focus Group IQ tab's wording
             var tutFrom = null;
             function tutorialEl() {
                 var d = el('dtwTutorial');

@@ -50,8 +50,24 @@ class Card(unittest.TestCase):
         for need in ('.dtw-tutorial.open { display: flex; }', 'aspect-ratio: 16 / 9', 'rgba(12, 22, 24, 0.86)', '@media (max-width: 640px) { .dtw-tutorial'):
             self.assertIn(need, css, need)
         title = js[js.index("var TUTORIALS = { seating:"):js.index('\n', js.index("var TUTORIALS = { seating:"))]
+        self.assertIn("title: 'How to seat your focus group'", title)
         self.assertNotIn('kind', title.lower())
         self.assertNotIn('\u2014', title)
+
+    def test_the_pop_up_copy_passes_the_reader_scrub(self):
+        # the words a reader sees in the pop-up (the eyebrow, the title, the close label) carry no banned word; panel is scoped
+        # to the methodology document only, so the title says focus group, the Focus Group IQ tab's wording
+        from migration import digital_twin_room as ROOM
+        import digital_twins_api as A
+        js = _read(JS)
+        block = js[js.index('            function tutorialEl()'):js.index('            window.dtwTutorialOpen')]
+        import re
+        copy = ' '.join(re.findall(r">([^<>]+)<", block.replace("' + '", '')) + re.findall(r'aria-label="([^"]+)"', block))
+        copy += ' ' + ' '.join(rec['title'] for rec in A.TUTORIALS.values())
+        self.assertIn('Tutorial', copy)
+        self.assertIn('How to seat your focus group', copy)
+        self.assertEqual(ROOM.has_banned(copy), [], copy)
+        self.assertNotRegex(copy.lower(), r"\bpanel\b|\bkinds?\b")
 
 
 @unittest.skipUnless(shutil.which('node'), 'node not available')
@@ -95,7 +111,7 @@ console.log(JSON.stringify({ open: open, closed: closed, again: again, scrimClos
         self.assertEqual(out.returncode, 0, out.stderr[-800:])
         got = json.loads(out.stdout.strip().splitlines()[-1])
         self.assertEqual(got['open'], {'isOpen': True, 'aria': 'false', 'src': '/api/digital-twins/tutorial/seating.mp4', 'poster': '/api/digital-twins/tutorial/seating.jpg',
-                                       'played': 1, 'paused': False, 'focusOnClose': True, 'title': 'How to seat your panel'})
+                                       'played': 1, 'paused': False, 'focusOnClose': True, 'title': 'How to seat your focus group'})
         self.assertEqual(got['closed'], {'isOpen': False, 'aria': 'true', 'paused': True, 'time': 0, 'focusBack': True})
         self.assertEqual(got['again'], {'sameEl': True, 'loads': 1}, 'a second open reuses the overlay and never reloads the video')
         self.assertTrue(got['scrimClosed'])
