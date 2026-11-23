@@ -159,6 +159,22 @@ def global_display_name(name) -> str:
     return f"{nm} - Global"
 
 
+def global_file_stem(name) -> str:
+    """The S3 file stem of a worldwide build: '<Subject>_Global', the
+    TU-style key the shipped precedent carries
+    ('Guinness_Global_11_23_2026_20_44.csv', display 'Guinness - Global').
+    Never a ' - ' key: the writer and the cut write gate read ' - ' in a
+    key as a cut of the subject's US file and cap every row at that
+    parent's people. The head is the subject before any ' - ' segment,
+    minus a trailing bare 'Global' / 'Worldwide' token."""
+    nm = re.sub(r"\s+", " ", str(name or "").strip())
+    head = nm.split(" - ")[0].strip() if nm else ""
+    head = re.sub(r"\s+(?:global|worldwide|world-?wide|international)$",
+                  "", head, flags=re.I).strip() or head
+    stem = re.sub(r"[^A-Za-z0-9]+", "_", head).strip("_") or "Profile"
+    return f"{stem}_Global"
+
+
 # ---------------------------------------------------------------------------
 # Country-native demographic schemas (Omaze precedent, canonical)
 #

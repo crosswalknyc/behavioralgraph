@@ -587,6 +587,79 @@ def _era_parent_key(base, stem_norm, era_norm, listing):
     return None
 
 
+# A worldwide build ('<Subject> - Global', Jenna 2026-11-23) is its own
+# universe, sized on the world, not a cut of the subject's US file. Its
+# cuts ('<Subject> - Global - Avid Fan') must bind to IT: resolved by
+# stem alone they would bind to the US TU, whose people cap every row
+# (the wrong-parent math the era rule above already forbids).
+_SCOPE_SEG_RE = re.compile(
+    r"^(?:global|worldwide|world-?wide|international)"
+    r"(?:\s+(?:audience|footprint|market|total universe|universe|profile))?$",
+    re.I)
+_SCOPE_LEAD_RE = re.compile(r"^(?:global|worldwide|world-?wide)\s+(?=\S)",
+                            re.I)
+_SCOPE_FILE_TOKENS = ("GLOBAL", "WORLDWIDE", "INTERNATIONAL")
+
+
+def _scope_token(cut_suffix):
+    """'GLOBAL' when the cut is a cut OF the subject's worldwide file
+    ('{Subject} - Global - Avid Fan', '{Subject} - Worldwide - Female',
+    '{Subject} - Global Avid Fan'); None otherwise. A bare
+    '{Subject} - Global' is the worldwide file itself, not a cut of it."""
+    s = str(cut_suffix or "").strip()
+    if not s:
+        return None
+    parts = [p.strip() for p in s.split(" - ")]
+    if len(parts) >= 2 and _SCOPE_SEG_RE.match(parts[0]):
+        return "GLOBAL"
+    if len(parts) == 1 and _SCOPE_LEAD_RE.match(s) \
+            and not _SCOPE_SEG_RE.match(s):
+        return "GLOBAL"
+    return None
+
+
+def _key_build_ts(k, lm):
+    """Build timestamp embedded in a dated key ('..._MM_DD_YYYY_HH_MM.csv'),
+    else S3 LastModified (in-place corrections churn LastModified)."""
+    m = re.search(r"(\d{2})_(\d{2})_(\d{4})_(\d{2})_(\d{2})\.csv$", str(k))
+    if m:
+        mo, d, y, hh, mi = (int(x) for x in m.groups())
+        try:
+            return datetime(y, mo, d, hh, mi, tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return lm
+
+
+def _scope_parent_key(base, stem_norm, listing):
+    """The subject's worldwide file for a cut of it: the TU-style key
+    '{Stem}_Global_<MM_DD_YYYY_HH_MM>' (the shipped convention; a ' - '
+    key would itself read as a cut) or an undated '{Stem} - Global' /
+    '{Stem} Global'. Newest build wins. Never the cut itself, never the
+    subject's US file."""
+    base_norm = _norm_token(base)
+    wanted = {stem_norm + t for t in _SCOPE_FILE_TOKENS}
+    found = []
+    for k, lm in listing:
+        kb_norm = _norm_token(_display_name(k))
+        if kb_norm == base_norm:
+            continue
+        if kb_norm in wanted:
+            found.append((k, lm))
+            continue
+        for w in wanted:
+            if kb_norm.startswith(w):
+                tail = kb_norm[len(w):]
+                if tail.isdigit() and len(tail) >= 8:
+                    found.append((k, lm))
+                break
+    if not found:
+        return None
+    found.sort(key=lambda t: (_key_build_ts(t[0], t[1]) is not None,
+                              _key_build_ts(t[0], t[1])), reverse=True)
+    return found[0][0]
+
+
 def _resolve_parent_tu(s3_key, s3_client=None, verbose=True):
     """For a cut named '{Subject} - {Cut}.csv', find the latest TU file
     for the same subject in the bucket root. TU keys either equal the
@@ -629,6 +702,45 @@ def _resolve_parent_tu(s3_key, s3_client=None, verbose=True):
                 print(f"[ship-gate] era parent fetch failed for "
                       f"{pkey}: {e}")
             return None, None
+
+    if _SCOPE_SEG_RE.match(cut_suffix):
+        # '{Subject} - Global' written as a ' - ' key is the worldwide
+        # file itself: its own universe, never a subset of the US file.
+        if verbose:
+            print(f"[ship-gate] worldwide file '{base}' is its own "
+                  f"universe; standalone (no subset binding)")
+        return None, None
+
+    if _scope_token(cut_suffix):
+        # A cut of the subject's worldwide file binds to that file.
+        listing = _list_root_csvs(s3_client)
+        pkey = _scope_parent_key(base, stem_norm, listing)
+        if pkey is None:
+            listing = _list_root_csvs(s3_client, force=True)
+            pkey = _scope_parent_key(base, stem_norm, listing)
+        if pkey is not None:
+            try:
+                body = _s3(s3_client).get_object(
+                    Bucket=BUCKET, Key=pkey)["Body"].read()
+                if verbose:
+                    print(f"[ship-gate] worldwide cut '{base}' binds to "
+                          f"its own file {pkey}")
+                return pkey, body
+            except Exception as e:
+                if verbose:
+                    print(f"[ship-gate] worldwide parent fetch failed "
+                          f"for {pkey}: {e}")
+                return None, None
+        if " - " in cut_suffix:
+            # '{Subject} - Global - {Cut}' is a cut of the worldwide file
+            # and of nothing else: with no such file it stands alone,
+            # never bound to the subject's US file.
+            if verbose:
+                print(f"[ship-gate] worldwide cut '{base}' has no "
+                      f"worldwide parent; standalone (no subset binding)")
+            return None, None
+        # '{Subject} - Global {Cut}' with no worldwide file on record: a
+        # cut label that merely opens on the word; resolve as usual.
 
     def _candidates(listing):
         found = []
