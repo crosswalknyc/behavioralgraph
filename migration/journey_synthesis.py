@@ -1462,6 +1462,21 @@ def corpus_anchors(inputs: dict, s3=None) -> dict:
     # the journey). Whichever product built first fixed the US viewer
     # universe for the title; a viewers journey lands its watch /
     # conversion stage exactly there.
+    # One set of figures across products (Jenna 2026-11-23): the subject's
+    # saved size and whole audience, the records, the valuations, the
+    # Attribution IQ campaign and the title universe, as the block every
+    # product carries (prometheus.knowledge.subject_facts); the ceiling
+    # and the cross-product band are applied after the build.
+    try:
+        from prometheus import knowledge as _know_sf
+        start, end = _dates(inputs)
+        shared = _know_sf.subject_facts(str(inputs.get('subject') or ''), window={'start': start, 'end': end},
+                                        extra_subjects=[str(inputs.get('title') or '')] if inputs.get('title') else ())
+        out['shared'] = shared
+        if shared.get('block'):
+            out['catalog_block'] = (shared['block'] + '\n' + str(out.get('catalog_block') or '')).strip()
+    except Exception as exc:
+        print(f'[journey] shared figures skipped: {exc}')
     try:
         ta = title_anchor_for(inputs)
         if ta:
@@ -1625,6 +1640,78 @@ def apply_title_anchor(payload: dict, ta: dict, seed: str = '') -> dict:
               f"({ta.get('source_product')} universe)")
     except Exception as exc:
         print(f'[journey] title anchor pass skipped: {exc}')
+    return payload
+
+
+def apply_shared_figures(payload: dict, shared: dict, inputs: dict, seed: str = '') -> dict:
+    """Across products (Jenna 2026-11-23): the journey's audience stage
+    (the first stage under the whole US) never exceeds the subject's whole
+    audience on file, and sits inside the near-twin band of the people
+    another product already published for the subject on a nearby window
+    (a Brand Partnership IQ reach, an Attribution IQ campaign), unless a
+    dated event moved it. A move scales every count by one factor through
+    the title-anchor scaler, so drops and kept shares follow and the copy
+    quotes the new counts. Returns the payload (changed in place)."""
+    try:
+        from prometheus import knowledge as _know_x
+        if not _know_x.shared_enabled() or not isinstance(shared, dict):
+            return payload
+        j = payload.get('fragrance_shop_journey') or {}
+        spine = j.get('spine') or []
+        if len(spine) < 2:
+            return payload
+        tam = int(spine[0].get('accounts') or US_GEN_POP)
+        top = int(spine[1].get('accounts') or 0)
+        last = int(spine[-1].get('accounts') or 0)
+        if top <= 0 or last <= 0:
+            return payload
+        start, end = _dates(inputs)
+        window = {'start': str(start)[:10], 'end': str(end)[:10]}
+        partnership = is_ticketing_journey(inputs) or str(inputs.get('journey_kind') or '') in ('partnership', 'campaign') \
+            or bool(inputs.get('brand_partner')) or ' x ' in f" {str(inputs.get('subject') or '').lower()} "
+        if partnership:
+            # a partnership or campaign journey's first stage is the people the
+            # partnership reached: the same quantity Brand Partnership IQ and
+            # Attribution IQ publish, so the band holds across products
+            held, rec = _know_x.cross_hold(top, kind='reach_people', facts=shared, window=window, salt=seed or str(inputs.get('subject') or ''),
+                                           label='journey audience stage', product='journey', exclude_products=('journey',))
+            kind = 'reach_people'
+        else:
+            # any other journey's first stage is a part of the subject's audience:
+            # only the whole audience on file caps it (the stage's own definition
+            # differs from product to product, so no band)
+            kind = 'audience_people'
+            ceiling = shared.get('ceiling')
+            held, rec = top, {'why': 'kept', 'before': top, 'after': top, 'anchor': None}
+            if ceiling and top > int(ceiling):
+                inset = 0.005 + 0.025 * (int(hashlib.md5(f"{seed}|shared-ceiling".encode()).hexdigest()[:4], 16) / 0xFFFF)
+                held = int(round(int(ceiling) * (1.0 - inset)))
+                if held % 10 == 0:
+                    held += 3
+                rec = {'why': 'ceiling', 'before': top, 'after': held, 'anchor': {'value': ceiling, 'label': 'the whole audience on file'}}
+        if rec.get('why') == 'kept' or not held or int(held) == top or int(held) >= tam:
+            return payload
+        f = float(held) / float(top)
+        if f > 4.0 or f < 0.25:
+            # a move this large is not a band correction but two products on
+            # two bases (a 400,000-person journey against a 92 million record):
+            # the journey stands and the mismatch is on the staff record
+            payload.setdefault('meta', {})['shared_figures'] = {'why': 'mismatch', 'audience_before': top, 'audience_after': top,
+                                                                 'anchor': rec.get('anchor'), 'kind': kind, 'factor': round(f, 3)}
+            _know_x.record_cross_hold(dict(rec, why='mismatch', kind=kind, product='journey', factor=round(f, 3)), subject=str(inputs.get('subject') or ''))
+            print(f"[journey] audience {top:,} sits {f:.1f}x from the figure on file ({rec.get('why')}); left as built, mismatch recorded")
+            return payload
+        want_last = max(1, int(round(last * f)))
+        payload = apply_title_anchor(payload, {'us_viewers': want_last, 'sample_size': 0, 'source_product': 'shared'}, seed=seed)
+        meta = payload.setdefault('meta', {})
+        if isinstance(meta.get('title_anchor'), dict) and meta['title_anchor'].get('source_product') == 'shared':
+            meta['shared_figures'] = {'why': rec.get('why'), 'audience_before': top, 'audience_after': int(held),
+                                      'anchor': rec.get('anchor'), 'kind': kind}
+            meta.pop('title_anchor', None)
+        _know_x.record_cross_hold(dict(rec, kind=kind, product='journey'), subject=str(inputs.get('subject') or ''))
+        print(f"[journey] audience held across products: {top:,} -> {int(held):,} ({rec.get('why')})")
+    except Exception as exc:
+        print(f'[journey] shared figures pass skipped: {exc}')
     return payload
 
 
@@ -2245,6 +2332,9 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     if anchors.get('title_anchor'):
         payload = apply_title_anchor(payload, anchors['title_anchor'],
                                      seed=f"{inputs['subject']}|{inputs['platform']}")
+    if anchors.get('shared'):
+        payload = apply_shared_figures(payload, anchors['shared'], inputs,
+                                       seed=f"{inputs['subject']}|{inputs['platform']}")
     # The sniff test (Jenna 2026-10-13): the end-to-end rate lands inside
     # the band for this kind of title, service and audience; every step
     # sits inside its ceiling; the already-watching line is its own.

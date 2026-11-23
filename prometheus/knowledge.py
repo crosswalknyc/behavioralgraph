@@ -948,6 +948,26 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         elif isinstance(h.get('profile'), dict) and _twin.same_name(h['profile'].get('subject') or ask.get('subject'), ask.get('subject') or ''):
             cap = _num(h['profile'].get('audience_size'))
             cap_source = 'profile' if cap else ''
+        # one set of figures across products (2026-11-23): the subject's saved
+        # size, records, valuations, title universe and campaign ride the read
+        # as one block, and the whole audience on file caps every count
+        sf = None
+        try:
+            # a read bound to one valuation never carries the other runs' totals
+            # as binding figures (the valuation block already names them as not
+            # this answer, 2026-11-20); the pairing's valuations ride only when
+            # no file is bound
+            sf = subject_facts(ask.get('subject') or base_subject, window=(ask.get('window') if (ask.get('window') or {}).get('start') else None),
+                               pairing=(None if bound else _pairing_of(text, ask, base, mr)), attribution=False)
+            if bound and sf.get('figures'):
+                sf = dict(sf, figures=[x for x in sf['figures'] if x.get('product') != 'bpiq'])
+                sf['block'] = shared_block(sf)
+            if sf.get('block'):
+                parts.append(sf['block'])
+            if not cap and sf.get('ceiling'):
+                cap, cap_source = int(sf['ceiling']), 'shared'
+        except Exception as e:
+            print(f"[pm-knowledge] shared figures skipped: {type(e).__name__}: {e}")
         sb = _twin.size_block(ask.get('subject'), cap, researched=researched,
                               borrowed_from=(base_subject if borrowed else ''), window=default_win)
         if sb:
@@ -966,6 +986,7 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
                               'cached': bool(r.get('cached')), 'marks': marks_of(h, r)[:60],
                               'named_subject': named, 'borrowed_base': base_subject if borrowed else '', 'size_cap': cap, 'size_source': cap_source,
                               'subject': str(ask.get('subject') or named or ''), 'unheld': unheld,
+                              'shared_figures': len((sf or {}).get('figures') or []),
                               'size_window': {'start': str((ask.get('window') or {}).get('start') or ''),
                                               'end': str((ask.get('window') or {}).get('end') or '')}}
         if isinstance(stages, dict):
@@ -1013,6 +1034,353 @@ def insight_blocks(text, subject, *, history=None, consult=None, claude_json=Non
         return _legacy()
 
 
+# ------------------------------------------------------------------------
+# One set of figures across products (Jenna 2026-11-23, round 2, item 2)
+#
+# Profile IQ, Brand Partnership IQ, Attribution IQ, Journey IQ, Subscriber
+# IQ and the generated read all consult the same held figures, decision-
+# of-record entries and saved subject sizes for a subject BEFORE computing,
+# through `subject_facts`; a product's own figure for the subject is then
+# held to them through `cross_hold`: a record for the same window is the
+# figure; a people count never exceeds the subject's whole audience; a
+# figure of the same kind on a nearby window sits within the near-twin
+# band of the one another product already published unless a dated event
+# in the changed part of the window moved it. journey_synthesis.corpus_anchors
+# did part of this for journeys; this is the general form every product
+# reads. Switch PM_SHARED_FIGURES=0 (env only).
+# ------------------------------------------------------------------------
+ENV_SHARED = 'PM_SHARED_FIGURES'
+PEOPLE_KINDS = ('audience_people', 'reach_people', 'viewers_people')
+PRODUCT_LABELS = {'profile': 'Profile IQ', 'bpiq': 'Brand Partnership IQ', 'attribution': 'Attribution IQ',
+                  'journey': 'Journey IQ', 'subiq': 'Subscriber IQ', 'subscriber_iq': 'Subscriber IQ', 'profile_iq': 'Profile IQ',
+                  'chat': 'Prometheus', 'record': 'On record', 'saved': 'The saved size', 'title': 'The title universe',
+                  'ledger': 'On record', 'ledger_record': 'On record', 'estimates': 'The saved size', 'saved_table': 'The saved size',
+                  'anchor_store': 'The saved size', 'title_anchor': 'The title universe'}
+_FACTS_CACHE: dict = {}
+_FACTS_TTL_S = 90.0
+LIVE_FOR_TESTS = False       # a test that wants the title anchor and campaign reads sets this
+_WHOLE_RX = re.compile(r"\b(?:us audience|audience size|total universe|whole audience|us people|us_audience|universe|fans?|audience)\b", re.I)
+_REACH_RX = re.compile(r"\breach(?:ed)?\b|\bexposed\b|\bpartnership\b|\bcampaign\b", re.I)
+_VIEW_RX = re.compile(r"\bview(?:er|ers|ed|s)?\b|\bwatch(?:ed|ers)?\b|\bstream(?:ed|ers)?\b|\blisten(?:ed|ers)?\b", re.I)
+_ORDER_RX = re.compile(r"\border|\bbuyer|\bpurchas|\bconver", re.I)
+
+
+def shared_enabled() -> bool:
+    return enabled() and os.environ.get(ENV_SHARED, '1').strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def figure_kind(label='', unit='', name='') -> str:
+    """The class a figure belongs to across products: share_pct,
+    value_usd, orders, reach_people, viewers_people, audience_people,
+    people (an unlabeled count), or '' for anything else."""
+    u = str(unit or '').lower()
+    text = f"{label or ''} {str(name or '').replace('_', ' ')}"
+    if u in ('pct', 'percent', '%', 'share', 'pct1', 'pct2'):
+        return 'share_pct'
+    if u in ('usd', 'money', 'dollars', '$'):
+        return 'value_usd'
+    if u in ('orders',) or (_ORDER_RX.search(text) and 'people' not in text.lower() and 'audience' not in text.lower()):
+        return 'orders'
+    if u in ('people', 'individuals', 'persons', 'users', 'viewers', 'accounts', 'buyers', 'subscribers', 'count', ''):
+        if _REACH_RX.search(text):
+            return 'reach_people'
+        if _VIEW_RX.search(text):
+            return 'viewers_people'
+        if _WHOLE_RX.search(text):
+            return 'audience_people'
+        return 'people' if u else ''
+    return ''
+
+
+def _fig(product, kind, value, *, label='', window=None, ref='', as_of='', record=False, unit='') -> Optional[dict]:
+    v = _num(value)
+    if v is None or v <= 0 or not kind:
+        return None
+    w = window if isinstance(window, dict) else {}
+    return {'product': str(product or '')[:24], 'kind': kind, 'value': v, 'unit': unit or ('usd' if kind == 'value_usd' else 'pct' if kind == 'share_pct' else 'people'),
+            'label': str(label or '')[:120], 'window': {'start': str(w.get('start') or '')[:10], 'end': str(w.get('end') or '')[:10]},
+            'ref': str(ref or '')[:200], 'as_of': str(as_of or '')[:32], 'record': bool(record)}
+
+
+def subject_facts(subject, *, window=None, pairing=None, extra_subjects=(), attribution=True, exclude_ref='') -> dict:
+    """Everything Crosswalk already holds on a subject, as one set of
+    figures: `size` (the saved audience size every build starts from,
+    `migration.saved_subject_size`), `figures` (each product's published
+    figures with their windows: Profile IQ sizes, Brand Partnership IQ
+    valuations, Attribution IQ campaign reach, Journey IQ stages,
+    Subscriber IQ title universes, the ledger's decisions of record),
+    `ceiling` (the subject's whole US audience: no count of it goes
+    higher) and `block` (the prompt block every product carries). Never
+    raises; every source is optional."""
+    out = {'subject': str(subject or '').strip(), 'size': None, 'figures': [], 'records': [], 'ceiling': None, 'block': '', 'marks': []}
+    if not shared_enabled() or not out['subject']:
+        return out
+    w0 = window if isinstance(window, dict) else {}
+    ck = (_fold(out['subject']), str(w0.get('start') or ''), str(w0.get('end') or ''), tuple(_fold(x) for x in (pairing or ())),
+          tuple(_fold(x) for x in (extra_subjects or ())), bool(attribution), str(exclude_ref or ''))
+    now = time.time()
+    with _PENDING_LOCK:
+        hit = _FACTS_CACHE.get(ck)
+    if hit and now - hit[0] < _FACTS_TTL_S:
+        return json.loads(json.dumps(hit[1]))
+    figs = out['figures']
+    # 1. the saved size (the one size a fresh build of the subject starts from)
+    try:
+        from migration import saved_subject_size as _sss
+        sz = _sss.lookup(out['subject'])
+        if sz and _num(sz.get('us')):
+            w = sz.get('window')
+            win = {'start': w[0], 'end': w[1]} if isinstance(w, (list, tuple)) and len(w) >= 2 else {}
+            out['size'] = {'us': int(sz['us']), 'tu': int(sz.get('tu') or 0), 'source': str(sz.get('source') or ''), 'ref': str(sz.get('ref') or ''), 'window': win}
+            f = _fig(str(sz.get('source') or 'saved'), 'audience_people', sz['us'], label=f"{out['subject']} US audience (saved size)", window=win,
+                     ref=sz.get('ref'), record=str(sz.get('source') or '') == 'ledger')
+            if f:
+                figs.append(f)
+    except Exception as e:
+        print(f"[pm-knowledge] saved size skipped: {type(e).__name__}: {e}")
+    # 2. the corpus catalog: each product's published figures
+    try:
+        from migration import corpus_catalog as _cc
+        names = [out['subject']] + [str(x) for x in (extra_subjects or []) if str(x or '').strip()]
+        for name in names:
+            cat = _cc.anchors_for(name, window=window)
+            for f in (cat.get('facts') or []):
+                if not isinstance(f, dict) or f.get('product') == 'chat' or f.get('kind') in ('stated_number', 'sample_size'):
+                    continue
+                if exclude_ref and str((f.get('source') or {}).get('key') or '').endswith(exclude_ref):
+                    continue
+                kind = {'audience_size': None, 'platform_count': 'viewers_people', 'valuation': None, 'title_viewers': 'viewers_people',
+                        'stage': 'people', 'reach': 'reach_people'}.get(str(f.get('kind') or ''), None)
+                if kind is None:
+                    kind = figure_kind(f.get('label'), f.get('unit'))
+                    if f.get('kind') == 'audience_size' and f.get('product') == 'profile':
+                        kind = 'audience_people'
+                    elif f.get('kind') == 'audience_size' and f.get('product') == 'bpiq':
+                        kind = 'reach_people'
+                if not kind:
+                    continue
+                fig = _fig(f.get('product'), kind, f.get('value'), label=f.get('label'), window=f.get('window'), ref=(f.get('source') or {}).get('key'),
+                           as_of=f.get('as_of'), unit=f.get('unit'))
+                if fig:
+                    fig['cut'] = bool(f.get('cut'))
+                    figs.append(fig)
+            for m in (cat.get('marks') or [])[:20]:
+                out['marks'].append(m)
+    except Exception as e:
+        print(f"[pm-knowledge] catalog facts skipped: {type(e).__name__}: {e}")
+    # 3. the ledger's decisions of record on the subject
+    try:
+        import insights_ledger as _il
+        led = _il.consult(subject=out['subject'])
+        for e in (led.get('entries') or []):
+            if not isinstance(e, dict) or not _il.is_record_entry(e) or e.get('retired'):
+                continue
+            out['records'].append({k: e.get(k) for k in ('k', 'route', 'ws', 'we', 'q', 'family')})
+            for m in (e.get('metrics') or []):
+                if not isinstance(m, dict):
+                    continue
+                kind = figure_kind(m.get('label'), m.get('unit'), m.get('name'))
+                if str(m.get('name') or '').endswith('_us_audience') or str(m.get('name') or '') == 'us_audience':
+                    kind = 'audience_people'
+                fig = _fig('record', kind, m.get('value'), label=m.get('label') or m.get('name'), window={'start': e.get('ws'), 'end': e.get('we')},
+                           ref=e.get('k'), as_of=e.get('ts'), record=True, unit=m.get('unit'))
+                if fig:
+                    fig['metric'] = str(m.get('name') or '')[:48]
+                    figs.append(fig)
+    except Exception as e:
+        print(f"[pm-knowledge] record lookup skipped: {type(e).__name__}: {e}")
+    # 4. valuations on the pairing (both orders of the two names)
+    if pairing and len(pairing) == 2:
+        try:
+            for c in _twin.valuation_candidates(str(pairing[0] or ''), str(pairing[1] or ''), exclude_ref=exclude_ref):
+                if not isinstance(c, dict):
+                    continue
+                w = c.get('window') or {}
+                d = c.get('drivers') or {}
+                fg = c.get('figures') or {}
+                for kind, val, label in (('reach_people', d.get('audience_reached'), 'US audience reached by the partnership'),
+                                         ('value_usd', fg.get('total_usd'), 'total brand value'),
+                                         ('value_usd', fg.get('attributable_usd'), 'value attributable to the partnership')):
+                    fig = _fig('bpiq', kind, val, label=label, window=w, ref=c.get('ref'), as_of=c.get('as_of'))
+                    if fig:
+                        fig['eligible'] = c.get('eligible', True)
+                        figs.append(fig)
+        except Exception as e:
+            print(f"[pm-knowledge] valuation figures skipped: {type(e).__name__}: {e}")
+    hermetic = os.environ.get('REGRESSION_TEST_MODE') == '1' and not LIVE_FOR_TESTS
+    # 5. the title universe (whichever product fixed it first)
+    try:
+        if hermetic:
+            raise RuntimeError('hermetic: no title anchor read')
+        from migration.title_anchors import get_title_anchor as _gta
+        ta = _gta(out['subject'], window=window)
+        if ta and _num(ta.get('us_viewers')):
+            fig = _fig(str(ta.get('source_product') or 'title'), 'viewers_people', ta['us_viewers'], label=f"US viewers of {out['subject']} (the title universe)",
+                       window=ta.get('window'), ref='title_anchor', as_of=ta.get('recorded_at') or ta.get('updated_at'))
+            if fig:
+                fig['title_universe'] = True
+                figs.append(fig)
+    except Exception as e:
+        if not hermetic:
+            print(f"[pm-knowledge] title anchor skipped: {type(e).__name__}: {e}")
+    # 6. the Attribution IQ campaign on the subject
+    if attribution and not hermetic:
+        try:
+            from migration import journey_synthesis as _js
+            camp = _js.find_attribution_campaign(out['subject'])
+            nest = (camp or {}).get('nest') or {}
+            total = None
+            if isinstance(nest, dict):
+                for k in ('reached', 'reach', 'exposed', 'total', 'aware'):
+                    if _num(nest.get(k)):
+                        total = nest[k]
+                        break
+                if total is None:
+                    vals = [v for v in nest.values() if _num(v)]
+                    total = max(vals) if vals else None
+            if camp and total:
+                fig = _fig('attribution', 'reach_people', total, label=f"US people the {camp.get('display_name') or 'campaign'} reached",
+                           window={'start': camp.get('campaign_start'), 'end': camp.get('as_of')}, ref=camp.get('slug') or '', as_of=camp.get('as_of'))
+                if fig:
+                    figs.append(fig)
+        except Exception as e:
+            print(f"[pm-knowledge] attribution campaign skipped: {type(e).__name__}: {e}")
+    # the whole audience: the ceiling on every count of this subject
+    wholes = [f['value'] for f in figs if f['kind'] == 'audience_people' and not f.get('cut')]
+    if wholes:
+        out['ceiling'] = int(round(max(wholes)))
+    out['block'] = shared_block(out)
+    with _PENDING_LOCK:
+        if len(_FACTS_CACHE) > 200:
+            for k in [k for k, v in _FACTS_CACHE.items() if now - v[0] > _FACTS_TTL_S]:
+                _FACTS_CACHE.pop(k, None)
+        _FACTS_CACHE[ck] = (now, json.loads(json.dumps(out)))
+    return out
+
+
+def _plain_win(w) -> str:
+    try:
+        return _twin._plain_window(w) if isinstance(w, dict) and w.get('start') else ''
+    except Exception:
+        return ''
+
+
+def shared_block(facts: dict, *, max_lines: int = 18) -> str:
+    """The prompt block every product carries for a subject: the saved
+    size first, then each product's figures with their windows, then the
+    rules. Nothing a reader sees; prompt text only."""
+    f = facts if isinstance(facts, dict) else {}
+    subj = str(f.get('subject') or 'the subject')
+    figs = [x for x in (f.get('figures') or []) if isinstance(x, dict)]
+    if not figs and not f.get('size'):
+        return ''
+    lines = [f"FIGURES ON FILE FOR {subj} (one set of numbers across every Crosswalk product; binding):"]
+    if f.get('size'):
+        sz = f['size']
+        w = _plain_win(sz.get('window'))
+        lines.append(f"- Audience size: {int(sz['us']):,} US people{(' (' + w + ')') if w else ''}, the size every build of {subj} starts from. "
+                     f"No count of this audience exceeds it.")
+    seen = set()
+    for x in sorted(figs, key=lambda y: (y.get('record') is False, y.get('product') or '', y.get('window', {}).get('start') or '')):
+        key = (x['product'], x['kind'], round(x['value'], 2), x['window'].get('start'), x['window'].get('end'))
+        if key in seen or (f.get('size') and x['kind'] == 'audience_people' and x['product'] in ('ledger', 'saved', 'estimates', 'saved_table', 'anchor_store')):
+            continue
+        seen.add(key)
+        if x['kind'] == 'value_usd':
+            val = f"${x['value']:,.2f}"
+        elif x['kind'] == 'share_pct':
+            val = f"{x['value']:.1f}%"
+        else:
+            val = f"{int(round(x['value'])):,} US people"
+        prod = PRODUCT_LABELS.get(x['product'], x['product'] or 'Crosswalk')
+        w = _plain_win(x.get('window'))
+        on_rec = ' (on record)' if x.get('record') and prod != 'On record' else ''
+        lines.append(f"- {prod}{(', ' + w) if w else ''}: {val} ({x.get('label') or x['kind'].replace('_', ' ')}){on_rec}.")
+        if len(lines) >= max_lines:
+            lines.append('- (more on file)')
+            break
+    lines.append(f"Rules: {subj} carries one set of numbers in every product. A figure on record for the same window IS the figure. "
+                 f"A new figure of the same kind on a nearby window sits within a quarter of the one on file unless a dated event in the "
+                 f"changed part of the window moved it; then name the event and its date in one plain line. A count of part of this "
+                 f"audience never exceeds the audience.")
+    return '\n'.join(lines)
+
+
+def cross_hold(value, *, kind, facts, window=None, salt='', events=None, label='', product='', exclude_products=()) -> tuple:
+    """(value, record) for one figure a product is about to publish on a
+    subject. A decision of record of the same kind for the same window is
+    the figure. A people count never exceeds the subject's whole audience
+    (reduced under it with a salted inset). A figure of the same kind on
+    a nearby window is held inside the near-twin band of the earliest one
+    another product published, unless `events` carries a dated event in
+    the changed part of the window (then it is left, lifted). Pure apart
+    from the record it returns; never raises."""
+    rec = {'kind': kind, 'label': label, 'product': product, 'before': _num(value), 'after': _num(value), 'why': 'kept', 'anchor': None}
+    v = _num(value)
+    f = facts if isinstance(facts, dict) else {}
+    if not shared_enabled() or v is None or v <= 0:
+        return value, rec
+    try:
+        figs = [x for x in (f.get('figures') or []) if isinstance(x, dict) and x.get('kind') == kind
+                and x.get('product') not in (exclude_products or ()) and x.get('eligible', True) is not False]
+        w = window if isinstance(window, dict) else {}
+        # a record for the same window is the figure
+        for x in figs:
+            if x.get('record') and w.get('start') and x['window'].get('start') == str(w.get('start'))[:10] and x['window'].get('end') == str(w.get('end'))[:10]:
+                rec.update(after=x['value'], why='record', anchor={k: x.get(k) for k in ('product', 'value', 'window', 'ref', 'label')})
+                return (int(round(x['value'])) if kind != 'value_usd' and kind != 'share_pct' else x['value']), rec
+        # a count of the subject never exceeds its whole audience
+        ceiling = _num(f.get('ceiling'))
+        if kind in PEOPLE_KINDS and ceiling and v > ceiling:
+            inset = 0.005 + 0.025 * _twin._unit(salt, 'cross-ceiling', kind, label)
+            held = _twin._messy_int(salt, ('cross-ceiling', kind, label), ceiling * (1.0 - inset))
+            rec.update(after=held, why='ceiling', anchor={'value': ceiling, 'label': 'the whole audience on file'})
+            v = float(held)
+        # the near twin across products: a record first, else the earliest
+        # figure of this kind on a nearby window
+        near = []
+        for x in figs:
+            if not x['window'].get('start') or not w.get('start'):
+                continue
+            ok, why = _twin.windows_near(x['window'], {'start': str(w.get('start'))[:10], 'end': str(w.get('end'))[:10]})
+            if ok:
+                near.append(((0 if x.get('record') else 1), x.get('as_of') or x['window'].get('start') or '', x, why))
+        if near:
+            near.sort(key=lambda t: (t[0], t[1]))
+            near = [(t[1], t[2], t[3]) for t in near]
+            _, anchor, why = near[0]
+            b = _twin.band('value' if kind == 'value_usd' else 'audience')
+            lo, hi = anchor['value'] * (1.0 - b), anchor['value'] * (1.0 + b)
+            if v < lo or v > hi:
+                changed = _twin.changed_windows(anchor['window'], {'start': str(w.get('start'))[:10], 'end': str(w.get('end'))[:10]})
+                ev = _twin.event_in_changed_window(changed, [e for e in (events or []) if isinstance(e, dict)])
+                if ev:
+                    rec.update(why='lifted', anchor={k: anchor.get(k) for k in ('product', 'value', 'window', 'ref', 'label')}, event=ev)
+                else:
+                    inset = 0.02 + 0.06 * _twin._unit(salt, 'cross-twin', kind, label)
+                    target = (lo * (1.0 + inset)) if v < lo else (hi * (1.0 - inset))
+                    held = round(target, 2) if kind in ('value_usd', 'share_pct') else _twin._messy_int(salt, ('cross-twin', kind, label), target)
+                    rec.update(after=held, why='held', anchor={k: anchor.get(k) for k in ('product', 'value', 'window', 'ref', 'label')}, near=why)
+                    v = float(held)
+        rec['after'] = v if kind in ('value_usd', 'share_pct') else int(round(v))
+        return rec['after'], rec
+    except Exception as e:
+        print(f"[pm-knowledge] cross hold skipped: {type(e).__name__}: {e}")
+        return value, rec
+
+
+def record_cross_hold(rec: dict, *, subject='', question='', store=None) -> None:
+    """A held, capped or record-bound figure leaves a staff record beside
+    the twin records (system/pm_consistency/). Never raises."""
+    try:
+        if not isinstance(rec, dict) or rec.get('why') in (None, 'kept'):
+            return
+        _twin.write_record(dict(rec, verdict=f"cross_{rec.get('why')}", product=str(rec.get('product') or 'cross'), subject=str(subject or ''),
+                                pair_key=_pieces.property_fold(subject), question=str(question or '')[:300], line='', line_shipped=False), store)
+    except Exception:
+        pass
+
+
 def valuation_events(inputs: dict, changed_windows: list, claude_json=None, tools=None, store=None) -> list:
     """The research override for a valuation's near-twin check: dated
     events inside the parts of the window that changed, from the anchor
@@ -1035,4 +1403,5 @@ __all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored
            'facts_block', 'marks_of', 'leave_twin', 'take_twin', 'peek_twin', 'hold_pending', 'read_blocks', 'insight_blocks',
            'leave_valuation', 'peek_valuation', 'bind_after', 'inline_window', 'valuation_for_read', 'world_block',
            'understanding_on_request', 'named_subject', 'base_is_borrowed', 'leave_size', 'peek_size', 'saved_people',
-           'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS']
+           'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS',
+           'shared_enabled', 'figure_kind', 'subject_facts', 'shared_block', 'cross_hold', 'record_cross_hold', 'ENV_SHARED', 'PEOPLE_KINDS']

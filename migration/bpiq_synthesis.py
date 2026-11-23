@@ -2511,6 +2511,20 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
                 published[label] = blk
     except Exception as e:
         print(f"[bpiq-synth] catalog anchors skipped: {e}")
+    # One set of figures across products (Jenna 2026-11-23): the talent's
+    # saved size and whole audience, the records, the title universe, the
+    # Attribution IQ campaign and the other valuations on the pairing, as
+    # the one block every product carries (prometheus.knowledge.subject_facts)
+    try:
+        from prometheus import knowledge as _know_sf
+        _ev = windows.get("event") or {}
+        _sf_win = {"start": _ev.get("start"), "end": _ev.get("end")} if isinstance(_ev, dict) else None
+        _sf = _know_sf.subject_facts(str(inputs.get("qualifier") or ""), window=_sf_win,
+                                     pairing=(str(inputs.get("qualifier") or ""), str(inputs.get("brand_partner") or "")))
+        if _sf.get("block"):
+            published["shared_figures"] = _sf["block"]
+    except Exception as e:
+        print(f"[bpiq-synth] shared figures skipped: {e}")
     campaign_facts = {k: campaign.get(k) for k in (
         "drop_dates", "campaign_window_note", "retail", "price_band", "collection_size",
         "sell_out", "restock", "inventory_signal", "inventory_note", "talent_role") if campaign.get(k) not in (None, "", [], {})}
@@ -2734,6 +2748,37 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
                     payload, _mc_notes2 = _mc.enforce_matched_control(payload, subject=run_salt(inputs))
         except Exception as e:
             print(f"[bpiq-synth] near-twin check skipped: {e}")
+        # Across products (Jenna 2026-11-23): the people this partnership
+        # reached never exceed the talent's whole audience on file, and sit
+        # inside the band of the reach another product already published on
+        # the same pairing and a nearby window (a Journey IQ partnership
+        # stage, an Attribution IQ campaign), unless a dated event in the
+        # changed part of the window moved it. Valuation-to-valuation twins
+        # were held just above; this reads the other products.
+        try:
+            from prometheus import knowledge as _know_x
+            _evw = windows.get("event") or {}
+            _xw = {"start": str(payload.get("start_date") or _evw.get("start") or "")[:10],
+                   "end": str(payload.get("end_date") or _evw.get("end") or "")[:10]}
+            _xf = _know_x.subject_facts(str(inputs.get("qualifier") or ""), window=_xw,
+                                        pairing=(str(inputs.get("qualifier") or ""), str(inputs.get("brand_partner") or "")),
+                                        exclude_ref=key)
+            _reach0 = int(payload.get("projected_audience_size") or 0)
+            _xev = [twin_rec.get("event")] if isinstance(twin_rec.get("event"), dict) else []
+            _held, _xrec = _know_x.cross_hold(_reach0, kind="reach_people", facts=_xf, window=_xw, salt=run_salt(inputs),
+                                              events=_xev, label="US audience reached by the partnership", product="bpiq",
+                                              exclude_products=("bpiq",))
+            if _xrec.get("why") in ("ceiling", "held", "record") and int(_held or 0) > 0 and int(_held) != _reach0:
+                payload = _rebuild_held(inputs, prim, campaign, {"audience_reached": int(_held)}, created_by=created_by)
+                _cg3 = payload.get("control_group") or {}
+                if _cg3.get("enabled", True):
+                    payload, _mc_notes3 = _mc.enforce_matched_control(payload, subject=run_salt(inputs))
+                print(f"[bpiq-synth] reach held across products: {_reach0:,} -> {int(_held):,} ({_xrec.get('why')}, "
+                      f"{((_xrec.get('anchor') or {}).get('product') or 'the whole audience')})")
+            twin_rec = dict(twin_rec, cross=_xrec) if _xrec.get("why") != "kept" else twin_rec
+            _know_x.record_cross_hold(_xrec, subject=f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}", store=_twin_store(underpinnings))
+        except Exception as e:
+            print(f"[bpiq-synth] cross-product hold skipped: {e}")
     if underpinnings is not None and saved is None:
         try:
             aov_doc = {"aov": (payload.get("valuation") or {}).get("rates", {}).get("conv_value_per_user"),
@@ -2755,7 +2800,7 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
                 "primitives": prim,
                 "banked_read": banked,         # the delivered read this run was held to, if any
                 "hold": hold_rec,
-                "twin": {k: twin_rec.get(k) for k in ("id", "verdict", "anchor", "event") if twin_rec.get(k) is not None},
+                "twin": {k: twin_rec.get(k) for k in ("id", "verdict", "anchor", "event", "cross") if twin_rec.get(k) is not None},
                 "aov": aov_doc,
                 "readme": underpinnings_readme(inputs, campaign, aov_doc, payload),
                 "created_at": _dt.datetime.utcnow().isoformat() + "Z",

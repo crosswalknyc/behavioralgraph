@@ -119,6 +119,7 @@ LEDGER_FOR_TESTS = None
 ANCHOR_STORE_FOR_TESTS = None
 ANCHORS_FOR_TESTS = None
 STORE_FOR_TESTS = None      # an S3-like store for the saved-size table and the anchor documents
+TITLE_ANCHOR_FOR_TESTS = None   # a stand-in for title_anchors.get_title_anchor in a test
 
 
 def _hermetic():
@@ -569,6 +570,48 @@ def from_anchor_store(subject):
     return {'tu': tu, 'us': us, 'source': 'anchor_store', 'ref': key, 'window': w, 'subject': str(subject)}
 
 
+def from_title_anchor(subject):
+    """The title universe another product fixed first (migration/
+    title_anchors: Subscriber IQ, a journey, a Profile IQ build): the US
+    viewers of the title stand as the title's audience size, so a Profile
+    IQ build of the title starts where the other products already are
+    (one set of figures across products, Jenna 2026-11-23). Only a title
+    the registry holds; a cut name never."""
+    want = core(subject)
+    if not want or is_cut_name(subject):
+        return None
+    if TITLE_ANCHOR_FOR_TESTS is not None:
+        get_title_anchor = TITLE_ANCHOR_FOR_TESTS
+    elif _hermetic():
+        return None                       # a test process never reads the live registry
+    else:
+        try:
+            from migration.title_anchors import get_title_anchor
+        except Exception:
+            return None
+    try:
+        ta = get_title_anchor(str(subject))
+    except Exception:
+        return None
+    if not isinstance(ta, dict):
+        return None
+    try:
+        us = int(round(float(ta.get('us_viewers') or 0)))
+    except (TypeError, ValueError):
+        return None
+    if us <= 0:
+        return None
+    tu = int(ta.get('sample_size') or 0) or sample_for(us)
+    if not (MIN_TU <= tu <= MAX_TU) or not is_messy(tu):
+        tu = sample_for(us)
+        if not (MIN_TU <= tu <= MAX_TU) or not is_messy(tu):
+            return None
+    w = ta.get('window') if isinstance(ta.get('window'), dict) else {}
+    return {'tu': tu, 'us': us, 'source': 'title_anchor', 'ref': str(ta.get('source_product') or 'title_anchor'),
+            'window': (str(w.get('start')), str(w.get('end'))) if w.get('start') and w.get('end') else None,
+            'subject': str(ta.get('title') or subject)}
+
+
 def lookup(subject):
     """The saved size for a subject (dict: tu, us, source, ref, window,
     subject) or None. Cached for a few minutes per subject."""
@@ -581,7 +624,7 @@ def lookup(subject):
         if hit and now - hit[0] < CACHE_TTL_S:
             return dict(hit[1]) if hit[1] else None
     found = None
-    for fn in (from_ledger, from_estimates, from_saved_table, from_anchor_store):
+    for fn in (from_ledger, from_estimates, from_saved_table, from_title_anchor, from_anchor_store):
         try:
             found = fn(subject)
         except Exception:
