@@ -17,7 +17,7 @@ from prometheus import faults as _faults
 from prometheus import subject_rules as _subject_rules
 from prometheus import bpiq_wizard as _bpiq_wiz
 from prometheus import named_platforms as _named_platforms
-from prometheus import build_ready as _build_ready, list_shape as _list_shape
+from prometheus import build_ready as _build_ready, list_shape as _list_shape, global_scope as _global_scope
 import time
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session, make_response
 from prometheus import order_quote as _oq
@@ -987,7 +987,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"exclusions\": [{\"brand\": \"Hulu\", \"note\": \"excluding current Hulu subscribers\"}, ...] or [] // see SEMANTIC GUARDS #1,\n"
         "  \"universe_mode\": \"churned|sequence\" or null // see SEMANTIC GUARDS #2-3,\n"
         "  \"universe_note\": \"one plain sentence describing the churned/sequence universe\" or null,\n"
-        "  \"country\": \"US\" or the country the request scopes to ('UK', 'Canada', 'Germany', ...) // see SEMANTIC GUARDS #6,\n"
+        "  \"country\": \"US\", the country the request scopes to ('UK', 'Canada', 'Germany', ...), or \"Global\" for a worldwide ask // see SEMANTIC GUARDS #6,\n"
         "  \"user_supplied_anchor\": <int or null - a count the USER stated ('we have 2 million subscribers'); see SEMANTIC GUARDS #11>,\n"
         "  \"intensity_note\": \"how an intensity phrase ('binge-watchers', 'superfans') was mapped onto the Avid/TU tiers\" or null,\n"
         "  \"scope_note\": \"how an unmeasurable tier/device scope ('with-ads tier', 'mobile-only') was handled\" or null,\n"
@@ -1244,7 +1244,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "market' - set `country`, keep the country in `subject` "
         "('Omaze UK' precedent: the deliverable is an authentic "
         "country-scoped universe with that country's markets, demos, "
-        "and sizing). US asks: country='US'.\n"
+        "and sizing). US asks: country='US'." + _global_scope.INTERPRET_RULE_6_GLOBAL +
         "  7. REGIONS THAT AREN'T DMAS: 'the Southeast', 'Midwest', "
         "'Pacific Northwest', 'Sun Belt', 'New England' are "
         "multi-market regions - emit ONE addon_cut whose dma list "
@@ -1417,7 +1417,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "decision is new_build for the subject exactly as the user "
         "stated it (generic nouns like buyers/customers/consumers "
         "mean the plain brand universe). The closest existing profile "
-        "may be mentioned in decision_reason by display name only.\n\n"
+        "may be mentioned in decision_reason by display name only.\n\n" + _global_scope.INTERPRET_RULE_WHOLE_WORLD +
 
         "SUBJECT-IDENTITY COMPATIBILITY (HARD RULE - 2026-09-02, the "
         "'cut of data we already have' defect): existing_match, "

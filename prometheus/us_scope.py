@@ -14,9 +14,11 @@ the open-profile binding and a fresh read.
 
 The question is a definition question about the answer in hand, never a
 new read. The house definition: every figure Prometheus reports is US
-people, measured on US consumers and projected to the US population;
-nothing is global. This lane answers it from that definition without a
-model call and without re-running anything:
+people, measured on US consumers and projected to the US population,
+unless the file is a global or country build, which carries that in its
+name ('<Subject> - Global', 'Omaze Germany'; 2026-11-23). This lane
+answers it from that definition without a model call and without
+re-running anything:
 
   * the figures the reader pasted are quoted back (or, with none pasted,
     the headline figures of the last read in the thread), with the read
@@ -46,8 +48,9 @@ from . import stated_numbers as _sn
 __all__ = ['wants_us_scope', 'quoted_figures', 'origin', 'answer', 'enabled', 'SCOPE_LINE', 'OPENER']
 
 OPENER = 'US only.'
-SCOPE_LINE = ('Every figure we report is measured on US consumers and projected to the US population; '
-              'nothing is global.')
+SCOPE_LINE = ('Every figure we report is measured on US consumers and projected to the US population. '
+              'A global or country build is the one exception, and it says so in its name (for example '
+              '"Guinness - Global").')
 
 _US = r"(?:us|u\.s\.?a?|usa|united states|domestic|stateside)"
 _WORLD = r"(?:global(?:ly)?|world ?wide|the world|world|international(?:ly)?|intl|ww|everywhere|all countries|other countries|outside (?:of )?the us|non[- ]us)"

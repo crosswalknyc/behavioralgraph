@@ -46060,6 +46060,8 @@ def _enforce_base_parent_pick(spec_draft, candidates, prompt):
     current_year_str = str(_date.today().year)
     if _is_base_profile_candidate(picked, current_year_str):
         return False, ''
+    if _name_is_global(picked_dn) and _ask_is_global(prompt):
+        return False, ''   # '<Subject> - Global' on a worldwide ask is the file asked for, however the scope was worded (2026-11-23)
 
     prompt_years = set(_HISTORICAL_YEAR_RE.findall(prompt or ''))
     picked_years = set(_HISTORICAL_YEAR_RE.findall(picked_dn))
@@ -46549,6 +46551,10 @@ def _universe_qualifiers_compatible(request_text, candidate_name):
         return False
     if not _platform_scopes_compatible(request_text, candidate_name):
         return False
+    # the whole world is a scope of its own (2026-11-23): a global ask
+    # never matches a US file and a US ask never matches '<X> - Global'
+    if _global_scope_mismatch(request_text, candidate_name) is not None:
+        return False
     return True
 
 
@@ -47001,7 +47007,9 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     # derive_cut, however cleanly the qualifier subset lines up.
     cand_sig = _universe_qualifier_signature(disp.split(' - ', 1)[0])
     req_sig = _universe_qualifier_signature(prompt)
-    if not _identity_mismatch and not _typed_swap and decision == 'derive_cut' and cand_sig <= req_sig:
+    _global_gap = _global_scope_mismatch(prompt, disp)   # (ask_is_global, name_is_global) when they differ
+    if not _identity_mismatch and not _typed_swap and decision == 'derive_cut' and cand_sig <= req_sig \
+            and _global_gap is None:
         return False, ''
     days = _profile_age_days(key, draft.get('existing_match_last_modified'))
     built_label = _profile_built_label(
@@ -47027,7 +47035,14 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     _plat_mismatch = (not _identity_mismatch
                       and req_sig == cand_sig
                       and req_plat != cand_plat)
-    if _typed_swap:
+    if _global_gap is not None and _global_gap[0] and not _global_gap[1]:
+        # a global ask on a US file (2026-11-23): never the match and never
+        # a question; the fresh build is the subject's worldwide footprint
+        draft['country'] = 'Global'
+        note = (f"Global-scope gate: the ask wants the worldwide footprint and "
+                f"candidate {disp!r} is a single-market file; demoted to "
+                f"new_build (country Global).")
+    elif _typed_swap:
         # the person's own spelling leads the fresh build they may want
         try:
             from prometheus.subject_rules import explicit_build_subject as _ebs2
@@ -47071,7 +47086,12 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
             f"so a fresh build is planned.")
     draft.pop('derive_type', None)
     draft.pop('ask_existing_profile', None)
-    if allow_ask and not _identity_mismatch and not _own_subject:
+    if _global_gap is not None and _global_gap[0] and not _global_gap[1]:
+        draft['decision_reason'] = (
+            f"The ask is for the worldwide audience of {str(draft.get('subject') or subj).split(' - ', 1)[0]}; "
+            f"the existing profile ({disp}) covers one market, so a global build is planned.")
+    if allow_ask and not _identity_mismatch and not _own_subject \
+            and not (_global_gap is not None and _global_gap[0] and not _global_gap[1]):
         draft['ask_qualifier_match'] = True
         draft['qualifier_match_data'] = {
             'display_name': disp,
@@ -49961,6 +49981,67 @@ def _guard_data_floor(draft, text='', decision=None, allow_ask=True):
 
 # Guard 6: international detection (the Omaze precedent: OMAZE was the
 # UK flagship, OMAZE GERMANY the country-suffixed sibling).
+# ---- Global scope (2026-11-23, Samantha Kolton's "Can you run a global
+# profile IQ analysis for guinness the beer?" came back as the US
+# Guinness profile). 'global', 'worldwide', 'international', 'around the
+# world', 'global footprint', 'all markets' are a UNIVERSE QUALIFIER: the
+# subject's worldwide footprint (world cities, global brands and
+# publications), built the way the Omaze international precedent builds
+# a country (spec country 'Global') and named '<Subject> - Global'. A US
+# profile never matches a global ask; an existing '<Subject> - Global'
+# file is its match; a US ask never matches the global file. A proper
+# name that carries the word ('Global Citizen', 'International Fencing
+# Federation') is not a scope, so the word has to modify the ask.
+_GLOBAL_SCOPE_PHRASE_RE = re.compile(
+    r"\b(?:globally|world-?wide|internationally|around the (?:world|globe)|"
+    r"across the (?:world|globe)|all over the world|the (?:whole|entire) world|"
+    r"all (?:markets|countries|regions|territories)|every (?:market|country|region)|"
+    r"(?:global|worldwide|international) footprint|"
+    r"outside (?:of )?(?:just )?the (?:us|u\.s\.|usa|united states|states)|"
+    r"not just (?:the )?(?:us|u\.s\.|usa|united states|america))\b", re.IGNORECASE)
+_GLOBAL_SCOPE_MOD_RE = re.compile(
+    r"\b(?:global|international|worldwide|world-wide)\s+"
+    r"(?:profile(?:\s*iq)?|iq|analysis|audience|footprint|read|build|pull|run|view|version|"
+    r"universe|fan ?base|fans|customers?|consumers?|buyers?|shoppers?|drinkers?|users?|"
+    r"viewers?|listeners?|subscribers?|followers?|market|reach|cut|take|look|breakdown|"
+    r"numbers|data|picture|total universe)\b", re.IGNORECASE)
+_GLOBAL_SCOPE_POST_RE = re.compile(
+    r"\b(?:profile(?:\s*iq)?|audience|footprint|read|analysis|reach|universe|version|numbers|data|"
+    r"build|it|this|that)\s+(?:that\s+is\s+|is\s+|as\s+|to\s+be\s+)?(?:global|worldwide|international)\b",
+    re.IGNORECASE)
+
+
+def _ask_is_global(text):
+    """True when the words ask for the subject's worldwide footprint (a
+    scope word modifying the ask), never when the word is part of a
+    proper name. Conservative: 'Global Citizen', 'the International
+    Fencing Federation' and 'international travelers' read no scope."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return False
+    return bool(_GLOBAL_SCOPE_PHRASE_RE.search(t) or _GLOBAL_SCOPE_MOD_RE.search(t)
+                or _GLOBAL_SCOPE_POST_RE.search(t))
+
+
+def _name_is_global(name):
+    """True when a catalog / display name is a worldwide build ('Guinness
+    - Global', 'Guinness - Global - Avid Fan', a trailing bare 'Global').
+    The one rule lives in migration.international_profiles."""
+    try:
+        from migration.international_profiles import name_is_global as _nig
+        return bool(_nig(name))
+    except Exception:
+        nm = ' '.join(str(name or '').split())
+        parts = [x.strip().lower() for x in nm.split(' - ')]
+        return any(x in ('global', 'worldwide', 'international') for x in parts[1:])
+
+
+def _global_scope_mismatch(request_text, candidate_name):
+    """(ask_is_global, name_is_global) when they disagree, else None."""
+    rg_, cg_ = _ask_is_global(request_text), _name_is_global(candidate_name)
+    return None if rg_ == cg_ else (rg_, cg_)
+
+
 _SG_COUNTRY_CANON = {
     'uk': 'UK', 'u.k.': 'UK', 'united kingdom': 'UK', 'britain': 'UK',
     'great britain': 'UK', 'british': 'UK', 'england': 'UK',
@@ -50031,6 +50112,10 @@ def _sg_detect_country(hay):
     m = _SG_COUNTRY_ADJ_RE.search(hay_scrub)
     if m:
         return _SG_COUNTRY_CANON.get(m.group(1).lower(), '')
+    # the whole world (2026-11-23): a global / worldwide / international
+    # ask with no single country named is the subject's global footprint
+    if _ask_is_global(hay_scrub):
+        return 'Global'
     return ''
 
 
@@ -50045,6 +50130,28 @@ def _sg_guard_country(draft, text, hay, allow_ask):
     if not country or country.upper() in ('US', 'USA',
                                           'UNITED STATES'):
         draft.pop('country', None)
+        return None
+    if country.strip().upper() in ('GLOBAL', 'WORLDWIDE', 'WORLD', 'INTERNATIONAL',
+                                   'ALL MARKETS', 'ALL COUNTRIES'):
+        # the subject's worldwide footprint, named '<Subject> - Global'
+        # (the dash form files it under the subject; Jenna 2026-11-23)
+        draft['country'] = 'Global'
+        subject = str(draft.get('subject') or '').strip()
+        if subject and not _name_is_global(subject):
+            draft['subject'] = f"{subject} - Global"
+            if str(draft.get('name') or '').strip():
+                draft['name'] = draft['subject']
+            stem = str(draft.get('file_stem') or '').strip()
+            if stem and 'global' not in stem.lower():
+                draft['file_stem'] = f"{stem}_Global"
+        _append_identity_echo(
+            draft, "built as a global audience: world cities, global brands "
+                   "and publications, worldwide sizing")
+        _append_persona_note(
+            draft, "COUNTRY SCOPE: GLOBAL. The universe is the subject's "
+                   "worldwide audience (the US is one market among many). "
+                   "Universe research, anchors, and sizing are worldwide, "
+                   "not US; LOCATION is world cities.")
         return None
     draft['country'] = country
     subject = str(draft.get('subject') or '').strip()
@@ -57515,14 +57622,30 @@ def _enforce_normalized_existing_match(draft, candidates, prompt,
     from datetime import date as _date
     current_year_str = str(_date.today().year)
     pool = list(catalog or []) or list(candidates or [])
+    # the whole world (2026-11-23): a global ask names the same entity as
+    # the US base and is still not its universe; its match is the
+    # '<Subject> - Global' file when one is held, else nothing here (the
+    # fresh build is the worldwide footprint). A US ask never lands on
+    # the global file (the base filter below already leaves it out).
+    ask_global = _ask_is_global(prompt)
     best = None
     for c in pool:
         if not isinstance(c, dict) or not c.get('s3_key'):
             continue
-        if not _is_base_profile_candidate(c, current_year_str):
-            continue
-        cand_entity = str(c.get('subject') or c.get('display_name')
-                          or '').split(' - ', 1)[0]
+        _disp_c = str(c.get('display_name') or '')
+        if ask_global:
+            if not _name_is_global(_disp_c):
+                continue
+            display_years = set(_HISTORICAL_YEAR_RE.findall(_disp_c))
+            if display_years and current_year_str not in display_years:
+                continue
+            cand_entity = re.sub(r'\s+(?:global|worldwide)\s*$', '',
+                                 _disp_c.split(' - ', 1)[0], flags=re.IGNORECASE)
+        else:
+            if not _is_base_profile_candidate(c, current_year_str):
+                continue
+            cand_entity = str(c.get('subject') or c.get('display_name')
+                              or '').split(' - ', 1)[0]
         cand_key = _collapse_for_match(cand_entity)
         if not cand_key:
             continue
@@ -57539,6 +57662,10 @@ def _enforce_normalized_existing_match(draft, candidates, prompt,
     c = best[1]
     corpus_subject = str(c.get('subject') or c.get('display_name')
                          or '').split(' - ', 1)[0].strip()
+    if ask_global:
+        # the global file is the whole match: its own name stays on the draft
+        corpus_subject = str(c.get('display_name') or corpus_subject).strip()
+        draft['country'] = 'Global'
     days = c.get('days_old')
     fresh = not isinstance(days, int) or days <= SYNTH_CHAT_FRESH_DAYS
     # Adopt the corpus casing so no near-duplicate filename can ever be
