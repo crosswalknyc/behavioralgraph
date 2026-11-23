@@ -20,20 +20,11 @@ carries:
     a spec (post-generation enforcers, ship gates, cut paths)
   * prompt-context notes so the reasoning layer scores country-native
     brand availability instead of US panel reality
-<<<<<<< Updated upstream
   * GLOBAL (worldwide) audiences (Jenna 2026-11-23, Guinness - Global:
     "it would show new york, london, berlin, etc and all of the data
     would be indicative of a global audience"): country-neutral demo
     buckets, `City, Country` markets (the subject's own researched list
     rides spec['location_markets']), worldwide reasoning context
-=======
-  * the GLOBAL scope (Jenna 2026-11-23, Samantha Kolton's "global
-    profile IQ analysis for guinness"): a worldwide ask builds the
-    subject's global footprint the same way, with country 'GLOBAL':
-    world cities for LOCATION (reasoned per subject, never a fixed
-    shape), global brands and publications in the reasoning context, a
-    worldwide demographic schema, named '<Subject> - Global'
->>>>>>> Stashed changes
 
 Design constraints (workspace rules):
   * detection is additive and conservative - a US frame must NEVER be
@@ -95,7 +86,6 @@ _COUNTRY_ALIASES = {
     "IE": "IRELAND",
     "NETHERLANDS": "NETHERLANDS",
     "NL": "NETHERLANDS",
-<<<<<<< Updated upstream
     "GLOBAL": "GLOBAL",
     "WORLDWIDE": "GLOBAL",
     "WORLD WIDE": "GLOBAL",
@@ -103,22 +93,7 @@ _COUNTRY_ALIASES = {
     "ALL MARKETS": "GLOBAL",
     "GLOBAL FOOTPRINT": "GLOBAL",
     "AROUND THE WORLD": "GLOBAL",
-=======
-    # the whole world as the market (never a country): the subject's
-    # worldwide footprint, '<Subject> - Global'
-    "GLOBAL": "GLOBAL",
-    "GLOBALLY": "GLOBAL",
-    "WORLD": "GLOBAL",
-    "WORLDWIDE": "GLOBAL",
-    "WORLD-WIDE": "GLOBAL",
-    "WORLD WIDE": "GLOBAL",
-    "INTERNATIONAL": "GLOBAL",
-    "ALL MARKETS": "GLOBAL",
-    "ALL COUNTRIES": "GLOBAL",
-    "EVERYWHERE": "GLOBAL",
->>>>>>> Stashed changes
 }
-GLOBAL = "GLOBAL"
 
 
 def normalize_country(country) -> str:
@@ -136,47 +111,8 @@ def normalize_country(country) -> str:
 
 
 def is_international(country) -> bool:
-    """True when the (normalized) country is a real non-US market, the
-    whole world included."""
+    """True when the (normalized) country is a real non-US market."""
     return normalize_country(country) != "US"
-
-
-def is_global(country) -> bool:
-    """True when the scope is the whole world ('<Subject> - Global')."""
-    return normalize_country(country) == GLOBAL
-
-
-def global_display_name(name) -> str:
-    """The deliverable name of a worldwide build: '<Subject> - Global'
-    (the dash form, so it files under the subject the way a cut does;
-    'Omaze Germany' style names stay for single countries). A name that
-    already carries the marker is returned as is."""
-    nm = re.sub(r"\s+", " ", str(name or "").strip())
-    if not nm or name_is_global(nm):
-        return nm
-    return f"{nm} - Global"
-
-
-_GLOBAL_NAME_SEGMENT_RE = re.compile(
-    r"^(?:global|worldwide|world-?wide|international)(?:\s+(?:audience|footprint|market|total universe|universe|profile))?$",
-    re.I)
-
-
-def name_is_global(name) -> bool:
-    """True when a deliverable name is a worldwide build: a ' - Global'
-    segment anywhere in its cut chain ('Guinness - Global',
-    'Guinness - Global - Avid Fan'), or a trailing bare 'Global' /
-    'Worldwide' token on the entity ('Guinness Global'). A proper name
-    that opens on the word ('Global Citizen', 'International Fencing
-    Federation') is not a scope."""
-    nm = re.sub(r"\s+", " ", str(name or "").strip())
-    if not nm:
-        return False
-    parts = [p.strip() for p in nm.split(" - ")]
-    if any(_GLOBAL_NAME_SEGMENT_RE.match(p) for p in parts[1:]):
-        return True
-    head = parts[0].split()
-    return len(head) >= 2 and head[-1].lower() in ("global", "worldwide")
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +240,6 @@ _DE_DEMO_SCHEMA = {
     },
 }
 
-<<<<<<< Updated upstream
 # Worldwide audience: no country census applies, so the buckets are
 # country-neutral. ETHNICITY reads by heritage region and INCOME in US
 # dollar equivalents (labelled US$ so it never reads as a US bracket).
@@ -360,76 +295,13 @@ _GLOBAL_DEMO_SCHEMA = {
     "SEXUAL_ORIENTATION": {
         "Straight / Heterosexual": 90.5, "LGBTQ+": 6.5,
         "Prefer Not to Say": 3.0,
-=======
-# The whole world (2026-11-23). Buckets a worldwide audience can carry:
-# US dollars for income (the reporting currency), schooling stages
-# every country has, origin by world region in place of one country's
-# census ethnicity. The shares are the online-adult shape of the world
-# (younger than the US, more Asia than Europe), a BASELINE the engine
-# jitters and renormalizes; a spec that already carries these labels
-# keeps its own persona shape.
-_GLOBAL_DEMO_SCHEMA = {
-    "AGE": {
-        "18-24": 14.6, "25-34": 24.3, "35-44": 21.7, "45-54": 15.9,
-        "55-64": 12.4, "65+": 11.1,
-    },
-    "GENDER": {
-        "Female": 49.3, "Male": 49.7, "Non-Binary": 0.5,
-        "Trans Female": 0.3, "Prefer Not to Say": 0.2,
-    },
-    "ETHNICITY": {
-        "South Asian": 22.9, "East Asian": 21.4, "White / European": 15.7,
-        "Black / African": 14.1, "Hispanic / Latino": 8.6,
-        "Southeast Asian": 7.9, "Middle Eastern / North African": 6.1,
-        "Mixed / Other": 3.3,
-    },
-    "EDUCATION": {
-        "No Formal Qualification": 9.4, "Primary School": 11.1,
-        "Secondary / High School": 36.3, "Vocational / Technical": 12.2,
-        "Bachelors Degree": 22.6, "Postgraduate Degree": 8.4,
-    },
-    "INCOME": {
-        "Under $10,000": 23.8, "$10,000 - $24,999": 26.7,
-        "$25,000 - $49,999": 22.1, "$50,000 - $99,999": 16.9,
-        "$100,000+": 7.6, "Prefer Not to Say": 2.9,
-    },
-    "OCCUPATION": {
-        "Management, Business & Professional": 17.4,
-        "Service & Hospitality": 14.6,
-        "Sales & Retail": 12.9,
-        "Skilled Trades/Construction or Maintenance": 10.3,
-        "Manufacturing & Production": 9.7,
-        "Science, Technology & Technical Professions": 8.1,
-        "Transportation & Logistics": 7.4,
-        "Healthcare Practitioners or Support": 6.6,
-        "Education or Library Services": 5.2,
-        "Agriculture & Outdoor": 3.9,
-        "Other": 1.8,
-        "Public Safety & Protective Services": 1.4,
-        "Legal": 0.7,
-    },
-    "PARENTAL_STATUS": {
-        "No Children": 40.9, "Has Children": 57.1, "Prefer Not to Say": 2.0,
-    },
-    "RELATIONSHIP": {
-        "Married": 51.6, "Single": 27.3, "In a Relationship": 11.4,
-        "Divorced or Separated": 6.6, "Widowed": 3.1,
-    },
-    "SEXUAL_ORIENTATION": {
-        "Straight / Heterosexual": 91.4, "LGBTQ+": 6.1,
-        "Prefer Not to Say": 2.5,
->>>>>>> Stashed changes
     },
 }
 
 COUNTRY_DEMO_SCHEMAS = {
     "UK": _UK_DEMO_SCHEMA,
     "GERMANY": _DE_DEMO_SCHEMA,
-<<<<<<< Updated upstream
     "GLOBAL": _GLOBAL_DEMO_SCHEMA,
-=======
-    GLOBAL: _GLOBAL_DEMO_SCHEMA,
->>>>>>> Stashed changes
 }
 
 
@@ -500,7 +372,6 @@ _DE_MARKETS = [
     ("Salzgitter", 0.21),
 ]
 
-<<<<<<< Updated upstream
 # Worldwide fallback (big online metros), used only when a GLOBAL spec
 # carries no researched list of its own. Labels are `City, Country` so a
 # world city never fuzzy-matches a US DMA of the same name.
@@ -532,55 +403,13 @@ _GLOBAL_MARKETS = [
     ("Casablanca, Morocco", 0.43), ("Warsaw, Poland", 0.42),
     ("Amsterdam, Netherlands", 0.41), ("Accra, Ghana", 0.38),
     ("Dublin, Ireland", 0.33),
-=======
-# World cities (2026-11-23): the LOCATION rows of a worldwide build. The
-# baseline share is each metro's share of the world's online adults, a
-# PRIOR only: unlike the single-country lists above, the engine reasons
-# these per subject (Guinness sits heavier in Dublin, London and Lagos
-# than the prior says) and the enforcer chain re-sums them to 100, so no
-# two global profiles share a shape.
-_GLOBAL_MARKETS = [
-    ("Tokyo", 5.69), ("Seoul", 4.19), ("Shanghai", 4.07), ("Beijing", 3.48),
-    ("New York", 3.35), ("Mexico City", 3.22), ("Sao Paulo", 3.19),
-    ("Delhi", 3.14), ("Osaka", 2.92), ("Mumbai", 2.83), ("Los Angeles", 2.66),
-    ("Jakarta", 2.51), ("Moscow", 2.45), ("Istanbul", 2.42), ("Buenos Aires", 2.35),
-    ("London", 2.31), ("Cairo", 2.27), ("Manila", 2.21), ("Bangkok", 2.09),
-    ("Paris", 2.04), ("Rio de Janeiro", 1.98), ("Lagos", 1.72), ("Bangalore", 1.66),
-    ("Chicago", 1.58), ("Lima", 1.56), ("Bogota", 1.51), ("Ho Chi Minh City", 1.41),
-    ("Kuala Lumpur", 1.35), ("Hong Kong", 1.29), ("Chennai", 1.27),
-    ("Taipei", 1.19), ("Santiago", 1.16), ("Madrid", 1.14), ("Toronto", 1.11),
-    ("Dallas", 1.08), ("Houston", 1.06), ("Johannesburg", 1.05), ("Singapore", 1.01),
-    ("Washington", 0.97), ("Miami", 0.95), ("San Francisco", 0.94),
-    ("Sydney", 0.92), ("Riyadh", 0.91), ("Melbourne", 0.87), ("Berlin", 0.83),
-    ("Milan", 0.78), ("Rome", 0.73), ("Barcelona", 0.69), ("Dubai", 0.68),
-    ("Montreal", 0.64), ("Tel Aviv", 0.58), ("Cape Town", 0.54), ("Nairobi", 0.53),
-    ("Warsaw", 0.48), ("Manchester", 0.47), ("Amsterdam", 0.45), ("Munich", 0.43),
-    ("Vancouver", 0.42), ("Stockholm", 0.39), ("Lisbon", 0.36), ("Vienna", 0.35),
-    ("Hamburg", 0.34), ("Dublin", 0.31), ("Auckland", 0.26), ("Copenhagen", 0.24),
-    ("Zurich", 0.21), ("Brussels", 0.21),
->>>>>>> Stashed changes
 ]
 
 COUNTRY_MARKETS = {
     "UK": _UK_MARKETS,
     "GERMANY": _DE_MARKETS,
-<<<<<<< Updated upstream
     "GLOBAL": _GLOBAL_MARKETS,
-=======
-    GLOBAL: _GLOBAL_MARKETS,
->>>>>>> Stashed changes
 }
-
-# The single-country lists above ship as a fixed shape (the Omaze
-# precedent); a worldwide LOCATION is the subject's own footprint, so
-# the engine reasons it over the world-city prior instead.
-REASONED_MARKET_COUNTRIES = frozenset({GLOBAL})
-
-
-def markets_are_reasoned(country) -> bool:
-    """True when the country's LOCATION rows are reasoned per subject over
-    the market list as a prior (the world), not emitted as a fixed shape."""
-    return normalize_country(country) in REASONED_MARKET_COUNTRIES
 
 
 def country_markets(country) -> list | None:
@@ -672,7 +501,6 @@ COUNTRY_META = {
             "language discount versus the UK."
         ),
     },
-<<<<<<< Updated upstream
     "GLOBAL": {
         "currency": "US$",
         "notes": (
@@ -688,35 +516,6 @@ COUNTRY_META = {
             "Walmart, Target, CVS, US banks, insurers and telcos, US "
             "sports leagues) score at about the US share of the audience "
             "times their US level, never their full US level."
-=======
-    GLOBAL: {
-        "currency": "$",
-        "adult_population": 5_612_000_000,
-        "notes": (
-            "Worldwide audience: every adult anywhere in the world who "
-            "touched the subject, with the US as one market among many. "
-            "Global leaders take the reach US leaders would have had: "
-            "YouTube, Google, Facebook, Instagram, WhatsApp, TikTok, "
-            "Netflix, Amazon, Apple, Samsung, Spotify, Coca-Cola, Pepsi, "
-            "Nestle, Unilever brands, Nike, Adidas, Toyota, McDonald's, "
-            "KFC, Starbucks, Heineken, Red Bull, IKEA, Zara, H&M, Uniqlo, "
-            "Shein, AliExpress, Visa, Mastercard, PayPal, Booking.com, "
-            "Airbnb, Uber. Global publications and broadcasters: BBC, "
-            "Reuters, The Guardian, CNN International, The New York Times, "
-            "The Economist, Al Jazeera, Bloomberg, Financial Times, DW, "
-            "France 24, NHK. Regional leaders carry their own regions: "
-            "Tesco, Carrefour, Aldi, Lidl, Mercado Libre, Shopee, Lazada, "
-            "Flipkart, Rakuten, Jio, Vodafone, Orange, Telefonica, "
-            "Globo, Televisa, Star, Zee, Disney+ Hotstar, iQIYI, Kakao, "
-            "LINE, WeChat. US-only services (Hulu, Peacock, Walmart, "
-            "Target, CVS, Walgreens, US regional banks, insurers and "
-            "telcos, US sports leagues outside their global fan bases) "
-            "reach only the US share of this audience, never their US "
-            "panel ceilings. LOCATION rows are world cities: each is "
-            "the share of the subject's worldwide audience living in that "
-            "metro (they sum to 100), reasoned from where the subject "
-            "really has reach, not copied from the prior."
->>>>>>> Stashed changes
         ),
     },
 }
@@ -724,14 +523,11 @@ COUNTRY_META = {
 
 def country_prompt_context(country) -> str:
     """One block of reasoning context for a non-US audience. Works for
-    every country; extra depth when COUNTRY_META has an entry. The whole
-    world (GLOBAL) gets its own wording: the US is one market among
-    many, not excluded."""
+    every country; extra depth when COUNTRY_META has an entry."""
     c = normalize_country(country)
     if c == "US":
         return ""
     meta = COUNTRY_META.get(c) or {}
-<<<<<<< Updated upstream
     if c == "GLOBAL":
         lines = [
             "AUDIENCE: WORLDWIDE (GLOBAL), NOT the US alone.",
@@ -747,24 +543,6 @@ def country_prompt_context(country) -> str:
             meta.get("notes") or "",
         ]
         return "\n".join(x for x in lines if x)
-=======
-    if c == GLOBAL:
-        return "\n".join([
-            "AUDIENCE SCOPE: GLOBAL (the whole world, not the US alone).",
-            "Every panelist in this cohort is an adult somewhere in the "
-            "world who touched the subject. The gen_pop_bp baselines you "
-            "are given are US reference values only - re-anchor every item "
-            "to its real worldwide availability and reach before applying "
-            "persona fit. The US is one market in this audience; its weight "
-            "is the subject's real US share of its worldwide audience, "
-            "never the whole.",
-            "Brands and services with no presence outside the US score at "
-            "that US share at most. Global platforms keep their worldwide "
-            "reach; a regional leader can score well above its US baseline "
-            "because the US panel barely sees it.",
-            meta.get("notes") or "",
-        ]).rstrip()
->>>>>>> Stashed changes
     lines = [
         f"AUDIENCE COUNTRY: {c} (NOT the US).",
         f"Every panelist in this cohort is a {c} adult. The gen_pop_bp "
@@ -793,7 +571,6 @@ def country_prompt_context(country) -> str:
 
 _UK_MARKET_NORMS = None
 _DE_MARKET_NORMS = None
-_GLOBAL_MARKET_NORMS = None
 
 
 def _norm_label(s) -> str:
@@ -847,7 +624,7 @@ def location_country(label) -> str:
 
 
 def _market_norms(country):
-    global _UK_MARKET_NORMS, _DE_MARKET_NORMS, _GLOBAL_MARKET_NORMS
+    global _UK_MARKET_NORMS, _DE_MARKET_NORMS
     if country == "UK":
         if _UK_MARKET_NORMS is None:
             _UK_MARKET_NORMS = {_norm_label(m) for m, _ in _UK_MARKETS}
@@ -856,29 +633,16 @@ def _market_norms(country):
         if _DE_MARKET_NORMS is None:
             _DE_MARKET_NORMS = {_norm_label(m) for m, _ in _DE_MARKETS}
         return _DE_MARKET_NORMS
-    if country == GLOBAL:
-        if _GLOBAL_MARKET_NORMS is None:
-            _GLOBAL_MARKET_NORMS = {_norm_label(m) for m, _ in _GLOBAL_MARKETS}
-        return _GLOBAL_MARKET_NORMS
     return set()
 
 
 def detect_country_from_pairs(pairs) -> str | None:
     """Detect the country of a profile from (category, value) pairs.
 
-<<<<<<< Updated upstream
     Returns a canonical country name ('UK', 'GERMANY', 'GLOBAL' for a
     worldwide audience), the generic marker 'INTERNATIONAL' for an
     unambiguous non-US signature we cannot place, or None for US /
     undetectable (treat None as US).
-=======
-    Returns a canonical country name ('UK', 'GERMANY'), 'GLOBAL' for a
-    worldwide frame (LOCATION dominated by the world-city list; a US
-    frame's DMA labels, 'New York Ny', never equal a world city's bare
-    name), the generic marker 'INTERNATIONAL' for an unambiguous non-US
-    signature we cannot place, or None for US / undetectable (treat
-    None as US).
->>>>>>> Stashed changes
     """
     income_vals, edu_vals, eth_vals, loc_vals = [], [], [], []
     for cat, val in pairs:
@@ -939,7 +703,7 @@ def detect_country_from_pairs(pairs) -> str | None:
                 and len(set(world_hits)) >= 3):
             return "GLOBAL"
         loc_norms = [_norm_label(v) for v in loc_vals]
-        for c in ("UK", "GERMANY", GLOBAL):
+        for c in ("UK", "GERMANY"):
             norms = _market_norms(c)
             hits = sum(1 for n in loc_norms if n in norms)
             if hits >= 5 and hits / len(loc_norms) >= 0.4:
