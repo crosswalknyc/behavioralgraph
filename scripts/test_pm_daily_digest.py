@@ -184,7 +184,8 @@ def fixture_day():
     put(s3, f"{dd.MAIL_PREFIX}2026-11-21/150000_m2.json", {'to': 'old.address@example.com', 'subject': 'Your valuation deck', 'caller': 'deck-landing', 'sent': True,
                                                           'logged_at': _ts(15, 0, 21), 'message_id': 'x'})
     ses = FakeSES([{'EmailAddress': 'old.address@example.com', 'Reason': 'BOUNCE', 'LastUpdateTime': dt.datetime(2026, 11, 22, 18, 10, tzinfo=UTC)},
-                   {'EmailAddress': 'earlier@example.com', 'Reason': 'BOUNCE', 'LastUpdateTime': dt.datetime(2026, 11, 17, 12, 0, tzinfo=UTC)}])
+                   {'EmailAddress': 'earlier@example.com', 'Reason': 'BOUNCE', 'LastUpdateTime': dt.datetime(2026, 11, 17, 12, 0, tzinfo=UTC)},
+                   {'EmailAddress': 'nobody.we.wrote@example.com', 'Reason': 'BOUNCE', 'LastUpdateTime': dt.datetime(2026, 11, 22, 19, 30, tzinfo=UTC)}])
     return s3, ses
 
 
@@ -265,8 +266,11 @@ class TheFixtureDay(unittest.TestCase):
     def test_the_bounce_and_the_mail_that_never_went_out(self):
         b = self._of('bounce')
         kinds = sorted((it['user'], it['outcome']) for it in b)
-        self.assertEqual(kinds, [('buyer@example.com', 'send failed'), ('old.address@example.com', 'BOUNCE')])
-        bounced = next(it for it in b if it['outcome'] == 'BOUNCE')
+        self.assertEqual(kinds, [('buyer@example.com', 'send failed'), ('nobody.we.wrote@example.com', 'BOUNCE'), ('old.address@example.com', 'BOUNCE')])
+        unmatched = next(it for it in b if it['user'] == 'nobody.we.wrote@example.com')
+        self.assertEqual(unmatched['what'], 'The email bounced; it was not one the chat sent in the last week.')
+        self.assertEqual(unmatched['question'], '')
+        bounced = next(it for it in b if it['user'] == 'old.address@example.com')
         self.assertIn('bounced', bounced['what'])
         self.assertIn('Your valuation deck', bounced['question'])
         self.assertFalse(any(it['user'] == 'earlier@example.com' for it in b), 'a bounce before the window is not listed')
@@ -278,19 +282,19 @@ class TheFixtureDay(unittest.TestCase):
 
     def test_counts_worst_ten_and_the_rest(self):
         c = self.doc['counts']
-        self.assertEqual(c, {'unfinished': 3, 'misrouted': 4, 'pushback': 3, 'deck_failures': 1, 'bounces': 2, 'reversals': 1}, c)
-        self.assertEqual(len(self.items), 14)
+        self.assertEqual(c, {'unfinished': 3, 'misrouted': 4, 'pushback': 3, 'deck_failures': 1, 'bounces': 3, 'reversals': 1}, c)
+        self.assertEqual(len(self.items), 15)
         self.assertFalse(any(it['user'] == 'jessie' for it in self.items), 'a running profile build is not an unfinished answer')
         lines = self.body.split('\n')
         self.assertTrue(lines[0].startswith('Prometheus, what went wrong: Sun Nov 22 7:00 AM to Mon Nov 23 7:00 AM PT.'), lines[0])
-        self.assertEqual(lines[1], '14 things to look at, out of 11 questions from 7 people.')
-        self.assertEqual(lines[3], 'Counts: 3 answers never finished, 4 sent to the wrong place, 3 pushed back on or asked again, 1 decks or files that failed, 2 emails that bounced, 1 charges reversed.')
+        self.assertEqual(lines[1], '15 things to look at, out of 11 questions from 7 people.')
+        self.assertEqual(lines[3], 'Counts: 3 answers never finished, 4 sent to the wrong place, 3 pushed back on or asked again, 1 decks or files that failed, 3 emails that bounced, 1 charges reversed.')
         self.assertIn('The worst ten:', self.body)
         self.assertIn('The rest, one line each:', self.body)
         numbered = [l for l in lines if re.match(r'^\d+\. ', l)]
         self.assertEqual(len(numbered), 10)
         rest = [l for l in lines if l.startswith('- ')]
-        self.assertEqual(len(rest), 4)
+        self.assertEqual(len(rest), 5)
         # the worst first: the unfinished answers, the reversal and the failed deck lead; the repeats sit in the rest
         blocks, cur = [], None
         for l in lines:
@@ -315,7 +319,7 @@ class TheFixtureDay(unittest.TestCase):
         self.assertNotIn('\u2014', self.body)
         self.assertNotIn('\u2013', self.body)
         self.assertIsNone(BANNED.search(dd.subject_line(self.doc)))
-        self.assertEqual(dd.subject_line(self.doc), 'Prometheus: 14 things went wrong, Sun Nov 22')
+        self.assertEqual(dd.subject_line(self.doc), 'Prometheus: 15 things went wrong, Sun Nov 22')
 
     def test_recipients_and_sender_are_the_house_ops_mail(self):
         self.assertEqual(sorted(dd.RECIPIENTS), ['jenna@crosswalknyc.com', 'jessie@crosswalknyc.com'])

@@ -591,8 +591,9 @@ def _bounces(s3, ses, since, until, out):
         what = 'The email bounced.' if str(s.get('Reason') or '') == 'BOUNCE' else 'The email was reported as unwanted.'
         if hit:
             what += f" Sent {_when(_parse_ts(hit.get('logged_at')))}."
-        out.append(_item('bounce', when, addr, (hit or {}).get('subject') or 'no email from the chat to this address in the last week',
-                         what, '', '', '', str(s.get('Reason') or ''), label='email to'))
+        else:
+            what = what.rstrip('.') + '; it was not one the chat sent in the last week.'
+        out.append(_item('bounce', when, addr, (hit or {}).get('subject') or '', what, '', '', '', str(s.get('Reason') or ''), label='email to'))
 
 
 def _reversals(s3, since, until, out):
