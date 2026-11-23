@@ -2760,7 +2760,7 @@
             // every completed step a way back. On the start it sits under the sentence; on Plan, Run and Report it is the rail up top.
             function paIndexStatus(p, i) {
                 var r = paRun(p.key), g = p.guided || {}, o = (p.report || {}).outcome || null;
-                if (i === 0) return (p.picked && p.key) ? (esc(paTwinName(p.key)) + (paPeople(p.key) ? ', ' + fmtN(paPeople(p.key)) + ' people' : '') + (r && r.kinds ? ', ' + r.kinds + ' archetypes' : '')) : 'Select twin';
+                if (i === 0) return ((p.picked || p.step >= 2) && p.key) ? (esc(paTwinName(p.key)) + (paPeople(p.key) ? ', ' + fmtN(paPeople(p.key)) + ' people' : '') + (r && r.kinds ? ', ' + r.kinds + ' archetypes' : '')) : 'Select twin';
                 if (i === 1) { var k = PA_KINDS.filter(function(x) { return x[0] === p.kind; })[0]; var typed = (p.goal || '').trim(); return typed ? esc(k ? k[1] : 'In your words') : (k ? esc(k[1]) : 'What you type above'); }
                 if (i === 2) { var qs = ((p.plan || {}).questions || []).length; return qs ? qs + ' questions, from the wide to the narrow' : 'Written for you when you press Plan it'; }
                 if (i === 3) { if (g.status === 'done') return 'Done'; if (g.status === 'stopped') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered, stopped'; if (g.status === 'running') return (g.done || 0) + ' of ' + (g.total || 0) + ' answered'; return 'One room, your plan rate'; }
@@ -2990,7 +2990,7 @@
                 else if (p.step === 2) out += paRail() + paStepPlan(p);
                 else if (p.step === 3) out += paRail() + paStepRun(p);
                 else out += paRail() + paReport(p);
-                h.innerHTML = '<div class="dtw-pa-wrap">' + out + '</div>';
+                h.innerHTML = '<div class="dtw-pa-wrap' + (p.step <= 1 ? ' start' : '') + '">' + out + '</div>';
                 if (p.step <= 1 && p.picked && p.key && !p.goal && !paDd.open) { var ge = el('dtwPaGoal'); if (ge) { try { ge.focus(); } catch (_) {} } }
                 if (p.step === 3 && p.guided && p.guided.status === 'running') paSchedulePoll();
             }

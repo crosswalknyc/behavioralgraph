@@ -76,7 +76,8 @@ class Static(unittest.TestCase):
                      'function paIndex(p, compact)', 'function paIndexStatus(p, i)', 'function paGoalText(p)', 'function paGoalValue()',
                      "if (p.step <= 1) out += paStart(p);", "else if (p.step === 2) out += paRail() + paStepPlan(p);", 'window.dtwPaKind = function(k) { var p = pa(); p.goal = paGoalValue();',
                      "window.dtwPaDdPick = function(key) { dtwPaDdToggle(false); if (key === PA_BUILD_KEY) { dtwBuildOpen(true); return; } pa().picked = true; dtwPaPickTwin(key); };",
-                     "return { step: 0, key: S.key || '', picked: false,", "if (p.step === 0) { if (!p.key || !p.picked) return; p.step = 1; }"):
+                     "return { step: 0, key: S.key || '', picked: false,", "if (p.step === 0) { if (!p.key || !p.picked) return; p.step = 1; }",
+                     "h.innerHTML = '<div class=\"dtw-pa-wrap' + (p.step <= 1 ? ' start' : '') + '\">' + out + '</div>';"):
             self.assertIn(need, js, need)
         self.assertNotRegex(js[js.index('var PA_JOIN = {'):js.index('var PA_BUILD_KEY')], r"ph: '", 'no example placeholder on any shape')
         css = _read(CSS)
@@ -84,8 +85,14 @@ class Static(unittest.TestCase):
                      '.dtw-pa-dd .nm { min-width: 0; font-size: 14px; font-weight: 400;', '.dtw-pa-dd .k { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dtw-mute); white-space: nowrap; width: 64px; }',
                      '.dtw-pa-dd .n { font-size: 12.5px; color: var(--dtw-body); white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }', '.dtw-pa-dd-opt { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto;',
                      '.dtw-pa-dd-opt.build .plus', '.dtw-pa-dd-rule { height: 1px;', '.dtw-pa-startline { display: flex; align-items: center;', '@media (max-width: 760px) {\n            #digitalTwinsIQView .dtw-pa-sent { font-size: 28px',
-                     '.dtw-pa-sent .dtw-pa-dd.inline .dtw-pa-dd-menu { width: auto; left: 0; right: 0;'):
+                     '.dtw-pa-sent .dtw-pa-dd.inline .dtw-pa-dd-menu { width: auto; left: 0; right: 0;',
+                     # the polish (2026-11-23): the start reads to the page's edge, the question slot starts a fresh line when it cannot fit whole,
+                     # Plan it is quiet while disabled and lit once it can be pressed, a hairline between twin rows, the phone menu stacks its rows
+                     '.dtw-pa-wrap.start { max-width: 1200px; }', '.dtw-pa-goalin { display: inline-block; max-width: 100%;', '.dtw-pa-startline .dtw-lb.go.pa[disabled] { background: var(--dtw-track); color: var(--dtw-mute);',
+                     '.dtw-pa-dd-opt + .dtw-pa-dd-opt { border-top: 1px solid var(--dtw-hair); }', '.dtw-pa-dd .dtw-pa-dd-opt .n { grid-column: 2; text-align: left;'):
             self.assertIn(need, css, need)
+        for gone in ('.dtw-pa-sent-or', '.dtw-pa-dd-foot', '.dtw-pa-build', '.dtw-pa-startrow', '.dtw-pa-pick'):
+            self.assertNotIn(gone, css, 'dead CSS from the removed affordances: ' + gone)
         self.assertNotIn('.dtw-pa-dd .nm { font-weight: 600', css, 'names in the list are regular weight')
 
 
@@ -199,6 +206,7 @@ var out = {};
 out.start = ix(Object.assign({}, base, { step: 0 }));
 out.unpicked = ix(Object.assign({}, base, { step: 0, picked: false }));
 out.noTwin = ix(Object.assign({}, base, { step: 0, key: '', picked: false }));
+out.planUnpicked = ix(Object.assign({}, base, { step: 2, picked: false, goal: 'x', kind: 'go', plan: plan }));
 out.plan = ix(Object.assign({}, base, { step: 2, goal: 'x', kind: 'go', plan: plan }));
 out.run = ix(Object.assign({}, base, { step: 3, goal: 'x', kind: 'go', plan: plan, guided: { status: 'running', done: 1, total: 3 } }));
 out.stopped = ix(Object.assign({}, base, { step: 3, goal: 'x', plan: plan, guided: { status: 'stopped', done: 1, total: 3 } }));
@@ -210,6 +218,7 @@ console.log(JSON.stringify(out));
         self.assertEqual((got['start']['on'], got['start']['backs']), ('2', []), 'on the start nothing is a way back')
         self.assertEqual((got['unpicked']['on'], got['unpicked']['statuses'][0]), ('1', 'Select twin'), 'an open twin that was not picked here leaves Audience open')
         self.assertEqual((got['noTwin']['on'], got['noTwin']['statuses'][0]), ('1', 'Select twin'))
+        self.assertEqual(got['planUnpicked']['statuses'][0], 'Jennifer Beals, 2,776,141 people, 16 archetypes', 'past the start the audience is always named, pick flag or not (a restored run)')
         self.assertEqual((got['plan']['on'], got['plan']['backs'], got['plan']['compact']), ('3', ['1', '1'], True), 'Audience and Question lead back to the start from Plan')
         self.assertEqual(got['plan']['statuses'][1:3], ['Should I do X?', '3 questions, from the wide to the narrow'])
         self.assertEqual((got['run']['on'], got['run']['backs']), ('4', ['1', '1']))
