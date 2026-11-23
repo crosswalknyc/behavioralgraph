@@ -1206,9 +1206,16 @@ def _renorm_100(vals, salt):
         if not bad:
             break
         for k in bad:
-            step = 0.0001 if _unit(salt, k, _round) < 0.5 else -0.0001
+            # the house's round-display jitter (0.0011 to 0.0389, salted), zero-sum against a donor,
+            # so a reasoned 74.3 reads like a measured share rather than 74.3001
+            amt = round(0.0011 + _unit(salt, k, _round, "amt") * 0.0378, 4)
+            step = amt if _unit(salt, k, _round) < 0.5 else -amt
+            if out[k] + step <= 0:
+                step = amt
+            taken = set(out.values())
             donor = next((d for d in order if d != k and out[d] - step > 0
-                          and not _on_2dp(round(out[d] - step, 4))), None)
+                          and not _on_2dp(round(out[d] - step, 4))
+                          and round(out[d] - step, 4) not in taken), None)
             if donor is None:
                 continue
             out[k] = round(out[k] + step, 4)
