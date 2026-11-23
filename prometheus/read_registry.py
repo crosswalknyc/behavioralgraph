@@ -127,10 +127,10 @@ def inflight(s3, bucket, read_prefix, user, text, now=None):
         return None
 
 
-def _set_aside(reply):
+def _set_aside(reply, subject=None, user=None):
     try:
         import insights_ledger as _il
-        return bool(_il.reply_set_aside(reply))
+        return bool(_il.reply_set_aside(reply, subject=subject or None, user=user or None))
     except Exception:
         return False
 
@@ -159,7 +159,7 @@ def recent(s3, bucket, read_prefix, user, text, now=None):
             return None        # a read that could not run never replays; the ask runs fresh (2026-11-04)
         if status.get('corrected_at') or status.get('retired'):
             return None        # a read corrected in place is never handed back as the same read (2026-11-10)
-        if reply and _set_aside(reply):
+        if reply and _set_aside(reply, subject=subject, user=user):
             return None        # words a correction set aside never replay from a job payload either (2026-11-23)
         if st == 'done' and reply:
             return {'status': 'done', 'job_id': str(ent['job_id']), 'reply': reply, 'subject': subject,

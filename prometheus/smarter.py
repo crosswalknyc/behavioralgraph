@@ -803,11 +803,13 @@ def _asks_for_input(ans):
     return bool(parts) and bool(_ASKS_INPUT_RX.search(parts[-1]))
 
 
-def _set_aside(ans):
-    """True when the ledger holds these words on a row that was set aside."""
+def _set_aside(ans, meta=None):
+    """True when the ledger holds these words on a row that was set aside
+    (a row a correction scoped to a subject matches only on that subject)."""
     try:
         import insights_ledger as _il
-        return bool(_il.reply_set_aside(ans))
+        m = meta if isinstance(meta, dict) else {}
+        return bool(_il.reply_set_aside(ans, subject=m.get('subject') or None))
     except Exception:
         return False
 
@@ -853,7 +855,7 @@ def thread_replay(text, history):
                 continue
             # nor one whose stored row was set aside (2026-11-18, Dark Matter
             # Season 2): the conversation keeps its words, the question runs again
-            if _set_aside(ans):
+            if _set_aside(ans, meta):
                 continue
             # a quote is not a read: sent again, the question draws the same
             # quote from the place quotes are made, never "Same read as

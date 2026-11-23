@@ -139,11 +139,12 @@ def ask_names_window(text):
     return False
 
 
-def _set_aside(reply):
-    """True when the ledger holds these words on a row that was set aside."""
+def _set_aside(reply, subject=None):
+    """True when the ledger holds these words on a row that was set aside
+    (a row a correction scoped to a subject matches only on that subject)."""
     try:
         import insights_ledger as _il
-        return bool(_il.reply_set_aside(reply))
+        return bool(_il.reply_set_aside(reply, subject=subject or None))
     except Exception:
         return False
 
@@ -166,7 +167,7 @@ def thread_reads(history, load_job=None, limit=MAX_READS):
         promise = bool(_PROMISE_RX.search(text[:400]))
         landed = not promise and (str(meta.get('kind') or '') == 'read'
                                   or (text.startswith('On ') and ':' in text[:160]))
-        if landed and text and _set_aside(text):
+        if landed and text and _set_aside(text, meta.get('subject')):
             continue        # a read whose stored row was set aside holds nothing (2026-11-18)
         if landed and text and (jid or text) not in seen:
             seen.add(jid or text)
@@ -183,7 +184,7 @@ def thread_reads(history, load_job=None, limit=MAX_READS):
                 continue
             payload = doc.get('payload') if isinstance(doc.get('payload'), dict) else {}
             reply = str(payload.get('reply') or '').strip()
-            if not reply or _set_aside(reply):
+            if not reply or _set_aside(reply, payload.get('profile') or doc.get('subject')):
                 continue
             seen.add(jid)
             out.append({'reply': reply, 'metrics': list(payload.get('metrics') or []),

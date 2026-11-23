@@ -42,7 +42,7 @@ import re
 import threading
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 ENV = 'PM_CORRECTIONS'
@@ -55,7 +55,8 @@ READER_PROVENANCE = 'delivered_artifact'     # a reader's figure outranks a read
 
 __all__ = ['enabled', 'figures_in', 'wrong_turn', 'learn_from_reader', 'learn_from_rejected_entry', 'correct_turn',
            'sanitize_text', 'candidate_case', 'write_candidate', 'list_candidates', 'CANDIDATES_PREFIX',
-           'CANDIDATES_INDEX', 'STAFF_SOURCE', 'READER_ROUTE', 'SYNC_FOR_TESTS']
+           'CANDIDATES_INDEX', 'STAFF_SOURCE', 'READER_ROUTE', 'SYNC_FOR_TESTS', 'is_stock_line', 'own_question',
+           'CorrectionHost', 'job_chain', 'resolve_subject', 'merge_check']
 
 SYNC_FOR_TESTS = False
 
@@ -194,6 +195,65 @@ def _prev_question(history, before_index) -> str:
         if turns[i].get('role') == 'user' and str(turns[i].get('text') or '').strip():
             return str(turns[i]['text']).strip()[:300]
     return ''
+
+
+def own_question(history, index) -> str:
+    """The question the turn at `index` answered: the user turn right
+    before it with no other agent turn in between. '' when the turn
+    follows another agent turn (a resume's progress line, a second
+    landing), so a neighbor turn's question is never taken for it
+    (2026-11-23: a correction was filed under a subject read off an
+    earlier turn)."""
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    if index is None or not (0 <= index < len(turns)):
+        return ''
+    for i in range(index - 1, -1, -1):
+        role = str(turns[i].get('role') or '')
+        if role == 'user':
+            return str(turns[i].get('text') or '').strip()[:300]
+        if str(turns[i].get('text') or '').strip():
+            return ''
+    return ''
+
+
+_STOCK_RX = (
+    re.compile(r"^\s*(?:working on it|on it[:.]|still reading|picking the read back up)", re.I),
+    re.compile(r"^\s*(?:my fault|thank you|thanks|got it|understood|noted|sure|okay|ok)\b", re.I),
+    re.compile(r"\b(?:which|what) (?:audience|subject|campaign|profile|title|window|dates?) (?:should|is|do|did|would|are)\b.{0,80}\?", re.I),
+    re.compile(r"^\s*(?:the answer to your question is just above|this line is withdrawn|this build could not be completed|stopped at your request)", re.I),
+    re.compile(r"\b(?:i can pull that read|pulling this data will|approve & run|approve and run|credits? (?:for this|will be charged)|will cost|runs? (?:it|all \w+) for)\b", re.I),
+    re.compile(r"\b(?:deck|file|read|report) (?:is|are) (?:ready|attached|on its way|in your inbox)\b", re.I),
+    re.compile(r"\bi (?:have|will) (?:built|sent|email(?:ed)?|send)\b.{0,60}\b(?:deck|inbox|email)\b", re.I),
+)
+
+
+def is_stock_line(text) -> bool:
+    """A house line that is never a wrong answer to retire or set aside
+    by its words: a promise or progress line, a held line, an ack, a
+    clarify, an offer or a quote, a delivery note, a withdrawn or failed
+    line, or any short line with no figure in it. Setting one of these
+    aside by its words would set it aside for every user (2026-11-23)."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return True
+    try:
+        from . import promise_truth as _pt
+        if _pt.is_calm(t) or _pt.promise_kind(t):
+            return True
+    except Exception:
+        pass
+    try:
+        import insights_ledger as _il
+        if _il.is_offer_reply(t) or _il.is_retired_surface_reply(t):
+            return True
+    except Exception:
+        pass
+    for rx in _STOCK_RX:
+        if rx.search(t):
+            return True
+    if len(t) < 160 and not re.search(r"\d", t):
+        return True
+    return False
 
 
 def _unit_class(unit_or_kind) -> str:
@@ -361,36 +421,51 @@ def _learn(*, username, thread_id, history, wrong_text, correction_text, questio
            corrected_reply='', names=()) -> dict:
     """The three steps on one wrong answer. Returns what was done."""
     il = _ledger()
-    done = {'retired': [], 'set_aside': 0, 'recorded': [], 'candidate': '', 'catalog_retired': 0}
+    done = {'retired': [], 'set_aside': 0, 'recorded': [], 'candidate': '', 'catalog_retired': 0, 'skipped': ''}
     subject = str(facts.get('subject') or '')
     ws, we = str(facts.get('window_start') or ''), str(facts.get('window_end') or '')
-    try:
-        hits = il.retire_by_reply(wrong_text, by=by, note=str(correction_text or '')[:160])
-        done['retired'] = [h.get('k') for h in hits]
-        if hits and not subject:
-            subject = str(hits[0].get('subject') or '')
-        if hits and not (ws and we):
-            ws, we = str(hits[0].get('ws') or ''), str(hits[0].get('we') or '')
-        if hits and not question:
-            question = str(hits[0].get('q') or '')
-    except Exception:
-        traceback.print_exc()
-    if not subject:
+    stock = is_stock_line(wrong_text)
+    if not subject and question:
         try:
-            import prometheus_analysis as _pma
-            subject = str(_pma.guess_subject_from_text(question) or '').strip()
+            from . import knowledge as _know
+            subject = str(_know.named_subject(question) or '').strip()   # the turn's own question, never a neighbor's
         except Exception:
             subject = ''
-    try:
-        done['set_aside'] = il.set_aside_reply(wrong_text, subject=subject, question=question, window_start=ws, window_end=we,
-                                               by=by, reason=str(correction_text or kind)[:200], job_id=facts.get('job_id') or '')
-    except Exception:
-        traceback.print_exc()
-    try:
-        from migration import corpus_catalog as _cc
-        done['catalog_retired'] = int(_cc.retire_answer(username or '', thread_id or '', wrong_text, subject=subject or None, by=by) or 0)
-    except Exception:
-        done['catalog_retired'] = 0
+    if stock:
+        # a promise line, an ack, a held line or an offer is never a wrong
+        # answer by its words: retiring or setting it aside would reach
+        # every user's copy of the same line (2026-11-23). The staff's
+        # corrected figures still bank below.
+        done['skipped'] = 'stock_line'
+        print(f"[pm-corrections] {kind} by {by}: the corrected turn is a house line; nothing retired or set aside by its words")
+    else:
+        try:
+            # only this subject's rows: never another subject's row that
+            # happens to carry the same words. The turn's own window first;
+            # the same words on the same subject on another window are the
+            # same wrong answer and go on the second pass
+            hits = il.retire_by_reply(wrong_text, by=by, note=str(correction_text or '')[:160], subject=subject or None,
+                                      window=({'start': ws, 'end': we} if ws and we else None)) if subject else []
+            if subject and not hits and ws and we:
+                hits = il.retire_by_reply(wrong_text, by=by, note=str(correction_text or '')[:160], subject=subject)
+            done['retired'] = [h.get('k') for h in hits]
+            if hits and not (ws and we):
+                ws, we = str(hits[0].get('ws') or ''), str(hits[0].get('we') or '')
+            if hits and not question:
+                question = str(hits[0].get('q') or '')
+        except Exception:
+            traceback.print_exc()
+        try:
+            done['set_aside'] = il.set_aside_reply(wrong_text, subject=subject, question=question, window_start=ws, window_end=we,
+                                                   by=by, reason=str(correction_text or kind)[:200], job_id=facts.get('job_id') or '',
+                                                   user=username or '', thread=thread_id or '')
+        except Exception:
+            traceback.print_exc()
+        try:
+            from migration import corpus_catalog as _cc
+            done['catalog_retired'] = int(_cc.retire_answer(username or '', thread_id or '', wrong_text, subject=subject or None, by=by) or 0)
+        except Exception:
+            done['catalog_retired'] = 0
     stated = list(stated or [])
     if stated and all(isinstance(x, dict) and x.get('name') for x in stated):
         corrected = corrected_metrics_from(stated)        # staff named the figures
@@ -411,13 +486,14 @@ def _learn(*, username, thread_id, history, wrong_text, correction_text, questio
                 done['recorded'] = [il.entry_key(subject, il.family_from_question(question) or '', ws, we)]
         except Exception:
             traceback.print_exc()
-    try:
-        case = candidate_case(question=question, wrong_text=wrong_text, correction_text=correction_text, corrected=corrected,
-                              subject=subject, window={'start': ws, 'end': we}, history=history, seat=username or '',
-                              by=by, view=view, job_id=facts.get('job_id') or '', kind=kind, names=names)
-        done['candidate'] = write_candidate(case)
-    except Exception:
-        traceback.print_exc()
+    if not stock or (subject and (corrected or corrected_reply)):
+        try:
+            case = candidate_case(question=question, wrong_text=wrong_text, correction_text=correction_text, corrected=corrected,
+                                  subject=subject, window={'start': ws, 'end': we}, history=history, seat=username or '',
+                                  by=by, view=view, job_id=facts.get('job_id') or '', kind=kind, names=names)
+            done['candidate'] = write_candidate(case)
+        except Exception:
+            traceback.print_exc()
     print(f"[pm-corrections] {kind} by {by} on {subject or '?'}: retired {len(done['retired'])} ledger row(s), "
           f"set aside {done['set_aside']} signature(s), recorded {len(done['recorded'])}, candidate {done['candidate'] or 'none'}")
     return done
@@ -508,41 +584,191 @@ def _find_turn(history, *, turn_id='', job_id='', index=None, text_prefix=''):
     return None
 
 
+class CorrectionHost:
+    """What a staff correction reads and writes: the thread, the read job
+    documents (a resumed chain included), the chain markers, the email
+    side-files, the held records and the backup copies. The CLI builds one
+    on S3 with the store's client hook installed; a test hands in a fake.
+    Every method is optional; a missing one is a no-op."""
+
+    def __init__(self, *, load_thread=None, save_thread=None, read_thread=None, restore_thread=None, job_doc=None, job_write=None,
+                 chain_marker=None, chain_marker_write=None, notify_delete=None, backup=None,
+                 held_list=None, held_get=None, held_write=None, registry_clear=None):
+        self.load_thread = load_thread
+        self.save_thread = save_thread
+        self.read_thread = read_thread or load_thread
+        self.restore_thread = restore_thread      # writes the backup copy back verbatim (the merge cannot undo a stamped correction)
+        self.job_doc = job_doc
+        self.job_write = job_write
+        self.chain_marker = chain_marker
+        self.chain_marker_write = chain_marker_write
+        self.notify_delete = notify_delete
+        self.backup = backup
+        self.held_list = held_list
+        self.held_get = held_get
+        self.held_write = held_write
+        self.registry_clear = registry_clear
+
+    @classmethod
+    def from_chat(cls):
+        """The running app's own helpers (the thread merge-save, the job
+        writer, the chain markers, the notify side-files)."""
+        from prometheus.legacy import chat as c
+        from prometheus.legacy import jobs as _jobs
+        from prometheus.legacy import notify as _notify
+        from prometheus import read_recovery as rr
+
+        def _marker_write(jid, doc):
+            s3, bucket = rr._s3()
+            s3.put_object(Bucket=bucket, Key=f"{rr.CHAIN_PREFIX}{jid}.json", Body=json.dumps(doc).encode('utf-8'),
+                          ContentType='application/json')
+
+        return cls(load_thread=lambda u, t: c._pm_load_thread_or_active(u, t),
+                   save_thread=lambda u, t, h: c._pm_save_thread_or_active(u, t, h),
+                   job_doc=lambda j: c._pm_read_job_doc(j),
+                   job_write=lambda j, d: _jobs._pm_read_status_write(j, d),
+                   chain_marker=lambda j: rr.chain_marker(j),
+                   chain_marker_write=_marker_write,
+                   notify_delete=lambda j: _notify._pm_notify_delete(j))
+
+
+HELD_LOOKBACK_DAYS = 14       # held records are filed by day; a correction looks back this far
+
+# the wrong answer's chips, figures, links and marks come off: set EMPTY, not
+# popped, because the thread merge unions meta (a popped key would ride back
+# in from the stored copy)
+_STALE_META_EMPTY = {'options': [], 'figures': [], 'link': '', 'chart': None, 'file_link': '', 'files': [], 'pdf_link': '',
+                     'faulted': False, 'held_ref': '', 'drilldown': None}
+
+
+def job_chain(job_id, host: CorrectionHost) -> list:
+    """Every job id of a resumed read's chain, root first, through the
+    chain markers (root) and the records (`resumed_as`). [job_id] for a
+    read never resumed."""
+    jid = str(job_id or '').strip()
+    if not jid or not callable(host.job_doc):
+        return [jid] if jid else []
+    ids = []
+    try:
+        marker = host.chain_marker(jid) if callable(host.chain_marker) else {}
+        cur, hops = str((marker or {}).get('root') or jid), 0
+        while cur and cur not in ids and hops < 8:
+            ids.append(cur)
+            doc = host.job_doc(cur) or {}
+            cur = str((doc or {}).get('resumed_as') or '').strip()
+            hops += 1
+    except Exception:
+        traceback.print_exc()
+    if jid not in ids:
+        ids.append(jid)
+    return ids
+
+
+def resolve_subject(turn, job_doc, history, index, *, given='') -> tuple:
+    """(subject, question, how) for a corrected turn: the subject staff
+    gave; else the job document's own subject (its profile or base, the
+    thread's pinned subject); else the subject the turn's OWN question
+    names (`own_question`: the user turn right before it, never a
+    neighbor's); else nothing. The question is the turn's own, else the
+    job document's."""
+    m = _meta(turn)
+    jd = job_doc if isinstance(job_doc, dict) else {}
+    pl = jd.get('payload') if isinstance(jd.get('payload'), dict) else {}
+    question = own_question(history, index) or str(jd.get('question') or (jd.get('resume') or {}).get('text') or '')[:300]
+    if str(given or '').strip():
+        return str(given).strip(), question, 'given'
+    for cand, how in ((pl.get('profile'), 'job profile'), (jd.get('subject'), 'job subject'), (m.get('subject'), 'turn subject'),
+                      (((jd.get('resume') or {}).get('base') or {}).get('subject'), 'thread base'), ((jd.get('resume') or {}).get('bind_subject'), 'thread subject')):
+        if str(cand or '').strip():
+            return str(cand).strip(), question, how
+    if question:
+        try:
+            from . import knowledge as _know
+            named = re.sub(r"(?:'|\u2019)s$", '', str(_know.named_subject(question) or '').strip()).strip()
+            if named:
+                return named, question, 'own question'
+        except Exception:
+            pass
+    return '', question, 'none'
+
+
+def merge_check(before, after, corrected_index=None, new_text='') -> dict:
+    """The correction survives a merge: the pre-correction copy merged
+    into the corrected thread (the way a stale client copy would arrive)
+    leaves the corrected text in place and adds no turn. {'ok', 'why'}."""
+    try:
+        from . import thread_merge as _tm
+        merged = _tm.merge_turns(list(after or []), list(before or []))
+        if len(merged) != len(after or []):
+            return {'ok': False, 'why': f"a stale copy would add {len(merged) - len(after or [])} turn(s)"}
+        if corrected_index is not None and 0 <= corrected_index < len(merged):
+            if ' '.join(str(merged[corrected_index].get('text') or '').split()) != ' '.join(str(new_text or '').split()):
+                return {'ok': False, 'why': 'a stale copy would write over the corrected text'}
+            if not _meta(merged[corrected_index]).get('corrected_at'):
+                return {'ok': False, 'why': 'the correction stamp would not survive a merge'}
+        return {'ok': True, 'why': ''}
+    except Exception as e:
+        return {'ok': False, 'why': f"merge check did not run: {type(e).__name__}"}
+
+
 def correct_turn(username, thread_id, new_text, *, by, turn_id='', job_id='', index=None, text_prefix='',
                  figures=None, subject='', window=None, note='', load=None, save=None, job_doc=None, job_write=None,
-                 learn=True, view='') -> dict:
-    """Correct one thread turn the way the hand edits of 2026-11-16 to
-    2026-11-20 did, plus everything they skipped, in one call.
+                 learn=True, view='', host: Optional[CorrectionHost] = None) -> dict:
+    """Correct one thread turn, the one complete path a staff correction
+    needs (Jenna 2026-11-23, after the defect found on Armine's thread):
 
-    The turn (found by turn_id, by the job id on it, by index, or by the
-    words it starts with) takes `new_text`; its meta takes `corrected_at`
-    (the merge reads it as the server's correction; a newer stamp wins),
-    `corrected_by`, `retired` (the old words, for audit) and
-    `server_note`. The thread is saved through the chat module's own
-    merge-save (ETag-guarded, mirrored to the store), never a raw put. The
-    read job document behind the turn takes the corrected reply and the
-    same stamp, so the registry never replays the old words. Then the
-    ledger retires the old words, sets them aside, banks `figures` (a
-    list of {'name','label','value','unit'} or 'name=value unit' strings)
-    with `new_text` as the decision of record for `subject` and `window`,
-    and the fixture candidate is queued.
+    1. a backup of the thread (and of every job document the correction
+       touches) first;
+    2. the turn (found by turn_id, by the job id on it, by index, or by
+       the words it starts with) takes `new_text`; its meta takes
+       `corrected_at` and `landed_at` (the merge reads the stamp as the
+       server's correction; a newer stamp wins), `corrected_by`,
+       `retired` (the old words, for audit) and `server_note`; the stale
+       follow-up chips, figures, links and held marks of the wrong answer
+       come off (new `figures` ride on when given); the save is the
+       thread merge (ETag-guarded, mirrored to the store), never a raw put;
+    3. every read job document behind the turn, the resumed chain
+       included, is settled through the house writer: the corrected reply
+       and the stamp on the payload, status done and final, the fault
+       cleared; the email-promise marker is turned off on every pass
+       (the chain marker, the notify side-file, the open held records);
+    4. the ledger retires the old words and sets them aside, scoped to
+       this subject, window, seat and thread (never a house stock line,
+       never another subject's row), banks `figures` with `new_text` as
+       the decision of record for the subject (resolved from the turn's
+       own question or the thread's own subject, never a neighbor turn)
+       and queues the fixture candidate;
+    5. a merge check against the backup before it returns: a stale copy
+       of the thread merged in later cannot write over the correction; when
+       it could, the thread is put back from the backup and the report
+       says so.
 
-    `load` / `save` / `job_doc` / `job_write` default to the chat module's
-    helpers; tests pass their own. Returns a report dict; raises only on a
-    turn that cannot be found."""
-    c = None
-    if load is None or save is None or job_doc is None or job_write is None:
-        from prometheus.legacy import chat as c
-    load = load or (lambda u, t: c._pm_load_thread_or_active(u, t))
-    save = save or (lambda u, t, h: c._pm_save_thread_or_active(u, t, h))
-    job_doc = job_doc or (lambda j: c._pm_read_job_doc(j))
-    job_write = job_write or (lambda j, d: c._pm_read_status_write(j, d))
+    Returns a report dict; raises only on a turn that cannot be found."""
+    if host is None:
+        if load is None or save is None or job_doc is None or job_write is None:
+            host = CorrectionHost.from_chat()
+            host.load_thread = load or host.load_thread
+            host.save_thread = save or host.save_thread
+            host.job_doc = job_doc or host.job_doc
+            host.job_write = job_write or host.job_write
+            host.read_thread = host.load_thread
+        else:
+            host = CorrectionHost(load_thread=load, save_thread=save, job_doc=job_doc, job_write=job_write)
     by = str(by or 'staff').strip()
     by_label = by if by.startswith('staff') else f"staff:{by}"
-    history = list(load(username, thread_id) or [])
+    history = list(host.load_thread(username, thread_id) or [])
+    before = json.loads(json.dumps(history))
     i = _find_turn(history, turn_id=turn_id, job_id=job_id, index=index, text_prefix=text_prefix)
     if i is None:
         raise LookupError('turn not found (give --turn-id, --job, --index or --starts-with)')
+    report = {'thread_id': thread_id, 'index': i, 'turn_id': history[i].get('turn_id'), 'corrected_at': '', 'job_id': '', 'jobs_settled': [],
+              'promise_off': [], 'held_closed': 0, 'backup': {}, 'subject': '', 'subject_from': '', 'learned': None, 'merge_check': None}
+    # 1. the backup first
+    if callable(host.backup):
+        try:
+            report['backup']['thread'] = host.backup('thread', f"{username}/{thread_id}", before) or True
+        except Exception:
+            traceback.print_exc()
     old = dict(history[i])
     old_text = str(old.get('text') or '')
     stamp = _now_iso()
@@ -552,42 +778,126 @@ def correct_turn(username, thread_id, new_text, *, by, turn_id='', job_id='', in
         # the merge keeps the newer correction: a second correction inside the
         # same second takes the next second so it is the newer one
         try:
-            from datetime import timedelta
             stamp = (datetime.strptime(prior, '%Y-%m-%dT%H:%M:%SZ') + timedelta(seconds=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
         except Exception:
             pass
-    meta.update({'corrected_at': stamp, 'corrected_by': by_label[:60], 'server_note': True,
+    report['corrected_at'] = stamp
+    # 2. the turn: stamps on, the wrong answer's chips, figures and links off
+    for k, empty in _STALE_META_EMPTY.items():
+        if k in meta:
+            meta[k] = empty
+    stated = _parse_figures(figures)
+    if stated:
+        meta['figures'] = [{'value': x['value'], 'kind': ('pct' if x.get('unit') == 'pct' else 'money' if x.get('unit') == 'usd' else 'count'),
+                            'label': str(x.get('label') or x.get('name') or 'figure')[:80], 'source': 'staff correction'} for x in stated]
+    meta.update({'corrected_at': stamp, 'landed_at': stamp, 'corrected_by': by_label[:60], 'server_note': True, 'kind': meta.get('kind') or 'read',
                  'retired': old_text[:400], **({'correction_note': str(note)[:200]} if note else {})})
     new = dict(old, text=str(new_text), role='agent', meta=meta)
     history[i] = new
-    save(username, thread_id, history)
-    report = {'thread_id': thread_id, 'index': i, 'turn_id': old.get('turn_id'), 'corrected_at': stamp, 'job_id': '',
-              'job_corrected': False, 'learned': None}
+    saved = host.save_thread(username, thread_id, history)
+    # 3. the job documents behind the turn, the chain included
     jid = str(meta.get('read_job_id') or meta.get('landed_job_id') or job_id or '')
     doc = None
-    if jid:
+    if jid and callable(host.job_doc):
         report['job_id'] = jid
+        for cid in job_chain(jid, host):
+            try:
+                d = host.job_doc(cid)
+                if not isinstance(d, dict):
+                    continue
+                if doc is None or cid == jid:
+                    doc = d                      # the corrected turn's own record wins; the root stands in until it is read
+                if callable(host.backup):
+                    try:
+                        host.backup('job', cid, d)
+                    except Exception:
+                        traceback.print_exc()
+                pl = dict(d.get('payload') or {}) if isinstance(d.get('payload'), dict) else {}
+                pl.update({'reply': str(new_text), 'corrected_at': stamp, 'retired_reply': str(pl.get('reply') or '')[:400] or old_text[:400],
+                           'success': True, 'action': 'answer', 'followups': []})
+                for k in ('faulted', 'held_ref', 'offer_deck', 'deck_angle', 'file_link', 'chart'):
+                    pl.pop(k, None)
+                settled = {**d, 'payload': pl, 'corrected_at': stamp, 'corrected_by': by_label[:60], 'status': 'done', 'final': True,
+                           'final_reason': f"corrected by staff {stamp}"[:200], 'settled_by_correction': True}
+                for k in ('fault', 'held_retries', 'claimed_by', 'claimed_at'):
+                    settled.pop(k, None)
+                try:
+                    from . import seams as _seams
+                    settled = _seams.tag_job(settled, 'read')      # the house writer's tag, whatever writer carries it
+                except Exception:
+                    pass
+                if callable(host.job_write):
+                    host.job_write(cid, settled)
+                report['jobs_settled'].append(cid)
+                # the email promise, off on every pass
+                try:
+                    if callable(host.chain_marker) and callable(host.chain_marker_write):
+                        mk = host.chain_marker(cid)
+                        if isinstance(mk, dict) and mk:
+                            host.chain_marker_write(cid, {**mk, 'promised_email': False, 'corrected_at': stamp})
+                    if callable(host.notify_delete):
+                        host.notify_delete(cid)
+                    report['promise_off'].append(cid)
+                except Exception:
+                    traceback.print_exc()
+            except Exception:
+                traceback.print_exc()
         try:
-            doc = job_doc(jid)
-            if isinstance(doc, dict):
-                pl = dict(doc.get('payload') or {}) if isinstance(doc.get('payload'), dict) else {}
-                pl.update({'reply': str(new_text), 'corrected_at': stamp, 'retired_reply': old_text[:400]})
-                job_write(jid, {**doc, 'payload': pl, 'corrected_at': stamp, 'corrected_by': by_label[:60]})
-                report['job_corrected'] = True
+            if callable(host.registry_clear):
+                host.registry_clear(username, str((doc or {}).get('question') or ''))
         except Exception:
             traceback.print_exc()
+    # the open held records behind the promise close as delivered by a person
+    try:
+        if callable(host.held_list) and callable(host.held_get) and callable(host.held_write):
+            from . import promise_truth as _pt
+            chain = set(report['jobs_settled']) | ({jid} if jid else set())
+            days = [(datetime.now(timezone.utc) - timedelta(days=n)).strftime('%Y-%m-%d') for n in range(HELD_LOOKBACK_DAYS)]
+            keys = []
+            for day in days:
+                keys.extend(host.held_list(f"{_pt.HELD_PREFIX}{day}/") or [])
+            for key in keys:
+                hd = host.held_get(key)
+                if not isinstance(hd, dict) or str(hd.get('status') or 'open') != 'open':
+                    continue
+                if str(hd.get('user') or '') != str(username or ''):
+                    continue
+                if (hd.get('job_id') and str(hd['job_id']) in chain) or (hd.get('thread_id') and str(hd['thread_id']) == str(thread_id)):
+                    if _pt.close(key, how='corrected by staff', by=by_label[:60], job_id=jid, emailed=False, thread_id=str(thread_id or ''),
+                                 getter=host.held_get, writer=host.held_write):
+                        report['held_closed'] += 1
+    except Exception:
+        traceback.print_exc()
+    # 4. the learning, scoped to this subject, window, seat and thread
+    subj, question, how = resolve_subject(old, doc, before, i, given=subject)
+    report['subject'], report['subject_from'] = subj, how
     if learn and enabled():
         facts = _turn_facts(old, doc)
-        if subject:
-            facts['subject'] = subject
+        facts['subject'] = subj
+        facts['question'] = question
         w = window if isinstance(window, dict) else {}
         if w.get('start') and w.get('end'):
             facts['window_start'], facts['window_end'] = str(w['start'])[:10], str(w['end'])[:10]
-        stated = _parse_figures(figures)
-        question = facts.get('question') or _prev_question(history, i)
         report['learned'] = _learn(username=username, thread_id=thread_id, history=history[:i + 1], wrong_text=old_text,
                                    correction_text=str(note or 'corrected by staff'), question=question, facts=facts, by=by_label,
                                    kind='staff_correction', view=view, stated=stated, corrected_reply=str(new_text))
+    # 5. the merge check against the backup
+    try:
+        after = list(host.read_thread(username, thread_id) or []) if callable(host.read_thread) else list(saved or history)
+    except Exception:
+        after = list(saved or history)
+    chk = merge_check(before, after, corrected_index=i, new_text=str(new_text))
+    report['merge_check'] = chk
+    if not chk.get('ok'):
+        try:
+            if callable(host.restore_thread):
+                host.restore_thread(username, thread_id, before)
+            else:
+                host.save_thread(username, thread_id, before)
+            report['restored_from_backup'] = True
+            print(f"[pm-corrections] correction on {username}/{thread_id} put back from the backup: {chk.get('why')}")
+        except Exception:
+            traceback.print_exc()
     return report
 
 

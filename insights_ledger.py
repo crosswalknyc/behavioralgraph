@@ -204,6 +204,8 @@ def use_test_ledger(index=None):
         _s3 = _TestLedger(index if index is not None else {})
     with _cache_lock:
         _index_cache.update(ts=0.0, doc=None)
+        _set_aside_registry.update(doc=None, ts=0.0)          # a fresh test ledger carries no set-aside rows either
+        _set_aside_cache.update(doc=None, ts=0.0, sigs=frozenset(), scoped=())
     return _s3
 
 
@@ -1343,7 +1345,7 @@ def retire_entries(keys=None, questions=None, by='operator', note=''):
     return done['n']
 
 
-_set_aside_cache = {'doc': None, 'ts': 0.0, 'sigs': frozenset()}
+_set_aside_cache = {'doc': None, 'ts': 0.0, 'sigs': frozenset(), 'scoped': ()}
 
 
 def _reply_sig(text):
@@ -1351,14 +1353,36 @@ def _reply_sig(text):
     return hashlib.sha1(t.encode('utf-8')).hexdigest() if len(t) >= 40 else ''
 
 
-def reply_set_aside(text):
+def _scope_matches(row_scope, subject=None, user=None, thread=None):
+    """A registry row with no scope matches every caller. A scoped row
+    matches a caller that names at least one of its fields with the same
+    value and contradicts none of them: the subject's exact replay (the
+    subject alone), the read registry (subject and seat), a thread's own
+    shortcuts (the subject it carries). A caller that names nothing never
+    matches a scoped row, so a scoped set-aside never reaches every user."""
+    rs = row_scope if isinstance(row_scope, dict) else {}
+    if not rs:
+        return True
+    gave = {'subject': fold_subject(subject) if subject else '', 'user': str(user or '').strip().lower(), 'thread': str(thread or '').strip()}
+    agreed = False
+    for k, v in rs.items():
+        if not v or not gave.get(k):
+            continue
+        if gave[k] != v:
+            return False          # a field both sides name must agree
+        agreed = True
+    return agreed
+
+
+def reply_set_aside(text, *, subject=None, user=None, thread=None):
     """True when these exact words sit on a row that was set aside
     (stamped retired) and on no live row (2026-11-18, Dark Matter Season
-    2). The row left replay and the published block; the shortcuts that
-    read a conversation instead of the ledger (the same question asked
-    again in a thread, a base held from the thread's earlier reads) ask
-    here so they do not hand the same words back. The conversation
-    itself is never changed. Never raises."""
+    2), or on a set-aside registry row whose scope the caller matches
+    (2026-11-23: a correction's row is bound to its subject, seat and
+    thread; a stock line is never on the registry). The shortcuts that
+    read a conversation instead of the ledger ask here so they do not
+    hand the same words back. The conversation itself is never changed.
+    Never raises."""
     try:
         want = set(reply_sigs(text))
         if not want:
@@ -1368,6 +1392,7 @@ def reply_set_aside(text):
         with _cache_lock:
             fresh = _set_aside_cache['doc'] is doc and now - _set_aside_cache['ts'] < _INDEX_TTL_S
             sigs = _set_aside_cache['sigs']
+            scoped = _set_aside_cache.get('scoped') or ()
         if not fresh:
             gone, live = set(), set()
             for sub in (doc.get('subjects') or {}).values():
@@ -1375,16 +1400,27 @@ def reply_set_aside(text):
                     if not isinstance(e, dict) or not e.get('reply'):
                         continue
                     (gone if e.get('retired') else live).update(reply_sigs(e.get('reply')))
-            # the words a correction set aside outright (no row needed): the
-            # registry wins over a live row that still carries them
+            # the words a correction set aside outright (no row needed): an
+            # unscoped registry row wins over a live row that still carries
+            # them; a scoped row is kept aside with its scope
+            registry, scoped_rows = set(), []
             try:
-                registry = {str(r.get('sig')) for r in (_load_set_aside().get('replies') or []) if isinstance(r, dict) and r.get('sig')}
+                for r in (_load_set_aside().get('replies') or []):
+                    if not isinstance(r, dict) or not r.get('sig'):
+                        continue
+                    if r.get('scope'):
+                        scoped_rows.append((str(r['sig']), dict(r['scope'])))
+                    else:
+                        registry.add(str(r['sig']))
             except Exception:
-                registry = set()
+                registry, scoped_rows = set(), []
             sigs = frozenset(((gone - live) | registry) - {''})
+            scoped = tuple(scoped_rows)
             with _cache_lock:
-                _set_aside_cache.update(doc=doc, ts=now, sigs=sigs)
-        return bool(want & sigs)
+                _set_aside_cache.update(doc=doc, ts=now, sigs=sigs, scoped=scoped)
+        if want & sigs:
+            return True
+        return any(sg in want and _scope_matches(sc, subject=subject, user=user, thread=thread) for sg, sc in scoped)
     except Exception:
         return False
 
@@ -1439,28 +1475,34 @@ def _load_set_aside(force=False):
     return doc
 
 
-def set_aside_reply(text, *, subject='', question='', window_start='', window_end='', by='', reason='', job_id=''):
+def set_aside_reply(text, *, subject='', question='', window_start='', window_end='', by='', reason='', job_id='', user='', thread=''):
     """Register the words as set aside: `reply_set_aside` says True for
-    them from now on, on every replay path, whether or not a ledger row
-    ever carried them. Idempotent on the signature. Returns the number of
-    signatures added. Never raises."""
+    them from now on, on the replay paths that read the same scope,
+    whether or not a ledger row ever carried them. A row written with a
+    subject, a seat or a thread is SCOPED (2026-11-23): it matches only a
+    caller that names the same subject, seat or thread, never every
+    user's copy of the same words. Idempotent on (signature, scope).
+    Returns the number of rows added. Never raises."""
     sigs = reply_sigs(text)
     if not sigs:
         return 0
     stamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    scope = {k: v for k, v in (('subject', fold_subject(subject) if subject else ''), ('user', str(user or '').strip().lower()),
+                               ('thread', str(thread or '').strip())) if v}
     added = {'n': 0}
 
     def _mut(doc):
         doc = doc if isinstance(doc, dict) else {}
         rows = [r for r in (doc.get('replies') or []) if isinstance(r, dict)]
-        have = {r.get('sig') for r in rows}
+        have = {(r.get('sig'), json.dumps(r.get('scope') or {}, sort_keys=True)) for r in rows}
         for sg in sigs:
-            if sg in have:
+            if (sg, json.dumps(scope, sort_keys=True)) in have:
                 continue
             rows.append({'sig': sg, 'subject': str(subject or '')[:120], 'q': str(question or '')[:300],
                          'ws': str(window_start or '')[:12], 'we': str(window_end or '')[:12],
                          'by': str(by or 'correction')[:40], 'reason': str(reason or '')[:200],
-                         'job_id': str(job_id or '')[:40], 'head': ' '.join(str(text or '').split())[:160], 'ts': stamp})
+                         'job_id': str(job_id or '')[:40], 'head': ' '.join(str(text or '').split())[:160], 'ts': stamp,
+                         **({'scope': scope} if scope else {})})
             added['n'] += 1
         if not added['n']:
             return None
@@ -1475,7 +1517,7 @@ def set_aside_reply(text, *, subject='', question='', window_start='', window_en
         return 0
     with _cache_lock:
         _set_aside_registry.update(doc=None, ts=0.0)
-        _set_aside_cache.update(doc=None, ts=0.0, sigs=frozenset())
+        _set_aside_cache.update(doc=None, ts=0.0, sigs=frozenset(), scoped=())
     return added['n']
 
 
@@ -1484,22 +1526,35 @@ def set_aside_rows(limit=200):
     return list((_load_set_aside().get('replies') or [])[-int(limit):])
 
 
-def retire_by_reply(text, by='correction', note=''):
+def retire_by_reply(text, by='correction', note='', subject=None, window=None):
     """Every live entry whose reply is these words (by signature, leads
-    stripped) is stamped retired. Returns the retired entries (copies:
-    k, subject, family, ws, we, q, route). Never raises."""
+    stripped) is stamped retired. With `subject` only that subject's
+    bucket is read (2026-11-23: a correction never retires another
+    subject's row by its words); with `window` ({'start','end'}) only rows
+    on that window, rows with no window included. Returns the retired
+    entries (copies: k, subject, family, ws, we, q, route). Never raises."""
     sigs = set(reply_sigs(text))
     if not sigs:
         return []
     hits = []
     stamp = {'by': str(by or 'correction')[:40], 'note': str(note or '')[:160],
              'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+    w = window if isinstance(window, dict) else {}
+    ws, we = str(w.get('start') or '')[:10], str(w.get('end') or '')[:10]
 
     def _mut(doc):
         found = False
-        for sk, sub in (doc.get('subjects') or {}).items():
+        subjects = doc.get('subjects') or {}
+        if subject:
+            skey = _resolve_subject(doc, subject=subject)
+            buckets = [(skey, subjects.get(skey))] if skey and subjects.get(skey) else []
+        else:
+            buckets = list(subjects.items())
+        for sk, sub in buckets:
             for e in (sub.get('entries') or []):
                 if not isinstance(e, dict) or e.get('retired') or not e.get('reply'):
+                    continue
+                if ws and we and e.get('ws') and e.get('we') and (str(e.get('ws'))[:10], str(e.get('we'))[:10]) != (ws, we):
                     continue
                 if sigs & set(reply_sigs(e.get('reply'))):
                     e['retired'] = dict(stamp)
@@ -1513,7 +1568,7 @@ def retire_by_reply(text, by='correction', note=''):
         print(f"[insights-ledger] retire_by_reply failed: {e}")
     if hits:
         with _cache_lock:
-            _set_aside_cache.update(doc=None, ts=0.0, sigs=frozenset())
+            _set_aside_cache.update(doc=None, ts=0.0, sigs=frozenset(), scoped=())
     return hits
 
 
@@ -3439,7 +3494,7 @@ def _exact_if_fresh(e):
     if not e:
         return None
     try:
-        if e.get('reply') and reply_set_aside(e.get('reply')):
+        if e.get('reply') and reply_set_aside(e.get('reply'), subject=e.get('subject')):
             return None          # words a correction set aside never replay (2026-11-23)
     except Exception:
         pass
