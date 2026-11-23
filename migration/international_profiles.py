@@ -304,13 +304,16 @@ _DE_DEMO_SCHEMA = {
 # country-neutral. ETHNICITY reads by heritage region and INCOME in US
 # dollar equivalents (labelled US$ so it never reads as a US bracket).
 _GLOBAL_DEMO_SCHEMA = {
+    # Every US bucket fits inside a worldwide one (Jenna 2026-11-23): the
+    # US profile's 17 AND UNDER sits in Under 18, TRANS MALE in Trans Male,
+    # 65 OR OLDER in 65+ (migration/global_profiles.US_TO_WORLD).
     "AGE": {
-        "18-24": 15.5, "25-34": 25.5, "35-44": 21.5, "45-54": 16.5,
-        "55-64": 12.5, "65+": 8.5,
+        "Under 18": 1.0, "18-24": 14.5, "25-34": 25.5, "35-44": 21.5,
+        "45-54": 16.5, "55-64": 12.5, "65+": 8.5,
     },
     "GENDER": {
-        "Female": 49.0, "Male": 49.5, "Non-Binary": 0.8,
-        "Trans Female": 0.3, "Prefer Not to Say": 0.4,
+        "Female": 49.0, "Male": 49.3, "Non-Binary": 0.8,
+        "Trans Female": 0.3, "Trans Male": 0.2, "Prefer Not to Say": 0.4,
     },
     "ETHNICITY": {
         "Asian Heritage": 46.5, "European Heritage": 22.5,
