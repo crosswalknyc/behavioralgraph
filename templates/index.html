@@ -19535,6 +19535,8 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         #tab-location .location-grid { grid-template-columns: 1fr !important; }
     }
     </style>
+    <!-- Profile IQ worldwide layout (MARKET: GLOBAL profiles: summary, country switcher, cities by country; Jenna 2026-11-23) -->
+    <link rel="stylesheet" href="/static/global-profile/global-profile.css?v={{ (app_build_version or 'dev')|urlencode }}">
 </head>
 <body{% if username %} data-username="{{ username }}"{% endif %}>
 {% set cur = currency_symbol|default('$') %}
@@ -159525,9 +159527,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     for (const [gpKey, gpVal] of Object.entries(demographicsGenPop.relationship || {})) {
                         if (normalizeDemoForIndex(gpKey) === normKey) return gpVal;
                     }
-                    // Fallback to hardcoded baseline
-                    if (GENPOP_DEMOGRAPHICS?.RELATIONSHIP?.[k] != null) return GENPOP_DEMOGRAPHICS.RELATIONSHIP[k];
-                    for (const [gpKey, gpVal] of Object.entries(GENPOP_DEMOGRAPHICS?.RELATIONSHIP || {})) {
+                    // Fallback to hardcoded baseline. GENPOP_DEMOGRAPHICS is a const inside
+                    // parseAllData, undeclared here: reading it bare throws and stops
+                    // every chart after this one.
+                    const _gpDemo = (typeof GENPOP_DEMOGRAPHICS !== 'undefined') ? GENPOP_DEMOGRAPHICS : null;
+                    if (_gpDemo?.RELATIONSHIP?.[k] != null) return _gpDemo.RELATIONSHIP[k];
+                    for (const [gpKey, gpVal] of Object.entries(_gpDemo?.RELATIONSHIP || {})) {
                         if (normalizeDemoForIndex(gpKey) === normKey) return gpVal;
                     }
                     return 0;
@@ -199828,5 +199833,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         };
     })();
 </script>
+<!-- Profile IQ worldwide layout: loads after every function it wraps (parseAllData, renderLocationTable, the v4 profile hooks) and before the boot runs -->
+<script src="/static/global-profile/global-profile.js?v={{ (app_build_version or 'dev')|urlencode }}"></script>
 </body>
 </html>

@@ -259,6 +259,10 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "state of the stale-tab refresh (page version, live version, holds)"),
     ('then set a share if you want one',
      "Build a twin audience step: a share field beside every demographic pick"),
+    # A '<Subject> - Global' profile (MARKET: GLOBAL): the worldwide summary,
+    # the country switcher and the cities by country (Jenna 2026-11-23).
+    ('window.CWGlobal',
+     "Profile IQ worldwide layout for MARKET: GLOBAL profiles (static/global-profile/)"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives).
@@ -285,6 +289,14 @@ SPLIT_FILES: list[tuple[str, str, str, int]] = [
      "static/digital-twins/digital-twins.css", "style", 100_000),
     ("/static/digital-twins/digital-twins.js",
      "static/digital-twins/digital-twins.js", "script", 400_000),
+    # Profile IQ worldwide layout (Jenna 2026-11-23: a '<Subject> - Global'
+    # profile reads as a worldwide summary, then country by country in each
+    # country's own terms). New code, never inline: the stylesheet loads at
+    # the end of <head>, the script right before </body>.
+    ("/static/global-profile/global-profile.css",
+     "static/global-profile/global-profile.css", "style", 6_000),
+    ("/static/global-profile/global-profile.js",
+     "static/global-profile/global-profile.js", "script", 20_000),
 ]
 
 

@@ -1,0 +1,2115 @@
+{
+"note": "A worldwide profile ('Harbor Stout - Global', invented) written to the GLOBAL PROFILE CONTRACT (Jenna 2026-11-23): SAMPLE SIZE carries MARKET: GLOBAL; COUNTRY rows (United States, United Kingdom, Nigeria, Ireland, Canada under 3%, Rest of world) summing to 100; per-country blocks '<DEMO> | <Country>' in each country's own terms, each summing to 100 (Canada has an AGE block and is still never offered; Nigeria's AGE block is written in upper case); worldwide AGE / GENDER / ETHNICITY / INCOME; 'City, Country' LOCATION with US cities in both forms and Birmingham, UK; a few behavioral rows. Read by scripts/test_global_profile_view.py and scripts/smoke_global_profile_view.py.",
+"columns": [
+"Column",
+"Value",
+"Brand Penetration (Row)",
+"Category Share",
+"Original Raw Numbers",
+"US Gen Pop Projection",
+"Gen Pop Penetration",
+"Index vs Gen Pop"
+],
+"rows": [
+{
+"Column": "BRAND INPUT",
+"Value": "Harbor Stout",
+"Brand Penetration (Row)": "100.0",
+"Category Share": "100.0000",
+"Original Raw Numbers": "184267",
+"US Gen Pop Projection": "11063279",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "SAMPLE SIZE",
+"Value": "SAMPLE SIZE (2025-11-23 TO 2026-11-23) | BEHAVIOR STUDY (2025-11-23 TO 2026-11-23) | MARKET: GLOBAL",
+"Brand Penetration (Row)": "100.0",
+"Category Share": "100.0000",
+"Original Raw Numbers": "184267",
+"US Gen Pop Projection": "11063279",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "BRAND CATEGORY",
+"Value": "BEVERAGE",
+"Brand Penetration (Row)": "",
+"Category Share": "",
+"Original Raw Numbers": "",
+"US Gen Pop Projection": "",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "SUBJECT",
+"Value": "Harbor Stout",
+"Brand Penetration (Row)": "100.0000",
+"Category Share": "100.0",
+"Original Raw Numbers": "184267",
+"US Gen Pop Projection": "11063279",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "COUNTRY",
+"Value": "United States",
+"Brand Penetration (Row)": "31.4127",
+"Category Share": "31.4127",
+"Original Raw Numbers": "57883",
+"US Gen Pop Projection": "3475260",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "COUNTRY",
+"Value": "United Kingdom",
+"Brand Penetration (Row)": "21.0963",
+"Category Share": "21.0963",
+"Original Raw Numbers": "38874",
+"US Gen Pop Projection": "2333971",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "COUNTRY",
+"Value": "Nigeria",
+"Brand Penetration (Row)": "7.8541",
+"Category Share": "7.8541",
+"Original Raw Numbers": "14473",
+"US Gen Pop Projection": "868950",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "COUNTRY",
+"Value": "Ireland",
+"Brand Penetration (Row)": "4.2219",
+"Category Share": "4.2219",
+"Original Raw Numbers": "7780",
+"US Gen Pop Projection": "467106",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "COUNTRY",
+"Value": "Canada",
+"Brand Penetration (Row)": "2.7184",
+"Category Share": "2.7184",
+"Original Raw Numbers": "5009",
+"US Gen Pop Projection": "300737",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "COUNTRY",
+"Value": "Rest of world",
+"Brand Penetration (Row)": "32.6966",
+"Category Share": "32.6966",
+"Original Raw Numbers": "60249",
+"US Gen Pop Projection": "3617313",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United States",
+"Value": "18-24",
+"Brand Penetration (Row)": "9.8312",
+"Category Share": "9.8312",
+"Original Raw Numbers": "5691",
+"US Gen Pop Projection": "341684",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United States",
+"Value": "25-34",
+"Brand Penetration (Row)": "22.4177",
+"Category Share": "22.4177",
+"Original Raw Numbers": "12976",
+"US Gen Pop Projection": "779071",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United States",
+"Value": "35-44",
+"Brand Penetration (Row)": "21.0563",
+"Category Share": "21.0563",
+"Original Raw Numbers": "12188",
+"US Gen Pop Projection": "731760",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United States",
+"Value": "45-54",
+"Brand Penetration (Row)": "18.7741",
+"Category Share": "18.7741",
+"Original Raw Numbers": "10867",
+"US Gen Pop Projection": "652448",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United States",
+"Value": "55-64",
+"Brand Penetration (Row)": "15.2219",
+"Category Share": "15.2219",
+"Original Raw Numbers": "8811",
+"US Gen Pop Projection": "529007",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United States",
+"Value": "65 or Older",
+"Brand Penetration (Row)": "12.6988",
+"Category Share": "12.6988",
+"Original Raw Numbers": "7350",
+"US Gen Pop Projection": "441290",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United States",
+"Value": "Male",
+"Brand Penetration (Row)": "61.3381",
+"Category Share": "61.3381",
+"Original Raw Numbers": "35504",
+"US Gen Pop Projection": "2131639",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United States",
+"Value": "Female",
+"Brand Penetration (Row)": "37.0913",
+"Category Share": "37.0913",
+"Original Raw Numbers": "21470",
+"US Gen Pop Projection": "1289046",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United States",
+"Value": "Non-Binary",
+"Brand Penetration (Row)": "1.0417",
+"Category Share": "1.0417",
+"Original Raw Numbers": "603",
+"US Gen Pop Projection": "36204",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United States",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "0.5289",
+"Category Share": "0.5289",
+"Original Raw Numbers": "306",
+"US Gen Pop Projection": "18372",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United States",
+"Value": "White",
+"Brand Penetration (Row)": "63.1127",
+"Category Share": "63.1127",
+"Original Raw Numbers": "36532",
+"US Gen Pop Projection": "2193359",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United States",
+"Value": "Hispanic or Latino",
+"Brand Penetration (Row)": "14.8213",
+"Category Share": "14.8213",
+"Original Raw Numbers": "8579",
+"US Gen Pop Projection": "515078",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United States",
+"Value": "Black or African American",
+"Brand Penetration (Row)": "11.9341",
+"Category Share": "11.9341",
+"Original Raw Numbers": "6908",
+"US Gen Pop Projection": "414752",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United States",
+"Value": "Asian",
+"Brand Penetration (Row)": "6.0119",
+"Category Share": "6.0119",
+"Original Raw Numbers": "3480",
+"US Gen Pop Projection": "208937",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United States",
+"Value": "Another Race/Ethnicity",
+"Brand Penetration (Row)": "4.1200",
+"Category Share": "4.1200",
+"Original Raw Numbers": "2385",
+"US Gen Pop Projection": "143194",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United States",
+"Value": "Less than $25,000",
+"Brand Penetration (Row)": "9.4417",
+"Category Share": "9.4417",
+"Original Raw Numbers": "5465",
+"US Gen Pop Projection": "328115",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United States",
+"Value": "$25,000 - $49,999",
+"Brand Penetration (Row)": "15.2283",
+"Category Share": "15.2283",
+"Original Raw Numbers": "8815",
+"US Gen Pop Projection": "529247",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United States",
+"Value": "$50,000 - $74,999",
+"Brand Penetration (Row)": "17.6611",
+"Category Share": "17.6611",
+"Original Raw Numbers": "10223",
+"US Gen Pop Projection": "613783",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United States",
+"Value": "$75,000 - $99,999",
+"Brand Penetration (Row)": "15.0937",
+"Category Share": "15.0937",
+"Original Raw Numbers": "8737",
+"US Gen Pop Projection": "524564",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United States",
+"Value": "$100,000 - $149,999",
+"Brand Penetration (Row)": "19.8823",
+"Category Share": "19.8823",
+"Original Raw Numbers": "11508",
+"US Gen Pop Projection": "690933",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United States",
+"Value": "$150,000 - $249,999",
+"Brand Penetration (Row)": "14.7419",
+"Category Share": "14.7419",
+"Original Raw Numbers": "8533",
+"US Gen Pop Projection": "512316",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United States",
+"Value": "$250,000 or More",
+"Brand Penetration (Row)": "7.9510",
+"Category Share": "7.9510",
+"Original Raw Numbers": "4602",
+"US Gen Pop Projection": "276301",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United States",
+"Value": "High School or Equivalent",
+"Brand Penetration (Row)": "24.3316",
+"Category Share": "24.3316",
+"Original Raw Numbers": "14084",
+"US Gen Pop Projection": "845595",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United States",
+"Value": "Some College",
+"Brand Penetration (Row)": "21.0071",
+"Category Share": "21.0071",
+"Original Raw Numbers": "12160",
+"US Gen Pop Projection": "730079",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United States",
+"Value": "Associates Degree",
+"Brand Penetration (Row)": "9.6113",
+"Category Share": "9.6113",
+"Original Raw Numbers": "5563",
+"US Gen Pop Projection": "333999",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United States",
+"Value": "Bachelors Degree",
+"Brand Penetration (Row)": "27.4419",
+"Category Share": "27.4419",
+"Original Raw Numbers": "15884",
+"US Gen Pop Projection": "953666",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United States",
+"Value": "Graduate or Professional Degree",
+"Brand Penetration (Row)": "15.1173",
+"Category Share": "15.1173",
+"Original Raw Numbers": "8750",
+"US Gen Pop Projection": "525345",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United States",
+"Value": "Less Than High School",
+"Brand Penetration (Row)": "2.4908",
+"Category Share": "2.4908",
+"Original Raw Numbers": "1442",
+"US Gen Pop Projection": "86577",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United Kingdom",
+"Value": "18-24",
+"Brand Penetration (Row)": "11.2287",
+"Category Share": "11.2287",
+"Original Raw Numbers": "4365",
+"US Gen Pop Projection": "262072",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United Kingdom",
+"Value": "25-34",
+"Brand Penetration (Row)": "24.0811",
+"Category Share": "24.0811",
+"Original Raw Numbers": "9361",
+"US Gen Pop Projection": "562029",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United Kingdom",
+"Value": "35-44",
+"Brand Penetration (Row)": "23.4417",
+"Category Share": "23.4417",
+"Original Raw Numbers": "9113",
+"US Gen Pop Projection": "547139",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United Kingdom",
+"Value": "45-54",
+"Brand Penetration (Row)": "19.6613",
+"Category Share": "19.6613",
+"Original Raw Numbers": "7643",
+"US Gen Pop Projection": "458881",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United Kingdom",
+"Value": "55-64",
+"Brand Penetration (Row)": "13.0441",
+"Category Share": "13.0441",
+"Original Raw Numbers": "5071",
+"US Gen Pop Projection": "304460",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | United Kingdom",
+"Value": "65+",
+"Brand Penetration (Row)": "8.5431",
+"Category Share": "8.5431",
+"Original Raw Numbers": "3321",
+"US Gen Pop Projection": "199391",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United Kingdom",
+"Value": "Male",
+"Brand Penetration (Row)": "68.1129",
+"Category Share": "68.1129",
+"Original Raw Numbers": "26478",
+"US Gen Pop Projection": "1589723",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United Kingdom",
+"Value": "Female",
+"Brand Penetration (Row)": "30.4417",
+"Category Share": "30.4417",
+"Original Raw Numbers": "11834",
+"US Gen Pop Projection": "710506",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United Kingdom",
+"Value": "Non-Binary",
+"Brand Penetration (Row)": "0.9921",
+"Category Share": "0.9921",
+"Original Raw Numbers": "386",
+"US Gen Pop Projection": "23175",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | United Kingdom",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "0.4533",
+"Category Share": "0.4533",
+"Original Raw Numbers": "176",
+"US Gen Pop Projection": "10567",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United Kingdom",
+"Value": "White British",
+"Brand Penetration (Row)": "71.4413",
+"Category Share": "71.4413",
+"Original Raw Numbers": "27772",
+"US Gen Pop Projection": "1667414",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United Kingdom",
+"Value": "White Other",
+"Brand Penetration (Row)": "9.8112",
+"Category Share": "9.8112",
+"Original Raw Numbers": "3814",
+"US Gen Pop Projection": "228990",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United Kingdom",
+"Value": "Asian British",
+"Brand Penetration (Row)": "8.2219",
+"Category Share": "8.2219",
+"Original Raw Numbers": "3196",
+"US Gen Pop Projection": "191886",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United Kingdom",
+"Value": "Black British",
+"Brand Penetration (Row)": "6.0914",
+"Category Share": "6.0914",
+"Original Raw Numbers": "2368",
+"US Gen Pop Projection": "142173",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United Kingdom",
+"Value": "Mixed / Multiple Ethnic Groups",
+"Brand Penetration (Row)": "3.2213",
+"Category Share": "3.2213",
+"Original Raw Numbers": "1252",
+"US Gen Pop Projection": "75169",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | United Kingdom",
+"Value": "Other Ethnic Group",
+"Brand Penetration (Row)": "1.2129",
+"Category Share": "1.2129",
+"Original Raw Numbers": "472",
+"US Gen Pop Projection": "28339",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United Kingdom",
+"Value": "£15,000 - £24,999",
+"Brand Penetration (Row)": "9.3117",
+"Category Share": "9.3117",
+"Original Raw Numbers": "3620",
+"US Gen Pop Projection": "217343",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United Kingdom",
+"Value": "£25,000 - £34,999",
+"Brand Penetration (Row)": "17.4411",
+"Category Share": "17.4411",
+"Original Raw Numbers": "6780",
+"US Gen Pop Projection": "407067",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United Kingdom",
+"Value": "£35,000 - £49,999",
+"Brand Penetration (Row)": "24.1203",
+"Category Share": "24.1203",
+"Original Raw Numbers": "9377",
+"US Gen Pop Projection": "562989",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United Kingdom",
+"Value": "£50,000 - £74,999",
+"Brand Penetration (Row)": "22.8811",
+"Category Share": "22.8811",
+"Original Raw Numbers": "8895",
+"US Gen Pop Projection": "534050",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United Kingdom",
+"Value": "£75,000 - £99,999",
+"Brand Penetration (Row)": "13.6219",
+"Category Share": "13.6219",
+"Original Raw Numbers": "5295",
+"US Gen Pop Projection": "317909",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United Kingdom",
+"Value": "£100,000+",
+"Brand Penetration (Row)": "8.4117",
+"Category Share": "8.4117",
+"Original Raw Numbers": "3270",
+"US Gen Pop Projection": "196329",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | United Kingdom",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "4.2122",
+"Category Share": "4.2122",
+"Original Raw Numbers": "1637",
+"US Gen Pop Projection": "98284",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United Kingdom",
+"Value": "GCSE / O-Level",
+"Brand Penetration (Row)": "19.4417",
+"Category Share": "19.4417",
+"Original Raw Numbers": "7558",
+"US Gen Pop Projection": "453778",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United Kingdom",
+"Value": "A-Level / BTEC",
+"Brand Penetration (Row)": "28.9113",
+"Category Share": "28.9113",
+"Original Raw Numbers": "11239",
+"US Gen Pop Projection": "674783",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United Kingdom",
+"Value": "Bachelors Degree",
+"Brand Penetration (Row)": "29.6611",
+"Category Share": "29.6611",
+"Original Raw Numbers": "11530",
+"US Gen Pop Projection": "692254",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United Kingdom",
+"Value": "Masters Degree",
+"Brand Penetration (Row)": "12.8819",
+"Category Share": "12.8819",
+"Original Raw Numbers": "5008",
+"US Gen Pop Projection": "300677",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United Kingdom",
+"Value": "Doctorate / PhD",
+"Brand Penetration (Row)": "2.6113",
+"Category Share": "2.6113",
+"Original Raw Numbers": "1015",
+"US Gen Pop Projection": "60940",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | United Kingdom",
+"Value": "No Formal Qualification",
+"Brand Penetration (Row)": "6.4927",
+"Category Share": "6.4927",
+"Original Raw Numbers": "2524",
+"US Gen Pop Projection": "151539",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | NIGERIA",
+"Value": "18-24",
+"Brand Penetration (Row)": "21.4419",
+"Category Share": "21.4419",
+"Original Raw Numbers": "3103",
+"US Gen Pop Projection": "186302",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | NIGERIA",
+"Value": "25-34",
+"Brand Penetration (Row)": "33.2117",
+"Category Share": "33.2117",
+"Original Raw Numbers": "4807",
+"US Gen Pop Projection": "288609",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | NIGERIA",
+"Value": "35-44",
+"Brand Penetration (Row)": "23.8811",
+"Category Share": "23.8811",
+"Original Raw Numbers": "3456",
+"US Gen Pop Projection": "207496",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | NIGERIA",
+"Value": "45-54",
+"Brand Penetration (Row)": "12.6613",
+"Category Share": "12.6613",
+"Original Raw Numbers": "1832",
+"US Gen Pop Projection": "109992",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | NIGERIA",
+"Value": "55-64",
+"Brand Penetration (Row)": "6.1419",
+"Category Share": "6.1419",
+"Original Raw Numbers": "889",
+"US Gen Pop Projection": "53375",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | NIGERIA",
+"Value": "65+",
+"Brand Penetration (Row)": "2.6621",
+"Category Share": "2.6621",
+"Original Raw Numbers": "385",
+"US Gen Pop Projection": "23115",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Nigeria",
+"Value": "Male",
+"Brand Penetration (Row)": "63.7719",
+"Category Share": "63.7719",
+"Original Raw Numbers": "9230",
+"US Gen Pop Projection": "554164",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Nigeria",
+"Value": "Female",
+"Brand Penetration (Row)": "35.6613",
+"Category Share": "35.6613",
+"Original Raw Numbers": "5161",
+"US Gen Pop Projection": "309863",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Nigeria",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "0.5668",
+"Category Share": "0.5668",
+"Original Raw Numbers": "82",
+"US Gen Pop Projection": "4923",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Nigeria",
+"Value": "Yoruba",
+"Brand Penetration (Row)": "31.8114",
+"Category Share": "31.8114",
+"Original Raw Numbers": "4604",
+"US Gen Pop Projection": "276421",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Nigeria",
+"Value": "Igbo",
+"Brand Penetration (Row)": "24.4419",
+"Category Share": "24.4419",
+"Original Raw Numbers": "3537",
+"US Gen Pop Projection": "212359",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Nigeria",
+"Value": "Hausa-Fulani",
+"Brand Penetration (Row)": "21.6613",
+"Category Share": "21.6613",
+"Original Raw Numbers": "3135",
+"US Gen Pop Projection": "188223",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Nigeria",
+"Value": "Ijaw",
+"Brand Penetration (Row)": "6.1117",
+"Category Share": "6.1117",
+"Original Raw Numbers": "885",
+"US Gen Pop Projection": "53135",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Nigeria",
+"Value": "Kanuri",
+"Brand Penetration (Row)": "3.4413",
+"Category Share": "3.4413",
+"Original Raw Numbers": "498",
+"US Gen Pop Projection": "29900",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Nigeria",
+"Value": "Ibibio",
+"Brand Penetration (Row)": "3.2219",
+"Category Share": "3.2219",
+"Original Raw Numbers": "466",
+"US Gen Pop Projection": "27978",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Nigeria",
+"Value": "Other Ethnic Groups",
+"Brand Penetration (Row)": "9.3105",
+"Category Share": "9.3105",
+"Original Raw Numbers": "1348",
+"US Gen Pop Projection": "80933",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Nigeria",
+"Value": "Under ₦1,000,000",
+"Brand Penetration (Row)": "18.4413",
+"Category Share": "18.4413",
+"Original Raw Numbers": "2669",
+"US Gen Pop Projection": "160245",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Nigeria",
+"Value": "₦1,000,000 - ₦2,999,999",
+"Brand Penetration (Row)": "29.7719",
+"Category Share": "29.7719",
+"Original Raw Numbers": "4309",
+"US Gen Pop Projection": "258710",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Nigeria",
+"Value": "₦3,000,000 - ₦5,999,999",
+"Brand Penetration (Row)": "24.6611",
+"Category Share": "24.6611",
+"Original Raw Numbers": "3569",
+"US Gen Pop Projection": "214281",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Nigeria",
+"Value": "₦6,000,000 - ₦11,999,999",
+"Brand Penetration (Row)": "15.3317",
+"Category Share": "15.3317",
+"Original Raw Numbers": "2219",
+"US Gen Pop Projection": "133227",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Nigeria",
+"Value": "₦12,000,000+",
+"Brand Penetration (Row)": "8.6611",
+"Category Share": "8.6611",
+"Original Raw Numbers": "1254",
+"US Gen Pop Projection": "75289",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Nigeria",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "3.1329",
+"Category Share": "3.1329",
+"Original Raw Numbers": "453",
+"US Gen Pop Projection": "27198",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Nigeria",
+"Value": "Primary School or Less",
+"Brand Penetration (Row)": "4.4417",
+"Category Share": "4.4417",
+"Original Raw Numbers": "643",
+"US Gen Pop Projection": "38605",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Nigeria",
+"Value": "Secondary School (WAEC / SSCE)",
+"Brand Penetration (Row)": "27.3319",
+"Category Share": "27.3319",
+"Original Raw Numbers": "3956",
+"US Gen Pop Projection": "237516",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Nigeria",
+"Value": "OND / NCE",
+"Brand Penetration (Row)": "17.6613",
+"Category Share": "17.6613",
+"Original Raw Numbers": "2556",
+"US Gen Pop Projection": "153461",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Nigeria",
+"Value": "HND / Bachelors Degree",
+"Brand Penetration (Row)": "37.4417",
+"Category Share": "37.4417",
+"Original Raw Numbers": "5419",
+"US Gen Pop Projection": "325353",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Nigeria",
+"Value": "Masters Degree",
+"Brand Penetration (Row)": "11.1119",
+"Category Share": "11.1119",
+"Original Raw Numbers": "1608",
+"US Gen Pop Projection": "96543",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Nigeria",
+"Value": "Doctorate / PhD",
+"Brand Penetration (Row)": "2.0115",
+"Category Share": "2.0115",
+"Original Raw Numbers": "291",
+"US Gen Pop Projection": "17471",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Ireland",
+"Value": "18-24",
+"Brand Penetration (Row)": "12.1119",
+"Category Share": "12.1119",
+"Original Raw Numbers": "942",
+"US Gen Pop Projection": "56557",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Ireland",
+"Value": "25-34",
+"Brand Penetration (Row)": "22.6611",
+"Category Share": "22.6611",
+"Original Raw Numbers": "1763",
+"US Gen Pop Projection": "105849",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Ireland",
+"Value": "35-44",
+"Brand Penetration (Row)": "24.4417",
+"Category Share": "24.4417",
+"Original Raw Numbers": "1902",
+"US Gen Pop Projection": "114195",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Ireland",
+"Value": "45-54",
+"Brand Penetration (Row)": "19.3313",
+"Category Share": "19.3313",
+"Original Raw Numbers": "1504",
+"US Gen Pop Projection": "90299",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Ireland",
+"Value": "55-64",
+"Brand Penetration (Row)": "13.1119",
+"Category Share": "13.1119",
+"Original Raw Numbers": "1020",
+"US Gen Pop Projection": "61240",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Ireland",
+"Value": "65+",
+"Brand Penetration (Row)": "8.3421",
+"Category Share": "8.3421",
+"Original Raw Numbers": "649",
+"US Gen Pop Projection": "38966",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Ireland",
+"Value": "Male",
+"Brand Penetration (Row)": "66.4419",
+"Category Share": "66.4419",
+"Original Raw Numbers": "5169",
+"US Gen Pop Projection": "310344",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Ireland",
+"Value": "Female",
+"Brand Penetration (Row)": "32.1117",
+"Category Share": "32.1117",
+"Original Raw Numbers": "2498",
+"US Gen Pop Projection": "149978",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Ireland",
+"Value": "Non-Binary",
+"Brand Penetration (Row)": "0.9913",
+"Category Share": "0.9913",
+"Original Raw Numbers": "77",
+"US Gen Pop Projection": "4623",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Ireland",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "0.4551",
+"Category Share": "0.4551",
+"Original Raw Numbers": "35",
+"US Gen Pop Projection": "2101",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Ireland",
+"Value": "White Irish",
+"Brand Penetration (Row)": "77.6613",
+"Category Share": "77.6613",
+"Original Raw Numbers": "6042",
+"US Gen Pop Projection": "362758",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Ireland",
+"Value": "Any Other White Background",
+"Brand Penetration (Row)": "10.4417",
+"Category Share": "10.4417",
+"Original Raw Numbers": "812",
+"US Gen Pop Projection": "48752",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Ireland",
+"Value": "Asian or Asian Irish",
+"Brand Penetration (Row)": "4.6611",
+"Category Share": "4.6611",
+"Original Raw Numbers": "363",
+"US Gen Pop Projection": "21794",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Ireland",
+"Value": "Black or Black Irish",
+"Brand Penetration (Row)": "2.3319",
+"Category Share": "2.3319",
+"Original Raw Numbers": "181",
+"US Gen Pop Projection": "10867",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Ireland",
+"Value": "Irish Traveller",
+"Brand Penetration (Row)": "0.6613",
+"Category Share": "0.6613",
+"Original Raw Numbers": "51",
+"US Gen Pop Projection": "3062",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Ireland",
+"Value": "Other, Including Mixed",
+"Brand Penetration (Row)": "4.2427",
+"Category Share": "4.2427",
+"Original Raw Numbers": "330",
+"US Gen Pop Projection": "19813",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Ireland",
+"Value": "Under €20,000",
+"Brand Penetration (Row)": "8.1117",
+"Category Share": "8.1117",
+"Original Raw Numbers": "631",
+"US Gen Pop Projection": "37885",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Ireland",
+"Value": "€20,000 - €34,999",
+"Brand Penetration (Row)": "17.6613",
+"Category Share": "17.6613",
+"Original Raw Numbers": "1374",
+"US Gen Pop Projection": "82494",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Ireland",
+"Value": "€35,000 - €49,999",
+"Brand Penetration (Row)": "23.4419",
+"Category Share": "23.4419",
+"Original Raw Numbers": "1824",
+"US Gen Pop Projection": "109512",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Ireland",
+"Value": "€50,000 - €74,999",
+"Brand Penetration (Row)": "25.1117",
+"Category Share": "25.1117",
+"Original Raw Numbers": "1954",
+"US Gen Pop Projection": "117317",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Ireland",
+"Value": "€75,000 - €99,999",
+"Brand Penetration (Row)": "14.3313",
+"Category Share": "14.3313",
+"Original Raw Numbers": "1115",
+"US Gen Pop Projection": "66944",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Ireland",
+"Value": "€100,000+",
+"Brand Penetration (Row)": "7.6619",
+"Category Share": "7.6619",
+"Original Raw Numbers": "596",
+"US Gen Pop Projection": "35783",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME | Ireland",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "3.6802",
+"Category Share": "3.6802",
+"Original Raw Numbers": "286",
+"US Gen Pop Projection": "17171",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Ireland",
+"Value": "Lower Secondary or Less",
+"Brand Penetration (Row)": "7.4413",
+"Category Share": "7.4413",
+"Original Raw Numbers": "579",
+"US Gen Pop Projection": "34763",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Ireland",
+"Value": "Leaving Certificate",
+"Brand Penetration (Row)": "26.6619",
+"Category Share": "26.6619",
+"Original Raw Numbers": "2074",
+"US Gen Pop Projection": "124522",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Ireland",
+"Value": "Post Leaving Certificate (PLC)",
+"Brand Penetration (Row)": "13.4417",
+"Category Share": "13.4417",
+"Original Raw Numbers": "1046",
+"US Gen Pop Projection": "62801",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Ireland",
+"Value": "Bachelors Degree",
+"Brand Penetration (Row)": "31.1113",
+"Category Share": "31.1113",
+"Original Raw Numbers": "2420",
+"US Gen Pop Projection": "145295",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Ireland",
+"Value": "Postgraduate Degree",
+"Brand Penetration (Row)": "19.2219",
+"Category Share": "19.2219",
+"Original Raw Numbers": "1495",
+"US Gen Pop Projection": "89759",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "EDUCATION | Ireland",
+"Value": "Doctorate / PhD",
+"Brand Penetration (Row)": "2.1219",
+"Category Share": "2.1219",
+"Original Raw Numbers": "165",
+"US Gen Pop Projection": "9906",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Canada",
+"Value": "18-24",
+"Brand Penetration (Row)": "13.1000",
+"Category Share": "13.1000",
+"Original Raw Numbers": "656",
+"US Gen Pop Projection": "39386",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Canada",
+"Value": "25-34",
+"Brand Penetration (Row)": "25.2000",
+"Category Share": "25.2000",
+"Original Raw Numbers": "1262",
+"US Gen Pop Projection": "75770",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Canada",
+"Value": "35-44",
+"Brand Penetration (Row)": "22.1000",
+"Category Share": "22.1000",
+"Original Raw Numbers": "1107",
+"US Gen Pop Projection": "66464",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Canada",
+"Value": "45-54",
+"Brand Penetration (Row)": "18.3000",
+"Category Share": "18.3000",
+"Original Raw Numbers": "917",
+"US Gen Pop Projection": "55056",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Canada",
+"Value": "55-64",
+"Brand Penetration (Row)": "12.4000",
+"Category Share": "12.4000",
+"Original Raw Numbers": "621",
+"US Gen Pop Projection": "37284",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Canada",
+"Value": "65+",
+"Brand Penetration (Row)": "8.9000",
+"Category Share": "8.9000",
+"Original Raw Numbers": "446",
+"US Gen Pop Projection": "26778",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Rest of world",
+"Value": "18-24",
+"Brand Penetration (Row)": "18.1119",
+"Category Share": "18.1119",
+"Original Raw Numbers": "10912",
+"US Gen Pop Projection": "655150",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Rest of world",
+"Value": "25-34",
+"Brand Penetration (Row)": "28.6613",
+"Category Share": "28.6613",
+"Original Raw Numbers": "17268",
+"US Gen Pop Projection": "1036760",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Rest of world",
+"Value": "35-44",
+"Brand Penetration (Row)": "22.3317",
+"Category Share": "22.3317",
+"Original Raw Numbers": "13455",
+"US Gen Pop Projection": "807830",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Rest of world",
+"Value": "45-54",
+"Brand Penetration (Row)": "15.4413",
+"Category Share": "15.4413",
+"Original Raw Numbers": "9303",
+"US Gen Pop Projection": "558546",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Rest of world",
+"Value": "55-64",
+"Brand Penetration (Row)": "9.6611",
+"Category Share": "9.6611",
+"Original Raw Numbers": "5821",
+"US Gen Pop Projection": "349489",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE | Rest of world",
+"Value": "65+",
+"Brand Penetration (Row)": "5.7927",
+"Category Share": "5.7927",
+"Original Raw Numbers": "3490",
+"US Gen Pop Projection": "209537",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Rest of world",
+"Value": "Male",
+"Brand Penetration (Row)": "64.2213",
+"Category Share": "64.2213",
+"Original Raw Numbers": "38693",
+"US Gen Pop Projection": "2323104",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Rest of world",
+"Value": "Female",
+"Brand Penetration (Row)": "34.6619",
+"Category Share": "34.6619",
+"Original Raw Numbers": "20883",
+"US Gen Pop Projection": "1253803",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Rest of world",
+"Value": "Non-Binary",
+"Brand Penetration (Row)": "0.7713",
+"Category Share": "0.7713",
+"Original Raw Numbers": "465",
+"US Gen Pop Projection": "27918",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER | Rest of world",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "0.3455",
+"Category Share": "0.3455",
+"Original Raw Numbers": "208",
+"US Gen Pop Projection": "12488",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Rest of world",
+"Value": "African Heritage",
+"Brand Penetration (Row)": "34.1117",
+"Category Share": "34.1117",
+"Original Raw Numbers": "20552",
+"US Gen Pop Projection": "1233930",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Rest of world",
+"Value": "Asian Heritage",
+"Brand Penetration (Row)": "24.6613",
+"Category Share": "24.6613",
+"Original Raw Numbers": "14858",
+"US Gen Pop Projection": "892065",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Rest of world",
+"Value": "European Heritage",
+"Brand Penetration (Row)": "26.3311",
+"Category Share": "26.3311",
+"Original Raw Numbers": "15864",
+"US Gen Pop Projection": "952465",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Rest of world",
+"Value": "Latin American Heritage",
+"Brand Penetration (Row)": "9.1119",
+"Category Share": "9.1119",
+"Original Raw Numbers": "5490",
+"US Gen Pop Projection": "329616",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Rest of world",
+"Value": "Middle Eastern / North African Heritage",
+"Brand Penetration (Row)": "3.6613",
+"Category Share": "3.6613",
+"Original Raw Numbers": "2206",
+"US Gen Pop Projection": "132447",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY | Rest of world",
+"Value": "Mixed / Other",
+"Brand Penetration (Row)": "2.1227",
+"Category Share": "2.1227",
+"Original Raw Numbers": "1279",
+"US Gen Pop Projection": "76790",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE",
+"Value": "18-24",
+"Brand Penetration (Row)": "14.3319",
+"Category Share": "14.3319",
+"Original Raw Numbers": "26409",
+"US Gen Pop Projection": "1585580",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE",
+"Value": "25-34",
+"Brand Penetration (Row)": "26.1117",
+"Category Share": "26.1117",
+"Original Raw Numbers": "48115",
+"US Gen Pop Projection": "2888795",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE",
+"Value": "35-44",
+"Brand Penetration (Row)": "22.2213",
+"Category Share": "22.2213",
+"Original Raw Numbers": "40947",
+"US Gen Pop Projection": "2458433",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE",
+"Value": "45-54",
+"Brand Penetration (Row)": "17.1119",
+"Category Share": "17.1119",
+"Original Raw Numbers": "31532",
+"US Gen Pop Projection": "1893162",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE",
+"Value": "55-64",
+"Brand Penetration (Row)": "11.8813",
+"Category Share": "11.8813",
+"Original Raw Numbers": "21893",
+"US Gen Pop Projection": "1314442",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "AGE",
+"Value": "65+",
+"Brand Penetration (Row)": "8.3419",
+"Category Share": "8.3419",
+"Original Raw Numbers": "15371",
+"US Gen Pop Projection": "922866",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER",
+"Value": "Male",
+"Brand Penetration (Row)": "64.5513",
+"Category Share": "64.5513",
+"Original Raw Numbers": "118947",
+"US Gen Pop Projection": "7141506",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER",
+"Value": "Female",
+"Brand Penetration (Row)": "34.1119",
+"Category Share": "34.1119",
+"Original Raw Numbers": "62857",
+"US Gen Pop Projection": "3773896",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER",
+"Value": "Non-Binary",
+"Brand Penetration (Row)": "0.8911",
+"Category Share": "0.8911",
+"Original Raw Numbers": "1642",
+"US Gen Pop Projection": "98585",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "GENDER",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "0.4457",
+"Category Share": "0.4457",
+"Original Raw Numbers": "821",
+"US Gen Pop Projection": "49292",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY",
+"Value": "European Heritage",
+"Brand Penetration (Row)": "52.4413",
+"Category Share": "52.4413",
+"Original Raw Numbers": "96632",
+"US Gen Pop Projection": "5801727",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY",
+"Value": "African Heritage",
+"Brand Penetration (Row)": "24.1117",
+"Category Share": "24.1117",
+"Original Raw Numbers": "44430",
+"US Gen Pop Projection": "2667550",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY",
+"Value": "Asian Heritage",
+"Brand Penetration (Row)": "12.3313",
+"Category Share": "12.3313",
+"Original Raw Numbers": "22723",
+"US Gen Pop Projection": "1364275",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY",
+"Value": "Latin American Heritage",
+"Brand Penetration (Row)": "6.6611",
+"Category Share": "6.6611",
+"Original Raw Numbers": "12274",
+"US Gen Pop Projection": "736924",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY",
+"Value": "Mixed / Other",
+"Brand Penetration (Row)": "3.2213",
+"Category Share": "3.2213",
+"Original Raw Numbers": "5936",
+"US Gen Pop Projection": "356394",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "ETHNICITY",
+"Value": "Middle Eastern / North African Heritage",
+"Brand Penetration (Row)": "1.2333",
+"Category Share": "1.2333",
+"Original Raw Numbers": "2273",
+"US Gen Pop Projection": "136470",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "Under US$10,000",
+"Brand Penetration (Row)": "12.1119",
+"Category Share": "12.1119",
+"Original Raw Numbers": "22318",
+"US Gen Pop Projection": "1339959",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "US$10,000 - US$24,999",
+"Brand Penetration (Row)": "13.4417",
+"Category Share": "13.4417",
+"Original Raw Numbers": "24769",
+"US Gen Pop Projection": "1487116",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "US$25,000 - US$49,999",
+"Brand Penetration (Row)": "19.6613",
+"Category Share": "19.6613",
+"Original Raw Numbers": "36229",
+"US Gen Pop Projection": "2175167",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "US$50,000 - US$74,999",
+"Brand Penetration (Row)": "17.2219",
+"Category Share": "17.2219",
+"Original Raw Numbers": "31734",
+"US Gen Pop Projection": "1905290",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "US$75,000 - US$99,999",
+"Brand Penetration (Row)": "13.1117",
+"Category Share": "13.1117",
+"Original Raw Numbers": "24161",
+"US Gen Pop Projection": "1450612",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "US$100,000 - US$149,999",
+"Brand Penetration (Row)": "12.4413",
+"Category Share": "12.4413",
+"Original Raw Numbers": "22925",
+"US Gen Pop Projection": "1376403",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "US$150,000+",
+"Brand Penetration (Row)": "8.6611",
+"Category Share": "8.6611",
+"Original Raw Numbers": "15960",
+"US Gen Pop Projection": "958229",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "INCOME",
+"Value": "Prefer Not to Say",
+"Brand Penetration (Row)": "3.3491",
+"Category Share": "3.3491",
+"Original Raw Numbers": "6171",
+"US Gen Pop Projection": "370503",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "London, UK",
+"Brand Penetration (Row)": "6.1137",
+"Category Share": "6.1137",
+"Original Raw Numbers": "11266",
+"US Gen Pop Projection": "676404",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "New York, USA",
+"Brand Penetration (Row)": "4.0219",
+"Category Share": "4.0219",
+"Original Raw Numbers": "7411",
+"US Gen Pop Projection": "444952",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Lagos, Nigeria",
+"Brand Penetration (Row)": "3.1127",
+"Category Share": "3.1127",
+"Original Raw Numbers": "5736",
+"US Gen Pop Projection": "344386",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Dublin, Ireland",
+"Brand Penetration (Row)": "2.4413",
+"Category Share": "2.4413",
+"Original Raw Numbers": "4499",
+"US Gen Pop Projection": "270117",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Chicago IL",
+"Brand Penetration (Row)": "2.0119",
+"Category Share": "2.0119",
+"Original Raw Numbers": "3707",
+"US Gen Pop Projection": "222566",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Los Angeles, USA",
+"Brand Penetration (Row)": "1.8817",
+"Category Share": "1.8817",
+"Original Raw Numbers": "3467",
+"US Gen Pop Projection": "208157",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Manchester, UK",
+"Brand Penetration (Row)": "1.4413",
+"Category Share": "1.4413",
+"Original Raw Numbers": "2656",
+"US Gen Pop Projection": "159465",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Birmingham, UK",
+"Brand Penetration (Row)": "1.0119",
+"Category Share": "1.0119",
+"Original Raw Numbers": "1865",
+"US Gen Pop Projection": "111973",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Abuja, Nigeria",
+"Brand Penetration (Row)": "1.3317",
+"Category Share": "1.3317",
+"Original Raw Numbers": "2454",
+"US Gen Pop Projection": "147337",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Boston, USA",
+"Brand Penetration (Row)": "1.5521",
+"Category Share": "1.5521",
+"Original Raw Numbers": "2860",
+"US Gen Pop Projection": "171713",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Toronto, Canada",
+"Brand Penetration (Row)": "1.2213",
+"Category Share": "1.2213",
+"Original Raw Numbers": "2250",
+"US Gen Pop Projection": "135089",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Sydney, Australia",
+"Brand Penetration (Row)": "0.9917",
+"Category Share": "0.9917",
+"Original Raw Numbers": "1827",
+"US Gen Pop Projection": "109692",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Glasgow, UK",
+"Brand Penetration (Row)": "0.9119",
+"Category Share": "0.9119",
+"Original Raw Numbers": "1680",
+"US Gen Pop Projection": "100866",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Cork, Ireland",
+"Brand Penetration (Row)": "0.6611",
+"Category Share": "0.6611",
+"Original Raw Numbers": "1218",
+"US Gen Pop Projection": "73128",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Philadelphia, USA",
+"Brand Penetration (Row)": "1.3217",
+"Category Share": "1.3217",
+"Original Raw Numbers": "2435",
+"US Gen Pop Projection": "146196",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Nairobi, Kenya",
+"Brand Penetration (Row)": "1.7713",
+"Category Share": "1.7713",
+"Original Raw Numbers": "3264",
+"US Gen Pop Projection": "195969",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Accra, Ghana",
+"Brand Penetration (Row)": "1.1417",
+"Category Share": "1.1417",
+"Original Raw Numbers": "2104",
+"US Gen Pop Projection": "126323",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Paris, France",
+"Brand Penetration (Row)": "0.8811",
+"Category Share": "0.8811",
+"Original Raw Numbers": "1624",
+"US Gen Pop Projection": "97504",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Kingston, Jamaica",
+"Brand Penetration (Row)": "0.7713",
+"Category Share": "0.7713",
+"Original Raw Numbers": "1421",
+"US Gen Pop Projection": "85316",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Atlanta, USA",
+"Brand Penetration (Row)": "0.9913",
+"Category Share": "0.9913",
+"Original Raw Numbers": "1827",
+"US Gen Pop Projection": "109692",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Port Harcourt, Nigeria",
+"Brand Penetration (Row)": "0.8211",
+"Category Share": "0.8211",
+"Original Raw Numbers": "1513",
+"US Gen Pop Projection": "90840",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Liverpool, UK",
+"Brand Penetration (Row)": "0.7917",
+"Category Share": "0.7917",
+"Original Raw Numbers": "1459",
+"US Gen Pop Projection": "87597",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Belfast, UK",
+"Brand Penetration (Row)": "0.7313",
+"Category Share": "0.7313",
+"Original Raw Numbers": "1348",
+"US Gen Pop Projection": "80933",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Galway, Ireland",
+"Brand Penetration (Row)": "0.4117",
+"Category Share": "0.4117",
+"Original Raw Numbers": "759",
+"US Gen Pop Projection": "45570",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Dallas, USA",
+"Brand Penetration (Row)": "0.9419",
+"Category Share": "0.9419",
+"Original Raw Numbers": "1736",
+"US Gen Pop Projection": "104228",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Seattle, USA",
+"Brand Penetration (Row)": "0.8813",
+"Category Share": "0.8813",
+"Original Raw Numbers": "1624",
+"US Gen Pop Projection": "97504",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Denver, USA",
+"Brand Penetration (Row)": "0.7711",
+"Category Share": "0.7711",
+"Original Raw Numbers": "1421",
+"US Gen Pop Projection": "85316",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Houston, USA",
+"Brand Penetration (Row)": "0.7517",
+"Category Share": "0.7517",
+"Original Raw Numbers": "1385",
+"US Gen Pop Projection": "83155",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Miami, USA",
+"Brand Penetration (Row)": "0.6911",
+"Category Share": "0.6911",
+"Original Raw Numbers": "1273",
+"US Gen Pop Projection": "76430",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Phoenix, USA",
+"Brand Penetration (Row)": "0.5913",
+"Category Share": "0.5913",
+"Original Raw Numbers": "1090",
+"US Gen Pop Projection": "65443",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Leeds, UK",
+"Brand Penetration (Row)": "0.6117",
+"Category Share": "0.6117",
+"Original Raw Numbers": "1127",
+"US Gen Pop Projection": "67664",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "LOCATION",
+"Value": "Kumasi, Ghana",
+"Brand Penetration (Row)": "0.4419",
+"Category Share": "0.4419",
+"Original Raw Numbers": "814",
+"US Gen Pop Projection": "48872",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "MOST PURCHASED BRANDS",
+"Value": "Harbor Stout",
+"Brand Penetration (Row)": "100.0000",
+"Category Share": "100.0000",
+"Original Raw Numbers": "184267",
+"US Gen Pop Projection": "11063279",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "MOST PURCHASED BRANDS",
+"Value": "NIKE",
+"Brand Penetration (Row)": "26.1137",
+"Category Share": "26.1137",
+"Original Raw Numbers": "48119",
+"US Gen Pop Projection": "2889036",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "MOST PURCHASED BRANDS",
+"Value": "Heineken",
+"Brand Penetration (Row)": "19.4417",
+"Category Share": "19.4417",
+"Original Raw Numbers": "35825",
+"US Gen Pop Projection": "2150911",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "SOCIAL MEDIA",
+"Value": "Instagram",
+"Brand Penetration (Row)": "61.2213",
+"Category Share": "61.2213",
+"Original Raw Numbers": "112811",
+"US Gen Pop Projection": "6773104",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "SOCIAL MEDIA",
+"Value": "Facebook",
+"Brand Penetration (Row)": "58.4419",
+"Category Share": "58.4419",
+"Original Raw Numbers": "107689",
+"US Gen Pop Projection": "6465582",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "STREAMING/PLATFORM",
+"Value": "Netflix",
+"Brand Penetration (Row)": "66.1137",
+"Category Share": "66.1137",
+"Original Raw Numbers": "121826",
+"US Gen Pop Projection": "7314359",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "STREAMING/PLATFORM",
+"Value": "Showmax",
+"Brand Penetration (Row)": "6.4413",
+"Category Share": "6.4413",
+"Original Raw Numbers": "11869",
+"US Gen Pop Projection": "712608",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+},
+{
+"Column": "QSR",
+"Value": "McDonald's",
+"Brand Penetration (Row)": "33.1119",
+"Category Share": "33.1119",
+"Original Raw Numbers": "61014",
+"US Gen Pop Projection": "3663244",
+"Gen Pop Penetration": "",
+"Index vs Gen Pop": ""
+}
+]
+}
