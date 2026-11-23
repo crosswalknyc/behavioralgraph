@@ -3253,11 +3253,21 @@
     "title": "DIGITAL TWINS",
     "intro": [
       {
-        "text": "Digital Twins IQ puts a question to an audience before money is committed to it. A twin is a standing read of one audience. Rooms and runs then place a cut, a script, a concept, a title, a plan or a price in front of that audience and report what it does.",
+        "text": "Digital Twins IQ lets you ask an audience before you decide. A twin is built from what real people did. You can seat it in a room, ask it anything, get answers in real time and watch how it reacts to your show, your price or your plan.",
         "is_list": false,
         "runs": [
           {
-            "text": "Digital Twins IQ puts a question to an audience before money is committed to it. A twin is a standing read of one audience. Rooms and runs then place a cut, a script, a concept, a title, a plan or a price in front of that audience and report what it does.",
+            "text": "Digital Twins IQ lets you ask an audience before you decide. A twin is built from what real people did. You can seat it in a room, ask it anything, get answers in real time and watch how it reacts to your show, your price or your plan.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "We start with real behavior. Crosswalk sees the entire digital life of 10M opted-in US consumers. That covers what they watch and stream, what they search and buy, and every other step in their digital life. Each twin is built from the longitudinal history of those people over the past five years and more.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "We start with real behavior. Crosswalk sees the entire digital life of 10M opted-in US consumers. That covers what they watch and stream, what they search and buy, and every other step in their digital life. Each twin is built from the longitudinal history of those people over the past five years and more.",
             "bold": false
           }
         ]
@@ -3265,34 +3275,44 @@
     ],
     "subs": [
       {
-        "title": "What a Twin Holds",
+        "title": "What a Twin Is",
         "paragraphs": [
           {
-            "text": "A twin carries four things about its audience. Who they are, by demographics and markets. What they already use and buy, by platform, brand and talent. Twelve dials for how they respond. And where the audience sits in its lifecycle.",
+            "text": "A twin is an audience you can ask questions. It stands in for real people. You ask it what you would ask them, and it answers from what those people have done.",
             "is_list": false,
             "runs": [
               {
-                "text": "A twin carries four things about its audience. Who they are, by demographics and markets. What they already use and buy, by platform, brand and talent. Twelve dials for how they respond. And where the audience sits in its lifecycle.",
+                "text": "A twin is an audience you can ask questions. It stands in for real people. You ask it what you would ask them, and it answers from what those people have done.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "The twelve dials are: • Finds things through social, not search • Binges rather than watching on a schedule • Reacts to price • Likely to cancel when the title ends • Comes back for the next entry • Buys the product • Phone in hand while watching • Shows up in person • Follows the people behind it • Sits through ads • Tries a new title fast • Tells other people.",
+            "text": "A twin can be the people who watch a show, use a service, follow a star or buy a brand. It can also be a group you shape yourself, such as women 25 to 44 in Dallas.",
             "is_list": false,
             "runs": [
               {
-                "text": "The twelve dials are: • Finds things through social, not search • Binges rather than watching on a schedule • Reacts to price • Likely to cancel when the title ends • Comes back for the next entry • Buys the product • Phone in hand while watching • Shows up in person • Follows the people behind it • Sits through ads • Tries a new title fast • Tells other people.",
+                "text": "A twin can be the people who watch a show, use a service, follow a star or buy a brand. It can also be a group you shape yourself, such as women 25 to 44 in Dallas.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "Every answer a twin gives traces back to those dials. A price question moves with price sensitivity, a watch question with the platform footprint and the lifecycle position, so a room cannot contradict the audience it was built on.",
+            "text": "A twin is not one average person. It is made of the archetypes inside the audience, usually 12 to 16 of them. Each archetype has one person who stands for it, and the people in all the archetypes add up to the whole audience.",
             "is_list": false,
             "runs": [
               {
-                "text": "Every answer a twin gives traces back to those dials. A price question moves with price sensitivity, a watch question with the platform footprint and the lifecycle position, so a room cannot contradict the audience it was built on.",
+                "text": "A twin is not one average person. It is made of the archetypes inside the audience, usually 12 to 16 of them. Each archetype has one person who stands for it, and the people in all the archetypes add up to the whole audience.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "When you ask a twin a question, every archetype in the audience answers.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "When you ask a twin a question, every archetype in the audience answers.",
                 "bold": false
               }
             ]
@@ -3300,34 +3320,34 @@
         ]
       },
       {
-        "title": "How a Twin Is Built",
+        "title": "How We Find the Archetypes",
         "paragraphs": [
           {
-            "text": "A twin is built on a defined group. For a named subject, a title, a talent or a brand, it sits on that subject's Profile IQ Total Universe. If no file is on record, one is pulled first, and that file is what the twin and all of its rooms use. A twin can also be shaped directly by demographics: gender, age, income, ethnicity and markets.",
+            "text": "We sort the audience by stage: just found it, trying it, in the habit, drifting away, or back after a break. We sort it again by stage of life: under 35, 35 to 54, and 55 and older. People in the habit split again into the most devoted and the regulars.",
             "is_list": false,
             "runs": [
               {
-                "text": "A twin is built on a defined group. For a named subject, a title, a talent or a brand, it sits on that subject's Profile IQ Total Universe. If no file is on record, one is pulled first, and that file is what the twin and all of its rooms use. A twin can also be shaped directly by demographics: gender, age, income, ethnicity and markets.",
+                "text": "We sort the audience by stage: just found it, trying it, in the habit, drifting away, or back after a break. We sort it again by stage of life: under 35, 35 to 54, and 55 and older. People in the habit split again into the most devoted and the regulars.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "The build reads everything already delivered on that subject: • The Total Universe and its cuts • Digital Journeys, for return behavior • Brand Partnership reads • Attribution campaigns, for the track record • Trends, for momentum • The Gen Pop baseline.",
+            "text": "The groups are fitted so they match the audience's own mix of ages and stages. An archetype smaller than 2.5% of the audience joins the archetype closest to it. If fewer than 12 archetypes are left, the largest split again, for example by gender or by age.",
             "is_list": false,
             "runs": [
               {
-                "text": "The build reads everything already delivered on that subject: • The Total Universe and its cuts • Digital Journeys, for return behavior • Brand Partnership reads • Attribution campaigns, for the track record • Trends, for momentum • The Gen Pop baseline.",
+                "text": "The groups are fitted so they match the audience's own mix of ages and stages. An archetype smaller than 2.5% of the audience joins the archetype closest to it. If fewer than 12 archetypes are left, the largest split again, for example by gender or by age.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "A twin is held against those, so it never contradicts a read already delivered on the same subject.",
+            "text": "Each archetype gets a plain name in the subject's own words, and a person to speak for it in a room.",
             "is_list": false,
             "runs": [
               {
-                "text": "A twin is held against those, so it never contradicts a read already delivered on the same subject.",
+                "text": "Each archetype gets a plain name in the subject's own words, and a person to speak for it in a room.",
                 "bold": false
               }
             ]
@@ -3335,34 +3355,269 @@
         ]
       },
       {
-        "title": "The Room",
+        "title": "How We Build a Twin",
         "paragraphs": [
           {
-            "text": "A room seats twins and takes questions in plain words. Twelve seats is the default, and the mix in the room matches the source file: gender, orientation, education and occupation. Each seat is built from those attributes and holds a stable name, age and city for the length of the session. No seat is an identified real person.",
+            "text": "Every twin starts from what real people did historically. We see what the people in your audience watch, stream, search and buy, and the rest of what they do online.",
             "is_list": false,
             "runs": [
               {
-                "text": "A room seats twins and takes questions in plain words. Twelve seats is the default, and the mix in the room matches the source file: gender, orientation, education and occupation. Each seat is built from those attributes and holds a stable name, age and city for the length of the session. No seat is an identified real person.",
+                "text": "Every twin starts from what real people did historically. We see what the people in your audience watch, stream, search and buy, and the rest of what they do online.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "Questions can be asked in several shapes: • Open • Yes or no • Multiple choice • Rating, one to five • Price, would you pay this • A against B • Show of hands • Probe, why, or what would change your mind.",
+            "text": "There are three ways to build one: • From a profile we hold. The audience of a show, a star, a service or a brand. If we do not have it yet, we build it first, usually in under an hour. • From a group you shape. Pick gender, age, income, ethnicity and where they live, and set the percentage shares yourself. • From a list of links. Paste or upload links to a show page, a channel, a feed or an article, and the twin is the people who went there.",
             "is_list": false,
             "runs": [
               {
-                "text": "Questions can be asked in several shapes: • Open • Yes or no • Multiple choice • Rating, one to five • Price, would you pay this • A against B • Show of hands • Probe, why, or what would change your mind.",
+                "text": "There are three ways to build one: • From a profile we hold. The audience of a show, a star, a service or a brand. If we do not have it yet, we build it first, usually in under an hour. • From a group you shape. Pick gender, age, income, ethnicity and where they live, and set the percentage shares yourself. • From a list of links. Paste or upload links to a show page, a channel, a feed or an article, and the twin is the people who went there.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "Every answer comes back with the shares and the people behind them, the split by segment in the room, a one-line read, and voices from the named seats. Re-asking with something changed, a price, a cast, a platform, moves the answer the way that audience's dials say it should.",
+            "text": "Every twin carries three things: • Who they are. Gender, age, ethnicity, income, education, kids at home and relationship. Where they live, the services they use, what they buy and the people they follow. • How they respond. Twelve habits, each a dial from 0 to 100, where 50 is an ordinary US audience. Each archetype carries its own version of these habits. • Where they are with it. Five stages: just found it, trying it, in the habit, drifting away, and back after a break. Every archetype sits at one of them.",
             "is_list": false,
             "runs": [
               {
-                "text": "Every answer comes back with the shares and the people behind them, the split by segment in the room, a one-line read, and voices from the named seats. Re-asking with something changed, a price, a cast, a platform, moves the answer the way that audience's dials say it should.",
+                "text": "Every twin carries three things: • Who they are. Gender, age, ethnicity, income, education, kids at home and relationship. Where they live, the services they use, what they buy and the people they follow. • How they respond. Twelve habits, each a dial from 0 to 100, where 50 is an ordinary US audience. Each archetype carries its own version of these habits. • Where they are with it. Five stages: just found it, trying it, in the habit, drifting away, and back after a break. Every archetype sits at one of them.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A twin's answers rest on five years and more of what its people actually did.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A twin's answers rest on five years and more of what its people actually did.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "How We Seat a Room",
+        "paragraphs": [
+          {
+            "text": "A room seats one person for each archetype the twin contains. You never pick how many people are seated. That is decided by the number of archetypes that actually exist in your audience.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A room seats one person for each archetype the twin contains. You never pick how many people are seated. That is decided by the number of archetypes that actually exist in your audience.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Never fewer than 12. When a twin has fewer than 12 archetypes, we go deeper to find more nuance and split them, so the room still has 12 voices. Most rooms seat 12 to 16.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Never fewer than 12. When a twin has fewer than 12 archetypes, we go deeper to find more nuance and split them, so the room still has 12 voices. Most rooms seat 12 to 16.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Seats have a bio and a memory. Click a seat to read who it stands in for. Each seat remembers what it said earlier in the room, and in past groups you have used it in, the way a real person would.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Seats have a bio and a memory. Click a seat to read who it stands in for. Each seat remembers what it said earlier in the room, and in past groups you have used it in, the way a real person would.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The room looks like the real audience. Gender, age and the rest follow the audience by its people. A twin that is 72% women seats about 9 women out of 12.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The room looks like the real audience. Gender, age and the rest follow the audience by its people. A twin that is 72% women seats about 9 women out of 12.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Every archetype gets a voice, sized to the people it stands for.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Every archetype gets a voice, sized to the people it stands for.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "How a Question Is Counted",
+        "paragraphs": [
+          {
+            "text": "A question in a room runs in four steps: • The room gets the facts. Before anyone answers, the room learns what you are asking about. What it is, when it came out, where it plays, and anything else the people in the room would naturally know. It also learns how similar things did before with each archetype. • Each seat answers in character. It speaks for two or three sentences, from who it is and its known history. It gives an answer, then says how sure it is from 1 to 5, and why. • The count adds up people. Each answer carries the people behind its seat. Shares add to 100% and people add to the room. • You get the read. A short paragraph in plain words, the voices that tell the story, and two suggested questions worth asking next.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A question in a room runs in four steps: • The room gets the facts. Before anyone answers, the room learns what you are asking about. What it is, when it came out, where it plays, and anything else the people in the room would naturally know. It also learns how similar things did before with each archetype. • Each seat answers in character. It speaks for two or three sentences, from who it is and its known history. It gives an answer, then says how sure it is from 1 to 5, and why. • The count adds up people. Each answer carries the people behind its seat. Shares add to 100% and people add to the room. • You get the read. A short paragraph in plain words, the voices that tell the story, and two suggested questions worth asking next.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A seat that stands for 16.6M people counts for more than one that stands for 3.6M. The tally of seats always sits beside the count of people, so you can see both.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A seat that stands for 16.6M people counts for more than one that stands for 3.6M. The tally of seats always sits beside the count of people, so you can see both.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Big archetypes weigh more, but small ones still count.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Big archetypes weigh more, but small ones still count.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "What the Room Leans On",
+        "paragraphs": [
+          {
+            "text": "The room draws on five things, in order: • History. The first step is always the twin's own behavioral history, to understand who these people are. • Similar behavior. What this audience did with this exact thing in the past. • A nearby audience, as the check. How a close audience acted with the same thing. • Similar things, for context. A boxed set, a price rise, a second season, a new service. • Habits, to fill in the rest.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The room draws on five things, in order: • History. The first step is always the twin's own behavioral history, to understand who these people are. • Similar behavior. What this audience did with this exact thing in the past. • A nearby audience, as the check. How a close audience acted with the same thing. • Similar things, for context. A boxed set, a price rise, a second season, a new service. • Habits, to fill in the rest.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Forecasts learn from real results: how many viewers a show got, how many books sold, which people engaged with a piece of content, how an election turned out.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Forecasts learn from real results: how many viewers a show got, how many books sold, which people engaged with a piece of content, how an election turned out.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Ask the same thing on the same day and the room gives the same count, in any room on that twin. The answers rest on what people did rather than on guesses. Ask again a month later and the result may differ, because of what those people did in between.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Ask the same thing on the same day and the room gives the same count, in any room on that twin. The answers rest on what people did rather than on guesses. Ask again a month later and the result may differ, because of what those people did in between.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The room starts from what its people already did.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The room starts from what its people already did.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Predictive Analytics",
+        "paragraphs": [
+          {
+            "text": "Bring one business question. Prometheus writes the plan, runs the room for you, and hands back the verdict with a full report.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Bring one business question. Prometheus writes the plan, runs the room for you, and hands back the verdict with a full report.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The question can take any shape: if I do X, will Y happen? Will X win? Should I do X? What will they pay? Something else.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The question can take any shape: if I do X, will Y happen? Will X win? Should I do X? What will they pay? Something else.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The plan has 5 to 8 questions in three steps. The big picture comes first: where the audience stands today. Then closer in: what pulls them and what holds them back. Last comes the question itself, put to every seat.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The plan has 5 to 8 questions in three steps. The big picture comes first: where the audience stands today. Then closer in: what pulls them and what holds them back. Last comes the question itself, put to every seat.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Planning is free, and you can edit or drop any question before it runs. The report gives the verdict, the numbers behind it, why, who drove it, what would change it and what to ask next. It comes as a page and a PDF.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Planning is free, and you can edit or drop any question before it runs. The report gives the verdict, the numbers behind it, why, who drove it, what would change it and what to ask next. It comes as a page and a PDF.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The verdict is built with intention, so you can act on it.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The verdict is built with intention, so you can act on it.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "How Firm a Count Is",
+        "paragraphs": [
+          {
+            "text": "Every count comes with a range and one of three words: firm, leaning or early. The word tells you how far the real number could sit from the count, and the range shows it.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Every count comes with a range and one of three words: firm, leaning or early. The word tells you how far the real number could sit from the count, and the range shows it.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "We write down every call before the result is known. We date each call ahead of its outcome. When it lands, we score it, and a miss stays on the record.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "We write down every call before the result is known. We date each call ahead of its outcome. When it lands, we score it, and a miss stays on the record.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Six calls have been scored so far. All three calls on a winner were right, and the counts landed within 3.2% of the result on average. The full record is public at crosswalknyc.com/twins-track-record.html.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Six calls have been scored so far. All three calls on a winner were right, and the counts landed within 3.2% of the result on average. The full record is public at crosswalknyc.com/twins-track-record.html.",
                 "bold": false
               }
             ]
@@ -3373,81 +3628,51 @@
         "title": "Pilot Testing",
         "paragraphs": [
           {
-            "text": "The room watches a cut on the clock: a pilot, an episode, a movie or a recorded read. Every seat holds a dial from 0 to 100 and fires timestamped reactions, loved it, laughed, leaned in, lost, checked out, wow, and those land against the video clock. A question can be asked at any point in the playhead, and it carries the moment that just played.",
+            "text": "Pilot Testing puts the room in front of your cut. The seats watch it from start to finish on a clock, react to it, and answer questions about it as it plays.",
             "is_list": false,
             "runs": [
               {
-                "text": "The room watches a cut on the clock: a pilot, an episode, a movie or a recorded read. Every seat holds a dial from 0 to 100 and fires timestamped reactions, loved it, laughed, leaned in, lost, checked out, wow, and those land against the video clock. A question can be asked at any point in the playhead, and it carries the moment that just played.",
+                "text": "Pilot Testing puts the room in front of your cut. The seats watch it from start to finish on a clock, react to it, and answer questions about it as it plays.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "The cut itself is read scene by scene: scene changes, a line on what is on screen in each, the dialogue with timestamps, and the silences.",
+            "text": "A test runs in six steps: • Set up the test. Name it and pick the kind: a pilot, an episode, an ad, a feature or a run of episodes. Add the cast list and choose which seats sit in the room. • Add the cut. Upload a file (MP4, MOV, WebM or M4V, from 15 seconds to 4 hours), or paste a link to where it plays. • The cut splits into scenes. A new scene starts where the picture changes. For each one we note who and what is on screen, what is said and when, and where it goes quiet. • The room watches act by act. Each seat watches in character, turns its dial and reacts from what its people have done before. • You ask questions as it plays. A guide puts questions at the turns of the story, and you can ask anything else at any second. Each question carries the last 75 seconds of what played. • The scorecard comes last. When the cut ends, every seat fills out the card.",
             "is_list": false,
             "runs": [
               {
-                "text": "The cut itself is read scene by scene: scene changes, a line on what is on screen in each, the dialogue with timestamps, and the silences.",
+                "text": "A test runs in six steps: • Set up the test. Name it and pick the kind: a pilot, an episode, an ad, a feature or a run of episodes. Add the cast list and choose which seats sit in the room. • Add the cut. Upload a file (MP4, MOV, WebM or M4V, from 15 seconds to 4 hours), or paste a link to where it plays. • The cut splits into scenes. A new scene starts where the picture changes. For each one we note who and what is on screen, what is said and when, and where it goes quiet. • The room watches act by act. Each seat watches in character, turns its dial and reacts from what its people have done before. • You ask questions as it plays. A guide puts questions at the turns of the story, and you can ask anything else at any second. Each question carries the last 75 seconds of what played. • The scorecard comes last. When the cut ends, every seat fills out the card.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "After the cut the scorecard reports: • Excellent, very good and total positive • Definitely recommend • Would finish • Tune-in • Urgency • Expectations • Would pay full price. Each sits next to its format norm and its genre norm, with the favorite moment and the dead spot off the dial, splits by every demographic, the reaction list and the transcript.",
+            "text": "How we know who is on screen: you give us the cast list. We fix the spelling of each name and find a photo of each actor to compare against. A frame from every scene is checked for faces. A face gets a name only when it matches someone on your list and is clear and big enough to tell. Anyone without a match is described by look and role, like a woman in a gray coat. Nobody off your list is ever named, and neither is a face that did not match.",
             "is_list": false,
             "runs": [
               {
-                "text": "After the cut the scorecard reports: • Excellent, very good and total positive • Definitely recommend • Would finish • Tune-in • Urgency • Expectations • Would pay full price. Each sits next to its format norm and its genre norm, with the favorite moment and the dead spot off the dial, splits by every demographic, the reaction list and the transcript.",
-                "bold": false
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "title": "Greenlight: Script Read and Concept",
-        "paragraphs": [
-          {
-            "text": "A script read puts the script to the room on a reading clock, scene by scene, split on the sluglines. It returns a dial per scene with notes on story, structure and character: where it runs long, where a character arrives without a want, where the turn lands. A recorded table read runs like a pilot instead.",
-            "is_list": false,
-            "runs": [
-              {
-                "text": "A script read puts the script to the room on a reading clock, scene by scene, split on the sluglines. It returns a dial per scene with notes on story, structure and character: where it runs long, where a character arrives without a want, where the turn lands. A recorded table read runs like a pilot instead.",
+                "text": "How we know who is on screen: you give us the cast list. We fix the spelling of each name and find a photo of each actor to compare against. A frame from every scene is checked for faces. A face gets a name only when it matches someone on your list and is clear and big enough to tell. Anyone without a match is described by look and role, like a woman in a gray coat. Nobody off your list is ever named, and neither is a face that did not match.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "A concept test takes a logline, a synopsis or a one-sheet. It returns interest and definite interest, how far the idea stands out, who it is for, whether they would watch, the strongest element and the biggest doubt. Each is reported against the concept norm and broken out by quadrant. Two twins can sit in the same room to read two audiences on one idea.",
+            "text": "This matters because the room's reactions in each person's scenes become that person's read. Time on screen is shown as a fact. It never makes the room like someone more or less, because a cameo can be the best part of a show.",
             "is_list": false,
             "runs": [
               {
-                "text": "A concept test takes a logline, a synopsis or a one-sheet. It returns interest and definite interest, how far the idea stands out, who it is for, whether they would watch, the strongest element and the biggest doubt. Each is reported against the concept norm and broken out by quadrant. Two twins can sit in the same room to read two audiences on one idea.",
-                "bold": false
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "title": "Trailers, Titles and Key Art",
-        "paragraphs": [
-          {
-            "text": "A trailer test runs assets from fifteen seconds to three minutes, up to three side by side in the same room, and reports interest in the title before and after.",
-            "is_list": false,
-            "runs": [
-              {
-                "text": "A trailer test runs assets from fifteen seconds to three minutes, up to three side by side in the same room, and reports interest in the title before and after.",
+                "text": "This matters because the room's reactions in each person's scenes become that person's read. Time on screen is shown as a fact. It never makes the room like someone more or less, because a cameo can be the best part of a show.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "A title or key art test shows up to six options to one room. Titles return appeal from the title alone and fit once the logline is read; key art returns the same on the image.",
+            "text": "Each person on screen gets a read of their own.",
             "is_list": false,
             "runs": [
               {
-                "text": "A title or key art test shows up to six options to one room. Titles return appeal from the title alone and fit once the logline is read; key art returns the same on the image.",
+                "text": "Each person on screen gets a read of their own.",
                 "bold": false
               }
             ]
@@ -3455,64 +3680,74 @@
         ]
       },
       {
-        "title": "Launch Lab and the Spend Engine",
+        "title": "The Scorecard",
         "paragraphs": [
           {
-            "text": "Launch Lab takes a plan and a budget and returns three plans side by side: as allocated, signal-led, and the smallest spend that still reaches the goal. Each carries odds and ranges week by week, the levers ranked by what they are worth, and a holdout sized to prove lift at the lowest spend.",
+            "text": "After the cut, every seat fills out a scorecard. It asks what studios ask after a screening. Each share counts the people behind the seats and comes with a range and one of the three words.",
             "is_list": false,
             "runs": [
               {
-                "text": "Launch Lab takes a plan and a budget and returns three plans side by side: as allocated, signal-led, and the smallest spend that still reaches the goal. Each carries odds and ranges week by week, the levers ranked by what they are worth, and a holdout sized to prove lift at the lowest spend.",
+                "text": "After the cut, every seat fills out a scorecard. It asks what studios ask after a screening. Each share counts the people behind the seats and comes with a range and one of the three words.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "The Spend Engine runs a plan forward day by day. It reports spend and signal by channel, and the single move that earns the most that day: shift money, raise or cut, or change the lead asset. The difference each move makes is stated in plain words.",
+            "text": "Four numbers sit at the top of the card: • Excellent. Rated the top mark. • Total positive. Excellent plus very good. • Definitely recommend. Would tell others to watch it. • Would finish. Would watch to the end.",
             "is_list": false,
             "runs": [
               {
-                "text": "The Spend Engine runs a plan forward day by day. It reports spend and signal by channel, and the single move that earns the most that day: shift money, raise or cut, or change the lead asset. The difference each move makes is stated in plain words.",
-                "bold": false
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "title": "Scenarios",
-        "paragraphs": [
-          {
-            "text": "Beyond the rooms, a twin answers scenario questions: • A launch, a plan and a budget • Content, a season, sequel or episode drop • A platform move, a window or a change of home • A partnership, a brand against the audience • Pricing, a price or packaging change • A talent attach, a cast or creator • A merchandise drop.",
-            "is_list": false,
-            "runs": [
-              {
-                "text": "Beyond the rooms, a twin answers scenario questions: • A launch, a plan and a budget • Content, a season, sequel or episode drop • A platform move, a window or a change of home • A partnership, a brand against the audience • Pricing, a price or packaging change • A talent attach, a cast or creator • A merchandise drop.",
-                "bold": false
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "title": "Norms",
-        "paragraphs": [
-          {
-            "text": "Every scorecard is read against a norm for its format and a norm for its genre. Formats covered are features, pilots, episodes, trailers, titles, key art, scripts and concepts, and each cell carries the count of tests standing behind it.",
-            "is_list": false,
-            "runs": [
-              {
-                "text": "Every scorecard is read against a norm for its format and a norm for its genre. Formats covered are features, pilots, episodes, trailers, titles, key art, scripts and concepts, and each cell carries the count of tests standing behind it.",
+                "text": "Four numbers sit at the top of the card: • Excellent. Rated the top mark. • Total positive. Excellent plus very good. • Definitely recommend. Would tell others to watch it. • Would finish. Would watch to the end.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "A cell begins at an established reference point for that format and genre. As our own tests accumulate, the cell becomes the running figure from those tests. The starting point stays in, carrying the weight of a fixed number of tests. Cells are shown to one decimal.",
+            "text": "Next to every top number sits the norm: what tests of the same kind usually score. You pick it, from all pilots to one genre, such as procedurals. A genre gets its own norm once enough of its tests are on file. Until then, the card says what it compares to instead.",
             "is_list": false,
             "runs": [
               {
-                "text": "A cell begins at an established reference point for that format and genre. As our own tests accumulate, the cell becomes the running figure from those tests. The starting point stays in, carrying the weight of a fixed number of tests. Cells are shown to one decimal.",
+                "text": "Next to every top number sits the norm: what tests of the same kind usually score. You pick it, from all pilots to one genre, such as procedurals. A genre gets its own norm once enough of its tests are on file. Until then, the card says what it compares to instead.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The card reads for the whole room and for each group you chose. It also marks two moments: the favorite moment, the strongest good reaction in the room, and the dead spot, where the room's dial sank the most.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The card reads for the whole room and for each group you chose. It also marks two moments: the favorite moment, the strongest good reaction in the room, and the dead spot, where the room's dial sank the most.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A character's read starts with how the room reacted in their scenes, then how the seats rated them and what they said about them. A scored test also carries a forecast. It gives the week-one audience if the episode came out, the share who would finish the season, and the share on another device while it plays. It also gives how many would sign up to a platform to watch it, or come back as a lapsed viewer for it.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A character's read starts with how the room reacted in their scenes, then how the seats rated them and what they said about them. A scored test also carries a forecast. It gives the week-one audience if the episode came out, the share who would finish the season, and the share on another device while it plays. It also gives how many would sign up to a platform to watch it, or come back as a lapsed viewer for it.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A feature film asks how soon in its own terms, from opening weekend to waiting for home, and whether it is worth full price.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A feature film asks how soon in its own terms, from opening weekend to waiting for home, and whether it is worth full price.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "These are the numbers a network uses to judge a pilot.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "These are the numbers a network uses to judge a pilot.",
                 "bold": false
               }
             ]
@@ -3520,14 +3755,54 @@
         ]
       },
       {
-        "title": "Repeatability",
+        "title": "The Dial",
         "paragraphs": [
           {
-            "text": "The same twin asked the same thing returns the same answer, so a number quoted in a meeting is the number still there a week later. No two twins land on the same figure, so two audiences read side by side are always distinguishable.",
+            "text": "Each seat turns a dial from 0 to 100 as it watches. The dial goes up when a scene lands for that seat. It goes down when a scene drags, confuses or loses them.",
             "is_list": false,
             "runs": [
               {
-                "text": "The same twin asked the same thing returns the same answer, so a number quoted in a meeting is the number still there a week later. No two twins land on the same figure, so two audiences read side by side are always distinguishable.",
+                "text": "Each seat turns a dial from 0 to 100 as it watches. The dial goes up when a scene lands for that seat. It goes down when a scene drags, confuses or loses them.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "How the lines work: • Each seat moves on its own. A seat moves from who it is, and the rest of the room does not pull it along. A devoted fan and a new member can feel opposite things in the same scene. • The room's line counts each seat by its people. A seat that stands for more people moves the line more. • Lines for groups count the same way, for women and men, age groups, the five stages, avid and casual seats, and the groups you chose. • Reactions are marked on the clock. Loved it, laughed, leaned in, lost, checked out and wow, each with its second and a line in the seat's own words. • A reading comes every 2 seconds on a short cut and every 4 on a long one. • Highs and lows suggest a question. The room points to its peaks and dips, and one click asks what landed there. • A ticker runs under the dial, with the average for each line every five minutes. • The dial stays when the test ends, so you can play it back, jump 10 seconds either way, run it at 2x or 4x, or drag to any second.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "How the lines work: • Each seat moves on its own. A seat moves from who it is, and the rest of the room does not pull it along. A devoted fan and a new member can feel opposite things in the same scene. • The room's line counts each seat by its people. A seat that stands for more people moves the line more. • Lines for groups count the same way, for women and men, age groups, the five stages, avid and casual seats, and the groups you chose. • Reactions are marked on the clock. Loved it, laughed, leaned in, lost, checked out and wow, each with its second and a line in the seat's own words. • A reading comes every 2 seconds on a short cut and every 4 on a long one. • Highs and lows suggest a question. The room points to its peaks and dips, and one click asks what landed there. • A ticker runs under the dial, with the average for each line every five minutes. • The dial stays when the test ends, so you can play it back, jump 10 seconds either way, run it at 2x or 4x, or drag to any second.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "What moves a seat's line: • Habits set the start. A seat starts higher when it is loyal to the show or 45 and older. A phone in hand while watching starts it lower. • Most of each move is the person's own reaction. About 70% is how they feel about the scene, and the rest is the pull of their habits. • The type of scene matters. Tender scenes lift seats that are women, LGBTQ+ or 45 and older. Funny scenes lift seats under 40. Action lifts men under 40. • Stage pushes the whole line. In the habit lifts every scene, and drifting away pulls every scene down. • Habits tilt big and quiet moments. A loyal seat gets more from a big moment, and a phone in hand drags talky stretches and silences. • Each line remembers. Every reading keeps most of the one before, so moves come in steps of a few points, and a real turn moves more. • A seat knows which cast member it sees. Time on screen alone never lifts a seat. • Reactions come only when something lands, at most two in any five scenes.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "What moves a seat's line: • Habits set the start. A seat starts higher when it is loyal to the show or 45 and older. A phone in hand while watching starts it lower. • Most of each move is the person's own reaction. About 70% is how they feel about the scene, and the rest is the pull of their habits. • The type of scene matters. Tender scenes lift seats that are women, LGBTQ+ or 45 and older. Funny scenes lift seats under 40. Action lifts men under 40. • Stage pushes the whole line. In the habit lifts every scene, and drifting away pulls every scene down. • Habits tilt big and quiet moments. A loyal seat gets more from a big moment, and a phone in hand drags talky stretches and silences. • Each line remembers. Every reading keeps most of the one before, so moves come in steps of a few points, and a real turn moves more. • A seat knows which cast member it sees. Time on screen alone never lifts a seat. • Reactions come only when something lands, at most two in any five scenes.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "As a cut ends, the dial settles every seat, so the credits never spike it.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "As a cut ends, the dial settles every seat, so the credits never spike it.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The dial shows which archetypes a scene won and which it lost.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The dial shows which archetypes a scene won and which it lost.",
                 "bold": false
               }
             ]
@@ -3535,14 +3810,49 @@
         ]
       },
       {
-        "title": "What a Twin Does Not Do",
+        "title": "What You Get",
         "paragraphs": [
           {
-            "text": "A twin answers for the audience it was built on, over the window it was built in. It is a read on that audience rather than a count of buyers, and it does not replace a field test with recruited participants. Norms move as tests accumulate behind them. A score read against a thin cell carries less weight than one read against a deep cell, which is why the count behind every cell is shown.",
+            "text": "Every read comes back as files you can share. What you see on the page is in the files too, so the work travels into your own decks and plans.",
             "is_list": false,
             "runs": [
               {
-                "text": "A twin answers for the audience it was built on, over the window it was built in. It is a read on that audience rather than a count of buyers, and it does not replace a field test with recruited participants. Norms move as tests accumulate behind them. A score read against a thin cell carries less weight than one read against a deep cell, which is why the count behind every cell is shown.",
+                "text": "Every read comes back as files you can share. What you see on the page is in the files too, so the work travels into your own decks and plans.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "By product: • Twins. The twin page, with a CSV, a PDF and a deck. • Focus Group IQ. Each room as a CSV and a PDF, carrying every question, split, read and voice. • Predictive Analytics. The report as a page and a PDF, with the raw data as a CSV. • Pilot Testing. The scorecard, the report as a PDF and a deck, and the raw data as a CSV.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "By product: • Twins. The twin page, with a CSV, a PDF and a deck. • Focus Group IQ. Each room as a CSV and a PDF, carrying every question, split, read and voice. • Predictive Analytics. The report as a page and a PDF, with the raw data as a CSV. • Pilot Testing. The scorecard, the report as a PDF and a deck, and the raw data as a CSV.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "When you finish a session in a room, Prometheus emails you the room's PDF read, with a link back to the room.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "When you finish a session in a room, Prometheus emails you the room's PDF read, with a link back to the room.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Words We Use",
+        "paragraphs": [
+          {
+            "text": "• Twin. An audience you can ask, built from five years and more of what its people did. • Archetype representative. The person who stands for one archetype inside a twin. Each twin has 12 to 16. • Seat. The landing spot for each archetype representative. • Room. A focus group with one seat for each archetype. • The count. The share, and the number of people, behind each answer. • How firm. Firm, leaning or early, with a range around the count. • The dial. The 0 to 100 line each seat turns while it watches a cut. • Total positive. Everyone who rates a cut excellent or very good. • The norm. What tests of the same kind usually score. • Prometheus. Crosswalk's assistant. Ask it to build a twin, open a room or explain a read.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Twin. An audience you can ask, built from five years and more of what its people did. • Archetype representative. The person who stands for one archetype inside a twin. Each twin has 12 to 16. • Seat. The landing spot for each archetype representative. • Room. A focus group with one seat for each archetype. • The count. The share, and the number of people, behind each answer. • How firm. Firm, leaning or early, with a range around the count. • The dial. The 0 to 100 line each seat turns while it watches a cut. • Total positive. Everyone who rates a cut excellent or very good. • The norm. What tests of the same kind usually score. • Prometheus. Crosswalk's assistant. Ask it to build a twin, open a room or explain a read.",
                 "bold": false
               }
             ]
