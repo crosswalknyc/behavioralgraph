@@ -56,7 +56,7 @@ import sys
 import unittest
 from unittest import mock
 
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -646,7 +646,7 @@ class AnEmptyReadIsRepairedNeverThrown(unittest.TestCase):
         held = body[body.index('except _read_repair.EmptyRead as e:'):body.index("_H._chatbot_error_email('brief-chat/analyze', e)")]
         self.assertIn("'_held': True", held)
         self.assertNotIn('_chatbot_calm_payload()', held)
-        self.assertLess(len(src.splitlines()), 19900)
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)
 
     def test_figures_in_another_shape_are_moved_into_the_contract(self):
         data = {'action': 'answer', 'subject': 'Chicago Fire', 'metric_family': 'viewership', 'headline': 'x',

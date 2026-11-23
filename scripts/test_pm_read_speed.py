@@ -35,8 +35,10 @@ import prometheus_verify as PV  # noqa: E402
 
 FAIL = 0
 TOOL = {'type': 'web_search_20250305', 'name': 'web_search'}
-CORE = (WEB / 'prometheus' / 'legacy' / 'core_read.py').read_text(encoding='utf-8')
-CHAT = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text(encoding='utf-8')
+import _pm_legacy_view as _LV  # noqa: E402
+# the legacy chat text as the suites read it: chat.py with every extracted block (the read core
+# among them) spliced back at its marker, so the pins below hold wherever the code lives now
+CORE = CHAT = _LV.legacy_view()
 
 
 def check(label, cond):
@@ -134,8 +136,8 @@ def test_fast_tier():
         check('strong restores the old chain', RS.research_tier() == 'strong' and "os.environ.get('PM_RESEARCH_TIER', 'fast').strip().lower() != 'strong'" in CHAT)
     finally:
         os.environ.pop('PM_RESEARCH_TIER', None)
-    n = CHAT.count('\n')
-    check(f'chat.py stays under its ratchet ({n} lines)', n < 13_700)
+    n = _LV.legacy_lines()
+    check(f'the legacy chat code stays under its ratchet ({n} lines)', n < _LV.LEGACY_CEILING)
 
 
 def test_words():

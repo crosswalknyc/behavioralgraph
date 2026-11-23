@@ -536,11 +536,17 @@ class ThroughTheDoor(unittest.TestCase):
 
 class ChatPyUnchanged(unittest.TestCase):
     def test_line_ceiling_and_the_one_stamp(self):
-        p = os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py')
-        with open(p, encoding='utf-8') as fh:
-            src = fh.read()
-        self.assertLessEqual(src.count('\n'), 19_900)
-        self.assertEqual(src.count("prometheus.understanding"), 1)
+        # the legacy chat text as the suites read it: chat.py with every extracted block spliced back
+        # (stage 5); the ratchet counts the legacy code, chat.py plus the cores still beside it (stage 7)
+        sys.path.insert(0, HERE)
+        import _pm_legacy_view as _lv
+        src = _lv.legacy_view()
+        self.assertLessEqual(_lv.legacy_lines(), _lv.LEGACY_CEILING)
+        # stage 2 touched the legacy chat text in one place, the stamp on the ask log; the read
+        # core's subject hint (read_subject_hint, 2026-11-2x) is the second site in the whole text
+        self.assertEqual(src.count("prometheus.understanding"), 2)
+        self.assertEqual(src.count("__import__('prometheus.understanding', fromlist=['stamp_log'])"), 1)
+        self.assertEqual(src.count("__import__('prometheus.understanding', fromlist=['read_subject_hint'])"), 1)
 
 
 if __name__ == '__main__':

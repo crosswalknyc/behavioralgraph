@@ -45,7 +45,7 @@ import re
 import sys
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -119,7 +119,7 @@ check('_mq.reply_reading(answer, draft.get(\'subject\') or subject, disp)' in ch
 check('allow_ask=not _mq_g.asked_before(history, spec_draft.get(\'existing_match_display_name\'))' in chat,
       'the brief flow asks about one profile once')
 check('"allow_ask"' not in chat and "body.get('allow_ask')" not in chat, 'and never on a field the page could send')
-check(_chat_py_lines() < 19900, 'the brief flow file stays under its line ceiling', len(chat.splitlines()))
+check(_legacy_lines() < _LEGACY_CEILING, 'the legacy chat code stays under its line ceiling', _legacy_lines())
 
 print('[C] the answer chips resolve from the thread when the page lost the brief')
 la = MQ.lane('no, build fresh', THREAD)

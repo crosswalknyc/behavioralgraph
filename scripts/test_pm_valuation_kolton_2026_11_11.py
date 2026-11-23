@@ -40,7 +40,7 @@ os.environ.setdefault('BPIQ_WHOLE_AUDIENCE_FALLBACK', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.pop('BPIQ_CORPUS_ANCHORS', None)
 
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 sys.path.insert(0, str(WEB / 'scripts'))
@@ -428,7 +428,7 @@ def test_d_e_deck_names_the_pick_and_keeps_the_read():
           "if res_err or not resolution or resolution.get('clarify'):\n                resolution, res_err = _pm_resolve_deck_subject(text, ctx)" not in chat)
     check("the deck route returns the confirm line", chat.count("'confirm_line': _deck_pick.confirm_line(resolution)") == 2)
     check("the deck job holds the plan to the read", '_deck_pick.hold_plan_to_read(' in chat)
-    check("chat.py stays under its line ratchet", _chat_py_lines() < 19900)
+    check("the legacy chat code stays under its line ratchet", _legacy_lines() < _LEGACY_CEILING)
     html = (WEB / 'templates' / 'index.html').read_text(encoding='utf-8')
     check("the page prints the server's confirm line", 'data.confirm_line ? String(data.confirm_line)' in html)
 

@@ -49,7 +49,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -522,7 +522,7 @@ class TheBuildStepKeepsTheOrder(unittest.TestCase):
     def test_the_build_step_calls_it_and_its_file_did_not_grow(self):
         chat = _legacy_view()
         self.assertIn(".keep_order_route(str(_route_d.get('route') or ''), body, text, hint=_pm_ask_hint)", chat)
-        self.assertLess(len(chat.splitlines()), 19900)                       # the line ratchet holds
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)                       # the line ratchet holds
 
     def test_the_brands_that_define_one_audience_are_one_build(self):
         named = ('create a profile of luxury resort engagers who engaged with Auberge Resorts, Discovery Land Company, Aman Resorts '

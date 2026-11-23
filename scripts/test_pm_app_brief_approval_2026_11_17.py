@@ -69,7 +69,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
 os.environ.setdefault('PM_PROBE_LOOKUP', '0')       # no sandbox-key lookup over the network
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = Path(os.path.abspath(__file__)).parent
 ROOT = HERE.parent
 if str(ROOT) not in sys.path:
@@ -1343,7 +1343,7 @@ class TheWiring(unittest.TestCase):
             self.assertIn(step, core, step)                                 # every safeguard the app's approval inherits
 
     def test_the_chat_module_did_not_grow(self):
-        self.assertLess(len(CHAT.splitlines()), 19900)
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)
         self.assertNotIn('pending_briefs', CHAT)
 
     def test_the_brief_price_table_is_the_app_readers_own(self):

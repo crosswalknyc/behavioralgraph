@@ -39,7 +39,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -290,7 +290,7 @@ class TheDeckIsOnTheSubjectNamed(unittest.TestCase):
         pick, ask = DS.pick_or_ask({}, 'can we build a deck for Mistletoe Murders', AD['page'], [], [], hint=lambda **k: hints.append(k))
         self.assertTrue(pick == '' and ask and len(hints) == 1)
         self.assertIn("for k in ('angle', 'confirm_open_screen', 'bind_subject'):", Path(ROOT, 'prometheus', 'service.py').read_text(encoding='utf-8'))
-        self.assertLess(len(CHAT_SRC.splitlines()), 19900)                                  # the line ratchet holds
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)                                  # the line ratchet holds
 
 
 # ============================================================================ 3

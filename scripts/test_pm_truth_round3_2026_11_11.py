@@ -43,7 +43,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -303,7 +303,7 @@ class AProbeLeavesNothing(unittest.TestCase):
         self.assertIn("_pf.install(caps['s3_client'])", host_src)
         self.assertIn('_probe_job_ended(a)', Path(ROOT, 'prometheus', 'ledger_gate.py').read_text(encoding='utf-8'))
         self.assertIn('_pf.sweep_with_host(host, now=now)', Path(ROOT, 'prometheus', 'build_ready.py').read_text(encoding='utf-8'))
-        self.assertLess(len(CHAT_SRC.splitlines()), 19900)
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)
 
 
 # ============================================================================ 2

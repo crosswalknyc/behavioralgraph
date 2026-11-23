@@ -37,7 +37,7 @@ from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -316,7 +316,7 @@ class TheSubjectIsDecidedByRule(_WithLedger):
     def test_the_wiring(self):
         chat = _legacy_view()
         self.assertIn("subj_hint = _cut_list.hint(text, mr.get('subject'))", chat)
-        self.assertLess(len(chat.splitlines()), 19900)
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)
         self.assertEqual(CL.hint(P1, 'Comedy'), '')
         self.assertEqual(CL.hint(P1, 'Horror Streaming Enthusiasts'), '')
         self.assertEqual(CL.hint(P1, 'Nike'), 'Nike')

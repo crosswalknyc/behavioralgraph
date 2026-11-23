@@ -42,7 +42,7 @@ from datetime import date, datetime, timezone
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.setdefault('CORPUS_CATALOG', '0')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -392,7 +392,7 @@ class AppUserPrice(unittest.TestCase):
         for name in ('_pm_price_sentence', '_pm_tool_price_label'):
             self.assertIn("fromlist=['seat_username']).seat_username(username)", _grab(CHAT, name), name)
             self.assertNotIn("session.get('username')", _grab(CHAT, name), name)   # one resolver, not a copy of the session read
-        self.assertLess(len(CHAT.splitlines()), 19900)                              # the file's line ratchet holds
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)                              # the file's line ratchet holds
         self.assertIn('_pr.included_with_plan(user, uname, _H)', _grab(CHAT, '_pm_price_sentence'))
         calls = []
         real = PR.included_with_plan

@@ -43,7 +43,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 os.environ.setdefault('PM_MAIL_OFF', '1')
 os.environ.pop('BPIQ_CORPUS_ANCHORS', None)
 
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 sys.path.insert(0, str(WEB / 'scripts'))
@@ -452,7 +452,7 @@ def test_e_read_never_prices_a_partnership():
           "partnership_value', fromlist=['guard_read']).guard_read(payload, question=text, history=history)" in legacy
           and legacy.index("fromlist=['guard_read']") < legacy.index("with_offer(payload, base=base, user=pm_user")
           < legacy.index('_pm_append_read_to_history(pm_user, job_id, _chat'))
-    check("chat.py stays under its line ratchet", _chat_py_lines() < 19900)
+    check("the legacy chat code stays under its line ratchet", _legacy_lines() < _LEGACY_CEILING)
 
 
 # ------------------------------------------------------------------ F

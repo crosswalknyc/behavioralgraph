@@ -55,7 +55,7 @@ import subprocess
 import sys
 import unittest
 
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -511,7 +511,7 @@ class Wiring(unittest.TestCase):
         self.assertNotIn('request.', self.mod)
 
     def test_the_line_ratchet_holds(self):
-        self.assertLess(len(self.chat.splitlines()), 19900)
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)
 
     def test_no_dashes_in_the_copy(self):
         for copy in (F.WHICH_TITLE, F.which_title_copy('it'), F.launch_question('Tony', 'Amazon Prime Video')):

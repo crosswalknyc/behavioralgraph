@@ -43,7 +43,7 @@ import subprocess
 import sys
 import unittest
 
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -639,7 +639,7 @@ class Wiring(unittest.TestCase):
         d = {'decision': 'existing_match', 'subject_raw_tu': 20727}
         self.assertEqual(HS.ranged(lambda tu: seen.append(tu) or {'low': 1, 'high': 2}, d, 20727), {'low': 1, 'high': 2})
         self.assertEqual(seen, [20727])                                 # the band is read from the size that stands
-        self.assertLess(len(chat.splitlines()), 19900)                  # the line ratchet holds
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)                  # the line ratchet holds
 
     def test_no_dashes_and_no_internal_words_in_the_copy(self):
         for copy in (TS.WHICH_TITLE, TS.which_title('x')['reply'], BT._CLOSE):

@@ -50,7 +50,7 @@ import subprocess
 import sys
 import unittest
 
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -455,7 +455,7 @@ class TheWiring(unittest.TestCase):
         dec = "fromlist=['from_decline']).from_decline(data, text, '', _pm_ask_hint)"
         self.assertEqual(chat.count(dec), 1)
         self.assertLess(chat.index(dec), chat.index("gate = {'domain': 'model_decline',"))
-        self.assertLess(len(chat.splitlines()), 19900)                   # the line ratchet holds
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING)                   # the line ratchet holds
 
     def test_the_routing_table_and_the_host_record(self):
         from prometheus import routing_table as RT

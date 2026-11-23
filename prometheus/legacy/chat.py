@@ -90,314 +90,29 @@ def _pm_correct_esc(text):
             .replace('>', '&gt;'))
 
 
-SYNTH_CHAT_HISTORY_KEY_PREFIX = "system/synth_chat_history"
+# <<extracted: prometheus.thread_history block 1>>
 
 
-# Freshness threshold for reusing an existing profile without asking the
-# user to refresh. If a profile is older than this, we still surface it
-# as a match but the default decision shifts to "offer refresh".
-SYNTH_CHAT_FRESH_DAYS = 120
+# <<extracted: prometheus.library_match block 1>>
 
 
-# How many candidate matches from s3_cache we surface to Claude's
-# interpret prompt. Keep this tight (prompt size + Claude focus).
-SYNTH_CHAT_MAX_CANDIDATES = 12
+# <<extracted: prometheus.library_match block 2>>
 try:   # the marker claude_client splits a system prompt on: cached rulebook before it, per-ask tail after (2026-10-13)
     from claude_client import PROMPT_CACHE_SPLIT as _PM_PROMPT_CACHE_SPLIT
 except Exception:   # no client on this host: one block, no split
     _PM_PROMPT_CACHE_SPLIT = "\n"
 
 
-def _profile_catalog_for_chat():
-    """Return a compact list of every profile in the dashboard catalog:
-    [{s3_key, display_name, subject, category, last_modified, days_old}, ...]
-
-    Reads from the in-memory `s3_cache['jobs']`. This is the same source
-    of truth the Select Profile dropdown uses, so if it's in the dropdown
-    it's in this list.
-
-    Critical: forces a persisted-cache refresh probe BEFORE reading so
-    profiles created in the last few minutes (including via the chatbot
-    or partner API on OTHER Render workers) are visible here. Without
-    this, a chat prompt like "do a cut of X" can miss a parent that
-    was just built and misclassify the request as new_build.
-    Directive 2026-08-17: cuts requested via chat were pulling as fresh
-    builds because interpret was seeing a stale catalog.
-    """
-    # Best-effort cross-worker propagation. The helper is throttled so
-    # it does at most one S3 HEAD per ~3s per worker.
-    try:
-        _H.maybe_refresh_persisted_cache_if_changed()
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    from datetime import timezone as _tz
-    now = datetime.now(_tz.utc)
-    jobs = []
-    try:
-        jobs = list((_H.s3_cache or {}).get('jobs') or [])
-    except Exception:
-        jobs = []
-    # Admin-hidden profiles (admin_quick_selects False) are invisible in
-    # the Select Profile dropdown, so they must be invisible to interpret
-    # matching too - otherwise a retired-but-kept-for-lineage file (e.g.
-    # a superseded year-old TU) can win existing_match and hand a stale
-    # window to a partner (Bethenny June TU, 2026-08-27). 60s TTL cache;
-    # any load failure fails open (empty hidden set).
-    hidden = _H._admin_hidden_profile_keys()
-    out = []
-    for j in jobs:
-        if not isinstance(j, dict):
-            continue
-        s3_key = j.get('s3_key') or j.get('key')
-        if not s3_key:
-            continue
-        if s3_key in hidden:
-            continue
-        display = (j.get('display_name') or j.get('project_name')
-                    or j.get('profile_subject') or s3_key).strip()
-        # The subject is the name a reader sees. On 137 catalog files
-        # `profile_subject` is the upper-snake file stem
-        # (BEST_OF_THE_BEST, 2_CHAINZ); it is matching material, never a
-        # label (2026-10-22, the counting block in Casey Pearson's
-        # Jackass: Best & Last thread printed it). Display name wins.
-        subject = _subject_display.display(
-            (j.get('profile_subject') or j.get('subject') or '').strip(), display) or display
-        cat = (j.get('category') or '').strip()
-        lm_iso = j.get('last_modified') or j.get('created_at')
-        # Age from the filename timestamp first (immutable build stamp);
-        # registry dates only when the key has no stamp. Bulk
-        # maintenance clobbers last_modified, which made a 78-day-old
-        # file report days_old=0 (client defect 2026-08-25).
-        try:
-            days_old = _H._profile_age_days(s3_key, lm_iso, now=now)
-        except Exception:
-            days_old = None
-        out.append({
-            's3_key': s3_key,
-            'display_name': display,
-            'subject': subject,
-            'category': cat,
-            'last_modified': lm_iso,
-            'days_old': days_old,
-        })
-    return out
+# <<extracted: prometheus.library_match block 3>>
 
 
 from prometheus.subject_rules import identity_swapped as _identity_swapped   # 2026-10-30: Ohio is not Florida
 
 
-def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CANDIDATES):
-    """Return the top-N profile candidates most likely to match the user's
-    prompt. Uses token-overlap scoring against each candidate's subject
-    and display_name. Cheap - runs in-memory over ~200-1000 records.
-
-    Ranking signals, in order of importance:
-      1. Token overlap between prompt and candidate subject/display_name.
-      2. Base-profile boost: if the user's ask has NO year AND NO explicit
-         cut modifier (avid, female, spotify, etc.), the base profile
-         (shortest display_name, no suffix) beats sibling skins.
-      3. Historical-year penalty: candidates whose display_name contains
-         a year like '2023' or '2024' get penalized UNLESS the prompt
-         also contains that exact year. This is what prevents 'reba
-         mcentire past 60 days' from being routed at 'Reba McEntire -
-         2024 Total Universe' when the base 'Reba McEntire' exists.
-      4. Recency: newer profiles beat older ones on ties.
-
-    Returns a list ordered best-first, each entry with the catalog
-    fields plus `_score` (float, 0..1) so Claude can see how strong
-    each candidate match is.
-    """
-    if not prompt or not catalog:
-        return []
-    p_norm = _H._normalize_for_match(prompt)
-    # Version qualifiers ('us', 'uk', 'bbc') are shorter than the
-    # 3-char token floor but distinguish same-name versions - keep
-    # them (2026-08-25).
-    p_version_tokens = _H._prompt_version_tokens(p_norm)
-    p_tokens = set(t for t in p_norm.split()
-                   if len(t) >= 3) | p_version_tokens
-    if not p_tokens:
-        return []
-    # Extract explicit years from the prompt so historical-year skins
-    # only rank high when the user actually asked for that year.
-    prompt_years = set(_H._HISTORICAL_YEAR_RE.findall(prompt or ''))
-    # Detect explicit cut modifiers so we know whether the user is asking
-    # for a sibling skin ("avid Reba") or the base current profile ("Reba").
-    prompt_has_cut_hint = bool(_H._prompt_extract_cut_hints(p_norm))
-    scored = []
-    for c in catalog:
-        subject_norm = _H._normalize_for_match(c.get('subject') or '')
-        display_norm = _H._normalize_for_match(c.get('display_name') or '')
-        combined = f"{subject_norm} {display_norm}"
-        cand_versions = _H._subject_version_tokens(
-            subject_norm or _H._normalize_for_match(
-                str(c.get('display_name') or '').split(' - ', 1)[0]))
-        c_tokens = set(t for t in combined.split()
-                       if len(t) >= 3) | cand_versions
-        if not c_tokens:
-            continue
-        overlap = p_tokens & c_tokens
-        if not overlap:
-            for pt in p_tokens:
-                if len(pt) >= 5 and pt in combined:
-                    overlap = overlap | {pt}
-        if not overlap:
-            continue
-        prompt_coverage = len(overlap) / max(len(p_tokens), 1)
-        subject_hit = 1.0 if any(t in subject_norm.split() for t in overlap) else 0.5
-        score = prompt_coverage * subject_hit
-
-        # Version mismatch (2026-08-25): the prompt names one version
-        # ('the office uk') and this candidate carries a DIFFERENT
-        # version marker ('The Office US') - push it down hard so the
-        # sibling version wins.
-        if p_version_tokens and cand_versions \
-                and not (p_version_tokens & cand_versions):
-            score *= 0.15
-
-        # Identity substitution (2026-10-30, the Ohio voters twin that was
-        # seated from the Florida Gubernatorial Voters profile): when the
-        # prompt carries a distinctive word the candidate lacks AND the
-        # candidate carries a distinctive word the prompt lacks, one name
-        # has been swapped for another (Ohio / Florida, Godzilla Minus One
-        # / Godzilla x Kong). Audience nouns, years and the stop words do
-        # not count, so 'Reba' still finds 'Reba McEntire' and 'Taylor
-        # Swift Eras Tour' still sees 'Taylor Swift'. Same push as a
-        # version mismatch.
-        _ident_swapped = False
-        try:
-            _ident_swapped = _identity_swapped(
-                prompt, str(c.get('display_name') or '').split(' - ', 1)[0] or c.get('subject') or '', combined)
-        except Exception:
-            _ident_swapped = False
-        if _ident_swapped:
-            score *= 0.15
-
-        # Historical-year handling. If the display name contains a year
-        # AND the prompt does NOT mention that exact year, this candidate
-        # is a historical skin the user did not ask for -- push it down.
-        display_years = set(_H._HISTORICAL_YEAR_RE.findall(
-            c.get('display_name') or ''))
-        if display_years and not (display_years & prompt_years):
-            score *= 0.55
-        elif display_years and (display_years & prompt_years):
-            # User explicitly named a historical year and this candidate
-            # matches -- reward it.
-            score *= 1.15
-
-        # Base-profile boost: when the user's ask has NO year and NO cut
-        # modifier, prefer the shortest matching display name (i.e. the
-        # base 'Reba McEntire', not 'Reba McEntire - Spotify Fan').
-        if not prompt_years and not prompt_has_cut_hint:
-            display_raw = str(c.get('display_name') or '')
-            has_suffix = (' - ' in display_raw) or bool(display_years)
-            if not has_suffix:
-                score *= 1.30
-
-        # Exact-entity floor (2026-08-28 client finding #3: a perfect
-        # name match 2 hours after its build ranked 0.65 because the
-        # prompt's filler words - 'audience of ... customers' -
-        # diluted token coverage). When every token of a BASE
-        # candidate's name appears in the prompt, the identity is
-        # fully asserted: floor the ranking score so the interpret
-        # model reads it as the strong match it is. Never applied
-        # over a version or historical-year penalty, and never to
-        # cut/year skins (their qualifier still has to earn the pick).
-        _ent_toks = set(_H._normalize_for_match(
-            str(c.get('display_name') or '').split(' - ', 1)[0]).split()
-        ) or set(subject_norm.split())
-        _penalized = bool(
-            (p_version_tokens and cand_versions
-             and not (p_version_tokens & cand_versions))
-            or _ident_swapped
-            or (display_years and not (display_years & prompt_years)))
-        if (_ent_toks and _ent_toks <= set(p_norm.split())
-                and not _penalized and not display_years
-                and ' - ' not in str(c.get('display_name') or '')):
-            score = max(score, 0.92)
-
-        score = round(score, 4)
-        if score < 0.15:
-            continue
-        c2 = dict(c)
-        c2['_score'] = score
-        scored.append(c2)
-    # Sort by score desc, then by recency desc (newer wins on ties).
-    def _sort_key(x):
-        lm = x.get('last_modified') or ''
-        return (-x['_score'], lm[::-1] if isinstance(lm, str) else '')
-    scored.sort(key=_sort_key)
-    return scored[:max_candidates]
+# <<extracted: prometheus.library_match block 4>>
 
 
-def _synth_chat_gate(allow_api_key: bool = True):
-    """Return (user_dict, error_response_or_None). None error means allow.
-
-    By default accepts either a logged-in session (browser / dashboard
-    use) OR an external partner API key sent as
-    `X-Crosswalk-API-Key: <raw_key>`. Pass ``allow_api_key=False`` to
-    force session-only auth - used by the internal dashboard chatbot
-    routes (`/api/synth-chat/*`, `/api/brief-chat/*`) so partners get
-    steered to the documented `/api/v1/*` surface instead of leaking
-    internal terminology through the chatbot UI paths.
-    """
-    api_key = request.headers.get('X-Crosswalk-API-Key') if request else None
-    if api_key:
-        if not allow_api_key:
-            # Partner keys must use the documented v1 API. Do NOT let
-            # them see internal chatbot-UI JSON (which mentions "queue",
-            # phase strings, etc.). Steer without exposing the internal
-            # path names.
-            return None, (jsonify({
-                'success': False,
-                'error': ('API keys are not accepted on this route. '
-                          'Use POST /api/v1/profiles/check, POST '
-                          '/api/v1/profiles/run, and GET /api/v1/'
-                          'profiles/<run_id>.'),
-            }), 403)
-        u, uname = _H._lookup_user_by_api_key(api_key)
-        if not u:
-            return None, (jsonify({
-                'success': False,
-                'error': 'invalid or revoked X-Crosswalk-API-Key',
-            }), 401)
-        role = u.get('role', '')
-        has_flag = bool(u.get('has_chatbot_profile_iq_access', False))
-        if role != 'super_admin' and not has_flag:
-            return None, (jsonify({
-                'success': False,
-                'error': 'API key does not have Chatbot Profile IQ access.',
-            }), 403)
-        u.setdefault('username', uname)
-        u['_auth_via'] = 'api_key'
-        # The ask log and the watch see the key owner as the user
-        # (2026-10-06: API asks used to log as 'unknown').
-        try:
-            from flask import g as _g_ak
-            _g_ak._pm_api_key_owner = uname or u.get('username') or u.get('email')
-        except Exception as _fx:
-            _faults.note('chat', _fx)
-        return u, None
-
-    user = _H.get_current_user()
-    if not user:
-        return None, (jsonify({'success': False, 'error': 'not authenticated'}), 401)
-    role = user.get('role', '')
-    has_flag = bool(user.get('has_chatbot_profile_iq_access', False))
-    if role != 'super_admin' and not has_flag:
-        return None, (jsonify({
-            'success': False,
-            'error': 'Chatbot Profile IQ access not granted for this account. '
-                     'Contact your admin.',
-        }), 403)
-    user['_auth_via'] = 'session'
-    # The users.json record carries no 'username' field (the dict key
-    # IS the username), so inject the session's. Without this, every
-    # job-owner check downstream compared the record's EMAIL against
-    # the username the job status stored, and a user's own polls
-    # 403'd (2026-09-25, keith's read-status / notify-when-done).
-    user.setdefault('username', session['username'])
-    return user, None
+# <<extracted: prometheus.library_match block 5>>
 
 
 # ---------------------------------------------------------------------------
@@ -439,193 +154,43 @@ _SYNTH_CHAT_INTERPRET_MODEL = (
     or 'claude-sonnet-4-6')
 
 
-def _synth_chat_history_key(username):
-    safe = ''.join(c for c in (username or 'anon')
-                    if c.isalnum() or c in '-_.@').lower()
-    return f"{SYNTH_CHAT_HISTORY_KEY_PREFIX}/{safe}.json"
+# <<extracted: prometheus.thread_history block 2>>
 
 
-SYNTH_CHAT_THREADS_PREFIX = "system/synth_chat_threads"
+# <<extracted: prometheus.thread_history block 3>>
 
 
-_PM_MAX_THREADS = 40
+# <<extracted: prometheus.thread_history block 4>>
 
 
-def _load_synth_chat_history(username):
-    try:
-        idx = _load_threads_index(username)
-        tid = idx.get('active') or (idx['threads'][0]['id']
-                                    if idx.get('threads') else None)
-        if not tid:
-            return []
-        return _pm_s3_json(_pm_thread_key(username, tid), [])
-    except Exception as e:
-        print(f"[synth-chat] history load failed for {username}: {e}")
-        return []
+# <<extracted: prometheus.thread_history block 5>>
 
 
-# Idle rotation (2026-10-01 Jenna: "if you've been gone for a while
-# and come back it should open a new thread like ChatGPT or Claude
-# and move the tired thread to the side bar"). Since 2026-11-06 the
-# decision is prometheus.thread_presence.fresh_decision, read on the
-# widget's open (history GET with open=1): a thread idle this long opens
-# a FRESH PANE, and no thread is created until the reader sends
-# something (Jenna: "if a chat window is empty there is no need to save
-# it to the left rail ... only go to a new window if it has been
-# inactive for 15m or more").
-_PM_IDLE_NEW_THREAD_SECONDS = 15 * 60
+# <<extracted: prometheus.thread_history block 6>>
 
 
-def _pm_parse_iso(s):
-    try:
-        s = str(s or '').strip()
-        if not s:
-            return None
-        if s.endswith('Z'):
-            s = s[:-1] + '+00:00'
-        d = datetime.fromisoformat(s)
-        if d.tzinfo is None:
-            d = d.replace(tzinfo=timezone.utc)
-        return d
-    except Exception:
-        return None
+# <<extracted: prometheus.thread_history block 7>>
 
 
-def _pm_history_has_running_job(history):
-    """True when the newest build in this thread is still polling;
-    rotation waits so the finished status lands where it started."""
-    terminal = ('complete', 'error', 'failed')
-    for t in reversed(list(history or [])):
-        meta = t.get('meta') if isinstance(t, dict) else None
-        if not isinstance(meta, dict) or not meta.get('run_id'):
-            continue
-        return str(meta.get('status') or 'queued').lower() not in terminal
-    return False
+# <<extracted: prometheus.thread_history block 8>>
 
 
-def _pm_new_thread_into(username, idx):
-    """Make a fresh New chat the active thread and persist. An active
-    thread that is still empty is reused so the rail never stacks
-    blank chats. Returns the active thread id."""
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    threads = idx.setdefault('threads', [])
-    act = next((t for t in threads if t.get('id') == idx.get('active')),
-               None)
-    # Reuse only a thread that is empty where it is stored, and never
-    # wipe it (2026-11-05, Jenna: "if you click for a new one it opens
-    # a new thread not an old one"). The index's turn count lags the
-    # thread body: the widget's save of the thread it is leaving and
-    # its New-thread call race, and a count still at 0 made this hand
-    # back the SAME id and write [] over the turns the save then
-    # merged straight back in. The new thread was the old one.
-    # the reader is in a thread again: a pending fresh-pane request is
-    # over, and the thread is seen now (prometheus.thread_presence)
-    idx.pop('fresh_at', None)
-    if act and not act.get('turns') \
-            and act.get('title') in (None, '', 'New chat') \
-            and not (_pm_s3_json(_pm_thread_key(username, act['id']), []) or []):
-        act['updated'] = now
-        act['last_seen'] = now
-        _pm_s3_put_json(_pm_threads_index_key(username), idx)
-        return act['id']
-    tid = uuid.uuid4().hex[:10]
-    threads.append({'id': tid, 'title': 'New chat', 'created': now,
-                    'updated': now, 'last_seen': now, 'turns': 0})
-    # Bound growth: the oldest empty-or-stale threads roll off.
-    if len(threads) > _PM_MAX_THREADS:
-        idx['threads'] = sorted(
-            threads, key=lambda t: str(t.get('updated') or ''),
-            reverse=True)[:_PM_MAX_THREADS]
-    idx['active'] = tid
-    _pm_s3_put_json(_pm_threads_index_key(username), idx)
-    _pm_s3_put_json(_pm_thread_key(username, tid), [])
-    return tid
+# <<extracted: prometheus.thread_history block 9>>
 
 
-def _pm_rotate_idle_thread(username):
-    """Retired 2026-11-06 (Jenna: an empty chat is never saved to the
-    rail). The two-hour rotation created a New chat on the server the
-    moment a thread went idle; those are the empty 'New chat' entries
-    that stacked in the rail. The idle decision now lives in
-    prometheus.thread_presence.fresh_decision and opens a fresh PANE
-    (no thread until the first message). Kept as a no-op for the
-    callers and tests that grew up on it."""
-    return None
+# <<extracted: prometheus.thread_history block 10>>
 
 
-def _pm_keep_corrected_turns(username, tid, incoming):
-    """The stored thread with the incoming turns merged in: every turn the server holds survives a client's save
-    (2026-11-04); corrections (meta.corrected_at) and server-appended turns included (2026-10-16). prometheus.thread_merge."""
-    try:
-        from prometheus.legacy import threads as _thr
-        return _thr.keep_server_turns(_pm_s3_json(_pm_thread_key(username, tid), []) or [], incoming)
-    except Exception:
-        traceback.print_exc()
-        return incoming
+# <<extracted: prometheus.thread_history block 11>>
 
 
-def _pm_merge_save_thread(username, tid, history):
-    """Write one thread: the stored turns with ``history`` merged in, guarded
-    by the object's ETag so a landing or a note that arrives mid-save is
-    re-read and kept (prometheus.thread_merge.merge_save). Never shorter
-    than what was stored, except the 200-turn growth bound."""
-    from prometheus import thread_merge as _tm
-    return _tm.merge_save(_H.s3_client, _H.S3_BUCKET, _pm_thread_key(username, tid), list(history or []))
+# <<extracted: prometheus.thread_history block 12>>
 
 
-def _save_synth_chat_history(username, history, thread_id=None):
-    """Merge the client's history into its thread and refresh the index.
-    Returns {'thread_id', 'history'} (the merged thread as written), or
-    False when nothing could be saved. A save naming a thread the caller
-    no longer has (deleted, rolled off the rail) is refused with
-    {'unknown_thread': True} rather than landed on another thread
-    (2026-11-04: that redirect is how one tab's stale copy reached
-    another tab's thread)."""
-    try:
-        idx = _load_threads_index(username)
-        known = {th.get('id') for th in idx.get('threads', [])}
-        want = str(thread_id).strip() if thread_id and str(thread_id).strip() else ''
-        if want and want not in known:
-            return {'unknown_thread': True, 'thread_id': want}
-        # the save names its thread (2026-10-21): a save that races a switch lands on the thread it came from, never the one just opened
-        tid = want or idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
-        if not tid:
-            return False
-        # a greeting is a bubble the widget draws, never a turn: a save with
-        # no user turn into a thread that holds nothing writes nothing, so
-        # an empty pane never becomes a rail entry (Jenna 2026-11-06)
-        if not any(isinstance(t, dict) and str(t.get('role') or '') == 'user' for t in history):
-            stored = _pm_s3_json(_pm_thread_key(username, tid), []) or []
-            if not stored:
-                return {'thread_id': tid, 'history': []}
-        merged = _pm_merge_save_thread(username, tid, history)
-        now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-        for th in idx.get('threads', []):
-            if th.get('id') == tid:
-                th['updated'] = now
-                th['last_seen'] = now   # a turn is activity (prometheus.thread_presence)
-                th['turns'] = len(merged)
-                if th.get('title') in (None, '', 'New chat'):
-                    th['title'] = _pm_thread_title_from(merged)
-                break
-        _pm_s3_put_json(_pm_threads_index_key(username), idx)
-        return {'thread_id': tid, 'history': merged}
-    except Exception as e:
-        print(f"[synth-chat] history save failed for {username}: {e}")
-        return False
+# <<extracted: prometheus.thread_history block 13>>
 
 
-def _pm_active_thread_history(username):
-    """(thread id, turns) of the caller's active thread."""
-    try:
-        idx = _load_threads_index(username)
-        tid = idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
-        if not tid:
-            return None, []
-        return tid, (_pm_s3_json(_pm_thread_key(username, tid), []) or [])
-    except Exception as e:
-        print(f"[synth-chat] history load failed for {username}: {e}")
-        return None, []
+# <<extracted: prometheus.thread_history block 14>>
 
 
 # Deterministic wall-time estimator for the chatbot approval card.
@@ -5996,339 +5561,50 @@ def _pm_approve_core(user, body):
     })
 
 
-@_H.app.route('/api/brief-chat/history', methods=['GET', 'POST'])
-@_H.app.route('/api/synth-chat/history', methods=['GET', 'POST'])  # legacy alias
-@_H.requires_auth
-@_H._chatbot_route_guard('brief-chat/history')
-def api_synth_chat_history():
-    """Per-user chat message history persistence (S3-backed).
-
-    Session-authenticated dashboard users only. Chat history is a UI
-    concern and never exposed via the partner API.
-    """
-    user, err = _synth_chat_gate(allow_api_key=False)
-    if err:
-        return err
-    uname = user.get('username') or user.get('email') or 'anon'
-    from prometheus import thread_merge as _tm
-    if request.method == 'GET':
-        from prometheus import thread_presence as _tp
-        _flag = lambda k: str(request.args.get(k) or '').strip() in ('1', 'true', 'yes')   # noqa: E731
-        opening = _flag('open')     # the widget is opening: resume or a fresh pane (2026-11-06)
-        seen = _flag('seen')        # the open widget's pull: the thread is on screen
-        want = str(request.args.get('thread_id') or '').strip()
-        idx = _load_threads_index(uname)
-        if want and not any(t.get('id') == want for t in idx.get('threads', [])):
-            if not opening:
-                return jsonify({'success': False, 'error': 'unknown thread'}), 404
-            # a tab reopening on a thread the index does not list keeps its own pane (2026-11-11); it used to be
-            # handed the reader's ACTIVE thread, another chat's turns under the question about to be typed
-            return jsonify({'success': True, 'history': [], 'thread_id': want, 'unlisted': True, 'why': 'unlisted', 'rev': ''})
-        if opening:
-            # Reopen resumes unless idle 15 minutes (Jenna 2026-11-06): the
-            # decision is the index's; a fresh pane names no thread and
-            # creates none. The resumed thread is seen now. The reader's
-            # empty threads older than fifteen minutes go on the same load.
-            fresh, why = _tp.fresh_decision(idx, tid=want or None)
-            tid = want or idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
-            try:
-                if _tp.sweep_due(idx):
-                    swept = _tp.sweep_for_user(uname, idx, force=True)   # writes the index itself
-                    if swept is not None and tid and not any(t.get('id') == tid for t in idx.get('threads', [])):
-                        tid = idx.get('active')
-            except Exception as _fx:
-                _faults.note('chat.sweep', _fx)
-            if fresh:
-                return jsonify({'success': True, 'history': [], 'thread_id': None, 'fresh': True,
-                                'fresh_from': tid, 'why': why, 'rev': ''})
-            if tid and _tp.mark_seen(idx, tid, min_gap_s=0):
-                _pm_s3_put_json(_pm_threads_index_key(uname), idx)
-            hist = (_pm_s3_json(_pm_thread_key(uname, tid), []) or []) if tid else []
-            return jsonify({'success': True, 'history': hist, 'thread_id': tid, 'resumed': True,
-                            'why': why, 'rev': _tm.thread_rev(hist)})
-        if want:
-            # One thread by id, read only (2026-11-04): a tab pulling its own
-            # thread's turns moves nothing (no rotation, no active switch).
-            # seen=1 stamps the thread as on screen (prometheus.thread_presence).
-            if seen and _tp.mark_seen(idx, want):
-                _pm_s3_put_json(_pm_threads_index_key(uname), idx)
-            hist = _pm_s3_json(_pm_thread_key(uname, want), []) or []
-            return jsonify({'success': True, 'history': hist, 'thread_id': want,
-                            'rev': _tm.thread_rev(hist)})
-        peek = str(request.args.get('peek') or '').strip() in ('1', 'true', 'yes')
-        rotated_from = None if peek else _pm_rotate_idle_thread(uname)
-        tid, hist = _pm_active_thread_history(uname)
-        out = {'success': True, 'history': hist, 'thread_id': tid,
-               'rev': _tm.thread_rev(hist)}
-        if rotated_from is not None:
-            out['rotated'] = True
-            out['rotated_from'] = rotated_from
-        return jsonify(out)
-    try:
-        body = request.get_json(force=True) or {}
-    except Exception as e:
-        _H._chatbot_error_email('brief-chat/history', e)
-        return jsonify(_H._chatbot_calm_payload())
-    history = body.get('history') or []
-    if not isinstance(history, list):
-        _H._chatbot_error_email('brief-chat/history',
-                             'history payload is not a list',
-                             tb='(request validation)')
-        return jsonify(_H._chatbot_calm_payload())
-    try:   # a calm line a tab wrote on its own gets the held record behind it (2026-11-11, prometheus.promise_truth)
-        history = __import__('prometheus.promise_truth', fromlist=['back_thread']).back_thread(
-            uname, body.get('thread_id'), history, load=lambda: (_pm_s3_json(_pm_thread_key(uname, body.get('thread_id')), []) if body.get('thread_id') else None))
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    saved = _save_synth_chat_history(uname, history, body.get('thread_id'))
-    if not saved:
-        return jsonify({'success': False})
-    if saved.get('unknown_thread'):
-        return jsonify({'success': False, 'error': 'unknown thread',
-                        'thread_id': saved.get('thread_id')}), 404
-    # The merged thread is the record (2026-11-04). When it is not the
-    # list the client sent (the client lacked turns the server held), it
-    # rides back so the tab takes them in instead of pushing over them.
-    merged = saved['history']
-    out = {'success': True, 'thread_id': saved['thread_id'],
-           'rev': _tm.thread_rev(merged), 'turns': len(merged)}
-    if _tm.differs(history, merged):
-        out['changed'] = True
-        out['history'] = merged
-    return jsonify(out)
+# <<extracted: prometheus.thread_history block 15>>
 
 
-@_H.app.route('/api/prometheus/proactive', methods=['GET'])
-@_H.requires_auth
-@_H._chatbot_route_guard('prometheus/proactive')
-def api_prometheus_proactive():
-    """Per-account openers for the chat welcome bubble (2026-10-01
-    proactive mode). Read-only; computed from the account's recent
-    asks plus the measured tracker movers; cached an hour per
-    account. Session-authenticated dashboard users only."""
-    user, err = _synth_chat_gate(allow_api_key=False)
-    if err:
-        return err
-    uname = user.get('username') or user.get('email') or 'anon'
-    chips = []
-    try:
-        import prometheus_proactive as _ppro
-        out = _ppro.suggestions(uname)
-        chips = (out or {}).get('chips') or []
-    except Exception:
-        traceback.print_exc()
-    # Status line on open (2026-10-06, audit item 8): what finished
-    # since the user was last here, what is still running, and what was
-    # reused from the dashboard instead of rebuilt. Composed here, in
-    # the API, so every client shows the same sentence.
-    status_line = ''
-    try:
-        status_line = _pm_open_status_line(user)
-    except Exception:
-        traceback.print_exc()
-    return jsonify({'success': True, 'chips': chips, 'status_line': status_line})
+# <<extracted: prometheus.thread_history block 16>>
 
 
-_PM_ANALYZE_MODEL_ENV = (os.environ.get('PROMETHEUS_ANALYZE_MODEL')
-                         or '').strip()
+# <<extracted: prometheus.model_chain block 1>>
 
 
-# Candidate IDs verified against the live Anthropic models list
-# 2026-08-21 (client.models.list): opus-5 / opus-4-8 / opus-4-7 all
-# exist. The chain tail is always the interpret sonnet, so analysis
-# degrades gracefully when the deploy key has no Opus access.
-_PM_ANALYZE_CANDIDATES = (
-    ([_PM_ANALYZE_MODEL_ENV] if _PM_ANALYZE_MODEL_ENV else [])
-    + ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7',
-       'claude-opus-4-6'])
+# <<extracted: prometheus.model_chain block 2>>
 
 
-_pm_model_lock = threading.Lock()
+# <<extracted: prometheus.model_chain block 3>>
 
 
-_pm_resolved_model = {'name': None}
+# <<extracted: prometheus.model_chain block 4>>
 
 
-# Pure-classification surfaces ride a fast Haiku-class model
-# (2026-08-28, the routing wave): corpus selection and the semantic
-# ask classifier are label decisions, not reasoning, and the fast
-# model answers them ~2x sooner (live probe on this key: opus-5
-# ~1.4s vs haiku-4-5 ~0.6s on the identical classify prompt). The
-# alias + the dated ID both verified against client.models.list on
-# 2026-08-28. The full analyze chain is always the tail, so
-# classification can never break on model naming.
-_PM_CLASSIFY_MODEL_ENV = (os.environ.get('PROMETHEUS_CLASSIFY_MODEL')
-                          or '').strip()
+# <<extracted: prometheus.model_chain block 5>>
 
 
-# 2026-09-04: dated ID first per Anthropic's Feb-2026 retirement of
-# claude-3-5-haiku-20241022. Migration notice explicitly recommends
-# the dated haiku-4-5-20251001 form.
-# 2026-10-30 (Sonnet 4.5 retirement wave): the ask classifier keys on
-# a literal label, so it was compared live on the five most frequent
-# real asks before moving. Haiku 5.5 agreed on four; the 'Value a brand
-# partnership' chip read `other` on 4.5 and `analysis` on 5.5. Per the
-# rule (move only what passed) this chain stays on Haiku 4.5 first,
-# with Haiku 5.5 as the live fallback in place of the retiring alias
-# (Haiku 4.5's earliest retirement date, 2026-10-15, has passed).
-_PM_CLASSIFY_CANDIDATES = (
-    ([_PM_CLASSIFY_MODEL_ENV] if _PM_CLASSIFY_MODEL_ENV else [])
-    + ['claude-haiku-4-5-20251001', 'claude-haiku-5-5'])
+# <<extracted: prometheus.model_chain block 6>>
 
 
-_PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify', 'reader_notes', 'crosstab_ties'))
-_PM_FAST_SURFACES = frozenset(('pm_knowledge_research', 'pm_valuation_events'))   # the interpret model first, the analysis chain behind it; the winner never cached as the analysis model (prometheus.read_speed, 2026-11-23)
+# <<extracted: prometheus.model_chain block 7>>
+# <<extracted: prometheus.model_chain block 8>>
 
 
-_pm_resolved_classify = {'name': None}
+# <<extracted: prometheus.model_chain block 9>>
 
 
 _PM_DECK_PREFIX = 'system/prometheus_decks/'
 
 
-def _pm_model_chain():
-    with _pm_model_lock:
-        if _pm_resolved_model['name']:
-            return [_pm_resolved_model['name'], _SYNTH_CHAT_INTERPRET_MODEL]
-    return _PM_ANALYZE_CANDIDATES + [_SYNTH_CHAT_INTERPRET_MODEL]
+# <<extracted: prometheus.model_chain block 10>>
 
 
-def _pm_classify_chain():
-    """Fast-classifier candidates, then the full analyze chain as the
-    fallback so a classification call can never hard-fail on model
-    naming. The winning fast model is cached for the process lifetime
-    in its own slot - it must never leak into the analysis chain (a
-    label model cannot own the reasoning calls)."""
-    # Read the resolved slot under the lock, then build the chain
-    # OUTSIDE it: _pm_model_chain() takes the same non-reentrant lock,
-    # so calling it while held self-deadlocks the second classify call
-    # of the process and every model call queues behind it (found
-    # 2026-08-28 via a hung read-job smoke).
-    with _pm_model_lock:
-        resolved = _pm_resolved_classify['name']
-    if resolved:
-        return [resolved] + _pm_model_chain()
-    return _PM_CLASSIFY_CANDIDATES + _pm_model_chain()
+# <<extracted: prometheus.model_chain block 11>>
 
 
-def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
-                    temperature=0.5, surface='analysis',
-                    usage_extras=None, tools=None):
-    """JSON reasoning pass on the strongest model that answers. Walks
-    the Opus candidate chain once, caches the winner for the process
-    lifetime, and always keeps the interpret sonnet as the final
-    fallback so analysis never hard-fails on model naming.
-
-    2026-08-21: advance on ANY failure, not just 404s. The original
-    404-only advance never fired because claude_reason_json swallowed
-    permanent API errors into "" (surfaced as 'non-JSON output', which
-    matched neither 'not_found' nor '404'), so the first unusable Opus
-    candidate hard-failed every Prometheus analyze call. The tail
-    sonnet is proven on this deploy's key, so walking the whole chain
-    is always safe and at worst costs a few failed cheap requests.
-
-    2026-08-26: `usage_extras` (from _pm_usage_extras) rides the usage
-    tag so a pay-as-you-go user's calls land with user + session
-    attribution and the billed amount.
-
-    2026-08-27 (Jenna): the compiled house canon (voice, vocabulary,
-    confidence calibration, number rules, boundaries, window default)
-    appends to every Prometheus system prompt here, at the single choke
-    point all four surfaces share. The block is byte-stable per pack
-    content hash (prometheus_knowledge caches it), so the assembled
-    system prompt stays byte-identical across calls and the provider
-    prompt cache keeps holding. On any failure the base prompt ships
-    unchanged."""
-    try:
-        import prometheus_knowledge as _pmk
-        system_prompt = _pmk.with_canon(system_prompt,
-                                        s3_client=_H.s3_client,
-                                        bucket=_H.S3_BUCKET)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    # Per-user attribution (2026-09-02): tag every dashboard chat call
-    # with the logged-in user so the daily spend email can break
-    # Prometheus cost out per user. _pm_attrib_extras() never sets
-    # pay_per_use, so billing and the credit gate (which key off
-    # _pm_usage_extras) are untouched; any real pay-as-you-go fields
-    # ride in via the caller's usage_extras and win the merge. The deck
-    # job runs on a background thread with no request context, so
-    # _pm_attrib_extras() is a no-op there and the caller's explicit
-    # usage_extras carries the enqueue-time attribution instead.
-    try:
-        usage_extras = _pm_merge_extras(_pm_attrib_extras(), usage_extras)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    last = None
-    # Tool plans (2026-08-27, the generation loop): when the caller
-    # asks for web research, try the current web_search tool type,
-    # then the legacy type, then no tools at all - research is
-    # additive and must never make a read fail.
-    tool_plans = [tools] if tools else [None]
-    if tools:
-        try:
-            import prometheus_analysis as _pma_tools
-            if tools == [_pma_tools.WEB_SEARCH_TOOL]:
-                tool_plans = [[_pma_tools.WEB_SEARCH_TOOL],
-                              [_pma_tools.WEB_SEARCH_TOOL_LEGACY], None]
-            else:
-                tool_plans = [tools, None]
-        except Exception:
-            tool_plans = [tools, None]
-    # Pure classification surfaces walk the fast chain first
-    # (2026-08-28): label decisions do not need the Opus chain, and
-    # the fast model answers them in under a second. Any failure
-    # falls through to the full analyze chain, so classification can
-    # never break.
-    _is_classify = surface in _PM_CLASSIFY_SURFACES
-    _is_fast = (not _is_classify) and surface in _PM_FAST_SURFACES and os.environ.get('PM_RESEARCH_TIER', 'fast').strip().lower() != 'strong'
-    for _tp in tool_plans:
-        for m in (_pm_classify_chain() if _is_classify
-                  else ([_SYNTH_CHAT_INTERPRET_MODEL] + _pm_model_chain()) if _is_fast
-                  else _pm_model_chain()):
-            result = _H._run_nflx_claude_agent(
-                system_prompt=system_prompt, user_prompt=user_prompt,
-                max_tokens=max_tokens, temperature=temperature, model=m,
-                usage_tag=((surface, 'chatbot', usage_extras)
-                           if usage_extras else (surface, 'chatbot')),
-                tools=_tp)
-            if result.get('success'):
-                with _pm_model_lock:
-                    if _is_classify and m in _PM_CLASSIFY_CANDIDATES:
-                        # The fast winner caches in its own slot only.
-                        # It must never become the analysis model.
-                        if _pm_resolved_classify['name'] != m:
-                            print(f"[prometheus] classify model "
-                                  f"resolved: {m}")
-                            _pm_resolved_classify['name'] = m
-                    elif not _is_classify and not _is_fast \
-                            and _pm_resolved_model['name'] != m:
-                        print(f"[prometheus] analysis model resolved: {m}")
-                        _pm_resolved_model['name'] = m
-                return _seams.tag_model(result)
-            print(f"[prometheus] model {m} failed "
-                  f"({str(result.get('error') or '')[:160]}); trying next")
-            last = result
-    return _seams.tag_model(
-        last or {'success': False, 'status': 503,
-                 'error': 'no reasoning model available'})
+# <<extracted: prometheus.model_chain block 12>>
 
 
-def _pm_claude_data(system_prompt, user_prompt, **kw):
-    """The parsed JSON object from _pm_claude_json, or {} on any
-    failure. _pm_claude_json returns the transport envelope
-    ({'success', 'data', 'model'}); the chip intake parsers and the
-    synthesis modules (journey / flywheel / brand partnership /
-    attribution) expect the object itself. Until 2026-10-02 they read
-    the envelope, so every guided pull answered 'Almost there - I
-    still need ...' no matter what the user typed (Bria, Babylon 5 on
-    Prime Video) and the research step raised 'returned no
-    primitives'."""
-    result = _pm_claude_json(system_prompt, user_prompt, **kw)
-    if not isinstance(result, dict) or not result.get('success'):
-        return {}
-    data = _seams.unwrap(result)
-    return data if isinstance(data, dict) else {}
+# <<extracted: prometheus.model_chain block 13>>
 
 
 _PM_INTAKE_STALL_PREFIX = 'Almost there - I still need'
@@ -10801,116 +10077,28 @@ def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=N
 _PM_READ_PREFIX = 'system/prometheus_reads/'
 
 
-# Thread targeting for background jobs (2026-10-01, Prometheus v1).
-# A caller that names a thread (the app, the API) sets a marker for
-# the life of the request thread; the job launch binds it to the job
-# id; the finish lands the result in THAT thread. Dashboard requests
-# name no thread and keep the legacy active-thread landing.
-_PM_REQ_THREAD = threading.local()
+# <<extracted: prometheus.thread_history block 17>>
 
 
-_PM_JOB_THREAD = {}
+# <<extracted: prometheus.thread_history block 18>>
 
 
-def _pm_req_thread_set(body):
-    try:
-        _PM_REQ_THREAD.tid = str((body or {}).get('thread_id') or '').strip()
-    except Exception:
-        _PM_REQ_THREAD.tid = ''
+# <<extracted: prometheus.thread_history block 19>>
 
 
-def _pm_read_job_doc(job_id):
-    """One read job's document (status, payload, resume), or None. The
-    thread-base hold reads a thread's earlier landed reads through it
-    (prometheus.thread_bases, 2026-11-10). Never raises."""
-    jid = ''.join(c for c in str(job_id or '') if c.isalnum() or c in '-_')
-    if not jid:
-        return None
-    doc = _pm_s3_json(f"{_PM_READ_PREFIX}{jid}.json", None)   # the shared read: the store's mirror first under PM_STORE_READ (stage 6, 2026-11-20), S3 on a miss
-    return doc if isinstance(doc, dict) else None
+# <<extracted: prometheus.thread_history block 20>>
 
 
-def _pm_job_bind_thread(job_id, username=None, resumed=False, question=''):
-    """The thread a job lands in, pinned at launch (prometheus.thread_scope.job_thread).
-    A job launched through the key surface never takes the dashboard's active thread: an ask that
-    named no conversation gets a key thread of its own (prometheus.api_threads, 2026-11-10).
-    The launch's own record wins: ``resumed`` (the read worker running a queued job, a
-    recovered copy) reads the thread already on the job document and never re-derives it
-    (2026-11-11, Armine: the worker re-read "the reader's active thread" and her Mad Men
-    read landed in the Cruel Summer thread she had opened meanwhile). Then the request's
-    own thread, then the one the ask service stashed on the request (``g._pm_thread_id``);
-    the active thread, then the first, only for a web request that named none."""
-    from prometheus import thread_scope as _tscope
-    _rec = str((_pm_read_job_doc(job_id) or {}).get('thread_id') or '') if (resumed and job_id) else ''
-    _stashed = ''
-    try:
-        from flask import g as _g_bind, has_app_context as _has_ctx
-        if _has_ctx():
-            _stashed = str(getattr(_g_bind, '_pm_thread_id', '') or '')
-    except Exception:
-        _stashed = ''
-
-    def _active():
-        idx = _load_threads_index(username)
-        tid = str(idx.get('active') or '')
-        if not tid and idx.get('threads'):
-            tid = str((idx['threads'][0] or {}).get('id') or '')
-        return tid
-    from prometheus import api_threads as _apit_b
-    _key_ask = _apit_b.is_api_request()
-    tid = _tscope.job_thread(recorded=_rec, request=('' if resumed else str(getattr(_PM_REQ_THREAD, 'tid', '') or '')),
-                             stashed=_stashed, active=(_active if (username and not _key_ask) else None), web=not resumed)
-    if not tid and _key_ask and username and job_id and not resumed:
-        from prometheus import service as _svc_at
-        tid = _apit_b.mint_for_job(username, job_id, question, ensure=_svc_at.ensure_thread, save=_svc_at.save_thread)
-    if tid and job_id:
-        _PM_JOB_THREAD[job_id] = tid
-    return tid or None
+# <<extracted: prometheus.thread_history block 21>>
 
 
-def _pm_thread_for_job(username, job_id):
-    """The thread a finished job should land in, or None for the
-    caller's active thread. Verifies the id still belongs to the user.
-    The job document's thread_id serves a finishing process that did not launch it (2026-10-14)."""
-    _svc_tj = __import__('prometheus.service', fromlist=['job_thread_id'])
-    tid = _PM_JOB_THREAD.pop(job_id, None) or _svc_tj.job_thread_id(job_id)
-    if not username:
-        return None
-    try:
-        # a key-surface job lands in a key thread, listed again when the index lost it; never the active thread (2026-11-10)
-        return __import__('prometheus.api_threads', fromlist=['landing_thread']).landing_thread(
-            username, job_id, tid, exists=lambda t: any(x.get('id') == t for x in _load_threads_index(username).get('threads', [])),
-            ensure=_svc_tj.ensure_thread, relist=_svc_tj.relist_thread, job_doc=(None if tid else (_svc_tj.find_job_doc(job_id)[0] or {})))
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    return None
+# <<extracted: prometheus.thread_history block 22>>
 
 
-def _pm_load_thread_or_active(username, tid):
-    if not tid:
-        return _load_synth_chat_history(username) or []
-    return _pm_s3_json(_pm_thread_key(username, tid), []) or []
+# <<extracted: prometheus.thread_history block 23>>
 
 
-def _pm_save_thread_or_active(username, tid, history):
-    if not tid:
-        return _save_synth_chat_history(username, history)
-    # merged into what is stored, ETag-guarded: a landing never writes over a turn that arrived mid-save (2026-11-04)
-    trimmed = _pm_merge_save_thread(username, tid, history)
-    _store.enabled() and _store.upsert_thread(username, tid, trimmed, _pm_thread_title_from(trimmed))   # shadow row (audit item 7)
-    try:
-        idx = _load_threads_index(username)
-        for th in idx.get('threads', []):
-            if th.get('id') == tid:
-                th['updated'] = _pm_iso_now()
-                th['turns'] = len(trimmed)
-                if th.get('title') in (None, '', 'New chat'):
-                    th['title'] = _pm_thread_title_from(trimmed)
-                break
-        _pm_s3_put_json(_pm_threads_index_key(username), idx)
-    except Exception:
-        traceback.print_exc()
-    return True
+# <<extracted: prometheus.thread_history block 24>>
 
 
 _PM_READ_INFLIGHT_PREFIX = 'system/prometheus_reads/_inflight/'
@@ -13061,119 +12249,13 @@ def api_synth_chat_pay_per_use():
     return jsonify({'success': True, 'enabled': True})
 
 
-_PM_SNAPSHOT_MONTHS = {m.lower(): i + 1 for i, m in enumerate(
-    ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-     'August', 'September', 'October', 'November', 'December'])}
+# <<extracted: prometheus.date_snapshot block 1>>
 
 
-def _pm_resolve_snapshot_date(text):
-    """ISO date for 'N days/weeks/months ago', 'on June 14',
-    'June 14 2026', '6/14/2026', or bare ISO. Past dates only.
-    Self-contained twin of migration/date_snapshot_cut.resolve_
-    snapshot_date (the engine lives worker-side; Render only needs
-    the parse)."""
-    import datetime as _dt
-    t = str(text or '').lower()
-    today = _dt.date.today()
-    m = re.search(r'(\d{1,4})\s*(day|week|month)s?\s+ago', t)
-    if m:
-        n = int(m.group(1))
-        days = n * (1 if m.group(2) == 'day' else
-                    7 if m.group(2) == 'week' else 30)
-        if 1 <= days <= 3650:
-            return (today - _dt.timedelta(days=days)).isoformat()
-    m = re.search(
-        r'\b(january|february|march|april|may|june|july|august'
-        r'|september|october|november|december)\s+(\d{1,2})'
-        r'(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?', t)
-    if m:
-        mo = _PM_SNAPSHOT_MONTHS[m.group(1)]
-        dd = int(m.group(2))
-        yr = int(m.group(3)) if m.group(3) else today.year
-        try:
-            d = _dt.date(yr, mo, dd)
-        except ValueError:
-            return None
-        if d > today:
-            d = _dt.date(yr - 1, mo, dd) if not m.group(3) else None
-        return d.isoformat() if d and d <= today else None
-    m = re.search(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', t)
-    if m:
-        try:
-            d = _dt.date(int(m.group(3)), int(m.group(1)),
-                         int(m.group(2)))
-        except ValueError:
-            return None
-        return d.isoformat() if d <= today else None
-    m = re.search(r'\b(\d{4})-(\d{2})-(\d{2})\b', t)
-    if m:
-        try:
-            d = _dt.date(int(m.group(1)), int(m.group(2)),
-                         int(m.group(3)))
-        except ValueError:
-            return None
-        return d.isoformat() if d <= today else None
-    return None
+# <<extracted: prometheus.date_snapshot block 2>>
 
 
-def _pm_promote_date_snapshot_ask(draft, text):
-    """Deterministic net under prompt rule 7a-DATE-SNAPSHOT (2026-09-23
-    Jenna): an ask for a subject AS OF a specific past date, bound to a
-    library parent, becomes a point-in-time snapshot cut
-    (derive_cut / date_snapshot). The engine researches the date and
-    re-reads the whole file row by row as it stood that day. Never
-    raises; returns True when it promoted."""
-    try:
-        if not isinstance(draft, dict):
-            return False
-        t = str(text or '')
-        if str(draft.get('derive_type') or '').strip().lower() == \
-                'date_snapshot':
-            if not draft.get('snapshot_date'):
-                iso0 = _pm_resolve_snapshot_date(t)
-                if iso0:
-                    draft['snapshot_date'] = iso0
-            return False
-        # phrase gate: dated-state phrasings only (a bare year or an
-        # explicit measurement window is a refresh, not a snapshot)
-        if not re.search(
-                r'\b\d{1,4}\s*(?:day|week|month)s?\s+ago\b|\bas of\b'
-                r'|\b(?:on|back on)\s+(?:january|february|march|april'
-                r'|may|june|july|august|september|october|november'
-                r'|december)\b',
-                t, re.I):
-            return False
-        iso = _pm_resolve_snapshot_date(t)
-        if not iso:
-            return False
-        parent = str(draft.get('parent_s3_key')
-                     or draft.get('existing_match_s3_key') or '').strip()
-        if not parent:
-            return False
-        if str(draft.get('decision') or '').strip().lower() not in (
-                'existing_match', 'derive_cut', 'time_shifted_refresh'):
-            return False
-        import datetime as _dt
-        d = _dt.date.fromisoformat(iso)
-        label = (list(_PM_SNAPSHOT_MONTHS)[d.month - 1].title()
-                 + f' {d.day} {d.year}')
-        draft['decision'] = 'derive_cut'
-        draft['derive_type'] = 'date_snapshot'
-        draft['parent_s3_key'] = parent
-        draft['cut_label'] = label
-        draft['snapshot_date'] = iso
-        draft['decision_reason'] = (
-            'Point-in-time snapshot: the audience as it stood on '
-            + label + ', built as a dated cut of the existing file.')
-        for k in ('ask_existing_profile', 'existing_profile_data',
-                  'ask_qualifier_match', 'qualifier_match_data'):
-            draft.pop(k, None)
-        print(f"[date-snapshot] promoted to derive_cut/date_snapshot "
-              f"({iso}, parent={parent!r})")
-        return True
-    except Exception as _dsp_err:
-        print(f"[date-snapshot] promoter failed (non-fatal): {_dsp_err}")
-        return False
+# <<extracted: prometheus.date_snapshot block 3>>
 
 _EXPORTS = (
     '_pm_record_held_reply',   # host 'record_held' (turn_gate.calm_hold, 2026-10-21)
@@ -13624,6 +12706,67 @@ from prometheus.legacy.core_read import (  # noqa: E402,F401  (stage 5: The gene
 from prometheus.legacy.core_interpret import (  # noqa: E402,F401  (stage 5: The brief drafter and its rulebook: the interpret core)
     _synth_chat_interpret_prompts,
     _pm_interpret_core,
+)
+# <</reimport>>
+# <<reimport: prometheus.library_match>>
+from prometheus.library_match import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The saved-profile library as the chat reads it: the catalog, the shortlist of matches for an ask, and the gate that decides whether a match stands)
+    SYNTH_CHAT_FRESH_DAYS,
+    SYNTH_CHAT_MAX_CANDIDATES,
+    _profile_catalog_for_chat,
+    _shortlist_profile_matches,
+    _synth_chat_gate,
+)
+# <</reimport>>
+# <<reimport: prometheus.thread_history>>
+from prometheus.thread_history import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Chat thread history: the per-user store, idle rotation, corrected turns, the active thread, the history route, and the thread a background job lands in)
+    SYNTH_CHAT_HISTORY_KEY_PREFIX,
+    _synth_chat_history_key,
+    SYNTH_CHAT_THREADS_PREFIX,
+    _PM_MAX_THREADS,
+    _load_synth_chat_history,
+    _PM_IDLE_NEW_THREAD_SECONDS,
+    _pm_parse_iso,
+    _pm_history_has_running_job,
+    _pm_new_thread_into,
+    _pm_rotate_idle_thread,
+    _pm_keep_corrected_turns,
+    _pm_merge_save_thread,
+    _save_synth_chat_history,
+    _pm_active_thread_history,
+    api_synth_chat_history,
+    api_prometheus_proactive,
+    _PM_REQ_THREAD,
+    _PM_JOB_THREAD,
+    _pm_req_thread_set,
+    _pm_read_job_doc,
+    _pm_job_bind_thread,
+    _pm_thread_for_job,
+    _pm_load_thread_or_active,
+    _pm_save_thread_or_active,
+)
+# <</reimport>>
+# <<reimport: prometheus.model_chain>>
+from prometheus.model_chain import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The model chain behind the chat: which model answers an analysis or a classification call, the resolved-model caches, and the JSON call every surface makes)
+    _PM_ANALYZE_MODEL_ENV,
+    _PM_ANALYZE_CANDIDATES,
+    _pm_model_lock,
+    _pm_resolved_model,
+    _PM_CLASSIFY_MODEL_ENV,
+    _PM_CLASSIFY_CANDIDATES,
+    _PM_CLASSIFY_SURFACES,
+    _PM_FAST_SURFACES,
+    _pm_resolved_classify,
+    _pm_model_chain,
+    _pm_classify_chain,
+    _pm_claude_json,
+    _pm_claude_data,
+)
+# <</reimport>>
+# <<reimport: prometheus.date_snapshot>>
+from prometheus.date_snapshot import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Point-in-time snapshots: a request for the audience as it stood on a date becomes a dated cut of the existing file)
+    _PM_SNAPSHOT_MONTHS,
+    _pm_resolve_snapshot_date,
+    _pm_promote_date_snapshot_ask,
 )
 # <</reimport>>
 # Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes

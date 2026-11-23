@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = Path(os.path.dirname(os.path.abspath(__file__)))
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
@@ -487,8 +487,8 @@ check('with no library in reach the stored rows decide, the same way', k == KE a
 # ---------------------------------------------------------------------------
 print('8. housekeeping')
 # ---------------------------------------------------------------------------
-chat_lines = len(_legacy_view().splitlines())
-check(f'the legacy chat module is under its ceiling ({chat_lines} lines)', chat_lines < 19900)
+chat_lines = _legacy_lines()
+check(f'the legacy chat code is under its ceiling ({chat_lines} lines)', chat_lines < _LEGACY_CEILING)
 for rel in ('prometheus/season_window.py', 'scripts/test_pm_season_window.py'):
     src = (ROOT / rel).read_text(encoding='utf-8')
     check(f'no long dash in {rel}', '\u2014' not in src and '\u2013' not in src)
