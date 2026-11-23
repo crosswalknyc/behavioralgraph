@@ -2765,15 +2765,93 @@
             }
             function paCallClass(o) { var c = String((o || {}).call || '').toLowerCase(); return c === 'yes' || c === 'lean yes' ? 'yes' : (c === 'no' || c === 'lean no' ? 'no' : (c === 'split' ? 'split' : 'pick')); }
             function paStepAudience(p) {
+                // one dropdown instead of a grid of cards, and Build a new twin beside it (Jenna 2026-11-23: 'lets make these a dropdown
+                // and make not here build a twin more prominent'); the dropdown opens on every twin the seat can see and defaults to the
+                // twin open on the page; picking one does what picking a card did (dtwPaPickTwin opens it, so the header follows)
                 var runs = S.runs || [];
                 var out = '<div class="dtw-bw-q">Who is the audience?</div><div class="dtw-bw-sub">The people whose answer you need. Pick a twin, or build one first.</div>';
                 if (!runs.length) out += '<div class="dtw-bw-line">No twins yet. <button type="button" class="dtw-link" onclick="dtwBuildOpen(true)">Build the first one</button>, then come back here.</div>';
-                else out += '<div class="dtw-bw-opts dtw-pa-twins">' + runs.map(function(r) {
-                    var on = r.key === p.key;
-                    return '<button type="button" class="dtw-bw-opt' + (on ? ' on' : '') + '" onclick="dtwPaPickTwin(\'' + esc(r.key) + '\')"><span class="k">' + esc(twinKindLabel(r) || 'Twin') + '</span><b>' + esc(r.name || r.subject || '') + '</b>' + (twinQualifier(r) ? '<span class="built">' + esc(twinQualifier(r)) + '</span>' : '') + '<span>' + (r.size_us ? fmtN(r.size_us) + ' people' : '') + '</span></button>';
-                }).join('') + '</div><div class="dtw-bw-shareline">Not here? <button type="button" class="dtw-link" onclick="dtwBuildOpen(true)">Build a twin</button> and it shows up in this list.</div>';
+                else {
+                    var cur = runs.filter(function(r) { return r.key === p.key; })[0] || null;
+                    out += '<div class="dtw-pa-pick"><div class="dtw-pa-dd" id="dtwPaDd">'
+                        + '<button type="button" class="dtw-pa-dd-btn" id="dtwPaDdBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="dtwPaDdList" onclick="dtwPaDdToggle()" onkeydown="dtwPaDdKey(event)">'
+                        + (cur ? paTwinRow(cur) : '<span class="k">Twin</span><span class="nm ph">Pick a twin</span><span class="n"></span>') + '<i class="chev" aria-hidden="true">&#9660;</i></button>'
+                        + '<div class="dtw-pa-dd-menu" id="dtwPaDdMenu" hidden>'
+                        + (runs.length > 7 ? '<input class="dtw-pa-dd-find" id="dtwPaDdFind" type="search" placeholder="Search twins" autocomplete="off" aria-label="Search twins" oninput="dtwPaDdFilter(this.value)" onkeydown="dtwPaDdKey(event)">' : '')
+                        + '<div class="dtw-pa-dd-list" id="dtwPaDdList" role="listbox" aria-label="Twins" tabindex="-1" onkeydown="dtwPaDdKey(event)">'
+                        + runs.map(function(r, i) { var on = r.key === p.key; return '<div class="dtw-pa-dd-opt' + (on ? ' on' : '') + '" role="option" id="dtwPaDdOpt' + i + '" data-key="' + esc(r.key) + '" data-hay="' + esc(twinOptionLabel(r).toLowerCase()) + '" aria-selected="' + on + '" onclick="dtwPaDdPick(\'' + esc(jsq(r.key)) + '\')" onmousemove="dtwPaDdHover(this)">' + paTwinRow(r) + '</div>'; }).join('')
+                        + '</div></div></div>'
+                        + '<div class="dtw-pa-build"><div class="top"><span class="dtw-cap on">Not here? Build a new twin</span><span class="price">' + esc(twinPrice()) + '</span></div>'
+                        + '<p>From a profile we hold, a group you shape, or a list of links. It shows up in this list when it is done.</p>'
+                        + '<div class="acts"><button type="button" class="dtw-lb go pa" onclick="dtwBuildOpen(true)">Start<i>&rarr;</i></button><button type="button" class="dtw-lb link tutorial" onclick="dtwTutorialOpen(\'seating\', this)" aria-haspopup="dialog"><i class="play" aria-hidden="true">&#9654;</i>Tutorial</button></div></div>'
+                        + '</div>';
+                }
                 return out + paNav(!!p.key, 'Next') + paEarlier(p);
             }
+            // one row of the dropdown: the type, the name with the same-name qualifier, the people
+            function paTwinRow(r) {
+                return '<span class="k">' + esc(twinKindLabel(r) || 'Twin') + '</span><span class="nm">' + esc(r.name || r.subject || '') + (twinQualifier(r) ? '<span class="built">' + esc(twinQualifier(r)) + '</span>' : '') + '</span><span class="n">' + (r.size_us ? fmtN(r.size_us) + ' people' : '') + '</span>';
+            }
+            // the dropdown's behaviour: open and close, arrows, Enter, Escape, Home and End, type to jump, a search box once the list is long
+            var paDd = { open: false, active: -1, typed: '', typedAt: 0 };
+            function paDdOpts() { var l = el('dtwPaDdList'); return l ? Array.prototype.slice.call(l.querySelectorAll('.dtw-pa-dd-opt')).filter(function(o) { return !o.hidden; }) : []; }
+            function paDdMark(i) {
+                var opts = paDdOpts(); if (!opts.length) { paDd.active = -1; return; }
+                paDd.active = Math.max(0, Math.min(opts.length - 1, i));
+                opts.forEach(function(o, j) { o.classList.toggle('active', j === paDd.active); });
+                var l = el('dtwPaDdList'); if (l) l.setAttribute('aria-activedescendant', opts[paDd.active].id);
+                try { opts[paDd.active].scrollIntoView({ block: 'nearest' }); } catch (_) {}
+            }
+            window.dtwPaDdToggle = function(on) {
+                var dd = el('dtwPaDd'), m = el('dtwPaDdMenu'), b = el('dtwPaDdBtn'); if (!dd || !m || !b) return;
+                on = (on == null) ? !paDd.open : !!on;
+                paDd.open = on; m.hidden = !on; dd.classList.toggle('open', on); b.setAttribute('aria-expanded', on ? 'true' : 'false');
+                if (on) {
+                    var f = el('dtwPaDdFind'); if (f) { f.value = ''; dtwPaDdFilter(''); }
+                    var opts = paDdOpts(), sel = opts.map(function(o) { return o.classList.contains('on'); }).indexOf(true);
+                    paDdMark(sel >= 0 ? sel : 0);
+                    try { (f || el('dtwPaDdList')).focus(); } catch (_) {}
+                } else {
+                    paDd.active = -1;
+                    try { b.focus(); } catch (_) {}
+                }
+            };
+            window.dtwPaDdPick = function(key) { dtwPaDdToggle(false); dtwPaPickTwin(key); };
+            window.dtwPaDdHover = function(o) { var opts = paDdOpts(), i = opts.indexOf(o); if (i >= 0 && i !== paDd.active) paDdMark(i); };
+            window.dtwPaDdFilter = function(q) {
+                q = String(q || '').toLowerCase().trim();
+                var l = el('dtwPaDdList'); if (!l) return;
+                Array.prototype.slice.call(l.querySelectorAll('.dtw-pa-dd-opt')).forEach(function(o) { o.hidden = !!q && String(o.getAttribute('data-hay') || '').indexOf(q) < 0; });
+                var none = el('dtwPaDdNone');
+                if (!paDdOpts().length) { if (!none) { none = document.createElement('div'); none.id = 'dtwPaDdNone'; none.className = 'dtw-pa-dd-none'; none.textContent = 'No twin matches that. Build it on the right.'; l.appendChild(none); } }
+                else if (none) none.remove();
+                paDdMark(0);
+            };
+            window.dtwPaDdKey = function(ev) {
+                var k = ev.key, inFind = ev.target && ev.target.id === 'dtwPaDdFind';
+                if (!paDd.open) {
+                    if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Enter' || k === ' ') { ev.preventDefault(); dtwPaDdToggle(true); }
+                    return;
+                }
+                if (k === 'Escape') { ev.preventDefault(); ev.stopPropagation(); dtwPaDdToggle(false); return; }
+                if (k === 'ArrowDown') { ev.preventDefault(); paDdMark(paDd.active + 1); return; }
+                if (k === 'ArrowUp') { ev.preventDefault(); paDdMark(paDd.active - 1); return; }
+                if (k === 'Home') { ev.preventDefault(); paDdMark(0); return; }
+                if (k === 'End') { ev.preventDefault(); paDdMark(paDdOpts().length - 1); return; }
+                if (k === 'Enter' || (k === ' ' && !inFind)) { ev.preventDefault(); var opts = paDdOpts(), o = opts[paDd.active]; if (o) dtwPaDdPick(o.getAttribute('data-key')); return; }
+                if (k === 'Tab') { dtwPaDdToggle(false); return; }
+                if (!inFind && k && k.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+                    // type to jump: the letters typed within a moment find the first twin whose name starts with them
+                    var now = Date.now(); paDd.typed = (now - paDd.typedAt < 700 ? paDd.typed : '') + k.toLowerCase(); paDd.typedAt = now;
+                    var opts2 = paDdOpts(), hit = -1;
+                    for (var i = 0; i < opts2.length; i++) { var nm = ((opts2[i].querySelector('.nm') || {}).textContent || '').toLowerCase(); if (nm.indexOf(paDd.typed) === 0) { hit = i; break; } }
+                    if (hit >= 0) paDdMark(hit);
+                }
+            };
+            document.addEventListener('click', function(e) {
+                if (!paDd.open) return;
+                var dd = el('dtwPaDd'); if (dd && e.target && dd.contains && !dd.contains(e.target)) dtwPaDdToggle(false);
+            });
             function paStepQuestion(p) {
                 var kind = PA_KINDS.filter(function(k) { return k[0] === p.kind; })[0] || null;
                 var out = '<div class="dtw-bw-q">What do you need to know?</div><div class="dtw-bw-sub">Say it the way you would to a colleague. Pick the shape that fits, or just type.</div>';
