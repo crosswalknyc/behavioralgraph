@@ -522,15 +522,47 @@ _REVIEW = ("REVIEW PASS. Each item carries a first estimate (first). Check it an
            "global or non-US item where its markets put it.\n\n")
 
 
+def _first_json_object(text):
+    """The first complete JSON object in a model reply (strings respected), parsed leniently
+    (trailing commas, curly quotes); None when there is none."""
+    t = str(text or "")
+    start = t.find("{")
+    while start >= 0:
+        depth, in_str, esc = 0, False, False
+        for i in range(start, len(t)):
+            ch = t[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    chunk = t[start:i + 1]
+                    for cand in (chunk, re.sub(r",\s*([}\]])", r"\1",
+                                               chunk.replace("\u201c", '"').replace("\u201d", '"'))):
+                        try:
+                            doc = json.loads(cand)
+                            if isinstance(doc, dict):
+                                return doc
+                        except Exception:
+                            continue
+                    break
+        start = t.find("{", start + 1)
+    return None
+
+
 def _parse(text):
-    if not text:
-        return {}
-    m = re.search(r"\{[\s\S]*\}", str(text))
-    if not m:
-        return {}
-    try:
-        doc = json.loads(m.group(0))
-    except Exception:
+    doc = _first_json_object(text)
+    if not doc:
         return {}
     out = {}
     for x in doc.get("items") or []:
@@ -1502,14 +1534,13 @@ def house_block_reason(countries, ctx, verbose=True):
     def _one(n, item):
         country, people, share = item
         body = _block_prompt(ctx, country, people, share)
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 text = call(_BLOCK_SYSTEM, body, n + attempt)
-                m = re.search(r"\{[\s\S]*\}", str(text or ""))
-                if m:
-                    doc = json.loads(m.group(0))
-                    if isinstance(doc, dict) and doc:
-                        return country, doc
+                doc = _first_json_object(text)
+                if doc and any(k.upper() in _ip.BLOCK_DEMOS for k in doc):
+                    return country, doc
+                print(f"   [country-blocks] {country}: reply carried no usable JSON (attempt {attempt + 1})")
             except Exception as e:
                 print(f"   [country-blocks] {country}: reasoning error ({type(e).__name__}: {str(e)[:100]})")
         return country, None
