@@ -15,7 +15,7 @@ import os
 import re
 import sys
 
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -76,7 +76,7 @@ s_know = src('prometheus', 'knowledge.py')
 check('from prometheus import peacock_scale as _pk_scale' in s_chat and 'pk=_pk_scale.block' in s_chat
       and 'def read_blocks(text, mr, base, *, pk=None' in s_know and '(pk, (text, mr, base))' in s_know,
       'the Prometheus measurement pass is handed the block (through the knowledge layer, called with text, mr, base)')
-check(s_chat.count('\n') <= 19_900, 'the legacy chat stays under its line ceiling', str(s_chat.count('\n')))
+check(_legacy_lines() <= _LEGACY_CEILING, 'the legacy chat stays under its line ceiling', str(_legacy_lines()))
 check('peacock_actuals' in src('prometheus', 'peacock_scale.py'), 'the Prometheus block is built from the shared module')
 s_tr = src('scripts', 'trends_scrapers', 'stream_estimates.py')
 check("('peacock_scale', lambda: _apply_peacock_scale(" in s_tr and s_tr.find("('first_party', lambda") < s_tr.find("('peacock_scale', lambda") < s_tr.find("('ceiling', lambda"),

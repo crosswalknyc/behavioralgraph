@@ -69,6 +69,12 @@ GATE_WRAPPERS = {
 }
 # Host names the Prometheus package uses for app.py callables.
 HOST_ALIASES = {'_H', 'host', '_host', 'h'}
+# The legacy chat proxy (prometheus.legacy.C): a family or an organized module
+# reads a name chat.py binds as ``_C.<name>``, resolved at call time against
+# chat.py's namespace, which re-exports every moved name. The scan resolves it
+# the same way: by name, across the legacy chat and the modules moved out of it.
+CHAT_PROXY = '_C'
+CHAT_NAMESPACE_DIRS = ('prometheus/',)
 
 REQ = '<request>'
 _REQUEST_ATTRS = {'args', 'form', 'json', 'values', 'files', 'data', 'headers',
@@ -380,7 +386,19 @@ class Index:
                 return self.by_file.get(imp[1], {}).get(f.attr) or []
             if alias in HOST_ALIASES:
                 return self.by_file.get('app.py', {}).get(f.attr) or []
+            if alias == CHAT_PROXY:
+                return self.chat_namespace(f.attr)
         return []
+
+    def chat_namespace(self, name):
+        """The functions a ``_C.<name>`` read can reach: every top-level function
+        of that name under prometheus/ (chat.py, its legacy families and the
+        organized modules its code moved into)."""
+        out = []
+        for rel, table in self.by_file.items():
+            if rel.replace(os.sep, '/').startswith(CHAT_NAMESPACE_DIRS):
+                out.extend(fn for fn in table.get(name, []) if fn.top)
+        return out
 
 
 def _analyse(fn, idx):

@@ -47,7 +47,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 import _pm_legacy_view as LV  # noqa: E402
 
 LEGACY = os.path.join(_WEB, 'prometheus', 'legacy')
-CHAT_RATCHET = 12_800          # chat.py on its own (13,625 after stage 5; 12,717 after stage 7's first move)
+CHAT_RATCHET = 10_900          # chat.py on its own (13,625 after stage 5; 12,777 after stage 7's first move; 10,839 after move 2)
 _MARK = re.compile(r'^# <<extracted: ([A-Za-z0-9_.]+) block (\d+)>>$', re.M)
 
 
@@ -169,6 +169,12 @@ class TheModulesResolve(unittest.TestCase):
             module = importlib.import_module(imp)
             for blk in LV._core_blocks(LV.module_path(mod)).values():
                 for name in _names_of(blk):
+                    if name == '_pm_watch_notify':
+                        # the harness's own baseline: a test process never mails, so load_chat
+                        # replaces chat._pm_watch_notify with a no-op; the proxy rule is what
+                        # lets that no-op reach every caller wherever the caller lives now
+                        self.assertIsNot(getattr(chat, name), getattr(module, name), (mod, name))
+                        continue
                     self.assertIs(getattr(chat, name), getattr(module, name), (mod, name))
         for name in ('_pm_analyze_core', '_pm_interpret_core', '_pm_generate_read_core'):
             self.assertIn(name, chat._EXPORTS)

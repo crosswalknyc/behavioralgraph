@@ -316,6 +316,27 @@ class _View:
                             self.chat_globals.add(n)
                     elif isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store):
                         self.chat_globals.add(sub.id)
+        # an import a module already extracted carries in its own header (a later splice
+        # added it there, not in chat.py: core_interpret's _global_scope) is copyable too
+        self.import_src = {}       # id(stmt) -> the lines of the text the statement came from
+        for st in self.chat_imports.values():
+            self.import_src[id(st)] = self.lines
+        for name in {m.group(2) for m in _lv._MARK_RX.finditer(_lv.chat_py_text())}:
+            path = _lv.module_path(name)
+            if not os.path.exists(path):
+                continue
+            head = open(path, encoding='utf-8').read().split('\n# <<moved>>\n', 1)[0]
+            head_lines = head.split('\n')
+            for st in ast.parse(head).body:
+                if not isinstance(st, (ast.Import, ast.ImportFrom)):
+                    continue
+                mod = getattr(st, 'module', '') or ''
+                if isinstance(st, ast.ImportFrom) and _FAMILY_IMPORT_RX.match(mod):
+                    continue
+                for n in _import_binds(st):
+                    if n not in self.chat_imports and n not in self.chat_globals:
+                        self.chat_imports[n] = st
+                        self.import_src[id(st)] = head_lines
         # a name bound by a top-level statement is a chat global even if it was also imported
         for n in list(self.chat_imports):
             if n in self.chat_globals:
@@ -502,10 +523,11 @@ def plan_moves(plan, dry_run=False):
             st = view.chat_imports[n]
             if st not in stmts_imp:
                 stmts_imp.append(st)
-        stmts_imp.sort(key=lambda s: s.lineno)
+        stmts_imp.sort(key=lambda s: (view.import_src[id(s)] is not view.lines, s.lineno))
         import_lines = []
         for st in stmts_imp:
-            seg = '\n'.join(view.lines[st.lineno - 1:st.end_lineno])
+            src_lines = view.import_src[id(st)]
+            seg = '\n'.join(src_lines[st.lineno - 1:st.end_lineno])
             seg = re.sub(r'\s+#.*$', '', seg, flags=re.M) if '\n' not in seg else seg
             import_lines.append(seg)
         text = _module_text(module, doc, out_blocks, import_lines, names)
@@ -591,7 +613,7 @@ def plan_moves(plan, dry_run=False):
                   f"{txt.count('_C.')} _C. reads")
         for src_mod, t in legacy_out.items():
             print(f'[dry-run] {src_mod}: ' + ('deleted' if t is None else 'regenerated'))
-        print(f'[dry-run] chat.py {len(chat_lines)} -> {len(new_lines)} lines; view byte-identical; {n_moved} names')
+        print(f'[dry-run] chat.py {len(chat_src.splitlines())} -> {len(new_src.splitlines())} lines; view byte-identical; {n_moved} names')
         return
     # write, then read the view back from disk
     written = []
@@ -620,8 +642,8 @@ def plan_moves(plan, dry_run=False):
         for p, t in deleted.items():
             open(p, 'w', encoding='utf-8').write(t)
         raise
-    print(f'moved {n_moved} name(s) into {len(modules_out)} module(s); chat.py {len(chat_lines)} -> {len(new_lines)} lines; '
-          f'legacy lines {_lv.legacy_lines()}; view byte-identical')
+    print(f'moved {n_moved} name(s) into {len(modules_out)} module(s); chat.py {len(chat_src.splitlines())} -> '
+          f'{_lv.chat_py_lines()} lines; legacy lines {_lv.legacy_lines()}; view byte-identical')
 
 
 def extract(module, names, doc, dry_run=False):

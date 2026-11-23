@@ -284,7 +284,8 @@ class Guard(unittest.TestCase):
             self.assertIsNone(PF.read_guard(t), t)
 
     def test_the_read_lane_runs_the_guard_before_any_work(self):
-        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'core_read.py'), encoding='utf-8').read()
+        sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+        src = __import__('_pm_legacy_view').legacy_view()     # the legacy chat text, the read core included, wherever it lives now
         fn = src[src.index('def _pm_generate_metrics_response('):]
         guard = fn.index('read_guard(')
         self.assertLess(guard, fn.index("_pm_ask_hint(route='reasoned_metrics')"), 'the guard sits before the read is even hinted')

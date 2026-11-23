@@ -53,7 +53,7 @@ os.environ.setdefault('AWS_ACCESS_KEY_ID', 'AKIATESTNOTREAL000000')
 os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'not-a-real-secret')
 os.environ.setdefault('AWS_SHARED_CREDENTIALS_FILE', '/nonexistent/aws/credentials')
 os.environ.setdefault('AWS_CONFIG_FILE', '/nonexistent/aws/config')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -688,7 +688,7 @@ class TheReadItself(unittest.TestCase):
         self.assertIn(".hold_read(data, text)", chat)
         self.assertIn("or payload.get('data_floor') == 'before'):", chat)
         self.assertIn("if panel_charge and not held and payload.get('data_floor') == 'before':", chat)
-        self.assertLess(_chat_py_lines(), 19900, "chat.py stays under 19,900 lines")
+        self.assertLess(_legacy_lines(), _LEGACY_CEILING, "the legacy chat code stays under its ceiling")
 
 
 # ---------------------------------------------------------------- guided flows

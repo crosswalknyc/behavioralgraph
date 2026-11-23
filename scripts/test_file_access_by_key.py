@@ -45,7 +45,7 @@ import sys
 from pathlib import Path
 
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
-from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines  # noqa: E402  (stage 5: chat.py plus its extracted cores)
+from _pm_legacy_view import legacy_view as _legacy_view, chat_py_lines as _chat_py_lines, legacy_lines as _legacy_lines, LEGACY_CEILING as _LEGACY_CEILING  # noqa: E402  (stage 5: chat.py plus its extracted cores; stage 7: the ratchet counts the legacy code)
 HERE = Path(os.path.dirname(os.path.abspath(__file__)))
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
@@ -1034,7 +1034,7 @@ check('the chat "download that" order passes it to the link', 'bucket=_H.S3_BUCK
 check('no caller reads or signs a thread file without the check',
       CHAT_SRC.count('_lt.file_bytes(') == CHAT_SRC.count('_lt.file_bytes(f, _H.s3_client, bucket=_H.S3_BUCKET, extra_buckets=(\'svod-acquisition\',), allowed=')
       and CHAT_SRC.count('_lt.fresh_url(') == CHAT_SRC.count('_lt.fresh_url(f, _H.s3_client, bucket=_H.S3_BUCKET, allowed='))
-check('the chat file stays under its line ceiling', _chat_py_lines() < 19900, str(len(CHAT_SRC.splitlines())))
+check('the legacy chat code stays under its line ceiling', _legacy_lines() < _LEGACY_CEILING, str(_legacy_lines()))
 SEND_SRC = (ROOT / 'prometheus' / 'send_file.py').read_text(encoding='utf-8')
 ans_src = fn_source('answer', SEND_SRC, ast.parse(SEND_SRC))
 check('send_file.answer checks the context first and the key again at the read',
@@ -1062,7 +1062,7 @@ REVIEWED = {
     ('digital_twins_api.py', 'dt_build_from_list'): 'reads system/digital_twins/url_lists/<token>; owner checked',
     # the chat cores: the body's keys are checked by the request hook
     # (prometheus.key_scope.install) and by _pm_validate_page_context
-    ('prometheus/legacy/chat.py', 'api_synth_chat_interpret'): 'page context checked by the hook and _pm_validate_page_context',
+    ('prometheus/interpret_turn.py', 'api_synth_chat_interpret'): 'page context checked by the hook and _pm_validate_page_context',   # moved out of chat.py (rebuild stage 7)
     ('prometheus/legacy/chat.py', 'api_synth_chat_analyze'): 'page context checked by the hook and _pm_validate_page_context',
 }
 funcs = SCAN.scan()

@@ -43,8 +43,9 @@ _HOST_ATTR = re.compile(r'(?<![\w.])_C\.(?=\w)')
 # prometheus/legacy/). Lowered at every move; it never goes up. History:
 # 19,900 on the pre-stage-5 chat.py; 20,212 legacy lines on 2026-11-23
 # before stage 7's first move; 19,355 after it (the library match, thread
-# history, model chain and date snapshot families moved out).
-LEGACY_CEILING = 19_400
+# history, model chain and date snapshot families moved out); 14,410 after
+# move 2 (the interpret side: core_interpret.py is gone).
+LEGACY_CEILING = 14_450
 
 
 def legacy_dir() -> str:
@@ -159,6 +160,26 @@ def legacy_view() -> str:
     return legacy_view_from(chat_py_text(), {})
 
 
+def legacy_defs(*names) -> str:
+    """The source of the named top-level defs of the view, in view order,
+    joined by blank lines: the text a stage 5 core held (its blocks) for a
+    suite that pinned a core file by path (``legacy_defs(
+    '_pm_generate_metrics_response', '_pm_generate_read_core')`` reads as
+    core_read.py did)."""
+    import ast
+    view = legacy_view()
+    tree = ast.parse(view)
+    want = set(names)
+    parts = []
+    for st in tree.body:
+        if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and st.name in want:
+            parts.append(ast.get_source_segment(view, st))
+            want.discard(st.name)
+    if want:
+        raise KeyError(f'not top-level defs of the legacy chat text: {sorted(want)}')
+    return '\n\n\n'.join(parts) + '\n'
+
+
 def legacy_view_origins() -> list:
     """One entry per line of ``legacy_view()`` saying where the line lives
     now: ``('chat', i)`` for line ``i`` (0-based) of the real chat.py, or
@@ -198,4 +219,4 @@ def legacy_view_origins() -> list:
 
 __all__ = ['legacy_dir', 'package_root', 'module_path', 'chat_py_text', 'chat_py_lines',
            'legacy_core_paths', 'legacy_lines', 'LEGACY_CEILING', 'legacy_view', 'legacy_view_from',
-           'legacy_view_origins']
+           'legacy_defs', 'legacy_view_origins']

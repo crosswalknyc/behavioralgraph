@@ -334,8 +334,11 @@ class Retirement(unittest.TestCase):
 
     def test_no_reader_facing_left_out_phrasing_remains(self):
         for rel in ('prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py'), os.path.join('prometheus', 'page_default.py')) + _CORE_FILES:
-            with open(os.path.join(ROOT, rel), encoding='utf-8') as fh:
-                src = fh.read()
+            if rel.endswith('chat.py'):
+                src = _legacy_view()     # chat.py with every extracted block spliced back (stage 5 / 7)
+            else:
+                with open(os.path.join(ROOT, rel), encoding='utf-8') as fh:
+                    src = fh.read()
             for line in src.split('\n'):
                 s = line.strip()
                 if s.startswith('#') or s.startswith('"""') or 'verbatim' in s or 'RETIRED' in s or 'the reader was told' in s \

@@ -41,6 +41,8 @@ if ROOT not in sys.path:
 os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 
 from prometheus import routing as R  # noqa: E402
+sys.path.insert(0, HERE)
+from _pm_legacy_view import legacy_view as _legacy_view  # noqa: E402  (the legacy chat text, wherever its blocks live now)
 from prometheus import understand as UD  # noqa: E402
 from prometheus import understanding as U  # noqa: E402
 import prometheus_router as PR  # noqa: E402
@@ -62,8 +64,9 @@ class OneDecider(unittest.TestCase):
         self.assertFalse(hasattr(RD, 'steer'))
         src = open(os.path.join(ROOT, 'prometheus', 'routing.py'), encoding='utf-8').read()
         self.assertNotIn("environ.get('PM_LEGACY_ROUTING'", src)
-        for rel in (('prometheus', 'legacy', 'core_analyze.py'), ('prometheus', 'legacy', 'core_interpret.py'), ('prometheus', 'service.py')):
-            body = open(os.path.join(ROOT, *rel), encoding='utf-8').read()
+        # the whole legacy chat text (chat.py with every extracted block spliced back, the two
+        # cores among them; scripts/_pm_legacy_view) and the service
+        for rel, body in (('legacy view', _legacy_view()), ('prometheus/service.py', open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8').read())):
             self.assertNotIn('classify_ask_semantic', body, rel)
             self.assertNotIn('classify_fn', body, rel)
             self.assertNotIn('.steer(', body, rel)
@@ -185,8 +188,7 @@ class TheAnalyzeRoute(unittest.TestCase):
 class TheWiring(unittest.TestCase):
     def test_the_call_sites_read_the_routing_module(self):
         svc = open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8').read()
-        core = open(os.path.join(ROOT, 'prometheus', 'legacy', 'core_analyze.py'), encoding='utf-8').read()
-        interp = open(os.path.join(ROOT, 'prometheus', 'legacy', 'core_interpret.py'), encoding='utf-8').read()
+        core = interp = _legacy_view()     # the analyze and interpret cores read through the view (stage 7 moved them)
         self.assertIn('_routing_s.surface(', svc)
         self.assertIn('_routing_f.surface(', svc)        # the forced-interpret release reads the ask's own Understanding
         self.assertNotIn('understand.decide(', svc)
