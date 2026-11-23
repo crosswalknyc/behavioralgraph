@@ -1116,6 +1116,21 @@ def _build_user_prompt(df, subject, s3_key, category, facts, genpop_map):
             f"multi-homing shape (everyone in a title universe uses "
             f"the carrier; most also use other services). It is never "
             f"a coverage impossibility.")
+    # A non-US frame (Omaze precedent; GLOBAL for a worldwide audience):
+    # the Gen Pop baselines and bands below are US references, so an
+    # index off band can be the market, not a defect.
+    try:
+        from migration.international_profiles import (
+            detect_profile_country, country_prompt_context)
+        _ctry = detect_profile_country(df)
+        if _ctry:
+            parts.append(
+                f"AUDIENCE MARKET: {_ctry} (not a US audience). The Gen Pop "
+                f"values and benchmark bands below are US references; judge "
+                f"every row against this market's real reach.\n"
+                + country_prompt_context(_ctry))
+    except Exception:
+        pass
     demo_lines = ["DEMOGRAPHIC COMPOSITION:"]
     for cu, pairs in facts.get("demo_summary", {}).items():
         row = ", ".join(f"{label} {bp:.1f}" for label, bp in pairs[:8])
