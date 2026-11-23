@@ -151,7 +151,7 @@ class CrossBehaviorsPage(unittest.TestCase):
             self.assertIsNone(BANNED.search(s), s)
         self.assertNotIn('\u2014', block)
         self.assertNotIn('\u2013', block)
-        self.assertLess(len(html.encode('utf-8')), 13_500_000)
+        self.assertLess(len(html.encode('utf-8')), 13_000_000)   # the page budget (13.0 MB since 2026-11-23; test_index_html_split carries the same line)
 
 
 if __name__ == '__main__':
