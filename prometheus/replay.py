@@ -747,14 +747,19 @@ def probe_many(items, timeout_s=None, python=None):
 
 
 def probe_route(question, view_id='', subject='', history=None,
-                view_data=None, logged_outcome=None, mode=None):
+                view_data=None, logged_outcome=None, mode=None,
+                reading=None, client_surface=None):
     """Re-run one ask in an isolated child. Returns a dict with the
     live route, outcome, surface, reply text, HTTP status, wall time,
-    and the routing row. Never raises."""
+    and the routing row. Never raises. `reading` is the Reader's logged
+    reading for the ask (the child cans the Reader with it, never an
+    invented one; stage 1, 2026-11-20): a suite that replays a production
+    case hands in what production's Reader logged."""
     return probe_many([{'question': question, 'view_id': view_id,
                         'subject': subject, 'history': history,
                         'view_data': view_data,
-                        'logged_outcome': logged_outcome, 'mode': mode}])[0]
+                        'logged_outcome': logged_outcome, 'mode': mode,
+                        'reading': reading, 'client_surface': client_surface}])[0]
 
 
 # ---------------------------------------------------------------------------

@@ -2112,6 +2112,20 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
             subject = platform_subject(words)
         subject = __import__('prometheus.platform_scope', fromlist=['quote_subject']).quote_subject(words, history, subject)   # a platform the words add scopes the subject on record; the quote never names the platform in its place (2026-11-11, Armine)
         subject = __import__('prometheus.cut_list', fromlist=['settle']).settle(words, history, subject)[0]   # a listed category is a cut: the subject on record, or '' and the reader is asked (2026-11-11)
+        if subject:
+            try:
+                # The words point at the open product's own view ("this campaign", "on this page") and the binder
+                # handed back the view's label: that view is the base and its lanes answer, metered, as they did
+                # before the screen rule let a pointer bind the label (2026-10-22, Alexia; 2026-11-24). A quote on
+                # the view's own name is never the answer to a question about what is on it. Words that NAME the
+                # subject outright keep today's path.
+                from . import view_base as _vb0
+                from . import screen_scope as _ss0
+                _vc0 = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
+                if _vb0.view_base(_vc0) and _fold(subject) == _fold(_vb0.view_label(_vc0)) and _ss0.points_at_screen(words):
+                    return None
+            except Exception:
+                pass
     if not subject:
         try:
             # The open product's own view ("this campaign", its title) is the

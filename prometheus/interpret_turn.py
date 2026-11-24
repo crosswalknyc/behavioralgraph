@@ -640,8 +640,10 @@ def _pm_interpret_core(user, body, text, history):
         # carries; the draft is two parallel halves of one JSON on the same model and rulebook, merged (prometheus.brief_speed, 2026-11-24).
         _preverify = _C._pm_start_preverify(text, candidates)
         _bsp = __import__('prometheus.brief_speed', fromlist=['draft']); _bsp.hold_prestart(_bsp.identity_prestart(text, _H))
-        result = _bsp.draft(lambda **_k: _H._run_nflx_claude_agent(**_k), system_prompt=system_prompt, user_prompt=user_prompt, max_tokens=_smart.draft_output_ceiling(text),
-                            temperature=0.4, model=_C._SYNTH_CHAT_INTERPRET_MODEL, text=text, long_ceiling=_smart.draft_output_ceiling.__defaults__[1], stage=_C._pm_ask_stage)
+        result = _bsp.draft(
+            lambda **_k: _H._run_nflx_claude_agent(**_k), system_prompt=system_prompt, user_prompt=user_prompt,
+            max_tokens=_smart.draft_output_ceiling(text), temperature=0.4,
+            model=_C._SYNTH_CHAT_INTERPRET_MODEL, text=text, long_ceiling=_smart.draft_output_ceiling.__defaults__[1], stage=_C._pm_ask_stage)
         _C._pm_ask_stage('model', t0=_t_model)
         if not result.get('success'):
             _H._chatbot_error_email(

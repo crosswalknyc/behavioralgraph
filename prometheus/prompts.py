@@ -94,14 +94,21 @@ REGISTRY = {
         # restated on the universe_anchor schema line, the account-holder list restated on its schema line): 13,384 and
         # 4,774 measured, under both old budgets. Budgets re-set to that size plus the few tokens the date lines move.
         # Brain rules 70 to 73 (2026-11-11) live in the knowledge pack and are in none of the prompts registered here.
-        'budget_tokens': 13390, 'target_tokens': 9000,
+        # 2026-11-24 re-baseline for two rules Jenna mandated: THE WHOLE WORLD IS A SCOPE plus the GLOBAL clause on guard 6
+        # (2026-11-23, the global profile contract; +165 tokens on this book and the plain one) and the time_shifted_refresh
+        # rule's dated events in the new window (2026-11-24, the Stephen Colbert refresh; +151 here). The one text that was
+        # said twice is gone (the refresh_row_hypothesis schema gloss restated the event list and the parent-window definition
+        # the DECISION LOGIC bullet carries; it now defers to that bullet: -37). Measured 13,663 and 4,939; budgets re-set to
+        # that size plus the few tokens the date lines move. Only shrinks from here except for a new rule Jenna mandates.
+        'budget_tokens': 13670, 'target_tokens': 9000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'the whole rulebook with candidates (worst case); 19,838 before the 2026-10-14 diet'},
     'interpret.rulebook.plain': {
         'version': '2026.10.14', 'owner': 'build drafting',
         'loader': lambda: _rulebook(reading={'intent': 'build_profile', 'confidence': 0.95, 'subjects': [{'as_written': 'Taylor Swift', 'catalog': 'Taylor Swift'}], 'flags': []}),
         # 2026-11-11: 4,774 measured after the same-day diet (see the note on the full book); only shrinks from here
-        'budget_tokens': 4780, 'target_tokens': 4000,
+        # 2026-11-24: 4,939 measured with the global-scope rules Jenna mandated on 2026-11-23 (see the note on the full book)
+        'budget_tokens': 4945, 'target_tokens': 4000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'a plain profile ask with a confident reading: the Reader-aware prune; 8,901 before the 2026-10-14 diet, 19,838 before the audit'},
     # 2026-11-18 (Jenna, a date field answered with a read of the open profile): THE DASHBOARD'S OWN CONTROLS rule joined the

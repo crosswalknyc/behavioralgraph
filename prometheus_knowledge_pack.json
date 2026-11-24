@@ -16,7 +16,7 @@
   ".cursor/rules/no-operator-hints-in-dashboard.mdc": "11cf4f4e4941733d2f53abf4cff647d07c3992752792ace9eaf77dd7a7324334",
   ".cursor/rules/no-round-numbers-in-deliverables.mdc": "b588ce6a0d7aefb7e8439863e540fde63be4085b43335011686a7a86b372116c",
   ".cursor/rules/no-round-sample-sizes.mdc": "e5e519707c0164136da81c82b5c8fccece70a183d809783e488a84a0bbd4e2a3",
-  ".cursor/rules/partner-api-shared-catalog.mdc": "10566e53228794e932bfd0cfe843f8658597f60479d765030c181d0343d6244d",
+  ".cursor/rules/partner-api-shared-catalog.mdc": "bbe3dd0d36aa439877d211003763841415ffb16d157580143a3bc220308db22b",
   ".cursor/rules/reasoned-answers-clickstream-boundary.mdc": "d0ce9e8945f21eedb7e3265804ca8b4a0635b43a3e2495ca33c3436676b93ca0",
   ".cursor/rules/always-project-to-us-genpop.mdc": "b2c64809a609d6fbb064f98f9000e5a8bef73bc323c0ddb8e6b385f1e831a72f",
   ".cursor/rules/reasoning-wins-when-fact-rooted.mdc": "09c11ea03c239a3d23485e547df55cc319471ec14ecb83905236902e8d8b15f3",

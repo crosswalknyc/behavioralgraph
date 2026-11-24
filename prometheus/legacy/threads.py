@@ -14,7 +14,7 @@ from flask import jsonify, request, session
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 from prometheus import seams as _seams  # noqa: E402
 
-__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_fresh', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', 'admin_prometheus_chat', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_pm_project_label', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
+__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_fresh', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_super_admin_gate', 'admin_prometheus_chat', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_pm_project_label', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
 
 
 # The dashboard's display name for a project key (2026-10-22, Scott's
