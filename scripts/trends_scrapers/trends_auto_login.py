@@ -100,8 +100,10 @@ _PROFILE_DIR = (Path.home() / "Library" / "Application Support"
                 / "CrosswalkTrendsLogin" / "chrome-profile")
 
 # How long the assisted (--setup) flow waits for you to finish a 2FA /
-# CAPTCHA challenge in the visible window before giving up.
-_SETUP_WAIT_S = 240
+# CAPTCHA challenge in the visible window before giving up. Ten
+# minutes: finding a security key and walking a passkey prompt took
+# longer than the four minutes this used to allow (2026-11-24).
+_SETUP_WAIT_S = 600
 # Per-page settle budget after a submit click.
 _SETTLE_MS = 6000
 
@@ -514,6 +516,20 @@ _ERROR_TEXT = [
 ]
 
 
+def _blank_document(page) -> bool:
+    """True when the page holds no document to speak of: the empty
+    stub an edge hands out instead of the page (a few hundred bytes at
+    most, no body text). A real login page, even a bare shell waiting
+    on its scripts, is far larger."""
+    try:
+        html = page.content() or ""
+    except Exception:
+        return False
+    if len(html) >= 600:
+        return False
+    return not _page_text(page).strip()
+
+
 def _first_present(page, selectors, *, timeout_ms=4000):
     """Return the first selector (from the list) that attaches within the
     budget, or None."""
@@ -769,8 +785,8 @@ def _harvest(ctx, domain: str) -> list[dict]:
 # ────────────────────────────────────────────────────────────────────
 # Single-domain login attempt
 # ────────────────────────────────────────────────────────────────────
-def _fill_first(page, selectors, value) -> bool:
-    sel = _first_present(page, selectors, timeout_ms=6000)
+def _fill_first(page, selectors, value, *, timeout_ms: int = 6000) -> bool:
+    sel = _first_present(page, selectors, timeout_ms=timeout_ms)
     if not sel:
         return False
     try:
@@ -939,8 +955,11 @@ def _xbox_reach_password(page) -> bool:
 
 
 def _xbox_flow(page, username: str, password: str) -> tuple[str, str]:
+    # login.live.com paints its form late behind the xbox.com redirect;
+    # a visible window on a cold start is slower still. Twenty seconds
+    # for the email field, not the six a flat form gets.
     if not _fill_first(page, ['input#usernameEntry', 'input[type="email"]',
-                              'input#i0116'], username):
+                              'input#i0116'], username, timeout_ms=20000):
         return "needs_human", (_challenge_reason(page)
                                or "could not find the Microsoft email field")
     _click_first(page, _XBOX_NEXT_SEL)
@@ -1030,6 +1049,29 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
     except Exception as e:
         return "error", f"navigation failed: {e}"
     page.wait_for_timeout(2500)
+    # An edge that answers the login route with an empty document (the
+    # xbox.com edge does, in streaks: a 200 carrying `<!doctype html>`
+    # and nothing else, 2026-11-24) leaves a blank page with no form
+    # and no redirect. Nothing to fill, nothing for a person to do in
+    # the --setup window. A document that small is never a login page;
+    # ask again a few times before reading the page.
+    for _ in range(3):
+        if not _blank_document(page):
+            break
+        logger.info("%s: login route answered with an empty document; "
+                    "asking again", domain)
+        page.wait_for_timeout(4000)
+        try:
+            page.goto(recipe["login_url"], wait_until="domcontentloaded",
+                      timeout=45000)
+        except Exception as e:
+            return "error", f"navigation failed: {e}"
+        page.wait_for_timeout(2500)
+    if headed:
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
 
     # A platform can route a still-valid session straight past its own
     # login page. The guard decides that too, without a navigation.
@@ -1171,8 +1213,13 @@ def _wait_for_human(page, recipe, reason: str) -> tuple[str, str]:
     """(Headed --setup only.) Pause and let the operator finish the
     challenge in the visible window; poll until logged in or timeout."""
     print(f"    -> {reason}")
-    print(f"    -> finish signing in in the browser window "
-          f"(waiting up to {_SETUP_WAIT_S}s)...")
+    print(f"    -> finish signing in in the Chrome window that just "
+          f"opened (waiting up to {_SETUP_WAIT_S // 60} minutes)...",
+          flush=True)
+    try:
+        page.bring_to_front()
+    except Exception:
+        pass
     deadline = time.time() + _SETUP_WAIT_S
     domain = next((d for d, r in _R.items() if r is recipe), "")
     while time.time() < deadline:
