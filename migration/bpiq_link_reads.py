@@ -365,6 +365,42 @@ def read_links(links, fetch: Optional[Callable] = None) -> list:
         return list(ex.map(lambda u: read_link(u, fetch=f), urls))
 
 
+_PRICE_RE = re.compile(r'"price"\s*:\s*"?(\d{1,5}(?:\.\d{1,2})?)"?')
+
+
+def parse_list_price(html_text) -> Optional[float]:
+    """The price a product page carries in US dollars, from its structured
+    data (an offer with the price and USD beside it) or its price tags.
+    None when the page shows none (2026-11-24: the brand's own list price
+    sets a valuation's order value)."""
+    h = str(html_text or "")
+    for m in _PRICE_RE.finditer(h):
+        near = h[max(0, m.start() - 400): m.end() + 400]
+        if re.search(r'"priceCurrency"\s*:\s*"USD"', near):
+            v = float(m.group(1))
+            if 0.5 <= v <= 20000:
+                return v
+    tag = re.search(r'<meta[^>]+(?:property|name|itemprop)="(?:product:price:amount|og:price:amount)"[^>]*content="(\d{1,5}(?:\.\d{1,2})?)"', h)
+    cur = re.search(r'<meta[^>]+(?:property|name|itemprop)="(?:product:price:currency|og:price:currency)"[^>]*content="([A-Z]{3})"', h)
+    if tag and (not cur or cur.group(1) == "USD"):
+        v = float(tag.group(1))
+        if 0.5 <= v <= 20000:
+            return v
+    return None
+
+
+def read_list_price(url: str, fetch: Optional[Callable] = None) -> Optional[float]:
+    """A product page's price in US dollars, read on the page itself; None
+    when it cannot be read. Never raises."""
+    f = _fetcher(fetch)
+    if f is None or not str(url or "").startswith(("http://", "https://")):
+        return None
+    try:
+        return parse_list_price(f(url) or "")
+    except Exception:
+        return None
+
+
 _ACCOUNT_PAGE = {
     "Instagram": "https://www.instagram.com/{a}/",
     "TikTok": "https://www.tiktok.com/@{a}",
@@ -390,4 +426,4 @@ def read_account(platform: str, account: str, fetch: Optional[Callable] = None) 
 
 __all__ = ["platform_of", "social_links", "link_key", "account_of", "published_from_id", "count_of",
            "parse_post_page", "parse_account_page", "read_link", "read_links", "read_account", "enabled",
-           "MAX_LINKS"]
+           "parse_list_price", "read_list_price", "MAX_LINKS"]

@@ -555,6 +555,16 @@ STRICT JSON only:
   "category": str,                 // one of %s
   "aov_hint_usd": float|null,      // your read of a typical order, if
                                    // no prices were readable
+  "brand_prices": {                // the brand itself, campaign or not
+    "tier": "mass"|"masstige"|"prestige"|"luxury"|"unknown",
+                                   // where it sells and at what level:
+                                   // drugstore and mass retail, masstige,
+                                   // prestige counters, luxury
+    "list_prices": [{"product": str, "price_usd": float, "url": str}, ...],
+                                   // the brand's own US list prices for
+                                   // its core full-size products, read on
+                                   // its own product pages
+    "note": str},
   "confidence": "high"|"medium"|"low",
   "sources": [{"title": str, "url": str, "used_for": str}, ...]
 }
@@ -564,7 +574,10 @@ invent a price. A piece whose price you did not see carries null. A
 sell-out needs evidence (sold-out product pages, the brand saying so,
 coverage); without it sold_out is false. Say when inventory was small
 (a capsule or limited run) so demand is not overstated. Prefer the US
-storefront and USD."""
+storefront and USD. A list price is the regular full-size price on the
+brand's own product page (or its storefront at a retailer when it sells
+only there): never a sale price, a mini, a set or a bundle; leave
+list_prices empty when you did not read one."""
 
 
 def campaign_prompt() -> str:
@@ -884,6 +897,96 @@ def _fnum(v) -> Optional[float]:
         return None
 
 
+# The brand's own price tier (Jenna 2026-11-24). The category bands below
+# are one range per category (beauty's reads as prestige, $45 to $110), so
+# a drugstore brand's own reads fell under the floor and were thrown out
+# (Zarna Garg x Maybelline: a $23 typical order discarded for $74.87). The
+# order value is reasoned from the brand itself: its own core list prices
+# when they can be read (the lowest, times the order's basket: the low
+# anchor), else the research's read of a typical order; the band is only a
+# sanity check, and its floor gives way for a brand that sits below it
+# (mass, masstige, or its own prices under the floor). Prestige keeps its
+# range. No table of brands: the tier and the prices come from the brand.
+_TIER_WORDS = (("luxury", "luxury"), ("prestige", "prestige"), ("masstige", "masstige"), ("premium", "masstige"),
+               ("drugstore", "mass"), ("mass", "mass"), ("value", "mass"), ("budget", "mass"), ("discount", "mass"))
+_BELOW_FLOOR_SHARE = 0.2      # with no price read, a brand below the band can sit at a fifth of its floor
+_BELOW_HINT_FACTOR = (0.86, 0.94)   # a typical order taken under the band's floor, at the low end of the read
+
+
+def normalize_brand_prices(raw) -> dict:
+    raw = raw if isinstance(raw, dict) else {}
+    tier = ""
+    t = str(raw.get("tier") or "").strip().lower()
+    for word, name in _TIER_WORDS:
+        if word in t:
+            tier = name
+            break
+    prices = []
+    for p in (raw.get("list_prices") or []):
+        if not isinstance(p, dict):
+            continue
+        v = _fnum(p.get("price_usd") if "price_usd" in p else p.get("price"))
+        if not v or not (0.5 <= v <= 20000):
+            continue
+        prices.append({"product": str(p.get("product") or p.get("name") or "").strip()[:120], "price_usd": round(v, 2),
+                       "url": str(p.get("url") or "").strip(), "source": str(p.get("source") or "research").strip() or "research"})
+    return {"tier": tier, "list_prices": prices[:24], "note": str(raw.get("note") or "").strip()[:400]}
+
+
+def brand_tier(campaign: Optional[dict]) -> str:
+    return str(((campaign or {}).get("brand_prices") or {}).get("tier") or "")
+
+
+def brand_list_prices(campaign: Optional[dict]) -> list:
+    """The brand's own core list prices, lowest first."""
+    return sorted(float(p["price_usd"]) for p in (((campaign or {}).get("brand_prices") or {}).get("list_prices") or [])
+                  if _fnum(p.get("price_usd")))
+
+
+def with_page_prices(brand_prices: dict, brand: str = "", *, fetch=None) -> dict:
+    """The research's list prices, each read again on the brand's own page
+    where the page carries a price (migration.bpiq_link_reads); a page
+    price replaces the research's figure, an unreadable page keeps it.
+    Only pages on the brand's own site are read (a retailer's price can
+    be a sale price). Never raises."""
+    bp = normalize_brand_prices(brand_prices)
+    try:
+        try:
+            from migration import bpiq_link_reads as _blr
+        except ImportError:   # twin layout
+            import bpiq_link_reads as _blr   # type: ignore
+        token = re.sub(r"[^a-z0-9]+", "", str(brand or "").lower())[:12]
+        for p in bp["list_prices"]:
+            host = re.sub(r"[^a-z0-9]+", "", (re.findall(r"https?://([^/]+)", p.get("url") or "") or [""])[0].lower())
+            if not token or len(token) < 3 or token not in host:
+                continue
+            got = _blr.read_list_price(p["url"], fetch=fetch)
+            if got:
+                p["price_usd"], p["source"] = round(float(got), 2), "page"
+    except Exception as e:
+        print(f"[bpiq-synth] list price reads skipped: {type(e).__name__}: {e}")
+    return bp
+
+
+def _median(values) -> float:
+    v = sorted(values)
+    n = len(v)
+    return (v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2.0) if n else 0.0
+
+
+def _order_window(band, tier: str, prices: list) -> tuple:
+    """(floor, ceiling, below) a typical order must sit inside to stand:
+    today's tolerance around the category band, with the floor giving way
+    for a brand below the band (its tier, or its own prices under the
+    floor at the smallest basket): to its lowest list price, or with none,
+    to a fifth of the band's floor."""
+    lo, hi = band[0] * 0.6, band[1] * 1.8
+    below = tier in ("mass", "masstige") or bool(prices and _median(prices) * BASKET_RANGE[0] < band[0])
+    if below:
+        lo = min(lo, min(prices) if prices else band[0] * _BELOW_FLOOR_SHARE)
+    return lo, hi, below
+
+
 def normalize_campaign(raw, inputs: Optional[dict] = None) -> dict:
     """The campaign research in one shape, whatever came back. Prices
     are floats or absent; the sell-out block always exists."""
@@ -947,6 +1050,7 @@ def normalize_campaign(raw, inputs: Optional[dict] = None) -> dict:
                       "social_note": str(fp.get("social_note") or "").strip()},
         "category": cat,
         "aov_hint_usd": _fnum(raw.get("aov_hint_usd")),
+        "brand_prices": normalize_brand_prices(raw.get("brand_prices")),
         "confidence": conf,
         "sources": [s for s in (raw.get("sources") or []) if isinstance(s, dict)][:20],
         **({"footprint": _normalize_fp(raw.get("footprint"))} if isinstance(raw.get("footprint"), dict) else {}),
@@ -986,6 +1090,9 @@ def research_campaign(inputs: dict, claude_json: Callable, *,
         campaign = normalize_campaign(merge_sellout(campaign, check), inputs)
         print(f"[bpiq-synth] sell-out check: sold out {campaign['sell_out'].get('sold_out')}"
               f" ({campaign['sell_out'].get('days_to_sell_out')} days, partial {campaign['sell_out'].get('partial')})")
+    # the brand's own list prices, read again on its own pages where they show one
+    campaign["brand_prices"] = with_page_prices(campaign.get("brand_prices"),
+                                                campaign.get("brand") or inputs.get("brand_partner") or "")
     # the footprint: press, events, the film, the posts, search, the site,
     # and every campaign link the reader pasted, read on its own page
     fp = with_pasted_links(research_footprint(inputs, claude_json, tools=tools), inputs)
@@ -1075,11 +1182,34 @@ def _derive_aov(campaign: Optional[dict], category: str, salt: str,
                    band={"low_usd": round(lo, 2), "high_usd": round(hi, 2)},
                    note=f"collection band ${lo:,.0f} to ${hi:,.0f}, basket {basket:.2f}")
         return out
+    # the brand itself (2026-11-24): its tier and its own core list prices
+    tier, prices = brand_tier(c), brand_list_prices(c)
+    w_lo, w_hi, below = _order_window(band, tier, prices)
+    if prices:
+        aov = prices[0] * basket          # the lowest core list price times the order's basket: the low anchor
+        floor = prices[0] if below else band[0]        # prestige keeps its range
+        if floor <= aov <= w_hi:
+            out.update(aov=_messy_cents(salt, aov, "aov"), basis="brand_list_prices", floor=round(prices[0], 2),
+                       band={"low_usd": round(prices[0], 2), "high_usd": round(prices[-1], 2)},
+                       note=(f"the brand's own list prices ${prices[0]:,.2f} to ${prices[-1]:,.2f} "
+                             f"({len(prices)} read), the lowest times a basket of {basket:.2f}"))
+            return out
     hint = _fnum(c.get("aov_hint_usd"))
-    if hint and band[0] * 0.6 <= hint <= band[1] * 1.8:
-        aov = hint * (0.94 + 0.12 * _unit(salt, "hint"))
+    if hint and w_lo <= hint <= w_hi:
+        under = hint < band[0] * 0.6      # standing only because the brand sits below the band
+        f = (_BELOW_HINT_FACTOR[0] + (_BELOW_HINT_FACTOR[1] - _BELOW_HINT_FACTOR[0]) * _unit(salt, "hint")) if under \
+            else (0.94 + 0.12 * _unit(salt, "hint"))
+        aov = hint * f
         out.update(aov=_messy_cents(salt, aov, "aov"), basis="researched_order_read",
-                   note=f"typical order read ${hint:,.2f}, inside the {cat or 'category'} band")
+                   note=(f"typical order read ${hint:,.2f}, " + ("a brand below the " + (cat or 'category') + " band"
+                                                                if under else f"inside the {cat or 'category'} band")))
+        return out
+    if below:
+        # below the band with nothing readable: the low part of the space under its floor
+        lo_b = band[0] * _BELOW_FLOOR_SHARE
+        aov = lo_b + (band[0] - lo_b) * (0.2 + 0.3 * _unit(salt, "band"))
+        out.update(aov=_messy_cents(salt, aov, "aov"), basis="tier_band", band={"low_usd": round(lo_b, 2), "high_usd": band[0]},
+                   note=f"a {tier or 'lower'}-tier brand under the {cat or 'category'} band, no readable prices")
         return out
     pos = 0.2 + 0.6 * _unit(salt, "band")
     aov = band[0] + (band[1] - band[0]) * pos
@@ -2141,6 +2271,10 @@ def build_payload(inputs: dict, prim: dict, *,
         _aov_line = (f"Average order value ${rates['conv_value_per_user']:,.2f}: the collection "
                      f"ran ${_pb['low_usd']:,.0f} to ${_pb['high_usd']:,.0f} a piece and a typical "
                      f"order carried about {aov.get('basket', 1.3):.1f} pieces.")
+    elif aov.get("basis") == "brand_list_prices" and aov.get("floor"):
+        _aov_line = (f"Average order value ${rates['conv_value_per_user']:,.2f}: {inputs['brand_partner']}'s own "
+                     f"list prices start at ${float(aov['floor']):,.2f}, and a typical order carried about "
+                     f"{aov.get('basket', 1.3):.1f} pieces.")
     else:
         _aov_line = (f"Average order value ${rates['conv_value_per_user']:,.2f}, read from what "
                      f"{inputs['brand_partner']} sells at.")
@@ -2341,7 +2475,8 @@ def underpinnings_readme(inputs: dict, campaign: dict, aov: dict, payload: dict)
         "Audience: people in the talent's audience inside the window.",
         "Brand engagement: the share of that audience with at least one brand touchpoint, before and during the campaign.",
         "Conversions: the share of the audience with a purchase action for the brand in the window.",
-        "Average order value: what one converting order carries, from the collection's own price points.",
+        "Average order value: what one converting order carries, from the collection's own price points, "
+        "or the brand's own list prices.",
         ("Comparison group: a matched group of the same size with the same brand engagement before the campaign."
          if ((payload or {}).get("control_group") or {}).get("enabled", True) else
          "Brand lift: a before and after read of the same audience, the campaign window against the same number of days before it."),
