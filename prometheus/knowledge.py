@@ -63,6 +63,10 @@ ANCHOR_FRESH_S = 14 * 24 * 3600          # anchors on an open window are researc
 ANCHOR_INDEX_PREFIX = 'system/pm_anchors/_by_subject/'   # one small index per subject: which anchor documents it has and their windows
 ENV_ANCHOR_TTL = 'PM_KNOWLEDGE_ANCHOR_TTL_DAYS'
 ENV_RESEARCH_GATE = 'PM_KNOWLEDGE_RESEARCH_GATE'
+ENV_RESEARCH_BUDGET = 'PM_KNOWLEDGE_RESEARCH_BUDGET_S'   # the research call's time budget inside a read (0: no budget)
+ENV_RESEARCH_MAX_USES = 'PM_KNOWLEDGE_RESEARCH_MAX_USES'  # web searches the research call may run
+RESEARCH_BUDGET_S = 90.0
+RESEARCH_MAX_USES = 4
 PRODUCTS = ('read', 'valuation', 'insight', 'journey', 'profile')
 
 RESEARCH_PROMPT = """You gather outside anchors for one measurement question before it is
@@ -653,7 +657,7 @@ def research(ask: dict, claude_json: Optional[Callable] = None, tools=None, chan
                     f"in for US people reached. Then the anchors the question itself needs.")
             kw = {'max_tokens': 2500, 'temperature': 0.1, 'surface': 'pm_knowledge_research'}
             if tools:
-                kw['tools'] = tools
+                kw['tools'] = _research_tools(tools)    # a handful of anchors needs a few searches, not six (2026-11-23)
             raw = _unwrap(claude_json(RESEARCH_PROMPT, json.dumps(ask_doc), **kw))
             out['anchors'] = _clean_anchors(raw.get('anchors'))
             out['events'] = _clean_events(raw.get('events'))
@@ -1010,6 +1014,71 @@ def research_gate_enabled() -> bool:
     return os.environ.get(ENV_RESEARCH_GATE, '1').strip().lower() not in ('0', 'false', 'no', 'off')
 
 
+def research_budget_s() -> float:
+    """How long a read waits for the research call (2026-11-23: the
+    knowledge step ran 82 to 308 s on eleven of the day's seventeen reads,
+    the research call with six web searches most of it). 0 waits as long
+    as it takes."""
+    try:
+        v = float(os.environ.get(ENV_RESEARCH_BUDGET, str(RESEARCH_BUDGET_S)))
+    except (TypeError, ValueError):
+        v = RESEARCH_BUDGET_S
+    return max(0.0, v)
+
+
+def research_max_uses() -> int:
+    try:
+        v = int(os.environ.get(ENV_RESEARCH_MAX_USES, str(RESEARCH_MAX_USES)))
+    except (TypeError, ValueError):
+        v = RESEARCH_MAX_USES
+    return max(1, v)
+
+
+def _research_tools(tools):
+    """The web search tool capped at the research step's own number of
+    searches; anything else passes through."""
+    out = []
+    for t in (tools or []):
+        if isinstance(t, dict) and str(t.get('type') or '').startswith('web_search'):
+            t = dict(t, max_uses=min(int(t.get('max_uses') or RESEARCH_MAX_USES), research_max_uses()))
+        out.append(t)
+    return out
+
+
+def research_bounded(ask: dict, claude_json=None, tools=None, *, changed_windows=None, call: bool = True,
+                     budget_s: Optional[float] = None, stages: Optional[dict] = None) -> dict:
+    """`research` under a time budget. The saved anchors come back at
+    once; a call that outruns the budget leaves the read to go on without
+    its anchors while the call finishes on its own thread and saves what
+    it found for the next ask on the subject. `stages['research_timeout']`
+    marks a read that went on without them."""
+    budget = research_budget_s() if budget_s is None else float(budget_s)
+    key = ask_key(ask if isinstance(ask, dict) else {})
+    empty = {'anchors': [], 'events': [], 'block': '', 'marks': [], 'cached': False, 'key': key}
+    if budget <= 0 or not call:
+        return research(ask, claude_json, tools, changed_windows=changed_windows, call=call)
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as _Timeout
+    import contextvars
+    ex = ThreadPoolExecutor(max_workers=1, thread_name_prefix='pm-research')
+    try:
+        ctx = contextvars.copy_context()
+        fut = ex.submit(ctx.run, lambda: research(ask, claude_json, tools, changed_windows=changed_windows, call=call))
+        try:
+            return fut.result(timeout=budget)
+        except _Timeout:
+            print(f"[pm-knowledge] research outran its {budget:.0f}s budget; the read goes on without the anchors "
+                  f"(the call finishes on its own and saves them for the next ask)")
+            if isinstance(stages, dict):
+                stages['research_timeout'] = int(budget * 1000)
+            empty['timed_out'] = True
+            return empty
+        except Exception as e:
+            print(f"[pm-knowledge] research step skipped: {type(e).__name__}: {e}")
+            return empty
+    finally:
+        ex.shutdown(wait=False)
+
+
 def research_needed(text, *, researched=False, h=None, led=None, facts=None, twin=None, changed=None) -> bool:
     """Whether the read needs a research call. Always for a subject we
     hold no profile on or read off another base, for a question about
@@ -1186,7 +1255,7 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
                 stage('researching')
             except Exception:
                 pass
-        r = research(ask, claude_json, tools, changed_windows=changed or None, call=need_call)
+        r = research_bounded(ask, claude_json, tools, changed_windows=changed or None, call=need_call, stages=stages)
         if r.get('block'):
             parts.append(r['block'])
         cap, cap_source = None, ''
@@ -1650,7 +1719,7 @@ def valuation_events(inputs: dict, changed_windows: list, claude_json=None, tool
         return []
 
 
-__all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored', 'research', 'anchors_block',
+__all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored', 'research', 'research_bounded', 'research_budget_s', 'research_max_uses', 'anchors_block',
            'facts_block', 'marks_of', 'leave_twin', 'take_twin', 'peek_twin', 'hold_pending', 'read_blocks', 'insight_blocks',
            'leave_valuation', 'peek_valuation', 'bind_after', 'inline_window', 'valuation_for_read', 'world_block',
            'understanding_on_request', 'named_subject', 'base_is_borrowed', 'leave_size', 'peek_size', 'saved_people',
