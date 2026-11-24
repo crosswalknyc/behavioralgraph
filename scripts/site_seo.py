@@ -681,7 +681,7 @@ def build_llms_txt(pages: list[str]) -> str:
 
 
 _BLOCK_RE = re.compile(
-    r"<(h1|h2|h3|p|li|dt|dd|figcaption|th|td|tr)(?:\s[^>]*)?>(.*?)</\1>|<(/?)(table|ul|ol|tr)(?:\s[^>]*)?>",
+    r"<(h1|h2|h3|p|li|dt|dd|figcaption|th|td)(?:\s[^>]*)?>(.*?)</\1>|<(/?)(table|ul|ol|tr)(?:\s[^>]*)?>",
     re.I | re.S)
 
 

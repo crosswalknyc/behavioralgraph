@@ -251,6 +251,10 @@ An early call. The room still names who leads and by how much; the range is wide
 
 Every scored call the twins made before its outcome, newest first. Nothing made after the fact is on it.
 
+| Audience | What was asked | We said | What happened | Miss | Called | Settled | Dated by |
+|---|---|---|---|---|---|---|---|
+| Loading the record. |
+
 A miss on a count is the share of the figure that happened; a miss on a split is the points that would have to move for the two to match. "On the right side" means the side we called was the side that won.
 
 ## Bring us something we can be wrong about.
@@ -328,6 +332,13 @@ First we sort people by where they are with the subject. There are five stages: 
 
 Each archetype gets a plain name and one representative to speak for it. Here are four of the 16 archetypes in the Amazon Prime Video twin, which stands for 128,116,302 US subscribers.
 
+| Archetype | People | Representative |
+|---|---|---|
+| Older regulars on sport and crime series | 16,572,733 | Devin, 65, Tampa |
+| Thursday night football people | 15,200,112 | Caleb, 53, Los Angeles |
+| Under-35 fans of The Boys and Fallout | 14,605,258 | Kenji, 33, New York |
+| Parents who keep it on for the kids | 3,587,256 | Leah, 45, Seattle |
+
 All 16 archetypes together add up to the full 128,116,302.
 
 ## What happens in the focus group
@@ -359,11 +370,26 @@ Devin, 65, chose a book series. "A game means nothing to me at my age."
 
 Every answer comes with a range and one of three words. The word tells you how close the real number should be to ours.
 
+| Word | How close | What it means |
+|---|---|---|
+| Firm | Within about 5 points | We are sure of this one. |
+| Leaning | Within about 12 points | A lean, not a lock. |
+| Early | Up to about 20 points | The range is wide, but you still get an answer. |
+
 In the example above, the 63.1% was leaning. The real share should fall between 51.2% and 75.0%.
 
 ### Our predictions, checked in public
 
 We write down each prediction before the result is known. When the result comes in, we score it. Misses stay on the record.
+
+| What we predicted | We said | What happened | The miss |
+|---|---|---|---|
+| Texas Senate: who wins | Talarico 54.6%, Paxton 43.3% | Talarico 55.1%, Paxton 43.0% | Right winner; within 0.5 points |
+| Nevada 4th District: the margin | By 23.0 points | By 22.7 points | 0.3 points |
+| Ohio governor: turnout and winner | 4.2M of 7.9M; the winner | About 4.6M; the winner | 8.7% under; right winner |
+| NCIS: New York, week-one audience | 10.04M | 10.25M | 2.0% under |
+| NCIS: New York, share who finish the pilot | 83.9% | 81.6% | 2.3 points over |
+| NCIS: New York, share back for episode two | 85.7% | 86.8% | 1.1 points under |
 
 That is six predictions scored as of November 17, 2026. All three winners were called right. On average, our numbers were off by 3.2%, about 3 in 100. The full list is on the track record page.
 
@@ -467,6 +493,12 @@ When you ask the twin a question, every archetype answers. Then the count adds u
 ## What a digital twin is built from
 
 There are three ways a vendor can build a digital twin. The method decides what the twin can tell you.
+
+| Built from | What it misses |
+|---|---|
+| Surveys and interviews | What people do when nobody is asking. People misremember and overstate. |
+| A language model playing a type of person | It has never met the audience. It repeats the average of the internet. |
+| Observed behavior over time | Private feelings that never show up in behavior |
 
 Crosswalk twins are the third kind. Every twin is built from the record of what 10 million opted-in US people did across their entire digital life. That record holds what they watched and streamed, what they searched, what they bought, what they paid for and what they cancelled. It runs day by day since January 2021. Each person is one ID across their phone, laptop and TV.
 
@@ -585,6 +617,12 @@ The word covers very different things. Some synthetic data is a statistical copy
 
 The input decides the output. A twin built from surveys can tell you what people say. A twin built from behavior can tell you what people do.
 
+| Kind | Built from | Best for | Watch out for |
+|---|---|---|---|
+| Survey-built twins | Past surveys and interviews with real people. One well-known research lineage built an agent from a two-hour interview. It reproduced that person's survey answers at about 85% of the person's own two-week retest (Park and others, Stanford, 2024). | Stated opinion, brand perception, how people describe themselves | Stated intent is not behavior. People say they will subscribe and then do not. |
+| Model-built synthetic respondents | A language model told to answer as a type of person, sometimes tuned on survey data | Fast idea screening, writing survey drafts | The model has never met the audience. It repeats the average of the internet, answers too consistently, and squeezes the extremes. |
+| Behavior-built digital twins | What real people did over time: watched, searched, bought, paid for and cancelled | Predicting what people will do: watch, pay, finish, return, leave | Needs a large, consented, longitudinal panel. Few vendors have one. |
+
 Crosswalk's digital twins are behavior-built. The panel sees the entire digital life of 10 million opted-in US people. Each person is one ID across phone, laptop and TV, day by day since January 2021. A twin is built from that history. The synthetic part is what you do with it. You run a plan the audience has not seen yet and read how people like them respond.
 
 ## Why synthetic data built on behavior is better
@@ -618,6 +656,15 @@ Ask these six questions of any vendor, including Crosswalk. A vendor that cannot
 
 Here are the six checks side by side: what most synthetic data offers, and what Crosswalk's twins offer.
 
+| Check | Most synthetic data | Crosswalk |
+|---|---|---|
+| Built from | Past surveys, or a chatbot playing a type of person | 5+ years of what 10 million opted-in US people did, on every screen |
+| Checked against | Another survey | Real results: certified votes, published audiences and our own count of what people did |
+| Calls dated before the result | Rarely | Every call, dated before the result and never changed after, with the misses kept on a public page |
+| Says how firm each count is | Often not shown | Every count: firm, leaning or early, with a range |
+| Scored going forward | Rarely | First six public calls: three winners called right, counts within 3.2% on average |
+| Method disclosed | Often shared only on request | A public methodology in plain words, plus a PDF for your research team |
+
 One scored call
 
 NCIS: New York, the week-one audience. Called on October 30, 2026: 10.04 million. The published result on November 5: 10.25 million. The miss was 2.0% under, about 2 in 100.
@@ -625,6 +672,13 @@ NCIS: New York, the week-one audience. Called on October 30, 2026: 10.04 million
 ## The four words, defined
 
 Four terms come up again and again. Here is what each one means at Crosswalk.
+
+| Word | What it means at Crosswalk |
+|---|---|
+| Synthetic data | The outcomes a twin produces when you run a plan it has never seen. New data, built on real behavior. |
+| Synthetic audience | The twins a plan would reach, sized, described and projected to the US population. |
+| Synthetic respondent | A program that answers a survey as if it were a person. Most are survey-built or model-built. Crosswalk's archetype representatives answer from behavior instead. |
+| Digital twin | A live copy of a real audience that you can ask. Read what a digital twin audience is. |
 
 The full list is in the Digital Twins IQ glossary.
 
@@ -678,6 +732,24 @@ Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 ## The four kinds, side by side
 
 Start with what the twin is built from. Everything else follows from that.
+
+| The question | Interview and survey twins | Model-built personas | Census-built populations | Behavior-built twins (Crosswalk) |
+|---|---|---|---|---|
+| Built from | Long interviews or past surveys with real people, each turned into an agent | A language model told to answer as a type of person, sometimes tuned on surveys | Census and survey microdata: a synthetic person per zip code, age, income and job, often fed current news | The observed digital life of 10 million opted-in US people over 5+ years: what they watched, searched, bought, paid and cancelled |
+| Real people behind it | The people a vendor could interview or survey | None; the model plays a type | None; made-up people with census traits | 10 million opted-in US people, about 1 in 33 Americans |
+| History behind each answer | One interview or one survey | Whatever the model read online | Census traits and the news | More than 2,000 days of behavior, in order, with timing |
+| Freshness | As of the interview | As of the model's training | As fresh as its news feed | Yesterday's behavior, on file today |
+| It predicts | A person's likely survey answers | The average group member's likely answer | How a population shaped like the country might answer | The likely actions of people like these: watch, finish, return, pay, cancel |
+| What a share means | A share of the twins asked | A share of the personas run | A share of made-up people | A share of real US people, with the count of people behind it |
+| Who decides the seats | A set number of twins per question | You pick the personas | A sample you define | The audience: at least 12 archetypes found in the data, sized by their real people |
+| How it is checked | Against the same person's later survey answers | Against published polls and surveys | Against polls, surveys and prediction markets | Against real outcomes: certified election results, published audience figures, the panel's own count of what the audience did |
+| Can count the outcome itself | Rarely | Rarely | Rarely | Often: the same panel shows who watched, came back or signed up |
+| Calls dated before the result | Rarely | Rarely | Sometimes | Always. Every call is dated before the outcome, never changed after, and kept on a public page with the misses |
+| Says how firm each answer is | Some vendors | Rarely | Rarely | Every count: firm, leaning or early, with a range |
+| Learns from live results | No | No | Partly, from the news feed | Yes. The panel refreshes every morning and forecasts learn from how things really ended up |
+| Can watch a video | No | Some | Some | Yes. Pilot Testing plays a cut to the room with a dial reading every 2 to 4 seconds and a scorecard at the end |
+| Prices and timing | Asked | Guessed | Inferred from income | Observed: what people paid, what they passed on, and how long each step took |
+| Best for | Stated opinion and brand perception | Fast idea screening | Polling-shaped questions on the whole country | Decisions that depend on what people will do |
 
 ## Why saying and doing are different data
 
@@ -795,6 +867,18 @@ The point is the same: hear the audience talk, and count where it lands. The dif
 
 A traditional group hears a dozen people at most. A Crosswalk room hears every archetype in the audience and counts the people behind each answer.
 
+| The question | Traditional focus group | Most AI focus group tools | Crosswalk Focus Group IQ |
+|---|---|---|---|
+| Who is in the room | 8 to 12 people found by a recruiter | Personas you pick, or a chatbot playing a type | One seat per archetype, found in 5+ years of real behavior |
+| Who each seat speaks for | Only themselves | No one in particular | The real people behind its archetype: 3.6 million to 16.6 million in the Prime Video room |
+| How the count works | Each chair counts the same | Each persona counts the same | Each answer counts for its people, and shares add to 100% |
+| One loud voice | Can sway the whole room | Varies by tool | Each seat answers on its own before the count |
+| Time to an answer | Weeks to recruit, hours in the room | Minutes | Minutes, and the next question is one line away |
+| How firm the answer is | Not stated | Rarely stated | Every count: firm, leaning or early, with a range |
+| Watches your video | In a screening room, with a dial | Rarely | Pilot Testing takes a reading every 2 to 4 seconds |
+| What you take away | Notes and a recording | A summary | A CSV and a PDF with every question, split, read and voice |
+| Track record | Not kept | Rarely published | Every call dated before the result, misses kept |
+
 ## Who sits in the room
 
 One seat per archetype. The audience decides how many that is.
@@ -830,6 +914,12 @@ The answers rest on what people did, not guesses. Ask again next month and the c
 ## How firm each count is
 
 Every count carries a range and one of three words. The room always makes the call; the word says how firm it is.
+
+| Word | Range around the count | What it means |
+|---|---|---|
+| Firm | Within about 5 points | The room is sure of this one. The count rests on something counted, or calls like it have landed close. |
+| Leaning | Within about 12 points | A lean, not a lock. The count rests on what was found about the subject and how the room answered. |
+| Early | Up to about 20 points | An early call. The room still names who leads and by how much, and the range tightens as calls like it settle. |
 
 ## When you have a business question, not a list of questions
 
@@ -922,6 +1012,14 @@ Prometheus never answers about this person. It answers about the 10 million US p
 ## A behavioral panel next to the other sources
 
 Most audience data sees one slice of a life, or asks people to remember. A single-source behavioral panel sees the whole person.
+
+| Source | Covers | Leaves out |
+|---|---|---|
+| Survey panel | People's own account of themselves, weeks after the fact | Their real actions. People misremember and overstate. |
+| A platform's own data | Everything inside one app or one store | Life outside its walls: the search before, the rival after, the purchase elsewhere. |
+| Card or receipt data | The payment | The watching, searching and considering before the purchase. |
+| A TV ratings panel | The programs that played on the television | The phone in the viewer's hand, the signup, the search, the merchandise. |
+| The Crosswalk panel (single source) | The entire digital life of one person, every screen, in order, with timing | Private feelings that never show up in behavior |
 
 Because the Crosswalk panel is single source, one question can follow one person from a search to a trailer to a signup to a purchase. Every Crosswalk report reads that same record, the digital twins included.
 
