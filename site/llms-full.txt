@@ -208,7 +208,7 @@ Talk to us. Digital Twins IQ opens to Crosswalk clients first, and Prometheus al
 
 Plain-English pages on how the twins are built, what the words mean, and how to tell a behavior-built twin from a synthetic respondent.
 
-How Crosswalk builds a twin and seats a room: archetypes, the count, confidence scores, pilot testing and the dial. Also as a PDF.
+How Crosswalk's digital twins work: archetypes, focus groups, how sure each answer is, and Pilot Testing. Also as a PDF.
 
 What is a digital twin audience? · Synthetic data in market research · How an AI focus group works · What is a behavioral panel?
 
@@ -264,216 +264,178 @@ Source: https://www.crosswalknyc.com/twins-track-record.html
 
 <!-- https://www.crosswalknyc.com/digital-twins-methodology.html -->
 
-# How Crosswalk builds a digital twin and reads what it will do.
+# How Crosswalk's digital twins work.
 
-Digital Twins IQ lets you ask an audience before you decide. Most twins start from a survey, an interview or a chatbot playing a type of person. Crosswalk's start from 5+ years of what 10 million real people did. Each twin holds 12 to 16 archetypes, the groups inside the audience. A focus group seats one person for each, and the count adds up the real people behind every answer. Each call goes on the record before the result. The first six landed within 3.2% on average.
+A digital twin is a copy of an audience that you can ask questions. Crosswalk builds each twin from 5+ years of what 10 million real people did online. Inside every twin are at least 12 archetypes: groups of people who act alike. In a focus group, one person speaks for each group. You ask a question and see how many people would pick each answer, and how sure we are.
 
-Published November 2026 by Crosswalk Technologies, Inc. · Download the methodology as a PDF · See the public track record
+Published November 2026 by Crosswalk Technologies, Inc. · Download the full methodology (PDF) · See the public track record
 
-## Why Crosswalk's method is stronger
+## How it works in four steps
 
-Most ways of building a twin start from what people say. This one starts from what people did, then checks itself against what happened next.
+You pick an audience, we build its twin, you ask it something, and you get the answer with the people behind it.
 
-- Real people stand behind it. The twins draw on 10 million opted-in US people, about 1 in 33 Americans. A typical survey hears from a few thousand.
-- More than 2,000 days of history. The same people have been recorded day by day since January 2021. An interview twin knows one conversation.
-- Every screen counts as one person. Phone, laptop and TV share one ID, so the twin sees the search, the show and the order that came after.
-- Yesterday is already in. New behavior lands every morning. A survey is weeks old before anyone reads it.
-- The audience picks the seats. The archetypes come from the data and are sized by their real people. Most persona tools ask you to choose the personas yourself.
-- Answers are counted in people. One seat in the Prime Video room stands for 16.6 million people. Another stands for 3.6 million. The first counts about 4.6 times as much.
-- Asking twice gives the same count. Ask again on the same day and the number holds. A chatbot persona can change its answer every time.
-- Calls go on the record first. Each one is written down before the outcome, and every miss stays public. Most vendors check their twins against old surveys instead.
-- We can count many results ourselves. The same panel shows who watched a premiere and who came back for episode two. So the forecast and the check come from the same people.
-What this means. You get an answer built on real lives, and a public record that shows how often it was right.
+- Pick the audience. The people who watch a show, use a service, follow a star or buy a brand. Or describe a group yourself, such as women 25 to 44 in Dallas.
+- We build the twin. We look at what those people did online over the past 5+ years, then find the archetypes inside the audience.
+- Ask it something. Ask questions in a focus group, bring one business question, or show it a video.
+- Get the answer. You see what share of the audience picked each answer, how many people that is, why they picked it, and how firm the answer is.
 
-## 1. What a twin is
+## Five words used on this page
 
-A twin is an audience you can ask questions. It stands in for real people. You ask it what you would ask them, and it answers from what those people have done.
+**Twin**
+A copy of a real audience that you can ask questions.
 
-It can be the people who watch a show, use a service, follow a star or buy a brand. It can also be a group you shape yourself, such as women 25 to 44 in Dallas.
+**Archetype**
+A group of people inside the audience who act alike, such as "parents who stopped watching after the season ended."
 
-No twin is one average person. It is made of the archetypes inside the audience, usually 12 to 16 of them. Each archetype has one person who stands for it, the archetype representative. The people in all the archetypes add up to the whole audience.
+**Archetype representative**
+The one person who speaks for an archetype. Each has a name, an age and a city.
 
-Example: the Amazon Prime Video twin
+**Focus group**
+A room with one seat for each archetype. You ask, and every representative answers.
 
-128,116,302 US subscribers, 16 archetypes. The largest is "older regulars on sport and crime series": 16,572,733 people, 12.9% of the twin, with Devin, 65, from Tampa standing for them. Next come "Thursday night football people" (15,200,112 people) and "under-35 fans of The Boys and Fallout" (14,605,258 people).
+**How firm**
+Every answer comes with one of three words: firm, leaning or early. The word tells you how close the real number should be.
 
-### How we find the archetypes
+## Why this method is stronger
 
-- We sort the audience by stage with the subject: just found it, trying it, in the habit, drifting away, or back after a break.
-- We sort it again by stage of life: under 35, 35 to 54, and 55 and older.
-- People in the habit split again into the most devoted and the regulars.
-- The groups are fitted so they match the audience's own mix of ages and stages.
-- An archetype smaller than 2.5% of the audience joins the archetype closest to it. If fewer than 12 are left, the largest split again, for example by gender or by age.
-- Each archetype gets a plain name in the subject's own words, and a person to speak for it in a room.
-What this means. When you ask a twin a question, every archetype in the audience answers.
+Most twins are built from what people say in a survey or an interview, or from a chatbot playing a type of person. Ours are built from what people did.
 
-## 2. How we build a twin
+- Real people. 10 million US people stand behind the twins, about 1 in 33 Americans. A typical survey hears from a few thousand.
+- Years of history. We have more than 2,000 days of what the same people did. A survey or an interview captures one moment.
+- Every screen. Phone, laptop and TV count as one person, so we see the search, the show and the purchase that came after.
+- Up to date. New behavior arrives every morning.
+- Groups found in the data. The audience decides its own archetypes. Nobody hand-picks personas.
+- Answers in real people. Every share comes with the number of US people behind it.
+- A public record. We write down each prediction before the result and keep every miss on a public page.
 
-Every twin starts from real behavior. Crosswalk sees the entire digital life of 10 million opted-in US consumers. That means what they watch and stream, what they search and buy, and every other step online. A twin takes shape from their history over the past 5+ years.
+## Where a twin comes from
+
+Every twin starts with real behavior. Crosswalk's panel is 10 million US people who chose to be counted, and we see their whole digital life.
+
+That means what they watch and stream, what they search for, what they buy, and what they sign up for or cancel. We see it on every screen, day by day, since January 2021. A twin is built from that history.
 
 ### Three ways to build one
 
-- From a profile we hold. The audience of a show, a star, a service or a brand. If we do not have it yet, we build it first, usually in under an hour.
-- A group you shape. Pick gender, age, income, ethnicity and where they live. You can set the percentage shares yourself.
-- From a list of links. Paste or upload links to a show page, a channel, a feed or an article. The twin is the people who went there.
+- An audience we already know. The viewers of a show, the fans of a star, the users of a service or the buyers of a brand. If we do not have it yet, we build it first, usually in under an hour.
+- A group you describe. Pick gender, age, income, ethnicity and where people live. You can set the shares yourself.
+- A list of links. Paste links to a show page, a channel, a feed or an article. The twin is the people who went there.
 
-### What every twin carries
+## Finding the archetypes
 
-- Who they are. Gender, age, ethnicity, income, education, kids at home and relationship. Where they live, the services they use, what they buy and the people they follow.
-- How they respond. Twelve habits, each a dial from 0 to 100. A 50 is an ordinary US audience. Each archetype carries its own version of these habits.
-- Where they are with it. Five stages: just found it, trying it, in the habit, drifting away, and back after a break. Every archetype sits at one of them.
+We sort the audience into groups of people who act alike. Every twin gets at least 12 groups, and it can have more.
 
-What this means. A twin's answers rest on 5+ years of what its people actually did.
+First we sort people by where they are with the subject. There are five stages: just found it, trying it, in the habit, drifting away, and back after a break. Then we sort by age. Very small groups join the group closest to them. If fewer than 12 groups are left, we split the biggest ones, for example by gender or age.
 
-## 3. How we seat a room
+Each archetype gets a plain name and one representative to speak for it. Here are four of the 16 archetypes in the Amazon Prime Video twin, which stands for 128,116,302 US subscribers.
 
-A focus group seats one person for each archetype. You never pick how many people are seated. The true number of archetypes in your audience decides it. Most rooms seat 12 to 16, and never fewer than 12.
+All 16 archetypes together add up to the full 128,116,302.
 
-- Never fewer than 12. When a twin has fewer than 12 archetypes, we go deeper to find more nuance and split them, so the room still has 12 voices.
-- Seats have a bio and a memory. Click a seat to read who they stand in for. Each seat remembers what it said earlier in the room, and in past groups you have used them in, just like a real person would.
-- The room looks like the real audience. Gender, age and the rest follow the audience by its people. A twin that is 72% women seats about 9 women out of 12.
-- Each answer counts for the people behind it. A seat standing for 16.6 million people counts for more than one standing for 3.6 million.
+## What happens in the focus group
 
-### A question in a room runs in four steps
+The focus group has one seat for each archetype. Every representative answers in their own words, and each answer counts for the people behind it.
 
-- The room gets the facts. Before anyone answers, the room learns what you plan to ask about. It learns what it is, when it came out, where it plays, and anything else the seats would naturally know. It also learns how similar things did before with each archetype.
-- Each seat answers in character. It speaks for two or three sentences, from who it is and its known history. It gives an answer, then says how sure it is from 1 to 5, and why.
-- The count adds up people. Each answer carries the people behind its seat. Shares add to 100% and people add to the room.
-- You get the read. A short paragraph in plain words, the voices that tell the story, and two suggested questions worth asking next.
-Example: one question in the Prime Video room, November 18, 2026
+- At least 12 seats. There is one seat per archetype, so the audience sets the number. You never pick it.
+- It looks like the audience. If a twin is 72% women, about 9 of 12 seats go to women.
+- Bigger groups count more. Devin speaks for 16.6 million people and Leah for 3.6 million. His answer counts about 4.6 times as much as hers.
+- Representatives remember. They recall what they said earlier, in this group and in past groups on the same twin, as a real person would.
 
-The room was asked which option would excite them most if it finally became a show. The lead answer was "a game I play." 9 of 16 seats picked it. Those seats stand for 61.8% of the audience. The room's count was 63.1%, or 80,841,387 people, with a range of 51.2% to 75.0% (leaning).
+### When you ask a question
 
-Kenji, 33, New York, picked the game. "A game I play, no contest, because Fallout did exactly that for me."
+- The focus group first learns the facts about your subject: what it is, when it came out and where it plays.
+- Each representative answers in two or three sentences, based on what their group did before. They also say how sure they are, from 1 to 5.
+- We add up the people behind each answer.
+- You get a short summary, the quotes that explain it, and two questions worth asking next.
+Example: one question on the Prime Video twin, November 18, 2026
 
-Devin, 65, Tampa, did not. "A game means nothing to me at my age."
+"Which of these would get you most excited if it finally became a show?"
 
-Ask the same question the same day and you get the same count. The group's responses are based on historical actions, not guesses.
+The answer: 63.1% of subscribers, about 80.8 million people, picked "a game I play." Nine of the 16 seats chose it. Those seats speak for bigger groups, so the share of people is higher than the share of seats.
 
-What this means. Big archetypes weigh more, but small ones still count.
+Kenji, 33, chose the game. "A game I play, no contest, because Fallout did exactly that for me."
 
-## 4. How the past shapes what comes next
+Devin, 65, chose a book series. "A game means nothing to me at my age."
 
-Each archetype representative answers from what the people it represents did before. A twin is a record of its people's actions over the past 5+ years. That history is what each seat answers from.
+## Three words that tell you how sure we are
 
-It starts with where people are with the subject being studied. As in real life, some archetypes know the subject well and some barely know it. Then come their habits. Does this archetype cancel when a show ends? Do they come back for the next season? These habits come from what the people really did, and they shape every answer.
+Every answer comes with a range and one of three words. The word tells you how close the real number should be to ours.
 
-### What the room leans on, in order
+In the example above, the 63.1% was leaning. The real share should fall between 51.2% and 75.0%.
 
-- History. The first step is always the twin's overall behavioral history, to understand who they are.
-- Similar behavior. What this audience did with this exact thing in the past.
-- A nearby audience is the check. How a close audience acted with the same thing.
-- Similar things add context. A boxed set, a price rise, a second season, a new service.
-- Habits fill in the rest. Their historical habits cover what is left.
-Forecasts learn from real results. How many viewers a show got, how many books sold, which people engaged with a piece of content, how an election turned out, and more. Ask the same thing the same day and the room gives the same count, in any room on that twin. Ask a month later and the result may differ, based on what the panel did during that month.
+### Our predictions, checked in public
 
-### Predictive Analytics plans the questions from wide to narrow
+We write down each prediction before the result is known. When the result comes in, we score it. Misses stay on the record.
 
-Bring one business question. Prometheus writes the plan, runs the room for you, and hands back the verdict with a full report. The question can take any shape: If I do X, will Y happen? Will X win? Should I do X? What will they pay?
+That is six predictions scored as of November 17, 2026. All three winners were called right. On average, our numbers were off by 3.2%, about 3 in 100. The full list is on the track record page.
 
-The plan has 5 to 8 questions in three steps. The big picture comes first: where the audience stands today. Then closer in: what pulls them and what holds them back. Last comes the question itself, put to every archetype representative. Planning is free, and you can edit or drop any question before it runs. The report gives the verdict, the numbers behind it, why, who drove it, what would change it, and what to ask next.
+## One business question, answered by Predictive Analytics
+
+Bring one business question. Prometheus, our research assistant, writes 5 to 8 questions, asks them in a focus group, and gives you a verdict with a full report.
+
+Your question can take almost any shape. It might be "Will this win?", "Should we do this?" or "What will people pay?" The plan starts wide, with where the audience stands today. Then it narrows to what pulls people in and what holds them back. Last comes your question itself. Planning is free, and you can edit or drop any question first.
 
 Example: the Prime Video run, November 18, 2026
 
-The business question: which piece of IP that no one has licensed yet would get a person to pay for Prime Video? The verdict: a new weeknight live sports package. 55.7% of the audience, 71,335,955 people, picked it. That is about 4 times the 14.1% who said nothing on the list would get them to pay.
+The question: which new show or sport, found on no other service, would get people to pay for Prime Video? The verdict: a new weeknight live sports package. 55.7% of subscribers, about 71.3 million people, picked it. That is about 4 times the 14.1% who said nothing would get them to pay.
 
-### Every count says how firm it is
+## Pilot Testing for shows and ads
 
-### We write down every call before the result is known
+Pilot Testing shows your video to the focus group. Each representative watches it, reacts, answers questions, and fills out a scorecard at the end.
 
-We date each call before the result is in. When it lands, we score it, and a miss stays on the record. The full record is public on the track record page.
+- Add your video. A pilot, an episode, an ad or a film, from 15 seconds to 4 hours. Upload it or paste a link.
+- We learn who is on screen. Faces are matched to your cast list. Only people on your list are ever named.
+- Each representative turns a dial. The dial runs from 0 to 100 and moves as they watch, with a reading every 2 to 4 seconds. A 43-minute pilot gets 706 readings per representative.
+- You can ask questions as it plays. Questions come at the turns of the story, and you can add your own at any moment.
+- A scorecard comes at the end. It asks what studios ask after a screening: the rating, and whether people would recommend it, finish it and come back for the next episode.
+- Then a forecast. How many people would watch in week one, how many would finish the season, and how many would sign up to watch it.
+After the test you can play the dial back to any second and see what was on screen and what people said. A test screening needs a recruiter, a room and a week. Pilot Testing needs the file.
 
-As of November 17, 2026: six calls scored, all three calls on a winner right, and counts within 3.2% of the result on average. Each row was dated ahead of its outcome.
+## What you get
 
-What this means. Every count tells you how firm it is, and the record shows how often we were right.
+Every result comes back as files you can share: a CSV, a PDF and, for twins and Pilot Testing, a deck.
 
-## 5. How pilot testing works
+When you finish a focus group, Prometheus also emails you a PDF of the session with a link back to it.
 
-Pilot Testing puts the archetype representatives in front of your cut. They watch it, react to it, and answer questions about it as it plays. When the cut ends, every seat fills out the card a network uses to judge a pilot.
+## Privacy
 
-A test screening needs a recruiter, a room and a week. Pilot Testing needs the file, and every seat stands for real people.
+Everyone on the panel chose to be counted and can leave at any time. We never answer about one person, only about groups.
 
-- Set up the test. Name it and pick the kind: a pilot, an episode, an ad, a feature or a run of episodes. Add the cast list and choose which archetype representatives sit in the room.
-- Add the cut. Upload a file (MP4, MOV, WebM or M4V, from 15 seconds to 4 hours), or paste a link to where it plays.
-- The cut splits into scenes. A new scene starts where the picture changes. For each one we note who and what is on screen, what is said and when, and where it goes quiet.
-- Faces tell us who is on screen. Facial recognition matches actors to your cast list. A face gets a name only when it matches someone on your list. Nobody off your list is ever named.
-- The room watches act by act. Each seat watches in character and turns its dial based on how its archetype has responded to things like this before.
-- You ask questions as it plays. A guide puts questions at the turns of the story. You can add to the moderator's questions at any second. Each question carries the last 75 seconds of what played.
-- The scorecard comes last. Overall rating, would recommend, would finish the episode, would watch a second episode, how soon, and against expectations. Each share counts the people behind the seats and carries its own range and word.
-Next to every top number sits the norm: what tests of the same kind usually score. A scored test also carries a forecast. It gives the week-one audience and the share who would finish the season. It shows the share on another device while it plays. And it counts how many would sign up to a platform to watch it, or come back as a lapsed viewer.
+Identity is kept apart from behavior. Clients see group results scaled up to the US population. Read how the panel works and the Privacy Policy.
 
-## 6. How the dial works
-
-Each seat turns a dial from 0 to 100 as it watches. The dial goes up when a scene lands for that archetype representative. It goes down when a scene drags, confuses or loses them.
-
-- A reading every few seconds. Every 2 seconds on a short cut and every 4 on a long one. A 43-minute pilot gives 706 readings per seat.
-- Each seat moves on its own. A devoted fan and a new member can feel the same scene in very different ways. The rest of the room does not pull a seat along.
-- The room's line counts each seat by its people. A seat that stands for more people moves the line more. Groups (women and men, age groups, the five stages, avid and casual) each get their own line.
-- Reactions are marked on the clock. Loved it, laughed, leaned in, lost, checked out and wow, each with its second and a line in the seat's own words.
-- Run it back after the test. Play, pause, jump 10 seconds, play at 2x or 4x, or drag to any second. At each second you see the scene, every group's dial, who moved most, and what was said.
-
-### What moves a seat's line
-
-- Habits set the start. A seat starts higher when it is loyal to the show or 45 and older. A phone in hand while watching starts it lower.
-- Most of each move is the person's own reaction to the scene, about 70%. The rest is the pull of their habits.
-- The type of scene matters. Tender scenes lift seats that are women, LGBTQ+ or 45 and older. Funny scenes lift seats under 40. Action lifts men under 40.
-- Stage pushes the whole line. In the habit lifts every scene; drifting away pulls every scene down.
-- Time on screen alone never lifts a seat. A cameo can be the best part of a show.
-What this means. You can find the second a scene won the room, or lost it.
-
-## 7. What you get
-
-Every read comes back as files you can share. What you see on the page is in the files too, so the work travels into your own decks and plans.
-
-- Twins: the twin page, with a CSV, a PDF and a deck.
-- Focus Group IQ: each room as a CSV and a PDF: every question, split, read and voice.
-- Predictive Analytics: the report as a page and a PDF, with the raw data as a CSV.
-- Pilot Testing: the scorecard, the report as a PDF and a deck, and the raw data as a CSV.
-When you finish a session in a room, Prometheus emails you the room's PDF read with a link back to the room. The words we use are defined in the Digital Twins IQ glossary.
-
-## 8. Privacy
-
-Each twin stands in for real people who chose to be counted. Identity is kept apart from behavior. Prometheus never answers about one person. It answers about the group a person is counted with, and every projected figure carries its base.
-
-Read more on how the panel works and in the Privacy Policy.
+More detail. Every step and figure is in the full methodology PDF.
 
 ## The methodology, in plain words.
 
 ### What is a Crosswalk digital twin built from?
 
-From what real people did. The Crosswalk panel sees the entire digital life of 10 million opted-in US consumers, day by day since January 2021. A twin rests on that history over the past 5+ years. No surveys, no interviews, no chatbot guessing at a type of person.
+From what real people did. Crosswalk sees the whole digital life of 10 million US people who chose to be counted, day by day since January 2021. No surveys, no interviews, and no chatbot guessing at a type of person.
 
-### Why is this method stronger than a survey or a chatbot persona?
+### How many archetypes does a twin have?
 
-Surveys report what people plan to do, and people often do something else. A chatbot persona has never met your audience. A Crosswalk twin learns from real signups, cancels, second episodes and orders. Those are the same things a forecast is judged on.
+At least 12, and there can be more. The audience decides the number. If an audience has fewer than 12 clear groups, we split the biggest ones until there are 12.
 
-### How many people sit in a Digital Twins IQ focus group?
+### Why does one answer count more than another?
 
-One for each archetype in the audience, usually 12 to 16 and never fewer than 12. You do not pick the number. The true number of archetypes in your audience decides it.
-
-### How is the count weighted?
-
-Each answer carries the people behind its seat. A seat that stands for 16.6 million people counts for more than one that stands for 3.6 million. Shares add to 100% and people add to the room.
+Representatives speak for groups of different sizes. One may speak for 16.6 million people and another for 3.6 million. The bigger group's answer counts for more, so the result matches the real audience.
 
 ### What do firm, leaning and early mean?
 
-They say how far the real number could sit from the count. Firm is within about 5 points. Leaning is within about 12. Early is a wide range, up to about 20 points, and the room still gives a verdict.
+They tell you how close the real number should be. Firm means within about 5 points. Leaning means within about 12. Early means a wider range, up to about 20 points.
 
 ### How accurate are Crosswalk's digital twins?
 
-Every call is dated before the result and scored when it lands, and the misses stay on the record. On the first six public calls, all three winner calls were right. The counts landed within 3.2% of the result on average.
+We publish every prediction before the result and score it after. On the first six, all three winners were called right, and our numbers were off by 3.2% on average.
 
-### Will the same question give the same answer?
+### Do the answers change over time?
 
-Yes, on the same day, in any room on that twin. The responses rest on historical actions, not guesses. A month later the result may differ because the panel's behavior moved during that month.
+They can, because people change. A twin keeps learning from what its people do, so a question asked next month may get a different answer. The answer follows the audience.
 
 ### What can Pilot Testing watch?
 
-A pilot, an episode, an ad, a feature or a run of episodes. Upload an MP4, MOV, WebM or M4V from 15 seconds to 4 hours, or paste a link to where it plays.
+A pilot, an episode, an ad, a film or a run of episodes, from 15 seconds to 4 hours. Upload an MP4, MOV, WebM or M4V file, or paste a link.
 
-### Is any individual identified?
+### Is any person identified?
 
-No. Identity is kept apart from behavior, and Prometheus never answers about one person. It answers about the group that person is counted with. Clients receive group statistics projected to the US population.
+No. We only answer about groups, never about one person. Identity is kept apart from behavior, and clients see group results scaled up to the US population.
 
 Source: https://www.crosswalknyc.com/digital-twins-methodology.html
 
@@ -519,7 +481,7 @@ A twin can only be as good as what it is built from. Crosswalk builds from a rec
 - The whole day, on every screen. Search, streaming, social, shopping, apps and gaming are joined under one ID across phone, laptop and TV. A platform's own data sees only its own app.
 - Fresh every morning. Yesterday's behavior is in today's twin. A chatbot knows the world as of its training.
 - Counts in people, not just percentages. Each answer carries the number of real US people behind it, so you can plan with it.
-- One question, one count. Ask again on the same day and you get the same number. The answers rest on what people did, so they do not drift.
+- One business question, a full plan. Predictive Analytics writes 5 to 8 questions from wide to narrow, runs them, and hands back a verdict with a report.
 - A public record. Every call goes on the record before the result and is scored when it lands. On the first six, three winners were called right.
 
 ## What you can ask a digital twin
@@ -566,7 +528,7 @@ A digital twin is a live copy of a real group of people that you can ask questio
 
 ### What makes Crosswalk's digital twins different?
 
-They are built from behavior, not surveys or chatbots: years of what 10 million opted-in US people did on every screen. Each answer counts real people and holds steady when asked again the same day. Every call is scored against real results in public.
+They are built from behavior, not surveys or chatbots: years of what 10 million opted-in US people did on every screen. Each answer counts real people, and every call is scored against real results in public.
 
 ### How does a digital twin differ from a persona?
 
@@ -582,7 +544,7 @@ One built from behavior. Surveys and chatbots predict what people say, and peopl
 
 ### How many archetypes are in a digital twin?
 
-Usually 12 to 16, and never fewer than 12. The audience's own mix of stage and age decides the number. An archetype smaller than 2.5% of the audience joins the one closest to it.
+At least 12, and there can be more. The audience's own mix of stage and age decides the number. An archetype smaller than 2.5% of the audience joins the one closest to it.
 
 ### What can I test on a digital twin?
 
@@ -698,7 +660,7 @@ For questions about what people will do, a behavior-built twin is often a better
 
 ### What is a synthetic audience?
 
-The twins a plan would reach, sized, described and projected to the US population. At Crosswalk a synthetic audience is made of 12 to 16 archetypes that add up to the whole audience.
+The twins a plan would reach, sized, described and projected to the US population. At Crosswalk a synthetic audience is made of at least 12 archetypes that add up to the whole audience.
 
 Source: https://www.crosswalknyc.com/synthetic-data-market-research.html
 
@@ -744,8 +706,8 @@ Every Crosswalk twin is behavior-built. Here is what that gives you, in ten poin
 - The whole digital life. Search, streaming, social, shopping, apps and gaming on phone, laptop and TV, all under one ID.
 - Fresh every morning. Yesterday's behavior is in today's answer. A chatbot knows the world as of its training.
 - Answers counted in people. Each answer carries the real people behind its seat, so every share comes with a US head count.
-- The audience builds the room. 12 to 16 archetypes come from the data, sized by their people. No one hand-picks personas.
-- Steady answers. The same question on the same day gives the same count, in any room on that twin.
+- The audience builds the room. At least 12 archetypes come from the data, sized by their people. No one hand-picks personas.
+- One business question, a full plan. Predictive Analytics writes 5 to 8 questions from wide to narrow, runs them, and returns a verdict with a report.
 - Seats with a memory. Each archetype representative remembers what it said in your earlier rooms on that twin, as a real person would.
 - It watches your cut. Pilot Testing reads every seat's dial every 2 to 4 seconds. That is 706 readings per seat on a 43-minute pilot, with faces matched to your cast list.
 - Scored in public, against real results. Every call is dated before the outcome. On the first six, all three winners were called right and the counts landed within 3.2% on average.
@@ -819,7 +781,7 @@ Source: https://www.crosswalknyc.com/synthetic-respondents-vs-behavioral-twins.h
 
 # How an AI focus group works.
 
-An AI focus group is a room of digital twins that you can question the way you would question real people. In Crosswalk's Focus Group IQ, the room seats one person for each archetype in the audience, usually 12 to 16. Every seat speaks in character from its people's real history, then the count adds up the real people behind every answer. You get a share, a people count, a range, a word for how firm it is, and the voices behind the result. A traditional group takes weeks to recruit and speaks only for the people in its chairs. This room runs in minutes and speaks for the whole audience.
+An AI focus group is a room of digital twins that you can question the way you would question real people. In Crosswalk's Focus Group IQ, the room seats one person for each archetype in the audience, never fewer than 12. Every seat speaks in character from its people's real history, then the count adds up the real people behind every answer. You get a share, a people count, a range, a word for how firm it is, and the voices behind the result. A traditional group takes weeks to recruit and speaks only for the people in its chairs. This room runs in minutes and speaks for the whole audience.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 
@@ -837,7 +799,7 @@ A traditional group hears a dozen people at most. A Crosswalk room hears every a
 
 One seat per archetype. The audience decides how many that is.
 
-A Crosswalk twin is made of 12 to 16 archetypes, the groups inside the audience. Each archetype has a person who speaks for it, with a name, an age, a city and a bio. The room seats all of them. When a twin has fewer than 12 archetypes, Crosswalk splits the largest ones further, by gender or age for example. The room always has at least 12 voices.
+A Crosswalk twin is made of at least 12 archetypes, the groups inside the audience. Each archetype has a person who speaks for it, with a name, an age, a city and a bio. The room seats all of them. When an audience has fewer than 12 clear groups, Crosswalk splits the largest ones further, by gender or age for example. The room always has at least 12 voices.
 
 The room looks like the real audience. A twin that is 72% women seats about 9 women out of 12. An archetype that is gay men or trans women is seated as exactly that, because that is who the archetype is. Each seat remembers what it said earlier in the room, and in past rooms you have used it in, the way a real person would.
 
@@ -863,7 +825,7 @@ Nine of sixteen seats is 56%. The room's count was 63.1%. The gap is the people.
 
 In a traditional focus group, every chair counts the same, so a room of twelve can over-weight a small slice of the audience. In a Crosswalk room, each seat carries the real people behind its archetype. The seat tally always sits beside the count so you can see both. The count also takes in what is known about the question. That is why it can sit a few points away from the raw people-weighted tally.
 
-Ask the same question the same day and you get the same count. The responses rest on historical actions, not guesses. Ask a month later and the count may move, because the panel's behavior moved.
+The answers rest on what people did, not guesses. Ask again next month and the count can move, because the audience's behavior moved.
 
 ## How firm each count is
 
@@ -892,15 +854,15 @@ A room of digital twins you can question like real people. In Crosswalk's Focus 
 
 ### Is a Crosswalk room better than a traditional focus group?
 
-For knowing what an audience will do, yes. A traditional group hears a dozen recruited people, and each chair counts the same. A Crosswalk room seats every archetype in the audience, counts the real people behind each answer, and gives the same count twice.
+For knowing what an audience will do, yes. A traditional group hears a dozen recruited people, and each chair counts the same. A Crosswalk room seats every archetype in the audience and counts the real people behind each answer.
 
 ### How is Focus Group IQ different from other AI focus group tools?
 
-The seats come from 5+ years of real behavior on 10 million opted-in US people, not from personas you write. Answers are counted in real people, hold steady when asked again the same day, and say how firm they are.
+The seats come from 5+ years of real behavior on 10 million opted-in US people, not from personas you write. Answers are counted in real people and say how firm they are.
 
 ### How many people are in an AI focus group?
 
-One per archetype, usually 12 to 16 and never fewer than 12. The audience decides the number. You never pick it.
+One per archetype, and never fewer than 12. An audience with more archetypes gets more seats. You never pick the number.
 
 ### Are the people in the room real?
 
@@ -910,9 +872,9 @@ Each seat is an archetype representative: a person who stands for one group insi
 
 Every Crosswalk count carries a range and one of three words: firm (within about 5 points), leaning (about 12) or early (up to about 20). Calls are dated before the result and scored in public; the first six landed within 3.2% on average.
 
-### Will the same question give the same answer twice?
+### Do the answers change over time?
 
-Yes, on the same day and in any room on that twin. The answers rest on historical actions, not guesses. A month later the count may move because the audience's behavior moved.
+They can, because people change. The twin keeps learning from what its people do, so a question asked next month may get a different answer.
 
 ### Can an AI focus group watch a video?
 
@@ -1000,7 +962,7 @@ Every panelist chose to be counted and can leave at any time. Identity is kept a
 
 A digital twin is an audience's 5+ years of behavior on the panel, turned into something you can ask.
 
-Crosswalk builds a twin of any audience on the panel: a show's viewers, a brand's buyers, a star's followers, or a group you shape. The twin is made of 12 to 16 archetypes that add up to the whole audience. You seat it in a room, ask it anything, or play it a video. Read how Crosswalk builds a twin.
+Crosswalk builds a twin of any audience on the panel: a show's viewers, a brand's buyers, a star's followers, or a group you shape. The twin is made of at least 12 archetypes that add up to the whole audience. You seat it in a room, ask it anything, or play it a video. Read how Crosswalk builds a twin.
 
 ## The behavioral panel, in plain words.
 
@@ -1060,16 +1022,16 @@ A live copy of a real audience that you can ask questions. Crosswalk builds one 
 Short for digital twin. An audience you can ask, built from 5+ years of what its people did. A twin can be a show's viewers, a service's subscribers, a star's followers, a brand's buyers, or a group you shape.
 
 **Archetype**
-One group inside a twin, such as "older regulars on sport and crime series" or "parents who stopped after the season ended." A twin usually has 12 to 16 archetypes, found by sorting the audience by where people are with the subject and by age. Together they add up to the whole audience.
+One group inside a twin, such as "older regulars on sport and crime series" or "parents who stopped after the season ended." A twin has at least 12 archetypes, found by sorting the audience by where people are with the subject and by age. Together they add up to the whole audience.
 
 **Archetype representative**
-The person who stands for one archetype inside a twin, with a name, an age, a city and a bio. Each twin has 12 to 16. In a room, the archetype representative answers in character from what its people did.
+The person who stands for one archetype inside a twin, with a name, an age, a city and a bio. Each twin has at least 12. In a room, the archetype representative answers in character from what its people did.
 
 **Seat**
 The landing spot for each archetype representative in a room. A seat has a bio and a memory. It remembers what it said earlier in the room and in past rooms you have used it in.
 
 **Room**
-A focus group with one seat for each archetype. Most rooms seat 12 to 16, never fewer than 12. You never pick the number; the audience decides it. Read how an AI focus group works.
+A focus group with one seat for each archetype, so never fewer than 12 seats. You never pick the number; the audience decides it. Read how an AI focus group works.
 
 **Focus Group IQ**
 The part of Digital Twins IQ where you open a room on a twin and ask it anything. Each room comes back as a CSV and a PDF with every question, split, read and voice.
@@ -1144,7 +1106,7 @@ Yesterday's behavior is on file today. The panel refreshes every morning.
 Data that was produced rather than observed. At Crosswalk, the outcomes a twin produces when you run a plan it has never seen: new data, built on real behavior. Read synthetic data in market research.
 
 **Synthetic audience**
-The twins a plan would reach, sized, described and projected to the US population. Made of the 12 to 16 archetypes that add up to the whole audience.
+The twins a plan would reach, sized, described and projected to the US population. Made of the archetypes, at least 12, that add up to the whole audience.
 
 **Synthetic respondent**
 A program that answers a survey as if it were a person. Most are built from past surveys or from a language model playing a type of person. Crosswalk's archetype representatives answer from behavior instead. Read the comparison.

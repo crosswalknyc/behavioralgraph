@@ -117,8 +117,8 @@ PAGES = {
     # can quote them. Article + FAQPage JSON-LD is generated from the page
     # body below (kind="learn"); each sits under Digital twins in the crumb.
     "digital-twins-methodology.html": dict(
-        title="Digital Twins IQ methodology: how Crosswalk builds a twin and seats a room | Crosswalk",
-        description="How Crosswalk builds a digital twin from 5+ years of real behavior on 10 million US people instead of surveys or chatbots: archetypes, people-weighted counts, how firm each count is, pilot testing, and a public record of every call.",
+        title="How Crosswalk's digital twins work: the Digital Twins IQ methodology | Crosswalk",
+        description="How Crosswalk builds a digital twin from 5+ years of what 10 million real people did, finds at least 12 archetypes in every audience, seats them in a focus group, and shows how sure each answer is. In plain words.",
         kind="learn", name="Digital Twins IQ methodology", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("Methodology", "digital-twins-methodology.html")],
         og_image="assets/images/og-digital-twins.png"),
@@ -148,7 +148,7 @@ PAGES = {
         og_image="assets/images/og-digital-twins.png"),
     "ai-focus-groups.html": dict(
         title="AI focus groups: how a room of digital twins answers a question | Crosswalk",
-        description="How an AI focus group works and why a Crosswalk room is better than a traditional group: every seat stands for real people, the count adds them up, the same question gives the same count, and every count says how firm it is.",
+        description="How an AI focus group works and why a Crosswalk room is better than a traditional group: every seat stands for real people, the count adds them up, and every count says how firm it is.",
         kind="learn", name="How an AI focus group works", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("AI focus groups", "ai-focus-groups.html")],
         og_image="assets/images/og-digital-twins.png"),
@@ -650,13 +650,13 @@ def build_llms_txt(pages: list[str]) -> str:
         "",
         "Key facts: 30 million opted-in people worldwide, 10 million in the US, census matched and projected to 329.9 million Americans. "
         "One ID per person across phone, laptop and TV. Recorded day by day since January 2021; yesterday's behavior is on file today. "
-        "Digital Twins IQ (also called Twin IQ) builds a digital twin of any audience from 5+ years of observed behavior; a twin is made of 12 to 16 archetypes; "
+        "Digital Twins IQ (also called Twin IQ) builds a digital twin of any audience from 5+ years of observed behavior; a twin is made of at least 12 archetypes; "
         "a focus group seats one archetype representative per archetype; every count carries a range and says how firm it is (firm, leaning or early); "
         "every call is dated before its outcome and scored on a public track record.",
         "",
         "How it differs from other digital twins and synthetic respondents: it is built from what real people did, not from surveys, interviews or chatbot personas. "
         "10 million real people stand behind every answer, about 1 in 33 Americans, with more than 2,000 days of history. "
-        "Answers are counted in people, hold steady when the same question is asked the same day, and are checked against real results in public: "
+        "Answers are counted in people and are checked against real results in public: "
         "on the first six scored calls, all three winners were called right and the counts landed within 3.2% on average.",
         "",
         f"The full text of the digital twins, synthetic data and panel pages is at {ORIGIN}/llms-full.txt.",
