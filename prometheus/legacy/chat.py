@@ -375,610 +375,68 @@ _PM_DECK_PREFIX = 'system/prometheus_decks/'
 # <<extracted: prometheus.model_chain block 13>>
 
 
-_PM_INTAKE_STALL_PREFIX = 'Almost there - I still need'
+# <<extracted: prometheus.intake_turn block 1>>
 
-# Agent turns that are part of an open intake: the ask copy, a stall,
-# or a confirm card. A user correction sent after any of these still
-# belongs to the same brief.
-_PM_INTAKE_AGENT_PREFIXES = (
-    _PM_INTAKE_STALL_PREFIX.lower(), 'happy to build', 'happy to run',
-    'happy to set up', "here's the", 'here is the', 'one question before i line it up')
+# <<extracted: prometheus.intake_turn block 2>>
 
-_PM_INTAKE_FAULT_REPLY = ('Got it. I have what you sent and I am lining '
-                          'it up now. I will email you when it is '
-                          'complete.')
+# <<extracted: prometheus.intake_turn block 3>>
 
 
-def _pm_intake_prior_user_turns(history, ask_copy, limit=4):
-    """User turns that belong to the open guided intake.
-
-    Walks the widget history backwards. Stops at the first agent turn
-    that is neither the intake ask copy nor a stall reply, so only the
-    messages the user sent while answering THIS intake come back,
-    oldest first. The current message is not in ``history`` yet.
-    """
-    out = []
-    ask = ' '.join(str(ask_copy or '').split()).lower()
-    for turn in reversed(list(history or [])):
-        if not isinstance(turn, dict):
-            continue
-        role = str(turn.get('role') or '').lower()
-        txt = str(turn.get('text') or '').strip()
-        if role == 'user':
-            if txt:
-                out.append(txt)
-            if len(out) >= limit:
-                break
-            continue
-        norm = ' '.join(txt.split()).lower()
-        if ask and norm[:80] == ask[:80]:
-            break
-        if norm.startswith(_PM_INTAKE_AGENT_PREFIXES):
-            continue
-        break
-    return list(reversed(out))
+# <<extracted: prometheus.intake_turn block 4>>
 
 
-def _pm_intake_last_agent_stalled(history):
-    for turn in reversed(list(history or [])):
-        if isinstance(turn, dict) and str(turn.get('role') or '').lower() != 'user':
-            txt = ' '.join(str(turn.get('text') or '').split()).lower()
-            return txt.startswith(_PM_INTAKE_STALL_PREFIX.lower())
-    return False
+# <<extracted: prometheus.intake_turn block 5>>
 
 
 from prometheus.intake_reader import missing_labels as _ir_labels  # noqa: E402  (plain words for missing intake fields)
 
 
-def _pm_intake_breakout(text, flow=''):
-    """A new ask typed while a guided intake is collecting leaves the
-    intake (2026-10-07 Eliot: "is there a way to build an audience of
-    people who have attended a Gunna concert?" was read as journey
-    fields and answered "I still need platform"). The intake guard
-    (prometheus.intake_guard, Jenna 2026-11-05) widens this to every
-    question-shaped message: an interrogative opener, a question mark,
-    a figure asked, an order on something else. When `flow` is named
-    the reply that answers the question carries the way back to the
-    intake ('Back to the journey'); the brief it had read so far stays
-    stashed for the reader."""
-    from prometheus.intake_reader import is_new_ask
-    out = is_new_ask(text)
-    if not out:
-        try:
-            from prometheus import intake_guard as _ig
-            out = bool(_ig.is_new_ask_for_brief(text))
-        except Exception:
-            out = False
-    if out and flow:
-        try:
-            from prometheus import intake_guard as _ig
-            _ig.mark_resume(flow)
-        except Exception:
-            pass
-    return out
+# <<extracted: prometheus.intake_turn block 6>>
 
 
-def _pm_intake_resume_reply(flow, history):
-    """Re-ask the open step of a brief-reading intake (a journey, a
-    campaign, a twin) after a question typed mid-intake was answered on
-    its own (2026-11-05): the last prompt this flow gave in the thread,
-    verbatim, with its chips and the collect flag; the opener when the
-    thread holds none. The brief read so far stays stashed for the
-    reader and the earlier answers stay in the thread, so the next
-    answer completes it."""
-    kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
-    ask_copy = _pm_intake_flow_table()[flow][3]
-    base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
-    heads = (str(ask_copy or '')[:40], 'Almost there - I still need', 'One question before I line it up', 'Do you want this ',
-             "Here's what I'll run", 'Here is what I will run')
-    for t in reversed([x for x in (history or []) if isinstance(x, dict)]):
-        if str(t.get('role') or '') not in ('agent', 'assistant'):
-            continue
-        txt = ' '.join(str(t.get('text') or t.get('content') or '').split())
-        if not txt or not any(h and txt.startswith(h) for h in heads):
-            continue
-        meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
-        chips = []
-        for o in (meta.get('options') or t.get('options') or []):
-            lbl = (o.get('send') or o.get('label')) if isinstance(o, dict) else o
-            lbl = str(lbl or '').strip()
-            if lbl and not lbl.lower().startswith('back to'):
-                chips.append(lbl)
-        return {**base, 'reply': txt, collect_key: True, 'followups': chips or ['Cancel']}
-    return {**base, 'reply': ask_copy, collect_key: True, 'followups': ['Cancel']}
+# <<extracted: prometheus.intake_turn block 7>>
 
 
-def _pm_collect_flag_applies(body, key, history):
-    """The widget's collect flag (`jiq_inputs`, `fw_inputs`, ...) is page
-    state and follows the reader across threads (Jenna 2026-11-05). It
-    arms this turn only when the thread itself could be waiting: no
-    agent turn yet, or a last agent turn that is not a job notice."""
-    if not (body or {}).get(key):
-        return False
-    try:
-        from prometheus import intake_guard as _ig
-        return bool(_ig.armed_flag_applies(history))
-    except Exception:
-        return True
+# <<extracted: prometheus.intake_turn block 8>>
 
 
-def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
-                       required, ask_copy, user=None, usage_extras=None,
-                       fallback_fn=None, propose_fn=None, alert=True):
-    """Parse a guided-intake message the way a person would read it.
-
-    Returns ``(parsed, fault)``. Three layers, cheapest first:
-
-    1. Parse the message on its own.
-    2. If that is incomplete and the user already sent earlier turns
-       in this intake, parse all of them together. Users split the
-       brief across messages; a parser that only sees the latest one
-       asks for things it was already told.
-    3. If a substantive message (10+ words) still yields none of the
-       required fields, or the previous reply was already a stall and
-       the user answered with substance again, that is a fault in our
-       reading, not a gap in their message. ``fault`` is True: the
-       caller must NOT send the stall copy a second time. It sends the
-       'lining it up, will email you' reply and this helper emails ops
-       (jenna@ + jessie@) the raw messages so a person runs it.
-
-    Born from the 2026-10-01 Babylon 5 intake: a complete brief got
-    'Almost there - I still need the category, the platform, the
-    conversion event' twice in a row because the parser read an empty
-    object and nothing noticed the reply was repeating.
-    """
-    text = str(text or '').strip()
-    try:
-        parsed = parse_fn(text, usage_extras=usage_extras) or {}
-    except Exception:
-        traceback.print_exc()
-        parsed = {}
-    if not isinstance(parsed, dict):
-        parsed = {}
-    if complete_fn(parsed):
-        return parsed, False
-    prior = _pm_intake_prior_user_turns(history, ask_copy)
-    if not prior:
-        from prometheus import intake_predicates as _ip   # local: the resolver is also exec'd standalone in tests
-        if _ip.points_back_at_thread(text):   # "look at the colin and samir campaign": the brief sits one message up (Debi 2026-10-21)
-            prior = _ip.recent_substantive_user_turns(history)
-    _pd = _intake_draft.prior_draft(history)   # an edit merges with the drafted brief (2026-10-09)
-    if _pd:
-        prior = [_pd] + prior
-    if prior:
-        combined = '\n\n'.join(prior + [text])
-        try:
-            again = parse_fn(combined, usage_extras=usage_extras) or {}
-        except Exception:
-            traceback.print_exc()
-            again = {}
-        if isinstance(again, dict):
-            if complete_fn(again):
-                return again, False
-            if (sum(1 for k in required if again.get(k))
-                    > sum(1 for k in required if parsed.get(k))):
-                parsed = again
-    combined_text = '\n\n'.join(prior + [text]) if prior else text
-    # Deterministic second reader (2026-10-02): plain rules over the
-    # same words (quoted or named title, platform names, end-step
-    # verbs) fill ONLY what the model left empty. It would have read
-    # Carolyn's brief on the first message even with the parser bug.
-    # Runs on a substantive message, or whenever the model read nothing
-    # ("Build a journey for Suits on Peacock" is seven words, 2026-10-13).
-    substantive = len(combined_text.split()) >= 10 or not any(parsed.get(k) for k in required)
-    if fallback_fn and substantive:
-        try:
-            from prometheus.intake_reader import merge_missing
-            kw = fallback_fn(combined_text) or {}
-            if isinstance(kw, dict):
-                before = sum(1 for k in required if parsed.get(k))
-                merged = merge_missing(parsed, kw, required)
-                after = sum(1 for k in required if merged.get(k))
-                if after > before:
-                    merged['_read_by'] = 'model+rules'
-                    parsed = merged
-                if complete_fn(parsed):
-                    try:
-                        _pm_ask_hint(outcome='intake_rules_completed',
-                                     subject=flow)
-                    except Exception as _fx:
-                        _faults.note('chat', _fx)
-                    return parsed, False
-        except Exception:
-            traceback.print_exc()
-    # Confirm instead of interrogate (2026-10-02): two of three in
-    # hand and the third obvious -> propose it on the confirm card
-    # instead of asking the user to type it again.
-    if propose_fn:
-        try:
-            parsed['_ask'] = combined_text   # the proposer reads the ask itself (a prospective partnership gets its window); popped there
-            prop = propose_fn(parsed)
-            parsed.pop('_ask', None)
-            # (field, value) or (field, value, display); the display
-            # form lets a falsy value ("daily tracking off") ride.
-            if prop and len(prop) in (2, 3) and (
-                    prop[1] or (len(prop) == 3 and prop[2])):
-                from prometheus.intake_reader import apply_proposal
-                _keys = apply_proposal(parsed, prop)   # one field, or a window's two (2026-10-16)
-                if complete_fn(parsed):
-                    try:
-                        _pm_ask_hint(outcome='intake_proposed_field',
-                                     subject=flow)
-                    except Exception as _fx:
-                        _faults.note('chat', _fx)
-                    return parsed, False
-                for _k in _keys + ['_proposed']:
-                    parsed.pop(_k, None)
-        except Exception:
-            traceback.print_exc()
-    found = sum(1 for k in required if parsed.get(k))
-    fault = bool(substantive
-                 and (found == 0 or _pm_intake_last_agent_stalled(history)))
-    if fault and alert:
-        try:
-            _pm_ask_hint(outcome='intake_fault', subject=flow)
-            from flask import g as _gf
-            _gf._pm_fault_alerted = True
-        except Exception as _fx:
-            _faults.note('chat', _fx)
-        try:
-            _who = ''
-            if isinstance(user, dict):
-                _who = (user.get('email') or user.get('username') or '')
-            _H._chatbot_error_email(
-                route=f'prometheus/intake/{flow}',
-                err=RuntimeError(
-                    f'{flow} intake could not read a complete brief; '
-                    f'user told it will be emailed'),
-                user_email=_who or None,
-                payload={'flow': flow, 'message': text,
-                         'earlier_messages': prior,
-                         'parsed': parsed,
-                         'required': list(required)},
-                tb='(guided intake fault - run this by hand and email '
-                   'the user from Prometheus)')
-        except Exception:
-            traceback.print_exc()
-    return parsed, fault
+# <<extracted: prometheus.intake_turn block 9>>
 
 
-def _pm_intake_finish_confirm(parsed, reply, run_label):
-    """Append the proposed-field note (if any) to the confirm reply
-    and strip private resolver keys from the payload the widget echoes
-    back on approve."""
-    prop = parsed.pop('_proposed', None) if isinstance(parsed, dict) else None
-    if isinstance(parsed, dict):
-        parsed.pop('_read_by', None)
-        parsed.pop('missing', None)
-        parsed.pop('_precedent_note', None)
-        parsed.pop('_precedent', None)
-    if prop and prop.get('field'):
-        try:
-            from prometheus.intake_reader import proposed_note
-            reply = reply + proposed_note(prop['field'], prop['value'],
-                                          run_label=run_label, source=prop.get('from') or '')
-        except Exception:
-            traceback.print_exc()
-    return reply
+# <<extracted: prometheus.intake_turn block 10>>
 
 
-_PM_INTAKE_UI = {   # flow -> (screen-draft kind, confirm reply fn, run chip, payload key, collect key, plain labels)
-    'digital_journey': ('journey', '_pm_jiq_confirm_reply', 'Run the journey', 'jiq_confirm_payload', 'jiq_collect',
-                        ['the category', 'the platform', 'the conversion event']),
-    'brand_partnership': ('bpiq', '_pm_bpiq_confirm_reply', 'Run the valuation', 'bpiq_confirm_payload', 'bpiq_collect',
-                          ['the brand', 'the partner', 'the campaign window']),
-    'flywheel': ('', '_pm_fw_confirm_reply', 'Run the flywheel', 'fw_confirm_payload', 'fw_collect',
-                 ['the title', 'the captured action', 'the ecosystem', 'the conversion']),
-    'attribution': ('', '_pm_aiq_confirm_reply', 'Start tracking', 'aiq_confirm_payload', 'aiq_collect',
-                    ['the campaign name', 'tagged URLs', 'the conversion']),
-    'digital_twin': _twin_lane.ui_entry(),   # Digital Twins IQ (2026-10-26): the row lives in prometheus/digital_twin_lane.py
-}
-_pm_twin_confirm_reply = lambda parsed: _twin_lane.confirm_reply(parsed)   # noqa: E731  (the intake looks confirm functions up by name)
-_pm_twin_intent = _intents.twin_intent   # host binding for understand.tool_intent (2026-10-26)
+# <<extracted: prometheus.intake_turn block 11>>
+# <<extracted: prometheus.intake_turn block 12>>
+# <<extracted: prometheus.intake_turn block 13>>
 
 
-def _pm_intake_turn(flow, text, body, history, user, ppu, first):
-    """One guided-intake turn for any of the four flows (2026-10-13). The first message is READ before anything
-    is asked: "Build a digital journey for Anthony Bourdain No Reservations on Amazon Prime just like the one you
-    did for Babylon 5" (Carolyn, WBD) names the title, the platform and the shape, and drew the three-field opener.
-    Order: the open screen can draft the whole brief; the ask itself is parsed (model, then rules); a prior
-    deliverable it points at lends its shape; a complete brief confirms; a partial one asks only for what is
-    missing; only an ask that names nothing gets the opener."""
-    _pm_ask_hint(route=flow)   # an intake turn is the flow's in the ask log, never the page analysis it runs beside (2026-11-23)
-    if flow == 'brand_partnership':
-        uname = (str((user or {}).get('username') or (user or {}).get('email') or '').strip()
-                 if isinstance(user, dict) else str(user or '').strip())
-        hit = _bpiq_wiz.analyze_hook(
-            text, body, history, user, ppu, uname, globals(), first=first,
-            store=_bpiq_wiz.store_for(body, globals()))
-        if hit is not None:
-            return hit
-        reply, chips = _bpiq_wiz.step_prompt(_bpiq_wiz.empty_draft())
-        return {'success': True, 'action': 'answer', 'reply': reply,
-                'followups': chips, 'offer_deck': False, 'deck_angle': None,
-                'bpiq_collect': True, 'bpiq_wizard': _bpiq_wiz.empty_draft()}
-    if flow == 'flywheel':
-        # The Flywheel wizard (Jenna 2026-11-03, after Grace Yin's Gilmore Girls on Prime Video attempt): the
-        # entry point, the ecosystem, the date range, one at a time, then the card with the price.
-        from prometheus import flywheel_wizard as _fw_wiz
-        uname = (str((user or {}).get('username') or (user or {}).get('email') or '').strip()
-                 if isinstance(user, dict) else str(user or '').strip())
-        def _fw_existing(inputs):
-            # the studies already on the Flywheel IQ page for this entry and ecosystem (Jenna 2026-11-03: tell the
-            # user one exists for that date range and offer it before building again)
-            try:
-                from migration.flywheel_synthesis import existing_studies as _fx
-                return _fx(str((inputs or {}).get('subject') or ''), str((inputs or {}).get('ecosystem') or ''), _H.s3_client)
-            except Exception as _ex:
-                _faults.note('chat', _ex)
-                return []
-        hit = _fw_wiz.analyze_hook(text, body, history, user, ppu, uname, globals(), first=first,
-                                   store=_fw_wiz.store_for(body, globals()),
-                                   price_label=_pm_tool_price_label('flywheel_iq', '$500'),
-                                   existing_lookup=_fw_existing)
-        if hit is not None:
-            if hit.get('fw_confirm_payload'):
-                _pm_pending_intake('stash', user, 'flywheel', hit['fw_confirm_payload'], _fw_wiz.RUN_CHIP)   # "run the flywheel" typed later still finds it
-            return hit
-        try:
-            from prometheus import intake_guard as _ig
-            if _ig.pending_resume():
-                return None   # the wizard let a question through (2026-11-05): the router answers it, the reply carries the way back
-        except Exception:
-            pass
-        return {'success': True, 'action': 'answer', 'reply': _fw_wiz.ASK_ENTRY,
-                'followups': ['Cancel'], 'offer_deck': False, 'deck_angle': None, 'fw_collect': True}
-    kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
-    parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
-    base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
-    from prometheus import intake_reader as _ir
-    if flow == 'attribution':   # the sheet on the thread carries the URLs; a named live campaign is an add (Alexia 2026-10-16)
-        from prometheus import aiq_assets as _aa
-        _add = _aa.intake_turn(text, body, user, history, host=_H, price_label=_pm_tool_price_label('attribution_iq_daily', '$100'), stash=_pm_pending_intake)
-        if _add:
-            return {**base, **_add}
-        parse_fn = _aa.with_sheet_urls(parse_fn, body, user, text, host=_H)
-    _pre = None
-    _low = ' '.join(str(text or '').lower().split()).strip(' .!')
-    if not first and _low == 'name another subject':
-        return {**base, 'reply': ask_copy, collect_key: True, 'followups': ['Cancel']}
-    _page = str((((_pm_validate_page_context((body or {}).get('page_context')) or (None,))[0] or {}).get('primary') or {}).get('name') or '').strip()
-    if kind and _page:
-        # Never bound to the open profile unless told (Jenna 2026-10-16: "never ever just start there"). "Use <page>" after the
-        # question, or an ask that points at the screen ("this profile"), drafts from it; an ask that names no subject gets the question.
-        if _low in (f"use {_page.lower()}", 'use the open profile', 'use this profile', 'yes, use it') or (first and _PM_PAGE_DEIXIS_RE.search(_low)):
-            drafted = _pm_intake_screen_draft(kind, body)
-            if drafted:
-                return drafted
-        if first:
-            _pre = _ir.first_read(text, parse_fn, fallback_fn, usage_extras=ppu)   # the model, then the rules when it read nothing
-            if not _ir.names_subject(_pre):
-                _pm_ask_hint(outcome='intake_page_question', subject=_page)
-                return {**base, 'reply': _pm_intake_page_question(kind, _page), collect_key: True,
-                        'followups': [f'Use {_page}', 'Name another subject', 'Cancel']}
-    from prometheus import precedent as _prec
-    template = _prec.reference(text) or _ir.reading_precedent(body)   # "like the one you did for X" (Jenna 2026-10-13); the Reader's precedent flag too (2026-10-14)
-    ask_text = _ir.strip_template_reference(text) if template else text
-    _reuse = (lambda t, usage_extras=None, _p=_pre: _p if (t == text and isinstance(_p, dict) and _p) else parse_fn(t, usage_extras=usage_extras))
-    parsed, fault = _pm_intake_resolve(flow, ask_text, history, _reuse, complete_fn, required, ask_copy,
-                                       user=user, usage_extras=ppu, fallback_fn=fallback_fn,
-                                       propose_fn=None if template else propose_fn, alert=not first)
-    found = None
-    if template:   # the prior deliverable lends its shape before any default is proposed
-        try:
-            found = _prec.resolve(template, (user or {}).get('username') or '', host=_H)
-        except Exception:
-            found = None
-        if flow == 'digital_journey' and not found:
-            parsed = _ir.apply_journey_template(parsed, _pm_prior_journey_shape(template, user), template)
-        else:
-            parsed = _prec.apply(flow, parsed, found, template, host=_H)
-        if isinstance(parsed, dict) and found:
-            parsed['_precedent_note'] = _prec.describe(found)
-        if not complete_fn(parsed) and propose_fn:
-            prop = propose_fn(parsed)
-            if prop:
-                _ir.apply_proposal(parsed, prop, keep_existing=True)
-    have = any(parsed.get(k) for k in required) if isinstance(parsed, dict) else False
-    if first and not have:   # an ask that names nothing gets the opener (a reader fault on a first turn is not the reader's)
-        return {**base, 'reply': ask_copy, collect_key: True, 'followups': ['Cancel']}
-    if fault and not complete_fn(parsed):
-        return _pm_intake_fault_payload()
-    if flow == 'digital_journey' and isinstance(parsed, dict):
-        parsed = _ir.apply_any_of_platforms(parsed, ask_text)   # several services as alternatives: one cross-service end step (Carolyn 2026-11-02)
-        parsed = _ir.apply_direction(parsed)
-        if _ir.direction_unclear(parsed) and parsed.get('subject') and _ir.direction_asked_already(history):
-            parsed = _ir.default_direction(parsed)   # asked once already: the default, never the same question twice (2026-10-26)
-        if _ir.direction_unclear(parsed) and parsed.get('subject'):
-            # which way does it run (Jenna 2026-10-19): how they came TO WATCH, or what watchers do after and in addition
-            _pm_ask_hint(outcome='clarified', subject=parsed.get('subject'))
-            _pm_pending_intake('stash', user, flow, parsed, run_label)
-            return {**base, 'reply': _ir.direction_question(parsed.get('subject')), collect_key: True,
-                    'followups': list(_ir.DIRECTION_CHIPS) + ['Cancel']}
-        parsed = _ir.watch_defaults(parsed)   # a title on a video platform starts on social (Jenna 2026-10-13)
-        parsed = _ir.watch_definition_default(parsed, (user or {}).get('username') if isinstance(user, dict) else user)   # click chain or saw-then-watched (2026-10-22)
-    if flow == 'attribution' and isinstance(parsed, dict) and parsed.get('daily_refresh') and _pm_aiq_days(parsed) < 1 \
-            and parsed.get('campaign_name') and parsed.get('urls') and parsed.get('conversion_event'):
-        # daily tracking with no stop date: propose 30 days and confirm rather than ask (the intake contract; golden g058, 2026-10-14)
-        parsed['end_tracking_date'] = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
-        parsed.setdefault('_proposed', {'field': 'end_tracking_date', 'value': parsed['end_tracking_date']})
-    _df = __import__('prometheus.data_floor', fromlist=['gate']).intake(parsed) or {}   # no data before the data floor (Jenna 2026-11-18): a window before it is not confirmed; one across it starts on it and the card says so first
-    if _df.get('refuse'):
-        return {**base, 'reply': _df['refuse'], collect_key: True, 'followups': ['Cancel'], 'data_floor': 'before'}
-    if complete_fn(parsed):
-        _pnote = parsed.pop('_precedent_note', '') if isinstance(parsed, dict) else ''
-        reply = (_df['note'] + '\n\n' if _df.get('note') else '') + _pm_intake_finish_confirm(parsed, globals()[confirm_name](parsed), run_label)
-        if _pnote:
-            reply = reply.rstrip() + '\n\n' + _pnote
-        _pm_pending_intake('stash', user, flow, parsed, run_label)   # a later "Run the journey" still finds it
-        return {**base, 'reply': reply, payload_key: parsed, 'followups': [run_label, 'Cancel']}
-    missing = _ir_labels(parsed, labels) or list(labels)
-    if flow == 'attribution' and parsed.get('daily_refresh') and _pm_aiq_days(parsed) < 1:
-        missing = ['a stop date after today for the daily tracking']
-    return {**base, 'reply': ('Almost there - I still need ' + ', '.join(str(m) for m in missing)
-                              + '. Send the missing piece(s) and I will line it up.'),
-            collect_key: True, 'followups': ['Cancel']}
+# <<extracted: prometheus.intake_turn block 14>>
 
 
-def _pm_pending_intake(op, user, flow, *args):
-    """stash / pick the brief a guided intake proposed, per reader, for a day (prometheus.pending_intake)."""
-    try:
-        from prometheus import pending_intake as _pi
-        if _faults.is_probe():
-            return None   # a probe leaves no brief behind for the next probe to pick up (2026-11-02)
-        uname = str((user or {}).get('username') or (user or {}).get('email') or '').strip() if isinstance(user, dict) else str(user or '')
-        if op == 'stash':
-            return _pi.stash(_H.s3_client, _H.S3_BUCKET, uname, flow, args[0], args[1] if len(args) > 1 else '')
-        return _pi.pick(_H.s3_client, _H.S3_BUCKET, uname, flow, args[0] if args else '')
-    except Exception:
-        return None
+# <<extracted: prometheus.intake_turn block 15>>
 
 
-def _pm_prior_journey_shape(title, user=None):
-    """The shape of a prior Digital Journey on `title` (start step, end step, kind) from the corpus, or None."""
-    try:
-        from migration import corpus_catalog as _cc
-        from prometheus import intake_reader as _ir
-        prior = _cc.prior_journey(_cc.anchors_for(title, with_ledger=False))
-        return _ir.journey_shape(prior, title) if prior else None
-    except Exception:
-        traceback.print_exc()
-        return None
+# <<extracted: prometheus.intake_turn block 16>>
 
 
 
-_PM_PAGE_DEIXIS_RE = re.compile(r"\b(?:this|the open|the current|my open) (?:profile|audience|page|screen)\b|\bprofile on (?:my|the) screen\b|\bwhat(?:'s| is) (?:open|on (?:my|the) screen)\b")
+# <<extracted: prometheus.intake_turn block 17>>
 
 
-def _pm_intake_page_question(kind, page):
-    """The question, never the draft, when an ask names no subject and a profile is open (Jenna 2026-10-16)."""
-    what = 'journey' if kind == 'journey' else 'valuation'
-    return (f"Do you want this {what} on {page}, the profile open on your screen, or on another subject? "
-            f"Say 'Use {page}' and I will draft it from that profile, or name the subject and I will start from there.")
+# <<extracted: prometheus.intake_turn block 18>>
 
 
-def _pm_intake_fault_payload():
-    return {'success': True, 'action': 'answer',
-            'reply': _PM_INTAKE_FAULT_REPLY,
-            'followups': [], 'offer_deck': False, 'deck_angle': None}
+# <<extracted: prometheus.intake_turn block 19>>
 
 
-def _pm_intake_screen_draft(kind, body):
-    """The full brief drafted from the profile open on screen (item 4,
-    2026-10-09): one confirm card instead of a field-by-field ask.
-    None when nothing is open or the profile cannot carry the brief."""
-    try:
-        ctx, _err = _pm_validate_page_context((body or {}).get('page_context'))
-        if not ctx:
-            return None
-        page = str((ctx.get('primary') or {}).get('name') or '').strip()
-        journey = kind == 'journey'
-        parsed = (_intake_draft.journey_draft if journey else _intake_draft.bpiq_draft)(ctx, _H.s3_client, _H.S3_BUCKET)
-        if not parsed or not (_pm_jiq_inputs_complete if journey else _pm_bpiq_inputs_complete)(parsed):
-            return None
-        parsed.pop('_drafted_from', None)
-        reply = _intake_draft.draft_lead(kind, page) + '\n\n' + (_pm_jiq_confirm_reply if journey else _pm_bpiq_confirm_reply)(parsed)
-        payload = ({'jiq_confirm_payload': parsed, 'followups': ['Run the journey', 'Cancel']} if journey
-                   else {'bpiq_confirm_payload': parsed, 'followups': ['Run it', 'Cancel']})
-        _pm_ask_hint(outcome='intake_drafted_from_screen', subject=page)
-        return {'success': True, 'action': 'answer', 'reply': reply, 'offer_deck': False, 'deck_angle': None, **payload}
-    except Exception:
-        traceback.print_exc()
-        return None
+# <<extracted: prometheus.intake_turn block 20>>
 
 
-def _pm_intake_flow_table():
-    """flow -> (parse_fn, complete_fn, required, ask_copy, fallback_fn,
-    propose_fn). One place the analyze branches and the canary share."""
-    from prometheus.intake_reader import (keyword_parse_journey,
-                                          propose_journey_field,
-                                          keyword_parse_flywheel,
-                                          propose_flywheel_field,
-                                          keyword_parse_brand_partnership,
-                                          propose_brand_partnership_field,
-                                          keyword_parse_attribution,
-                                          propose_attribution_field)
-    return {
-        'digital_journey': (
-            _pm_jiq_parse, _pm_jiq_inputs_complete,
-            ('subject', 'platform', 'conversion_event'),
-            _PM_JIQ_ASK_COPY, keyword_parse_journey,
-            propose_journey_field),
-        'flywheel': (
-            _pm_fw_parse, _pm_fw_inputs_complete,
-            ('subject', 'captured_action', 'ecosystem',
-             'conversion_event'),
-            _PM_FW_ASK_COPY, keyword_parse_flywheel,
-            propose_flywheel_field),
-        'brand_partnership': (
-            _pm_bpiq_parse, _pm_bpiq_inputs_complete,
-            ('brand_partner', 'qualifier', 'event_start', 'event_end'),
-            _PM_BPIQ_ASK_COPY, keyword_parse_brand_partnership,
-            lambda parsed: propose_brand_partnership_field(parsed, researcher=_pm_bpiq_flight_research)),
-        'attribution': (
-            _pm_aiq_parse, _pm_aiq_inputs_complete,
-            ('campaign_name', 'urls', 'conversion_event'),
-            _PM_AIQ_ASK_COPY, keyword_parse_attribution,
-            propose_attribution_field),
-        'digital_twin': _twin_lane.flow_table_entry(),
-    }
+# <<extracted: prometheus.intake_turn block 21>>
 
 
-@_H.app.route('/api/internal/intake-canary', methods=['POST'])
-def api_internal_intake_canary():
-    """Run one known-complete brief through a guided intake on THIS
-    deployment, exactly as the analyze route would, with no user, no
-    thread write, no charge, no ops alert (2026-10-02 Jenna: the test
-    suite catches code regressions; this catches model or transport
-    changes). Shared-secret auth: ``X-Synth-Auth`` must equal the
-    build server's SYNTH_QUEUE_SECRET, so only the nightly canary on
-    the build server can call it. Never a dashboard surface.
-
-    Reports two verdicts per brief: ``model_complete`` (the model read
-    alone, the signal the canary alerts on) and ``complete`` (after
-    the rules reader and any proposal, what the user would see).
-    """
-    import hmac as _hmac
-    secret = str(getattr(_H, 'SYNTH_QUEUE_SECRET', '') or '')
-    given = str(request.headers.get('X-Synth-Auth') or '')
-    if not secret or not _hmac.compare_digest(secret, given):
-        return jsonify({'error': 'not found'}), 404
-    body = request.get_json(silent=True) or {}
-    flow = str(body.get('flow') or '').strip()
-    text = str(body.get('text') or '').strip()
-    history = body.get('history') or []
-    table = _pm_intake_flow_table()
-    if flow not in table or not text:
-        return jsonify({'error': 'flow and text required',
-                        'flows': sorted(table)}), 400
-    parse_fn, complete_fn, required, ask_copy, fb, pr = table[flow]
-    t0 = time.time()
-    try:
-        model_parsed = parse_fn(text, usage_extras=None) or {}
-    except Exception as e:
-        traceback.print_exc()
-        model_parsed = {'_error': f'{type(e).__name__}: {e}'[:300]}
-    model_complete = bool(isinstance(model_parsed, dict)
-                          and complete_fn(model_parsed))
-    parsed, fault = _pm_intake_resolve(
-        flow, text, history, parse_fn, complete_fn, required, ask_copy,
-        user=None, usage_extras=None, fallback_fn=fb, propose_fn=pr,
-        alert=False)
-    return jsonify({
-        'success': True, 'flow': flow,
-        'model_complete': model_complete,
-        'model_found': [k for k in required if model_parsed.get(k)]
-        if isinstance(model_parsed, dict) else [],
-        'model_error': (model_parsed.get('_error')
-                        if isinstance(model_parsed, dict) else None),
-        'complete': bool(complete_fn(parsed)),
-        'fault': bool(fault),
-        'read_by': parsed.get('_read_by') or 'model',
-        'proposed': parsed.get('_proposed'),
-        'found': [k for k in required if parsed.get(k)],
-        'missing': [k for k in required if not parsed.get(k)],
-        'elapsed_s': round(time.time() - t0, 2),
-    })
+# <<extracted: prometheus.intake_turn block 22>>
 
 
 # <<extracted: prometheus.page_context block 1>>
@@ -1014,301 +472,51 @@ def api_internal_intake_canary():
 # <<extracted: prometheus.page_context block 11>>
 
 
-# GARBLED-INPUT NORMALIZATION (2026-09-28, Phase 4): "top 1 0 starz
-# series" hit the calm fallback because a split number reads as noise.
-# Join single digits split by a space when they form a plausible
-# number, and collapse runs of spaces. Routing and the model both see
-# the repaired text; nothing else changes.
-_PM_SPLIT_DIGIT_RE = re.compile(r'\b(\d)\s+(\d)\b')
+# <<extracted: prometheus.ask_intercepts block 1>>
 
 
-def _pm_normalize_ask(text):
-    t = str(text or '')
-    if not t:
-        return t
-    prev = None
-    while prev != t:
-        prev = t
-        t = _PM_SPLIT_DIGIT_RE.sub(r'\1\2', t)
-    return re.sub(r'[ \t]{2,}', ' ', t)
+# <<extracted: prometheus.ask_intercepts block 2>>
 
 
-# NUMERIC FOLLOW-UP (2026-09-28, Phase 3): "what is that as a share of
-# the US population?" after a delivered count is arithmetic on the
-# last answer, not a fresh read. Resolve the count from the last
-# agent turn and answer instantly.
-_PM_US_SHARE_RE = re.compile(
-    r'\b(?:as a |what )?(?:share|percent(?:age)?)\s+of\s+(?:the\s+)?'
-    r'(?:us|u\.s\.|american)\s*(?:population|pop|adults|country|'
-    r'gen pop)?\b', re.IGNORECASE)
+# <<extracted: prometheus.ask_intercepts block 3>>
 
 
-_PM_COUNT_IN_REPLY_RE = re.compile(
-    r'(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?\s*[MKB])\s*'
-    r'(?:us\s+)?(?:unique\s+)?(?:viewers|people|users|accounts|'
-    r'subscribers|buyers|players|individuals)', re.IGNORECASE)
+# <<extracted: prometheus.ask_intercepts block 4>>
 
 
-def _pm_parse_count(tok):
-    tok = str(tok).strip()
-    try:
-        if tok[-1] in 'MKBmkb':
-            mult = {'k': 1e3, 'm': 1e6, 'b': 1e9}[tok[-1].lower()]
-            return float(tok[:-1].strip()) * mult
-        return float(tok.replace(',', ''))
-    except Exception:
-        return None
+# <<extracted: prometheus.ask_intercepts block 5>>
 
 
-def _pm_numeric_followup_reply(text, history):
-    """US-population share arithmetic on the last delivered count, or
-    None when the ask is not that shape or no count resolves."""
-    if not _PM_US_SHARE_RE.search(str(text or '')) \
-            or len(str(text or '')) > 120:
-        return None
-    for turn in reversed(list(history or [])[-8:]):
-        if (turn.get('role') or '') == 'user':
-            continue
-        matches = _PM_COUNT_IN_REPLY_RE.findall(
-            str(turn.get('text') or ''))
-        if not matches:
-            continue
-        vals = [v for v in (_pm_parse_count(m) for m in matches)
-                if v and v > 999]
-        if not vals:
-            continue
-        n = max(vals)
-        share = n / 329_900_000.0 * 100.0
-        share_s = (f"{share:.2f}%" if share < 1 else f"{share:.1f}%")
-        return (f"That is {share_s} of the US population - "
-                f"{int(n):,} of 329.9M people.")
-    return None
+# <<extracted: prometheus.ask_intercepts block 6>>
 
 
-# STATUS-CHECK INTERCEPT (2026-09-28 Jenna, keith's "is eastside golf
-# running?" got an empty step on one surface and a duplicate 5-credit
-# build offer on the other: "these were clearly a status update check.
-# needs to recognize that in the future"). Subject-named status
-# questions answer from the caller's own runs; they never reach the
-# analysis pass, the answer library, or the build interpreter. The
-# interceptor only speaks when a run actually matches the named
-# subject, so "is yellowstone still running?" as an airing question
-# falls through to analysis untouched when no Yellowstone run exists.
-_PM_STATUS_ASK_RES = (
-    re.compile(r"^\s*(?:is|are)\s+(?:my\s+|the\s+)?(.+?)\s+(?:still\s+)?"
-               r"(?:running|building|done|finished|ready|complete(?:d)?|"
-               r"going|in\s+progress|live\s+yet)\s*\??\s*$", re.I),
-    re.compile(r"^\s*(?:did|has|have)\s+(?:my\s+|the\s+)?(.+?)\s+"
-               r"(?:finish(?:ed)?|complete(?:d)?|land(?:ed)?|"
-               r"come\s+back|run(?:\s+yet)?)\s*\??\s*$", re.I),
-    re.compile(r"^\s*(?:status|progress|eta)\s+(?:of|on|for)\s+"
-               r"(.+?)\s*\??\s*$", re.I),
-    re.compile(r"^\s*how(?:'s|\s+is)\s+(?:my\s+|the\s+)?(.+?)\s+"
-               r"(?:coming(?:\s+along)?|going|doing|progressing)"
-               r"\s*\??\s*$", re.I),
-)
+# <<extracted: prometheus.ask_intercepts block 7>>
 
 
-_PM_STATUS_TAIL_TOKENS = {'build', 'builds', 'profile', 'profiles',
-                          'run', 'runs', 'pull', 'pulls', 'cut',
-                          'cuts', 'report', 'job', 'request'}
+# <<extracted: prometheus.ask_intercepts block 8>>
 
 
-def _pm_status_ask_subject(text):
-    """Return the subject phrase of a status question, or ''."""
-    t = str(text or '').strip()
-    if not t or len(t) > 120:
-        return ''
-    for rx in _PM_STATUS_ASK_RES:
-        m = rx.match(t)
-        if not m:
-            continue
-        words = [w for w in re.split(r'\s+', m.group(1).strip()) if w]
-        while words and _H._normalize_for_match(words[-1]) in \
-                _PM_STATUS_TAIL_TOKENS:
-            words.pop()
-        if words:
-            return ' '.join(words[:6])
-    return ''
+# <<extracted: prometheus.ask_intercepts block 9>>
 
 
-def _pm_status_matching_runs(user, phrase, limit=40):
-    """The caller's runs whose subject matches the phrase (token
-    containment either way), most recent first. Empty on any listener
-    trouble - the ask then falls through to normal routing."""
-    if not _H.SYNTH_QUEUE_SECRET or not _H.SYNTH_QUEUE_URL:
-        return []
-    uid = (user.get('email') or user.get('username') or '').strip()
-    if not uid:
-        return []
-    try:
-        import requests as _rq
-        resp = _rq.get(
-            f"{_H.SYNTH_QUEUE_URL}/synth/list",
-            params={'limit': limit, 'user': uid},
-            headers={'X-Synth-Auth': _H.SYNTH_QUEUE_SECRET}, timeout=12)
-        if resp.status_code != 200:
-            return []
-        docs = resp.json() or []
-    except Exception:
-        return []
-    want = {w for w in _H._normalize_for_match(phrase).split()
-            if w not in _PM_BASE_GENERIC_TOKENS}
-    if not want:
-        return []
-    out = []
-    for doc in docs:
-        if not isinstance(doc, dict):
-            continue
-        subj = {w for w in _H._normalize_for_match(
-                    str(doc.get('subject') or '')).split()
-                if w not in _PM_BASE_GENERIC_TOKENS}
-        if subj and (want <= subj or subj <= want):
-            out.append(doc)
-    return out
+# <<extracted: prometheus.ask_intercepts block 10>>
 
 
-def _pm_status_reply_for_runs(runs):
-    """One plain status line per matching run (up to 3). Failed runs
-    read as still building - the ops-hold convention keeps internal
-    failures invisible while the rerun completes under the same id."""
-    lines = []
-    for doc in runs[:3]:
-        subj = str(doc.get('subject') or 'Your profile').strip()
-        st = str(doc.get('status') or '').strip().lower()
-        if st == 'complete':
-            if doc.get('subiq_s3_key'):
-                lines.append(
-                    f"{subj} is finished. The Subscriber IQ read is "
-                    f"live in the Subscriber IQ tab now.")
-            else:
-                line = (f"{subj} is finished and live in the Select "
-                        f"Profile dropdown.")
-                if doc.get('tu_key'):
-                    line += f" File: {doc['tu_key']}"
-                lines.append(line)
-        elif st in ('failed', 'error', 'ops_hold'):
-            from prometheus.status_lane import client_failure_line
-            _cl = client_failure_line(doc.get('error')) if st == 'failed' else ''
-            if _cl:
-                lines.append(f"{subj}: {_cl}")
-            else:
-                lines.append(
-                    f"{subj} is still building - it is taking a little "
-                    f"longer than usual. It lands in the Select Profile "
-                    f"dropdown and this chat confirms the moment it "
-                    f"finishes.")
-        else:
-            si, tot = doc.get('step_index'), doc.get('step_total') or 11
-            lab = str(doc.get('step_label') or '').strip()
-            if isinstance(si, int) and tot:
-                pct = max(0, min(100, int(round(100.0 * si / tot))))
-                line = f"{subj} is building now - step {si} of {tot}"
-                if lab:
-                    line += f" ({lab})"
-                line += f", about {pct}%."
-            else:
-                line = f"{subj} is {st or 'queued'}."
-            line += (" It lands in the Select Profile dropdown and "
-                     "this chat confirms the moment it finishes.")
-            lines.append(line)
-    return '\n'.join(lines)
+# <<extracted: prometheus.ask_intercepts block 11>>
 
 
-_PM_STATUS_LEAD_TOKENS = {'my', 'the', 'our', 'that', 'this'}
+# <<extracted: prometheus.ask_intercepts block 12>>
 
 
-def _pm_library_match(phrase):
-    """The catalog profile the phrase names (distinctive-token
-    containment either way, like the run match), or None."""
-    pt = [w for w in _H._normalize_for_match(phrase).split()
-          if w not in _PM_STATUS_TAIL_TOKENS]
-    if not pt:
-        return None
-    pset = set(pt)
-    best = None
-    try:
-        for entry in _profile_catalog_for_chat():
-            subj = str(entry.get('subject')
-                       or entry.get('display_name') or '').strip()
-            if not subj or ' - ' in subj:
-                continue
-            st = set(_H._normalize_for_match(subj).split())
-            if not st:
-                continue
-            if st <= pset or pset <= st:
-                score = len(st & pset)
-                if best is None or score > best[0]:
-                    best = (score, {
-                        'subject': subj,
-                        's3_key': str(entry.get('s3_key') or ''),
-                        'last_modified': str(entry.get('last_modified')
-                                             or ''),
-                    })
-    except Exception:
-        traceback.print_exc()
-    return best[1] if best else None
+# <<extracted: prometheus.ask_intercepts block 13>>
 
 
-def _pm_status_lane(user, text):
-    """Deterministic answer for a subject-named status question on
-    either chat surface (2026-10-02 S3 lanes). Returns
-    (reply, followups, outcome, subject) or None when the text is not
-    a status question. A status question never reaches the model: a
-    matching run reads its step, a library profile reads as finished,
-    anything else reads as not started with a build chip."""
-    phrase = _pm_status_ask_subject(text)
-    if not phrase:
-        return None
-    words = phrase.split()
-    while len(words) > 1 and words[0].lower() in _PM_STATUS_LEAD_TOKENS:
-        words.pop(0)
-    phrase = ' '.join(words)
-    try:
-        runs = _pm_status_matching_runs(user, phrase)
-    except Exception:
-        runs = []
-    if runs:
-        return (_pm_status_reply_for_runs(runs), [], 'answered',
-                str(runs[0].get('subject') or phrase))
-    lib = _pm_library_match(phrase)
-    if lib:
-        when = ''
-        try:
-            from datetime import datetime as _dt
-            d = _dt.strptime(str(lib.get('last_modified') or '')[:10],
-                             '%Y-%m-%d')
-            when = d.strftime('%b %-d, %Y')
-        except Exception:
-            when = ''
-        reply = (f"Nothing named {phrase} is building for your account "
-                 f"right now. {lib['subject']} is already in the library"
-                 + (f" (finished {when})." if when else ".")
-                 + " Open it from Select Profile, or ask me to read it "
-                 "here.")
-        return (reply, [f"Analyze {lib['subject']}"], 'in_library',
-                lib['subject'])
-    reply = (f"Nothing named {phrase} is building for your account, and "
-             f"it is not in the library yet. Say 'Build a profile for "
-             f"{phrase}' and I will set up the brief for you to approve.")
-    return (reply, [f"Build a profile for {phrase}"], 'not_found', phrase)
+# <<extracted: prometheus.ask_intercepts block 14>>
 
 
-# TYPED APPROVAL WITH NO BRIEF (2026-10-02 S3 lanes). The widget turns
-# "approved" into the Approve button while a brief is on screen; the
-# bare word only reaches this surface when the card is gone. Approval
-# vocabulary only - a plain "yes" can still answer a server question.
-_PM_APPROVAL_WORD_RE = re.compile(
-    r"^\s*(?:yes[,.!]?\s*)?(?:approved?|approve\s+(?:it|this|that|the\s+"
-    r"brief)|run\s+it|ship\s+it|proceed|start\s+(?:it|the\s+build)|"
-    r"looks\s+good[,.]?\s*(?:approve|run\s+it|go)|go\s+ahead(?:\s+and\s+"
-    r"(?:run|build)\s+it)?)\s*[.! ]*$", re.I)
+# <<extracted: prometheus.ask_intercepts block 15>>
 
-_PM_APPROVE_NO_DRAFT_COPY = (
-    "There is no brief waiting for approval in this thread, so there is "
-    "nothing to run yet. Tell me what you want (for example 'Build a "
-    "profile for Eastside Golf' or 'Compare Hulu and Peacock') and I "
-    "will set up the brief for you to approve.")
+# <<extracted: prometheus.ask_intercepts block 16>>
 
 
 from prometheus import kpi_definitions as _kpi  # noqa: E402
@@ -1323,978 +531,133 @@ from prometheus import kpi_definitions as _kpi  # noqa: E402
 # <<extracted: prometheus.page_context block 14>>
 
 
-def _pm_last_agent_asked(history):
-    """True when the most recent agent turn in the thread ended on a
-    question, so a bare confirm word is an answer to it."""
-    for h in reversed([h for h in (history or []) if isinstance(h, dict)]):
-        role = str(h.get('role') or '').lower()
-        if role in ('agent', 'assistant'):
-            txt = str(h.get('text') or h.get('content') or '').strip()
-            return txt.endswith('?')
-        if role == 'user':
-            return False
-    return False
-
-
-def _pm_approval_word(text):
-    """True when the message is approval vocabulary and nothing else."""
-    t = str(text or '')
-    try:
-        from prometheus import user_signal as _us
-        t = _us._DATE_RANGE_SUFFIX_RE.sub('', t)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    return bool(_PM_APPROVAL_WORD_RE.match(t))
-
-
-# WORK-ORDER VERBS (2026-09-30 Jenna: "do all of them"). Status, ETA,
-# and cancel are account services: subjectless asks ("status?", "are
-# you still working on my report?", "how long will this take?",
-# "stop") answer deterministically from the caller's own runs on BOTH
-# chat surfaces, free, before any gate or model call. Evidence from
-# the ask log: emma's nine-turn work-order thread got an ETA shrug and
-# a page-analysis answer to "Are you still working on my report?";
-# jessie typed "stop" three times and got three page analyses.
-_PM_WO_WORK_NOUNS = (
-    r"(?:report|profile|build|run|pull|file|request|order|job|"
-    r"deliverable|csv|deck|cut|analysis)")
-
-
-_PM_WO_STATUS_RES = (
-    re.compile(r"^\s*(?:status|any\s+updates?|progress|"
-               r"status\s+update|what(?:'s|\s+is)\s+the\s+status)"
-               r"\s*[?.!]*\s*$", re.I),
-    re.compile(r"^\s*are\s+you\s+still\s+working(?:\s+on\s+"
-               r"(?:it|that|this|my\s+[\w ]{1,40}|the\s+[\w ]{1,40}))?"
-               r"\s*[?.!]*\s*$", re.I),
-    re.compile(r"^\s*(?:is|are)\s+(?:it|that|this|they|my\s+"
-               + _PM_WO_WORK_NOUNS + r"s?)\s+(?:done|ready|"
-               r"finished|complete[d]?)(?:\s+yet)?\s*[?.!]*\s*$",
-               re.I),
-    re.compile(r"^\s*where(?:'s|\s+is)\s+(?:my|the)\s+"
-               r"[\w ]{0,30}?" + _PM_WO_WORK_NOUNS +
-               r"\s*[?.!]*\s*$", re.I),
-    re.compile(r"^\s*did\s+(?:it|my\s+" + _PM_WO_WORK_NOUNS +
-               r")\s+(?:finish|complete|land|go\s+through)"
-               r"(?:\s+yet)?\s*[?.!]*\s*$", re.I),
-)
-
-
-_PM_WO_ETA_RES = (
-    re.compile(r"^\s*(?:what(?:'s|\s+is)\s+the\s+)?eta"
-               r"\s*[?.!]*\s*$", re.I),
-    re.compile(r"^\s*how\s+much\s+longer(?:\s+(?:will|does|is)\s+"
-               r"(?:it|this|that)[\w ]{0,20})?\s*[?.!]*\s*$", re.I),
-    re.compile(r"\bhow\s+long\s+(?:will|does|do|should)\s+"
-               r"(?:it|this|that|the\s+(?:build|run|report|profile|"
-               r"pull)|my\s+[\w ]{1,30}?)\s*.{0,40}?\btake\b", re.I),
-    re.compile(r"\bwhen\s+will\s+(?:it|that|this|my\s+[\w ]{1,40}|"
-               r"the\s+[\w ]{1,40})\s+be\s+"
-               r"(?:done|ready|finished|complete)\b", re.I),
-)
-
-
-_PM_WO_CANCEL_RE = re.compile(
-    r"^\s*(?:please\s+|ok(?:ay)?[,\s]+|never\s*mind[,\s]+|"
-    r"actually[,\s]+)?"
-    r"(?:stop|cancel|abort|kill)\b"
-    r"(?!\s+(?:showing|sending|giving|telling|asking|using|"
-    r"putting|adding|including|counting|saying|repeating)\b)"
-    r"(?P<tail>(?:\s+(?:it|that|this|everything|all|the|my))?"
-    r"[\w .&'-]{0,50}?)\s*[.!]*\s*$", re.I)
-
-
-def _pm_subiq_lookup_answer(user, title):
-    """Answer "do you see the X Subscriber IQ?" from the library and
-    the caller's own runs (2026-10-02, Bria: the question drafted a
-    10-credit duplicate of a read finished twelve hours earlier).
-    Returns (reply, followups). Never charges, never drafts."""
-    import prometheus_analysis as _pma
-    title = str(title or '').strip()
-    rows = []
-    try:
-        if title == '*':
-            rows = _pma.list_subiq_shows(
-                _H.s3_client, _H.SUBSCRIBER_S3_BUCKET)[:5]
-        else:
-            rows = _pma.match_subiq_shows(
-                _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, title)
-    except Exception:
-        traceback.print_exc()
-        rows = []
-
-    def _when(lm):
-        try:
-            from datetime import datetime as _dt
-            d = _dt.strptime(str(lm or '')[:16], '%Y-%m-%dT%H:%M')
-            return d.strftime('%b %-d, %Y')
-        except Exception:
-            return ''
-
-    if rows:
-        if title == '*':
-            names = ', '.join(r[0] for r in rows)
-            return (f"The newest Subscriber IQ reads in the library are "
-                    f"{names}. Name one and I will pull it up, or open "
-                    f"any of them from the Subscriber IQ tab.",
-                    [f"Analyze {rows[0][0]}"])
-        show, _key, lm = rows[0]
-        when = _when(lm)
-        lead = (f"Yes. {show} is in the Subscriber IQ library"
-                + (f" (finished {when})." if when else "."))
-        if len(rows) > 1:
-            others = ', '.join(r[0] for r in rows[1:])
-            lead += f" {others} {'is' if len(rows) == 2 else 'are'} there too."
-        reply = (lead + " Open it from the Subscriber IQ tab, or ask me "
-                 "about it here. No charge to view it.")
-        return reply, [f"Analyze {show}",
-                       f"Top 3 insights on {show}"]
-    # Not in the library: still building?
-    try:
-        runs = _pm_status_matching_runs(user, title) if title != '*' else []
-    except Exception:
-        runs = []
-    if runs:
-        return _pm_status_reply_for_runs(runs), []
-    nice = title if title != '*' else 'that title'
-    return (f"I do not see a Subscriber IQ for {nice} yet. I can build "
-            f"it{_plan.build_cost_clause(_pm_seat_reads_included(_oq.build_usd(_H, 'subscriber_iq')), _pm_usd_label(_oq.build_usd(_H, 'subscriber_iq')))}"
-            f", and it lands in the Subscriber IQ tab when it "
-            f"finishes.",
-            [f"Pull Subscriber IQ for {nice}"] if title != '*' else [])
-
-
-def _pm_workorder_intent(text):
-    """'status' | 'eta' | 'cancel' | None. Anchored, short, and
-    subjectless-friendly so real analysis questions never match."""
-    t = str(text or '').strip()
-    if not t or len(t) > 90 or '\n' in t:
-        return None
-    if _PM_WO_CANCEL_RE.match(t) and '?' not in t:
-        return 'cancel'
-    for rx in _PM_WO_ETA_RES:
-        if rx.search(t):
-            return 'eta'
-    for rx in _PM_WO_STATUS_RES:
-        if rx.match(t):
-            return 'status'
-    return None
-
-
-def _pm_user_runs(user, limit=40, active=False, status=None):
-    """The caller's runs from the build engine, newest first. [] on
-    any listener trouble so the ask falls through to normal routing."""
-    if not _H.SYNTH_QUEUE_SECRET or not _H.SYNTH_QUEUE_URL:
-        return []
-    uid = (user.get('email') or user.get('username') or '').strip()
-    if not uid and not status:
-        return []
-    try:
-        import requests as _rq
-        params = {'limit': limit}
-        if uid and status is None:
-            params['user'] = uid
-        if active:
-            params['active'] = 1
-        if status:
-            params['status'] = status
-        resp = _rq.get(
-            f"{_H.SYNTH_QUEUE_URL}/synth/list", params=params,
-            headers={'X-Synth-Auth': _H.SYNTH_QUEUE_SECRET}, timeout=12)
-        if resp.status_code != 200:
-            return []
-        docs = resp.json() or []
-        return [d for d in docs if isinstance(d, dict)]
-    except Exception:
-        return []
-
-
-def _pm_typical_build_minutes():
-    """Median wall minutes of recently completed builds, or None.
-    Honest ETA basis: measured durations, never a made-up promise."""
-    docs = _pm_user_runs({}, limit=60, status='complete')
-    mins = []
-    for d in docs:
-        try:
-            q = datetime.fromisoformat(
-                str(d.get('queued_at') or '').replace('Z', '+00:00'))
-            u = datetime.fromisoformat(
-                str(d.get('updated_at') or '').replace('Z', '+00:00'))
-            m = (u - q).total_seconds() / 60.0
-            if 3 <= m <= 360:
-                mins.append(m)
-        except Exception:
-            continue
-    if not mins:
-        return None
-    mins.sort()
-    return mins[len(mins) // 2]
-
-
-def _pm_eta_line(doc, typical=None):
-    """Plain remaining-time sentence for one active run, or ''."""
-    try:
-        typical = typical or _pm_typical_build_minutes()
-        if not typical:
-            return ''
-        q = datetime.fromisoformat(
-            str(doc.get('queued_at') or '').replace('Z', '+00:00'))
-        elapsed = (datetime.now(timezone.utc) - q).total_seconds() / 60.0
-        remaining = typical - elapsed
-        if elapsed > 2 * typical:
-            return ("It is taking longer than a typical build. It "
-                    "finishes on its own and the completion email "
-                    "goes out the moment it lands.")
-        if remaining <= 4:
-            return "Expect it within the next few minutes."
-        return (f"Recent builds like this one finish in about "
-                f"{int(round(typical))} minutes; this one has roughly "
-                f"{int(round(remaining))} minutes to go.")
-    except Exception:
-        return ''
-
-
-def _pm_cancel_target(user, text):
-    """(doc, others) - the active run the cancel names, or the only
-    active run. doc None when nothing matches / nothing active."""
-    active = _pm_user_runs(user, active=True)
-    if not active:
-        return None, []
-    m = _PM_WO_CANCEL_RE.match(str(text or '').strip())
-    tail = (m.group('tail') or '').strip() if m else ''
-    tail = re.sub(r'^(?:it|that|this|everything|all|the|my)\b\s*', '',
-                  tail, flags=re.I).strip()
-    tail = re.sub(r'\b(?:build|run|profile|pull|report|request|job)s?'
-                  r'\s*$', '', tail, flags=re.I).strip()
-    if tail:
-        want = {w for w in _H._normalize_for_match(tail).split()
-                if w not in _PM_BASE_GENERIC_TOKENS}
-        for doc in active:
-            subj = {w for w in _H._normalize_for_match(
-                        str(doc.get('subject') or '')).split()
-                    if w not in _PM_BASE_GENERIC_TOKENS}
-            if want and subj and (want <= subj or subj <= want):
-                return doc, [d for d in active if d is not doc]
-        return None, active
-    if len(active) == 1:
-        return active[0], []
-    return None, active
-
-
-def _pm_workorder_reply(user, text, intent):
-    """Deterministic answer for a work-order verb, or None to fall
-    through to normal routing. Never raises."""
-    try:
-        if intent == 'cancel':
-            doc, others = _pm_cancel_target(user, text)
-            if doc is None and not others:
-                return ("Nothing is building for your account right "
-                        "now, so there is nothing to stop. If you "
-                        "meant something else, say the word and I "
-                        "will take care of it.")
-            if doc is None and others:
-                names = ', '.join(
-                    str(d.get('subject') or 'unnamed')
-                    for d in others[:4])
-                return (f"You have more than one build going: "
-                        f"{names}. Say 'cancel' plus the name and I "
-                        f"will stop that one.")
-            run_id = str(doc.get('run_id') or '')
-            subj = str(doc.get('subject') or 'that build')
-            try:
-                import requests as _rq
-                resp = _rq.post(
-                    f"{_H.SYNTH_QUEUE_URL}/synth/cancel/{run_id}",
-                    headers={'X-Synth-Auth': _H.SYNTH_QUEUE_SECRET},
-                    timeout=12)
-                ok = resp.status_code == 200
-                st = (resp.json() or {}).get('status', '') if ok else ''
-            except Exception:
-                ok, st = False, ''
-            if ok and st == 'cancelled':
-                return (f"Stopped. {subj} was cancelled before it "
-                        f"started and the charge comes back to your "
-                        f"balance automatically. Nothing else was "
-                        f"touched.")
-            if ok:
-                return (f"Stopping {subj} now. It unwinds at the next "
-                        f"safe point and the charge comes back to "
-                        f"your balance automatically. Nothing else "
-                        f"was touched.")
-            _H._chatbot_error_email(
-                'pm/cancel',
-                f'cancel request did not reach the engine '
-                f'(run {run_id}, subject {subj})',
-                user_email=(user.get('email') or user.get('username')),
-                payload={'question': text[:300], 'run_id': run_id})
-            return _H._CHATBOT_CALM_MESSAGE
-        # status / eta share the same data
-        active = _pm_user_runs(user, active=True)
-        if intent == 'eta':
-            if active:
-                lead = _pm_status_reply_for_runs(active[:1])
-                eta = _pm_eta_line(active[0])
-                return (lead + ('\n' + eta if eta else '')).strip()
-            typical = _pm_typical_build_minutes()
-            if typical:
-                return (f"Nothing is building for your account right "
-                        f"now. For reference, a typical build "
-                        f"finishes in about {int(round(typical))} "
-                        f"minutes end to end.")
-            return ("Nothing is building for your account right now. "
-                    "Ask for any audience and I will kick one off.")
-        # status
-        if active:
-            lead = _pm_status_reply_for_runs(active[:3])
-            eta = _pm_eta_line(active[0])
-            return (lead + ('\n' + eta if eta else '')).strip()
-        recent = _pm_user_runs(user, limit=6)
-        for doc in recent:
-            st = str(doc.get('status') or '').lower()
-            if st == 'complete':
-                return _pm_status_reply_for_runs([doc])
-        return ("Nothing is building for your account right now. "
-                "Everything you have run is already live in the "
-                "Select Profile dropdown. Ask for any audience and I "
-                "will kick off a new one.")
-    except Exception:
-        traceback.print_exc()
-        return None
-
-
-# DELIVERY + FEEDBACK INTERCEPTS (2026-09-28, the W39 weekly review):
-# "please email david carter@... when it is ready" and "the key art is
-# from an older series, please replace it" each burned a full paid
-# read. A delivery request registers the ready-notification on the
-# caller's in-flight builds; product feedback and methodology
-# challenges acknowledge, forward to ops, and never generate.
-_PM_EMAIL_ADDR_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w{2,}")
-
-
-_PM_EMAIL_WHEN_READY_RE = re.compile(
-    # '.' stays inside the spans: addresses carry dots
-    # (david.carter@spe.sony.com). 2026-09-30: notify / tell /
-    # ping / alert / let me know / update me all register the
-    # ready-notification, same as email.
-    r"\b(?:e-?mail|send|notify|tell|ping|alert|update|let\s+me\s+know)\b"
-    r"[^?!\n]{0,80}?\bwhen\b[^?!\n]{0,30}?"
-    r"\b(?:ready|done|finish(?:e[sd])?|complete[sd]?|lands?|arrives?)\b",
-    re.IGNORECASE)
-
-
-_PM_WRONG_ANSWER_RES = (
-    # "thats not what i asked for" and family (2026-09-28, Casey).
-    re.compile(r"\bnot\s+what\s+i\s+(?:was\s+)?ask(?:ed|ing)\b",
-               re.IGNORECASE),
-    re.compile(r"\b(?:wrong|incorrect)\s+"
-               r"(?:answer|read|response|data|numbers?)\b", re.IGNORECASE),
-    re.compile(r"\b(?:that|this)\s+(?:is|was|'?s)\s+"
-               r"(?:wrong|incorrect|not\s+right)\b", re.IGNORECASE),
-    re.compile(r"\b(?:you\s+)?did\s*n[o']?t\s+answer\s+"
-               r"(?:my|the)\b", re.IGNORECASE),
-    re.compile(r"\bdoes\s*n[o']?t\s+answer\s+(?:my|the)\s+"
-               r"question\b", re.IGNORECASE),
-    re.compile(r"\banswer\s+(?:my|the)\s+(?:actual\s+)?"
-               r"question\b", re.IGNORECASE),
-    re.compile(r"\btry\s+(?:that\s+)?again\b", re.IGNORECASE),
-    re.compile(r"\bstill\s+(?:wrong|not\s+right)\b", re.IGNORECASE),
-    re.compile(r"\bre\s*-?\s*read\s+my\s+question\b", re.IGNORECASE),
-)
-
-
-def _pm_prev_user_question(history, complaint):
-    """The reader's last substantive question before a wrong-answer
-    complaint: newest user turn that is not itself complaint-shaped
-    and long enough to be a real ask."""
-    try:
-        for turn in reversed(list(history or [])):
-            if str((turn or {}).get('role') or '') != 'user':
-                continue
-            t = str(turn.get('text') or '').strip()
-            if not t or len(t) < 15:
-                continue
-            if t == str(complaint or '').strip():
-                continue
-            if any(rx.search(t) for rx in _PM_WRONG_ANSWER_RES):
-                continue
-            return t
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    return ''
-
-
-def _pm_replay_repeat_block(pm_user, question, window_s=1500):
-    """True when this user was ALREADY served a library replay for
-    this same question within the window. Re-asking the identical
-    question minutes after a replay means the stored read did not
-    satisfy - the ask runs fresh instead of replaying again
-    (2026-09-28, the same entry served four times in 90 seconds)."""
-    try:
-        import prometheus_memory as pmm
-        qn = ' '.join(re.sub(r"[^a-z0-9 ]+", ' ',
-                             str(question or '').lower()).split())
-        if not qn or not pm_user:
-            return False
-        now = datetime.now(timezone.utc)
-        for rec in (pmm.recall(pm_user, 12) or []):
-            if str((rec or {}).get('route') or '') != 'replay':
-                continue
-            rqn = ' '.join(re.sub(r"[^a-z0-9 ]+", ' ',
-                                  str(rec.get('question') or '')
-                                  .lower()).split())
-            if rqn != qn:
-                continue
-            try:
-                ts = datetime.fromisoformat(
-                    str(rec.get('ts') or '').replace('Z', '+00:00'))
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
-            except Exception:
-                continue
-            if (now - ts).total_seconds() <= window_s:
-                return True
-        return False
-    except Exception:
-        return False
-
-
-def _pm_replay_rejected_in_thread(entry, history):
-    """True when the stored entry's reply already appeared in this thread
-    and the reader's next message pushed back on it (prometheus.user_signal.
-    rejected_reply). A replay of those words is the loop Jessie hit on
-    2026-11-04; the ask runs fresh instead. Never raises."""
-    try:
-        from prometheus import user_signal as _us
-        reply = str((entry or {}).get('reply') or '')
-        if reply and _us.rejected_reply(reply, history):
-            print(f"[pm-replay] stored read {str((entry or {}).get('k') or '')!r} was pushed back on in this thread; running fresh")
-            return True
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    return False
-
-
-_PM_REFUSAL_RX = re.compile(
-    r"(?:re-?\s?aim|could\s+not\s+lock|cannot\s+lock|"
-    r"rather\s+than\s+guess|tell\s+me\s+the\s+specific\s+read|"
-    r"name\s+the\s+cohort,\s+the\s+category|"
-    r"rephrase\s+(?:the|your)\s+question|"
-    r"ask\s+(?:me\s+)?(?:a\s+|the\s+)?(?:different|another)\s+"
-    r"question)", re.IGNORECASE)
-
-
-def _pm_reads_as_refusal(reply, mode=''):
-    """A generated answer that declines to answer, or carries no
-    numbers at all, is not a read (2026-09-28: the model authored
-    "could not lock the numbers... re-aim than guess" and it shipped).
-    Mode chips are render-shape commands and skip the digit test."""
-    t = str(reply or '')
-    if not t:
-        return False
-    if _PM_REFUSAL_RX.search(t):
-        return True
-    if mode:
-        return False
-    digits = len(re.findall(r"\d", t))
-    return digits < 2 and len(t) < 900
-
-
-_PM_FEEDBACK_RES = (
-    # wrong / stale artwork, images, titles on a card
-    re.compile(r"\b(?:key\s*art|artwork|thumbnail|poster|image|logo)\b"
-               r"[^.?!\n]{0,60}\b(?:wrong|older|old|incorrect|replace|"
-               r"outdated|from an?\b)", re.IGNORECASE),
-    re.compile(r"\breplace\s+(?:the|this|that)\s+"
-               r"(?:key\s*art|artwork|thumbnail|poster|image|logo)\b",
-               re.IGNORECASE),
-)
-
-
-_PM_METHOD_CHALLENGE_RES = (   # "how is X calculated" is a definition question, answered, never a challenge (Jenna 2026-10-14)
-    re.compile(r"\b(?:seems?|looks?|is)\s+(?:very|too|way too)\s+"
-               r"(?:high|low)\b", re.IGNORECASE),
-)
-
-
-_PM_FEEDBACK_SENT = {}
-
-
-_PM_REGRESSION_CASES_KEY = 'system/pm_regression_cases.json'
-
-
-def _pm_regression_q_key(text):
-    """Stable key for one question: the shared fold (prometheus.question_key), md5[:16]."""
-    from prometheus import question_key as _qk   # local: this function is extracted by source in a test
-    return _qk.key(text)
-
-
-def _pm_compact_for_bank(value, depth=0):
-    """Trim a view-context payload for the regression registry: long
-    strings cut, lists and dicts capped, depth capped. Keeps the
-    on-screen vocabulary the nightly replay matches against."""
-    if depth >= 4:
-        return None
-    if isinstance(value, str):
-        return value[:400]
-    if isinstance(value, (int, float, bool)) or value is None:
-        return value
-    if isinstance(value, list):
-        return [_pm_compact_for_bank(v, depth + 1)
-                for v in value[:25]]
-    if isinstance(value, dict):
-        out = {}
-        for k in list(value.keys())[:40]:
-            out[str(k)[:80]] = _pm_compact_for_bank(
-                value[k], depth + 1)
-        return out
-    return str(value)[:200]
-
-
-def _pm_bank_regression_case(username, question, complaint, history,
-                             view_ctx):
-    """A question the reader called wrong becomes a permanent nightly
-    regression case (Jenna 2026-09-30: a mistake fixed once stays
-    fixed). Registry: system/pm_regression_cases.json, replayed every
-    night by migration/pm_regression_nightly.py on the build server.
-    Dedupe by normalized question. Fire-and-forget off the request
-    thread; never raises into the chat path."""
-    def _bank():
-        try:
-            key = _pm_regression_q_key(question)
-            if not key or not str(question or '').strip():
-                return
-            try:
-                resp = _H.s3_client.get_object(
-                    Bucket=_H.S3_BUCKET, Key=_PM_REGRESSION_CASES_KEY)
-                doc = json.loads(resp['Body'].read().decode('utf-8'))
-            except Exception:
-                doc = {}
-            cases = doc.get('cases') if isinstance(doc, dict) else None
-            if not isinstance(cases, list):
-                cases = []
-            if any(isinstance(c, dict) and c.get('id') == key
-                   for c in cases):
-                return
-            rejected = ''
-            for turn in reversed(list(history or [])):
-                if isinstance(turn, dict)                         and turn.get('role') != 'user':
-                    rejected = str(turn.get('text') or '')[:400]
-                    break
-            # The learning loop (2026-10-06): the figures the rejected
-            # reply banked leave the corpus catalog, so the regenerated
-            # answer and every later one cannot lean on them.
-            try:
-                from migration import corpus_catalog as _cc_rej
-                _full_rejected = ''
-                for turn in reversed(list(history or [])):
-                    if isinstance(turn, dict) and turn.get('role') != 'user':
-                        _full_rejected = str(turn.get('text') or '')
-                        break
-                _tid = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
-                if not _tid and username:
-                    try:
-                        _tid = str((_load_threads_index(username) or {}).get('active') or '')
-                    except Exception:
-                        _tid = ''
-                if _full_rejected:
-                    _cc_rej.retire_answer(username or '', _tid, _full_rejected)
-            except Exception:
-                traceback.print_exc()
-            vc = view_ctx if isinstance(view_ctx, dict) else {}
-            view_id = str(vc.get('view_id') or '').strip()
-            view_data = (_pm_compact_for_bank(vc.get('data'))
-                         if vc.get('data') else None)
-            subj = ''
-            try:
-                import prometheus_analysis as pma
-                subj = str(pma.guess_subject_from_text(question)
-                           or '').strip()
-            except Exception:
-                subj = ''
-            blob_len = (len(json.dumps(view_data))
-                        if view_data is not None else 0)
-            if view_id and blob_len >= 80:
-                check = 'view_grounded'
-            elif subj:
-                check = 'subject_named'
-            else:
-                check = 'context_followup'
-            cases.append({
-                'id': key,
-                'created': _pm_iso_now(),
-                'user': str(username or '')[:80],
-                'question': str(question or '')[:500],
-                'complaint': str(complaint or '')[:300],
-                'rejected_answer': rejected,
-                'view_id': view_id,
-                'view_title': str(vc.get('view_title') or '')[:200],
-                'view_data': view_data,
-                'subject_at_capture': subj[:120],
-                'check': check,
-                'muted': False,
-            })
-            _H.s3_client.put_object(
-                Bucket=_H.S3_BUCKET, Key=_PM_REGRESSION_CASES_KEY,
-                Body=json.dumps({'cases': cases}).encode('utf-8'),
-                ContentType='application/json')
-        except Exception:
-            traceback.print_exc()
-    threading.Thread(target=_bank, daemon=True).start()
-
-
-def _pm_forward_user_feedback(username, text, kind):
-    """One SES note to ops per distinct feedback message per hour.
-    Never raises, never blocks the reply. A probe never mails."""
-    try:
-        if _pm_probe_caller() or _pm_is_probe_user(username):
-            return
-        sig = hashlib.md5(
-            f"{username}|{str(text)[:200]}".encode()).hexdigest()
-        now = time.time()
-        if now - _PM_FEEDBACK_SENT.get(sig, 0) < 3600:
-            return
-        _PM_FEEDBACK_SENT[sig] = now
-
-        def _send():
-            try:
-                import boto3 as _b3
-                ses = _b3.client('ses', region_name='us-east-2')
-                ses.send_email(
-                    Source='BehavioralGraph <jenna@crosswalknyc.com>',
-                    Destination={'ToAddresses': [
-                        'jenna@crosswalknyc.com',
-                        'jessie@crosswalknyc.com']},
-                    Message={
-                        'Subject': {'Data':
-                                    f'Prometheus user feedback: '
-                                    f'{username or "unknown"}'},
-                        'Body': {'Text': {'Data': (
-                            f'Kind: {kind}\n'
-                            f'User: {username}\n\n'
-                            f'{str(text)[:1500]}\n')}}})
-            except Exception:
-                traceback.print_exc()
-        threading.Thread(target=_send, daemon=True).start()
-    except Exception:
-        traceback.print_exc()
-
-
-def _pm_cant_do_lane(username, text):
-    """(reply, chips, kind) when the message asks for an action this
-    chat cannot take (add a user, refund credits, rename or re-image a
-    profile, edit a number by hand, contact a third party, set up a
-    recurring run, push a file into another tool), else None. The
-    note goes to the team on the same hourly-deduped path as product
-    feedback; the reply says what Prometheus can do instead. No model
-    call (2026-10-02 S8)."""
-    try:
-        from prometheus import capabilities as _pc
-        if not _pc.enabled():
-            return None
-        kind = _pc.action_request(text)
-        if not kind:
-            return None
-        reply, chips = _pc.cant_do_reply(kind)
-        _pm_forward_user_feedback(username, text, 'action_request_' + kind)
-        return reply, chips, kind
-    except Exception:
-        traceback.print_exc()
-        return None
-
-
-_PM_BUILD_NOTIFY_PREFIX = 'system/pm_build_notify/'
-
-
-def _pm_register_build_notify(run_id, emails, requested_by):
-    """Stash a ready-notification opt-in for one queue run. The worker
-    merges these into the recipient list of the branded completion
-    email at send time."""
-    try:
-        _H.s3_client.put_object(
-            Bucket=_H.S3_BUCKET,
-            Key=f"{_PM_BUILD_NOTIFY_PREFIX}{run_id}.json",
-            Body=json.dumps({
-                'run_id': run_id,
-                'emails': list(emails),
-                'requested_by': requested_by,
-                'requested_at': time.time(),
-            }).encode('utf-8'),
-            ContentType='application/json')
-        return True
-    except Exception:
-        traceback.print_exc()
-        return False
-
-
-# CUT-REQUEST INTERCEPT (2026-09-28 Jenna, keith's "Let's do one cut
-# of males only and another cut of black consumers" answered with a
-# replayed brand read: "it should have asked him what profile he was
-# talking about and then helped prompt him to run cuts of it").
-# Imperative cut vocabulary near 'cut(s)'; analytical questions about
-# an existing cut ("what's the male cut of the audience") stay on the
-# analysis path.
-_PM_CUT_INTENT_RE = re.compile(
-    r"\b(?:do|run|make|create|add|build|pull|need|want|get|give|lets|"
-    r"let's|can you|could you|please)\b[^.?!\n]{0,40}?\bcuts?\b"
-    r"|\bcut\s+(?:this|that|it|the)\b"
-    # imperative-start command, incl. the composed chip:
-    # 'Cut USA Today by males only and black consumers'
-    r"|^\s*cuts?\b", re.IGNORECASE)
-
-
-# 'one cut of males only and another cut of black consumers' ->
-# ['males only', 'black consumers']
-_PM_CUT_COHORT_RE = re.compile(
-    r"\bcuts?\s+(?:of|for|by)\s+([a-z0-9][a-z0-9 +&'\-]{1,40}?)"
-    r"(?=\s+(?:and|plus)\b|\s*[,.;!?\n]|$)", re.IGNORECASE)
-
-
-_PM_CUT_IDIOM_RE = re.compile(
-    r"\bcut\s+(?:to the chase|corners|it (?:out|down|short))\b",
-    re.IGNORECASE)
-
-
-def _pm_text_names_catalog_subject(text):
-    """True when the ask itself names a catalog profile (every
-    distinctive token of some catalog subject appears in the text)."""
-    toks = set(_H._normalize_for_match(text).split())
-    if not toks:
-        return False
-    try:
-        for entry in _subject_rules.library_named(_profile_catalog_for_chat(), text):
-            st = [w for w in _H._normalize_for_match(
-                      str(entry.get('subject') or '')).split()
-                  if w not in _PM_BASE_GENERIC_TOKENS]
-            if st and sum(len(w) for w in st) >= 4 and set(st) <= toks:
-                return True
-    except Exception:
-        traceback.print_exc()
-    return False
-
-
-def _pm_gate_refusal(kind):
-    """Build a partner-safe 403 for a mode-blocked chatbot request.
-
-    `kind` is 'analyze' when the caller tried to reach a read / deck
-    surface but their mode is 'pull'; 'pull' when they tried to reach
-    a new-build surface but their mode is 'analysis'. The reply carries
-    `guidance=True` so the widget renders it as a plain agent bubble
-    (see the `data.guidance && data.error` branch in the analyze /
-    approve / interpret handlers). No internal vocabulary."""
-    if kind == 'analyze':
-        msg = ('This account covers new profile pulls only. To '
-               'unlock analysis of existing profiles, please '
-               'contact your account manager.')
-    else:
-        msg = ('This account covers analysis only. To unlock the '
-               'ability to pull new profiles, please contact your '
-               'account manager.')
-    return jsonify({
-        'success': False,
-        'guidance': True,
-        'error': msg,
-    }), 403
-
-
-def _pm_access_gate(user):
-    """Prometheus tier gate for the analysis surfaces (2026-08-26).
-
-    Admin sets prometheus_access per user: 'full' (analysis and
-    everything else - the default; every existing user resolves here)
-    or 'pulls_only' (Profile IQ / Subscriber IQ builds only). A
-    pulls_only user who has NOT opted into pay as you go gets Jenna's
-    exact offer copy with Yes/No chips instead of the analysis; the
-    affordance itself never hides. Returns None when the user may
-    proceed."""
-    import pay_per_use as ppu
-    if ppu.analysis_allowed(user):
-        return None
-    _pm_ask_hint(outcome='declined_not_subscribed')
-    return jsonify({
-        'success': True, 'action': 'answer',
-        'reply': ppu.OFFER_MESSAGE,
-        'followups': ['Yes', 'No'],
-        'pay_per_use_offer': True,
-        'offer_deck': False, 'deck_angle': None})
-
-
-def _pm_has_funding(user, username, data=None):
-    """Pure funding decision for the Prometheus ask surfaces (Jenna
-    2026-09-16: "make sure that no one gets free metered usage of
-    prometheus if they do not have any credits/money in their account
-    unless they've been set to unlimited").
-
-    Returns (allowed, reason). Allowed when ANY funding source is open:
-      * unlimited: personal credits == -1, the admin 'unlimited' flag,
-        or an unlimited company pool reachable by this user
-        (check_user_credits returns -1),
-      * credits: personal / company-pool credits remaining > 0 within
-        the user's ceiling,
-      * money: the resolved billing subject (personal wallet or the
-        company-shared wallet) can absorb one metered answer at the
-        configured rate - covers prepaid balance, auto-reload with a
-        card on file, and monthly-invoice room.
-    Role is not a free pass. Liz (super_admin, $0, 0 credits) still
-    ran Prometheus until this check treated her like any other
-    drained account (Jenna 2026-09-16).
-    Blocked only when every source above is exhausted."""
-    user = user or {}
-    try:
-        import wallet as _w
-    except Exception:
-        traceback.print_exc()
-        return False, 'wallet_unavailable'
-    try:
-        if _w.is_unlimited(user):
-            return True, 'unlimited'
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    try:
-        if data is None:
-            data = _H.load_users()
-        if _w.opening_funding_unmet(user, data):
-            return False, 'opening_topup'
-    except Exception:
-        traceback.print_exc()
-    try:
-        has_cr, left = _H.check_user_credits(username)
-        if left == -1:
-            return True, 'unlimited_pool'
-        if has_cr and left > 0:
-            return True, 'credits'
-    except Exception:
-        traceback.print_exc()
-    try:
-        if data is None:
-            data = _H.load_users()
-        subject, _kind, _key = _w.resolve_billing_subject(user, data)
-    except Exception:
-        subject = user
-    try:
-        rate = float(_w.metered_answer_usd())
-    except Exception:
-        rate = 2.10
-    try:
-        ok, _why = _w.wallet_can_absorb(subject or {}, rate)
-        if ok:
-            return True, 'wallet'
-    except Exception:
-        traceback.print_exc()
-    return False, 'no_funding'
-
-
-def _pm_funds_gate(user):
-    """Prometheus funds gate: None when the user may proceed, else the
-    partner-safe paused reply. Session surfaces only. Fails open on
-    internal lookup errors (a billing-file hiccup must never take
-    Prometheus down for funded users); the pure decision lives in
-    _pm_has_funding."""
-    try:
-        uname = (session.get('username') or (user or {}).get('username')
-                 or '').strip()
-        allowed, reason = _pm_has_funding(user, uname)
-        if allowed:
-            return None
-        try:
-            _pm_ask_hint(outcome='declined_no_funds')
-        except Exception as _fx:
-            _faults.note('chat', _fx)
-        print(f"[prometheus] funds gate blocked {uname!r} ({reason})")
-        if reason == 'opening_topup':
-            try:
-                import lock_hit_notify as _lhn
-                _lhn.notify_opening_lock_hit(user, uname, where="prometheus")
-            except Exception:
-                pass
-        reply = (_H.opening_funds_message(user) if reason == 'opening_topup'
-                 else _plan.out_of_plan_reply(_H, uname, user, _H.NO_FUNDS_MESSAGE))   # a plan allowance: the plain top-up ask, one notice
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': reply,
-            'followups': [],
-            'no_funds': True,
-            'top_up_url': '/wallet',
-            'top_up_label': 'Add funds',
-            'offer_deck': False, 'deck_angle': None})
-    except Exception:
-        traceback.print_exc()
-        return None
-
-
-def _pm_usage_extras(user):
-    """Attribution extras for a pay-as-you-go user's model calls.
-
-
-    Returns None when billing_active is false (unlimited, super_admin,
-    or pulls_only without the opt-in). Everyone else, including
-    full-tier dashboard users and Kartel, gets username, email, the
-    active session id (30-minute idle window), and a per-request id
-    so one ask that fans out into several model calls still counts
-    as one ask on the bill."""
-    import pay_per_use as ppu
-    try:
-        if not ppu.billing_active(user):
-            return None
-        email = (user.get('email') or '').strip().lower()
-        uname = (session.get('username') or user.get('username')
-                 or '').strip()
-        rid = None
-        try:
-            from flask import g as _g
-            rid = getattr(_g, '_pm_ppu_request_id', None)
-            if not rid:
-                rid = uuid.uuid4().hex[:12]
-                _g._pm_ppu_request_id = rid
-        except Exception:
-            rid = uuid.uuid4().hex[:12]
-        return {'user': uname or email,
-                'user_email': email or uname,
-                'session_id': ppu.touch_session(email or uname),
-                'request_id': rid,
-                'pay_per_use': True}
-    except Exception:
-        traceback.print_exc()
-        return None
-
-
-def _pm_attrib_extras():
-    """Always-on per-user attribution for a dashboard (Prometheus) model
-    call, independent of pay-as-you-go billing.
-
-    Returns {'user', 'user_email'} for the logged-in user when a request
-    context is present, else {} (background threads such as the deck job
-    have no request context and pass attribution explicitly instead).
-
-    This tags every Prometheus chat record with WHO caused it so the
-    daily spend email can break Prometheus cost out per user. It NEVER
-    sets pay_per_use, so billing and the credit gate (both keyed off
-    _pm_usage_extras returning None for subscribed users) are untouched.
-    Never raises."""
-    try:
-        from flask import has_request_context
-        if not has_request_context():
-            return {}
-        u = _H.get_current_user() or {}
-        email = (u.get('email') or '').strip().lower()
-        uname = (session.get('username') or u.get('username') or '').strip()
-        if not (email or uname):
-            return {}
-        return {'user': uname or email, 'user_email': email or uname}
-    except Exception:
-        return {}
-
-
-def _pm_merge_extras(*parts):
-    """Merge attribution dicts left-to-right (later parts win on key
-    collisions). Returns a dict, or None when nothing merged (None keeps
-    the untagged code path in _run_nflx_claude_agent). Never raises."""
-    out = {}
-    for p in parts:
-        if isinstance(p, dict):
-            for k, v in p.items():
-                if v is not None:
-                    out[k] = v
-    return out or None
+# <<extracted: prometheus.ask_intercepts block 17>>
+
+
+# <<extracted: prometheus.ask_intercepts block 18>>
+
+
+# <<extracted: prometheus.ask_intercepts block 19>>
+
+
+# <<extracted: prometheus.ask_intercepts block 20>>
+
+
+# <<extracted: prometheus.ask_intercepts block 21>>
+
+
+# <<extracted: prometheus.ask_intercepts block 22>>
+
+
+# <<extracted: prometheus.ask_intercepts block 23>>
+
+
+# <<extracted: prometheus.ask_intercepts block 24>>
+
+
+# <<extracted: prometheus.ask_intercepts block 25>>
+
+
+# <<extracted: prometheus.ask_intercepts block 26>>
+
+
+# <<extracted: prometheus.ask_intercepts block 27>>
+
+
+# <<extracted: prometheus.ask_intercepts block 28>>
+
+
+# <<extracted: prometheus.ask_intercepts block 29>>
+
+
+# <<extracted: prometheus.feedback_bank block 1>>
+
+
+# <<extracted: prometheus.feedback_bank block 2>>
+
+
+# <<extracted: prometheus.feedback_bank block 3>>
+
+
+# <<extracted: prometheus.feedback_bank block 4>>
+
+
+# <<extracted: prometheus.feedback_bank block 5>>
+
+
+# <<extracted: prometheus.feedback_bank block 6>>
+
+
+# <<extracted: prometheus.feedback_bank block 7>>
+
+
+# <<extracted: prometheus.feedback_bank block 8>>
+
+
+# <<extracted: prometheus.feedback_bank block 9>>
+
+
+# <<extracted: prometheus.feedback_bank block 10>>
+
+
+# <<extracted: prometheus.feedback_bank block 11>>
+
+
+# <<extracted: prometheus.feedback_bank block 12>>
+
+
+# <<extracted: prometheus.feedback_bank block 13>>
+
+
+# <<extracted: prometheus.feedback_bank block 14>>
+
+
+# <<extracted: prometheus.feedback_bank block 15>>
+
+
+# <<extracted: prometheus.feedback_bank block 16>>
+
+
+# <<extracted: prometheus.feedback_bank block 17>>
+
+
+# <<extracted: prometheus.feedback_bank block 18>>
+
+
+# <<extracted: prometheus.feedback_bank block 19>>
+
+
+# <<extracted: prometheus.ask_intercepts block 30>>
+
+
+# <<extracted: prometheus.ask_intercepts block 31>>
+
+
+# <<extracted: prometheus.ask_intercepts block 32>>
+
+
+# <<extracted: prometheus.ask_intercepts block 33>>
+
+
+# <<extracted: prometheus.access_gates block 1>>
+
+
+# <<extracted: prometheus.access_gates block 2>>
+
+
+# <<extracted: prometheus.access_gates block 3>>
+
+
+# <<extracted: prometheus.access_gates block 4>>
+
+
+# <<extracted: prometheus.access_gates block 5>>
+
+
+# <<extracted: prometheus.access_gates block 6>>
+
+
+# <<extracted: prometheus.access_gates block 7>>
 
 
 # <<extracted: prometheus.base_clarify block 1>>
@@ -2535,8 +898,7 @@ _PM_EMAIL_FILE_RE = re.compile(
     re.I)
 
 
-_PM_EMAIL_ADDR_RE = re.compile(
-    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# <<extracted: prometheus.feedback_bank block 20>>
 
 
 def _pm_email_file_intent(text):
@@ -5393,6 +3755,103 @@ from prometheus.read_jobs import (  # noqa: E402,F401  (rebuild stage 7, 2026-11
     _pm_held_read_clarify,
     _PM_CHALLENGE_RES,
     _pm_challenge_headsup,
+)
+# <</reimport>>
+# <<reimport: prometheus.intake_turn>>
+from prometheus.intake_turn import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The product intake in the chat: the stalled and resumed intake, the breakout, the collect flags, the resolve and finish, the intake turn, the pending intake, the page question, the screen draft, the flow table, and the internal canary route)
+    _PM_INTAKE_STALL_PREFIX,
+    _PM_INTAKE_AGENT_PREFIXES,
+    _PM_INTAKE_FAULT_REPLY,
+    _pm_intake_prior_user_turns,
+    _pm_intake_last_agent_stalled,
+    _pm_intake_breakout,
+    _pm_intake_resume_reply,
+    _pm_collect_flag_applies,
+    _pm_intake_resolve,
+    _pm_intake_finish_confirm,
+    _PM_INTAKE_UI,
+    _pm_twin_confirm_reply,
+    _pm_twin_intent,
+    _pm_intake_turn,
+    _pm_pending_intake,
+    _pm_prior_journey_shape,
+    _PM_PAGE_DEIXIS_RE,
+    _pm_intake_page_question,
+    _pm_intake_fault_payload,
+    _pm_intake_screen_draft,
+    _pm_intake_flow_table,
+    api_internal_intake_canary,
+)
+# <</reimport>>
+# <<reimport: prometheus.ask_intercepts>>
+from prometheus.ask_intercepts import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Short answers before any work starts: the garbled-input normalization, the numeric follow-up, the status check on a running build, the typed approval with no brief, the work-order verbs (status, ETA, cancel), the Subscriber IQ lookup, and the cut-request intercept)
+    _PM_SPLIT_DIGIT_RE,
+    _pm_normalize_ask,
+    _PM_US_SHARE_RE,
+    _PM_COUNT_IN_REPLY_RE,
+    _pm_parse_count,
+    _pm_numeric_followup_reply,
+    _PM_STATUS_ASK_RES,
+    _PM_STATUS_TAIL_TOKENS,
+    _pm_status_ask_subject,
+    _pm_status_matching_runs,
+    _pm_status_reply_for_runs,
+    _PM_STATUS_LEAD_TOKENS,
+    _pm_library_match,
+    _pm_status_lane,
+    _PM_APPROVAL_WORD_RE,
+    _PM_APPROVE_NO_DRAFT_COPY,
+    _pm_last_agent_asked,
+    _pm_approval_word,
+    _PM_WO_WORK_NOUNS,
+    _PM_WO_STATUS_RES,
+    _PM_WO_ETA_RES,
+    _PM_WO_CANCEL_RE,
+    _pm_subiq_lookup_answer,
+    _pm_workorder_intent,
+    _pm_user_runs,
+    _pm_typical_build_minutes,
+    _pm_eta_line,
+    _pm_cancel_target,
+    _pm_workorder_reply,
+    _PM_CUT_INTENT_RE,
+    _PM_CUT_COHORT_RE,
+    _PM_CUT_IDIOM_RE,
+    _pm_text_names_catalog_subject,
+)
+# <</reimport>>
+# <<reimport: prometheus.feedback_bank>>
+from prometheus.feedback_bank import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: What a reader says back: the email-when-ready and wrong-answer intercepts, the repeat and rejected-answer replays, the refusal reader, the feedback forward, the regression bank, the cannot-do lane, and the build notify registration)
+    _PM_EMAIL_ADDR_RE,
+    _PM_EMAIL_WHEN_READY_RE,
+    _PM_WRONG_ANSWER_RES,
+    _pm_prev_user_question,
+    _pm_replay_repeat_block,
+    _pm_replay_rejected_in_thread,
+    _PM_REFUSAL_RX,
+    _pm_reads_as_refusal,
+    _PM_FEEDBACK_RES,
+    _PM_METHOD_CHALLENGE_RES,
+    _PM_FEEDBACK_SENT,
+    _PM_REGRESSION_CASES_KEY,
+    _pm_regression_q_key,
+    _pm_compact_for_bank,
+    _pm_bank_regression_case,
+    _pm_forward_user_feedback,
+    _pm_cant_do_lane,
+    _PM_BUILD_NOTIFY_PREFIX,
+    _pm_register_build_notify,
+)
+# <</reimport>>
+# <<reimport: prometheus.access_gates>>
+from prometheus.access_gates import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Who may ask and who pays: the gate refusal, the access gate, the funding check and funds gate, and the usage and attribution extras merged onto a call)
+    _pm_gate_refusal,
+    _pm_access_gate,
+    _pm_has_funding,
+    _pm_funds_gate,
+    _pm_usage_extras,
+    _pm_attrib_extras,
+    _pm_merge_extras,
 )
 # <</reimport>>
 # Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes
