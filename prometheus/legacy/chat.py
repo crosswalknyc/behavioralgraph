@@ -3493,654 +3493,54 @@ def _pm_short_name_identity(toks, raw_text):
         return False
 
 
-_PM_PENDING_Q_S3_KEY = 'system/pm_pending_questions.json'
+# <<extracted: prometheus.subject_verify block 1>>
 
 
-_PM_VERIFY_CACHE = {}
-_PM_VERIFY_CACHE_LOCK = threading.Lock()
-_PM_VERIFY_TTL_S = 24 * 3600
+# <<extracted: prometheus.subject_verify block 2>>
+# <<extracted: prometheus.subject_verify block 3>>
+# <<extracted: prometheus.subject_verify block 4>>
 
 
-def _pm_verify_cached(subj, candidates):
-    """(ok, subject, suggestion) for a subject, from the 24h in-process
-    cache or the verification ladder (2026-10-06, speed: the same name
-    is never web-verified twice in a day)."""
-    key = re.sub(r'[^a-z0-9]+', ' ', str(subj or '').lower()).strip()
-    now = time.time()
-    with _PM_VERIFY_CACHE_LOCK:
-        hit = _PM_VERIFY_CACHE.get(key)
-        if hit and now - hit[0] < _PM_VERIFY_TTL_S:
-            return hit[1]
-    verify = getattr(_H, '_v1_subject_verified', None)
-    if not callable(verify):
-        return (True, subj, None)
-    res = verify({'subject': subj, 'decision': 'new_build'}, 'new_build', None,
-                 candidates=candidates)
-    with _PM_VERIFY_CACHE_LOCK:
-        _PM_VERIFY_CACHE[key] = (now, res)
-        if len(_PM_VERIFY_CACHE) > 2000:
-            for k in sorted(_PM_VERIFY_CACHE, key=lambda k: _PM_VERIFY_CACHE[k][0])[:500]:
-                _PM_VERIFY_CACHE.pop(k, None)
-    return res
+# <<extracted: prometheus.subject_verify block 5>>
 
 
-def _pm_start_preverify(text, candidates):
-    """Start the subject verification for the name the ask plainly
-    carries while the draft model runs (2026-10-06, speed). Returns a
-    Thread whose .result holds (guess, (ok, subj, suggestion)) or None."""
-    try:
-        if os.environ.get('PM_CHAT_SUBJECT_VERIFY', '1') == '0':
-            return None
-        import prometheus_analysis as _pma_pv
-        guess = str(_pma_pv.guess_subject_from_text(text) or '').strip()
-        # The ladder verifies the entity, never a wrapper phrase around
-        # it ("the appeal of the Spiderwick Chronicles" -> the title).
-        try:
-            from prometheus import guards as _pg_pv
-            core = str(_pg_pv.entity_core(guess) or '').strip()
-            guess = core or guess
-        except Exception as _fx:
-            _faults.note('chat', _fx)
-        if not guess or len(guess) < 2:
-            return None
-    except Exception:
-        return None
-
-    class _T(threading.Thread):
-        result = None
-
-        def run(self):
-            try:
-                self.result = (guess, _pm_verify_cached(guess, candidates))
-            except Exception:
-                self.result = None
-
-    t = _T(daemon=True)
-    t.start()
-    return t
+# <<extracted: prometheus.subject_verify block 6>>
 
 
-def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None, history=None, followup=None):
-    """Run the subject-verification ladder on a fresh chat build.
-    Returns a guidance response when the subject does not resolve,
-    else None (2026-10-02 S6). Never raises; any failure is None.
-    `preverify` is the thread _pm_start_preverify returned: when its
-    guess is this draft's subject the result is reused (no second
-    web check); otherwise the ladder runs through the 24h cache."""
-    try:
-        if os.environ.get('PM_CHAT_SUBJECT_VERIFY', '1') == '0':
-            return None
-        dec = str((spec_draft or {}).get('decision') or '')
-        if dec not in ('new_build', 'cut_needs_parent'):
-            return None
-        _fu_ask = __import__('prometheus.followup_refine', fromlist=['settle_subject']).settle_subject(spec_draft, text, history, followup, _pm_ask_hint)   # a sentence is never looked up as a name: the thread's subject, or which title (2026-11-18)
-        subj = str(spec_draft.get('subject') or '').split(' - ', 1)[0].strip()
-        if not subj or _fu_ask:
-            return (jsonify(_fu_ask), 400) if _fu_ask else None
-        if spec_draft.get('_persona_universe') or spec_draft.get('ask_ip_scope') or spec_draft.get('clarify_question') \
-                or _cohort_scope.apply_to_draft(spec_draft, text):   # compound cohort anchored on an entity (2026-10-12)
-            return None
-        # A category audience ("yoga clothing buyers", "craft beer
-        # drinkers") is a persona universe: there is no entity to find.
-        # The normalizer that marks the draft runs after this ladder, so
-        # the same test is asked here (golden g044, 2026-11-02: "I could
-        # not find Yoga Clothing as a brand, person, or title").
-        try:
-            _pca = getattr(_H, '_v1_persona_class_ask', None)
-            if callable(_pca) and _pca(text):
-                spec_draft['_persona_universe'] = True
-                spec_draft['subject_verified'] = True
-                return None
-        except Exception:
-            pass
-        verify = getattr(_H, '_v1_subject_verified', None)
-        if not callable(verify):
-            return None
-        res = None
-        if preverify is not None:
-            try:
-                preverify.join(timeout=20)
-                pr = getattr(preverify, 'result', None)
-                if pr and re.sub(r'[^a-z0-9]+', ' ', pr[0].lower()).strip() == \
-                        re.sub(r'[^a-z0-9]+', ' ', subj.lower()).strip():
-                    res = pr[1]
-            except Exception:
-                res = None
-        if res is None:
-            res = _pm_verify_cached(subj, candidates)
-        ok, _subj, suggest = res
-        if ok:
-            return None
-        from prometheus import match_question as _mq   # "Euphoria US ... Did you mean Euphoria?" to the person who typed Euphoria (2026-11-17)
-        _un = _mq.unresolved(subj, suggest, text)
-        if _un.get('adopt'):
-            spec_draft['subject'] = spec_draft['name'] = _un['adopt']
-            spec_draft.pop('file_stem', None)
-            return None
-        _pm_ask_hint(route='subject_unresolved', outcome='asked_subject',
-                     subject=subj)
-        chips, copy = list(_un.get('chips') or []), _un['copy']
-        payload = {'success': False, 'guidance': True, 'error': copy}
-        if chips:
-            payload['followups'] = chips
-        return jsonify(payload), 400
-    except Exception:
-        traceback.print_exc()
-        return None
+# <<extracted: prometheus.subject_verify block 7>>
 
 
-def _pm_entity_core_bind(subj):
-    """(core, library_subject_or_'') for a build-subject candidate.
-    The core strips measure wrappers and audience tails
-    (prometheus.guards.entity_core); the library subject is the
-    catalog entry the core resolves to, when there is one
-    (2026-10-02 S6)."""
-    try:
-        from prometheus import guards as _pg
-        core = _pg.entity_core(subj)
-    except Exception:
-        core = str(subj or '').strip()
-    if not core:
-        return '', ''
-    if core != str(subj or '').strip():
-        print(f"[pm-entity] {subj!r} -> core {core!r}")
-    lib = ''
-    try:
-        hit = _pm_library_match(core)
-        if hit and hit.get('subject'):
-            lib = str(hit['subject'])
-    except Exception:
-        traceback.print_exc()
-    return core, lib
+# <<extracted: prometheus.subject_verify block 8>>
 
 
-def _pm_plausible_subject(subj):
-    """A subject string that is only ordinary words, or starts or ends
-    on a connective, is not a subject (2026-10-02, 'Three Actually
-    Influence Product Purchases and')."""
-    try:
-        from prometheus import referents as _refs
-        return bool(_refs.plausible_subject(subj))
-    except Exception:
-        return bool(str(subj or '').strip())
+# <<extracted: prometheus.subject_verify block 9>>
 
 
-# Fuzzy catalog tier (2026-09-28, Phase 1 of the improvement plan):
-# exact token matching means 'Emily in Parris' or 'Kardashians' can
-# miss the catalog and trigger a duplicate build of a profile the
-# library already carries. One typo'd token per subject is tolerated
-# (edit distance 1 on tokens of 5+, 2 on 8+); ambiguous fuzzy hits
-# never bind.
-_PM_SUBJECT_ALIASES = {
-    'kuwtk': 'keeping up with the kardashians',
-    'hbomax': 'hbo max',
-    'gotw': 'the god of the woods',
-}
+# <<extracted: prometheus.subject_verify block 10>>
 
 
-def _pm_edit_distance(a, b, cap=3):
-    """Small bounded Levenshtein; returns cap when clearly beyond."""
-    if a == b:
-        return 0
-    la, lb = len(a), len(b)
-    if abs(la - lb) >= cap:
-        return cap
-    prev = list(range(lb + 1))
-    for i in range(1, la + 1):
-        cur = [i] + [0] * lb
-        best = cur[0]
-        for j in range(1, lb + 1):
-            cur[j] = min(prev[j] + 1, cur[j - 1] + 1,
-                         prev[j - 1] + (a[i - 1] != b[j - 1]))
-            best = min(best, cur[j])
-        if best >= cap:
-            return cap
-        prev = cur
-    return min(prev[lb], cap)
+# <<extracted: prometheus.subject_verify block 11>>
 
 
-def _pm_token_typo_eq(a, b):
-    a, b = str(a), str(b)
-    if a == b:
-        return True
-    if len(a) < 5 or len(b) < 5:
-        return False
-    allow = 2 if min(len(a), len(b)) >= 8 else 1
-    return _pm_edit_distance(a, b, cap=allow + 1) <= allow
+# <<extracted: prometheus.subject_verify block 12>>
 
 
-def _pm_expand_alias_tokens(toks, raw_text):
-    """Add canonical tokens for any house alias present in the text."""
-    out = set(toks)
-    norm = _H._normalize_for_match(raw_text)
-    flat = norm.replace(' ', '')
-    for alias, canon in _PM_SUBJECT_ALIASES.items():
-        if alias in flat or alias in norm:
-            out.update(_H._normalize_for_match(canon).split())
-    return out
+# <<extracted: prometheus.subject_verify block 13>>
 
 
-def _pm_fuzzy_catalog_subject(text, extra_tokens=None):   # the one library subject the ask nearly names, or None
-    try:
-        return _ns_mod.fuzzy_catalog_subject(text, _subject_rules.library_named(_profile_catalog_for_chat(), text), normalize=_H._normalize_for_match,
-                                             typo_eq=_pm_token_typo_eq, expand_alias=_pm_expand_alias_tokens,
-                                             generic_tokens=_PM_BASE_GENERIC_TOKENS, extra_tokens=extra_tokens)
-    except Exception:
-        traceback.print_exc()
-        return None
+# <<extracted: prometheus.subject_verify block 14>>
 
 
-# TWO-BASE READS (2026-09-28, Phase 3 of the improvement plan):
-# comparison and overlap asks name two audiences, and the generation
-# pass bound exactly one, so "how much do X and Y overlap" was
-# half-answered. When the ask carries comparison vocabulary and two
-# catalog subjects resolve (or one plus the open page), the read gets
-# BOTH digests: the second rides the existing COMPARISON PROFILE
-# rendering in the digest bundle.
-_PM_TWO_BASE_VOCAB_RE = re.compile(
-    r'\b(?:compare[ds]?|comparison|versus|vs\.?|overlap|'
-    r'both audiences|side by side|head to head|against)\b',
-    re.IGNORECASE)
+# <<extracted: prometheus.subject_verify block 15>>
 
 
-def _pm_two_base_detect(text, ctx=None):
-    """Return {'pair': [side1, side2]} when the ask is a two-audience
-    read with both sides resolvable, else None. Each side carries
-    subject + s3_key. The open page fills side one when exactly one
-    other subject is named."""
-    t = str(text or '')
-    if not _PM_TWO_BASE_VOCAB_RE.search(t):
-        return None
-    toks = set(_H._normalize_for_match(t).split())
-    # a platform named under another name counts as the library's spelling
-    # ("Prime Video" is Amazon Prime Video; Cara Dorfman 2026-11-10)
-    try:
-        from prometheus import base_pair as _bp
-        toks |= set(_bp.alias_tokens(t))
-    except Exception:
-        _bp = None
-    found = {}
-    try:
-        for entry in _subject_rules.library_named(_profile_catalog_for_chat(), t):
-            subj = str(entry.get('subject')
-                       or entry.get('display_name') or '').strip()
-            st = [w for w in _H._normalize_for_match(subj).split()
-                  if w not in _PM_BASE_GENERIC_TOKENS]
-            if not st or sum(len(w) for w in st) < 4:
-                continue
-            if set(st) <= toks and not __import__('prometheus.cut_list', fromlist=['is_cut']).is_cut(subj, t):   # a profile reached only through a category the words list is not a second audience (2026-11-12)
-                key = _H._normalize_for_match(subj)
-                is_tu = ' - ' not in str(entry.get('display_name')
-                                         or subj)
-                if key not in found or is_tu:
-                    found[key] = {
-                        'subject': subj,
-                        's3_key': str(entry.get('s3_key') or ''),
-                        'display_name': str(entry.get('display_name') or subj)}
-    except Exception:
-        traceback.print_exc()
-    # two sides are two families: a Total Universe is never paired with
-    # its own cut (Cara's Tubi x Prime Video read ran as TUBI - Avid Fan x TUBI)
-    if _bp is not None:
-        pair = _bp.two_families(found)
-    else:
-        pair = [v for v in found.values() if v.get('s3_key')]
-        pair.sort(key=lambda v: -len(v['subject']))
-    pair = [{'subject': v['subject'], 's3_key': v['s3_key']} for v in pair]
-    if len(pair) == 1 and ctx and (ctx.get('primary') or {}) \
-            .get('s3_key'):
-        pname = str(ctx['primary'].get('name') or '').strip()
-        if _H._normalize_for_match(pname) != \
-                _H._normalize_for_match(pair[0]['subject']):
-            pair = [{'subject': pname or 'the open profile',
-                     's3_key': str(ctx['primary']['s3_key'])},
-                    pair[0]]
-    if len(pair) >= 2:
-        return {'pair': pair[:2]}
-    return None
+# <<extracted: prometheus.subject_verify block 16>>
 
 
-def _pm_generation_base(subject_hint, text, ctx=None,
-                        prefer_catalog=False, bound=False):
-    """Resolve the base that authorizes a generated read.
+# <<extracted: prometheus.generation_base block 1>>
 
-    Jenna 2026-08-27 (verbatim): "it can't pull full data on something
-    that doesnt have a base profile. if someone asks for paw patrol
-    data but there is no paw patrol base TU profile they would have to
-    pay the 5 credits to run that profile first ... the synth can
-    never superceed a topic not already pulled somewhere."
-
-    A generated read is only ever a derivation of a subject already
-    pulled somewhere: the profile open on the page, a profile in the
-    Select Profile catalog, or a Subscriber IQ run. Returns
-    {'subject', 's3_key', 'source'} or None (None = hard refuse; the
-    caller steers to the 5-credit build instead of generating).
-
-    `prefer_catalog` (2026-08-27, Paige Bueckers ad CTR): KPI asks
-    name their own subject in the question, which may not be the
-    profile open on screen. When set, a catalog subject named in the
-    ask wins over the open page; the page stays the fallback.
-    """
-    import prometheus_analysis as pma
-    if _page_default.brief_on_own_base(text):
-        return None   # a brief on works it names, on its own base (all US people): no page, library file or Subscriber IQ run is its base (2026-11-17)
-    # 0. The open product is the base (2026-10-22, Alexia / The Influencer
-    # Project): with an Attribution IQ campaign, a Digital Journey or a Brand
-    # Partnership read on screen, an ask that refers to it or names its own
-    # title answers from that payload. The library is never consulted for
-    # it, so a same-title Profile IQ file (the Potential Ticket Buyer
-    # profile) can never become the base of a campaign question.
-    try:
-        from prometheus import view_base as _vb
-        _vc0 = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
-        if _vb.is_self_contained((_vc0 or {}).get('view_id')):
-            # An ask that names the open view's OWN title is the view's
-            # ask whatever else it lists: the services, platforms and
-            # cuts in a demographics ask are its dimensions, not another
-            # subject (2026-11-04: "Music to Long Form study ... Netflix,
-            # Amazon Prime Video, TikTok" was vetoed here and then bound
-            # to the Tracker and Gunna - 18-24 files by token luck).
-            _own_title = _vb.names_view(text, _vc0, product_nouns=False) or _vb.names_view(subject_hint, _vc0, product_nouns=False)
-            if _own_title:
-                return _vb.view_base(_vc0)
-            _own = _vb.names_view(text, _vc0) or _vb.names_view(subject_hint, _vc0)
-            if not _own:
-                try:
-                    _own = bool(_PM_VIEW_DEIXIS_RE.search(str(text or ''))) or (not str(subject_hint or '').strip() and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled())   # no hint is not a pointer (Jenna 2026-11-20)
-                except Exception:
-                    _own = False
-            if _own and not _subject_rules.names_other_subject(text, ctx):
-                return _vb.view_base(_vc0)
-    except Exception:
-        traceback.print_exc()
-    # 1. The profile open on the page IS the base (unless the caller
-    # asked for ask-named catalog subjects to win; the page is still
-    # the fallback below when the catalog names nothing).
-    if _page_default.is_everyone(subject_hint):
-        return None   # the whole panel: never a file, never the page; priced and run as a panel read (2026-10-24)
-    page_base = None
-    if ctx and ctx.get('primary'):
-        pk = str(ctx['primary'].get('s3_key') or '').strip()
-        nm = str(ctx['primary'].get('name') or '').strip()
-        if nm and not pk:   # a page named without its file (an API caller, a probe): the library knows the key (2026-10-14)
-            try:
-                _n0 = _H._normalize_for_match(nm)
-                pk = next((str(e.get('s3_key') or '') for e in _profile_catalog_for_chat()
-                           if e.get('s3_key') and _H._normalize_for_match(e.get('display_name')) == _n0), '')
-            except Exception as _fx:
-                _faults.note('chat', _fx)
-        if pk:
-            page_base = {'subject': nm or pk, 's3_key': pk,
-                         'source': 'page'}
-    # The base is the universe the question names (Jenna 2026-11-06, her
-    # holiday toy shopping question ran "in the Starz audience"): a
-    # question that names its own universe ("people who ...", "potential
-    # <brand> consumers", "<brand> buyers", "US households", "when people
-    # start ...") is read on that universe. The page is not its base, and
-    # no file is guessed in for it below (the partial-name tier and the
-    # typo tier stand down); only a library subject the words name in
-    # full binds. The page stays when the words point at it or name it
-    # (prometheus.question_universe.question_universe).
-    _qu_named = _qu_explicit = False
-    try:
-        _qu = _question_universe.question_universe(text, str((page_base or {}).get('subject') or ''))
-        _qu_named = bool(_qu.kind == 'named') and not bound
-        # an audience named outright: no file is guessed in for it, on the
-        # ask and on the Approve that carries the quoted universe back
-        # (2026-11-06: 'Potential Paw Patrol Consumers' approved drew the
-        # Paw Patrol Ticket Purchasers file out of the partial-name tier)
-        _qu_explicit = bool(_qu.kind == 'named') and bool(_qu.explicit)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    if page_base is not None and _qu_named:
-        print(f"[pm-base] the ask names its own universe ({_qu.label!r}); the open page "
-              f"{page_base.get('subject')!r} is not its base")
-        page_base = None
-
-    def _tokens(s):
-        # Distinct: 'BEST OF THE BEST' is one ordinary word (2026-10-22)
-        return list(dict.fromkeys(
-            w for w in _H._normalize_for_match(s).split()
-            if w not in _PM_BASE_GENERIC_TOKENS))
-
-    # Subject-conflict guard (2026-09-24, the PA-09 hold): an ask that
-    # NAMES ITS OWN SUBJECT must never silently ride the open page as
-    # its base. 'what are congressional district pa 09 voters googling'
-    # asked while 2026 Florida Gubernatorial Voters was open bound the
-    # Florida file, generated a Pennsylvania read off it, and the
-    # verify pass then held the read for contradicting Florida's rows.
-    # The guard fires only when the router extracted a subject hint
-    # with distinctive tokens (2+) sharing NOTHING with the page
-    # subject - pronoun asks ('what are they googling', 'analyze
-    # this') carry no hint and keep the page base exactly as before.
-    if page_base is not None:
-        # 2026-10-06 (Jenna, strip the dashboard assumptions): the guard
-        # applies on every path, including prefer_catalog callers, so a
-        # named subject with no catalog file never falls back onto the
-        # open page.
-        _hint_d = set(_tokens(subject_hint))
-        _page_d = set(_tokens(page_base.get('subject')))
-        _page_outright = False
-        try:   # the page written out in full is named too: the hint is then the object, not another subject (2026-11-04)
-            _page_outright = _ns_mod.page_named_outright(text, page_base.get('subject'), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS)
-        except Exception as _fx:
-            _faults.note('chat', _fx)
-        if (len(_hint_d) >= 2 and _page_d
-                and not (_hint_d & _page_d) and not _page_outright):
-            print(f"[pm-base] ask names its own subject "
-                  f"({' '.join(sorted(_hint_d))[:60]}) with no overlap "
-                  f"to the open page ({page_base.get('subject')!r}); "
-                  f"page base skipped")
-            page_base = None
-    # A person's profile is not the audience of their films (Jenna
-    # 2026-11-04, Jay Patel's Statham thread): with an ACTOR / MUSICIAN /
-    # creator profile open, a question about viewers of the titles, their
-    # Prime Video share or total viewers is anchored on title viewing,
-    # never on the people with digital touchpoints to the person. The
-    # profile stays the base for a question about the person's own
-    # audience (prometheus.page_default.person_page_for_title_ask).
-    if page_base is not None:
-        try:
-            _pcat = _page_default.profile_category(page_base.get('s3_key'), page_base.get('subject'),
-                                                   _profile_catalog_for_chat())
-            if _page_default.person_page_for_title_ask(text, _pcat, page_base.get('subject')):
-                print(f"[pm-base] page {page_base.get('subject')!r} is a person ({_pcat}); the ask is about "
-                      f"viewers of titles, not the person's audience; page base skipped")
-                page_base = None
-        except Exception:
-            traceback.print_exc()
-    if page_base is not None and bound and not _page_default.page_base_stands(
-            '', None, page_base.get('subject'), '', subject_hint, normalize=_H._normalize_for_match, stop_tokens=_PM_CLARIFY_STOP_TOKENS)[0]:
-        page_base = None   # a bound subject (chip, approved quote) is the base or nothing; the quote and the read agree (2026-10-24)
-    if page_base is not None and not prefer_catalog:
-        return page_base
-    # The page written out in full in the ask is the ask's audience; a
-    # library subject the ask also names is what the read measures on it
-    # (Jessie 2026-11-04: "from the New Heights Podcast Listeners profile,
-    # what percentage ... Tubi, Roku, Pluto" carried the hint 'Tubi', the
-    # catalog tier below bound the TUBI file, and two reads ran on the
-    # wrong rows with the named profile open). A cut of the page's own
-    # family named outright still binds the cut.
-    if page_base is not None and not bound:
-        try:
-            if _ns_mod.page_named_outright(text, page_base.get('subject'), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS):
-                _fam_hit = _ns_mod.named_entry(text, _profile_catalog_for_chat(), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS)
-                if _fam_hit and _fam_hit.get('s3_key') \
-                        and _ns_mod.same_family(_fam_hit, page_base.get('subject'), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS) \
-                        and str(_fam_hit.get('s3_key') or '') != str(page_base.get('s3_key') or ''):
-                    print(f"[pm-base] the ask names {_fam_hit.get('display_name')!r}, a cut of the open page's family; it is the base")
-                    return {'subject': str(_fam_hit.get('subject') or _fam_hit.get('display_name') or '').strip(),
-                            's3_key': str(_fam_hit.get('s3_key') or ''), 'source': 'catalog'}
-                print(f"[pm-base] the ask names the open page {page_base.get('subject')!r} outright; the page is the base "
-                      f"(the hint {str(subject_hint or '')[:40]!r} is what the read measures on it)")
-                return page_base
-        except Exception:
-            traceback.print_exc()
-
-    q_tokens = set(_H._normalize_for_match(text).split())
-    hint_tokens = set(_H._normalize_for_match(subject_hint).split())
-    # a platform named under another name is the library's file ("Prime
-    # Video" is Amazon Prime Video; Cara Dorfman 2026-11-10, whose Prime
-    # Video reads found no base and ran on the other side's file)
-    try:
-        from prometheus import base_pair as _bp_al
-        _al_q = set(_bp_al.alias_tokens(text))
-        _al_h = set(_bp_al.alias_tokens(subject_hint))
-        q_tokens |= _al_q
-        hint_tokens |= _al_h
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    guessed = ''
-    try:
-        guessed = pma.guess_subject_from_text(text)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    guess_tokens = set(_H._normalize_for_match(guessed).split())
-
-    # 2. Profile catalog: a profile whose distinctive subject tokens
-    # all appear in the ask (or the subject hint). TU files win over
-    # cuts; more distinctive subjects win over shorter ones. When no
-    # subject is fully named, a partial tier binds the closest catalog
-    # subject whose distinctive tokens mostly appear in the ask (at
-    # least 2 tokens at two-thirds coverage), so "what are parents of
-    # kids 4-7 buying in terms of toy categories" still reaches the
-    # parents / toy-buyers base (2026-08-27, toy-categories routing).
-    best, best_score = None, (0, 0)
-    partial, partial_score = None, (0, 0.0, 0)
-    ask_tokens = q_tokens | hint_tokens
-    # A long analytical ask lists things that are not its subject: the
-    # services, platforms and bands of a demographics ask (2026-11-04,
-    # Liz's Music to Long Form reads bound 'Tracker' off the word
-    # 'tracked', 'Gunna - 18-24' off the age band, 'ANIMATED' off 'Family
-    # animated' and 'Amazon Prime Video' off the streaming list). In such
-    # an ask a lone ordinary word is no identity, number tokens never
-    # count toward a partial match, the one-typo tier stays out, and a
-    # list of three or more fully named library subjects is a list, not
-    # a subject, unless the hint names one of them.
-    _long_ask = len(str(text or '')) > 350
-    _full_hits = set()
-    # 2026-10-07 (Jenna, the Gunna-on-Warriors ask): a file named by
-    # display name (bound chip, cut label) is the base; a subject named
-    # in subject position beats token presence (Gen Pop, Under Armour
-    # and Nike sat in that ask as objects); Gen Pop is never a base.
-    _norm = _H._normalize_for_match
-    try:
-        _cat = _subject_rules.library_named(_profile_catalog_for_chat(), text, hint=subject_hint)   # a plus is part of a service's name (2026-11-17)
-        _hint_n = _norm(subject_hint)
-        _ent = None
-        if _hint_n:
-            _ent = next((e for e in _cat if e.get('s3_key')
-                         and _norm(e.get('display_name')) == _hint_n
-                         and not _ns_mod.is_gen_pop(
-                             _ns_mod.family_name(e), _norm)), None)
-        if not _ent:
-            _ent = _ns_mod.named_entry(
-                f"{subject_hint or ''} {text or ''}", _cat, _norm,
-                _PM_CLARIFY_STOP_TOKENS)
-        if _ent and _ent.get('s3_key'):
-            print(f"[pm-base] named: {_ent.get('display_name')!r}")
-            return {'subject': str(_ent.get('subject')
-                                   or _ent.get('display_name') or '').strip(),
-                    's3_key': str(_ent.get('s3_key') or ''),
-                    'source': 'catalog'}
-    except Exception:
-        traceback.print_exc()
-    try:
-        for entry in _subject_rules.library_named(_profile_catalog_for_chat(), text, hint=subject_hint):
-            if _ns_mod.is_gen_pop(_ns_mod.family_name(entry), _norm):
-                continue
-            for field in ('subject', 'display_name'):
-                toks = _tokens(entry.get(field))
-                if not toks:
-                    continue
-                if sum(len(t) for t in toks) < 4 and \
-                        not _pm_short_name_identity(
-                            toks, f"{text or ''} {subject_hint or ''}"):
-                    # identity-token floor, with the ALL-CAPS
-                    # initialism bypass for 2-5 letter subjects
-                    continue
-                if len(toks) == 1 and toks[0] in _PM_COMMON_IDENTITY_WORDS \
-                        and not _pm_short_name_identity(
-                            toks, f"{text or ''} {subject_hint or ''}"):
-                    # one ordinary word is not an identity (2026-10-06)
-                    continue
-                tset = set(toks)
-                is_tu = ' - ' not in str(entry.get('display_name') or '')
-                cand = {'subject': str(entry.get('subject')
-                                       or entry.get('display_name')
-                                       or '').strip(),
-                        's3_key': str(entry.get('s3_key') or ''),
-                        'source': 'catalog'}
-                if (tset <= q_tokens or tset <= hint_tokens
-                        or tset <= guess_tokens):
-                    if _long_ask and len(toks) == 1 and not (tset <= hint_tokens) \
-                            and re.search(r"(?:ed|ing|ly|ous|ful|ive|al|ic)$", toks[0]) \
-                            and not re.search(rf"(?<![A-Za-z])[A-Z][A-Za-z]*{re.escape(toks[0][1:])}\b", str(text or '')):
-                        continue   # a lone lowercase English word deep in a long ask ('animated') is not a subject
-                    if _long_ask and not (tset <= hint_tokens):
-                        _full_hits.add(_H._normalize_for_match(cand['subject']))
-                    score = (1 if is_tu else 0, len(toks))
-                    if score > best_score:
-                        best_score = score
-                        best = cand
-                    continue
-                matched = len({t for t in (tset & ask_tokens) if not t.isdigit()})
-                frac = matched / len(tset)
-                if matched >= 2 and frac >= 0.66:
-                    pscore = (1 if is_tu else 0, frac, matched)
-                    if pscore > partial_score:
-                        partial_score = pscore
-                        partial = cand
-    except Exception:
-        traceback.print_exc()
-    if best and len(_full_hits) >= 3 and not (set(_tokens(best.get('subject'))) <= hint_tokens):
-        print(f"[pm-base] {len(_full_hits)} library subjects named in one ask read as a list, not a subject; catalog tiers skipped")
-        best, partial = None, None
-    if best:
-        return best
-    if partial and _qu_explicit:
-        print(f"[pm-base] the ask names its own universe; the partial-name tier's {partial.get('subject')!r} is not its base")
-        partial = None
-    if partial:
-        return partial
-    # 2b. Fuzzy tier (2026-09-28, Phase 1): a unique one-typo-away
-    # catalog subject binds instead of falling through to a duplicate
-    # build offer. Ambiguity never binds. A long ask never binds by a
-    # typo (2026-11-04: 'tracked' is not 'Tracker'). A question that
-    # names its own audience outright binds by a typo only inside that
-    # audience's own words ("cotsco members" is Costco; "start" in "when
-    # people start ... shopping" was never "Starz", 2026-11-06).
-    try:
-        fz = None if _long_ask else _pm_fuzzy_catalog_subject(
-            ' '.join(_qu.phrases) if _qu_explicit else f"{text or ''} {subject_hint or ''}")
-        if fz and fz.get('s3_key'):
-            print(f"[pm-base] fuzzy catalog bind: {fz['subject']!r}")
-            return {'subject': fz['subject'], 's3_key': fz['s3_key'],
-                    'source': 'catalog'}
-    except Exception:
-        traceback.print_exc()
-    if page_base is not None:
-        return page_base
-
-    # 3. Subscriber IQ runs count as pulled bases too.
-    try:
-        import prometheus_analysis as _pma_si
-        idx = _pma_si._load_subiq_index(_H.s3_client, _H.SUBSCRIBER_S3_BUCKET)
-        shows = [v[0] for v in idx.values()]
-        named = _pma_si._xmod_subject_from_text(
-            f"{subject_hint or ''} {text or ''}", shows)
-        if named:
-            tk = _pma_si._xmod_title_key(named)
-            if tk and tk in idx:
-                return {'subject': idx[tk][0],
-                        's3_key': f"subiq:{idx[tk][1]}",
-                        'source': 'subscriber_iq'}
-    except Exception:
-        traceback.print_exc()
-    return None
-
-_pm_generation_base = _primary_profile.held(_pm_generation_base, lambda: _profile_catalog_for_chat())   # the primary is the default; a year cut only when the words name its year (2026-11-12)
-_pm_generation_base = __import__('prometheus.named_title', fromlist=['held']).held(_pm_generation_base)   # a file about another title is never the base of a question that names its own (2026-11-19)
+# <<extracted: prometheus.generation_base block 2>>
+# <<extracted: prometheus.generation_base block 3>>
 _PM_DATA_FILE_PREFIX = 'generated_data/'
 
 
@@ -4712,348 +4112,43 @@ def _pm_search_demand_response(user, text, history):
         **_sd_file})
 
 
-def _pm_remember_ask(pm_user, question, subject=None, cohort=None,
-                     ledger_key=None, route=None):
-    """Write one resolved ask into the user's cross-session memory
-    (fire-and-forget; the store is per-user and never informs another
-    user's session). Marks the request so the ask-log decorator does
-    not double-record."""
-    try:
-        import prometheus_memory as pmm
-        pmm.remember(pm_user, question, subject=subject, cohort=cohort,
-                     ledger_key=ledger_key, route=route)
-        try:
-            from flask import g as _g
-            _g._pm_mem_recorded = True
-        except Exception as _fx:
-            _faults.note('chat', _fx)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
+# <<extracted: prometheus.ask_memory block 1>>
 
 
-def _pm_remember_ask_build(pm_user, question, subject=None, window=None,
-                           region=None):
-    """Record an approved build (subject + confirmed window + named
-    markets) into per-user memory. Fire-and-forget; never raises."""
-    try:
-        import prometheus_memory as pmm
-        pmm.remember(pm_user, question, subject=subject, route='build',
-                     window=window, region=region or None)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
+# <<extracted: prometheus.ask_memory block 2>>
 
 
-def _pm_memory_last_window():
-    """The session user's most recent non-default build window from
-    per-user memory, or None. One small cached S3 GET; any failure
-    returns None so the clarify keeps its current wording."""
-    try:
-        import prometheus_memory as pmm
-        u = (session.get('username') or '').strip()
-        return pmm.last_window(u) if u else None
-    except Exception:
-        return None
+# <<extracted: prometheus.ask_memory block 3>>
 
 
-def _pm_history_bind_text(history):
-    """Referent text for an anaphoric ask ('this audience', 'them'):
-    the last few thread turns, newest last, so subject inference can
-    bind whatever the thread just read."""
-    parts = []
-    for turn in (history or [])[-6:]:
-        t = str((turn or {}).get('text') or '').strip()
-        if t:
-            parts.append(t[:400])
-    return '\n'.join(parts)
+# <<extracted: prometheus.ask_memory block 4>>
 
 
-def _pm_panel_refund(panel_charge):
-    """Reverse a research-report charge when the read never delivered
-    (job error or held-for-review). Mirrors the build flow's
-    charge-then-refund posture. Never raises."""
-    if not isinstance(panel_charge, dict):
-        return
-    try:
-        u = str(panel_charge.get('user') or '').strip()
-        n = int(panel_charge.get('credits') or 0)
-        if u and n > 0:
-            # The charge carried no job id; its ledger description and
-            # pull type locate it so the refund restores the unit it
-            # took (credits or dollars; refund_charge.py 2026-11-05).
-            _H.refund_credit(
-                u, credits=n,
-                reason=('Research report did not deliver - '
-                        f"{panel_charge.get('subject') or 'read'}"),
-                charge_description=str(panel_charge.get('description') or ''),
-                pull_type=str(panel_charge.get('pull_type') or ''))
-            print(f"[pm-panel] refunded {n} credits to {u}")
-    except Exception:
-        traceback.print_exc()
+# <<extracted: prometheus.ask_memory block 5>>
 
 
-def _pm_panel_fact_response(pm_user, ppu, text, base):
-    """Panel facts (2026-09-30, Jenna: "lets now do the panel-fact
-    queries upgrades"): a factual ask the shipped base file answers
-    exactly - a demo share, a named brand's reach, a category top
-    list, the audience size - returns the file's own numbers in one
-    step. Byte-consistent with the dashboard, reads only what already
-    shipped, and anything the file cannot answer exactly returns None
-    so the full read runs unchanged. Never raises."""
-    import prometheus_analysis as pma
-    import insights_ledger as il
-    key = str((base or {}).get('s3_key') or '')
-    if not key.lower().endswith('.csv'):
-        return None
-    try:
-        fact = pma.detect_panel_fact(text)
-    except Exception:
-        traceback.print_exc()
-        return None
-    if not fact:
-        return None
-    try:
-        df, _etag = pma.load_profile_df(_H.s3_client, _H.S3_BUCKET, key)
-        meta = pma._profile_meta(df, (base or {}).get('subject') or '')
-        meta['s3_key'] = key     # the key names an account-holder universe when the SUBJECT row does not (2026-11-10)
-        # 2026-10-02 audit: the subject's own platform is not a brand
-        # fact ("what % of Roku subscribers ..." on The Roku Channel
-        # file read back "Roku reaches 18.4% of the audience"). That
-        # ask is about the audience itself; ride the full read.
-        if fact.get('kind') == 'brand':
-            _b = re.sub(r'[^a-z0-9]+', '', str(fact.get('brand') or '').lower())
-            _s = re.sub(r'[^a-z0-9]+', '', str(meta.get('name') or '').lower())
-            if _b and _s and (_b in _s or _s in _b):
-                return None
-        gmap = (pma.load_genpop_map(_H.s3_client, _H.S3_BUCKET)
-                if fact.get('kind') == 'brand' else {})
-        ans = pma.answer_panel_fact(fact, df, meta, gmap)
-    except Exception:
-        traceback.print_exc()
-        return None
-    if not ans or not ans.get('reply'):
-        return None
-    subj = meta.get('name') or (base or {}).get('subject') or ''
-    _pm_ask_hint(route='panel_fact', outcome='answered', subject=subj)
-    # Answered from what already shipped: metered, never free
-    # (2026-09-14).
-    try:
-        _pm_meter_answer('panel_fact', ppu)
-    except Exception:
-        traceback.print_exc()
-    try:
-        _pm_remember_ask(pm_user, text, subject=subj,
-                         route='panel_fact')
-    except Exception:
-        traceback.print_exc()
-    chips = list(ans.get('followups') or [])[:2]
-    # the profile's own universe: people with a digital touchpoint with the
-    # subject in its window; each projected count stores the people in the
-    # data behind it (2026-11-04)
-    _pf_universe = f"US people with at least one digital touchpoint with {subj} in the window"
-    entry_kw = dict(
-        subject=subj, metric_family=ans.get('family') or '',
-        question=text, route='panel_fact',
-        metrics=il.attach_sample_people(ans.get('metrics') or [], universe=_pf_universe), reply=ans['reply'],
-        followups=chips, base_profile_key=key,
-        breakdown=ans.get('breakdown'),
-        window_label=str(meta.get('window') or ''),
-        derivation='exact values read from the shipped base profile',
-        universe=_pf_universe)
-    try:
-        il.persist(**entry_kw)
-    except Exception:
-        traceback.print_exc()
-    file_payload = {}
-    try:
-        entry = il.make_entry(**entry_kw)
-        if entry.get('breakdown') or entry.get('metrics'):
-            file_payload = _pm_answer_file_payload(
-                entry,
-                auto_save=bool(_PM_FILE_ASK_RE.search(str(text or ''))),
-                username=pm_user, question=text)
-            if file_payload and 'Email me this file' not in chips:
-                chips.append('Email me this file')
-    except Exception:
-        traceback.print_exc()
-    try:
-        _pm_csv_point(subj, text, ans.get('family'))
-    except Exception:
-        traceback.print_exc()
-    return jsonify({
-        'success': True, 'action': 'answer', 'reply': ans['reply'],
-        'followups': chips, 'offer_deck': False, 'deck_angle': None,
-        'profile': subj, **file_payload})
+# <<extracted: prometheus.ask_memory block 6>>
 
 
-# <<extracted: core_read block 1>>
+# <<extracted: prometheus.generated_read block 1>>
 
 
-def _pm_verify_prior_entries(res, family, led):
-    """Stored ledger entries the verification pass compares a fresh
-    read against: the pre-generation consult, plus a re-consult on the
-    response's own subject when it resolved differently (the ask may
-    have named no subject at all). Deduped; never raises."""
-    import insights_ledger as il
-    ents = list((led or {}).get('entries') or [])
-    try:
-        subj = str((res or {}).get('subject') or '').strip()
-        led_subj = str((led or {}).get('subject') or '').strip()
-        if subj and subj.lower() != led_subj.lower():
-            led2 = il.consult(subject=subj, metric_family=family)
-            ents.extend(led2.get('entries') or [])
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    seen, out = set(), []
-    for e in ents:
-        if not isinstance(e, dict):
-            continue
-        k = (e.get('k'), e.get('ts'), e.get('qn'))
-        if k in seen:
-            continue
-        seen.add(k)
-        out.append(e)
-    return out
+# <<extracted: prometheus.ask_memory block 7>>
 
 
-# <<extracted: core_read block 2>>
+# <<extracted: prometheus.generated_read block 2>>
 
 
-def _pm_name_two_audiences(res, text, base=None):
-    """An overlap read opens on the two audiences it crosses (Grace Yin,
-    2026-11-08: "the overlap between Hazbin Hotel viewers and viewers of
-    adult animation and anime on Netflix, Crunchyroll and HIDIVE" shipped
-    under "On people who watched Hazbin Hotel on Netflix in the window:").
-    Sets res['universe'] to '<A> and <B>' in the ask's own words, so the
-    opener and the Base line name both and a service rides only on the
-    side whose words (or whose bound audience) name it. Returns the label,
-    or '' when the ask is not a two-audience read (nothing changes)."""
-    try:
-        from prometheus import overlap_read as _ov
-        bound = [str((base or {}).get('subject') or ''), str((res or {}).get('subject') or '')]
-        try:
-            _two = _pm_two_base_detect(text)
-            for side in (_two or {}).get('pair') or []:
-                bound.append(str(side.get('subject') or ''))
-        except Exception:
-            pass
-        label = _ov.two_audience_label(text, bound=[b for b in bound if b])
-        if label:
-            res['universe'] = label
-        return label
-    except Exception:
-        traceback.print_exc()
-        return ''
+# <<extracted: prometheus.ask_memory block 8>>
 
 
-def _pm_persist_identity(res, base):
-    """(subject, cohort) a generated read banks under. A read on a
-    product view (Digital Journey IQ on screen) banks under the view's
-    own title, with the model's label folded into the cohort, so every
-    pass on that view consults and binds the same bucket (2026-11-04:
-    Liz's six passes on Music to Long Form sat under six different
-    subject labels and never saw one another). Everything else banks
-    under the read's subject as before."""
-    subj = str((res or {}).get('subject') or '').strip()
-    coh = str((res or {}).get('cohort') or '').strip()
-    try:
-        if str((base or {}).get('source') or '') == 'view':
-            anchor = str(base.get('subject') or '').strip()
-            if anchor and _H._normalize_for_match(anchor) != _H._normalize_for_match(subj):
-                bits = [b for b in (subj, coh) if b and _H._normalize_for_match(b) != _H._normalize_for_match(anchor)]
-                return anchor, ' - '.join(dict.fromkeys(bits))[:120]
-            if anchor:
-                return anchor, coh
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    return subj, coh
+# <<extracted: prometheus.ask_memory block 9>>
 
 
-def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=None, derivation=''):
-    """Bank one assembled matrix read: the reply (top rows in the chat,
-    the full table named in the file), the ledger entry (every row and
-    bucket), the CSV with every row, and the payload the job lands
-    (2026-11-04). Request-context free; never raises past the reply."""
-    import prometheus_analysis as pma
-    import insights_ledger as il
-    from prometheus import figure_binding as _fb
-    from prometheus import methodology as _meth
-    reply = pma.format_generated_metrics_reply(res)
-    # the same arithmetic coherence pass the single read gets (2026-11-05)
-    _arith_trail = ''
-    try:
-        from prometheus import arith_coherence as _arith
-        reply, _ai = _arith.apply(reply, res, subject=str(res.get('subject') or ''))
-        _arith_trail = _arith.trail(_ai)
-        if _arith_trail:
-            print(f"[pm-matrix] arithmetic coherence: {_arith_trail[:700]}")
-        if _ai.get('fixes') and isinstance(verify, dict):
-            verify = dict(verify, arith={'fixed': len(_ai['fixes']), 'trail': _arith_trail[:800]})
-    except Exception:
-        traceback.print_exc()
-    try:
-        if str((base or {}).get('source') or '') != 'view':
-            _pm_name_two_audiences(res, text, base)
-    except Exception:
-        traceback.print_exc()
-    _aud = _meth.audience_label(res, '')
-    reply = __import__('prometheus.read_opener', fromlist=['with_opener']).with_opener(reply, _aud)   # one opener (2026-11-11)
-    try:
-        reply = _meth.ensure(reply, res, question=text, base_label=str(base.get('subject') or ''),
-                             domain=str(base.get('domain') or ''),
-                             view_context=(base.get('view_context') if str(base.get('source') or '') == 'view' else None))
-    except Exception:
-        traceback.print_exc()
-    followups = [f for f in list(followups or []) if isinstance(f, str) and f.strip()][:3]
-    fam = res.get('metric_family') or 'audience'
-    try:
-        _fb.stamp_definitions(res)
-        _ps, _pc = _pm_persist_identity(res, base)
-        _metrics = res.get('metrics')
-        try:
-            _metrics = il.attach_sample_people(_metrics, universe=_aud)
-        except Exception:
-            pass
-        il.persist(subject=_ps, metric_family=fam, question=text, route='reasoned_metrics',
-                   metrics=_metrics, anchors=[], window_start=res.get('window_start'),
-                   window_end=res.get('window_end'), window_label=res.get('window_label'),
-                   reply=reply, followups=followups,
-                   base_profile_key=base.get('s3_key') or (base.get('subject') if str(base.get('source') or '') == 'view' else ''),
-                   cohort=_pc, breakdown=res.get('breakdown'),
-                   derivation=(derivation or 'matrix read, pieces assembled') + (f"; {_arith_trail}" if _arith_trail else ''),
-                   verify=verify, universe=_aud)
-    except Exception:
-        traceback.print_exc()
-    try:
-        _pm_remember_ask(pm_user, text, subject=res.get('subject'), cohort=res.get('cohort'), route='generated')
-    except Exception as _fx:
-        _faults.note('chat', _fx)
-    _file_payload = {}
-    try:
-        _fe = {'subject': res.get('subject'), 'cohort': res.get('cohort'), 'question': text,
-               'metrics': res.get('metrics'), 'breakdown': res.get('breakdown'),
-               'ws': res.get('window_start'), 'we': res.get('window_end'), 'wl': res.get('window_label'),
-               'family': fam}   # the file's pool noun and note follow the family (2026-11-06)
-        _file_payload = _pm_answer_file_payload(_fe, auto_save=bool(_PM_FILE_ASK_RE.search(str(text or ''))),
-                                                username=pm_user, question=text)
-        if _file_payload and 'Email me this file' not in followups:
-            followups.append('Email me this file')
-    except Exception:
-        traceback.print_exc()
-    try:
-        from prometheus import charts as _charts
-        _chart_payload = _charts.publish(res, text, pm_user, _H.s3_client, _H.S3_BUCKET)
-    except Exception:
-        _chart_payload = {}
-    out = {'success': True, 'action': 'answer', 'reply': reply, **(_chart_payload or {}), 'figures': [],
-           'followups': followups, 'offer_deck': False, 'deck_angle': None, 'profile': res.get('subject'),
-           'metrics': list(res.get('metrics') or []),
-           'breakdown': (dict(res['breakdown']) if isinstance(res.get('breakdown'), dict) else None),
-           'matrix': dict(res.get('_matrix') or {}), '_family': fam, '_verify': verify, '_stages_ms': {},
-           **_file_payload}
-    return out
+# <<extracted: prometheus.read_jobs block 1>>
 
 
-_PM_READ_PREFIX = 'system/prometheus_reads/'
+# <<extracted: prometheus.read_jobs block 2>>
 
 
 # <<extracted: prometheus.thread_history block 17>>
@@ -5080,577 +4175,67 @@ _PM_READ_PREFIX = 'system/prometheus_reads/'
 # <<extracted: prometheus.thread_history block 24>>
 
 
-_PM_READ_INFLIGHT_PREFIX = 'system/prometheus_reads/_inflight/'
+# <<extracted: prometheus.read_jobs block 3>>
 
 
-def _pm_read_inflight_doc_key(user):
-    return _read_registry.doc_key(user)
+# <<extracted: prometheus.read_jobs block 4>>
 
 
-def _pm_read_inflight_check(user, text):
-    """The caller's own running job for this question (shared fold), or None
-    (prometheus.read_registry; Jenna 2026-09-30, 2026-10-26)."""
-    return _read_registry.inflight(_H.s3_client, _H.S3_BUCKET, _PM_READ_PREFIX, user, text)
+# <<extracted: prometheus.read_jobs block 5>>
 
 
-def _pm_read_recent_check(user, text):
-    """The caller's landed read on this question inside a day, or the running one."""
-    return _read_registry.recent(_H.s3_client, _H.S3_BUCKET, _PM_READ_PREFIX, user, text)
+# <<extracted: prometheus.read_jobs block 6>>
 
 
-def _pm_read_inflight_mark(user, text, job_id, subject=''):
-    _read_registry.mark(_H.s3_client, _H.S3_BUCKET, user, text, job_id, subject=subject)
+# <<extracted: prometheus.read_jobs block 7>>
 
 
-# ------------------------------------------------------------------
-# "Email me when it is ready" for long tasks (2026-09-02).
-#
-# A generated read (analyze background job) and a deck build each take
-# a few minutes. When one starts, the chat offers to email the
-# finished OUTPUT to the requester. The opt-in is captured AFTER
-# kickoff (the offer is the ack's follow-up), so the email address is
-# threaded to the background thread through an S3 side-file keyed by
-# job id - the same job-id side-channel idea deck attribution uses at
-# enqueue, but S3-backed so the confirm POST and the worker thread can
-# land on different workers.
-#
-# On completion both jobs ALSO append the finished output to the
-# requester's chat thread (the existing per-user history store), so
-# the read / deck link is waiting when they return even if the tab
-# that started it is gone. The chat re-hydration is unconditional; the
-# email is the opt-in extra.
-# ------------------------------------------------------------------
-_PM_EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+# <<extracted: prometheus.read_jobs block 8>>
 
 
-def _pm_iso_now():
-    return time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
+# <<extracted: prometheus.read_jobs block 9>>
 
 
-def _pm_history_has_job_turn(history, meta_key, job_id):
-    for t in (history or []):
-        try:
-            if (t or {}).get('meta', {}).get(meta_key) == job_id:
-                return True
-        except Exception:
-            continue
-    return False
+# <<extracted: prometheus.read_jobs block 10>>
 
 
-def _pm_payload_has_figures(payload):
-    """A finished read's payload carries figures (a table, metrics, a
-    file, a figure ledger) or a stated reason (not quantifiable, held).
-    Anything else is an empty pass and never lands as the answer."""
-    p = payload if isinstance(payload, dict) else {}
-    if p.get('not_quantifiable') or p.get('held') or p.get('_held') or p.get('faulted'):
-        return True
-    if p.get('metrics') or p.get('breakdown') or p.get('file_link') or p.get('figures'):
-        return True
-    reply = str(p.get('reply') or '')
-    low = reply.lower()
-    if 'pulling this data will cost' in low or low.startswith('which ') or low.startswith('i can pull') \
-            or low.startswith('i can split') or 'name the show, brand or person' in low:
-        return False
-    return bool(re.search(r"\d", reply)) and len(reply) > 120
+# <<extracted: prometheus.read_jobs block 11>>
 
 
-def _pm_run_matrix_read(plan, *, text, history, mr, base, digest_block, anchors_block, led,
-                        pm_user, pm_ppu, stage_cb=None):
-    """A big matrix ask inside one read job (2026-11-04, Liz): every
-    piece runs through the same read core on the same base, window and
-    definitions (bank=False); the pieces assemble into one result;
-    `_pm_finish_matrix_read` banks once, writes one file and returns the
-    one payload the job lands. A piece that fails retries once inside
-    `matrix_read.run`; a piece that still fails gets one bounded second
-    pass and then the deterministic fill from the landed pieces
-    (`matrix_read.complete`), so the table lands whole. The reader is
-    never told a piece was missing (Jenna 2026-11-04: "it should never
-    say anything like that ever. it should only send it to us."): a
-    fill goes to ops (jenna@ + jessie@); a read where nothing landed at
-    all is held (the calm line) and ops hears, never the reader."""
-    from prometheus import matrix_read as _mx
-
-    def _core(piece_text, piece_label):
-        out = _pm_generate_read_core(
-            text=piece_text, history=history, mr=mr, base=base,
-            digest_block=digest_block, anchors_block=anchors_block,
-            led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=None, bank=False)
-        if not isinstance(out, dict) or not out.get('success') or out.get('_held'):
-            return None
-        res = out.get('_res')
-        return res if isinstance(res, dict) and (res.get('breakdown') or res.get('metrics')) else None
-
-    results = _mx.run(plan, core=_core, text=text, stage_cb=stage_cb)
-    subject = str((base or {}).get('subject') or '').strip() or 'this audience'
-    _cinfo = {'second_pass': [], 'filled': [], 'how': {}}
-    if results and len(results) < len(plan['pieces']):
-        try:
-            results, _cinfo = _mx.complete(plan, results, core=_core, text=text, stage_cb=stage_cb,
-                                           subject=subject, genpop=_pm_genpop_dimension_shares)
-        except Exception:
-            traceback.print_exc()
-    if stage_cb is not None:
-        try:
-            stage_cb('putting the table together')
-        except Exception:
-            pass
-    res = _mx.assemble(plan, results, subject=subject, text=text)
-    if not results or not res.get('breakdown'):
-        # nothing landed at all: nothing to complete from. The read is
-        # held (the calm line; the sweep gives it a fresh pass) and ops
-        # hears; the reader is never told the pieces did not come back
-        try:
-            _H._chatbot_error_email(
-                'brief-chat/matrix',
-                f"matrix read: none of {len(plan['pieces'])} pieces came back ({_mx.describe(plan)}); "
-                f"held with the calm line, the user needs the answer by email | {text[:140]}",
-                user_email=pm_user, payload={'question': text[:300], 'subject': subject, 'base': base.get('s3_key')})
-        except Exception:
-            traceback.print_exc()
-        return {'success': True, 'action': 'answer', 'reply': _H._CHATBOT_CALM_MESSAGE, 'followups': [],
-                'offer_deck': False, 'deck_angle': None, '_held': True, '_family': 'audience',
-                '_verify': None, '_stages_ms': {}}
-    res['_missing'] = []
-    # the finished table re-verifies (the scrub, the base rows) for the
-    # stamp on the job and the ledger entry; the table ships whole either way
-    _stamp = None
-    try:
-        import prometheus_verify as _pmv
-        _lk = None
-        try:
-            _lk = _pmv.load_base_lookup(_H.s3_client, _H.S3_BUCKET, base.get('s3_key'), base.get('subject') or '')
-        except Exception:
-            _lk = None
-        _vd = _pmv.verify_read(reply=__import__('prometheus_analysis').format_generated_metrics_reply(
-            __import__('prometheus_analysis').enforce_metrics_coherence(res) | {'_matrix': res.get('_matrix')}),
-            res=res, family='audience', base_lookup=_lk, question=text)
-        _stamp = _pmv.stamp(_vd, revised=bool(_cinfo.get('second_pass') or _cinfo.get('filled')))
-        if not _vd.get('ok'):
-            print(f"[pm-matrix] the assembled table did not clear the checks: {_vd.get('findings')}")
-            _cinfo['findings'] = list(_vd.get('findings') or [])
-    except Exception:
-        traceback.print_exc()
-    if _cinfo.get('filled'):
-        try:
-            _lines = [f"Matrix pieces filled by arithmetic: {', '.join(_cinfo['filled'])} | {text[:140]}",
-                      f"{_mx.describe(plan)}; {len(results) - len(_cinfo['filled'])} piece(s) landed from the passes"
-                      + (f", {len(_cinfo['second_pass'])} of them on the second pass ({', '.join(_cinfo['second_pass'])})" if _cinfo.get('second_pass') else '')
-                      + f"; {len(_cinfo['filled'])} filled from the landed pieces. The reader received the whole table; nothing about this reached them."]
-            for _lab in _cinfo['filled']:
-                _lines.append(f"Filled: {_lab}: {_cinfo['how'].get(_lab) or 'from the landed pieces'}")
-            if _cinfo.get('findings'):
-                _lines.append('Findings on the assembled table: ' + ' | '.join(str(f) for f in _cinfo['findings'][:8]))
-            _lines.append(f"Question: {text[:600]}")
-            _H._chatbot_error_email('brief-chat/complete', '\n'.join(_lines), user_email=pm_user,
-                                    payload={'question': text[:300], 'subject': subject, 'base': base.get('s3_key')})
-        except Exception:
-            traceback.print_exc()
-    return _pm_finish_matrix_read(res, text=text, base=base, pm_user=pm_user, verify=_stamp,
-                                  derivation=f"matrix read: {_mx.describe(plan)}; landed {len(results) - len(_cinfo.get('filled') or [])} of "
-                                             f"{len(plan['pieces'])}; second pass {len(_cinfo.get('second_pass') or [])}; "
-                                             f"filled {len(_cinfo.get('filled') or [])}")
+# <<extracted: prometheus.read_jobs block 12>>
 
 
-_GENPOP_DIMENSION_COLUMNS = {'age': 'AGE', 'gender': 'GENDER', 'income': 'INCOME', 'education': 'EDUCATION',
-                             'ethnicity': 'ETHNICITY', 'household': 'PARENTAL STATUS'}
+# <<extracted: prometheus.read_jobs block 13>>
 
 
-def _pm_genpop_dimension_shares(dimension):
-    """US baseline shares for a demographic dimension, [(band, share)],
-    from the Gen Pop file (the fill for a matrix piece whose dimension no
-    landed piece carried). None when the dimension is not a demographic
-    one or the file cannot be read. Never raises."""
-    try:
-        col = _GENPOP_DIMENSION_COLUMNS.get(str(dimension or '').strip().lower().split()[0])
-        if not col:
-            return None
-        import prometheus_analysis as pma
-        df, _etag = pma.load_profile_df(_H.s3_client, _H.S3_BUCKET, 'Gen_Pop_2026.csv')
-        bp_c = pma._bp_col(df)
-        out = []
-        for cat, grp in df.groupby('Column', sort=False):
-            if pma._norm_cat(cat) != col:
-                continue
-            for label, bpv in zip(grp['Value'].tolist(), grp[bp_c].tolist()):
-                v = pma._parse_bp(bpv)
-                if v is not None and str(label or '').strip():
-                    out.append((str(label).strip(), float(v)))
-        return out if len(out) >= 2 else None
-    except Exception:
-        return None
+# <<extracted: prometheus.read_jobs block 14>>
 
 
-@_ledger_gate.job_scope()
-def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
-                     digest_block, anchors_block, led,
-                     panel_charge=None, probe=False, matrix_plan=None):
-    """Background body of one generated read. Writes the finished
-    payload to the S3-backed job status the widget polls; a locked
-    phone or reloaded tab picks the read up when it returns. As the
-    read advances, each phase transition lands on the job JSON as a
-    user-safe `stage` (one tiny S3 put per transition) so the widget
-    can narrate progress (2026-08-28, p1-staged-progress).
-
-    `pm_ppu` (2026-09-04): now carries the pre-captured request-thread
-    user attribution (user, user_email) merged with pay-as-you-go
-    billing extras. Threaded through to _pm_generate_read_core so
-    every model call inside the read attributes to the requesting
-    user, even though this function runs on a background thread with
-    no Flask request context."""
-    head = {'job_id': job_id, 'user': pm_user, 'probe': bool(probe),
-            'question': text[:300], 'started_at': time.time()}
-    head = _rr.carry_resume(job_id, head)   # keep the launch's resume record
-    _beat = _rr.start_heartbeat(job_id, head)   # also registers for handoff
-
-    def _stage(label):
-        try:
-            _pm_read_status_write(job_id, {
-                **head, 'status': 'working', 'stage': str(label)[:60],
-                'stage_at': time.time()})
-        except Exception as _fx:
-            _faults.note('chat', _fx)
-
-    try:
-        if matrix_plan:
-            payload = _pm_run_matrix_read(matrix_plan, text=text, history=history, mr=mr, base=base,
-                                          digest_block=digest_block, anchors_block=anchors_block,
-                                          led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
-        else:
-            payload = _pm_generate_read_core(
-                text=text, history=history, mr=mr, base=base,
-                digest_block=digest_block, anchors_block=anchors_block,
-                led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
-        payload.pop('_family', None)
-        held = bool(payload.pop('_held', False))
-        _verify = payload.pop('_verify', None)
-        # a read that produced no figures never lands as an empty or a
-        # transport line, and never as a line that tells the reader
-        # nothing came back (Jenna 2026-11-04: "it should never say
-        # anything like that ever. it should only send it to us."): it
-        # is held with the calm line, the sweep gives it a fresh pass,
-        # and ops hears what happened
-        if payload.get('success') and not held and (payload.get('faulted') or not _pm_payload_has_figures(payload)):
-            _why = str(payload.get('reply') or '').strip()
-            try:
-                _H._chatbot_error_email(
-                    'brief-chat/read-job',
-                    f"generated read came back with no figures ({str(payload.get('faulted') or 'no_figures')}); "
-                    f"held with the calm line for a fresh pass, the user needs the answer by email | {text[:140]}"
-                    + (f" | reply was: {_why[:300]}" if _why else ''),
-                    user_email=pm_user, payload={'job_id': job_id, 'question': text[:300],
-                                                 'subject': head.get('subject') or (base or {}).get('subject')})
-            except Exception:
-                traceback.print_exc()
-            payload = {'success': True, 'action': 'answer', 'reply': _H._CHATBOT_CALM_MESSAGE, 'followups': [],
-                       'offer_deck': False, 'deck_angle': None}
-            held = True
-        # The finished read bypasses the envelope, so the plain-English
-        # shaper runs here (2026-10-06).
-        from prometheus import reply_shape as _rs
-        _rs.shape_finished_read(payload, held)
-        __import__('prometheus.people_bounds', fromlist=['guard_payload']).guard_payload(payload)   # a people count never passes the US population or its own audience (2026-11-11)
-        __import__('prometheus.partnership_value', fromlist=['guard_read']).guard_read(payload, question=text, history=history)   # a partnership's dollar value is the valuation's to state (Jenna 2026-11-11)
-        __import__('prometheus.reply_truth', fromlist=['finish_read']).finish_read(payload, question=text)   # a read claims nothing it has no record of (2026-11-11)
-        _stages = payload.pop('_stages_ms', None)
-        _chat = __import__('prometheus.build_offer', fromlist=['with_offer']).with_offer(payload, base=base, user=pm_user, question=text, history=history, job_id=job_id, thread_id=str(head.get('thread_id') or ''), via=head.get('via'), held=held, probe=probe)   # a read on a subject we do not hold ends with the build offer in the chat copy only; emails carry the read alone (Jenna 2026-11-23)
-        if payload.get('success'):
-            _done = {**head,
-                     'status': 'held' if held else 'done',
-                     'finished_at': time.time(), 'payload': _chat}
-            if isinstance(_stages, dict) and _stages:
-                _done['stages_ms'] = _stages
-            if isinstance(_verify, dict) and _verify:
-                _done['verify'] = _verify
-            # the file the read wrote, as a job file the API door lists
-            # and serves under the same key (2026-11-04)
-            _fl = payload.get('file_link') if isinstance(payload.get('file_link'), dict) else {}
-            if _fl.get('key') and _fl.get('name'):
-                _done['files'] = {'csv': {'key': str(_fl['key']), 'name': str(_fl['name'])}}
-            # Land the finished read in the requester's chat thread so
-            # it is waiting when they return, and (if they opted in)
-            # email them the read itself. A held read still lands in
-            # the thread as its calm one-liner, but carries no output
-            # to email, so only a clean read fires the notify. The
-            # thread is written BEFORE the job reads done (2026-11-05):
-            # the widget's poll refreshes the thread on done and finds
-            # the server's copy, so the server is the writer and the
-            # widget's own copy is the fallback, not the other way round.
-            if panel_charge and not held and payload.get('data_floor') == 'before':
-                _pm_panel_refund(panel_charge)   # the read was refused at the data floor: nothing is charged (Jenna 2026-11-18)
-            _pm_append_read_to_history(pm_user, job_id, _chat, held=held, started_at=head.get('started_at'))
-            _pm_read_status_write(job_id, _done)
-            _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
-                             via=__import__('prometheus.service', fromlist=['job_doc_field']).job_doc_field(job_id, 'via'))
-            __import__('prometheus.ride_along', fromlist=['on_read_landed']).on_read_landed(pm_user, job_id, payload, held=held, probe=probe)   # the deck asked for with the question (2026-11-11)
-            if not held and not probe:
-                _sent = _pm_flush_notify(job_id, 'read',
-                                         {**payload, 'question': text})
-                # The calm line on a held read promises the answer by email; a retry that lands keeps it
-                # (2026-10-22 audit: Casey's re-run landed six hours later, in the thread only).
-                if not _sent and _rr.promised_email(job_id) and _pm_user_email(pm_user):
-                    _sent = bool(_pm_send_output_email('read', _pm_user_email(pm_user), {**payload, 'question': text}, sync=True))
-                # an open promise on this question (an earlier copy of it died behind the calm line) is kept: emailed once, the record closed as delivered (2026-11-18)
-                _PT.keep(pm_user, text, job_id=job_id, emailed=_sent, thread_id=str(head.get('thread_id') or ''),
-                         send=lambda: bool(_pm_user_email(pm_user)) and _pm_send_output_email('read', _pm_user_email(pm_user), {**payload, 'question': text}, sync=True))
-            else:
-                _pm_notify_delete(job_id)
-                # A held research report never delivered: the charge
-                # reverses (the read itself stays held per house
-                # practice; the user was told it needs another pass).
-                if panel_charge:
-                    _pm_panel_refund(panel_charge)
-        elif not probe and _rr.hold_for_fresh_pass(job_id, head, write=_pm_read_status_write, why='the pass came back failed', land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True, started_at=head.get('started_at'))):
-            held = True   # ended without an answer on its first run: held for one fresh pass before a person owes it (2026-11-18)
-            _pm_notify_delete(job_id)
-            if panel_charge:
-                _pm_panel_refund(panel_charge)
-        else:
-            probe or _PT.job_failed('read', pm_user, job_id, text, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True))
-            _pm_read_status_write(job_id, {**head, 'status': 'error'})
-            _pm_notify_delete(job_id)
-            _pm_settle_ask(job_id, 'faulted', '', head.get('started_at'))
-            if panel_charge:
-                _pm_panel_refund(panel_charge)
-        print(f"[pm-loop] read {job_id} "
-              f"{'held' if held else 'done' if payload.get('success') else 'failed'} "
-              f"for {pm_user}")
-    except Exception as e:
-        traceback.print_exc()
-        _H._chatbot_error_email('brief-chat/read-job', e,
-                             user_email=pm_user,
-                             payload={'job_id': job_id,
-                                      'text': text[:200]})
-        if probe or not _rr.hold_for_fresh_pass(job_id, head, write=_pm_read_status_write, why=e, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True, started_at=head.get('started_at'))):   # a job that died on its first run is held for one fresh pass (2026-11-18)
-            probe or _PT.job_failed('read', pm_user, job_id, text, land=lambda _p: _pm_append_read_to_history(pm_user, job_id, _p, held=True))
-            try:
-                _pm_read_status_write(job_id, {**head, 'status': 'error'})
-            except Exception as _fx:
-                _faults.note('chat', _fx)
-        _pm_notify_delete(job_id)
-        if panel_charge:
-            _pm_panel_refund(panel_charge)
-    finally:
-        _beat.set()
+# <<extracted: prometheus.read_jobs block 15>>
 
 
-@_H.app.route('/api/brief-chat/notify-when-done', methods=['POST'])
-@_H.requires_auth
-@_H._chatbot_route_guard('brief-chat/notify-when-done')
-def api_synth_chat_notify_when_done():
-    """Opt in to an email when a long read / deck finishes.
-
-    Called after the task's ack, once the user confirms the offer with
-    an address. The finished output always lands in the chat thread on
-    return; this endpoint is only the opt-in email extra. The address
-    rides an S3 side-file keyed by job id so the background thread
-    picks it up on completion regardless of which worker serves this
-    request. If the job already finished, the output email is sent
-    right away instead of queued.
-
-    Session-authenticated dashboard users only."""
-    user, err = _synth_chat_gate(allow_api_key=False)
-    if err:
-        return err
-    # Prometheus mode gate (2026-09-03, Jenna): notify-when-done is
-    # only ever wired to a read / deck job the user already kicked
-    # off, both of which are analysis-tier surfaces. Pull-only users
-    # never see the offer chip on the frontend; this is defense in
-    # depth.
-    if not _pm_gate_analyze(user):
-        return _pm_gate_refusal('analyze')
-    try:
-        body = request.get_json(force=True) or {}
-    except Exception:
-        return jsonify({'success': False, 'error': 'bad request'}), 400
-    job_id = str(body.get('job_id') or '').strip()
-    kind = 'deck' if str(body.get('kind') or '') == 'deck' else 'read'
-    email = _pm_clean_notify_email(body.get('email'))
-    if not re.fullmatch(r'[0-9a-f]{12}', job_id):
-        return jsonify({'success': False, 'error': 'bad job id'}), 400
-    if not email:
-        return jsonify({'success': False,
-                        'error': 'enter a valid email'}), 400
-    uname = (user.get('username') or user.get('email') or '').strip()
-    prefix = _PM_DECK_PREFIX if kind == 'deck' else _PM_READ_PREFIX
-    try:
-        resp = _H.s3_client.get_object(
-            Bucket=_H.S3_BUCKET, Key=f"{prefix}{job_id}.json")
-        status = json.loads(resp['Body'].read().decode('utf-8'))
-    except Exception:
-        return jsonify({'success': False, 'error': 'unknown job'}), 404
-    if not _pm_job_owner_ok(status.get('user'), user):
-        return jsonify({'success': False, 'error': 'not your job'}), 403
-    st = str(status.get('status') or '').strip().lower()
-    # Already finished: send the output now (a held read / any error
-    # has no output to send, so those just confirm without a send).
-    if kind == 'read' and st in ('done', 'held', 'error'):
-        sent = False
-        if st == 'done':
-            sent = _pm_send_output_email(
-                'read', email,
-                {**(status.get('payload') or {}),
-                 'question': str(status.get('question') or '')})
-        return jsonify({'success': True, 'already_done': True,
-                        'sent': bool(sent)})
-    if kind == 'deck' and st in ('done', 'error'):
-        sent = False
-        if st == 'done':
-            sent = _pm_send_output_email('deck', email, status)
-        return jsonify({'success': True, 'already_done': True,
-                        'sent': bool(sent)})
-    # Still running: stash the opt-in for the worker to pick up.
-    try:
-        _pm_notify_write(job_id, {'job_id': job_id, 'kind': kind,
-                                  'email': email, 'user': uname,
-                                  'requested_at': time.time()})
-    except Exception:
-        traceback.print_exc()
-        return jsonify({'success': False,
-                        'error': 'could not save your request'}), 500
-    return jsonify({'success': True, 'queued': True})
+# <<extracted: prometheus.read_jobs block 16>>
 
 
-_PM_COHORT_WORDS_RE = re.compile(
-    r'\b(millennials?|gen\s*z|gen\s*x|gen\s*alpha|boomers?|'
-    r'women|men|females?|males?|moms?|dads?|parents|teens?|seniors?|'
-    r'hispanic|black|latino|asian|lgbtq\+?|'
-    r'\d{2}\s*(?:-|to)\s*\d{2})\b', re.I)
+# <<extracted: prometheus.read_jobs block 17>>
 
 
-_PM_TITLES_SCOPE_RE = re.compile(
-    r"\b(?:top|highest|leading|best|rank(?:ed|ing)?)\b"
-    r".{0,60}\b(?:titles?|shows?|movies?|films?|series)\b"
-    r"|\btop titles inside\b"
-    r"|\b(?:titles?|shows?|movies?|films?)\b.{0,40}\b(?:views?|viewership)\b",
-    re.I)
+# <<extracted: prometheus.read_jobs block 18>>
 
 
-_PM_NAMED_SERVICE_RE = re.compile(
-    r"\b(?:netflix|hulu|disney|peacock|tubi|pluto|roku|starz|"
-    r"hbo|prime video|amazon prime|paramount|apple tv|youtube|espn)\b",
-    re.I)
+# <<extracted: prometheus.read_jobs block 19>>
 
 
-def _pm_titles_ask_needs_scope(text, page_subject):
-    """True when a titles/shows ask does not name the open profile.
-
-    Jenna 2026-09-25: the profile on screen is not the question.
-    Ask 'Do you mean on Paramount+?' before answering. A service
-    named in the ask is already the subject, so this stays quiet.
-    """
-    t = str(text or "")
-    page = str(page_subject or "").strip()
-    if not t or not page or not _PM_TITLES_SCOPE_RE.search(t):
-        return False
-    # A pasted block of figures (2026-10-05, Alexia quoting a reply
-    # back: "these numbers are not displayed on this current
-    # dashboard: 21.8M ticketing-site visitors ...") is not a titles
-    # ask, whatever words sit inside it. Titles asks are short and
-    # carry no counts.
-    if len(t) > 240 or re.search(r"\d{1,3}(?:,\d{3})+|\b\d+(?:\.\d+)?[MK]\b|\d+(?:\.\d+)?%", t):
-        return False
-    page_toks = [w for w in re.findall(r"[a-z0-9]+", page.lower())
-                 if len(w) >= 4]
-    tl = t.lower()
-    if page_toks and any(w in tl for w in page_toks):
-        return False
-    page_l = page.lower()
-    named = [m.group(0).lower() for m in _PM_NAMED_SERVICE_RE.finditer(t)]
-    if any(n not in page_l for n in named):
-        return False
-    return True
+# <<extracted: prometheus.read_jobs block 20>>
 
 
-def _pm_held_read_clarify(text, subject):
-    """Clarify + suggestions when a generated read cannot ship (Jenna
-    2026-09-22, Scott's 'Compare Millennials against the Will And
-    Grace audience': the read fabricated a cohort that exists as no
-    file, was held, and the user got a dead end - 'it should ask him
-    to clarify and suggest instead of just killing it').
-
-    Comparison-of-cohort asks get the two honest paths: derive the
-    cohort cut off the existing file and compare real files, or read
-    what the current file measures about that cohort today. Everything
-    else gets a plain re-aim ask. Returns (reply, chips)."""
-    subj = str(subject or 'this audience').strip() or 'this audience'
-    t = str(text or '')
-    m = _PM_COHORT_WORDS_RE.search(t)
-    if m and re.search(r'\bcompare|\bvs\.?\b|\bversus\b|\bagainst\b',
-                       t, re.I):
-        cohort = ' '.join(m.group(1).split()).title()
-        reply = (
-            f"I want to get this comparison right rather than hand "
-            f"you numbers I am not sure of. When you say "
-            f"\"{t.strip()}\", I read two possible asks:\n\n"
-            f"1. The {subj} audience's own {cohort} cut against the "
-            f"full {subj} audience - that cut is not on the shelf "
-            f"yet, but it derives straight off the existing file "
-            f"and then the comparison runs on two real files.\n"
-            f"2. What the current {subj} file already measures "
-            f"about {cohort} inside the audience today - no build "
-            f"needed.\n\n"
-            f"Which one do you want?")
-        chips = [
-            f"Cut {subj} by {cohort}, then compare to the full "
-            f"audience",
-            f"What does the {subj} file show about {cohort} today?",
-        ]
-        return reply, chips
-    # Jenna 2026-09-25: never tell the user the read was held.
-    # The promise is a follow-up email, not a re-aim.
-    reply = ("Working on it! I will email you the results when "
-             "they are ready.")
-    return reply, []
+# <<extracted: prometheus.read_jobs block 21>>
 
 
-# CHALLENGED-NUMBER HEADS-UP (2026-09-30 Jenna: consistency guard).
-# When a reader questions a delivered figure ("seems very high", "why
-# is this smaller than the previous analysis", "how is this
-# calculated"), the answer still generates normally - the analysis
-# prompt carries the reconcile instructions - and ops hears about it
-# in the background so a genuine inconsistency never dies in a chat
-# session. Evidence: sonytv challenged the Apple TV+ subscriber read
-# and a Dark Matter season-over-season contradiction in the same week.
-_PM_CHALLENGE_RES = (
-    re.compile(r"\bseems?\s+(?:too\s+|very\s+|really\s+|way\s+too\s+)?"
-               r"(?:high|low|off|wrong|inflated|small|big|large)\b", re.I),
-    re.compile(r"\b(?:number|figure|count|value|read|projection)s?\s+"
-               r"(?:looks?|seems?|feels?)\b", re.I),
-    re.compile(r"\bhow\s+(?:is|was|did|are|were)\s+"
-               r"(?:this|that|it|these|those|the\s+[\w %#]{1,30}?)\s+"
-               r"(?:calculated|derived|measured|computed|determined|"
-               r"arrived\s+at)\b", re.I),
-    re.compile(r"\b(?:doesn'?t|does\s+not|didn'?t|did\s+not)\s+"
-               r"(?:match|line\s+up\s+with|square\s+with|agree\s+"
-               r"with)\b", re.I),
-    re.compile(r"\bwhy\s+(?:is|was|does|did|are|were)\b.{0,70}?"
-               r"\b(?:higher|lower|bigger|smaller|larger|different)\s+"
-               r"than\b", re.I),
-    re.compile(r"\b(?:very|extremely|surprisingly|unusually|"
-               r"impossibly)\s+(?:high|low)\b", re.I),
-    re.compile(r"\bcan'?t\s+be\s+right\b|\bdouble[- ]check\s+"
-               r"(?:this|that|the)\b", re.I),
-)
+# <<extracted: prometheus.read_jobs block 22>>
 
 
-def _pm_challenge_headsup(user, text):
-    """Fire-and-continue ops email when a reader challenges a figure.
-    Never blocks or changes the answer path. Never raises."""
-    try:
-        t = str(text or '')
-        if len(t) < 12 or not any(
-                rx.search(t) for rx in _PM_CHALLENGE_RES):
-            return
-        if _pm_probe_caller() or _pm_is_probe_user((user or {}).get('username')):
-            return   # a probe (golden set, canary, smoke) never mails ops (2026-10-14)
-        _H._chatbot_error_email(
-            'pm/number-challenged',
-            'reader challenged a delivered figure (the answer still '
-            'generated normally; review for consistency): ' + t[:400],
-            user_email=(user.get('email') or user.get('username')),
-            payload={'question': t[:400], '_no_promise': True})
-    except Exception as _fx:
-        _faults.note('chat', _fx)
+# <<extracted: prometheus.read_jobs block 23>>
 
 
 @_H.app.route('/api/brief-chat/analyze', methods=['POST'])
@@ -7675,12 +6260,6 @@ from prometheus.legacy.core_analyze import (  # noqa: E402,F401  (stage 5: Page 
     _pm_analyze_core,
 )
 # <</reimport>>
-# <<reimport: core_read>>
-from prometheus.legacy.core_read import (  # noqa: E402,F401  (stage 5: The generated read: context bind, research, synthesis, verify and bank)
-    _pm_generate_metrics_response,
-    _pm_generate_read_core,
-)
-# <</reimport>>
 # <<reimport: prometheus.library_match>>
 from prometheus.library_match import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The saved-profile library as the chat reads it: the catalog, the shortlist of matches for an ask, and the gate that decides whether a match stands)
     SYNTH_CHAT_FRESH_DAYS,
@@ -7828,6 +6407,77 @@ from prometheus.approve_route import (  # noqa: E402,F401  (rebuild stage 7, 202
     _PM_NO_DRAFT_REPLY,
     api_synth_chat_approve,
     _pm_approve_core,
+)
+# <</reimport>>
+# <<reimport: prometheus.ask_memory>>
+from prometheus.ask_memory import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: What the chat remembers about an ask: the remembered question and build, the last window, the history bind, the panel refund and the panel fact answer, prior entries, two named audiences, and the persisted identity)
+    _pm_remember_ask,
+    _pm_remember_ask_build,
+    _pm_memory_last_window,
+    _pm_history_bind_text,
+    _pm_panel_refund,
+    _pm_panel_fact_response,
+    _pm_verify_prior_entries,
+    _pm_name_two_audiences,
+    _pm_persist_identity,
+)
+# <</reimport>>
+# <<reimport: prometheus.subject_verify>>
+from prometheus.subject_verify import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Which subject an ask names: the pending question key, the verify cache and pre-verify, the chat subject verify, the entity bind, the plausibility check, the fuzzy catalog match with its aliases and typo tolerance, and the two-base detect)
+    _PM_PENDING_Q_S3_KEY,
+    _PM_VERIFY_CACHE,
+    _PM_VERIFY_CACHE_LOCK,
+    _PM_VERIFY_TTL_S,
+    _pm_verify_cached,
+    _pm_start_preverify,
+    _pm_chat_subject_verify,
+    _pm_entity_core_bind,
+    _pm_plausible_subject,
+    _PM_SUBJECT_ALIASES,
+    _pm_edit_distance,
+    _pm_token_typo_eq,
+    _pm_expand_alias_tokens,
+    _pm_fuzzy_catalog_subject,
+    _PM_TWO_BASE_VOCAB_RE,
+    _pm_two_base_detect,
+)
+# <</reimport>>
+# <<reimport: prometheus.generation_base>>
+from prometheus.generation_base import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The base a generated read runs on: the open profile, the named subject, or a question with no base at all)
+    _pm_generation_base,
+)
+# <</reimport>>
+# <<reimport: prometheus.generated_read>>
+from prometheus.generated_read import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The generated read: the metrics response that frames a question against its base, and the read core that researches, synthesizes, verifies and banks the answer)
+    _pm_generate_metrics_response,
+    _pm_generate_read_core,
+)
+# <</reimport>>
+# <<reimport: prometheus.read_jobs>>
+from prometheus.read_jobs import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Background read jobs: the matrix read in pieces and its finish, the read job runner, the in-flight and recent-read checks, the notify-when-done route, the titles scope question, the held-read clarifier, and the challenged-number heads-up)
+    _pm_finish_matrix_read,
+    _PM_READ_PREFIX,
+    _PM_READ_INFLIGHT_PREFIX,
+    _pm_read_inflight_doc_key,
+    _pm_read_inflight_check,
+    _pm_read_recent_check,
+    _pm_read_inflight_mark,
+    _PM_EMAIL_RE,
+    _pm_iso_now,
+    _pm_history_has_job_turn,
+    _pm_payload_has_figures,
+    _pm_run_matrix_read,
+    _GENPOP_DIMENSION_COLUMNS,
+    _pm_genpop_dimension_shares,
+    _pm_run_read_job,
+    api_synth_chat_notify_when_done,
+    _PM_COHORT_WORDS_RE,
+    _PM_TITLES_SCOPE_RE,
+    _PM_NAMED_SERVICE_RE,
+    _pm_titles_ask_needs_scope,
+    _pm_held_read_clarify,
+    _PM_CHALLENGE_RES,
+    _pm_challenge_headsup,
 )
 # <</reimport>>
 # Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes

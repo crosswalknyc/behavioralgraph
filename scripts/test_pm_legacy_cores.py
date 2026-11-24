@@ -47,7 +47,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 import _pm_legacy_view as LV  # noqa: E402
 
 LEGACY = os.path.join(_WEB, 'prometheus', 'legacy')
-CHAT_RATCHET = 7_900           # chat.py on its own (13,625 after stage 5; 12,777 after stage 7's first move; 10,839 after move 2; 7,838 after move 3)
+CHAT_RATCHET = 6_550           # chat.py on its own (13,625 after stage 5; 12,777 after stage 7's first move; 10,839 after move 2; 7,838 after move 3; 6,488 after move 4)
 _MARK = re.compile(r'^# <<extracted: ([A-Za-z0-9_.]+) block (\d+)>>$', re.M)
 
 
@@ -98,7 +98,9 @@ class TheModulesCarryTheirBlocks(unittest.TestCase):
             for n in sorted(held):
                 self.assertEqual(blocks[n], 1, (mod, n))                # one marker per block
                 self.assertIn(f'\n# <<block: {n}>>\n', src, (mod, n))
-                names.extend(_names_of(held[n]))
+                for nm in _names_of(held[n]):
+                    if nm not in names:                                 # a name bound more than once (a def and its wrappers) is one name
+                        names.append(nm)
             self.assertTrue(names, mod)
             self.assertIn('__all__ = [' + ', '.join(repr(n) for n in names) + ']', src, mod)
             # chat.py re-imports every moved name at its tail, from the module's own import path

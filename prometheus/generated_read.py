@@ -1,13 +1,15 @@
-"""The generated read: context bind, research, synthesis, verify and bank.
+"""The generated read: the metrics response that frames a question against its base, and the read core that researches, synthesizes, verifies and banks the answer.
 
-Extracted from prometheus/legacy/chat.py (rebuild stage 5, 2026-11-20) by
+Moved out of prometheus/legacy/chat.py (rebuild stage 7, 2026-11-23) by
 scripts/extract_legacy_core.py, behaviour unchanged. This module reads the
-host through ``_H`` and the rest of the legacy chat module through ``_C``
+host through ``_H`` and the legacy chat namespace through ``_C``
 (prometheus.legacy.C), both bound before it is imported; chat.py imports it
-last and re-exports the moved names. ``_C.globals()`` is chat.py's own
-namespace, the one the lanes this code hands it to expect. The suites read
-the moved text through scripts/_pm_legacy_view.legacy_view(), which splices
-each block back at its marker in chat.py.
+last and re-exports the moved names, so every name chat.py binds is read
+through ``_C.<name>`` at call time exactly as it was when the code lived in
+one file. ``_C.globals()`` is chat.py's own namespace, the one the lanes this
+code hands it to expect. The suites read the moved text through
+scripts/_pm_legacy_view.legacy_view(), which splices each block back at its
+marker in chat.py.
 """
 from prometheus.legacy import H as _H, C as _C  # noqa: E402,F401
 from prometheus import file_names as _file_names, no_build as _no_build, study_record as _study_record
@@ -28,65 +30,6 @@ from prometheus import promise_truth as _PT, read_repair as _read_repair, grid_f
 import time
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session, make_response
 from prometheus import named_subject as _ns_mod
-from prometheus.legacy.jobs import (  # noqa: E402,F401
-    api_synth_chat_status,
-    _pm_job_owner_ok,
-    _pm_read_status_write,
-    api_synth_chat_read_status,
-    _pm_deck_status_write,
-    _pm_bpiq_status_write,
-    _pm_jiq_status_write,
-    _pm_fw_status_write,
-    _pm_aiq_status_write,
-    api_synth_chat_deck_status,
-    api_synth_chat_bpiq_status,
-    api_synth_chat_jiq_status,
-    api_synth_chat_fw_status,
-    api_synth_chat_aiq_status,
-    api_synth_chat_active_runs,
-    api_synth_chat_health,
-)
-from prometheus.legacy.land import (  # noqa: E402,F401  (I4: landing settles the promise; the calm hold on a repeat)
-    _pm_append_read_to_history, _pm_append_deck_to_history, _pm_settle_ask, _pm_gate_host, _pm_calm_hold_response, _pm_on_it_line)
-from prometheus.legacy.jobs import (  # noqa: E402,F401  (the last-file stash, 2026-10-21)
-    _PM_LAST_FILE_PREFIX, _pm_file_stash_write, _pm_file_stash_read)
-from prometheus.legacy.watch import (  # noqa: E402,F401
-    _PM_WATCH_FLAGGED,
-    _PM_USER_BLOCK_CACHE,
-    _PM_USER_BLOCK_LOCK,
-    _pm_user_block,
-    _pm_catalog_block,
-    _pm_ask_log_user,
-    _pm_probe_caller,
-    _pm_is_probe_user,
-    _PM_COMMON_IDENTITY_WORDS,
-    _pm_thread_confirmed_page,
-    _pm_page_confirm_mark,
-    _pm_page_confirmed_recently,
-    _pm_watch_flag,
-    _pm_record_held_reply,
-    _pm_gate_options,
-    _pm_open_status_line,
-    _pm_price_table,
-    _pm_usd,
-    _pm_usd_label,
-    _pm_money_symbol,
-    _pm_viewership_read_price,
-    _pm_derived_read_price,
-    _pm_viewership_verb,
-    _pm_is_viewership_series_ask,
-    _pm_is_viewership_ask,
-    _pm_consumption_subject,
-    _pm_page_clarify_subject,
-    _pm_panel_price_label,
-    _pm_pending_q_tokens,
-    _pm_stash_pending_question, _pm_pop_pending_question,
-    _pm_safe_user,
-    _pm_s3_json,
-    _pm_s3_put_json,
-    _PM_REPORT_ASK_RE,
-    _pm_looks_report_ask,
-)
 from prometheus import read_recovery as _rr
 
 # <<moved>>
@@ -192,8 +135,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # A consumption count typed in lowercase ("how many people read the walsh family book series
     # in the us last year?") names its own subject; the capitalized-run guess misses it and the ladder
     # used to ask "Do you mean for <memory>?" (Jenna 2026-10-08). Read the object of the consumption verb instead.
-    if not subj_hint and _pm_is_viewership_ask(text):
-        subj_hint = _pm_consumption_subject(text)
+    if not subj_hint and _C._pm_is_viewership_ask(text):
+        subj_hint = _C._pm_consumption_subject(text)
     # WHICH ONES? (2026-10-02 Jenna: "it should have asked him which 3 influencers he was talking
     # about then actually given him the answer"). An ask that points at "these three creators" and
     # names none of them stops here with the question, before any base lookup, model call or offer.
@@ -260,7 +203,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         base, digest_block = None, ''   # nor a file reached through the brief's own label (2026-11-17)
     if base and not _pinned_base and str(base.get('source') or '') in ('page', 'catalog') and not str(base.get('s3_key') or '').startswith('subiq:'):
         _stands, _why = _page_default.base_stands(text, history, base, bind_subject, normalize=_H._normalize_for_match,
-                                                  stop_tokens=_C._PM_CLARIFY_STOP_TOKENS, brand_named=_C._pm_page_brand_named, ask_user=_pm_ask_log_user(''))
+                                                  stop_tokens=_C._PM_CLARIFY_STOP_TOKENS, brand_named=_C._pm_page_brand_named, ask_user=_C._pm_ask_log_user(''))
         if not _stands:   # the open profile is context, never a default subject; a name the reader said no to is no base (2026-10-06, 2026-10-24)
             print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} dropped ({_why})")
             switch_page, base = (switch_page or str(base.get('subject') or '')), None
@@ -382,7 +325,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 if len(_hit) == 1 and not bind_subject:
                     _C._pm_ask_hint(route='memory_bind',
                                  subject=_hit[0]['subject'])
-                    return _pm_generate_metrics_response(
+                    return _C._pm_generate_metrics_response(
                         user, text, history, metric_request=metric_request,
                         prefer_catalog=True,
                         bind_subject=str(_hit[0]['subject']),
@@ -478,7 +421,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             # the library subject down so the base resolves on it.
             _bf_mr = (dict(mr, subject=_bf_lib)
                       if isinstance(metric_request, dict) else None)
-            return _pm_generate_metrics_response(
+            return _C._pm_generate_metrics_response(
                 user, text, history, metric_request=_bf_mr,
                 prefer_catalog=True, bind_subject=_bf_lib,
                 bind_cohort=bind_cohort, switch_page=switch_page)
@@ -577,7 +520,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             # ($100 first on a subject in the thread, $50 after). The offer
             # is one shape; the charge lands on Accept, server side.
             from prometheus import priced_read as _prg
-            _vw = _pm_viewership_read_price(text, _pm_user)
+            _vw = _C._pm_viewership_read_price(text, _pm_user)
             _has_delivered = bool((metric_request or {}).get('bound_series')) \
                 or (isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') == 'derived')
             _pr_kind = 'derived' if (_is_derived and (_has_delivered or not _vw)) else ('viewership' if _vw else 'report')
@@ -585,7 +528,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 text=text, subject=subj_name, kind=_pr_kind, panel_confirm=panel_confirm,
                 username=_pm_user, user=user, history=history, consume=_H.consume_credit,
                 years=(_vw[2] if _vw else 1), dimension=str((metric_request or {}).get('dimension') or ''),
-                verb=_pm_viewership_verb(text), series=_pm_is_viewership_series_ask(text))
+                verb=_C._pm_viewership_verb(text), series=_C._pm_is_viewership_series_ask(text))
             if _state != 'charged':
                 _C._pm_ask_hint(outcome=(('panel_offer' if _pl.get('panel_offer') else 'answered') if _state == 'offer' else 'panel_out_of_credits'), subject=subj_name)
                 return jsonify(_pl)
@@ -627,7 +570,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             return jsonify(_prg.which_audience(text, ctx if (_pg_name and not _page_default.page_rejected(text, history, _pg_name)) else None))
         if not base:
             reply, followups = pma.build_profile_required_reply(
-                '', price_label=_pm_panel_price_label(_pm_user)[0])
+                '', price_label=_C._pm_panel_price_label(_pm_user)[0])
             _C._pm_ask_hint(outcome='clarify_subject')
             return jsonify({
                 'success': True, 'action': 'answer', 'reply': reply,
@@ -861,20 +804,20 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _mplan = _matrix.plan(text, mr)
         except Exception as _fx:
             _faults.note('chat', _fx); _mplan = None
-        _on_it = _pm_on_it_line(base, bound=bind_subject)
+        _on_it = _C._pm_on_it_line(base, bound=bind_subject)
         if _mplan:
             _on_it = (_on_it.rstrip() + f" This one runs in pieces ({_matrix.describe(_mplan)}); "
                       "the whole table lands here as one answer with the file under it.")
         if isinstance(panel_charge, dict) and panel_charge.get('included'):
             # Included with your plan (Jenna 2026-11-08): the opener an unlimited seat reads instead of a price
             _on_it = __import__('prometheus.priced_read', fromlist=['with_included_line']).with_included_line(_on_it)
-        if _pm_probe_caller() == 'golden-set' or _faults.is_probe():   # a probe grades the reply shape only: no job, no queue, no inflight mark (2026-11-02: a local replay's orphaned read drew the deliver-by-email alert for 'canary:golden')
+        if _C._pm_probe_caller() == 'golden-set' or _faults.is_probe():   # a probe grades the reply shape only: no job, no queue, no inflight mark (2026-11-02: a local replay's orphaned read drew the deliver-by-email alert for 'canary:golden')
             _C._pm_ask_hint(outcome='answered', subject=_promised)
             return jsonify({'success': True, 'action': 'answer', 'read_job_id': 'golden-' + job_id, 'followups': [], 'offer_deck': False, 'deck_angle': None,
                             'reply': _on_it})
         # A probe's finished read never mails anyone (captured here,
         # on the request thread, and carried on the job).
-        _probe = bool(_pm_probe_caller()) or _pm_is_probe_user(_pm_ask_log_user(''))
+        _probe = bool(_C._pm_probe_caller()) or _C._pm_is_probe_user(_C._pm_ask_log_user(''))
         _head = {'job_id': job_id, 'user': _pm_user, 'status': 'working',
                  'stage': 'reading the data', 'probe': _probe, 'subject': _promised,
                  'question': text[:300], 'started_at': time.time(),
@@ -892,12 +835,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _head['thread_id'] = _C._pm_job_bind_thread(job_id, _pm_user) if not inline_job_id else _C._pm_job_bind_thread(job_id, _pm_user, resumed=True)   # the worker is another process (2026-10-14); it keeps the launch's thread (2026-11-11)
         _head['via'] = 'api' if getattr(__import__('flask').g, '_pm_api_key_owner', None) else 'dashboard'
         if inline_job_id:            # the read worker runs the job right here
-            _pm_read_status_write(job_id, _head)
+            _C._pm_read_status_write(job_id, _head)
             _C._pm_run_read_job(*_args, **_kw)
         elif _rr.queue_enabled() and not force_local:
             _rr.enqueue(job_id, _head)   # the Hetzner read worker picks it up
         else:                        # local thread (fallback / kill switch)
-            _pm_read_status_write(job_id, _head)
+            _C._pm_read_status_write(job_id, _head)
             _ledger_gate.note_job(job_id, _pm_user, _probe)   # the thread has no request: who asked rides with the job (a probe never banks, 2026-11-11)
             threading.Thread(target=_C._pm_run_read_job, args=_args, kwargs=_kw, daemon=True).start()
         _C._pm_ask_hint(outcome='answered', subject=_promised)
@@ -905,7 +848,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'success': True, 'action': 'answer', 'read_job_id': job_id, 'subject': _promised,
             'reply': _on_it,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    payload = _pm_generate_read_core(
+    payload = _C._pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,
         digest_block=digest_block, anchors_block=anchors_block,
         led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras,
@@ -1107,7 +1050,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _cat_block = ''
     try:   # a pairing Crosswalk has already valued hands the read the valuation's own figures (2026-11-11)
         from prometheus import peacock_scale as _pk_scale   # a read on Peacock answers from the figures on file (2026-11-18)
-        _cat_block = __import__('prometheus.knowledge', fromlist=['read_blocks']).read_blocks(text, mr, base, pk=_pk_scale.block, saved=_bpiq_wiz.saved_valuation_block, catalog=_pm_catalog_block, stage=_stage_note, stages=stages, claude_json=lambda _s, _u, **_kw: _C._pm_claude_json(_s, _u, usage_extras=pm_ppu, **_kw), tools=[pma.WEB_SEARCH_TOOL], history=history, led=led)   # the knowledge layer: held, stored, the near twin, the researched anchors (2026-11-20)
+        _cat_block = __import__('prometheus.knowledge', fromlist=['read_blocks']).read_blocks(text, mr, base, pk=_pk_scale.block, saved=_bpiq_wiz.saved_valuation_block, catalog=_C._pm_catalog_block, stage=_stage_note, stages=stages, claude_json=lambda _s, _u, **_kw: _C._pm_claude_json(_s, _u, usage_extras=pm_ppu, **_kw), tools=[pma.WEB_SEARCH_TOOL], history=history, led=led)   # the knowledge layer: held, stored, the near twin, the researched anchors (2026-11-20)
     except Exception:
         traceback.print_exc()
     # The words named a subject the base does not describe (Emma Crouchen's
@@ -1371,7 +1314,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             print(f"[pm-loop] reply framed on {_leak!r}, an audience the question never named; "
                   f"reading again on {_qu.base!r} ({_qu.label!r})")
             _stage_note('reading the data')
-            return _pm_generate_read_core(
+            return _C._pm_generate_read_core(
                 text=text, history=history, mr=mr, base=_question_universe.panel_base(_qu),
                 digest_block='', anchors_block=anchors_block, led=led, pm_user=pm_user, pm_ppu=pm_ppu,
                 stage_cb=stage_cb, switch_page=None, bank=bank, universe_guard=False)
@@ -1794,7 +1737,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                     {'download_url': _furl, 'filename': _fn})
                 reply += (f"\n\n{_fn} is saving to your browser "
                           "downloads now.")
-            _pm_file_stash_write(pm_user, _furl, _fn, _fkey,
+            _C._pm_file_stash_write(pm_user, _furl, _fn, _fkey,
                                  subject=res.get('subject'),
                                  question=text)
             if 'Email me this file' not in followups:
