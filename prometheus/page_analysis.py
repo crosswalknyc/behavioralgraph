@@ -82,6 +82,7 @@ def _ask_logged(surface):
                 _g._pm_user_signal = user_sig
             except Exception:
                 user_sig = None
+            _C._pm_ask_stage('door_entry', ms=int((time.time() - t0) * 1000))   # the wrapper's own work before the handler: the trace, the thread binding, the user signal (2026-11-24)
             try:
                 try:
                     resp = fn(*args, **kwargs)

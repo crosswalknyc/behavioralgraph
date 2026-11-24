@@ -642,6 +642,8 @@ def _u_claims(body, name, fallback):
 
 def ask(user, body, *, via='session'):
     """Run one ask end to end. Returns (envelope_dict, http_status)."""
+    import time as _time_door
+    _t_door = _time_door.monotonic()      # the door's own clock for the ask log's stage marks (2026-11-24)
     body = body if isinstance(body, dict) else {}
     text = str(body.get('text') or '').strip()
     uname = username_of(user)
@@ -1036,6 +1038,26 @@ def ask(user, body, *, via='session'):
                                                              'client_hint': None}, thread_id=tid, via=via)
         _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
         return env, 200
+
+    # The Reader starts now, on its own thread, while the lanes below run; the reader lane takes its answer when
+    # it gets there (prometheus.reader_prestart, Jenna's standing ask 2026-11-24). Same words, same context, same
+    # call; nothing below reads the reading before that lane. An armed step never reaches the Reader, so none starts.
+    _rd_pre = None
+    if not _armed(body):
+        try:
+            from . import reader_prestart as _rdp
+            from . import reader as _rd_pre_mod
+            from . import progress as _pg_pre
+            _pre_extras = None
+            try:
+                from . import access_gates as _ag_pre
+                _pre_extras = _ag_pre._pm_attrib_extras()
+            except Exception:
+                _pre_extras = None
+            _rd_pre = _rdp.start(text, ctx, history, user, uname, read=_rd_pre_mod.read, say=_pg_pre.say, extras=_pre_extras)
+        except Exception as _fx:
+            _faults.note('service.reader_prestart', _fx)
+            _rd_pre = None
 
     # lane: intake_cancel
     # Cancel means gone, and a new thread starts clean (Jenna 2026-11-05:
@@ -2737,14 +2759,23 @@ def ask(user, body, *, via='session'):
 
     # lane: reader
     reading = None
+    _stage_door = __import__('prometheus.page_context', fromlist=['_pm_ask_stage'])._pm_ask_stage
+    _stage_door('door_pre_reader', ms=int((_time_door.monotonic() - _t_door) * 1000))   # the lanes ahead of the Reader (2026-11-24)
     if referent_decision is None and not _armed(body) and len(text.split()) >= 2 and not _cap_hit:
+        _t_reader = _time_door.monotonic()
         try:
             from . import reader as _rd
             from . import progress as _pg
-            reading = _rd.read(text, ctx, history, user, uname, progress=_pg.say)
+            if _rd_pre is not None and _rd_pre.matches(text, ctx, history):
+                reading = _rd_pre.take(say=_pg.say)      # the call that started before the lanes, on these same inputs
+            else:
+                reading = _rd.read(text, ctx, history, user, uname, progress=_pg.say)
         except Exception as e:
             _faults.note('service.reader', e)
             reading = None
+        _stage_door('door_reader_wait', t0=_t_reader)      # what the lane waited for the reading (no live line of its own)
+        if isinstance(reading, dict) and reading.get('ms') is not None:
+            _stage_door('reader_call', ms=int(reading.get('ms') or 0))   # the Reader's own call, wherever it started
         try:
             # the categories a question lists are cuts: they leave the reading's subjects here, before anything
             # reads it (the executor, the lanes, the line that says what is being read); prometheus.cut_list
