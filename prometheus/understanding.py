@@ -617,10 +617,12 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
                 # an order for a read ("please run one read for ...") is a read: the analyze surface prices or runs
                 # it, never the build flow (2026-11-23, with the one decider)
                 intent, action = 'analyze', 'answer'
-        elif f.get('product_question') and not f.get('wizard_start'):
+        elif f.get('product_question') and not f.get('wizard_start') and not (f.get('send_order') or f.get('send_file')):
             # a question about Prometheus or Crosswalk itself (what it is, how it differs from an AI tool, a tagline, what it
             # can do, what a product costs): product knowledge, never a subject read (Liz 2026-11-20 drew "Which subject
-            # should this be on?" on "a 3-5 word description for CW prometheus versus AI")
+            # should this be on?" on "a 3-5 word description for CW prometheus versus AI"). An order to send the file we
+            # hold is an order, whatever product word rides in it ("can you send me a file with the above full data" was
+            # answered with how to upload a list of names, Armine 2026-11-23)
             intent, action, conf = 'capability', 'answer', 0.9
             ev.append('product:' + str(f['product_question'])[:16])
             if str(f['product_question']) == 'dashboard':

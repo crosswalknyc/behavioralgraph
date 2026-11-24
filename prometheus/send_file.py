@@ -36,7 +36,7 @@ _SEND_RX = re.compile(
     r"(?:me\s+|us\s+)?(?:a copy of\s+)?(?:this|that|the|those|these)\s*"
     r"(?:(?:excel|xlsx|xls|csv|spreadsheet|workbook|pdf)\s+)?(?:(?:file|workbook|export|copy|version)\s+)?(?:(?:of|for)\s+(?:this|that|the)\s+)?"
     r"(?:profile|file|csv|read|report|answer|data|results?|numbers|analysis|output|journey|breakdown|workbook|spreadsheet|export|page)?s?"
-    r"(?:\s+(?:to me|to my (?:e-?mail|inbox)|over|please|in (?:excel|xlsx|csv)(?: format)?))?\W*$", re.I)
+    r"(?:\s+(?:to me|to my (?:e-?mail|inbox)|over|please|in (?:excel|xlsx|csv)(?: format)?|(?:as|by|via|in) (?:an? )?e-?mail))?\W*$", re.I)
 _SEND_PLAIN_RX = re.compile(r"^\W*(?:e-?mail|send)\s+(?:it|this|that)\s+(?:to\s+)?me\W*$", re.I)
 # "email me the Babylon 5 breakdown", "send me the Nike profile" (2026-10-14: the
 # first drafted a profile build; a send order names a thing we hold, never a build)
@@ -60,6 +60,22 @@ _FORMAT_LEAD_RX = re.compile(r"^(?:(?:an?|the)\s+)?(?:" + _FORMATS + r"\s+)?(?:f
 CLARIFIER_LEAD = 'Which file?'
 
 
+# "can you send me a file with the above full data", "send me a csv of this", "email us a copy": the order names the
+# shape of the file and points at the thread, never a subject (2026-11-23, Armine: it was read as a question about
+# uploading a list of names and answered with that product's description)
+_SEND_UNNAMED_RX = re.compile(
+    r"^\W*(?:please\s+)?(?:can you\s+|could you\s+|would you\s+)?(?:e-?mail|send|mail|forward)\s+(?:me\s+|us\s+)?"
+    r"(?:(?:a|an|the|some)\s+)?(?:(?:full|complete|whole|raw|underlying)\s+)?(?:copy|file|csv|xlsx|excel|spreadsheet|workbook|export|pdf|data|results?|numbers)\b"
+    r"(?P<rest>[^.?!]{0,60})$", re.I)
+# what may follow the file noun in an unnamed order: nothing, a courtesy, a file shape, or a pointer back into the thread
+_UNNAMED_REST_RX = re.compile(
+    r"^\s*(?:(?:please|to me|to us|over)\s*)*(?:(?:as|in)\s+(?:an?\s+)?(?:file|csv|xlsx|excel|spreadsheet|pdf|workbook)(?:\s+(?:format|form))?\s*)?(?:please\s*)?$", re.I)
+# a "name" that is only the shape of a file or a pointer back into the thread names nothing
+_FILE_SHAPED_RX = re.compile(
+    r"^(?:(?:a|an|the|some)\s+)?(?:(?:full|complete|whole|raw|underlying)\s+)?(?:copy|file|csv|xlsx|excel|spreadsheet|workbook|export|pdf|data|results?|numbers)\b", re.I)
+_POINTS_BACK_RX = re.compile(r"\b(?:above|below|this|that|these|those|here|earlier|previous|prior|last|latest|attached)\b", re.I)
+
+
 def parse(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 140:
@@ -68,7 +84,52 @@ def parse(text):
         return False   # "email me when it's ready" is the notify family, not this lane
     if _SEND_RX.match(t) or _SEND_PLAIN_RX.match(t):
         return True
-    return bool(named_subject(t))
+    if named_subject(t):
+        return True
+    m = _SEND_UNNAMED_RX.match(t)
+    if not m:
+        return False
+    rest = m.group('rest') or ''
+    # "a file of the top 10 brands for Nike" asks for new data, not for the last thing; a pointer back into the
+    # thread ("with the above full data", "of this") or nothing at all is the order
+    if _UNNAMED_REST_RX.match(rest):
+        return True
+    return bool(_POINTS_BACK_RX.search(rest)) and not re.search(r"\b[A-Z][\w'&.+-]+", rest.replace('US', ''))
+
+
+# the short email-the-file shape the lane's own intent check reads ("email me this file", "send this as an
+# email", "mail it to me"); a long ask that mentions email while asking for new data is not an order
+_EMAIL_SHAPE_RX = re.compile(
+    r"^\W*(?:please\s+|pls\s+)?(?:can you\s+|could you\s+|would you\s+)?(?:"
+    r"(?:e-?mail|mail)\b[^.?!\n]{0,50}\b(?:csv|file|spreadsheet|data|it|this|that)\b"
+    r"|(?:send|shoot)\b[^.?!\n]{0,30}\b(?:e-?mail|inbox)\b)", re.I)
+
+
+def is_order(text):
+    """True when the words order the last thing sent by email, whatever
+    sits above them in the thread. An order is carried out each time it
+    is given: "Email me this file" after a second read is a new order on
+    the new read, never the same question asked again, and never a line
+    to hand back from earlier in the thread (2026-11-23, Armine: the
+    second "Email me this file" of the afternoon drew "Working on it ...
+    I will email you when it completes" twice and nothing was sent for
+    an hour; later sends were answered with an earlier read's words and
+    with an earlier "Sent ..." line). The repeat guard and both replay
+    lanes stand aside for an order; the send lane runs it."""
+    t = ' '.join(str(text or '').split())
+    if not t or len(t) > 140:
+        return False
+    if re.search(r"\bwhen\b", t, re.I):
+        return False
+    if not (parse(t) or (len(t) <= 90 and _EMAIL_SHAPE_RX.search(t))):
+        return False
+    try:
+        from . import insight_ask as _ia
+        if _ia.stands_down(t):      # "an insight we can email to Lego" is what the reader will do with the answer
+            return False
+    except Exception:
+        pass
+    return True
 
 
 def named_subject(text):
@@ -93,6 +154,8 @@ def clean_subject(subj):
     if not subj or subj.lower() in ('it', 'this', 'that', 'same', 'latest', 'last', 'excel', 'csv', 'file', 'the file',
                                     'the', 'a', 'an', 'my', 'your', 'our', 'me', 'us'):
         return ''
+    if _FILE_SHAPED_RX.match(subj) or _POINTS_BACK_RX.search(subj):
+        return ''       # "a file with the above full", "full data as a": the shape of a file, not a name
     return subj
 
 
@@ -619,4 +682,4 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, c
             'offer_deck': False, 'deck_angle': None, 'subject': subject_name, 'sent': sent}
 
 
-__all__ = ['parse', 'answer', 'mail_safe', 'named_subject', 'clean_subject', 'follows_clarifier', 'user_journeys', 'match_journeys', 'open_journey_key', 'journey_workbook', 'CLARIFIER_LEAD']
+__all__ = ['parse', 'is_order', 'answer', 'mail_safe', 'named_subject', 'clean_subject', 'follows_clarifier', 'user_journeys', 'match_journeys', 'open_journey_key', 'journey_workbook', 'CLARIFIER_LEAD']

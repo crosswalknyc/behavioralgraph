@@ -462,13 +462,19 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                 return _answer(_dq.stored_raw(_st), 'offer_stands', route='repeat_guard', outcome='panel_offer', **common)
         except Exception as _fx:
             _faults.note('turn_gate.declined_quote', _fx)
-    n_rep = 0 if probe else repeat_count(text, history)
+    # An order to send the last thing by email is carried out each time it is
+    # given; it is never the same question again and never a read to hand
+    # back (2026-11-23, Armine: "Email me this file" after a second read drew
+    # the calm hold twice, then an earlier read's words, then an earlier
+    # "Sent ..." line). The repeat guard and the replays stand aside.
+    send_order = _is_send_order(text)
+    n_rep = 0 if (probe or send_order) else repeat_count(text, history)
     # ---- the same question again while its read runs or after it landed:
     # the same read, never a second copy. Before the guard and whatever the
     # count: a re-send a minute after "On it" is impatience, not a failed
     # reply, and the second copy is where the numbers diverged (2026-10-26,
     # Jay Patel: three reads of one BookTok question, three answers).
-    if not probe and (n_rep or _prior_was_read(deliv)) and not body.get('bind_subject'):
+    if not probe and not send_order and (n_rep or _prior_was_read(deliv)) and not body.get('bind_subject'):
         kept = same_read_again(text, history, uname, host)
         if kept:
             raw, route = kept
@@ -899,6 +905,16 @@ def _ack_line(negated, page, subj, history, text=''):
     if subj:
         ack += f" This is {subj} on its own."
     return ack
+
+
+def _is_send_order(text):
+    """A send-the-file order (prometheus.send_file.is_order); False on any fault."""
+    try:
+        from . import send_file as _sf
+        return bool(_sf.is_order(text))
+    except Exception as e:
+        _faults.note('turn_gate.send_order', e)
+        return False
 
 
 def _prior_was_read(deliv):

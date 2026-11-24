@@ -2914,13 +2914,20 @@ def ask(user, body, *, via='session'):
         _sm_raw, _sm_reason = None, ''
         try:
             from . import smarter as _sm
+            # an order to send the last thing by email is carried out each time it is given: never a read
+            # on record to hand back, never an earlier turn's words (2026-11-23, Armine)
+            try:
+                from . import send_file as _sf0
+                _send_order = bool(_sf0.is_order(text))
+            except Exception:
+                _send_order = False
             # the caller's own read on this question inside the day, in any
             # thread: the words that landed, never a fresh draw (2026-10-26)
             _rr_hit = None
             try:
                 from . import read_registry as _reg0
-                _rr_hit = _reg0.for_subject(host.recent_read(uname, text) if host.has('recent_read') else None,
-                                            body.get('bind_subject'))
+                _rr_hit = None if _send_order else _reg0.for_subject(host.recent_read(uname, text) if host.has('recent_read') else None,
+                                                                     body.get('bind_subject'))
             except Exception as _fx:
                 _faults.note('service.recent_read', _fx)
             # the words the reader already pushed back on in this thread are
@@ -2933,7 +2940,7 @@ def ask(user, body, *, via='session'):
             except Exception as _fx:
                 _faults.note('service.recent_read', _fx)
             # the gate's other path never hands back the words that did not land (Cara Dorfman 2026-11-10)
-            _tr = None if (_rr_hit or body.get('bind_subject') or body.get('_pm_alternative')) else _sm.thread_replay(text, history)
+            _tr = None if (_rr_hit or _send_order or body.get('bind_subject') or body.get('_pm_alternative')) else _sm.thread_replay(text, history)
             if _rr_hit and _rr_hit.get('status') == 'done':
                 from . import read_registry as _reg
                 _sm_raw, _sm_reason = _reg.replay_payload(_rr_hit), 'read_replay'

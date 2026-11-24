@@ -399,8 +399,9 @@ def _entry(case, live, baseline_entry=None):
             # the data floor (2026-11-18) now answers a window before 2021 ahead of every lane: a gate added since the
             # ask shipped, not a dead end
             verdict, reason = 'drift', f"{rec.get('route')}/{rec.get('outcome')} -> {lr}/{lo} (the data floor gate)"
-        elif lr == 'deck' and lo == 'declined' and re.search(r"no figures loaded|do not have a profile or a finished read", str(live.get('reply') or '')):
-            # the replay carries no page figures and an empty library, so a deck has nothing to draw from
+        elif lr == 'deck' and lo == 'declined' and re.search(r"no figures loaded|do not have a profile or a finished read|is not in the library yet", str(live.get('reply') or '')):
+            # the replay carries no page figures and an empty library, so a deck has nothing to draw from (the
+            # third phrasing is the lane's library miss for a deck ordered off an open view the replay does not carry)
             verdict, reason = 'unchecked', 'deck: needs the page figures or a library the replay does not carry'
     live_cls = _ic.class_of(live.get('route'), live.get('outcome'), live.get('surface') or live.get('door_surface'))
     rec_cls = rec.get('class') or _ic.class_of(rec.get('route'), rec.get('outcome'), case.get('surface'))

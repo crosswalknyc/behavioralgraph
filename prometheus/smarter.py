@@ -823,6 +823,14 @@ def thread_replay(text, history):
         q = _fold_q(text)
         if len(q) < 3:
             return None
+        # an order to send the last thing is carried out each time, never
+        # answered with an earlier turn's words (2026-11-23, Armine)
+        try:
+            from . import send_file as _sf
+            if _sf.is_order(text):
+                return None
+        except Exception:
+            pass
         turns = list(history or [])
         for i, turn in enumerate(turns):
             if str(turn.get('role') or '') != 'user':
