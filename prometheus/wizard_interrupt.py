@@ -79,6 +79,10 @@ def unrelated(body, text, draft, today=None):
             return False
         if _w.names_slots(t, step, today=today) or _w.parse_dates(t, today=today)[0]:
             return False
+        # the campaign links, or the word that they are coming, belong to the asset step wherever the walk is
+        # (Emi Hill 2026-11-24: 53 pasted URLs at the card are the asset list, never an unrelated message)
+        if _w.extract_urls(t) or _w.links_switch(t):
+            return False
         # a statement shaped like the step's answer belongs to the step; an ask (a question, an order for something
         # else) never does, however the step's own shape check reads it
         try:

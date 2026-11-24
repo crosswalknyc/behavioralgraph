@@ -7,6 +7,18 @@ pricing, persist, and the accept/decline door.
 
 User-facing copy is Prometheus first person. No em dashes. No synth,
 modeled, pipeline, or model names.
+
+Links at any step (Emi Hill, UTA, 2026-11-24): at the confirm card she
+said "actually i ahve the links" and then pasted 53 campaign URLs, and
+both times the card came back unchanged with "I'll find the assets". The
+card is a step like any other: "I have the links", "here are the links",
+"use these links" switches the asset step to links and asks for them (or
+takes them when they ride in the same message); a message that is mostly
+URLs is the asset list, stored deduped and verbatim from any platform,
+and the card shows "Using your N links". Links that arrive before the
+card are kept the same way and the open step is asked again. The price
+is never touched by any of this (``links_switch``, ``links_message``,
+``take_links``).
 """
 from __future__ import annotations
 
@@ -204,6 +216,20 @@ _ACCEPT_RE = re.compile(
 _PASTE_RE = re.compile(
     r"i(?:'|’)?ll paste|paste (?:the )?links|i have (?:the )?links|specific (?:campaign )?links",
     re.I)
+# "I have the links", "actually i ahve the links" (the typo as typed), "here are the links", "use these links",
+# "the links are below", "I'll send the urls": the reader has the campaign assets and the asset step switches to
+# links at whatever step is open, the confirm card included (Emi Hill 2026-11-24)
+_LINKS_SWITCH_RE = re.compile(
+    r"(?:\b(?:i|we)(?:\s+(?:actually\s+|do\s+|now\s+|already\s+)?(?:have|hvae|ahve|hve|haev|got|have\s+got)|(?:'|’)?ve\s+(?:actually\s+|now\s+|already\s+)?got)\s+"
+    r"(?:all\s+)?(?:the|some|my|our|a\s+few|a\s+list\s+of|these|those)?\s*(?:\d+\s+)?"
+    r"(?:campaign\s+|social\s+|post\s+|asset\s+)?(?:links?|urls?|posts?|assets?)\b"
+    r"|\bhere(?:'|’)?s?\s+(?:are\s+|is\s+)?(?:the|all|some|my|our|a\s+few|a\s+list\s+of)?\s*(?:\d+\s+)?(?:campaign\s+|social\s+|asset\s+)?(?:links?|urls?|posts?|assets?)\b"
+    r"|\b(?:use|take|include|add|run\s+with|go\s+with|work\s+from)\s+(?:these|those|my|our|the\s+following|the\s+attached|the\s+below|the)\s+(?:\d+\s+)?"
+    r"(?:campaign\s+|social\s+|asset\s+)?(?:links?|urls?|posts?|assets?)\b"
+    r"|\bthe\s+(?:links?|urls?)\s+(?:are|is)\s+(?:below|here|attached|as\s+follows|pasted)\b"
+    r"|\b(?:these|those|the\s+following)\s+are\s+the\s+(?:campaign\s+)?(?:links?|urls?|posts?|assets?)\b"
+    r"|\bi(?:'|’)?ll\s+(?:paste|send|share|drop|give\s+you)\s+(?:the|some|my|our|a\s+few)?\s*(?:links?|urls?)\b"
+    r"|\blinks?\s+(?:below|attached|incoming|coming)\b)", re.I)
 _FIND_RE = re.compile(
     r'find (?:the |every |all )?assets|you find|find them', re.I)
 _BANNED_USER = (
@@ -547,6 +573,64 @@ def extract_urls(text):
     return list(dict.fromkeys(out))
 
 
+def links_switch(text):
+    """The reader says they have the campaign links ("actually i have the
+    links", "here are the links", "use these links"): the asset step
+    switches to links. Never an ask to find them, never a question."""
+    t = ' '.join(str(text or '').split())
+    if not t or '?' in _URL_RE.sub(' ', t):
+        return False
+    bare = _URL_RE.sub(' ', t)
+    if _slots.has_no_links(bare) and not extract_urls(t):
+        return False      # "I don't have the links"
+    mine = re.search(r"\b(?:use|take|include|add|run\s+with|go\s+with|work\s+from)\s+(?:these|those|my|our|the\s+following|the\s+attached|the\s+below)\b",
+                     bare, re.I)
+    if not mine and (_FIND_RE.search(bare) or _slots.finds_assets(bare)):
+        return False      # "find the links yourself" ("use these links" is the reader's own, whatever the find words read)
+    return bool(_LINKS_SWITCH_RE.search(bare))
+
+
+def links_message(text):
+    """The URLs when the message is mostly URLs (a pasted asset list, any
+    platform, with a few words at most around it); [] otherwise."""
+    t = str(text or '')
+    urls = extract_urls(t)
+    if not urls:
+        return []
+    rest = _URL_RE.sub(' ', t)
+    words = re.findall(r"[A-Za-z][A-Za-z'’]*", rest)
+    if len(words) <= 12 or len(words) <= 2 * len(urls):
+        return urls
+    if len(' '.join(words)) <= 0.3 * len(' '.join(t.split())):
+        return urls
+    return []
+
+
+def take_links(draft, urls, text=''):
+    """The draft with these links as its campaign assets: asset mode
+    links, every URL kept verbatim, deduped against the ones already
+    held, in the order given. Nothing else on the draft moves; the price
+    stays what the control group makes it."""
+    d = dict(draft or empty_draft())
+    kept = list(dict.fromkeys(list(d.get('links') or []) + list(urls or [])))
+    d['links'] = kept
+    d['asset_mode'] = 'links'
+    d.pop('misses', None)
+    return d
+
+
+LINKS_SHOWN = 3     # up to this many links the card names them; past it the card counts them
+
+
+def links_line(draft):
+    """The card's asset line when the reader gave the links: the links
+    themselves when there are a few, the count when there are many."""
+    links = list((draft or {}).get('links') or [])
+    n = len(links)
+    head = f"Using your {n} link{'' if n == 1 else 's'}"
+    return f"{head}: {', '.join(links)}" if 0 < n <= LINKS_SHOWN else head
+
+
 def is_chip(text):
     return _low(text) in {_low(c) for c in CHIP_ALIASES}
 
@@ -666,9 +750,10 @@ _STEP_ANSWER_PATTERNS = {
     STEP_ATTR: (_ACCEPT_RE, re.compile(r'\bdifferent\b', re.I), _YES_RE),
     # "find the campaign asset", "find it", "I don't have one", "not sure"
     # are the assets step's own answers (2026-11-11)
-    STEP_ASSETS: (_PASTE_RE, _FIND_RE, _YES_RE, _NO_RE, _slots._FIND_RX, _slots._NO_LINKS_RX),
-    STEP_LINKS: (_slots._FIND_RX, _slots._NO_LINKS_RX),
-    STEP_CHARGE: (_ACCEPT_RE, _DECLINE_RE),
+    STEP_ASSETS: (_PASTE_RE, _FIND_RE, _YES_RE, _NO_RE, _slots._FIND_RX, _slots._NO_LINKS_RX, _LINKS_SWITCH_RE),
+    STEP_LINKS: (_slots._FIND_RX, _slots._NO_LINKS_RX, _LINKS_SWITCH_RE),
+    # the card takes the links too: "I have the links", a pasted list, "find the assets" (2026-11-24)
+    STEP_CHARGE: (_ACCEPT_RE, _DECLINE_RE, _LINKS_SWITCH_RE, _URL_RE, _FIND_RE),
     STEP_CONTROL: (_YES_RE, _NO_RE, _CONTROL_YES_RE, _CONTROL_NO_RE),
 }
 
@@ -780,8 +865,8 @@ def loose_statement(text, draft, today=None):
     that did not answer the step (asked again in other words, then the
     step's default); nothing in it is stored as a name."""
     t = str(text or '').strip()
-    if not t or extract_urls(t):
-        return False
+    if not t or extract_urls(t) or links_switch(t):
+        return False      # links, or the word that they are coming, answer the asset step wherever the walk is (2026-11-24)
     d = dict(draft or empty_draft())
     step = d.get('step') or next_step(d)
     if names_slots(t, step, today=today) or _shaped_answer(t, d, today=today):
@@ -996,6 +1081,10 @@ def replay_history(history, today=None):
             if not err:
                 d2.pop('_named', None)
                 d = d2
+            elif isinstance(d2, dict) and d2.get('links') and list(d2.get('links') or []) != list(d.get('links') or []):
+                # links pasted while another step waited were kept for the assets and the step asked again: the
+                # replay keeps them the same way (2026-11-24)
+                d['links'], d['asset_mode'] = list(d2['links']), 'links'
             pending = None
             saw = True
     if pending:
@@ -1609,8 +1698,8 @@ def recap_lines(draft):
     d = draft or {}
     control = bool(d.get('control_group'))
     usd = price_usd(control)
-    assets = ("I'll find the assets" if d.get('asset_mode') != 'links'
-              else ('Links: ' + ', '.join(d.get('links') or [])))
+    # the reader's own links are counted, never listed back (53 of them on 2026-11-24); the draft holds every one
+    assets = ("I'll find the assets" if d.get('asset_mode') != 'links' or not d.get('links') else links_line(d))
     lines = [
         f"{_cased(d.get('talent'))}",
         f"{_cased(d.get('campaign'))}",
@@ -1845,14 +1934,17 @@ def _draft_from_recap(text):
     as_, ae = _range(attr)
     if not (cs and ce and as_ and ae):
         return None
-    links_line = next((ln for ln in body if ln.startswith('Links:')), '')
-    links = [u.strip() for u in links_line.split(':', 1)[1].split(', ') if u.strip()] if links_line else []
+    links_ln = next((ln for ln in body if ln.startswith('Links:') or re.match(r"Using your \d+ links?:", ln)), '')
+    links = [u.strip() for u in links_ln.split(':', 1)[1].split(', ') if u.strip()] if links_ln else []
+    # a card with many links counts them ("Using your 53 links", 2026-11-24): the mode is known from the line, the
+    # list itself from the thread's own turns (quoted_draft replays them) or the store
+    counted = any(re.match(r"Using your \d+ links?$", ln) for ln in body)
     d = empty_draft()
     d.update({
         'talent': talent, 'campaign': campaign, 'campaign_start': cs, 'campaign_end': ce,
         'attr_start': as_, 'attr_end': ae, 'attr_ok': True,
         'control_group': ctrl.split(':', 1)[1].strip().lower().startswith('y'),
-        'asset_mode': 'links' if links else 'find', 'links': links,
+        'asset_mode': 'links' if (links or counted) else 'find', 'links': links,
         'brand_partner': _brand_from_campaign(campaign, talent), 'step': STEP_CHARGE,
     })
     return _price_draft(d)
@@ -1899,8 +1991,10 @@ def quoted_draft(history, today=None, look=12):
     if isinstance(played, dict) and all(
             str(played.get(k) or '').strip().lower() == str(seen.get(k) or '').strip().lower()
             for k in ('talent', 'campaign', 'campaign_start', 'campaign_end', 'attr_start', 'attr_end')):
+        # the links themselves come from the thread's own turns when the card only counted them (2026-11-24)
+        links = list(seen['links']) or (list(played.get('links') or []) if seen['asset_mode'] == 'links' else [])
         played = dict(played, step=STEP_CHARGE, attr_ok=True, control_group=seen['control_group'],
-                      asset_mode=seen['asset_mode'], links=list(seen['links']))
+                      asset_mode=seen['asset_mode'], links=links)
         played.pop('misses', None)
         return _price_draft(played)
     return seen
@@ -2176,6 +2270,33 @@ def apply_answer(draft, text, today=None):
     except Exception:
         pass
 
+    # The campaign links, at whatever step is open (Emi Hill 2026-11-24: "actually i ahve the links" and then 53
+    # pasted URLs at the confirm card both drew the same card back with "I'll find the assets"). A message that is
+    # mostly URLs is the asset list: kept verbatim and deduped, asset mode links. "I have the links" with none in
+    # the message switches the asset step to links; the links are asked for when the walk reaches them (at the
+    # card, right away). Before the assets step the open step is asked again with the links kept. The price never
+    # moves here: it is the control group's alone.
+    _pasted = links_message(t)
+    _switch = links_switch(t)
+    if _pasted or (_switch and step not in (STEP_ASSETS, STEP_LINKS)):
+        d = take_links(d, _pasted, t) if _pasted else dict(d, asset_mode='links', links=list(d.get('links') or []))
+        d.pop('misses', None)
+        if step in (STEP_TALENT, STEP_CAMPAIGN, STEP_DATES, STEP_ATTR, STEP_ATTR_CUSTOM, STEP_CONTROL):
+            # the step that was open is still open; the links ride along to the card
+            d['step'] = step
+            if _pasted:
+                return d, LINK_KEPT_LINE + step_prompt(d, today=today)[0]
+            return d, None
+        d = _price_draft(d)
+        d['step'] = next_step(d)        # the card with "Using your N links", or the ask for them
+        return d, None
+    if step == STEP_CHARGE and not _pasted and (_FIND_RE.search(t) or _slots.finds_assets(t)) and not extract_urls(t):
+        # the other way at the card: "find the assets yourself" after links were given
+        d['asset_mode'], d['links'] = 'find', []
+        d.pop('misses', None)
+        d = _price_draft(d)
+        d['step'] = next_step(d)
+        return d, None
     if step in (STEP_TALENT, STEP_CAMPAIGN, STEP_DATES):
         # a link is never a name (2026-11-12: on current code a YouTube
         # link pasted at the talent step became the talent; on Nov 5 one
