@@ -434,9 +434,16 @@ def _pm_kpi_view(body_or_ctx):
 def _pm_kpi_definition_for(text, body):
     """The glossary entry a definition-shaped ask names, or None."""
     try:
-        if not _kpi.is_definition_ask(text):
-            return None
         vid, labels = _C._pm_kpi_view(body)
+        if not _kpi.is_definition_ask(text, vid):
+            return None
+        try:
+            # what the Crosswalk sample is has its own answer, the sample lane below (Tania Nasr 2026-10-20)
+            from prometheus import guards as _gd
+            if _gd.is_sample_definition_ask(text) or _gd.is_sample_size_ask(text):
+                return None
+        except Exception:
+            pass
         return _kpi.find_definition(text, vid, labels)
     except Exception:
         return None

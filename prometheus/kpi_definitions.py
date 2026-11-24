@@ -145,6 +145,10 @@ DEFINITIONS = [
         'aliases': ('category share', 'share of category',
                     'share within the category', 'share of the category',
                     'category split'),
+        # the bare word on a profile page is this column ("what is share", "how do I read share vs penetration",
+        # Armine 2026-11-23: five such asks took 26 to 40 s through the model and one was read as a journey row);
+        # on any other view the word is that view's own (a journey table's share of its base)
+        'short_aliases': ('share', 'shares', 'the share', 'share column', 'share number', 'share figure'),
         'definition': (
             "Share of category is each brand's slice of all the activity "
             "this audience showed in that category. The slices in one "
@@ -471,7 +475,24 @@ _DEFINITION_ASK_RES = (
     re.compile(r"\b(?:define|definition\s+of|what\s+counts\s+as|"
                r"what\s+qualifies\s+as|how\s+do\s+you\s+define)\b", re.I),
     re.compile(r"\bwhat\s+(?:goes|went)\s+into\b", re.I),
+    # "how do I read share vs penetration", "what metric is penetration vs share", "explain share vs penetration",
+    # "the difference between index and penetration" (2026-11-23)
+    re.compile(r"\bhow\s+(?:do|should|can|would)\s+(?:i|we|you|one)\s+(?:read|interpret|understand|think\s+about)\b", re.I),
+    re.compile(r"\bwhat\s+metric\s+is\b", re.I),
+    re.compile(r"\b(?:explain|walk\s+me\s+through|clarify)\b[^.?!]{0,40}?\b(?:vs\.?|versus)\b", re.I),
+    re.compile(r"\bdifference\s+between\b", re.I),
 )
+
+# the views where a bare word like "share" is the profile column; elsewhere the word is the view's own
+PROFILE_VIEWS = frozenset({'', 'profileIQ', 'profile', 'compareIQ'})
+
+
+def _aliases_for(d, view_id=''):
+    """An entry's aliases on this view: the full aliases always, the short ones on a profile view only."""
+    out = tuple(d.get('aliases') or ())
+    if d.get('short_aliases') and str(view_id or '') in PROFILE_VIEWS:
+        out = out + tuple(d['short_aliases'])
+    return out
 
 _RECONCILE_ASK_RES = (
     re.compile(r"\bwhy\s+(?:is|was|does|did|are|were)\b.{0,80}?"
@@ -500,7 +521,7 @@ _WHAT_IS_FILLER = {'what', 'is', 'are', 'an', 'a', 'the', 'here', 'this',
                    'again', 'please', 'actually', 'crosswalk', 'prometheus'}
 
 
-def _bare_what_is(text):
+def _bare_what_is(text, view_id=''):
     """'what is penetration?' style: the ask is a what-is whose
     remainder, minus a glossary alias and filler, is empty. 'what is
     the index for nike' keeps 'nike' and is a data ask, not this."""
@@ -509,7 +530,7 @@ def _bare_what_is(text):
         return False
     nt = _norm(m.group(1))
     for d in DEFINITIONS:
-        for alias in d['aliases']:
+        for alias in _aliases_for(d, view_id):
             if _alias_in(alias, nt):
                 rest = re.sub(r'(?<![a-z0-9])' + re.escape(_norm(alias))
                               + r'(?![a-z0-9])', ' ', nt)
@@ -519,7 +540,7 @@ def _bare_what_is(text):
     return False
 
 
-def is_definition_ask(text):
+def is_definition_ask(text, view_id=''):
     """A short, single definition question. A message carrying several
     questions, or a long one, is an analysis ask even when one clause
     says "define" (2026-10-06, Emmet: "identify brand partnerships that
@@ -532,7 +553,7 @@ def is_definition_ask(text):
         return False
     if any(rx.search(t) for rx in _DEFINITION_ASK_RES):
         return True
-    return _bare_what_is(t)
+    return _bare_what_is(t, view_id)
 
 
 def is_reconcile_ask(text):
@@ -570,14 +591,14 @@ def find_definition(text, view_id='', on_screen_labels=None):
     # ("define X", "what does X mean"), never elsewhere in the message
     cue_sent = None
     for sent in re.split(r'(?<=[.!?])\s+', str(text or '')):
-        if any(rx.search(sent) for rx in _DEFINITION_ASK_RES) or _bare_what_is(sent):
+        if any(rx.search(sent) for rx in _DEFINITION_ASK_RES) or _bare_what_is(sent, view_id):
             cue_sent = _norm(sent)
             break
     if cue_sent is not None:
         nt = cue_sent
     best = None
     for d in DEFINITIONS:
-        for alias in d['aliases']:
+        for alias in _aliases_for(d, view_id):
             if _alias_in(alias, nt):
                 score = (len(_norm(alias)),
                          1 if (d['views'] == '*' or view_id in d['views'])
@@ -597,6 +618,74 @@ def find_definition(text, view_id='', on_screen_labels=None):
     # which_figure_options, which asks with the on-screen labels as
     # chips instead of guessing one.
     return None
+
+
+def find_definitions(text, view_id='', limit=3):
+    """Every glossary entry the ask names, in the order the words name
+    them ("how do I read share vs penetration" names two). Empty when
+    the ask names none, or quotes a label the glossary does not know.
+    The longest alias claims its words first, so "share of the audience"
+    is penetration's before the bare "share" is the column's."""
+    first = find_definition(text, view_id)
+    if not first:
+        return []
+    pairs = []
+    for d in DEFINITIONS:
+        for alias in _aliases_for(d, view_id):
+            a = _norm(alias)
+            if a:
+                pairs.append((len(a), a, d))
+    pairs.sort(key=lambda x: -x[0])
+    work = _norm(text)
+    hits = []
+    for _, a, d in pairs:
+        rx = re.compile(r'(?<![a-z0-9])' + re.escape(a) + r'(?![a-z0-9])')
+        m = rx.search(work)
+        if m:
+            hits.append((m.start(), d))
+            work = rx.sub(lambda mm: ' ' * len(mm.group(0)), work)   # blank the words, keep the positions
+    hits.sort(key=lambda x: x[0])
+    out, seen = [], set()
+    for _, d in hits:
+        if d['id'] not in seen:
+            seen.add(d['id'])
+            out.append(d)
+    if first['id'] not in seen:
+        out.insert(0, first)
+    return out[:limit]
+
+
+def definitions_reply(entries, view_id=''):
+    """The finished answer for one or more glossary entries."""
+    parts = [definition_reply(d, view_id) for d in (entries or []) if d]
+    return '\n\n'.join(p for p in parts if p)
+
+
+def standing_answer(text, ctx=None):
+    """The glossary's answer to a plain definition question, before the
+    Reader and the lanes: {'success', 'action', 'reply', ...} or None.
+    View-aware (a bare 'share' is the profile column only on a profile
+    view); a quoted label the glossary does not know is left to the
+    drill-down; never a read, never a model call (2026-11-23)."""
+    try:
+        view_id = str((((ctx or {}).get('view_context') or {}).get('view_id')) or '') if isinstance(ctx, dict) else ''
+    except Exception:
+        view_id = ''
+    if not is_definition_ask(text, view_id):
+        return None
+    try:
+        # a question about what the Crosswalk sample itself is has the one product fact about the ten million
+        # (its own lane, Tania Nasr 2026-10-20); never the audience-size entry
+        from . import guards as _gd
+        if _gd.is_sample_definition_ask(text) or _gd.is_sample_size_ask(text):
+            return None
+    except Exception:
+        pass
+    entries = find_definitions(text, view_id)
+    if not entries:
+        return None
+    return {'success': True, 'action': 'answer', 'reply': definitions_reply(entries, view_id), 'followups': [],
+            'offer_deck': False, 'deck_angle': None, 'kpi_definition': [d['id'] for d in entries]}
 
 
 _DEICTIC_RX = re.compile(r'\b(?:this|that|it|these|those)\b', re.I)

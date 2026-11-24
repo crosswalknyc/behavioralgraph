@@ -337,9 +337,16 @@ def _pm_analyze_core(user, body, text, history):
     if _kpi_defn:
         _C._pm_ask_hint(route='kpi_definition', outcome='answered',
                      subject=_kpi_defn['label'])
+        # every term the ask names, in order ("share vs penetration" is two entries, 2026-11-23)
+        try:
+            _kpi_vid = _C._pm_kpi_view(body)[0]
+            _kpi_entries = _kpi.find_definitions(text, _kpi_vid) or [_kpi_defn]
+            _kpi_reply = _kpi.definitions_reply(_kpi_entries, _kpi_vid) or _kpi.definition_reply(_kpi_defn)
+        except Exception:
+            _kpi_reply = _kpi.definition_reply(_kpi_defn)
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': _kpi.definition_reply(_kpi_defn), 'followups': [],
+            'reply': _kpi_reply, 'followups': [],
             'offer_deck': False, 'deck_angle': None})
     _wf = _kpi.which_figure_payload(text, _C._pm_kpi_view(body)[1])  # deictic: ask which figure
     if _wf:

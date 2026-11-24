@@ -712,7 +712,8 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             view_id = str((vc or {}).get('view_id') or '')
             d = _kd.find_definition(text, view_id)
             if d:
-                raw = {'success': True, 'action': 'answer', 'reply': _kd.definition_reply(d, view_id),
+                entries = _kd.find_definitions(text, view_id) or [d]     # "share vs penetration" names two (2026-11-23)
+                raw = {'success': True, 'action': 'answer', 'reply': _kd.definitions_reply(entries, view_id) or _kd.definition_reply(d, view_id),
                        'followups': [], 'offer_deck': False, 'deck_angle': None}
                 return _answer(raw, 'kpi_definition', route='kpi_definition', outcome='answered', **common)
         except Exception as e:

@@ -3709,6 +3709,23 @@ def _standing_answer(text, user=None, uname='', ctx=None, correction=False, body
     except Exception as _fx:
         _faults.note('service.how_computed', _fx)
     try:
+        # A glossary term asked plainly ("what is share", "how do I read share vs penetration", "what metric is
+        # penetration vs share") is the house definition, here, before the Reader and the lanes (2026-11-23,
+        # Armine: five such asks took 26 to 40 s through the model, and "what does share mean" was answered as a
+        # journey row). View-aware: a bare "share" is the profile column only on a profile view; a quoted label the
+        # glossary does not know stays with the drill-down (prometheus.kpi_definitions.standing_answer).
+        from . import kpi_definitions as _kd
+        _kd_raw = _kd.standing_answer(text, ctx) if _u_claims(body, 'definition', lambda: _kd.is_definition_ask(text)) else None
+        if _kd_raw:
+            try:
+                host.ask_hint(route='kpi_definition', outcome='answered',
+                              subject=', '.join(_kd_raw.get('kpi_definition') or []) or None)
+            except Exception:
+                pass
+            return _kd_raw
+    except Exception as _fx:
+        _faults.note('service.kpi_definition', _fx)
+    try:
         from . import guards as _g
         if _u_claims(body, 'provenance', lambda: _g.is_provenance_question(text)):
             try:
