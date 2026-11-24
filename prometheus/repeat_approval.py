@@ -737,6 +737,9 @@ def records_for(h):
         return resp.json() or {}
 
     def recent_runs():
+        early = __import__('prometheus.brief_speed', fromlist=['prefetched']).prefetched('engine_list')
+        if early is not None:           # the approve path started this read before the spec build (brief_speed, 2026-11-24)
+            return early.get(_ENGINE_TIMEOUT_S + 1)
         resp = _engine_get('/synth/list', {'limit': _ENGINE_LIST_LIMIT})
         if resp.status_code != 200:
             raise RuntimeError(f'engine list {resp.status_code}')

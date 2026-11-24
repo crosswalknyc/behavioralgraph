@@ -398,7 +398,7 @@ def _pm_approve_core(user, body):
                 'success': False, 'guidance': True,
                 'error': _uv['ask'], 'followups': []})
 
-    _t_spec = time.monotonic()
+    _t_spec = time.monotonic(); __import__('prometheus.brief_speed', fromlist=['prefetch']).prefetch('engine_list', lambda: __import__('prometheus.repeat_approval', fromlist=['records_for']).records_for(_H).recent_runs())   # the repeat gate's engine list, read while the spec is built (brief_speed, 2026-11-24)
     # the question this build was started from rides the brief; read here and taken off, never to the engine
     _origin_keep = _question_first.take_origin(draft)
     _df_stop = __import__('prometheus.data_floor', fromlist=['gate']).approve_stop(draft)   # a brief whose window still starts before the data floor is not run or charged (Jenna 2026-11-18)

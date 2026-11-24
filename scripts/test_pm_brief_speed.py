@@ -33,7 +33,11 @@ Pins, hermetically (no model, no store, no mail):
    credit charge runs off the person's wait on its own thread (inline in
    a test process), the response's balance is the pre-charge balance less
    the price, users.json is confirmed with S3 once per request, the
-   approve gates and tail carry stage marks.
+   approve gates and tail carry stage marks;
+7. the repeat gate's engine list (400 status documents, 1 MB over HTTP)
+   is read while the spec is built: started by the approve path, taken
+   once by the gate, its own error handed back so fail-open is unchanged,
+   inline in a test process, never across requests.
 """
 from __future__ import annotations
 
@@ -264,6 +268,63 @@ def main():
           'users_memo_hit(c_etag)' in app and '_bsp_users.users_memo_mark(etag)' in app and app.index('users_memo_hit(c_etag)') < app.index('IfNoneMatch=c_etag'))
     it2 = (WEB / 'prometheus' / 'interpret_turn.py').read_text(encoding='utf-8')
     check('the brief tail is marked before the auto-start order', "'at_auto_start'" in it2)
+
+    print("7. the repeat gate's engine list, read while the spec is built")
+    check('no request, no early read', B.prefetch('engine_list', lambda: [1]) is None and B.prefetched('engine_list') is None)
+    g3 = G2()
+    B._stash = lambda: g3
+    try:
+        p = B.prefetch('engine_list', lambda: [{'run_id': 'a'}])
+        check('in a test process the read runs inline and is handed back once, as the read\'s own answer',
+              p is not None and B.prefetched('engine_list') is p and p.get(1) == [{'run_id': 'a'}] and B.prefetched('engine_list') is None)
+
+        def _boom():
+            raise RuntimeError('engine list 503')
+        pe = B.prefetch('engine_list', _boom)
+        try:
+            pe.get(1); raised = ''
+        except RuntimeError as e:
+            raised = str(e)
+        check("a read that failed raises its own error from get(), so the gate's fail-open rule sees what it always saw", raised == 'engine list 503')
+        check('two labels never cross', B.prefetch('other', lambda: 2) is not None and B.prefetched('engine_list') is pe and B.prefetched('other').get(1) == 2)
+    finally:
+        B._stash = _orig_stash2
+    os.environ.pop('REGRESSION_TEST_MODE', None)
+    try:
+        hold = threading.Event()
+        pl = B.Prefetch(lambda: hold.wait(3) and 'late', 'slow')
+        try:
+            pl.get(0.2); to = False
+        except TimeoutError:
+            to = True
+        hold.set()
+        check('live, the read runs on its own thread; a get() past its wait raises a timeout (the gate reads it as the engine down) and the value lands after', to and pl.get(2) == 'late')
+    finally:
+        os.environ['REGRESSION_TEST_MODE'] = '1'
+    from prometheus import repeat_approval as RA
+
+    class H4:
+        SYNTH_QUEUE_URL, SYNTH_QUEUE_SECRET, S3_BUCKET, s3_client = 'http://127.0.0.1:9', 's', 'b', None
+    g4 = G2()
+    B._stash = lambda: g4
+    try:
+        B.prefetch('engine_list', lambda: [{'run_id': 'early'}])
+        recs = RA.records_for(H4)
+        check('the gate\'s recent_runs takes the early read when the request holds one', recs.recent_runs() == [{'run_id': 'early'}])
+        try:
+            recs.recent_runs(); fell = ''
+        except Exception as e:
+            fell = type(e).__name__
+        check('with none left it reads from the engine as before (here an unreachable one)', fell != '')
+        B.prefetch('engine_list', lambda: (_ for _ in ()).throw(RuntimeError('engine list 500')))
+        eng = RA._Engine(RA.records_for(H4))
+        check('an early read that failed leaves the gate fail-open exactly as before: an empty list and the engine marked down', eng.recent() == [] and eng.down is True)
+    finally:
+        B._stash = _orig_stash2
+    check('the approve path starts the read before the spec build and the gate runs after it',
+          "prefetch('engine_list'" in ar and ar.index("prefetch('engine_list'") < ar.index("fromlist=['Gate']).Gate(") and ar.index('_t_spec = time.monotonic()') <= ar.index("prefetch('engine_list'"))
+    ra_src = (WEB / 'prometheus' / 'repeat_approval.py').read_text(encoding='utf-8')
+    check('recent_runs asks for the early read first and keeps its fetch', ra_src.index("prefetched('engine_list')") < ra_src.index("_engine_get('/synth/list'"))
 
     print('5. the wiring')
     it = (WEB / 'prometheus' / 'interpret_turn.py').read_text(encoding='utf-8')

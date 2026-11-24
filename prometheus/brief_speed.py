@@ -329,6 +329,64 @@ def users_memo_mark(etag) -> None:
             pass
 
 
+# ------------------------------------------------------------ a read started early
+# The repeat-approval gate asks the engine for its recent runs (400 status documents, 1 MB over HTTP
+# from the web host to the build server) after the spec is built. The list depends on nothing in the
+# spec, so the approve path starts the read before the spec build and the gate takes the answer when
+# it gets there. The answer, or the read's own error, is handed back exactly as if the read had run in
+# place, so the gate's fail-open rule is unchanged. One request, one use; a thread with no request
+# (the charge) never sees another request's read. Inline under REGRESSION_TEST_MODE.
+class Prefetch:
+    def __init__(self, fn, label=''):
+        self.label, self._r, self._e, self.done = label, None, None, threading.Event()
+
+        def _run():
+            try:
+                self._r = fn()
+            except BaseException as e:      # handed back from get(), never lost
+                self._e = e
+            finally:
+                self.done.set()
+        if os.environ.get('REGRESSION_TEST_MODE') == '1' or os.environ.get('PM_PREFETCH_INLINE') == '1':
+            _run()
+        else:
+            threading.Thread(target=_run, daemon=True, name=f'pm-prefetch-{label}').start()
+
+    def get(self, timeout=None):
+        if not self.done.wait(timeout):
+            raise TimeoutError(f'{self.label} read still running after {timeout}s')
+        if self._e is not None:
+            raise self._e
+        return self._r
+
+
+def prefetch(label, fn):
+    """Start ``fn`` now for this request; None when there is no request to hold it."""
+    g = _stash()
+    if g is None:
+        return None
+    try:
+        p = Prefetch(fn, label)
+        setattr(g, f'_pm_prefetch_{label}', p)
+        return p
+    except Exception:
+        return None
+
+
+def prefetched(label):
+    """The read this request started under ``label``, taken once; None when none was started."""
+    g = _stash()
+    if g is None:
+        return None
+    p = getattr(g, f'_pm_prefetch_{label}', None)
+    if p is not None:
+        try:
+            delattr(g, f'_pm_prefetch_{label}')
+        except Exception:
+            pass
+    return p
+
+
 def say_in_hand(spec_draft) -> None:
     """The live line the moment the model returns: the draft is in hand, the checks run next."""
     try:
@@ -351,4 +409,4 @@ def say_pricing(go=True) -> None:
 
 
 __all__ = ['enabled', 'is_multi', 'merge', 'draft', 'identity_prestart', 'hold_prestart', 'identity_verify', 'bounded', 'say_in_hand', 'say_pricing', 'charge_later', 'remaining_after', 'users_memo_hit', 'users_memo_mark',
-           'SHAPE_KEYS', 'ENV', 'IDENTITY_BUDGET_ENV']
+           'Prefetch', 'prefetch', 'prefetched', 'SHAPE_KEYS', 'ENV', 'IDENTITY_BUDGET_ENV']
