@@ -48,8 +48,10 @@ _HOST_ATTR = re.compile(r'(?<![\w.])_C\.(?=\w)')
 # 3 (the clarify and approve routes); 8,209 after move 4 (the read side:
 # core_read.py is gone); 5,403 after move 5 (the analyze side: core_analyze.py
 # is gone, and with it the last stage 5 core); 3,862 after move 6 (intake,
-# the intercepts, the feedback bank and the access gates).
-LEGACY_CEILING = 3_900
+# the intercepts, the feedback bank and the access gates); 2,037 after move 7
+# (files, product orders, decks, the correction page): chat.py is the shim,
+# its imports, the markers, _EXPORTS and the re-imports; no code of its own.
+LEGACY_CEILING = 2_080
 
 
 def legacy_dir() -> str:

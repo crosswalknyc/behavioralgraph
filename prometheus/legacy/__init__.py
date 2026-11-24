@@ -12,6 +12,24 @@ service) binds a namespace that provides the same names.
 
 Nothing here knows app.py's spelling of anything; the names are
 whatever the moved code already used.
+
+Since rebuild stage 7 (2026-11-23) ``chat.py`` is a shim: its imports, one
+marker line per block that moved out (``# <<extracted: <module> block N>>``),
+``_EXPORTS``, and the tail re-imports that bind every moved name back into
+its namespace. The code lives in ``prometheus/<family>.py`` modules
+(library_match, thread_history, model_chain, brief_prompts, brief_draft,
+answer_gate, interpret_turn, spec_from_draft, incidence_check,
+clarify_route, approve_route, generated_read, read_jobs, generation_base,
+subject_verify, ask_memory, page_analysis, page_context, screen_bind,
+base_clarify, intake_turn, ask_intercepts, feedback_bank, access_gates,
+file_replies, product_orders, deck_route, date_snapshot, correction_page)
+beside the earlier families still here (threads, jobs, land, notify, watch,
+rankers). Each reads this namespace through ``C`` at call time, so a
+patch of ``chat.<name>`` reaches every caller. The suites read the legacy
+text through ``scripts/_pm_legacy_view.legacy_view()``, which splices the
+blocks back at their markers; a change to a moved function goes in its
+module, never here. The tool that moves a family is
+``scripts/extract_legacy_core.py``.
 """
 from prometheus.host import HostNotBound
 

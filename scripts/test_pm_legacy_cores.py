@@ -47,7 +47,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 import _pm_legacy_view as LV  # noqa: E402
 
 LEGACY = os.path.join(_WEB, 'prometheus', 'legacy')
-CHAT_RATCHET = 3_900           # chat.py on its own (13,625 after stage 5; 12,777 after stage 7's first move; 10,839 after move 2; 7,838 after move 3; 6,488 after move 4; 5,403 after move 5; 3,862 after move 6)
+CHAT_RATCHET = 2_080           # chat.py on its own (13,625 after stage 5; 12,777 after stage 7's first move; 10,839 after move 2; 7,838 after move 3; 6,488 after move 4; 5,403 after move 5; 3,862 after move 6; 2,037 after move 7, the shim)
 _MARK = re.compile(r'^# <<extracted: ([A-Za-z0-9_.]+) block (\d+)>>$', re.M)
 
 
@@ -126,6 +126,13 @@ class TheModulesCarryTheirBlocks(unittest.TestCase):
                         self.assertEqual(view.count(f'\ndef {st.name}('), 1, st.name)
         # the re-imports at the tail are the moves', not the view's
         self.assertNotIn('from prometheus.library_match import', view)
+
+    def test_chat_py_is_the_shim(self):
+        """chat.py holds no function of its own any more: its imports, the markers, _EXPORTS
+        and the re-imports (move 7, 2026-11-23). A def added here is a def in the wrong file."""
+        tree = ast.parse(LV.chat_py_text())
+        defs = [st.name for st in tree.body if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+        self.assertEqual(defs, [], f'chat.py defines {defs}; new legacy code goes in its prometheus/ module')
 
     def test_the_ratchets_moved_down(self):
         n = LV.chat_py_lines()
