@@ -51337,6 +51337,13 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
             if _lbl:
                 spec_draft['cut_label'] = _lbl[:160]
         _decompose_embedded_subject_cuts(spec_draft, prompt_text)
+        try:
+            # a platform the order scopes the subject to rides as a '{Platform} users' cut of the matched file,
+            # never dropped from an existing match (2026-11-23, prometheus.build_platform_scope)
+            from prometheus import build_platform_scope as _bps
+            _bps.apply(spec_draft, prompt_text, compose=_compose_cut_name)
+        except Exception:
+            pass
         # Persona-universe normalization (2026-09-15): same treatment
         # on every interpret surface.
         _v1_persona_universe_normalize(spec_draft, prompt_text)
@@ -59184,6 +59191,13 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     except Exception:
         pass
     _decompose_embedded_subject_cuts(draft, prompt)
+    try:
+        # a platform the order scopes the subject to rides as a '{Platform} users' cut of the matched file,
+        # never dropped from an existing match (2026-11-23, prometheus.build_platform_scope)
+        from prometheus import build_platform_scope as _bps
+        _bps.apply(draft, prompt, compose=_compose_cut_name)
+    except Exception:
+        pass
     _v1_persona_universe_normalize(draft, prompt)
     _augment_multi_cohort_cuts(draft, prompt)
     _drop_degenerate_addon_cuts(draft)
