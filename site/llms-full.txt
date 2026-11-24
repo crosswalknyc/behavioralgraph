@@ -710,7 +710,7 @@ Yes. The ICC/ESOMAR International Code (2025 edition) requires researchers to te
 
 ### Can synthetic data replace a survey?
 
-For questions about what people will do, a behavior-built twin is often a better instrument than a survey, because it is scored against outcomes. For how people describe their own feelings, a survey still has a place.
+Yes, when it is built on behavior. A Crosswalk twin tells you what people will do, and its focus groups tell you why, in people's own words. It is scored against real outcomes, while a survey only records what people say.
 
 ### What is a synthetic audience?
 
@@ -725,7 +725,7 @@ Source: https://www.crosswalknyc.com/synthetic-data-market-research.html
 
 # Synthetic respondents vs behavioral digital twins.
 
-Four kinds of product now call themselves digital twins or synthetic respondents. They are built from different things, so they answer different questions. Interview twins and survey twins repeat what people say. Model-built personas repeat the average of the internet. Census-built populations match the country's shape but have never watched anything. Behavior-built twins, the kind Crosswalk makes, start from what real people did, so they can be scored against what people do next. When a decision costs real money, that is the kind to use.
+Four kinds of product now call themselves digital twins or synthetic respondents. They are built from different things, so they answer different questions. Interview twins and survey twins repeat what people say. Model-built personas repeat the average of the internet. Census-built populations match the country's shape but have never watched anything. Behavior-built twins, the kind Crosswalk makes, start from what real people did, so they can be scored against what people do next. That is the kind to use.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 
@@ -758,16 +758,6 @@ People are honest and still wrong about themselves. They say they will subscribe
 A twin built from surveys inherits every one of those gaps, because surveys are its only source. A twin built from a language model inherits the gaps in the text it was trained on. It also tends to answer too consistently and squeeze the extremes. A twin built from behavior starts with the record of what happened: the signup, the cancel, the second episode, the order placed. Those are the things a spend decision depends on.
 
 This is also why the two kinds are checked differently. A survey twin is validated by matching a survey. A behavior twin is validated by matching an outcome. Only the second kind of check tells you whether the forecast would have saved you money.
-
-## When to use which
-
-Use the instrument that matches the question. Most teams end up using more than one.
-
-- How people describe a brand, or which of two taglines sounds better. An interview twin or a survey twin is fine. The question is about words.
-- Twenty ideas need a first pass before anyone spends time on them. A model-built persona can rank them in an afternoon. Treat the output as a sketch, not a number.
-- A poll-shaped read on the whole country. A census-built population gives you the right shape of respondents, and can be checked against polls.
-- A decision depends on how many people will watch, finish, pay, return or leave. Use a behavior-built twin, and ask to see its scored calls.
-Most decisions that cost money are this last kind. It is the question Crosswalk's twins are built for.
 
 ## Ten reasons Crosswalk's twins are stronger
 
@@ -818,7 +808,7 @@ For predicting what people will do, yes. An interview-built twin knows one conve
 
 ### Which is more accurate, synthetic respondents or behavioral twins?
 
-It depends on the question. For what people will say, a survey-built twin can be close. For what people will do (watch, pay, cancel, return), a behavior-built twin learns from the real thing, and Crosswalk publishes how its calls landed.
+Behavioral twins. A synthetic respondent can only repeat what people say, and people often act differently. A behavior-built twin learns from what people did: what they watched, paid for, cancelled and came back to. Crosswalk publishes how its calls landed.
 
 ### Why do behavior-built twins predict better?
 
@@ -834,15 +824,15 @@ A set of made-up people with real census traits (zip code, age, income, job), so
 
 ### Can a language model be a digital twin?
 
-It can play a type of person, which is useful for a quick sketch. It has never met your audience, it tends to answer too consistently, and it cannot be scored against what your audience did. Treat its output as a draft, not a count.
+Not a reliable one. A language model can play a type of person, but it has never met your audience. It tends to answer too consistently, and it cannot be scored against what your audience did.
 
 ### How do I know if a vendor's twin is behavior-built?
 
 Ask what it is built from and how it is validated. A behavior-built twin names a consented panel, validates against outcomes rather than surveys, dates its calls before the result, and shows you the misses.
 
-### Can I use both kinds?
+### Do I still need a survey?
 
-Yes, and many teams do. Use a survey-built twin for how people describe a brand, and a behavior-built twin for how many will watch, pay or leave.
+No. A Crosswalk twin tells you what people will do, and its focus groups tell you why, in each representative's own words. Every answer rests on real behavior, not on what people remember or plan to do.
 
 Source: https://www.crosswalknyc.com/synthetic-respondents-vs-behavioral-twins.html
 
