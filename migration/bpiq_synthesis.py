@@ -571,6 +571,24 @@ def campaign_prompt() -> str:
     return CAMPAIGN_RESEARCH_PROMPT % ", ".join(BPIQ_CATEGORIES)
 
 
+def _campaign_links(inputs: dict) -> list:
+    """Every link the reader pasted, verbatim and once each. The research
+    asks carry all of them (2026-11-24: they carried the first 12, so 40
+    of Emi Hill's 52 campaign posts never reached the research)."""
+    out, seen = [], set()
+    for raw in list((inputs or {}).get("links") or []):
+        u = str(raw or "").strip()
+        k = u.lower().rstrip("/")
+        if u and k not in seen:
+            seen.add(k)
+            out.append(u)
+    try:
+        from migration.bpiq_link_reads import MAX_LINKS as _max
+    except ImportError:   # twin layout
+        from bpiq_link_reads import MAX_LINKS as _max   # type: ignore
+    return out[:_max]
+
+
 def _hints_block(inputs: dict) -> dict:
     """Facts an operator read by hand (page, count, date) ride every
     research ask as verified facts: included, never contradicted, and
@@ -679,6 +697,17 @@ JSON only:
   "talent_asset_share_pct": float|null,   // share of the campaign's
                                           // exposure carrying the talent
   "talent_is_face": bool,
+  "link_reads": [                  // one row for EVERY campaign link
+    {"url": str,                   // given, exactly as given, on any
+     "platform": str,              // platform (Instagram, Facebook,
+     "account": str,               // TikTok, YouTube, X, Threads, ...)
+     "published": "YYYY-MM-DD"|null,
+     "views": int|null, "likes": int|null, "comments": int|null}, ...
+  ],
+  "talent_accounts": [             // the talent's own accounts on the
+    {"platform": str, "account": str,   // platforms the links sit on
+     "followers": int|null}, ...   // read on the account's own page
+  ],
   "sources": [{"title": str, "url": str, "used_for": str}, ...]
 }
 
@@ -687,7 +716,11 @@ them; a count you did not see is null, never invented. List outlets
 by name here (this document is internal). Published audience figures
 for outlets and sites come from approved sources (traffic trackers,
 publisher media kits, filings). An event with named guests and photo
-coverage is an event even when no outlet wrote a full piece."""
+coverage is an event even when no outlet wrote a full piece. Every
+campaign link given is a campaign post in its own right, whatever
+platforms the talent is known for: list each one under link_reads
+with the counts its own page shows (null when the page could not be
+read). A follower counter site is a lead, never the number."""
 
 
 def research_footprint(inputs: dict, claude_json: Callable, *,
@@ -703,16 +736,80 @@ def research_footprint(inputs: dict, claude_json: Callable, *,
         "talent": inputs.get("qualifier"),
         "window": windows["event"],
         "attribution_window": windows["post"],
-        **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+        **({"campaign_links": _campaign_links(inputs)} if inputs.get("links") else {}),
         **_hints_block(inputs),
     }
     try:
-        raw = claude_json(CAMPAIGN_FOOTPRINT_PROMPT, json.dumps(ask), max_tokens=9500,
+        raw = claude_json(CAMPAIGN_FOOTPRINT_PROMPT, json.dumps(ask), max_tokens=12000 if ask.get("campaign_links") else 9500,
                           temperature=0.15, surface="bpiq_campaign_footprint", tools=tools)
     except Exception as e:
         print(f"[bpiq-synth] footprint research failed: {e}")
         raw = {}
+    if isinstance(raw, dict):
+        # what the research read for each link is its second reading; the
+        # link's own page, read below, wins wherever it shows a count
+        raw = dict(raw, link_reads=[dict(r, source="research") for r in (raw.get("link_reads") or [])
+                                    if isinstance(r, dict)],
+                   talent_accounts=[dict(a, source="research") for a in (raw.get("talent_accounts") or [])
+                                    if isinstance(a, dict)])
     return normalize_footprint(raw)
+
+
+def with_pasted_links(fp: dict, inputs: dict, *, fetch=None) -> dict:
+    """The footprint with every pasted social link as a campaign post
+    (2026-11-24): each link read on its own page (migration.bpiq_link_reads),
+    the research's reading of the same link filling only a count the page
+    did not show, and the talent's account sizes read on the accounts'
+    own pages. Nothing here estimates a count; the reach does that from
+    these readings (bpiq_campaign.link_reach). Fail-safe: the footprint
+    as given."""
+    try:
+        try:
+            from migration import bpiq_link_reads as _blr
+            from migration.bpiq_campaign import normalize_link_reads, normalize_accounts
+        except ImportError:   # twin layout
+            import bpiq_link_reads as _blr   # type: ignore
+            from bpiq_campaign import normalize_link_reads, normalize_accounts   # type: ignore
+        links = _blr.social_links(_campaign_links(inputs))
+        if not links:
+            return fp
+        out = dict(fp or {})
+        page = [dict(r, source="page") for r in _blr.read_links(links, fetch=fetch)]
+        research = {_blr.link_key(r.get("url")): r for r in (out.get("link_reads") or [])
+                    if isinstance(r, dict) and r.get("url")}
+        rows = []
+        for r in page:
+            got = research.pop(_blr.link_key(r["url"]), None) or {}
+            if not r.get("read") and any(got.get(f) for f in ("views", "likes", "comments")):
+                r["source"] = "research"
+            for f in ("views", "likes", "comments", "published"):
+                if not r.get(f) and got.get(f):
+                    r[f] = got[f]
+            if not r.get("account") and got.get("account"):
+                r["account"] = got["account"]
+            rows.append(r)
+        out["link_reads"] = normalize_link_reads(rows)
+        accounts = [a for a in (out.get("talent_accounts") or []) if isinstance(a, dict)]
+        have = {(str(a.get("platform")), str(a.get("account") or "").lower()) for a in accounts
+                if a.get("source") == "page"}
+        seen = set()
+        for r in out["link_reads"]:
+            key = (r["platform"], str(r.get("account") or "").lower())
+            if not r.get("account") or key in have or key in seen:
+                continue
+            seen.add(key)
+            n = _blr.read_account(r["platform"], r["account"], fetch=fetch)
+            if n:
+                accounts = [a for a in accounts if (str(a.get("platform")), str(a.get("account") or "").lower()) != key]
+                accounts.append({"platform": r["platform"], "account": r["account"], "followers": n, "source": "page"})
+        out["talent_accounts"] = normalize_accounts(accounts)
+        n_read = sum(1 for r in out["link_reads"] if r.get("read"))
+        print(f"[bpiq-synth] pasted links: {len(out['link_reads'])} campaign posts, {n_read} read on their own page "
+              f"or by the research, {len(out['talent_accounts'])} account sizes")
+        return out
+    except Exception as e:
+        print(f"[bpiq-synth] pasted links skipped: {type(e).__name__}: {e}")
+        return fp
 
 
 def sellout_check(inputs: dict, claude_json: Callable, *,
@@ -723,7 +820,7 @@ def sellout_check(inputs: dict, claude_json: Callable, *,
         "brand": inputs.get("brand_partner"),
         "talent": inputs.get("qualifier"),
         "drop_window": {"start": inputs.get("event_start"), "end": inputs.get("event_end")},
-        **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+        **({"campaign_links": _campaign_links(inputs)} if inputs.get("links") else {}),
         **_hints_block(inputs),
     }
     try:
@@ -873,7 +970,7 @@ def research_campaign(inputs: dict, claude_json: Callable, *,
         "campaign": inputs.get("campaign") or f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}",
         "campaign_window": windows["event"],
         "attribution_window": windows["post"],
-        **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+        **({"campaign_links": _campaign_links(inputs)} if inputs.get("links") else {}),
         **_hints_block(inputs),
     }
     try:
@@ -889,8 +986,9 @@ def research_campaign(inputs: dict, claude_json: Callable, *,
         campaign = normalize_campaign(merge_sellout(campaign, check), inputs)
         print(f"[bpiq-synth] sell-out check: sold out {campaign['sell_out'].get('sold_out')}"
               f" ({campaign['sell_out'].get('days_to_sell_out')} days, partial {campaign['sell_out'].get('partial')})")
-    # the footprint: press, events, the film, the posts, search, the site
-    fp = research_footprint(inputs, claude_json, tools=tools)
+    # the footprint: press, events, the film, the posts, search, the site,
+    # and every campaign link the reader pasted, read on its own page
+    fp = with_pasted_links(research_footprint(inputs, claude_json, tools=tools), inputs)
     campaign["footprint"] = fp
     print(f"[bpiq-synth] footprint: {len(fp.get('press') or [])} press pieces listed "
           f"({fp.get('press_pieces_total')} total), {len(fp.get('events') or [])} events, "
@@ -1652,6 +1750,13 @@ def _dates(inputs: dict) -> dict:
     }
 
 
+def _link_window(windows: dict) -> dict:
+    """The days a pasted post's views count in: the campaign's first day
+    to the attribution window's last (2026-11-24)."""
+    ev, post = (windows or {}).get("event") or {}, (windows or {}).get("post") or {}
+    return {"start": ev.get("start"), "end": post.get("end") or ev.get("end")}
+
+
 def _variants(name: str) -> list:
     base = re.sub(r"[^a-z0-9 ]", "", str(name).lower()).strip()
     joined = base.replace(" ", "")
@@ -1676,7 +1781,7 @@ def _hold_reach(reach: dict, f: float, salt: str, reach_us: int) -> dict:
     moves together, the union is `reach_us`, and the counts of pieces,
     events and views (facts of the campaign, not people) stay."""
     out = dict(reach)
-    for k in ("gross_people", "site_people", "press_people", "social_people", "commercial_people",
+    for k in ("gross_people", "site_people", "press_people", "social_people", "link_people", "commercial_people",
               "event_people", "search_people"):
         if out.get(k):
             out[k] = _hold_count(salt, k, out[k], f)
@@ -1688,7 +1793,8 @@ def _hold_reach(reach: dict, f: float, salt: str, reach_us: int) -> dict:
     out["lines"] = lines
     out["reach_us"] = int(reach_us)
     # a line of people reached cannot exceed the union
-    for k in ("site_people", "press_people", "social_people", "commercial_people", "event_people", "search_people"):
+    for k in ("site_people", "press_people", "social_people", "link_people", "commercial_people", "event_people",
+              "search_people"):
         if out.get(k) and out[k] > out["reach_us"]:
             out[k] = out["reach_us"]
     for ln in out["lines"]:
@@ -1727,7 +1833,8 @@ def build_payload(inputs: dict, prim: dict, *,
     fp = (campaign or {}).get("footprint") or {}
     talent_n = int(prim["audience_size"])
     talent_projected = int(prim.get("_talent_audience_in_window") or prim["projected_audience_size"])
-    reach = _camp.derive_reach(fp, campaign, salt, windows["event"]["days"]) if _camp.has_footprint(fp) else None
+    reach = (_camp.derive_reach(fp, campaign, salt, windows["event"]["days"], window=_link_window(windows))
+             if _camp.has_footprint(fp) else None)
     if reach and int(reach.get("reach_us") or 0) >= talent_projected:
         projected = int(reach["reach_us"])
         n = _messy((salt, "reach_n"), projected / _camp.PANEL_WEIGHT)
@@ -1934,6 +2041,7 @@ def build_payload(inputs: dict, prim: dict, *,
     _asset_ctx = {
         "talent": [inputs.get("qualifier"), (campaign or {}).get("talent")],
         "campaign": [inputs.get("campaign"), (campaign or {}).get("campaign_name")],
+        "brand": [inputs.get("brand_partner"), (campaign or {}).get("brand")],
         "pre_end": windows["pre"]["end"],
         "drop_dates": (campaign or {}).get("drop_dates") or [],
         "event_start": windows["event"]["start"],
@@ -2059,14 +2167,24 @@ def build_payload(inputs: dict, prim: dict, *,
     if reach:
         camp_block["reach"] = {k: reach.get(k) for k in (
             "reach_us", "gross_people", "overlap", "lines", "site_people", "press_people", "social_people",
-            "commercial_people", "event_people", "search_people", "views_total", "press_pieces", "events")}
-        _parts = []
-        for ln in reach.get("lines") or []:
-            if ln.get("line") == "search":
-                continue
-            _parts.append(f"{_m_people(ln['people'])} {('on the ' + ln['line']) if ln['line'] == 'collection pages' else ('through ' + ln['line']) if ln['line'] in ('press', 'the film and the launch posts') else ('around ' + ln['line'])}")
-        camp_block["reach_line"] = (f"The campaign reached about {_m_people(projected)} people in the window: "
-                                    + ", ".join(_parts) + ", counted once each.") if _parts else ""
+            "link_people", "commercial_people", "event_people", "search_people", "views_total", "link_posts",
+            "press_pieces", "events")}
+        def _how(line):
+            return (('on the ' + line) if line == 'collection pages' else ('through ' + line)
+                    if line in ('press', 'the film and the launch posts', 'the campaign posts') else ('around ' + line))
+        _lns = [ln for ln in (reach.get("lines") or []) if ln.get("line") != "search"]
+        _parts = [f"{_m_people(ln['people'])} {_how(ln['line'])}" for ln in _lns]
+        if len(_lns) > 1 and int(_lns[0].get("people") or 0) == int(projected):
+            # one line is the whole group: the rest were also reached that way, never added on top
+            _also = [(ln['people'], _how(ln['line'])) for ln in _lns[1:]]
+            _rest = [f"about {_m_people(p)} {h}" for p, h in _also[1:]]
+            camp_block["reach_line"] = (f"The campaign reached about {_m_people(projected)} people in the window, "
+                                        f"all of them {_how(_lns[0]['line'])}. Of those, about "
+                                        f"{_m_people(_also[0][0])} were also reached {_also[0][1]}"
+                                        + ((", and " + ", ".join(_rest)) if _rest else "") + ".")
+        else:
+            camp_block["reach_line"] = (f"The campaign reached about {_m_people(projected)} people in the window: "
+                                        + ", ".join(_parts) + ", counted once each.") if _parts else ""
     if drop and int(drop.get("orders") or 0) > 0:
         camp_block["drop"] = drop
         camp_block["drop_line"] = (f"About {int(drop['units_us']):,} pieces sold in the US, "
@@ -2535,7 +2653,8 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
     reach_ctx = None
     drop_ctx = None
     if _camp.has_footprint(_fp):
-        _reach = _camp.derive_reach(_fp, campaign, run_salt(inputs), windows["event"]["days"])
+        _reach = _camp.derive_reach(_fp, campaign, run_salt(inputs), windows["event"]["days"],
+                                    window=_link_window(windows))
         if int(_reach.get("reach_us") or 0) > 0:
             reach_ctx = {"reach_us": int(_reach["reach_us"]),
                          "panel_count": int(round(int(_reach["reach_us"]) / _camp.PANEL_WEIGHT)),
@@ -2561,7 +2680,7 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
         # partner (MMG = the YouTube/TikTok creator, not a label) and
         # the assets the research should start from
         **({"campaign": inputs["campaign"]} if inputs.get("campaign") else {}),
-        **({"campaign_links": list(inputs["links"])[:12],
+        **({"campaign_links": _campaign_links(inputs),
             "campaign_links_rule": ("The partner is the account behind these links. Research them first: "
                                     "the channel or handle, its size, and the sponsored posts for the brand.")}
            if inputs.get("links") else {}),

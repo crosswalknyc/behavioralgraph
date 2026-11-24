@@ -2194,6 +2194,10 @@ def _touchpoints(ctx: DeckCtx, limit: int = 7) -> list:
     return rows[:limit] if limit else rows
 
 
+_SOCIAL_PAGE_RX = re.compile(r"(@|\b(?:instagram|tiktok|facebook|youtube|threads|twitter|snapchat|pinterest|reddit|"
+                             r"twitch|posts?|profile|reels?|stories)\b)", re.I)
+
+
 def _next_step(ctx: DeckCtx) -> tuple:
     """(the short version, the fuller version) of what to do next, read
     off the valuation: where the value sits, whether engagement moved,
@@ -2201,7 +2205,9 @@ def _next_step(ctx: DeckCtx) -> tuple:
     days = _days_phrase(ctx.post_days)
     top = ctx.emv_rows[0] if ctx.emv_rows else None
     channel = _channel_in_sentence(top["name"], ctx.brand, ctx.site) if top else "the earned channels"
-    own = next((r["name"] for r in _touchpoints(ctx, 0) if r["new"]), "")
+    # where to send people for orders: the campaign's own page people can buy from, never its
+    # social posts or an account (2026-11-24: "point Instagram at the race-day Instagram posts")
+    own = next((r["name"] for r in _touchpoints(ctx, 0) if r["new"] and not _SOCIAL_PAGE_RX.search(r["name"])), "")
     where = own or f"{_poss(ctx.b)} product pages"
     if not _moved(ctx):
         return (
@@ -2641,7 +2647,8 @@ def _campaign_account(ctx: DeckCtx) -> str:
              if isinstance(ln, dict) and _count(ln.get("people")) > 0 and str(ln.get("line") or "") != "search"]
     if lines:
         how = {"collection pages": "on the collection pages", "press": "through press",
-               "the film and the launch posts": "through the film and the launch posts"}
+               "the film and the launch posts": "through the film and the launch posts",
+               "the campaign posts": "through the campaign posts"}
         parts = [f"{fmt_num(_count(ln['people']))} people {how.get(str(ln['line']), 'around ' + str(ln['line']))}"
                  if i == 0 else f"{fmt_num(_count(ln['people']))} {how.get(str(ln['line']), 'around ' + str(ln['line']))}"
                  for i, ln in enumerate(lines[:4])]

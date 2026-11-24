@@ -83,16 +83,21 @@ def _forms(names: Iterable, *, pairing: bool = False) -> list:
     return uniq
 
 
-def is_campaign_asset(name, *, talent: Iterable = (), campaign: Iterable = (), flag=None) -> bool:
+def is_campaign_asset(name, *, talent: Iterable = (), campaign: Iterable = (), brand: Iterable = (),
+                      flag=None) -> bool:
     """True when the touchpoint is the campaign's own: the research marked
     it new, its name carries the talent or the campaign's name, or it is
-    the announcement."""
+    the announcement. A campaign named only by the brand's own name
+    ("Maybelline" for a Maybelline campaign, 2026-11-24) says nothing about
+    which pages the campaign made: the brand's homepage and shelves were
+    there before it."""
     if flag is True or (isinstance(flag, str) and flag.strip().lower() in ("true", "yes", "1")):
         return True
     n = _norm(name)
     if not n.strip():
         return False
-    for form in _forms(talent) + _forms(campaign, pairing=True):
+    brand_forms = set(_forms(brand))
+    for form in _forms(talent) + [f for f in _forms(campaign, pairing=True) if f not in brand_forms]:
         if f" {form} " in n:
             return True
     return bool(_ANNOUNCEMENT.search(n))
@@ -112,13 +117,13 @@ def first_public_date(drop_dates, event_start) -> Optional[_dt.date]:
     return min(days) if days else None
 
 
-def no_history_before(name, *, talent: Iterable = (), campaign: Iterable = (), pre_end=None,
+def no_history_before(name, *, talent: Iterable = (), campaign: Iterable = (), brand: Iterable = (), pre_end=None,
                       drop_dates=None, event_start=None, flag=None) -> bool:
     """True when this touchpoint cannot have a before count: it is the
     campaign's own and the before window ends ahead of the campaign's
     first public date. Never raises."""
     try:
-        if not is_campaign_asset(name, talent=talent, campaign=campaign, flag=flag):
+        if not is_campaign_asset(name, talent=talent, campaign=campaign, brand=brand, flag=flag):
             return False
         public = first_public_date(drop_dates, event_start)
         end = _date(pre_end)
@@ -141,6 +146,7 @@ def context_from_payload(data: dict) -> dict:
     return {
         "talent": [t for t in talent if t.strip()],
         "campaign": [str(x) for x in (data.get("campaign_name"), camp.get("name")) if str(x or "").strip()],
+        "brand": [str(data.get("brand_partner"))] if str(data.get("brand_partner") or "").strip() else [],
         "pre_end": pre.get("end"),
         "drop_dates": camp.get("drop_dates") or [],
         "event_start": event.get("start") or data.get("start_date"),

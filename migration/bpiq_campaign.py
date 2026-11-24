@@ -9,8 +9,10 @@ runs on:
 
   * reach      the people the campaign reached in the window, built
                from the brand site's collection pages, the press, the
-               film and the launch posts, the launch event and search,
-               each line with its basis, deduplicated to people
+               film and the launch posts, the campaign posts the reader
+               pasted (every platform, 2026-11-24), the launch event
+               and search, each line with its basis, deduplicated to
+               people
   * the drop   units sold (a sell-out means units = inventory), the
                revenue of the drop at the collection's prices, and the
                orders that revenue took at the researched basket
@@ -25,9 +27,16 @@ sources stay in the run's underpinnings; nothing here names a source.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
+import math
 import re
 from typing import Optional
+
+try:
+    from migration import bpiq_link_reads as _links
+except ImportError:   # twin layout
+    import bpiq_link_reads as _links   # type: ignore
 
 PANEL_WEIGHT = 32.99                 # 329.9M US / 10M panel
 
@@ -66,6 +75,24 @@ _COLLECTION_SHARE_SOLD_OUT = (0.10, 0.18)   # share of site visitors on the coll
 _COLLECTION_SHARE = (0.045, 0.095)
 _SEARCH_WEIGHT = 0.5                 # searchers overlap the other lines heavily
 _OVERLAP = (0.30, 0.42)              # people reached on more than one surface
+
+# The links the reader pasted (Jenna 2026-11-24, Emi Hill's Zarna Garg x
+# Maybelline order: 52 posts counted as nobody). Each link is a campaign
+# post on its own platform, whatever channels the research names for the
+# talent. Every band sits at the low end of what is defensible
+# (calibrate-low-anchor-to-actuals.mdc): views come from the post's own
+# page; people come from views at a frequency that rises with the posts
+# one account made on one platform; an account never reaches more people
+# than its own audience and a few beyond it.
+_LINK_REPEAT_BASE = (1.78, 1.95)     # views per person on one post, the top of the repeat band
+_LINK_REPEAT_EXP = 0.45              # each further post by the account reaches more of the same people
+_LINK_FOLLOWER_POOL = 1.3            # people one account reaches on a platform, as a multiple of its audience
+_LINK_US_SHARE = (0.58, 0.64)        # US share of a talent's own social audience, the bottom of the band
+_LINK_TAIL_TAU_DAYS = (2.5, 3.3)     # a post's views fall off as exp(-days / tau) after it goes up
+_LINK_VIEWS_PER_LIKE = (22.0, 26.7)  # a post whose page shows likes but no views, the bottom third
+_LINK_PEER_QUANTILE = 0.25           # an unread post takes the low quartile of the read posts beside it
+_LINK_CROSS_PLATFORM = 0.5           # with no read post on its platform, half the low quartile across platforms
+_LINK_FOLLOWER_REACH_LOW = (0.14, 0.18)  # or a feed post's reach as a share of the account, the bottom third
 
 # the drop
 _UNITS_PER_SKU = {"small": (110, 320), "medium": (320, 760), "large": (760, 1_600), "unknown": (220, 620)}
@@ -141,6 +168,69 @@ def _outlet_class(outlet: str, country: str = "") -> str:
 # ---------------------------------------------------------------------------
 # normalize the researched footprint
 # ---------------------------------------------------------------------------
+
+def _iso(v) -> Optional[str]:
+    s = str(v or "").strip()
+    try:
+        return _dt.date.fromisoformat(s[:10]).isoformat() if s else None
+    except ValueError:
+        return None
+
+
+def normalize_link_reads(items) -> list:
+    """The pasted links as read: one row per post (the same post pasted
+    twice is one row), each on the platform its address names. A count
+    is kept only when it was read; a page read wins over a research read
+    of the same link."""
+    rows, at = [], {}
+    for r in (items or []):
+        if not isinstance(r, dict):
+            continue
+        url = str(r.get("url") or "").strip()
+        plat = _links.platform_of(url) or str(r.get("platform") or "").strip()
+        if not url or not plat:
+            continue
+        day = _links.published_from_id(url)
+        row = {"url": url, "platform": plat,
+               "account": str(r.get("account") or _links.account_of(url) or "").strip().lstrip("@"),
+               "published": _iso(r.get("published")) or (day.isoformat() if day else None),
+               "views": _num(r.get("views")), "likes": _num(r.get("likes")), "comments": _num(r.get("comments")),
+               "source": str(r.get("source") or "page").strip() or "page"}
+        k = _links.link_key(url)
+        if k in at:
+            have = rows[at[k]]
+            for f in ("views", "likes", "comments", "published"):
+                if not have.get(f) and row.get(f):
+                    have[f] = row[f]
+            if not have.get("account") and row.get("account"):
+                have["account"] = row["account"]
+            continue
+        at[k] = len(rows)
+        rows.append(row)
+    for row in rows:
+        row["read"] = bool(row.get("views") or row.get("likes") or row.get("comments"))
+    return rows[:_links.MAX_LINKS]
+
+
+def normalize_accounts(items) -> list:
+    """The talent's account sizes, one per platform and account."""
+    out, seen = [], set()
+    for a in (items or []):
+        if not isinstance(a, dict):
+            continue
+        plat = str(a.get("platform") or "").strip()
+        acct = str(a.get("account") or "").strip().lstrip("@")
+        followers = _num(a.get("followers"))
+        if not plat or not followers:
+            continue
+        key = (plat.lower(), acct.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"platform": plat, "account": acct, "followers": followers,
+                    "source": str(a.get("source") or "page").strip() or "page"})
+    return out[:24]
+
 
 def normalize_footprint(raw) -> dict:
     raw = raw if isinstance(raw, dict) else {}
@@ -222,6 +312,8 @@ def normalize_footprint(raw) -> dict:
         "talent_asset_share_pct": _num(raw.get("talent_asset_share_pct")),
         "talent_is_face": bool(raw.get("talent_is_face", True)),
         "sources": [s for s in (raw.get("sources") or []) if isinstance(s, dict)][:40],
+        "link_reads": normalize_link_reads(raw.get("link_reads")),
+        "talent_accounts": normalize_accounts(raw.get("talent_accounts")),
     }
 
 
@@ -229,7 +321,22 @@ def has_footprint(fp: Optional[dict]) -> bool:
     fp = fp or {}
     return bool(fp.get("press") or fp.get("events") or (fp.get("commercial") or {}).get("platforms")
                 or fp.get("viral_posts") or (fp.get("site") or {}).get("brand_site_us_monthly_visits")
-                or (fp.get("site") or {}).get("brand_site_us_monthly_uniques"))
+                or (fp.get("site") or {}).get("brand_site_us_monthly_uniques")
+                or _links_countable(fp))
+
+
+def _links_countable(fp: dict) -> bool:
+    """Pasted posts give the campaign a footprint when one of them shows a
+    count, or the account behind them has a known size; a list of posts
+    none of which could be read and with no account size counts nobody
+    and the order is asked about like any campaign with nothing to count."""
+    reads = [r for r in (fp.get("link_reads") or []) if isinstance(r, dict) and r.get("platform")]
+    if not reads:
+        return False
+    if any(_num(r.get("views")) or _num(r.get("likes")) for r in reads):
+        return True
+    sizes = _account_sizes(fp.get("talent_accounts"))
+    return any(sizes.get(r["platform"]) for r in reads)
 
 
 # ---------------------------------------------------------------------------
@@ -249,13 +356,138 @@ def _post_views(p: dict, salt: str, tag: str) -> float:
     return 0.0
 
 
-def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int = 14) -> dict:
+def _quantile(values, q: float) -> Optional[float]:
+    v = sorted(float(x) for x in (values or []) if x and float(x) > 0)
+    if not v:
+        return None
+    i = q * (len(v) - 1)
+    lo = int(math.floor(i))
+    hi = min(lo + 1, len(v) - 1)
+    return v[lo] + (v[hi] - v[lo]) * (i - lo)
+
+
+def _account_sizes(accounts) -> dict:
+    out = {}
+    for a in normalize_accounts(accounts):
+        out[a["platform"]] = max(out.get(a["platform"], 0.0), float(a["followers"]))
+    return out
+
+
+def link_posts(reads, *, window: Optional[dict] = None, accounts=None, salt: str = "") -> list:
+    """Every pasted link as a campaign post: the views it drew, how that
+    figure was arrived at (internal only), and the share of them inside
+    the window. A post's own page count wins; a page showing only likes
+    reads views at the low end of views per like; an unread post takes
+    the low quartile of the read posts on its platform, else the lower of
+    half the low quartile across platforms and the low end of a feed
+    post's reach on the account; with nothing to go on it counts nobody.
+    A post that went up before the window counts the views that fell
+    inside it; one after the window counts none."""
+    rows = [dict(r) for r in normalize_link_reads(reads)]
+    if not rows:
+        return []
+    for i, r in enumerate(rows):
+        v, basis = _num(r.get("views")), "read"
+        if not v and _num(r.get("likes")):
+            v, basis = _num(r["likes"]) * _band(salt, ("lvpl", i), _LINK_VIEWS_PER_LIKE), "read_likes"
+        r["_v"], r["views_basis"] = float(v or 0.0), (basis if v else "")
+    by_plat = {}
+    for r in rows:
+        if r["_v"] > 0:
+            by_plat.setdefault(r["platform"], []).append(r["_v"])
+    everywhere = [x for vs in by_plat.values() for x in vs]
+    sizes = _account_sizes(accounts)
+    for r in rows:
+        if r["_v"] > 0:
+            continue
+        peer = _quantile(by_plat.get(r["platform"]), _LINK_PEER_QUANTILE)
+        if peer:
+            r["_v"], r["views_basis"] = peer, "peers"
+            continue
+        cands = []
+        cross = _quantile(everywhere, _LINK_PEER_QUANTILE)
+        if cross:
+            cands.append((cross * _LINK_CROSS_PLATFORM, "cross_platform"))
+        if sizes.get(r["platform"]):
+            cands.append((sizes[r["platform"]] * _band(salt, ("lfr", r["platform"]), _LINK_FOLLOWER_REACH_LOW),
+                          "account_size"))
+        if cands:
+            r["_v"], r["views_basis"] = min(cands)
+        else:
+            r["views_basis"] = "none"
+    w = window or {}
+    w0, w1 = _date(w.get("start")), _date(w.get("end"))
+    out = []
+    for i, r in enumerate(rows):
+        d = _date(r.get("published"))
+        share = 1.0
+        if d and w0 and d < w0:
+            share = math.exp(-float((w0 - d).days) / _band(salt, ("ltau", _links.link_key(r["url"])), _LINK_TAIL_TAU_DAYS))
+        elif d and w1 and d > w1:
+            share = 0.0
+        row = {k: v for k, v in r.items() if k != "_v"}
+        row["views_used"] = int(round(r["_v"]))
+        row["window_share"] = round(share, 4)
+        row["views_in_window"] = round(r["_v"] * share, 1)
+        out.append(row)
+    return out
+
+
+def _date(v) -> Optional[_dt.date]:
+    try:
+        return _dt.date.fromisoformat(str(v or "")[:10]) if v else None
+    except ValueError:
+        return None
+
+
+def _plat_list(names) -> str:
+    names = [n for n in dict.fromkeys(names) if n]
+    if len(names) <= 1:
+        return "".join(names)
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def link_reach(fp: Optional[dict], salt: str, window: Optional[dict] = None) -> dict:
+    """The people the pasted posts reached, before the US share and the
+    overlap with the other lines: per platform, the views inside the
+    window over a frequency that rises with the account's post count,
+    never under the biggest post's own viewers and never over the
+    account's audience and a few beyond it. Returns {"people", "views",
+    "posts", "platforms", "by_platform"}."""
+    fp = fp or {}
+    posts = link_posts(fp.get("link_reads"), window=window, accounts=fp.get("talent_accounts"), salt=salt)
+    sizes = _account_sizes(fp.get("talent_accounts"))
+    by = {}
+    for p in posts:
+        if float(p.get("views_in_window") or 0) > 0:
+            by.setdefault(p["platform"], []).append(float(p["views_in_window"]))
+    people, views, n, per = 0.0, 0.0, 0, {}
+    for plat, vs in by.items():
+        total = sum(vs)
+        base = _band(salt, ("lrep", plat), _LINK_REPEAT_BASE)
+        p = total / (base * (len(vs) ** _LINK_REPEAT_EXP))
+        p = max(p, max(vs) / base)
+        if sizes.get(plat):
+            p = min(p, sizes[plat] * _LINK_FOLLOWER_POOL)
+        per[plat] = {"posts": len(vs), "views": round(total), "people": round(p)}
+        people += p
+        views += total
+        n += len(vs)
+    return {"people": people, "views": views, "posts": n, "posts_pasted": len(posts),
+            "platforms": list(per), "by_platform": per}
+
+
+def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int = 14,
+                 window: Optional[dict] = None) -> dict:
     """The people the campaign reached in the window, by line, deduped.
 
-    Lines: site (collection pages), press, film and posts, event,
-    search (corroborating, half weight). Each line records its basis.
-    Returns {"reach_us", "lines": [...], "overlap", "commercial_people",
-    "site_people", "press_people", "social_people", "event_people",
+    Lines: site (collection pages), press, film and posts, the campaign
+    posts the reader pasted (every platform, `link_reach`), event, search
+    (corroborating, half weight). Each line records its basis. `window`
+    ({"start", "end"}: the campaign's first day to the attribution
+    window's last) dates the pasted posts. Returns {"reach_us", "lines":
+    [...], "overlap", "commercial_people", "site_people",
+    "press_people", "social_people", "link_people", "event_people",
     "search_people"}."""
     fp = fp or {}
     c = campaign or {}
@@ -305,12 +537,21 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
     views = 0.0
     com = fp.get("commercial") or {}
     com_views = 0.0
+    # a post the reader pasted is counted on its own line below, once
+    pasted = {_links.link_key(r.get("url")) for r in (fp.get("link_reads") or [])
+              if isinstance(r, dict) and r.get("url")}
+    skipped_com = 0
     for i, pl in enumerate(com.get("platforms") or []):
+        if pl.get("url") and _links.link_key(pl.get("url")) in pasted:
+            skipped_com += 1
+            continue
         com_views += _post_views(pl, salt, ("com", i))
-    if not com_views and _num(com.get("views_total")):
+    if not com_views and _num(com.get("views_total")) and not skipped_com:
         com_views = float(com.get("views_total"))
     views += com_views
     for i, v in enumerate(fp.get("viral_posts") or []):
+        if v.get("url") and _links.link_key(v.get("url")) in pasted:
+            continue
         views += _post_views(v, salt, ("post", i))
     seen_accounts = {str(v.get("account") or "").lower() for v in (fp.get("viral_posts") or [])}
     for i, a in enumerate((fp.get("brand_social") or {}).get("accounts") or []):
@@ -327,6 +568,14 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
         lines.append({"line": "the film and the launch posts", "people": _messy(salt, "social_p", social_people),
                       "basis": f"about {views / 1e6:.1f}M views across the film and the brands' and the talent's posts, "
                                f"{us_share * 100:.0f}% US, {repeat:.1f} views per person"})
+
+    # the campaign posts the reader pasted, on every platform they sit on
+    lr = link_reach(fp, salt, window)
+    link_people = lr["people"] * _band(salt, "link_us", _LINK_US_SHARE) if lr["people"] else 0.0
+    if link_people:
+        lines.append({"line": "the campaign posts", "people": _messy(salt, "link_p", link_people),
+                      "basis": f"{lr['posts']} campaign post{'s' if lr['posts'] != 1 else ''} on "
+                               f"{_plat_list(lr['platforms'])}, counted once per person"})
 
     # the event
     event_people = 0.0
@@ -351,11 +600,11 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
         lines.append({"line": "search", "people": _messy(salt, "search_p", search_people),
                       "basis": "people searching the collaboration in the window, half-weighted for overlap"})
 
-    gross = site_people + press_people + social_people + event_people + search_people
+    gross = site_people + press_people + social_people + link_people + event_people + search_people
     overlap = _band(salt, "overlap", _OVERLAP) if gross else 0.0
     reach = gross * (1.0 - overlap)
     # a line of people reached cannot exceed the union
-    reach = max(reach, commercial_people, site_people, press_people, event_people)
+    reach = max(reach, commercial_people, site_people, press_people, event_people, link_people)
     # Held to a near twin (prometheus.consistency, Jenna 2026-11-20): the
     # people reached land on the held figure and every line moves with
     # them, so the union and its parts still add up. Counts of pieces,
@@ -365,21 +614,36 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
         f = float(target) / float(reach)
         site_people, press_people, social_people = site_people * f, press_people * f, social_people * f
         commercial_people, event_people, search_people = commercial_people * f, event_people * f, search_people * f
+        link_people = link_people * f
         gross, reach = gross * f, float(target)
         for ln in lines:
             ln["people"] = _messy(salt, ("hold", ln.get("line")), float(ln.get("people") or 0) * f)
+    reach_us = _messy(salt, "reach", reach) if reach else 0
+    # a line that is the whole group leads and carries the same count as
+    # the union, so the reader sees one group and the people also reached
+    # another way, never two groups adding past the total (the deck's
+    # 2026-11-11 rule, read by the line itself)
+    raw = {"collection pages": site_people, "press": press_people, "the film and the launch posts": social_people,
+           "the campaign posts": link_people, "the launch event": event_people}
+    whole = [i for i, ln in enumerate(lines) if reach and raw.get(ln.get("line")) and abs(raw[ln["line"]] - reach) < 0.5]
+    if whole:
+        top = lines.pop(whole[0])
+        top["people"] = reach_us
+        lines.insert(0, top)
     return {
-        "reach_us": _messy(salt, "reach", reach) if reach else 0,
+        "reach_us": reach_us,
         "gross_people": _messy(salt, "gross", gross) if gross else 0,
         "overlap": round(overlap, 4),
         "lines": lines,
         "site_people": _messy(salt, "site_p", site_people) if site_people else 0,
         "press_people": _messy(salt, "press_p", press_people) if press_people else 0,
         "social_people": _messy(salt, "social_p", social_people) if social_people else 0,
+        "link_people": _messy(salt, "link_p", link_people) if link_people else 0,
         "commercial_people": _messy(salt, "com_p", commercial_people) if commercial_people else 0,
         "event_people": _messy(salt, "event_p", event_people) if event_people else 0,
         "search_people": _messy(salt, "search_p", search_people) if search_people else 0,
-        "views_total": _messy(salt, "views", views) if views else 0,
+        "views_total": _messy(salt, "views", views + lr["views"]) if (views + lr["views"]) else 0,
+        "link_posts": lr["posts"],
         "press_pieces": len(pieces) + extra,
         "events": len(fp.get("events") or []),
     }
@@ -522,5 +786,5 @@ def derive_talent_share(fp: Optional[dict], campaign: Optional[dict], reach: dic
     }
 
 
-__all__ = ["normalize_footprint", "has_footprint", "derive_reach", "derive_drop",
-           "derive_talent_share", "PANEL_WEIGHT"]
+__all__ = ["normalize_footprint", "normalize_link_reads", "normalize_accounts", "has_footprint",
+           "link_posts", "link_reach", "derive_reach", "derive_drop", "derive_talent_share", "PANEL_WEIGHT"]
