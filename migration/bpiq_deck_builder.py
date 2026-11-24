@@ -2196,6 +2196,34 @@ def _touchpoints(ctx: DeckCtx, limit: int = 7) -> list:
 
 _SOCIAL_PAGE_RX = re.compile(r"(@|\b(?:instagram|tiktok|facebook|youtube|threads|twitter|snapchat|pinterest|reddit|"
                              r"twitch|posts?|profile|reels?|stories)\b)", re.I)
+# Where a next step sends people for orders (Jenna 2026-11-24): the brand's
+# own product or shop pages on its own site. Never a press, news, event,
+# partner or retailer page and never the talent's posts (Emi Hill's Zarna
+# Garg x Maybelline deck sent people to a race organizer's news page, the
+# campaign's newest page in the list).
+_SHOP_PAGE_RX = re.compile(r"\b(?:products?|shop|store|category|categories|collections?|browse|buy|catalog)\b", re.I)
+_NOT_A_SHOP_RX = re.compile(r"\b(?:news|press|announcements?|releases?|recap|articles?|story|stories|blog|events?|race|"
+                            r"marathon|roster|finishers?|runners?|charity|foundation|partners?|partnership|careers?|"
+                            r"investors?|mental health|giveaway|contest)\b", re.I)
+
+
+def _shop_destination(ctx: DeckCtx) -> str:
+    """The page a next step sends people to for orders: the campaign's own
+    shop page on the brand's own site, else the brand's own product or
+    shop page people visited most, else the product section of the
+    brand's own site. A page counts as the brand's own only when its name
+    carries the brand's site; a domain is never guessed."""
+    host = str(ctx.site or "").strip().lower()
+
+    def shop(name):
+        return (bool(host) and host in name.lower() and bool(_SHOP_PAGE_RX.search(name))
+                and not _NOT_A_SHOP_RX.search(name) and not _SOCIAL_PAGE_RX.search(name))
+    rows = _touchpoints(ctx, 0)
+    page = next((r["name"] for r in rows if r["new"] and shop(r["name"])), "") \
+        or next((r["name"] for r in rows if shop(r["name"])), "")
+    if page:
+        return page if "/" in page else f"the {page}"
+    return f"the product pages on {ctx.site}" if ctx.site else f"{_poss(ctx.b)} own product pages"
 
 
 def _next_step(ctx: DeckCtx) -> tuple:
@@ -2205,10 +2233,7 @@ def _next_step(ctx: DeckCtx) -> tuple:
     days = _days_phrase(ctx.post_days)
     top = ctx.emv_rows[0] if ctx.emv_rows else None
     channel = _channel_in_sentence(top["name"], ctx.brand, ctx.site) if top else "the earned channels"
-    # where to send people for orders: the campaign's own page people can buy from, never its
-    # social posts or an account (2026-11-24: "point Instagram at the race-day Instagram posts")
-    own = next((r["name"] for r in _touchpoints(ctx, 0) if r["new"] and not _SOCIAL_PAGE_RX.search(r["name"])), "")
-    where = own or f"{_poss(ctx.b)} product pages"
+    where = _shop_destination(ctx)       # the brand's own shop pages, never a news page or the talent's posts
     if not _moved(ctx):
         return (
             f"Change the creative or the channel mix before the next flight. {_cap(ctx.ba)} engagement did not move in this window.",
