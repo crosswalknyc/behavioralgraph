@@ -91,9 +91,19 @@ def chat_py_lines() -> int:
 
 
 def legacy_core_paths() -> list:
-    """The stage 5 cores still under prometheus/legacy/ (none once stage 7
-    has moved them all)."""
-    return sorted(glob.glob(os.path.join(legacy_dir(), 'core_*.py')))
+    """The stage 5 cores still under prometheus/legacy/ that chat.py still
+    reads (a marker or a tail re-import names them). None since stage 7
+    moved them all. A core file left on disk after its blocks moved (the
+    build server materializes tracked files and never deletes; a local
+    checkout can hold one too) is dead text, not legacy code, and does not
+    count."""
+    chat = chat_py_text()
+    out = []
+    for p in sorted(glob.glob(os.path.join(legacy_dir(), 'core_*.py'))):
+        name = os.path.basename(p)[:-3]
+        if f'# <<extracted: {name} block ' in chat or f'# <<reimport: {name}>>' in chat:
+            out.append(p)
+    return out
 
 
 def legacy_lines() -> int:
