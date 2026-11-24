@@ -797,6 +797,28 @@ def ask(user, body, *, via='session'):
         if isinstance(body.get('page_context'), dict):
             body['page_context'] = ctx
     has_ctx = bool(ctx)
+    # The Reader starts now, on its own thread, while the door's setup and the lanes run; the reader lane takes
+    # its answer when it gets there (prometheus.reader_prestart, Jenna's standing ask 2026-11-24). Same words,
+    # same checked context, same thread, same call; nothing before that lane reads the reading. A step that
+    # rewrites the words (the data floor, a held brief, the build lane, wayfinding) leaves the early call unused
+    # and the lane makes its own. An armed step never reaches the Reader, so none starts. The first live ask on
+    # the lane-side prestart showed 2.2 s of the 2.4 s ahead of the Reader sitting in this setup, not the lanes.
+    _rd_pre = None
+    if not _armed(body):
+        try:
+            from . import reader_prestart as _rdp
+            from . import reader as _rd_pre_mod
+            from . import progress as _pg_pre
+            _pre_extras = None
+            try:
+                from . import access_gates as _ag_pre
+                _pre_extras = _ag_pre._pm_attrib_extras()
+            except Exception:
+                _pre_extras = None
+            _rd_pre = _rdp.start(text, ctx, history, user, uname, read=_rd_pre_mod.read, say=_pg_pre.say, extras=_pre_extras)
+        except Exception as _fx:
+            _faults.note('service.reader_prestart', _fx)
+            _rd_pre = None
     open_tabs = 0
     try:
         open_tabs = len((ctx or {}).get('other_tabs') or [])
@@ -1038,26 +1060,6 @@ def ask(user, body, *, via='session'):
                                                              'client_hint': None}, thread_id=tid, via=via)
         _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
         return env, 200
-
-    # The Reader starts now, on its own thread, while the lanes below run; the reader lane takes its answer when
-    # it gets there (prometheus.reader_prestart, Jenna's standing ask 2026-11-24). Same words, same context, same
-    # call; nothing below reads the reading before that lane. An armed step never reaches the Reader, so none starts.
-    _rd_pre = None
-    if not _armed(body):
-        try:
-            from . import reader_prestart as _rdp
-            from . import reader as _rd_pre_mod
-            from . import progress as _pg_pre
-            _pre_extras = None
-            try:
-                from . import access_gates as _ag_pre
-                _pre_extras = _ag_pre._pm_attrib_extras()
-            except Exception:
-                _pre_extras = None
-            _rd_pre = _rdp.start(text, ctx, history, user, uname, read=_rd_pre_mod.read, say=_pg_pre.say, extras=_pre_extras)
-        except Exception as _fx:
-            _faults.note('service.reader_prestart', _fx)
-            _rd_pre = None
 
     # lane: intake_cancel
     # Cancel means gone, and a new thread starts clean (Jenna 2026-11-05:
