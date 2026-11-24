@@ -528,6 +528,12 @@ def validate(doc, parent_window, new_window) -> dict:
             lo, hi = min(lo, hi), max(lo, hi)
             if hi < amin / 2.0 or lo > amax * 2.0:   # the range ignores its own anchors: use theirs
                 lo, hi = amin, amax
+            elif (amin > 1.0 and hi <= 1.0) or (amax < 1.0 and lo >= 1.0):
+                # every anchor points one way and the range the other: it is
+                # not derived from them (2026-11-24, the Colbert read gave
+                # 0.75 to 1.0 on anchors of 1.08 to 1.49): use theirs
+                lo, hi = amin, amax
+                drop['range_contradicts_anchors'] = drop.get('range_contradicts_anchors', 0) + 1
         else:
             lo, hi = amin, amax
         lo = max(RATIO_MIN, min(RATIO_MAX, lo))
