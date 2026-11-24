@@ -24,6 +24,7 @@ from prometheus import creator_fit as _creator_fit
 from prometheus import audience_referent as _audience_referent
 from prometheus import bpiq_wizard as _bpiq_wiz
 from prometheus import matrix_read as _matrix
+from prometheus import title_list_read as _title_list
 from prometheus import question_universe as _question_universe
 from prometheus import ledger_gate as _ledger_gate, probe_files as _probe_files, cut_list as _cut_list, primary_profile as _primary_profile
 from prometheus import promise_truth as _PT, read_repair as _read_repair, grid_facts as _grid_facts
@@ -804,10 +805,24 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _mplan = _matrix.plan(text, mr)
         except Exception as _fx:
             _faults.note('chat', _fx); _mplan = None
+        # A pasted list of titles runs one read per title inside the one job and lands as one answer that names
+        # each title, with one row per title in the file (Nov 23 2026 ask audit, fix 6). The plan is read off the
+        # words, so a resumed copy of the job makes the same plan; a two-base compare keeps its own path.
+        _tplan = None
+        if not _mplan and not _two:
+            try:
+                _tplan = _title_list.plan(text, getattr(__import__('flask').g, '_pm_reading', None))
+            except Exception as _fx:
+                _faults.note('chat', _fx); _tplan = None
+        if _tplan:
+            _promised = _title_list.label(_tplan)
         _on_it = _C._pm_on_it_line(base, bound=bind_subject)
         if _mplan:
             _on_it = (_on_it.rstrip() + f" This one runs in pieces ({_matrix.describe(_mplan)}); "
                       "the whole table lands here as one answer with the file under it.")
+        elif _tplan:
+            _on_it = (f"On it: reading {_title_list.label(_tplan)} now, one read per title. This one takes a real look at the data, "
+                      "so give me a moment - every title lands here as one answer with the file under it.")
         if isinstance(panel_charge, dict) and panel_charge.get('included'):
             # Included with your plan (Jenna 2026-11-08): the opener an unlimited seat reads instead of a price
             _on_it = __import__('prometheus.priced_read', fromlist=['with_included_line']).with_included_line(_on_it)
@@ -828,9 +843,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if _mplan:
             _head['matrix'] = {'groups': len(_mplan['groups']), 'dimensions': len(_mplan['dimensions']),
                                'pieces': len(_mplan['pieces'])}
+        if _tplan:
+            _head['titles'] = {'titles': list(_tplan['titles']), 'platform': _tplan.get('platform') or '',
+                               'per_title_windows': bool(_tplan.get('per_title_windows'))}
         _args = (job_id, _pm_user, _pm_read_extras, text, list(history or [])[-10:],
                  mr, base, digest_block, anchors_block, led)
-        _kw = {'panel_charge': panel_charge, 'probe': _probe, 'matrix_plan': _mplan}
+        _kw = {'panel_charge': panel_charge, 'probe': _probe, 'matrix_plan': _mplan, 'title_plan': _tplan}
         _C._pm_read_inflight_mark(_pm_user, text, job_id, _promised)
         _head['thread_id'] = _C._pm_job_bind_thread(job_id, _pm_user) if not inline_job_id else _C._pm_job_bind_thread(job_id, _pm_user, resumed=True)   # the worker is another process (2026-10-14); it keeps the launch's thread (2026-11-11)
         _head['via'] = 'api' if getattr(__import__('flask').g, '_pm_api_key_owner', None) else 'dashboard'

@@ -7256,6 +7256,14 @@ def format_generated_metrics_reply(res):
                 return scrub_user_text(_grid_reply)
     except Exception as _fx:
         _faults.note('analysis', _fx)
+    try:   # a pasted list of titles: one block per title, then the title mix (2026-11-24)
+        from prometheus import title_list_read as _tlr
+        if _tlr.is_title_list(res):
+            _tl_reply = _tlr.format_reply(res)
+            if _tl_reply:
+                return scrub_user_text(_tl_reply)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     if res.get('_multi') and not res.get('breakdown'):
         return format_multi_question_reply(res)
     if res.get('_so_what') and not res.get('breakdown'):
@@ -7406,6 +7414,18 @@ def build_generated_csv(entry):
                 _gw.writerow([scrub_user_text(str(c)) for c in _gr])
             _gstem = '_'.join(_csv_slug(b) for b in (subject, 'demographics') if b)[:80].strip('_')
             return (f"{_gstem or 'crosswalk_data'}.csv", _gbuf.getvalue())
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+    try:   # a title-list read: one row per title, every metric a column (2026-11-24)
+        from prometheus import title_list_read as _tlr
+        _tl_rows = _tlr.csv_rows(entry)
+        if _tl_rows:
+            _tbuf = io.StringIO()
+            _tw = _csv.writer(_tbuf, lineterminator='\n')
+            for _tr in _tl_rows:
+                _tw.writerow([scrub_user_text(str(c)) for c in _tr])
+            _tstem = '_'.join(_csv_slug(b) for b in (subject, 'by_title') if b)[:80].strip('_')
+            return (f"{_tstem or 'crosswalk_data'}.csv", _tbuf.getvalue())
     except Exception as _fx:
         _faults.note('analysis', _fx)
     bd = entry.get('breakdown') if isinstance(entry.get('breakdown'),

@@ -314,8 +314,10 @@ def subject_key(subject):
 
 
 def normalize_question(question):
+    # the whole question, not its first 300 characters (2026-11-23: two pasted asks that differed only in the title
+    # named at their end shared one normalized question, and the second was answered with the first title's read)
     return re.sub(r'[^a-z0-9]+', ' ',
-                  str(question or '').lower()).strip()[:300]
+                  str(question or '').lower()).strip()[:4000]
 
 
 def entry_key(subject, metric_family, window_start=None, window_end=None, journey=None):
@@ -3433,6 +3435,47 @@ def is_retired_surface_reply(reply):
     return bool(_RETIRED_SURFACE_RX.search(head[:400])) or is_offer_reply(head)
 
 
+_LEGACY_QN_LEN = 300     # entries written before 2026-11-24 stored the question's first 300 characters
+_CAP_WORD_RX = re.compile(r"(?<![A-Za-z0-9])[A-Z][A-Za-z0-9'\u2019.&-]*")
+
+
+def _legacy_qn_match(e, qn, question=''):
+    """An entry written with the question's first 300 characters as its
+    key matches a longer question only when the words past that point
+    name nothing the entry does not carry: every capitalized name in the
+    question that is not inside the stored key is in the entry's reply,
+    subject, universe or question (2026-11-23, Armine: two pasted asks
+    that differed only in the title at their end shared one key and the
+    second was answered with the first title's read)."""
+    try:
+        e_qn = str((e or {}).get('qn') or '')
+        if not qn or len(e_qn) != _LEGACY_QN_LEN or len(qn) <= _LEGACY_QN_LEN or not qn.startswith(e_qn):
+            return False
+        head_words = set(e_qn.split())
+        names = set()
+        raw = str(question or '')
+        for m in _CAP_WORD_RX.finditer(raw):
+            before = raw[:m.start()].rstrip()
+            if not before or before[-1] in '.?!;:\n':
+                continue                    # a sentence opener is capitalized for that alone ("State how churn is defined")
+            names.add(normalize_question(m.group(0)))
+        novel = [w for w in names if w and len(w) >= 3 and w not in head_words]
+        if not novel:
+            return True
+        hay = set(normalize_question(' '.join(str((e or {}).get(k) or '') for k in ('reply', 'subject', 'universe', 'cohort', 'q'))).split())
+        return all(all(part in hay for part in w.split()) for w in novel)
+    except Exception:
+        return False
+
+
+def same_question(e, question):
+    """True when the entry was written for these very words: its stored
+    key is the question's, or the legacy 300-character key with nothing
+    new named past it."""
+    qn = normalize_question(question) if question else ''
+    return bool(qn) and (str((e or {}).get('qn') or '') == qn or _legacy_qn_match(e, qn, question))
+
+
 def find_exact(entries, question=None, key=None, ask_sig=None):
     """Best stored entry matching this exact ask: normalized question
     match first (strongest), else normalized key match with a
@@ -3461,7 +3504,7 @@ def find_exact(entries, question=None, key=None, ask_sig=None):
         return best
 
     if qn:
-        hit = _best(lambda e: e.get('qn') == qn)
+        hit = _best(lambda e: e.get('qn') == qn or _legacy_qn_match(e, qn, question))
         if hit is not None:
             return hit
     if key:
@@ -3781,7 +3824,7 @@ def consult(subject=None, question=None, metric_family=None,
         exact = find_exact(entries, question=question, key=key, ask_sig=_ask_sig)
         if exact:
             match = 'exact'
-            _by_meaning = exact.get('qn') != normalize_question(question) and not is_record_entry(exact)
+            _by_meaning = not same_question(exact, question) and not is_record_entry(exact)
         if not exact:
             gkey, gexact = _find_exact_anywhere(subjects, question)
             if gexact and journey_match(gexact, _ask_sig):
@@ -3842,7 +3885,7 @@ def consult(subject=None, question=None, metric_family=None,
         if not _can_replay:
             exact, match = None, None
         if _scoped and not _scoped.get('same_scope') and exact is not None \
-                and exact.get('qn') != normalize_question(question):
+                and not same_question(exact, question):
             exact, match = None, None     # an all-platform read is context for a platform-only question, never its answer
         if exact is not None and _svc_refuse:
             print(f"[insights-ledger] replay refused under {bucket.get('subject')!r}: the title is on record on other services than the question names")

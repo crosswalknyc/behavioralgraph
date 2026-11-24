@@ -330,7 +330,7 @@ def _pm_genpop_dimension_shares(dimension):
 @_ledger_gate.job_scope()
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led,
-                     panel_charge=None, probe=False, matrix_plan=None):
+                     panel_charge=None, probe=False, matrix_plan=None, title_plan=None):
     """Background body of one generated read. Writes the finished
     payload to the S3-backed job status the widget polls; a locked
     phone or reloaded tab picks the read up when it returns. As the
@@ -362,6 +362,12 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             payload = _C._pm_run_matrix_read(matrix_plan, text=text, history=history, mr=mr, base=base,
                                           digest_block=digest_block, anchors_block=anchors_block,
                                           led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
+        elif title_plan:
+            # a pasted list of titles: one read per title, one answer (prometheus.title_list_job, 2026-11-24)
+            from prometheus.title_list_job import run_title_list_read as _run_titles
+            payload = _run_titles(title_plan, text=text, history=history, mr=mr, base=base,
+                                  digest_block=digest_block, anchors_block=anchors_block,
+                                  led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
         else:
             payload = _C._pm_generate_read_core(
                 text=text, history=history, mr=mr, base=base,

@@ -586,11 +586,14 @@ def complete(p, results, *, core, text, stage_cb=None, subject='', genpop=None, 
     return results, info
 
 
-def run(p, *, core, text, stage_cb=None, max_workers=MAX_WORKERS, retries=1):
+def run(p, *, core, text, stage_cb=None, max_workers=MAX_WORKERS, retries=1, question_fn=None):
     """Run every piece through `core(piece_text, piece_label) -> res or
     None` with a bounded pool, one retry per piece, progress on
-    `stage_cb`. Returns {piece_label: res} for the pieces that landed."""
+    `stage_cb`. Returns {piece_label: res} for the pieces that landed.
+    `question_fn(text, p, piece)` writes a piece's question (the matrix
+    piece by default; a title-list piece hands its own, 2026-11-24)."""
     pieces = list(p['pieces'])
+    _qfn = question_fn if callable(question_fn) else piece_question
     n = len(pieces)
     results = {}
     done = {'n': 0}
@@ -605,7 +608,7 @@ def run(p, *, core, text, stage_cb=None, max_workers=MAX_WORKERS, retries=1):
             pass
 
     def _one(idx, piece):
-        q = piece_question(text, p, piece)
+        q = _qfn(text, p, piece)
         res = None
         for attempt in range(retries + 1):
             try:

@@ -1090,6 +1090,8 @@ _QUALIFIED_AUDIENCE_RX = re.compile(
     r"^(?P<name>[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)\s+(?P<verb>viewers|readers|listeners|players|watchers|buyers|shoppers|users|fans|subscribers|customers)"
     r"(?:\s+on\s+(?P<platform>[A-Za-z0-9+&' .-]{2,40}?))?"
     r"(?:\s*,\s*|\s+(?:in|for|during)\s+)?(?P<window>(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}|q[1-4]\s+\d{4}|\d{4}|(?:last|trailing|past)\s+\d+\s+(?:days|weeks|months))?\s*$", re.I)
+_QUOTED_PLACE_RX = re.compile(r"\s*(?:section|shelf|tab|row|rail|carousel|hub|page|category|menu|feed|playlist|channel|tier|plan|label|button|banner)\b", re.I)
+_AVAILABILITY_LABEL_RX = re.compile(r"(?:free(?:\s+(?:with|w/)\s+ads?)?|with ads?|ad[- ]supported|free to watch|included|buy|rent|rental|purchase|premium|basic|standard)", re.I)
 _QUOTED_WITH_TYPE_RX = re.compile(
     r"(?<![A-Za-z0-9])[\"\u201c\u201d'\u2018\u2019](?P<name>[^\"\u201c\u201d'\u2018\u2019]{2,60})[\"\u201c\u201d'\u2018\u2019](?![A-Za-z0-9])\s*(?P<kind>webtoon|comic|manga|book|novel|series|show|film|movie|podcast|game|title)?", re.I)
 _LIKE_IN_TEXT_RX = re.compile(
@@ -1849,6 +1851,19 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
     listed title, or the name in "the same for X" / "what about X", beats
     the thread and the page, and a listed title is bound under its one
     name however it was typed ("chicago pd", "Chicago P.D")."""
+    # a pasted list of two or more titles is bound as the list: every lane names the titles, never a phrase from
+    # the text or the first title alone (Nov 23 2026 ask audit, fix 6; prometheus.title_list_read)
+    try:
+        from . import title_list_read as _tlr
+        _tp = _tlr.plan(text, reading if reading is not None else _request_reading())
+    except Exception:
+        _tp = None
+    if _tp:
+        _tq = {'titles': list(_tp['titles']), 'title_list': True}
+        if _tp.get('platform'):
+            _tq['scope_platform'] = _tp['platform']      # where the titles are read; the label stays the titles (the quote adds the service its own way)
+        _tn = _tlr._join(_tp['titles'])
+        return Subject('title', _tn, _tn, _tq, 'words', 0.85)
     s = _bind_any(text, history, page, reading, catalog_names, normalize)
     try:
         from . import named_title as _nt
@@ -1861,6 +1876,24 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
             return Subject('title', name, name, dict(s.qualifiers or {}), src, 0.85, s.pointed)
     except Exception:
         pass
+    if not (s and s.source == 'words'):
+        # the one title a list cue names with its window ("The titles and window is Beta Lake (10/1/26-11/9/26)")
+        # is the subject when nothing else in the words is (2026-11-23)
+        try:
+            from . import title_list_read as _tlr
+            one = _tlr.listed_single(text)
+        except Exception:
+            one = None
+        if one:
+            q = {'window': one['window']}
+            try:
+                from . import platform_scope as _ps
+                named = {k: v for k, v in (_ps.named(text) or {}).items() if v != 'example'}
+                if len(named) == 1:
+                    q['platform'] = list(named)[0]
+            except Exception:
+                pass
+            return Subject('title', one['title'], one['title'], q, 'words', 0.8, s.pointed if s else False)
     return s
 
 
@@ -1999,8 +2032,12 @@ def _bind_words(text, history=None, page='', reading=None, catalog_names=None, n
             if c:
                 quals['condition'] = c
             return Subject('title', name, name, quals, 'words', 0.9)
-    # 4. a quoted title ("'Lore Olympus' webtoon", "the title 'mutiny'")
+    # 4. a quoted title ("'Lore Olympus' webtoon", "the title 'mutiny'"); a quoted place on a service ("the
+    # “Free with ads” section", "the 'Top 10' row") or an availability label is not a title (2026-11-23,
+    # Armine's pasted ask was bound to "Free")
     m = _QUOTED_WITH_TYPE_RX.search(t)
+    if m and (_QUOTED_PLACE_RX.match(t[m.end():]) or _AVAILABILITY_LABEL_RX.fullmatch(m.group('name').strip())):
+        m = None
     if m:
         name = clean_display(m.group('name'), t, casing)
         if name:

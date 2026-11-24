@@ -478,6 +478,20 @@ def _population_label(phrase):
     return US_PEOPLE
 
 
+# words that introduce a list of measures, not an audience
+_METRIC_LEAD = frozenset(('including', 'includes', 'include', 'namely', 'like', 'metrics', 'measures', 'eg', 'e.g.', 'ie', 'i.e.'))
+# the qualifiers a measure carries ("unique viewers", "total US viewers", "monthly active users")
+_METRIC_QUALIFIERS = frozenset(('unique', 'total', 'distinct', 'monthly', 'weekly', 'daily', 'annual', 'yearly', 'average', 'avg',
+                                'median', 'net', 'gross', 'cumulative', 'active', 'new', 'returning', 'repeat', 'overall', 'peak',
+                                'projected', 'estimated', 'measured', 'reported', 'dedup', 'deduped', 'deduplicated', 'unduplicated',
+                                'incremental', 'reach'))
+
+
+def _metric_qualifier(word):
+    w = bare_word(word)
+    return bool(w) and (w in _METRIC_QUALIFIERS or re.fullmatch(r"u\.?s\.?a?|usa|american|us", w) is not None)
+
+
 def named_universe(text, known=None):
     """The universe phrases the words name on their own, in order of
     appearance: 'people who watched Fightland on Starz', 'potential Paw
@@ -521,9 +535,14 @@ def named_universe(text, known=None):
         # the brand is the name beside the noun: leading verbs and function
         # words ("what do Costco members", "compare Gunna fans") come off
         btoks = _clean_phrase(m.group('brand')).split()
-        while btoks and (ordinary_word(btoks[0]) or bare_word(btoks[0]) in _LABEL_LOWER) and not _ACRONYM_RX.match(btoks[0]):
+        while btoks and (ordinary_word(btoks[0]) or bare_word(btoks[0]) in _LABEL_LOWER or bare_word(btoks[0]) in _METRIC_LEAD) and not _ACRONYM_RX.match(btoks[0]):
             btoks.pop(0)
         if not btoks:
+            continue
+        # a metric named in the ask ("including U.S. unique viewers, total views, and plays") is what is measured,
+        # never the audience: the words beside the noun are measure qualifiers and the US (2026-11-23, Armine's
+        # five-title ask opened "On Including U.S. Unique viewers:" and its emailed file carried that name)
+        if all(_metric_qualifier(w) for w in btoks):
             continue
         b = ' '.join(btoks)
         if any(ordinary_word(w) for w in b.lower().split()) and not any(c.isupper() for c in b):
