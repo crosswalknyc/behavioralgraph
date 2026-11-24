@@ -483,9 +483,10 @@ class RetiredPairTests(unittest.TestCase):
         self.assertTrue(M._is_default_pair(*self.RETIRED))
         self.assertTrue(M._is_default_pair('2025-11-10', '2026-11-10', '2026-11-10T21:54:51Z'))
         self.assertFalse(M._is_default_pair('2024-06-01', '2025-06-01', '2026-11-10T21:54:51Z'))
-        import prometheus.legacy.chat as C
-        import inspect
-        src = inspect.getsource(C)
+        # the legacy chat text as the suites read it: chat.py with every extracted block spliced
+        # back at its marker (scripts/_pm_legacy_view), so the sizing prompt is found wherever it lives
+        sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+        src = __import__('_pm_legacy_view').legacy_view()
         self.assertNotIn("'2025-07-01'", src)
         # the sizing prompt named the retired pair as its default and its example (sizings were banked on it into
         # November); it carries the computed trailing year now
