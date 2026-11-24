@@ -61277,13 +61277,14 @@ def api_v1_schema():
             },
             'GET /api/v1/profiles/library': {
                 'description': ('Every profile in the shared library with '
-                                'its details: name, subject, type, '
-                                'category, window, audience and the '
+                                'its details: name, file name, subject, '
+                                'type, category, window, audience and the '
                                 'sections it holds. Free.'),
                 'query': {
                     'q': {'type': 'string', 'required': False,
-                          'description': ('search names and subjects; case '
-                                          'and punctuation do not matter')},
+                          'description': ('search names, subjects and file '
+                                          'names; case and punctuation do '
+                                          'not matter')},
                     'category': {'type': 'string', 'required': False,
                                  'description': 'e.g. ACTOR or MUSICIAN/BAND'},
                     'type': {'type': 'string', 'required': False,
@@ -61314,6 +61315,8 @@ def api_v1_schema():
                     'id': ('string - pf_ and 20 letters and digits; stable '
                            'for the life of the profile'),
                     'name': 'string - the name in the library',
+                    's3_key': ('string - the file name, the same value '
+                               '/check returns as existing_match_s3_key'),
                     'subject': 'string',
                     'type': ('Total Universe, Avid Fan, or the cut label '
                              '(Female, 18-24, 2025 Total Universe, Global)'),

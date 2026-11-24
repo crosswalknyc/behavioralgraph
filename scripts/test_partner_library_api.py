@@ -206,10 +206,12 @@ INDEX = {
     ORPHAN: _rec('2025-10-01', '2026-10-01', 211983),
 }
 
-ITEM_FIELDS = {'id', 'name', 'subject', 'type', 'category', 'window', 'updated_at', 'us_audience', 'worldwide_audience',
-               'sections', 'cuts', 'parent_id'}
-INTERNAL_WORDS = ('s3_key', '"_', '.csv', 'sample', '"etag"', '"proj"', '"columns"', '"market"', 'us_share',
-                  'dashboard-inputs', 'system/')
+ITEM_FIELDS = {'id', 'name', 's3_key', 'subject', 'type', 'category', 'window', 'updated_at', 'us_audience',
+               'worldwide_audience', 'sections', 'cuts', 'parent_id'}
+# The file name is the one file field (s3_key, 2026-11-23); every other
+# internal word stays out of a response.
+INTERNAL_WORDS = ('"_', 'sample', '"etag"', '"proj"', '"columns"', '"market"', 'us_share', 'dashboard-inputs',
+                  'system/', 's3://')
 
 
 def _lst(params=None, inm=None, index=None, catalog=None):
@@ -437,9 +439,13 @@ class TheList(_Base):
             self.assertEqual(set(p['window']), {'start', 'end', 'label'})
             for c in p['cuts']:
                 self.assertEqual(set(c), {'id', 'label'})
-        blob = json.dumps(_all())
+        body = _all()
+        blob = json.dumps(body)
         for word in INTERNAL_WORDS:
             self.assertNotIn(word, blob, word)
+        for p in body['profiles']:                      # a file name shows only as the file name
+            blob = blob.replace(json.dumps(p['s3_key']), '""')
+        self.assertNotIn('.csv', blob)
 
     def test_family_links_types_and_dates(self):
         body = _all()
@@ -656,6 +662,69 @@ class CompanyPrivate(_Base):
             self.assertIn('_profile_catalog_for_chat()', seg)     # admin-hidden files are already out of it
         lm = _read(os.path.join(ROOT, 'prometheus', 'library_match.py'))
         self.assertIn('hidden = _H._admin_hidden_profile_keys()', lm)
+
+
+class FileName(_Base):
+    """Each profile carries its file name, the value /check returns as
+    existing_match_s3_key (the client's ask, approved 2026-11-23)."""
+
+    def test_every_item_and_cut_carries_its_own_file_name(self):
+        by_id = {PLI.profile_id(k): k for k in PUBLIC_KEYS}
+        for p in _all()['profiles']:
+            self.assertEqual(p['s3_key'], by_id[p['id']])
+        body, status, _h = PL.detail_route(PLI.profile_id(TS_NEW), {}, None, CATALOG, INDEX)
+        self.assertEqual(status, 200)
+        self.assertEqual(body['profile']['s3_key'], TS_NEW)
+        self.assertEqual([c['s3_key'] for c in body['cuts']], [TS_2025, TS_AVID, TS_FEM])
+
+    def test_never_a_folder_a_bucket_or_another_file_field(self):
+        for p in _all()['profiles']:
+            k = p['s3_key']
+            self.assertNotIn('/', k)
+            self.assertFalse(k.lower().startswith(('dashboard-inputs', 's3:')), k)
+            self.assertTrue(k.lower().endswith('.csv'), k)
+        det = PL.detail_route(PLI.profile_id(GU), {}, None, CATALOG, INDEX)[0]
+        for c in [det['profile']] + det['cuts']:
+            self.assertEqual(set(c), ITEM_FIELDS | {'section_details'})
+
+    def test_q_finds_a_file_name(self):
+        for q, want in (('Taylor_Swift_11_01_2026_14_22.csv', [TS_NEW]),
+                        ('Guinness - Global - Avid Fan.csv', [GU_GLOBAL_AVID]),
+                        ('06_01_2026', [TS_OLD])):
+            body, status, _h = _lst({'q': q, 'limit': '200'})
+            self.assertEqual(status, 200, q)
+            self.assertEqual([p['s3_key'] for p in body['profiles']], want, q)
+
+    def test_the_belt_never_strips_it(self):
+        tu, cut = 'Synth_Pop_Fans_11_01_2026_10_00.csv', 'Synth Pop Fans - Avid Fan.csv'
+        self.assertEqual(G.scrub_partner_text(cut, fallback=''), '')        # the belt alone would blank this one
+        catalog = CATALOG + [{'s3_key': tu, 'display_name': 'Synth Pop Fans', 'category': 'MUSICIAN/BAND'},
+                             {'s3_key': cut, 'display_name': 'Synth Pop Fans - Avid Fan', 'category': 'MUSICIAN/BAND'}]
+        index = dict(INDEX, **{k: _rec('2025-11-01', '2026-11-01', 2318467) for k in (tu, cut)})
+        orig_house, orig_lib = G._PARTNER_SKIP_KEYS, PL.SKIP_KEYS
+        no_house = frozenset(k for k in orig_house if k != 's3_key')
+
+        def _keys(house, lib):
+            G._PARTNER_SKIP_KEYS, PL.SKIP_KEYS = house, lib
+            try:
+                PL.reset_cache()
+                body, status, _h = _lst({'q': 'synth pop', 'limit': '200'}, catalog=catalog, index=index)
+            finally:
+                G._PARTNER_SKIP_KEYS, PL.SKIP_KEYS = orig_house, orig_lib
+                PL.reset_cache()
+            self.assertEqual(status, 200)
+            return body, sorted(p['s3_key'] for p in body['profiles'])
+
+        for house in (orig_house, no_house):                                  # with or without the house list's entry
+            body, keys = _keys(house, orig_lib)
+            self.assertEqual(keys, [cut, tu])
+            self.assertEqual(PL.violations(body), [])
+        _body, keys = _keys(no_house, frozenset(orig_lib - {'s3_key'}))      # the library's own entry is what holds it
+        self.assertEqual(keys, ['', tu])
+
+    def test_the_allowlist_is_narrow(self):
+        self.assertEqual(PL.SKIP_KEYS, frozenset({'id', 'parent_id', 'name', 's3_key', 'subject', 'type', 'label',
+                                                  'updated_at', 'next_cursor', 'window', 'start', 'end'}))
 
 
 class Belt(_Base):
@@ -947,6 +1016,88 @@ class Routes(unittest.TestCase):
         self.assertEqual(resolve(PLI.profile_id(GU)), 'Guinness')
         self.assertIsNone(resolve(PLI.profile_id('Never_Built_01_01_2026_10_00.csv')))
         self.assertEqual(self.catalog_calls, 1)
+
+
+class _CheckRequest:
+    def __init__(self, body):
+        self._body = body
+        self.headers = {}
+        self.args = {}
+
+    def get_json(self, force=False, silent=False):
+        return self._body
+
+
+class MatchesCheck(unittest.TestCase):
+    """The file name is exactly what POST /api/v1/profiles/check returns as
+    existing_match_s3_key for the same profile: the real check route body
+    and the real first step of the decision (a library id read as the
+    profile's own name); only the engine's match, which cannot run
+    offline, is stood in."""
+
+    SAMPLE = (GU, TS_NEW, TS_AVID, TS_FEM, GU_GLOBAL, GU_GLOBAL_AVID)
+
+    def setUp(self):
+        PL.reset_cache()
+        ns = {'__name__': 'app_under_test', 'app': _App(), 'traceback': __import__('traceback'), 're': re, 'json': json,
+              'request': None, 'ADDON_CUT_CREDITS': 3}
+        ns['jsonify'] = lambda body: _Resp(json.loads(json.dumps(body, default=str)))
+        ns['_synth_chat_gate'] = lambda allow_api_key=True: ({'username': 'acme', '_auth_via': 'api_key'}, None)
+        ns['_partner_key_id'] = lambda u: 'key:check'
+        ns['_profile_catalog_for_chat'] = lambda: list(CATALOG)
+        ns['_v1_parse_check_run_body'] = lambda body: (str((body or {}).get('prompt') or '').strip(), True, None, None, None)
+        ns['_partner_credit_preflight'] = lambda username, min_credits=0: (None, None)
+        ns['_existing_match_charge_credits'] = lambda *a, **k: 0
+        ns['_scrub_identity_dashes'] = lambda s: s
+        ns['_v1_price_usd_for'] = lambda *a, **k: 0.0
+        ns['_v1_price_usd_for_cut'] = lambda: 100.0
+        ns['_draft_window_field'] = lambda d, dec: None
+        ns['_v1_check_caveats'] = lambda: []
+        ns['_generate_presigned_profile_url'] = lambda k, expires_seconds=0: 'https://signed.example/file'
+        ns['_v1_conclude'] = self._engine
+        code = _extract_src(_APP_SRC(), ['api_v1_profiles_check', '_v1_prompt_for_library_id', '_v1_profile_id',
+                                         '_scrub_v1_freetext', '_V1_BANNED_TOKENS', '_rate_limit_check',
+                                         '_rate_limit_response', '_V1_RATE_LIMITS', '_v1_rate_windows',
+                                         '_v1_rate_windows_lock'])
+        exec(compile('\n\n'.join(code), APP_PY, 'exec'), ns)
+        self.ns = ns
+
+    def _engine(self, prompt, run_avid=True, identity_context=None, competitor_brands=None, actor=None):
+        prompt, err = self.ns['_v1_prompt_for_library_id'](prompt)       # _v1_conclude's own first step
+        if err is not None:
+            return None, err
+        hits = [e for e in CATALOG
+                if e['s3_key'] in PUBLIC_KEYS and PL._ws(e['display_name']).lower() == PL._ws(prompt).lower()]
+        hits.sort(key=lambda e: PL._stamp_iso(e['s3_key']) or '', reverse=True)     # the newest file of that name
+        e = hits[0]
+        draft = {'subject': prompt, 'existing_match_display_name': e['display_name'], 'existing_match_days_old': 4,
+                 'decision_reason': 'Already in the library.'}
+        return {'draft': draft, 'decision': 'existing_match', 'ex_key': e['s3_key'], 'd_type': None, 'cuts': [],
+                'price': 0, 'buildable': True, 'brief_summary': '', 'match_score': 0.97}, None
+
+    def _check(self, prompt):
+        self.ns['request'] = _CheckRequest({'prompt': prompt})
+        out = self.ns['api_v1_profiles_check']()
+        if isinstance(out, tuple):
+            return out[0].body, int(out[1])
+        return out.body, int(out.status_code)
+
+    def test_the_field_equals_checks_existing_match_s3_key(self):
+        listed = {p['id']: p for p in _all()['profiles']}
+        for key in self.SAMPLE:
+            pid = PLI.profile_id(key)
+            item = listed[pid]
+            det = PL.detail_route(item['parent_id'] or pid, {}, None, CATALOG, INDEX)[0]
+            in_detail = [c['s3_key'] for c in [det['profile']] + det['cuts'] if c['id'] == pid]
+            self.assertEqual(in_detail, [item['s3_key']], key)
+            for prompt in (pid, item['name']):
+                body, status = self._check(prompt)
+                self.assertEqual(status, 200, (key, prompt, body))
+                self.assertEqual(body['decision'], 'existing_match')
+                self.assertEqual(body['existing_match_s3_key'], item['s3_key'], (key, prompt))
+                self.assertEqual(body['existing_match_profile_id'], pid, (key, prompt))
+        self.assertTrue(any(listed[PLI.profile_id(k)]['parent_id'] for k in self.SAMPLE))           # cuts in the sample
+        self.assertTrue(listed[PLI.profile_id(GU_GLOBAL)]['worldwide_audience'])                   # and the worldwide one
 
 
 class Bulk(unittest.TestCase):

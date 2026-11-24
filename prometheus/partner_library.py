@@ -10,15 +10,23 @@ same day.
 
 What a key sees: every profile in the shared library
 (partner-api-shared-catalog.mdc), Total Universes and their cuts, each
-with an id, name, subject, type, category, window, updated_at, US
-audience (and the worldwide audience on a worldwide profile), the
-sections it holds in plain words, its parent, and a Total Universe's
-cuts. The detail call adds every category inside each section, for the
-profile and each of its cuts. Free, rate-limited, an ETag for caching.
+with an id, name, file name (``s3_key``), subject, type, category,
+window, updated_at, US audience (and the worldwide audience on a
+worldwide profile), the sections it holds in plain words, its parent,
+and a Total Universe's cuts. The detail call adds every category inside
+each section, for the profile and each of its cuts. Free, rate-limited,
+an ETag for caching.
 
-What a key never sees: file keys or paths, sample counts, how a file was
-made, admin-hidden files, and the general population baselines (served
-by GET /api/v1/genpop). Work private to one company never reaches this
+The file name is the one file field a key reads (the client's ask,
+approved by Jenna 2026-11-23 4:14 PM PT): exactly the value /check
+returns as ``existing_match_s3_key`` for the profile, already partner
+visible there. It is a file at the top of the profile bucket, so it never
+carries a folder or the bucket's name.
+
+What a key never sees: any other path, bucket names, sample counts, how
+a file was made, admin-hidden files, and the general population
+baselines (served by GET /api/v1/genpop). Work private to one company
+never reaches this
 list: Brand Partnership valuations, Digital Twins rooms, journeys and the
 decks and data files we deliver each live in their own folder, and only a
 .csv at the top of the profile bucket that is in the dashboard's shared
@@ -466,7 +474,7 @@ def build_items(catalog, index):
             it['us_audience'] = us
     for it in raw:
         it['_sort'] = '\x1f'.join((it['subject'].lower(), '0' if not it['_label'] else '1', it['name'].lower(), it['id']))
-        it['_q'] = _fold(it['name']) + ' ' + _fold(it['subject'])
+        it['_q'] = _fold(it['name']) + ' ' + _fold(it['subject']) + ' ' + _fold(it['_key'])
     raw.sort(key=lambda i: i['_sort'])
     return raw, {i['id']: i for i in raw}
 
@@ -474,7 +482,7 @@ def build_items(catalog, index):
 def public(it, details=False):
     """The fields a key reads for one item."""
     out = {
-        'id': it['id'], 'name': it['name'], 'subject': it['subject'], 'type': it['type'],
+        'id': it['id'], 'name': it['name'], 's3_key': it['_key'], 'subject': it['subject'], 'type': it['type'],
         'category': it['category'], 'window': dict(it['window']), 'updated_at': it['updated_at'],
         'us_audience': it['us_audience'], 'worldwide_audience': it['worldwide_audience'],
         'sections': list(it['sections']), 'cuts': [dict(c) for c in it['cuts']], 'parent_id': it['parent_id'],
@@ -552,7 +560,11 @@ def name_for_id(pid, catalog):
 
 
 # ---------------------------------------------------------------- the belt, the ETag
-SKIP_KEYS = frozenset({'id', 'parent_id', 'name', 'subject', 'type', 'label', 'updated_at', 'next_cursor',
+# Identity fields the belt leaves as written. 's3_key' is the profile's file
+# name, the value /check already returns as existing_match_s3_key
+# (2026-11-23); a name like Bill_Pullman_... must reach the key whole. No
+# other file field is ever listed here.
+SKIP_KEYS = frozenset({'id', 'parent_id', 'name', 's3_key', 'subject', 'type', 'label', 'updated_at', 'next_cursor',
                        'window', 'start', 'end'})
 
 
