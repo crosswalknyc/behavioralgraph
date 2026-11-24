@@ -317,12 +317,33 @@ def normalize_footprint(raw) -> dict:
     }
 
 
-def has_footprint(fp: Optional[dict]) -> bool:
+def has_footprint(fp: Optional[dict], window: Optional[dict] = None) -> bool:
+    """Something the reach can count. With the window given, a press piece
+    dated outside it counts nothing (derive_reach), so it gives the
+    campaign no footprint on its own."""
     fp = fp or {}
-    return bool(fp.get("press") or fp.get("events") or (fp.get("commercial") or {}).get("platforms")
+    return bool(_press_countable(fp, window) or fp.get("events") or (fp.get("commercial") or {}).get("platforms")
                 or fp.get("viral_posts") or (fp.get("site") or {}).get("brand_site_us_monthly_visits")
                 or (fp.get("site") or {}).get("brand_site_us_monthly_uniques")
                 or _links_countable(fp))
+
+
+def _press_countable(fp: dict, window: Optional[dict] = None) -> bool:
+    pieces = [p for p in (fp.get("press") or []) if isinstance(p, dict)]
+    if not window:
+        return bool(fp.get("press"))
+    w0, w1 = _date((window or {}).get("start")), _date((window or {}).get("end"))
+    if any(_in_window(p.get("date"), w0, w1) for p in pieces):
+        return True
+    return int(fp.get("press_pieces_total") or 0) > len(pieces)      # unlisted pickups carry no date
+
+
+def _in_window(day, w0, w1) -> bool:
+    """True for a piece dated inside the window, or with no date."""
+    d = _date(day)
+    if d is None:
+        return True
+    return not ((w0 and d < w0) or (w1 and d > w1))
 
 
 def _links_countable(fp: dict) -> bool:
@@ -512,10 +533,21 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
         lines.append({"line": "collection pages", "people": _messy(salt, "site_p", site_people),
                       "basis": f"{share * 100:.1f}% of the brand site's {days}-day US visitors reached the collection pages"})
 
-    # press: every piece, reads to people
+    # press: every piece, reads to people. A piece published outside the
+    # window (before the campaign began, or after the attribution window)
+    # counts only the reads shown inside the window, and a story's
+    # in-window reads cannot be shown, so it counts nobody: the rule the
+    # pasted posts follow (Jenna 2026-11-24). An undated piece counts as
+    # it always has.
+    w = window or {}
+    w0, w1 = _date(w.get("start")), _date(w.get("end"))
     press_reads = 0.0
     pieces = list(fp.get("press") or [])
+    counted = 0
     for i, p in enumerate(pieces):
+        if not _in_window(p.get("date"), w0, w1):
+            continue
+        counted += 1
         reads = _num(p.get("article_reads_us"))
         if not reads:
             klass = _outlet_class(p.get("outlet"), p.get("country"))
@@ -530,7 +562,7 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
     press_people = press_reads * _band(salt, "pressdd", _PRESS_DEDUPE) if press_reads else 0.0
     if press_people:
         lines.append({"line": "press", "people": _messy(salt, "press_p", press_people),
-                      "basis": f"{len(pieces) + extra} pieces across national, fashion and trade titles, counted once per reader"})
+                      "basis": f"{counted + extra} pieces across national, fashion and trade titles, counted once per reader"})
 
     # the film and the launch posts
     us_share = _band(salt, "usshare", _US_SHARE_GLOBAL_BRAND)
@@ -644,7 +676,7 @@ def derive_reach(fp: dict, campaign: Optional[dict], salt: str, window_days: int
         "search_people": _messy(salt, "search_p", search_people) if search_people else 0,
         "views_total": _messy(salt, "views", views + lr["views"]) if (views + lr["views"]) else 0,
         "link_posts": lr["posts"],
-        "press_pieces": len(pieces) + extra,
+        "press_pieces": counted + extra,
         "events": len(fp.get("events") or []),
     }
 

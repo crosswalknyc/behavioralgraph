@@ -1834,7 +1834,7 @@ def build_payload(inputs: dict, prim: dict, *,
     talent_n = int(prim["audience_size"])
     talent_projected = int(prim.get("_talent_audience_in_window") or prim["projected_audience_size"])
     reach = (_camp.derive_reach(fp, campaign, salt, windows["event"]["days"], window=_link_window(windows))
-             if _camp.has_footprint(fp) else None)
+             if _camp.has_footprint(fp, _link_window(windows)) else None)
     if reach and int(reach.get("reach_us") or 0) >= talent_projected:
         projected = int(reach["reach_us"])
         n = _messy((salt, "reach_n"), projected / _camp.PANEL_WEIGHT)
@@ -2584,14 +2584,14 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
         # still nothing, and the order is held with a plain question. The
         # talent's whole audience is never the campaign's reach.
         from migration import bpiq_campaign as _camp0
-        if not _camp0.has_footprint(campaign.get("footprint") or {}):
+        if not _camp0.has_footprint(campaign.get("footprint") or {}, _link_window(windows)):
             try:
                 _again = research_footprint(dict(inputs, research_hints=list(inputs.get("research_hints") or []) + [
                     "Second look: list EVERY dated piece of coverage, review, trade story, syndication and pickup about this "
                     "campaign in and around the window with its date and outlet, the brand's own campaign pages and posts, "
                     "and any launch event. A piece dated inside the window counts even when it is small."]),
                     claude_json, tools=tools)
-                if _camp0.has_footprint(_again):
+                if _camp0.has_footprint(_again, _link_window(windows)):
                     campaign["footprint"] = _again
                     print(f"[bpiq-synth] second look found {len(_again.get('press') or [])} press pieces, "
                           f"{len(_again.get('events') or [])} events")
@@ -2606,7 +2606,7 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
                     print(f"[bpiq-synth] pieces registry (second look) skipped: {e}")
             except Exception as e:
                 print(f"[bpiq-synth] second look skipped: {e}")
-        if not _camp0.has_footprint(campaign.get("footprint") or {}) and not whole_audience_fallback_allowed():
+        if not _camp0.has_footprint(campaign.get("footprint") or {}, _link_window(windows)) and not whole_audience_fallback_allowed():
             print("[bpiq-synth] nothing countable for the campaign's reach after a second look; the order is held, "
                   "no figure on the talent's whole audience")
             raise NoCountableReach(inputs)
@@ -2652,7 +2652,7 @@ def _synthesize(inputs: dict, claude_json: Callable, *,
     _fp = campaign.get("footprint") or {}
     reach_ctx = None
     drop_ctx = None
-    if _camp.has_footprint(_fp):
+    if _camp.has_footprint(_fp, _link_window(windows)):
         _reach = _camp.derive_reach(_fp, campaign, run_salt(inputs), windows["event"]["days"],
                                     window=_link_window(windows))
         if int(_reach.get("reach_us") or 0) > 0:
