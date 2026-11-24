@@ -85,6 +85,10 @@ _seed_assets_done = False
 _s3 = None
 _ses = None
 SEND_LEASE_TTL = 180
+# Send-snapshot row status for an open, click or unsubscribe on a letter
+# that was not out yet: the person held a [Test] copy. Such a row never
+# counts toward stats, never makes a letter sent, and is never sent to.
+NON_COUNTING_STATUS = "test"
 
 
 def _utcnow():
@@ -746,8 +750,37 @@ def _send_finished(camp):
     return False
 
 
+def _send_path_delivered(camp):
+    """True only when the real send path ran for this letter and delivered a copy.
+
+    _claim_send is the only writer of the send snapshot's started_at, and
+    _run_send stamps sent_at on every row it delivers. Rows written by the
+    open and click tracker carry neither, so engagement alone (for example
+    opens on a [Test] copy) can never make a letter read as sent.
+    """
+    cid = (camp or {}).get("id")
+    if not cid:
+        return False
+    try:
+        snap = get_send_snapshot(cid) or {}
+    except Exception:
+        traceback.print_exc()
+        return False
+    if not snap.get("started_at"):
+        return False
+    return any(
+        (row or {}).get("status") == "sent" and (row or {}).get("sent_at")
+        for row in (snap.get("recipients") or {}).values()
+    )
+
+
 def _effective_status(camp):
-    """A letter that has gone out is sent, even if a crash left status as draft or sending."""
+    """A letter that has gone out is sent, even if a crash left status as draft or sending.
+
+    Only the send path makes a letter sent. A scheduled letter is never
+    promoted, and a draft is promoted only when its send snapshot shows a
+    claimed send that delivered copies. The public archive gates on this.
+    """
     status = (camp or {}).get("status") or "draft"
     if status == "sending":
         if _lease_live(camp):
@@ -756,7 +789,7 @@ def _effective_status(camp):
             return "sent"
         return "sending"
     sent = _stats_int(camp, "sent")
-    if sent > 0 and status in ("draft", "", None):
+    if sent > 0 and status in ("draft", "", None) and _send_path_delivered(camp):
         return "sent"
     return status
 
@@ -1861,8 +1894,10 @@ def campaign_results_export_table(cid, state=None, snap=None, store=None):
         email = _valid_email(key) or (key or "").strip().lower()
         if not email or email in seen:
             continue
-        seen.add(email)
         row = row or {}
+        if row.get("status") == NON_COUNTING_STATUS:
+            continue
+        seen.add(email)
         clicks = row.get("clicks") or []
         click_count = sum(int(c.get("count") or 1) for c in clicks)
         links = "; ".join(c.get("url") or "" for c in clicks if c.get("url"))
@@ -2146,6 +2181,9 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
     for row in unique_recipient_map(recipients).values():
         email = row["email"]
         prev = existing_norm.get(email) or {}
+        if prev.get("status") == NON_COUNTING_STATUS:
+            # opens and clicks on a [Test] copy never ride into the real send
+            prev = {}
         already = prev.get("status") == "sent"
         recips[email] = {
             "name": row.get("name") or prev.get("name") or "",
@@ -2372,6 +2410,8 @@ def _run_send(campaign_id):
         delivered = set()
         n = 0
         for email, row in recips.items():
+            if row.get("status") == NON_COUNTING_STATUS:
+                continue
             if email in delivered or row.get("status") == "sent":
                 if row.get("status") == "sent":
                     sent += 1
@@ -2463,7 +2503,7 @@ def _run_send(campaign_id):
             try:
                 recips = (get_send_snapshot(campaign_id).get("recipients") or {})
                 leftover = any(
-                    (r or {}).get("status") not in ("sent", "failed")
+                    (r or {}).get("status") not in ("sent", "failed", NON_COUNTING_STATUS)
                     for r in recips.values()
                 )
             except Exception:
@@ -2718,7 +2758,10 @@ def send_test(campaign_id, to_email):
 
 def _stats_from_snapshot(snap):
     stats = _empty_stats()
-    recips = snap.get("recipients") or {}
+    recips = {
+        email: row for email, row in (snap.get("recipients") or {}).items()
+        if (row or {}).get("status") != NON_COUNTING_STATUS
+    }
     stats["recipients"] = len(recips)
     clickers = set()
     for email, row in recips.items():
@@ -2748,13 +2791,23 @@ def _record_engagement(campaign_id, email, kind, url=None):
         return
     now = _utcnow()
 
+    def _new_row_status():
+        # Fresh on every attempt: a CAS retry can land after the real send was
+        # claimed. Until then, a token with no row can only be a [Test] copy's.
+        camp = _campaign(load_state_raw(), campaign_id) or {}
+        if camp.get("status") in ("sending", "sent"):
+            return "sent"
+        return NON_COUNTING_STATUS
+
     def _apply(snap):
         if not isinstance(snap, dict):
             snap = {}
         recips = snap.setdefault("recipients", {})
-        row = recips.setdefault(email, {
-            "name": "", "status": "sent", "open_count": 0, "clicks": [],
-        })
+        if email not in recips:
+            recips[email] = {
+                "name": "", "status": _new_row_status(), "open_count": 0, "clicks": [],
+            }
+        row = recips[email]
         if kind == "open":
             row["open_count"] = int(row.get("open_count") or 0) + 1
             if not row.get("opened_at"):
@@ -2817,7 +2870,7 @@ def _kick_due_sends():
             snap = get_send_snapshot(cid)
             queued = [
                 e for e, r in (snap.get("recipients") or {}).items()
-                if (r.get("status") or "") != "sent"
+                if (r.get("status") or "") not in ("sent", NON_COUNTING_STATUS)
             ]
             if queued:
                 start_send_async(cid)
@@ -3614,6 +3667,8 @@ def api_report(cid):
     recips = []
     link_counts = {}
     for email, row in (snap.get("recipients") or {}).items():
+        if (row or {}).get("status") == NON_COUNTING_STATUS:
+            continue
         recips.append({
             "email": email,
             "name": row.get("name") or "",
