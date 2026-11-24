@@ -380,12 +380,11 @@ def research(subject, parent_window, new_window, *, category='', run_id='', call
             return None
         else:
             from migration.claude_client import claude_messages
-            model = os.environ.get('CLAUDE_REFRESH_RESEARCH_MODEL') or 'claude-sonnet-4-6'
+            model = os.environ.get('CLAUDE_REFRESH_RESEARCH_MODEL') or None   # None: the house default model
             raw = claude_messages(system=_SYSTEM, user=user, model=model, max_tokens=2500, temperature=0.2,
                                   tools=[{'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 8}])
             if not raw:
-                raw = claude_messages(system=_SYSTEM, user=user, model='claude-sonnet-4-6', max_tokens=2500,
-                                      temperature=0.2,
+                raw = claude_messages(system=_SYSTEM, user=user, model=model, max_tokens=2500, temperature=0.2,
                                       tools=[{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 8}])
     except Exception as e:
         try:
