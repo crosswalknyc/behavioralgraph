@@ -33,6 +33,7 @@ import sys
 import time
 import types
 import unittest
+from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -996,6 +997,7 @@ class Routes(unittest.TestCase):
         self.assertEqual(fn('Taylor Swift fans'), ('Taylor Swift fans', None))
         self.assertEqual(fn(PLI.profile_id('Gen_Pop_2026.csv'))[1][1], 404)
         conclude = _fn_src(self.src, '_v1_conclude')
+        self.assertLess(conclude.index('_v1_exact_library_file(prompt)'), conclude.index('_v1_prompt_for_library_id(prompt)'))
         self.assertLess(conclude.index('_v1_prompt_for_library_id(prompt)'), conclude.index('_v1_interpret('))
 
     def test_results_point_back_to_the_library(self):
@@ -1046,11 +1048,33 @@ class _CheckRequest:
         return self._body
 
 
+class _EngineRead(BaseException):
+    """The real _v1_conclude reached the engine with this prompt. A
+    BaseException, so it passes the decision's own `except Exception` and
+    the stand-in engine can answer instead."""
+
+    def __init__(self, prompt):
+        super().__init__(prompt)
+        self.prompt = prompt
+
+
+def _engine_read(prompt, identity_context=None, actor=None):
+    raise _EngineRead(prompt)
+
+
+# The real decision up to the engine: the exact-file step, the name step,
+# and what an exact file's verdict needs (in app.py's own order).
+_DECISION_NAMES = ['CREDITS_PROFILE_ANALYSIS', 'CREDITS_SVOD', '_S3_KEY_TS_RE', '_profile_key_timestamp',
+                   '_profile_age_days', 'ADDON_CUT_CREDITS', '_V1_CREDITS', '_v1_build_brief_summary', '_v1_conclude',
+                   '_v1_exact_library_file', '_v1_exact_file_conclusion']
+
+
 class MatchesCheck(unittest.TestCase):
     """The file name is exactly what POST /api/v1/profiles/check returns as
     existing_match_s3_key for the same profile: the real check route body
-    and the real first step of the decision (a library id read as the
-    profile's own name); only the engine's match, which cannot run
+    and the real first steps of the decision (an exact file name or a
+    library id is that file; a file name written as a profile's name is
+    read as that name); only the engine's match, which cannot run
     offline, is stood in."""
 
     SAMPLE = (GU, TS_NEW, TS_AVID, TS_FEM, GU_GLOBAL, GU_GLOBAL_AVID)
@@ -1059,7 +1083,7 @@ class MatchesCheck(unittest.TestCase):
         PL.reset_cache()
         self.seen = []
         ns = {'__name__': 'app_under_test', 'app': _App(), 'traceback': __import__('traceback'), 're': re, 'json': json,
-              'request': None, 'ADDON_CUT_CREDITS': 3}
+              'request': None, 'ADDON_CUT_CREDITS': 3, 'datetime': datetime, '_v1_interpret': _engine_read}
         ns['jsonify'] = lambda body: _Resp(json.loads(json.dumps(body, default=str)))
         ns['_synth_chat_gate'] = lambda allow_api_key=True: ({'username': 'acme', '_auth_via': 'api_key'}, None)
         ns['_partner_key_id'] = lambda u: 'key:check'
@@ -1073,18 +1097,20 @@ class MatchesCheck(unittest.TestCase):
         ns['_draft_window_field'] = lambda d, dec: None
         ns['_v1_check_caveats'] = lambda: []
         ns['_generate_presigned_profile_url'] = lambda k, expires_seconds=0: 'https://signed.example/file'
-        ns['_v1_conclude'] = self._engine
         code = _extract_src(_APP_SRC(), ['api_v1_profiles_check', '_v1_prompt_for_library_id', '_v1_profile_id',
                                          '_scrub_v1_freetext', '_V1_BANNED_TOKENS', '_rate_limit_check',
                                          '_rate_limit_response', '_V1_RATE_LIMITS', '_v1_rate_windows',
-                                         '_v1_rate_windows_lock'])
+                                         '_v1_rate_windows_lock'] + _DECISION_NAMES)
         exec(compile('\n\n'.join(code), APP_PY, 'exec'), ns)
+        self.real_conclude = ns['_v1_conclude']
+        ns['_v1_conclude'] = self._engine
         self.ns = ns
 
     def _engine(self, prompt, run_avid=True, identity_context=None, competitor_brands=None, actor=None):
-        prompt, err = self.ns['_v1_prompt_for_library_id'](prompt)       # _v1_conclude's own first step
-        if err is not None:
-            return None, err
+        try:
+            return self.real_conclude(prompt, run_avid=run_avid)          # _v1_conclude's own first steps
+        except _EngineRead as read:
+            prompt = read.prompt
         self.seen.append(prompt)                                          # what the engine reads
         hits = [e for e in CATALOG
                 if e['s3_key'] in PUBLIC_KEYS and PL._ws(e['display_name']).lower() == PL._ws(prompt).lower()]
@@ -1130,9 +1156,13 @@ class MatchesCheck(unittest.TestCase):
                 self.assertEqual(status, 200, (key, prompt, body))
                 self.assertEqual((body['decision'], body['existing_match_s3_key']), ('existing_match', key), prompt)
                 self.assertEqual(body['credits_would_charge'], 0, prompt)
-        # an older file that shares its name with a newer one: the engine still decides and answers with the newest
+        # an older file that shares its name with a newer one: that exact file, as it is (Jenna 2026-11-24)
+        self.seen.clear()
         body, _s = self._check(TS_OLD)
-        self.assertEqual(body['existing_match_s3_key'], TS_NEW)
+        self.assertEqual((body['existing_match_s3_key'], self.seen), (TS_OLD, []))
+        # the shared name itself is still read by the engine, which answers with the newest
+        body, _s = self._check('Taylor Swift')
+        self.assertEqual((body['existing_match_s3_key'], self.seen), (TS_NEW, ['Taylor Swift']))
 
     def test_a_file_name_we_do_not_hold_is_a_404(self):
         for prompt in ('Taylor_Swift_01_01_2020_10_00.csv', 'TAYLOR_SWIFT_01_01_2020_10_00', 'Guinness - Global - Female.csv',
@@ -1151,9 +1181,266 @@ class MatchesCheck(unittest.TestCase):
             self.assertIsNone(body['existing_match_s3_key'])
 
 
+NIKE_OLD = 'Nike_05_29_2026_02_45.csv'           # the file a partner pulled by its dates: over 120 days old
+NIKE_OLDER = 'Nike_10_14_2025_11_07.csv'
+NIKE_AVID = 'Nike - Avid Fan.csv'
+NIKE_2025 = 'Nike - 2025 Total Universe.csv'
+EXACT_CATALOG = CATALOG + [
+    {'s3_key': NIKE_OLD, 'display_name': 'Nike', 'category': 'APPAREL/FOOTWEAR', 'last_modified': '2026-06-03T08:00:00Z'},
+    {'s3_key': NIKE_OLDER, 'display_name': 'Nike', 'category': 'APPAREL/FOOTWEAR'},
+    {'s3_key': NIKE_AVID, 'display_name': 'Nike - Avid Fan', 'category': 'APPAREL/FOOTWEAR',
+     'last_modified': '2026-05-29T03:12:00Z'},
+    {'s3_key': NIKE_2025, 'display_name': 'Nike - 2025 Total Universe', 'category': 'APPAREL/FOOTWEAR',
+     'last_modified': '2026-01-04T12:00:00Z'},
+]
+EXACT_PUBLIC = PUBLIC_KEYS + [NIKE_OLD, NIKE_OLDER, NIKE_AVID, NIKE_2025]
+FRESH_DAYS = 120                                   # prometheus.library_match.SYNTH_CHAT_FRESH_DAYS
+NOT_FOUND = {'success': False, 'error': 'profile not found'}
+
+
+def _days_since(stamp):
+    from datetime import timezone
+    return int((datetime.now(timezone.utc) - stamp.replace(tzinfo=timezone.utc)).total_seconds() // 86400)
+
+
+class ExactFileWhateverItsAge(unittest.TestCase):
+    """Jenna 2026-11-24 (a partner asked to pull profiles older than 120
+    days by file name): an exact file name or a library id returns that
+    file, whatever its age, at the key's existing-match price. A plain name
+    still gets the newest file, with the fresh-build offer once that file
+    is over 120 days old; dates still get the file for those dates.
+
+    The real /check and /run route bodies and the real first steps of the
+    decision. The engine, which cannot run offline, is stood in with
+    today's rule; it answers only the prompts the decision hands it."""
+
+    def setUp(self):
+        PL.reset_cache()
+        self.seen, self.charges, self.grants = [], [], []
+        self.seat_charge = 0                   # a key whose plan covers the library: an existing match costs $0
+        ns = {'__name__': 'app_under_test', 'app': _App(), 'traceback': __import__('traceback'), 're': re, 'json': json,
+              'request': None, 'datetime': datetime, '_v1_interpret': _engine_read,
+              'SYNTH_QUEUE_SECRET': 'test', 'SYNTH_QUEUE_URL': 'http://queue.invalid'}
+        ns['jsonify'] = lambda body: _Resp(json.loads(json.dumps(body, default=str)))
+        ns['_synth_chat_gate'] = lambda allow_api_key=True: ({'username': 'acme', '_auth_via': 'api_key'}, None)
+        ns['_partner_key_id'] = lambda u: 'key:acme'
+        ns['_profile_catalog_for_chat'] = lambda: list(EXACT_CATALOG)
+        ns['_v1_parse_check_run_body'] = lambda body: (str((body or {}).get('prompt') or '').strip(),
+                                                       bool((body or {}).get('run_avid', True)), None, None, None)
+        ns['_partner_credit_preflight'] = lambda username, min_credits=0: (None, None)
+        ns['_existing_match_charge_credits'] = lambda *a, **k: self.seat_charge
+        ns['_scrub_identity_dashes'] = lambda s: s
+        ns['_v1_price_usd_for'] = lambda decision, *a, **k: 0.0 if decision == 'existing_match' else 300.0
+        ns['_v1_price_usd_for_cut'] = lambda: 100.0
+        ns['_draft_window_field'] = lambda d, dec: '' if dec == 'existing_match' else 'Trailing 12 months'
+        ns['_v1_check_caveats'] = lambda: []
+        ns['_generate_presigned_profile_url'] = lambda k, expires_seconds=0: 'https://signed.example/' + k
+        ns['_idempotency_lookup'] = lambda username, key: None
+        ns['_idempotency_store'] = lambda username, key, body: None
+        ns['has_credits_for'] = lambda *a, **k: True
+        ns['check_user_credits'] = lambda username: (True, 7)
+        ns['_v1_balance_usd'] = lambda username: 1234.56
+        ns['consume_credit'] = lambda username, **kw: self.charges.append(kw) or True
+        code = _extract_src(_APP_SRC(), ['api_v1_profiles_check', 'api_v1_profiles_run', '_v1_prompt_for_library_id',
+                                         '_v1_profile_id', '_scrub_v1_freetext', '_V1_BANNED_TOKENS', '_rate_limit_check',
+                                         '_rate_limit_response', '_V1_RATE_LIMITS', '_v1_rate_windows',
+                                         '_v1_rate_windows_lock'] + _DECISION_NAMES)
+        exec(compile('\n\n'.join(code), APP_PY, 'exec'), ns)
+        self.real_conclude = ns['_v1_conclude']
+        ns['_v1_conclude'] = self._decide
+        self.ns = ns
+        self._signup = sys.modules.get('site_signup')
+        fake = types.ModuleType('site_signup')
+        fake.grant_runs_to_user = lambda username, keys: self.grants.append(list(keys))
+        sys.modules['site_signup'] = fake
+
+    def tearDown(self):
+        if self._signup is None:
+            sys.modules.pop('site_signup', None)
+        else:
+            sys.modules['site_signup'] = self._signup
+        PL.reset_cache()
+
+    # the decision: its real first steps, then today's engine on whatever it reads
+    def _decide(self, prompt, run_avid=True, identity_context=None, competitor_brands=None, actor=None):
+        try:
+            return self.real_conclude(prompt, run_avid=run_avid)
+        except _EngineRead as read:
+            self.seen.append(read.prompt)
+            return self._today(read.prompt), None
+
+    def _today(self, prompt):
+        """Today's engine: dates name the file built on that day; a name gets
+        its newest file, or the fresh-build offer once that file is over 120
+        days old; anything else is a new build."""
+        age = self.ns['_profile_age_days']
+
+        def verdict(decision, key='', price=0):
+            entry = next((e for e in EXACT_CATALOG if e['s3_key'] == key), {})
+            draft = {'subject': entry.get('display_name') or prompt, 'decision_reason': 'Read by the engine.'}
+            if key:
+                draft.update(existing_match_s3_key=key, existing_match_display_name=entry['display_name'],
+                             existing_match_days_old=age(key, entry.get('last_modified')))
+            return {'draft': draft, 'candidates': [], 'decision': decision, 'ex_key': key, 'd_type': None, 'cuts': [],
+                    'quarter_reads': [], 'price': price, 'buildable': True, 'refusal_code': None,
+                    'refusal_message': None, 'spec': None, 'brief_summary': '', 'estimated_audience': None,
+                    'subject_verified': True, 'match_score': 0.96 if key else None, 'related_profile': None}
+
+        m = re.search(r'for the 12 months ending ([A-Z][a-z]+ \d{1,2}, \d{4})', prompt)
+        if m:
+            day = datetime.strptime(m.group(1), '%B %d, %Y').strftime('%m_%d_%Y')
+            hit = next((e['s3_key'] for e in EXACT_CATALOG if e['s3_key'] in EXACT_PUBLIC and day in e['s3_key']), '')
+            if hit:
+                return verdict('existing_match', hit)
+        same = sorted((e['s3_key'] for e in EXACT_CATALOG if e['s3_key'] in EXACT_PUBLIC
+                       and PL._ws(e['display_name']).lower() == PL._ws(prompt).lower()),
+                      key=lambda k: PL._stamp_iso(k) or '', reverse=True)
+        if not same:
+            return verdict('new_build', price=5)
+        days = age(same[0])
+        if isinstance(days, int) and days > FRESH_DAYS:
+            return verdict('time_shifted_refresh', price=5)
+        return verdict('existing_match', same[0])
+
+    def _call(self, route, prompt):
+        self.ns['request'] = _CheckRequest({'prompt': prompt})
+        out = self.ns[route]()
+        if isinstance(out, tuple):
+            return out[0].body, int(out[1])
+        return out.body, int(out.status_code)
+
+    def _pick(self, body, want):
+        return {k: body.get(k) for k in want}
+
+    def test_an_old_file_by_its_exact_name_is_that_file(self):
+        days = _days_since(datetime(2026, 5, 29, 2, 45))         # from the name, not the registry date
+        self.assertGreater(days, FRESH_DAYS)
+        for prompt in (NIKE_OLD, NIKE_OLD[:-4], NIKE_OLD.upper(), '  ' + NIKE_OLD[:-4].lower() + '  '):
+            self.seen.clear()
+            body, status = self._call('api_v1_profiles_check', prompt)
+            want = {'decision': 'existing_match', 'existing_match_s3_key': NIKE_OLD,
+                    'existing_match_profile_id': PLI.profile_id(NIKE_OLD), 'existing_match_display_name': 'Nike',
+                    'existing_match_days_old': days, 'existing_match_last_modified': None, 'price_usd': 0.0,
+                    'credits_would_charge': 0, 'match_score': 1.0, 'date_window': None,
+                    'download_url': 'https://signed.example/' + NIKE_OLD}
+            self.assertEqual((status, self._pick(body, want)), (200, want), prompt)
+            body, status = self._call('api_v1_profiles_run', prompt)
+            want = {'success': True, 'decision': 'existing_match', 'reused_existing': True, 'subject': 'Nike',
+                    's3_key': NIKE_OLD, 'profile_id': PLI.profile_id(NIKE_OLD), 'profile_name': NIKE_OLD,
+                    'download_url': 'https://signed.example/' + NIKE_OLD, 'charge_usd': 0.0, 'credits_charged': 0,
+                    'existing_match_days_old': days, 'existing_match_last_modified': None, 'match_score': 1.0,
+                    'run_id': None}
+            self.assertEqual((status, self._pick(body, want)), (200, want), prompt)
+            self.assertEqual(self.seen, [], prompt)                 # never read by the engine: no fresh-build offer
+        self.assertEqual(self.charges, [])
+        self.assertEqual({k for keys in self.grants for k in keys}, {NIKE_OLD})
+        # an older file that shares its name with a newer one
+        body, _s = self._call('api_v1_profiles_check', TS_OLD)
+        self.assertEqual((body['existing_match_s3_key'], body['price_usd'], self.seen), (TS_OLD, 0.0, []))
+
+    def test_a_library_id_is_the_same(self):
+        for key in (NIKE_OLD, NIKE_OLDER, NIKE_AVID):
+            pid = PLI.profile_id(key)
+            for route, field in (('api_v1_profiles_check', 'existing_match_s3_key'), ('api_v1_profiles_run', 's3_key')):
+                self.seen.clear()
+                body, status = self._call(route, pid)
+                self.assertEqual((status, body['decision'], body[field], self.seen), (200, 'existing_match', key, []),
+                                 (key, route))
+        self.assertEqual(self.charges, [])
+
+    def test_a_plain_name_still_gets_the_fresh_build_offer(self):
+        body, status = self._call('api_v1_profiles_check', 'Nike')
+        self.assertEqual((status, body['decision'], body['price_usd'], body['existing_match_s3_key']),
+                         (200, 'time_shifted_refresh', 300.0, None))
+        self.assertEqual(self.seen, ['Nike'])
+        # written without '.csv' and without a build date, a file name reads as the profile's name, as before
+        for name in ('Nike - 2025 Total Universe', 'nike - avid fan'):
+            self.seen.clear()
+            self._call('api_v1_profiles_check', name)
+            self.assertEqual(len(self.seen), 1, name)
+        # a name whose newest file is inside the 120 days: that newest file
+        self.seen.clear()
+        body, _s = self._call('api_v1_profiles_check', 'Taylor Swift')
+        self.assertEqual((body['decision'], body['existing_match_s3_key'], self.seen),
+                         ('existing_match', TS_NEW, ['Taylor Swift']))
+
+    def test_dates_still_get_the_file_for_those_dates(self):
+        prompt = 'audience of Nike customers for the 12 months ending May 29, 2026'
+        body, status = self._call('api_v1_profiles_check', prompt)
+        self.assertEqual((status, body['decision'], body['existing_match_s3_key'], body['price_usd']),
+                         (200, 'existing_match', NIKE_OLD, 0.0))
+        self.assertEqual(self.seen, [prompt])                        # read by the engine word for word
+
+    def test_a_file_we_do_not_hold_is_not_found(self):
+        for prompt in ('Nike_05_29_2020_02_45.csv', 'NIKE_01_01_2026_10_00', PLI.profile_id('Nike_01_01_2026_10_00.csv'),
+                       'Nike - 2019 Total Universe.csv', 'Gen_Pop_2026.csv'):
+            for route in ('api_v1_profiles_check', 'api_v1_profiles_run'):
+                self.seen.clear()
+                body, status = self._call(route, prompt)
+                self.assertEqual((status, body, self.seen), (404, NOT_FOUND, []), (prompt, route))
+        self.assertEqual((self.charges, self.grants), ([], []))
+
+    def test_a_year_cut_by_its_file_name_is_that_file(self):
+        for key in (NIKE_2025, TS_2025):
+            for prompt in (key, key.lower(), key.upper()):
+                self.seen.clear()
+                body, status = self._call('api_v1_profiles_check', prompt)
+                self.assertEqual((status, body['decision'], body['existing_match_s3_key'], self.seen),
+                                 (200, 'existing_match', key, []), prompt)
+        body, _s = self._call('api_v1_profiles_check', NIKE_2025)
+        self.assertEqual(body['existing_match_days_old'], _days_since(datetime(2026, 1, 4, 12, 0)))   # the file's own date
+        body, status = self._call('api_v1_profiles_run', NIKE_2025)
+        self.assertEqual((status, body['s3_key'], body['profile_name'], body['charge_usd']), (200, NIKE_2025, NIKE_2025, 0.0))
+
+    def test_the_price_is_the_keys_existing_match_price(self):
+        dated = 'audience of Nike customers for the 12 months ending May 29, 2026'
+        for seat_charge, want in ((0, (0.0, 0, True)), (5, (300.0, 5, False))):   # a library plan, then a retail one
+            self.seat_charge = seat_charge
+            exact, _s = self._call('api_v1_profiles_check', NIKE_OLD)
+            match, _s = self._call('api_v1_profiles_check', dated)                   # the engine's own existing match
+            for body in (exact, match):
+                self.assertEqual((body['decision'], body['existing_match_s3_key']), ('existing_match', NIKE_OLD))
+            price = lambda b: (b['price_usd'], b['credits_would_charge'], 'download_url' in b)
+            self.assertEqual((price(exact), price(match)), (want, want), seat_charge)
+        body, status = self._call('api_v1_profiles_run', NIKE_OLD)
+        self.assertEqual((status, body['charge_usd'], body['credits_charged'], body['s3_key']), (200, 300.0, 5, NIKE_OLD))
+        self.assertEqual([c['credits_used'] for c in self.charges], [5])
+
+    def test_plain_words_only(self):
+        for prompt in (NIKE_OLD, PLI.profile_id(NIKE_OLD)):
+            for route in ('api_v1_profiles_check', 'api_v1_profiles_run'):
+                body, _s = self._call(route, prompt)
+                for field in ('decision_reason', 'brief_summary'):
+                    text = str(body.get(field) or '')
+                    self.assertEqual([t for t in BANNED_FULL if t in text.lower()], [], (route, field, text))
+                    self.assertFalse(set(text) & {'\u2014', '\u2013'}, text)
+                self.assertEqual(body['decision_reason'], 'This is the exact file you asked for, returned as it is.')
+
+    def test_the_decision_reads_the_exact_file_first(self):
+        src = _APP_SRC()
+        conclude = _fn_src(src, '_v1_conclude')
+        steps = [conclude.index(s) for s in ('_v1_exact_library_file(prompt)', '_v1_prompt_for_library_id(prompt)',
+                                             '_v1_interpret(')]
+        self.assertEqual(steps, sorted(steps))
+        for route in ('api_v1_profiles_check', 'api_v1_profiles_run'):
+            seg = _fn_src(src, route)
+            self.assertIn('_existing_match_charge_credits(', seg)            # the key's own existing-match price
+        parse = _fn_src(src, '_v1_parse_check_run_body')
+        for field in ('exact_file', 'file_name', 'library_id', 'profile_id', 's3_key', 'force_new', 'mode'):
+            self.assertNotIn(f"'{field}'", parse)                            # no new request field: the prompt decides
+
+
 class Resolver(unittest.TestCase):
     def setUp(self):
         PL.reset_cache()
+
+    def test_written_as_a_file_name(self):
+        for text in (TS_NEW, TS_NEW.upper(), TS_NEW[:-4], ' ' + TS_NEW[:-4].lower() + ' ', TS_AVID, TS_2025,
+                     'Taylor Swift - Avid Fan.CSV'):
+            self.assertTrue(PL.written_as_file_name(text), text)
+        for text in ('Taylor Swift', 'Taylor Swift - Avid Fan', 'American Eagle', 'Taylor Swift - 2025 Total Universe',
+                     'audience of Nike customers for the 12 months ending May 29, 2026', '', 'x' * 300):
+            self.assertFalse(PL.written_as_file_name(text), text)
 
     def test_the_whole_text_is_an_id_or_a_file_name(self):
         cases = {
@@ -1204,6 +1491,16 @@ class Bulk(unittest.TestCase):
         bare = {r['subject']: r['state'] for r in BP.plan_rows(read['items'], BP.library_index(CATALOG))}
         self.assertEqual((bare['Taylor Swift - Avid Fan'], bare['Guinness - Global']), ('queued', 'queued'))
 
+    def test_an_old_file_on_a_list_is_reused_whatever_its_age(self):
+        refs = PL.refs_for(EXACT_CATALOG)
+        parsed, err = PBK.parse_body({'subjects': [NIKE_OLD, PLI.profile_id(NIKE_OLDER), NIKE_2025]})
+        self.assertIsNone(err)
+        read = PBK.read_from_items(parsed, resolve_ref=lambda s: PL.resolve_ref(s, refs=refs))
+        index = PBK.with_library_refs(BP.library_index(EXACT_CATALOG), read)
+        plan = [(r['state'], r['key'], r['charged']) for r in BP.plan_rows(read['items'], index)]
+        self.assertEqual(sorted(plan), sorted([('reused', NIKE_OLD, False), ('reused', NIKE_OLDER, False),
+                                               ('reused', NIKE_2025, False)]))
+
     def test_ids_on_a_list(self):
         names = {PLI.profile_id(TS_AVID): 'Taylor Swift - Avid Fan'}
         parsed, err = PBK.parse_body({'subjects': [PLI.profile_id(TS_AVID), 'Dolly Parton',
@@ -1238,6 +1535,21 @@ class SchemaAndGuide(unittest.TestCase):
         self.assertEqual([t for t in BANNED_FULL if t in lits], [])
         for f in ('existing_match_profile_id', "'profile_id'", "'avid_profile_id'"):
             self.assertIn(f, seg)
+        check = seg[seg.index("'POST /api/v1/profiles/check': {"):seg.index("'POST /api/v1/profiles/run': {")]
+        lits = ' '.join(n.value for n in ast.walk(ast.parse('{' + check.rstrip().rstrip(',') + '}'))
+                        if isinstance(n, ast.Constant) and isinstance(n.value, str))
+        self.assertIn('an id or a file name returns that exact file, whatever its age', lits)
+
+    def test_guide_older_files(self):
+        doc = _read(DOC)
+        sec = doc[doc.index('### Getting an older file'):doc.index('## Bulk builds')]
+        low = sec.lower()
+        for want in ('exact file', 'whatever its age', 'over 120 days old', '$300', 'dates', '`.csv`', '`id`'):
+            self.assertIn(want, low if want.islower() else sec, want)
+        self.assertEqual([t for t in BANNED_FULL if t in low], [])
+        self.assertFalse(set(sec) & {'\u2014', '\u2013'})
+        self.assertIn('(#getting-an-older-file)', doc)
+        self.assertNotIn('answer with the newer one', doc)
 
     def test_guide(self):
         doc = _read(DOC)

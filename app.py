@@ -59162,9 +59162,18 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
       brief_summary
     On a refusal, buildable=False and price=0 (a refused run charges
     nothing on either route)."""
-    # A library id or a file name sent as the whole prompt (2026-11-23):
-    # the engine reads the profile's own name and still decides; one we do
-    # not hold is a 404, never a build.
+    # A library id, or the exact file name of a profile we hold written as a
+    # file name (2026-11-24, Jenna: "Asking by exact file name (or library
+    # id) returns that file free, whatever its age"): that file is the
+    # existing match. No fresh-build offer, no build; the routes price it
+    # as any existing match on this key's plan.
+    _exact = _v1_exact_library_file(prompt)
+    if _exact is not None:
+        return _v1_exact_file_conclusion(*_exact, run_avid=run_avid), None
+    # A held profile's file name written as its display name (2026-11-23):
+    # the engine reads the profile's own name and still decides, so an ask
+    # by name keeps the newest file and its fresh-build offer. An id or a
+    # file name we do not hold is a 404, never a build.
     prompt, _lib_err = _v1_prompt_for_library_id(prompt)
     if _lib_err is not None:
         return None, _lib_err
@@ -60948,6 +60957,69 @@ def _v1_prompt_for_library_id(prompt):
     return prompt, None
 
 
+def _v1_exact_library_file(prompt):
+    """(file name, display name, catalog entry) when the whole prompt is a
+    library id, or the file name of a profile we hold written as a file
+    name: ending in '.csv' or carrying its build stamp, any case
+    (2026-11-24). None for anything else: a display name, a plain name, a
+    sentence that mentions a file name, and an id or a file name we do not
+    hold (the next step answers that one with a 404)."""
+    p = str(prompt or '').strip()
+    if not p:
+        return None
+    try:
+        from prometheus import partner_library as _plib
+        catalog = _profile_catalog_for_chat() or []
+        kind, name, key = _plib.resolve_ref(p, catalog)
+        if kind not in ('id', 'file') or not (name and key):
+            return None
+        if kind == 'file' and not _plib.written_as_file_name(p):
+            return None
+        entry = next((j for j in catalog if isinstance(j, dict)
+                      and str(j.get('s3_key') or '') == key), {})
+        return key, name, entry
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _v1_exact_file_conclusion(key, name, entry=None, run_avid=True):
+    """The verdict for an exact file: that file as the existing match,
+    whatever its age, in the same shape as any other verdict. The price is
+    the existing-match tier; the routes then add this key's own
+    existing-match charge, exactly as for a match the engine picks."""
+    entry = entry if isinstance(entry, dict) else {}
+    draft = {
+        'decision': 'existing_match', 'derive_type': '',
+        'subject': name, 'name': name,
+        'existing_match_s3_key': key,
+        'existing_match_display_name': name,
+        'brand_category': entry.get('category') or None,
+        'decision_reason': 'This is the exact file you asked for, returned as it is.',
+    }
+    try:
+        _days = _profile_age_days(key, entry.get('last_modified')
+                                  or entry.get('created_at'))
+        if _days is not None:
+            draft['existing_match_days_old'] = _days
+    except Exception:
+        pass
+    import wallet as _w_price
+    price = _w_price.order_credits(
+        _V1_CREDITS, ADDON_CUT_CREDITS, 'existing_match', 0, 0,
+        cuts_only=False, default=CREDITS_PROFILE_ANALYSIS)
+    return {
+        'draft': draft, 'candidates': [], 'decision': 'existing_match',
+        'ex_key': key, 'd_type': '', 'cuts': [], 'quarter_reads': [],
+        'price': price, 'buildable': True, 'refusal_code': None,
+        'refusal_message': None, 'spec': None,
+        'brief_summary': _v1_build_brief_summary(
+            draft, 'existing_match', '', [], run_avid),
+        'estimated_audience': None, 'subject_verified': True,
+        'match_score': 1.0, 'related_profile': None, 'exact_file': True,
+    }
+
+
 def _v1_library_ref_resolver():
     """Library ids and file names on a bulk list: (kind, name, file name)
     per subject (prometheus.partner_library.resolve_ref). The library's
@@ -61067,7 +61139,10 @@ def api_v1_schema():
                                                'library id (pf_...) or a file '
                                                'name (s3_key) from GET '
                                                '/api/v1/profiles/library, '
-                                               'sent as the whole prompt')},
+                                               'sent as the whole prompt: '
+                                               'an id or a file name returns '
+                                               'that exact file, whatever '
+                                               'its age')},
                     'run_avid': {'type': 'boolean', 'required': False,
                                  'default': True},
                     'domain': {

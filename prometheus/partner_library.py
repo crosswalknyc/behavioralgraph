@@ -603,6 +603,22 @@ def looks_like_file_name(text):
     return not any(w in _REQUEST_WORDS for w in re.findall(r"[A-Za-z]+", stem))
 
 
+def written_as_file_name(text):
+    """True when the text is written the way a file name is, not the way a
+    profile is named: it ends in '.csv' (any case) or carries the file's
+    build stamp. A cut's display name ('Taylor Swift - Avid Fan') and an
+    older undated file's ('American Eagle') read the same as the file
+    without '.csv'; those are names, and an ask by name keeps the newest
+    file and its fresh-build offer (Jenna 2026-11-24)."""
+    t = str(text or '').strip()
+    if not t or len(t) > REF_MAX_LEN:
+        return False
+    low = t.lower()
+    if low.endswith('.csv'):
+        return True
+    return bool(_STAMP_TAIL_RX.search(t))
+
+
 def looks_like_ref(text):
     """A library id or a file name by shape alone (no list needed)."""
     t = str(text or '').strip()
