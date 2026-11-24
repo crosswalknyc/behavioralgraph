@@ -749,7 +749,6 @@ Start with what the twin is built from. Everything else follows from that.
 | Learns from live results | No | No | Partly, from the news feed | Yes. The panel refreshes every morning and forecasts learn from how things really ended up |
 | Can watch a video | No | Some | Some | Yes. Pilot Testing plays a cut to the room with a dial reading every 2 to 4 seconds and a scorecard at the end |
 | Prices and timing | Asked | Guessed | Inferred from income | Observed: what people paid, what they passed on, and how long each step took |
-| Best for | Stated opinion and brand perception | Fast idea screening | Polling-shaped questions on the whole country | Decisions that depend on what people will do |
 
 ## Why saying and doing are different data
 
