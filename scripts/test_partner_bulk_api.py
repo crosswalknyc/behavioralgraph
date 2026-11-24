@@ -139,7 +139,8 @@ class Harness:
         for name in ('_fetch_run_status_from_queue', '_lookup_run_owner', '_scrub_v1_status', '_generate_presigned_profile_url',
                      '_scrub_v1_freetext'):
             ns[name] = lambda *a, **k: None
-        code = _extract(['api_v1_profiles_bulk', 'api_v1_profiles_status', '_idempotency_lookup', '_idempotency_store',
+        code = _extract(['api_v1_profiles_bulk', 'api_v1_profiles_status', '_v1_library_id_resolver',
+                         '_idempotency_lookup', '_idempotency_store',
                          '_v1_idempotency_cache', '_v1_idempotency_lock', '_V1_IDEMPOTENCY_TTL_SECONDS', '_rate_limit_check',
                          '_rate_limit_response', '_V1_RATE_LIMITS', '_v1_rate_windows', '_v1_rate_windows_lock',
                          '_PROFILE_FILENAME_RE'])
@@ -309,6 +310,20 @@ class TheRoute(unittest.TestCase):
         body2, code2 = self.h.post({'subjects': ['Someone New']})
         self.assertEqual(code2, 200)
         self.assertEqual(body2['queued'], 1)
+
+    def test_library_ids_on_a_list(self):
+        # GET /api/v1/profiles/library ids (2026-11-23): an id stands for its
+        # profile and comes back reused, free; an id we do not hold is dropped
+        from migration.partner_library_index import profile_id
+        body, code = self.h.post({'subjects': [profile_id('Taylor_Swift_09_01_2026_10_00.csv'),
+                                               profile_id('Never_Built_01_01_2026_10_00.csv')]})
+        self.assertEqual(code, 200, body)
+        self.assertEqual((body['reused'], body['queued'], body['dropped'], body['charge_usd']), (1, 0, 1, 0.0))
+        row = body['rows'][0]
+        self.assertEqual((row['subject'], row['s3_key']), ('Taylor Swift', 'Taylor_Swift_09_01_2026_10_00.csv'))
+        self.assertEqual(row['profile_id'], profile_id('Taylor_Swift_09_01_2026_10_00.csv'))
+        self.assertEqual(self.h.calls, [])
+        _assert_clean(self, body)
 
     def test_idempotency_key(self):
         hdr = {'Idempotency-Key': 'req-123'}
