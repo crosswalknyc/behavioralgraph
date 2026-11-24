@@ -405,10 +405,21 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
     # against it (2026-10-22, Alexia / The Influencer Project). Before the
     # repeat guard: asked twice because the lanes answered something else,
     # the second ask still gets the answer, never the hold.
-    if kind == 'question_about_answer' and (cont.get('params') or {}).get('figure'):
+    # a breakdown ask that quotes no figure ("break that down") points at the latest read's headline figure and is
+    # answered here only when its parts can be built from what we hold (prometheus.figure_breakdown, fix 8)
+    _fig_q = (cont.get('params') or {}).get('figure') if kind == 'question_about_answer' else None
+    _implied = None
+    if not _fig_q and not body.get('panel_confirm'):
+        try:
+            from . import figure_breakdown as _fbk
+            _implied = _fbk.implied_figure(text, history)
+        except Exception as e:
+            _faults.note('turn_gate.figure_breakdown', e)
+            _implied = None
+    if _fig_q or _implied:
         try:
             from . import figure_provenance as _fp
-            _pa = _fp.answer(text, history, ctx, host=host)
+            _pa = _fp.answer(text, history, ctx, host=host, implied=(None if _fig_q else _implied))
         except Exception as e:
             _faults.note('turn_gate.figure_provenance', e)
             _pa = None

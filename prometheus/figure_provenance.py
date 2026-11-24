@@ -66,8 +66,17 @@ def quoted_from_thread(text, history, max_turns=12):
     or None. Only agent turns count; a figure the user typed on their own
     is not a quote."""
     figs = figures_in(text)
-    if not figs or not _PROVENANCE_RX.search(str(text or '')):
+    if not figs:
         return None
+    if not _PROVENANCE_RX.search(str(text or '')):
+        # "what is the full breakdown of 2,851,821 audience": a question about the figure's parts is a question
+        # about that answer too (prometheus.figure_breakdown, Nov 23 2026 ask audit, fix 8)
+        try:
+            from . import figure_breakdown as _fbk
+            if not _fbk.wants(text):
+                return None
+        except Exception:
+            return None
     turns = [h for h in (history or []) if isinstance(h, dict)]
     agent_turns = [(i, h) for i, h in enumerate(turns)
                    if str(h.get('role') or '').lower() in ('agent', 'assistant')][-max_turns:]
@@ -119,7 +128,8 @@ def ledger_record(digits, ledger=None):
                 continue
             rec = {'subject': str(e.get('subject') or bucket.get('subject') or ''), 'base': str(e.get('base') or ''),
                    'window_label': str(e.get('wl') or e.get('window_label') or ''), 'route': str(e.get('route') or ''),
-                   'k': str(e.get('k') or ''), 'ts': str(e.get('ts') or ''), 'retired': bool(e.get('retired'))}
+                   'k': str(e.get('k') or ''), 'ts': str(e.get('ts') or ''), 'retired': bool(e.get('retired')),
+                   'entry': e}
             if best is None or rec['ts'] > best['ts']:
                 best = rec
     return best
@@ -155,10 +165,13 @@ def _view_numbers(view_context):
     return lines
 
 
-def answer(text, history, ctx=None, ledger=None, host=None):
+def answer(text, history, ctx=None, ledger=None, host=None, implied=None):
     """The provenance reply for a quoted figure, or None when the turn is
-    not one. {'reply', 'figure', 'record'}"""
-    q = quoted_from_thread(text, history)
+    not one. {'reply', 'figure', 'record', 'breakdown'?}. ``implied`` is
+    the figure a breakdown ask points at without quoting it ("break that
+    down"), from figure_breakdown.implied_figure; the answer then stands
+    only when the breakdown builds."""
+    q = quoted_from_thread(text, history) or (implied if isinstance(implied, dict) and implied.get('digits') else None)
     if not q:
         return None
     rec = ledger_record(q['digits'], ledger)
@@ -199,4 +212,29 @@ def answer(text, history, ctx=None, ledger=None, host=None):
         parts.extend(contrast)
         parts.append("Use the campaign's numbers for anything about this campaign; the profile describes who the potential ticket buyers are, not what the campaign reached.")
     reply = ' '.join(p for p in parts if p)
-    return {'reply': reply, 'figure': fig, 'record': rec}
+    # the parts of the figure, when the words ask for them and we hold them (fix 8): the record's own breakdown
+    # table, else the profile the figure is the US projection of
+    bd = None
+    try:
+        from . import figure_breakdown as _fbk
+        if _fbk.wants(text):
+            bd = _fbk.build(q['digits'], record=rec, ctx=ctx, host=host, text=text, history=history)
+            if bd:
+                if bd.get('source') == 'profile' and bd.get('key') and not (rec and rec.get('base')):
+                    # the figure is that profile's whole audience: say so, never "not from the data on your screen"
+                    win = ''
+                    try:
+                        origin = [h for h in (history or []) if isinstance(h, dict)][q['turn']]
+                        wm = re.search(r"\bWindow:\s*([^.\n]{6,60})", str(origin.get('text') or origin.get('content') or ''))
+                        win = wm.group(1).strip() if wm else ''
+                    except Exception:
+                        win = ''
+                    reply = f"{fig} is the US projection of the {_profile_name(bd['key'])} profile in Profile IQ" + (f", an audience read for {win}" if win else '') + '.'
+                reply = reply + '\n\n' + _fbk.render(bd, f"{fig}")
+            elif implied is None:
+                reply = reply + " I do not hold a split of that figure on file. Ask for it by gender, age, market or service and I run it as a read."
+    except Exception:
+        bd = None
+    if implied is not None and not bd:
+        return None
+    return {'reply': reply, 'figure': fig, 'record': rec, 'breakdown': bd}
