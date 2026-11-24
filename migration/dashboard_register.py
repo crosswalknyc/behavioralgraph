@@ -398,6 +398,17 @@ def register_profile_in_dashboard(
     except Exception as e:
         print(f"⚠️  corpus catalog hook failed for {s3_key}: {e}")
 
+    # Partner library index (2026-11-23): the API's library lists this
+    # file's window, audience and sections right away. Fail-safe, off the
+    # request path.
+    try:
+        import threading as _th
+        from migration import partner_library_index as _pli
+        _th.Thread(target=_pli.index_profiles, args=([s3_key],),
+                   kwargs={"s3": s3_client}, daemon=True).start()
+    except Exception as e:
+        print(f"⚠️  partner library hook failed for {s3_key}: {e}")
+
     return {
         "s3_key": s3_key,
         "cache_added": cache_added,

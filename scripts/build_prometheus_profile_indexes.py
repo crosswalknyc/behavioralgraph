@@ -409,6 +409,15 @@ def main(argv=None):
         print(f"failures ({len(failures)}):")
         for key, err in failures[:50]:
             print(f"  {key}: {err}")
+    # The partner library index (2026-11-23): the window, audience and
+    # sections of every changed file, read from the summaries this run
+    # just wrote. Full runs only; never fails the run.
+    if not (args.dry_run or args.only or args.limit):
+        try:
+            from migration import partner_library_index as _pli
+            _pli.refresh(s3=s3)
+        except Exception as e:
+            print(f"[partner-library] refresh skipped: {type(e).__name__}")
     ok = counts['built'] + counts['fresh']
     return 0 if (ok > 0 or not tasks) else 1
 

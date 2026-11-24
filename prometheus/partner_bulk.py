@@ -154,12 +154,42 @@ def parse_body(body):
     return {'rows': rows, 'run_avid': run_avid, 'window': window}, None
 
 
-def read_from_items(parsed):
+def _library_id_rx():
+    try:
+        from migration.partner_library_index import ID_RX
+        return ID_RX
+    except Exception:
+        return re.compile(r'^pf_[0-9a-f]{20}$')
+
+
+def read_from_items(parsed, resolve_id=None):
     """The chat door's own read of a list ({'items','dropped','duplicates',
     'columns'}): duplicates collapsed, blanks / links / numbers dropped,
-    the optional category and notes kept per name."""
-    rows = [['subject', 'category', 'notes']] + [list(r) for r in (parsed or {}).get('rows') or []]
+    the optional category and notes kept per name. A library id (from GET
+    /api/v1/profiles/library) stands for that profile's own name when
+    ``resolve_id`` knows it; an id it does not know is dropped and counted,
+    never read as a name to build (2026-11-23)."""
+    id_rx = _library_id_rx()
+    kept, unknown_ids = [], 0
+    for r in (parsed or {}).get('rows') or []:
+        r = list(r)
+        subj = str(r[0] if r else '').strip()
+        if id_rx.match(subj):
+            name = None
+            if resolve_id is not None:
+                try:
+                    name = resolve_id(subj)
+                except Exception:
+                    name = None
+            if not name:
+                unknown_ids += 1
+                continue
+            r = [name] + r[1:]
+        kept.append(r)
+    rows = [['subject', 'category', 'notes']] + kept
     read = BP.subjects_from_rows(rows)
+    if unknown_ids:
+        read['dropped'] = int(read.get('dropped') or 0) + unknown_ids
     read['columns'] = {'subject': 'subject', 'category': 'category', 'notes': 'notes', 'run_avid': ''}
     return read
 
@@ -232,11 +262,23 @@ def status_doc(ledger, *, host_url=''):
     doc = {'success': True, 'run_id': str((ledger or {}).get('bulk_id') or '')}
     doc.update(BP.partner_status(ledger or {}))
     doc['status_url'] = f"{str(host_url or '').rstrip('/')}{STATUS_PATH}{doc['bulk_id']}"
+    # the library id beside each file, so a row joins GET /api/v1/profiles/library
+    try:
+        from migration.partner_library_index import profile_id as _pid
+        for row in doc.get('rows') or []:
+            if isinstance(row, dict):
+                if row.get('s3_key'):
+                    row['profile_id'] = _pid(row['s3_key'])
+                if row.get('avid_s3_key'):
+                    row['avid_profile_id'] = _pid(row['avid_s3_key'])
+    except Exception:
+        pass
     return doc
 
 
 # ---------------------------------------------------------------- the belt
-_KEEP = frozenset(('subject', 'bulk_id', 'run_id', 'open_bulk_id', 's3_key', 'avid_s3_key', 'status_url', 'download_url',
+_KEEP = frozenset(('subject', 'bulk_id', 'run_id', 'open_bulk_id', 's3_key', 'avid_s3_key', 'profile_id', 'avid_profile_id',
+                   'status_url', 'download_url',
                    'avid_download_url', 'date_window', 'created_at', 'completed_at'))
 
 

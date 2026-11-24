@@ -375,6 +375,8 @@ PARTNER_BANNED_TOKENS = (
     'worker', 'attempt ', 'traceback', 'exception', 'stack trace', 'nameerror', 'typeerror', 'keyerror',
     # file paths, module names, config knobs
     '/root/', 'finished_codes', 'migration/', '.py:', 'api_key', 'anthropic_api',
+    # library index internals (2026-11-23): store and source names
+    'partner_library', 'profile_indexes', 's3_cache', 'quick_selects',
 )
 
 # Attribution clauses: the figure stays, the "according to X" goes.

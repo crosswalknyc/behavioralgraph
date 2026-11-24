@@ -54231,6 +54231,8 @@ _V1_BANNED_TOKENS = (
     '/root/', 'finished_codes', 'migration/', '.py:',
     # Config knobs
     'api_key', 'anthropic_api',
+    # Library index internals (2026-11-23): store and source names
+    'partner_library', 'profile_indexes', 's3_cache', 'quick_selects',
 )
 # One list for every key-facing surface (2026-10-14): the ask API's
 # partner belt in prometheus/guards.py owns the list; the literal above
@@ -54649,6 +54651,7 @@ _V1_RATE_LIMITS = {
     '/v1/bulk':  (10, 100),     # a list of up to 1,000 names; one in progress per key
     '/v1/status': (300, 5000),  # polling is expected to be frequent
     '/v1/genpop': (10, 300),    # baseline file downloads
+    '/v1/library': (120, 2000), # the shared library list and one profile's details (free)
 }
 _v1_rate_windows: dict = {}  # {(key_id, endpoint): [(ts_epoch), ...]}
 _v1_rate_windows_lock = None
@@ -59148,6 +59151,12 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
       brief_summary
     On a refusal, buildable=False and price=0 (a refused run charges
     nothing on either route)."""
+    # A library id sent as the whole prompt (2026-11-23): the engine reads
+    # the profile's own name and still decides; an id we do not hold is a
+    # 404, never a build.
+    prompt, _lib_err = _v1_prompt_for_library_id(prompt)
+    if _lib_err is not None:
+        return None, _lib_err
     try:
         draft, candidates, interp = _v1_interpret(
             prompt, identity_context=identity_context, actor=actor)
@@ -60007,6 +60016,8 @@ def api_v1_profiles_check():
         'brand_category': draft.get('brand_category'),
         'derive_type': d_type or None,
         'existing_match_s3_key': ex_key or None,
+        # the id GET /api/v1/profiles/library lists (2026-11-23)
+        'existing_match_profile_id': _v1_profile_id(ex_key) if ex_key else None,
         'existing_match_display_name': draft.get('existing_match_display_name') or None,
         'existing_match_days_old': draft.get('existing_match_days_old'),
         # Null permanently (standing decision 2026-08-25: in-place
@@ -60286,6 +60297,7 @@ def api_v1_profiles_run():
             'reused_existing': True,
             'subject': draft.get('existing_match_display_name') or draft.get('subject'),
             's3_key': ex_key,
+            'profile_id': _v1_profile_id(ex_key),
             'profile_name': ex_key.rsplit('/', 1)[-1],
             'download_url': url,
             'download_expires_seconds': 86400 if url else None,
@@ -60646,7 +60658,7 @@ def api_v1_profiles_bulk():
         if cached is not None:
             return jsonify(cached)
 
-    read = _pb.read_from_items(parsed)
+    read = _pb.read_from_items(parsed, resolve_id=_v1_library_id_resolver())
     if not read.get('items'):
         return jsonify({'success': False,
                          'error': ('no usable names in "subjects": send plain '
@@ -60821,6 +60833,7 @@ def api_v1_profiles_status(run_id):
                 resp['download_url'] = url
                 resp['download_expires_seconds'] = 86400
                 resp['s3_key'] = s3_key
+                resp['profile_id'] = _v1_profile_id(s3_key)
                 resp['profile_name'] = status.get('profile_name') or s3_key.rsplit('/', 1)[-1]
         avid_key = status.get('avid_s3_key')
         if avid_key:
@@ -60829,6 +60842,7 @@ def api_v1_profiles_status(run_id):
                 resp['avid_download_url'] = avid_url
                 resp['avid_s3_key'] = avid_key
                 resp['avid_s3_key'] = avid_key
+                resp['avid_profile_id'] = _v1_profile_id(avid_key)
         # Prove the file is discoverable in the Select Profile dropdown,
         # not just a raw S3 download. Every /run output goes through
         # register_profile_in_dashboard (canonical helper) just like a
@@ -60868,6 +60882,137 @@ def api_v1_profiles_status(run_id):
     return jsonify(resp)
 
 
+# ---------------------------------------------------------------------------
+# Partner library (Jenna 2026-11-23). GET /api/v1/profiles/library lists
+# every profile in the shared library with its details; GET
+# /api/v1/profiles/library/<id> returns one profile and its cuts. Free: no
+# charge and no balance needed, the same as /schema and /genpop.
+# Rate-limited under /v1/library, ETag for caching. The work lives in
+# prometheus/partner_library.py (items, filters, pages, the partner belt)
+# and migration/partner_library_index.py (each file's window, audience and
+# sections); these routes gate, rate-limit and hand over.
+# ---------------------------------------------------------------------------
+def _v1_profile_id(s3_key):
+    """The library id of a profile file (the id GET
+    /api/v1/profiles/library lists), or None."""
+    try:
+        from migration.partner_library_index import profile_id as _pid
+        return _pid(s3_key) or None
+    except Exception:
+        return None
+
+
+def _v1_prompt_for_library_id(prompt):
+    """(prompt, err_resp). A library id sent as the whole prompt becomes
+    that profile's own name, which the engine reads like any other prompt
+    and still decides on. An id we do not hold is a 404, never a build.
+    Any other prompt passes through untouched."""
+    p = str(prompt or '').strip()
+    if not p.startswith('pf_'):
+        return prompt, None
+    try:
+        from migration.partner_library_index import ID_RX as _lib_rx
+        if not _lib_rx.match(p):
+            return prompt, None
+        from prometheus import partner_library as _plib
+        name = _plib.name_for_id(p, _profile_catalog_for_chat() or [])
+    except Exception:
+        traceback.print_exc()
+        name = None
+    if not name:
+        return prompt, (jsonify({'success': False,
+                                 'error': 'profile not found'}), 404)
+    return name, None
+
+
+def _v1_library_id_resolver():
+    """Name lookup for library ids on a bulk list. The library's names
+    are read once, on the first id, and never for a list of plain names."""
+    held = {}
+
+    def _resolve(pid):
+        if 'names' not in held:
+            try:
+                from prometheus import partner_library as _plib
+                held['names'] = _plib.id_names(_profile_catalog_for_chat() or [])
+            except Exception:
+                traceback.print_exc()
+                held['names'] = {}
+        return held['names'].get(str(pid or '').strip())
+    return _resolve
+
+
+def _v1_library_reply(body, status, headers):
+    if status == 304:
+        resp = app.response_class(status=304)
+    else:
+        resp = jsonify(body)
+        resp.status_code = status
+    for _h, _v in (headers or {}).items():
+        resp.headers[_h] = _v
+    return resp
+
+
+@app.route('/api/v1/profiles/library', methods=['GET'])
+def api_v1_profiles_library():
+    """Every profile in the shared library, with its details.
+
+    Request:
+      Headers: X-Crosswalk-API-Key: <raw_key>; optional If-None-Match
+      Query (all optional): q, category, type, updated_since, limit (1 to
+        200, default 50), cursor (next_cursor from the page before)
+
+    Response: {success, profiles: [item, ...], count, total, limit,
+    next_cursor} with an ETag header; 304 and no body when If-None-Match
+    matches. Free; 120 a minute and 2,000 a day per key.
+    """
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    key_id = _partner_key_id(user)
+    allowed, retry_after, cur_min, cur_day, cap_min, cap_day = _rate_limit_check(
+        key_id, '/v1/library')
+    if not allowed:
+        return _rate_limit_response(retry_after, cur_min, cur_day,
+                                     cap_min, cap_day, '/v1/library')
+    try:
+        from prometheus import partner_library as _plib
+        body, status, headers = _plib.list_route(
+            request.args, request.headers.get('If-None-Match'),
+            _profile_catalog_for_chat() or [])
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                        'error': 'library temporarily unavailable'}), 503
+    return _v1_library_reply(body, status, headers)
+
+
+@app.route('/api/v1/profiles/library/<profile_id>', methods=['GET'])
+def api_v1_profiles_library_item(profile_id):
+    """One library profile and its cuts, each with every category inside
+    each section. Same key, limits and ETag handling as the list; 404
+    'profile not found' for an id the library does not hold."""
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    key_id = _partner_key_id(user)
+    allowed, retry_after, cur_min, cur_day, cap_min, cap_day = _rate_limit_check(
+        key_id, '/v1/library')
+    if not allowed:
+        return _rate_limit_response(retry_after, cur_min, cur_day,
+                                     cap_min, cap_day, '/v1/library')
+    try:
+        from prometheus import partner_library as _plib
+        body, status, headers = _plib.detail_route(
+            profile_id, request.args, request.headers.get('If-None-Match'),
+            _profile_catalog_for_chat() or [])
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                        'error': 'library temporarily unavailable'}), 503
+    return _v1_library_reply(body, status, headers)
+
+
 @app.route('/api/v1/schema', methods=['GET'])
 def api_v1_schema():
     """Minimal machine-readable request/response schema for the partner
@@ -60891,7 +61036,10 @@ def api_v1_schema():
                                 'anything.'),
                 'request': {
                     'prompt': {'type': 'string', 'required': True,
-                               'max_length': 4000},
+                               'max_length': 4000,
+                               'description': ('a plain-English ask, or a '
+                                               'library id (pf_...) from GET '
+                                               '/api/v1/profiles/library')},
                     'run_avid': {'type': 'boolean', 'required': False,
                                  'default': True},
                     'domain': {
@@ -60943,6 +61091,9 @@ def api_v1_schema():
                                              'framing kept for existing '
                                              'integrations'),
                     'existing_match_s3_key': 'string or null',
+                    'existing_match_profile_id': ('string or null - the id '
+                                                  'GET /api/v1/profiles/library '
+                                                  'lists'),
                     'existing_match_display_name': 'string or null',
                     'existing_match_days_old': ('integer or null - file '
                                                 'age in days'),
@@ -61026,6 +61177,8 @@ def api_v1_schema():
                     'existing_match_last_modified': 'always null',
                     'match_score': 'number or null (on existing_match)',
                     'download_url': 'string (existing_match only)',
+                    'profile_id': ('string (existing_match only) - the '
+                                   'library id'),
                 },
             },
             'POST /api/v1/profiles/bulk': {
@@ -61069,7 +61222,7 @@ def api_v1_schema():
                     'estimated_completion': 'string, plain words',
                     'status_url': 'string',
                     'rows': ('array of {subject, status, s3_key?, '
-                             'reused?, reason?}'),
+                             'profile_id?, reused?, reason?}'),
                 },
                 'errors': {
                     '400': 'bad body (the field is named)',
@@ -61088,7 +61241,8 @@ def api_v1_schema():
                     'building': 'integer', 'in_progress': 'integer',
                     'rows': ('array of {subject, status (queued, running, '
                              'complete, failed), s3_key?, download_url? '
-                             '(24h), avid_s3_key?, avid_download_url?, '
+                             '(24h), profile_id?, avid_s3_key?, '
+                             'avid_profile_id?, avid_download_url?, '
                              'reused?, reason?, refunded?}'),
                     'download_expires_seconds': '86400 when any link is present',
                 },
@@ -61105,6 +61259,10 @@ def api_v1_schema():
                     'download_url': 'string (when complete, 24h expiry)',
                     'avid_download_url': ('string (when an Avid Fan '
                                           'companion was built)'),
+                    'profile_id': ('string (when complete) - the library '
+                                   'id of the file'),
+                    'avid_profile_id': ('string (when an Avid Fan '
+                                        'companion was built)'),
                     'delivered_summary': 'string (when complete)',
                     'estimated_audience_low': 'integer (when quoted)',
                     'estimated_audience_high': 'integer (when quoted)',
@@ -61116,6 +61274,76 @@ def api_v1_schema():
                     'credits_refunded': ('integer (on failed runs - '
                                          'legacy credit framing)'),
                 },
+            },
+            'GET /api/v1/profiles/library': {
+                'description': ('Every profile in the shared library with '
+                                'its details: name, subject, type, '
+                                'category, window, audience and the '
+                                'sections it holds. Free.'),
+                'query': {
+                    'q': {'type': 'string', 'required': False,
+                          'description': ('search names and subjects; case '
+                                          'and punctuation do not matter')},
+                    'category': {'type': 'string', 'required': False,
+                                 'description': 'e.g. ACTOR or MUSICIAN/BAND'},
+                    'type': {'type': 'string', 'required': False,
+                             'description': ('Total Universe, Avid Fan, a cut '
+                                             'label such as Female or 18-24, '
+                                             'or cut for every cut')},
+                    'updated_since': {'type': 'string', 'required': False,
+                                      'description': ('YYYY-MM-DD, or a time '
+                                                      'like 2026-11-01T09:30:00Z')},
+                    'limit': {'type': 'integer', 'required': False,
+                              'default': 50, 'max': 200},
+                    'cursor': {'type': 'string', 'required': False,
+                               'description': ('next_cursor from the page '
+                                               'before, with the same filters')},
+                },
+                'headers': {
+                    'If-None-Match': ('optional - the ETag from an earlier '
+                                      'response; 304 with no body when '
+                                      'nothing changed')},
+                'response': {
+                    'profiles': 'array of items (fields under item)',
+                    'count': 'integer - items on this page',
+                    'total': 'integer - items matching the filters',
+                    'limit': 'integer',
+                    'next_cursor': 'string or null (null on the last page)',
+                },
+                'item': {
+                    'id': ('string - pf_ and 20 letters and digits; stable '
+                           'for the life of the profile'),
+                    'name': 'string - the name in the library',
+                    'subject': 'string',
+                    'type': ('Total Universe, Avid Fan, or the cut label '
+                             '(Female, 18-24, 2025 Total Universe, Global)'),
+                    'category': 'string',
+                    'window': ('{start, end, label} - the dates the profile '
+                               'covers, YYYY-MM-DD'),
+                    'updated_at': ('ISO-8601 string - when the profile was '
+                                   'built or last refreshed'),
+                    'us_audience': ('integer - projected US people (the US '
+                                    'part on a worldwide profile)'),
+                    'worldwide_audience': ('integer or null - set on a '
+                                           'worldwide profile'),
+                    'sections': ('array of strings - what the profile holds, '
+                                 'in plain words'),
+                    'cuts': 'array of {id, label} - on a Total Universe',
+                    'parent_id': ('string or null - the Total Universe a cut '
+                                  'belongs to'),
+                },
+                'rate_limit': '120 per minute, 2,000 per day',
+            },
+            'GET /api/v1/profiles/library/{id}': {
+                'description': ('One library profile and its cuts, each with '
+                                'every category inside each section. Free.'),
+                'headers': {'If-None-Match': 'optional - as on the list'},
+                'response': {
+                    'profile': 'item fields plus section_details',
+                    'cuts': 'array of items, each with section_details',
+                    'section_details': 'array of {section, categories}',
+                },
+                'errors': {'404': 'profile not found'},
             },
             'GET /api/v1/genpop': {
                 'description': ('US population baseline CSV. Optional '
