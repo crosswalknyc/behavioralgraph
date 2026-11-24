@@ -139,7 +139,7 @@ class Harness:
         for name in ('_fetch_run_status_from_queue', '_lookup_run_owner', '_scrub_v1_status', '_generate_presigned_profile_url',
                      '_scrub_v1_freetext'):
             ns[name] = lambda *a, **k: None
-        code = _extract(['api_v1_profiles_bulk', 'api_v1_profiles_status', '_v1_library_id_resolver',
+        code = _extract(['api_v1_profiles_bulk', 'api_v1_profiles_status', '_v1_library_ref_resolver',
                          '_idempotency_lookup', '_idempotency_store',
                          '_v1_idempotency_cache', '_v1_idempotency_lock', '_V1_IDEMPOTENCY_TTL_SECONDS', '_rate_limit_check',
                          '_rate_limit_response', '_V1_RATE_LIMITS', '_v1_rate_windows', '_v1_rate_windows_lock',
@@ -324,6 +324,38 @@ class TheRoute(unittest.TestCase):
         self.assertEqual(row['profile_id'], profile_id('Taylor_Swift_09_01_2026_10_00.csv'))
         self.assertEqual(self.h.calls, [])
         _assert_clean(self, body)
+
+    def test_a_cuts_id_is_reused_not_built(self):
+        # the base-name index holds Total Universes only; an id names its own file
+        from migration.partner_library_index import profile_id
+        body, code = self.h.post({'subjects': [profile_id('Taylor Swift - Avid Fan.csv')]})
+        self.assertEqual(code, 200, body)
+        self.assertEqual((body['reused'], body['queued'], body['charge_usd']), (1, 0, 0.0))
+        self.assertEqual(body['rows'][0]['s3_key'], 'Taylor Swift - Avid Fan.csv')
+        self.assertEqual(self.h.calls, [])
+
+    def test_file_names_on_a_list(self):
+        # a file name we hold (any case, with or without .csv) stands for that
+        # file and comes back reused, free; one we do not hold is dropped
+        body, code = self.h.post({'subjects': ['Taylor_Swift_09_01_2026_10_00.csv', 'taylor swift - avid fan',
+                                               'TAYLOR_SWIFT_06_01_2026_10_00', 'Taylor_Swift_01_01_2020_10_00.csv']})
+        self.assertEqual(code, 200, body)
+        self.assertEqual((body['reused'], body['queued'], body['dropped'], body['charge_usd']), (3, 0, 1, 0.0))
+        self.assertEqual([(r['subject'], r['s3_key']) for r in body['rows']],
+                         [('Taylor Swift', 'Taylor_Swift_09_01_2026_10_00.csv'),
+                          ('Taylor Swift - Avid Fan', 'Taylor Swift - Avid Fan.csv'),
+                          # the older file shares its name, so it keeps its own row under its file name
+                          ('Taylor_Swift_06_01_2026_10_00.csv', 'Taylor_Swift_06_01_2026_10_00.csv')])
+        self.assertEqual(self.h.calls, [])
+        _assert_clean(self, body)
+
+    def test_a_sentence_with_a_file_name_is_read_as_a_name(self):
+        text = 'Taylor_Swift_09_01_2026_10_00.csv with the newer window please'
+        body, code = self.h.post({'subjects': [text]})
+        self.assertEqual(code, 200, body)
+        self.assertEqual((body['reused'], body['queued'], body['dropped']), (0, 1, 0))
+        self.assertEqual(body['rows'][0]['subject'], text)
+        self.assertNotIn('s3_key', body['rows'][0])
 
     def test_idempotency_key(self):
         hdr = {'Idempotency-Key': 'req-123'}

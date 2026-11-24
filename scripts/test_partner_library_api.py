@@ -50,6 +50,7 @@ from botocore.exceptions import ClientError  # noqa: E402
 from migration import partner_library_index as PLI  # noqa: E402
 from prometheus import partner_library as PL  # noqa: E402
 from prometheus import partner_bulk as PBK  # noqa: E402
+from prometheus import bulk_pull as BP  # noqa: E402
 from prometheus import guards as G  # noqa: E402
 
 APP_PY = os.path.join(ROOT, 'app.py')
@@ -915,7 +916,7 @@ class Routes(unittest.TestCase):
             return list(CATALOG)
         ns['_profile_catalog_for_chat'] = _catalog
         code = _extract_src(src, ['api_v1_profiles_library', 'api_v1_profiles_library_item', '_v1_library_reply',
-                                  '_v1_prompt_for_library_id', '_v1_library_id_resolver', '_v1_profile_id',
+                                  '_v1_prompt_for_library_id', '_v1_library_ref_resolver', '_v1_profile_id',
                                   '_rate_limit_check', '_rate_limit_response', '_V1_RATE_LIMITS', '_v1_rate_windows',
                                   '_v1_rate_windows_lock'])
         exec(compile('\n\n'.join(code), APP_PY, 'exec'), ns)
@@ -1007,14 +1008,31 @@ class Routes(unittest.TestCase):
         self.assertIn("resp['profile_id'] = _v1_profile_id(s3_key)", status)
         self.assertIn("resp['avid_profile_id'] = _v1_profile_id(avid_key)", status)
         bulk = _fn_src(self.src, 'api_v1_profiles_bulk')
-        self.assertIn('_pb.read_from_items(parsed, resolve_id=_v1_library_id_resolver())', bulk)
+        self.assertIn('_pb.read_from_items(parsed, resolve_ref=_v1_library_ref_resolver())', bulk)
+        self.assertIn('index = _pb.with_library_refs(_bulk.library_index(catalog), read)', bulk)
+
+    def test_a_file_name_as_the_prompt(self):
+        fn = self.ns['_v1_prompt_for_library_id']
+        self.assertEqual(fn(TS_NEW), ('Taylor Swift', None))
+        self.assertEqual(fn('taylor swift - avid fan'), ('Taylor Swift - Avid Fan', None))
+        self.assertEqual(fn('GUINNESS_GLOBAL_11_23_2026_20_44'), ('Guinness - Global', None))
+        for unknown in ('Taylor_Swift_01_01_2020_10_00.csv', 'Taylor_Swift_01_01_2020_10_00', 'Reba McEntire - Avid Fan.csv',
+                        'Gen_Pop_2026.csv'):
+            prompt, err = fn(unknown)
+            self.assertEqual((prompt, err[1], err[0].body['error']), (unknown, 404, 'profile not found'), unknown)
+        for sentence in ('Can you pull Taylor_Swift_11_01_2026_14_22.csv for me?', 'please send Taylor Swift - Avid Fan.csv',
+                         'Build a profile from my list.csv', 'Taylor Swift - Avid Fan fans in Ohio'):
+            self.assertEqual(fn(sentence), (sentence, None), sentence)
 
     def test_a_bulk_list_reads_the_names_once(self):
-        resolve = self.ns['_v1_library_id_resolver']()
+        resolve = self.ns['_v1_library_ref_resolver']()
         self.assertEqual(self.catalog_calls, 0)
-        self.assertEqual(resolve(PLI.profile_id(TS_NEW)), 'Taylor Swift')
-        self.assertEqual(resolve(PLI.profile_id(GU)), 'Guinness')
-        self.assertIsNone(resolve(PLI.profile_id('Never_Built_01_01_2026_10_00.csv')))
+        self.assertEqual(resolve(PLI.profile_id(TS_NEW)), ('id', 'Taylor Swift', TS_NEW))
+        self.assertEqual(resolve(GU), ('file', 'Guinness', GU))
+        self.assertEqual(resolve('guinness - avid fan'), ('file', 'Guinness - Avid Fan', GU_AVID))
+        self.assertEqual(resolve(PLI.profile_id('Never_Built_01_01_2026_10_00.csv')), ('unknown', None, None))
+        self.assertEqual(resolve('Never_Built_01_01_2026_10_00.csv'), ('unknown', None, None))
+        self.assertEqual(resolve('Dolly Parton'), (None, None, None))
         self.assertEqual(self.catalog_calls, 1)
 
 
@@ -1039,6 +1057,7 @@ class MatchesCheck(unittest.TestCase):
 
     def setUp(self):
         PL.reset_cache()
+        self.seen = []
         ns = {'__name__': 'app_under_test', 'app': _App(), 'traceback': __import__('traceback'), 're': re, 'json': json,
               'request': None, 'ADDON_CUT_CREDITS': 3}
         ns['jsonify'] = lambda body: _Resp(json.loads(json.dumps(body, default=str)))
@@ -1066,9 +1085,14 @@ class MatchesCheck(unittest.TestCase):
         prompt, err = self.ns['_v1_prompt_for_library_id'](prompt)       # _v1_conclude's own first step
         if err is not None:
             return None, err
+        self.seen.append(prompt)                                          # what the engine reads
         hits = [e for e in CATALOG
                 if e['s3_key'] in PUBLIC_KEYS and PL._ws(e['display_name']).lower() == PL._ws(prompt).lower()]
         hits.sort(key=lambda e: PL._stamp_iso(e['s3_key']) or '', reverse=True)     # the newest file of that name
+        if not hits:
+            return {'draft': {'subject': prompt, 'decision_reason': 'A new build.'}, 'decision': 'new_build',
+                    'ex_key': '', 'd_type': None, 'cuts': [], 'price': 5, 'buildable': True, 'brief_summary': '',
+                    'match_score': None}, None
         e = hits[0]
         draft = {'subject': prompt, 'existing_match_display_name': e['display_name'], 'existing_match_days_old': 4,
                  'decision_reason': 'Already in the library.'}
@@ -1099,8 +1123,87 @@ class MatchesCheck(unittest.TestCase):
         self.assertTrue(any(listed[PLI.profile_id(k)]['parent_id'] for k in self.SAMPLE))           # cuts in the sample
         self.assertTrue(listed[PLI.profile_id(GU_GLOBAL)]['worldwide_audience'])                   # and the worldwide one
 
+    def test_a_file_name_is_read_as_that_profile(self):
+        for key in self.SAMPLE:                      # a Total Universe, cuts, the worldwide profile and its cut
+            for prompt in (key, key[:-4].upper(), '  ' + key.lower() + '  '):
+                body, status = self._check(prompt)
+                self.assertEqual(status, 200, (key, prompt, body))
+                self.assertEqual((body['decision'], body['existing_match_s3_key']), ('existing_match', key), prompt)
+                self.assertEqual(body['credits_would_charge'], 0, prompt)
+        # an older file that shares its name with a newer one: the engine still decides and answers with the newest
+        body, _s = self._check(TS_OLD)
+        self.assertEqual(body['existing_match_s3_key'], TS_NEW)
+
+    def test_a_file_name_we_do_not_hold_is_a_404(self):
+        for prompt in ('Taylor_Swift_01_01_2020_10_00.csv', 'TAYLOR_SWIFT_01_01_2020_10_00', 'Guinness - Global - Female.csv',
+                       'Gen_Pop_2026.csv', 'folder/Taylor_Swift_11_01_2026_14_22.csv'):
+            self.seen.clear()
+            body, status = self._check(prompt)
+            self.assertEqual((status, body), (404, {'success': False, 'error': 'profile not found'}), prompt)
+            self.assertEqual(self.seen, [], prompt)                       # the engine never read it
+
+    def test_a_sentence_with_a_file_name_is_read_as_written(self):
+        for text in ('Can you pull Taylor_Swift_11_01_2026_14_22.csv for me?', 'please send Guinness - Global.csv'):
+            self.seen.clear()
+            body, status = self._check(text)
+            self.assertEqual(status, 200, text)
+            self.assertEqual(self.seen, [text])
+            self.assertIsNone(body['existing_match_s3_key'])
+
+
+class Resolver(unittest.TestCase):
+    def setUp(self):
+        PL.reset_cache()
+
+    def test_the_whole_text_is_an_id_or_a_file_name(self):
+        cases = {
+            TS_NEW: ('file', 'Taylor Swift', TS_NEW),
+            TS_NEW[:-4].lower(): ('file', 'Taylor Swift', TS_NEW),
+            TS_AVID.upper(): ('file', 'Taylor Swift - Avid Fan', TS_AVID),
+            'taylor swift - avid fan': ('file', 'Taylor Swift - Avid Fan', TS_AVID),
+            GU_GLOBAL[:-4]: ('file', 'Guinness - Global', GU_GLOBAL),
+            '  ' + GU + '  ': ('file', 'Guinness', GU),
+            PLI.profile_id(ORPHAN): ('id', 'Orphan Show - Avid Fan', ORPHAN),
+        }
+        for text, want in cases.items():
+            self.assertEqual(PL.resolve_ref(text, CATALOG), want, text)
+
+    def test_shaped_like_ours_but_not_held(self):
+        for text in ('Taylor_Swift_01_01_2020_10_00.csv', 'Taylor_Swift_01_01_2020_10_00', 'Reba McEntire - Avid Fan.csv',
+                     'Some Show.csv', 'Gen_Pop_2026.csv', 'pf_' + '0' * 20, 'folder/Taylor_Swift_11_01_2026_14_22.csv'):
+            self.assertEqual(PL.resolve_ref(text, CATALOG), ('unknown', None, None), text)
+            self.assertTrue(PL.looks_like_ref(text), text)
+
+    def test_anything_else_is_a_prompt(self):
+        for text in ('Can you pull Taylor_Swift_11_01_2026_14_22.csv for me?', 'please send Taylor Swift - Avid Fan.csv',
+                     'Build a profile from my list.csv', 'Taylor Swift - Avid Fan.csv and Guinness.csv', 'Taylor Swift fans',
+                     'Taylor Swift', 'pf_changs fans in Texas', '', 'x' * 300):
+            self.assertEqual(PL.resolve_ref(text, CATALOG), (None, None, None), text)
+
 
 class Bulk(unittest.TestCase):
+    def test_file_names_and_ids_reuse_exactly_their_files(self):
+        refs = PL.refs_for(CATALOG)
+        parsed, err = PBK.parse_body({'subjects': ['taylor swift - avid fan', GU_GLOBAL, PLI.profile_id(TS_FEM), TS_OLD,
+                                                   'Taylor Swift', 'Guinness_01_01_2020_10_00.csv',
+                                                   'please send Guinness_11_23_2026_17_38.csv']})
+        self.assertIsNone(err)
+        read = PBK.read_from_items(parsed, resolve_ref=lambda s: PL.resolve_ref(s, refs=refs))
+        self.assertEqual([i['subject'] for i in read['items']],
+                         ['Taylor Swift - Avid Fan', 'Guinness - Global', 'TAYLOR SWIFT - Female', TS_OLD, 'Taylor Swift',
+                          'please send Guinness_11_23_2026_17_38.csv'])
+        self.assertEqual(read['dropped'], 1)
+        index = PBK.with_library_refs(BP.library_index(CATALOG), read)
+        plan = {r['subject']: (r['state'], r['key']) for r in BP.plan_rows(read['items'], index)}
+        self.assertEqual(plan['Taylor Swift - Avid Fan'], ('reused', TS_AVID))
+        self.assertEqual(plan['Guinness - Global'], ('reused', GU_GLOBAL))
+        self.assertEqual(plan['TAYLOR SWIFT - Female'], ('reused', TS_FEM))
+        self.assertEqual(plan[TS_OLD], ('reused', TS_OLD))                      # exactly the older file named
+        self.assertEqual(plan['Taylor Swift'], ('reused', TS_NEW))              # a plain name: the newest, as always
+        self.assertEqual(plan['please send Guinness_11_23_2026_17_38.csv'][0], 'queued')
+        bare = {r['subject']: r['state'] for r in BP.plan_rows(read['items'], BP.library_index(CATALOG))}
+        self.assertEqual((bare['Taylor Swift - Avid Fan'], bare['Guinness - Global']), ('queued', 'queued'))
+
     def test_ids_on_a_list(self):
         names = {PLI.profile_id(TS_AVID): 'Taylor Swift - Avid Fan'}
         parsed, err = PBK.parse_body({'subjects': [PLI.profile_id(TS_AVID), 'Dolly Parton',

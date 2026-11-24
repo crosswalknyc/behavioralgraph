@@ -526,6 +526,8 @@ def library(catalog, index=None):
 def reset_cache():
     with _LIB_LOCK:
         _LIB.update(fp=None, items=None, by_id=None, at=0.0)
+    with _REFS_LOCK:
+        _REFS.update(fp=None, refs=None)
 
 
 def _fill_gaps(items):
@@ -537,24 +539,122 @@ def _fill_gaps(items):
             pass
 
 
-def id_names(catalog):
-    """{library id: display name} over the current list (names only: no
-    index read, so the check, run and bulk calls stay as fast as before)."""
+# ---------------------------------------------------------------- a library id or a file name as the prompt
+# A prompt (or a bulk subject) that is, as a whole, a library id or the file
+# name of a profile we hold is read as that profile (Jenna 2026-11-23: ids
+# first, file names at 4:45 PM PT). File names match in any case, with or
+# without '.csv'. Something shaped like one of our file names that we do not
+# hold is refused (a 404, or dropped from a list), never built. A sentence
+# that mentions a file name is read like any other prompt.
+REF_MAX_LEN = 240
+_STAMP_TAIL_RX = re.compile(r'_\d{2}_\d{2}_\d{4}(?:_\d{2}_\d{2})?$')
+# Lower-case words that make a '.csv' ending part of a request, not a name
+# ('please send my list.csv'). Titles capitalize their words, so a held or
+# unheld name like 'Get Out - Avid Fan.csv' is never read as a request.
+_REQUEST_WORDS = frozenset((
+    'please', 'pull', 'send', 'give', 'get', 'check', 'use', 'using', 'build', 'run', 'make', 'from', 'my', 'our',
+    'your', 'this', 'that', 'these', 'those', 'file', 'files', 'list', 'can', 'could', 'would', 'should', 'you', 'me',
+    'us', 'attached', 'upload', 'uploaded', 'want', 'need', 'what', 'how', 'show', 'open', 'load', 'download',
+    'find', 'look', 'see', 'here', 'there', 'about'))
+_REFS = {'fp': None, 'refs': None}
+_REFS_LOCK = threading.Lock()
+
+
+def _stem_of(text):
+    low = str(text or '').strip().lower()
+    return low[:-4] if low.endswith('.csv') else low
+
+
+def refs_for(catalog):
+    """{'ids': {id: (name, key)}, 'stems': {lower stem: [(key, name)]},
+    'keys': [lower key]} over the current list (names only: no index
+    read, so the check, run and bulk calls stay as fast as before).
+    Rebuilt only when the list changes."""
+    fp = _catalog_fp(catalog)
+    with _REFS_LOCK:
+        if _REFS['fp'] == fp and _REFS['refs'] is not None:
+            return _REFS['refs']
+    pli = _idx()
+    ids, stems, keys = {}, {}, []
+    for key, name, _cat in _entries(catalog):
+        ids[pli.profile_id(key)] = (name, key)
+        stems.setdefault(_stem_of(key), []).append((key, name))
+        keys.append(key.lower())
+    refs = {'ids': ids, 'stems': stems, 'keys': keys}
+    with _REFS_LOCK:
+        _REFS.update(fp=fp, refs=refs)
+    return refs
+
+
+def looks_like_file_name(text):
+    """True when the whole text reads as one of our file names: one word
+    ending in '.csv' or in a build stamp (_MM_DD_YYYY or _MM_DD_YYYY_HH_MM),
+    or a name ending in '.csv' with no lower-case request word and no
+    question or exclamation mark."""
+    t = str(text or '').strip()
+    if not t or len(t) > REF_MAX_LEN:
+        return False
+    low = t.lower()
+    stem = t[:-4] if low.endswith('.csv') else t
+    if not re.search(r'\s', t):
+        return low.endswith('.csv') or bool(_STAMP_TAIL_RX.search(stem))
+    if not low.endswith('.csv') or re.search(r'[?!]', t):
+        return False
+    return not any(w in _REQUEST_WORDS for w in re.findall(r"[A-Za-z]+", stem))
+
+
+def looks_like_ref(text):
+    """A library id or a file name by shape alone (no list needed)."""
+    t = str(text or '').strip()
     try:
-        pli = _idx()
-        return {pli.profile_id(key): name for key, name, _cat in _entries(catalog)}
+        if _idx().ID_RX.match(t):
+            return True
+    except Exception:
+        if t.startswith('pf_'):
+            return True
+    return looks_like_file_name(t)
+
+
+def resolve_ref(text, catalog=None, refs=None):
+    """(kind, display name, file name) for a prompt or a bulk subject.
+    kind is 'id' or 'file' when the whole text is a library id or a file
+    name we hold; 'unknown' when it is shaped like one and we do not hold
+    it; None for anything else, a sentence that mentions a file name
+    included."""
+    t = str(text or '').strip()
+    if not t or len(t) > REF_MAX_LEN:
+        return None, None, None
+    refs = refs if refs is not None else refs_for(catalog)
+    if _idx().ID_RX.match(t):
+        hit = refs['ids'].get(t)
+        return ('id', hit[0], hit[1]) if hit else ('unknown', None, None)
+    hits = refs['stems'].get(_stem_of(t))
+    if hits:
+        exact = [h for h in hits if h[0] == t or h[0][:-4] == t]      # the same case as sent
+        canon = [h for h in hits if h[0][:-4] == h[1]]                # written as its own name
+        key, name = (exact or canon or sorted(hits))[0]
+        return 'file', name, key
+    if looks_like_file_name(t):
+        low = t.lower()
+        if re.search(r'\s', t) and any(k in low for k in refs['keys']):
+            return None, None, None            # a sentence that mentions a file we hold
+        return 'unknown', None, None           # one word ('a/b.csv' included) that is not our file
+    return None, None, None
+
+
+def id_names(catalog):
+    """{library id: display name} over the current list."""
+    try:
+        return {pid: hit[0] for pid, hit in refs_for(catalog)['ids'].items()}
     except Exception:
         return {}
 
 
 def name_for_id(pid, catalog):
-    """The display name of the library profile with this id, or None. Lets
-    a library id stand in for a prompt on the check and run calls."""
+    """The display name of the library profile with this id, or None."""
     try:
-        pid = str(pid or '').strip()
-        if not _idx().ID_RX.match(pid):
-            return None
-        return id_names(catalog).get(pid)
+        kind, name, _key = resolve_ref(pid, catalog)
+        return name if kind == 'id' else None
     except Exception:
         return None
 
@@ -789,5 +889,5 @@ def detail_route(pid, args, if_none_match, catalog, index=None):
 
 __all__ = ['TYPE_TU', 'DEFAULT_LIMIT', 'MAX_LIMIT', 'RATE_LIMIT', 'LIST_PARAMS', 'NOT_FOUND', 'SECTION_ORDER',
            'split_name', 'section_of', 'sections_for', 'build_items', 'public', 'library', 'reset_cache',
-           'id_names', 'name_for_id', 'scrub', 'violations', 'etag_of', 'etag_matches', 'parse_list_args', 'list_route',
-           'detail_route']
+           'REF_MAX_LEN', 'refs_for', 'looks_like_file_name', 'looks_like_ref', 'resolve_ref', 'id_names', 'name_for_id',
+           'scrub', 'violations', 'etag_of', 'etag_matches', 'parse_list_args', 'list_route', 'detail_route']

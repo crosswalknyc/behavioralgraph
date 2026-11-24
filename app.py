@@ -59151,9 +59151,9 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
       brief_summary
     On a refusal, buildable=False and price=0 (a refused run charges
     nothing on either route)."""
-    # A library id sent as the whole prompt (2026-11-23): the engine reads
-    # the profile's own name and still decides; an id we do not hold is a
-    # 404, never a build.
+    # A library id or a file name sent as the whole prompt (2026-11-23):
+    # the engine reads the profile's own name and still decides; one we do
+    # not hold is a 404, never a build.
     prompt, _lib_err = _v1_prompt_for_library_id(prompt)
     if _lib_err is not None:
         return None, _lib_err
@@ -60658,7 +60658,7 @@ def api_v1_profiles_bulk():
         if cached is not None:
             return jsonify(cached)
 
-    read = _pb.read_from_items(parsed, resolve_id=_v1_library_id_resolver())
+    read = _pb.read_from_items(parsed, resolve_ref=_v1_library_ref_resolver())
     if not read.get('items'):
         return jsonify({'success': False,
                          'error': ('no usable names in "subjects": send plain '
@@ -60678,7 +60678,7 @@ def api_v1_profiles_bulk():
     except Exception:
         traceback.print_exc()
         catalog = []
-    index = _bulk.library_index(catalog)
+    index = _pb.with_library_refs(_bulk.library_index(catalog), read)
     n_new = sum(1 for r in _bulk.plan_rows(read['items'], index)
                 if r.get('state') == 'queued')
     each_usd = float(_bulk.price(username)['usd'])
@@ -60903,42 +60903,50 @@ def _v1_profile_id(s3_key):
 
 
 def _v1_prompt_for_library_id(prompt):
-    """(prompt, err_resp). A library id sent as the whole prompt becomes
-    that profile's own name, which the engine reads like any other prompt
-    and still decides on. An id we do not hold is a 404, never a build.
-    Any other prompt passes through untouched."""
+    """(prompt, err_resp). A library id or the file name of a profile we
+    hold (any case, with or without '.csv'), sent as the whole prompt,
+    becomes that profile's own name, which the engine reads like any other
+    prompt and still decides on. An id or a file name we do not hold is a
+    404, never a build. Any other prompt, a sentence that mentions a file
+    name included, passes through untouched."""
     p = str(prompt or '').strip()
-    if not p.startswith('pf_'):
+    if not p:
         return prompt, None
     try:
-        from migration.partner_library_index import ID_RX as _lib_rx
-        if not _lib_rx.match(p):
-            return prompt, None
         from prometheus import partner_library as _plib
-        name = _plib.name_for_id(p, _profile_catalog_for_chat() or [])
+        kind, name, _key = _plib.resolve_ref(p, _profile_catalog_for_chat() or [])
     except Exception:
         traceback.print_exc()
-        name = None
-    if not name:
+        try:
+            from prometheus import partner_library as _plib
+            kind, name = ('unknown' if _plib.looks_like_ref(p) else None), None
+        except Exception:
+            kind, name = ('unknown' if p.startswith('pf_') else None), None
+    if kind in ('id', 'file') and name:
+        return name, None
+    if kind is not None:
         return prompt, (jsonify({'success': False,
                                  'error': 'profile not found'}), 404)
-    return name, None
+    return prompt, None
 
 
-def _v1_library_id_resolver():
-    """Name lookup for library ids on a bulk list. The library's names
-    are read once, on the first id, and never for a list of plain names."""
+def _v1_library_ref_resolver():
+    """Library ids and file names on a bulk list: (kind, name, file name)
+    per subject (prometheus.partner_library.resolve_ref). The library's
+    names are read once, on the first subject."""
     held = {}
 
-    def _resolve(pid):
-        if 'names' not in held:
+    def _resolve(subject):
+        from prometheus import partner_library as _plib
+        if 'refs' not in held:
             try:
-                from prometheus import partner_library as _plib
-                held['names'] = _plib.id_names(_profile_catalog_for_chat() or [])
+                held['refs'] = _plib.refs_for(_profile_catalog_for_chat() or [])
             except Exception:
                 traceback.print_exc()
-                held['names'] = {}
-        return held['names'].get(str(pid or '').strip())
+                held['refs'] = None
+        if held['refs'] is None:
+            return ('unknown' if _plib.looks_like_ref(subject) else None), None, None
+        return _plib.resolve_ref(subject, refs=held['refs'])
     return _resolve
 
 
@@ -61038,8 +61046,10 @@ def api_v1_schema():
                     'prompt': {'type': 'string', 'required': True,
                                'max_length': 4000,
                                'description': ('a plain-English ask, or a '
-                                               'library id (pf_...) from GET '
-                                               '/api/v1/profiles/library')},
+                                               'library id (pf_...) or a file '
+                                               'name (s3_key) from GET '
+                                               '/api/v1/profiles/library, '
+                                               'sent as the whole prompt')},
                     'run_avid': {'type': 'boolean', 'required': False,
                                  'default': True},
                     'domain': {
@@ -61195,7 +61205,10 @@ def api_v1_schema():
                                  'description': ('plain names, or objects '
                                                  '{subject, category, notes}; '
                                                  'duplicates collapse, links '
-                                                 'and numbers are dropped')},
+                                                 'and numbers are dropped; a '
+                                                 'library id or file name '
+                                                 'reuses that profile, one we '
+                                                 'do not hold is dropped')},
                     'run_avid': {'type': 'boolean', 'required': False,
                                  'default': True},
                     'date_range': {'type': 'object {start, end}',

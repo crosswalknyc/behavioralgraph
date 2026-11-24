@@ -38,7 +38,8 @@ import time
 from . import bulk_pull as BP
 
 __all__ = ['MAX_SUBJECTS', 'KNOWN_FIELDS', 'ITEM_FIELDS', 'SOURCE', 'FILE_NAME', 'RATE_LIMIT', 'parse_body', 'read_from_items',
-           'open_bulk_for', 'open_bulk_error', 'response_doc', 'status_doc', 'funds_error', 'scrub', 'violations', 'eta_words']
+           'with_library_refs', 'open_bulk_for', 'open_bulk_error', 'response_doc', 'status_doc', 'funds_error', 'scrub',
+           'violations', 'eta_words']
 
 MAX_SUBJECTS = 1000
 SUBJECT_MAX_LEN = 120
@@ -162,36 +163,88 @@ def _library_id_rx():
         return re.compile(r'^pf_[0-9a-f]{20}$')
 
 
-def read_from_items(parsed, resolve_id=None):
+def _looks_like_ref(subj):
+    try:
+        from .partner_library import looks_like_ref
+        return looks_like_ref(subj)
+    except Exception:
+        return bool(_library_id_rx().match(str(subj or '').strip()))
+
+
+def read_from_items(parsed, resolve_id=None, resolve_ref=None):
     """The chat door's own read of a list ({'items','dropped','duplicates',
     'columns'}): duplicates collapsed, blanks / links / numbers dropped,
-    the optional category and notes kept per name. A library id (from GET
-    /api/v1/profiles/library) stands for that profile's own name when
-    ``resolve_id`` knows it; an id it does not know is dropped and counted,
-    never read as a name to build (2026-11-23)."""
+    the optional category and notes kept per name.
+
+    A subject that is, as a whole, a library id or the file name of a
+    profile we hold (GET /api/v1/profiles/library; ``resolve_ref`` returns
+    (kind, display name, file name)) stands for that profile: its own name
+    goes on the list and ``read['library_refs']`` remembers its file, so the
+    plan reuses exactly that file (with_library_refs). An id or a file name
+    we do not hold is dropped and counted, never read as a name to build.
+    A sentence that mentions a file name is read like any other name.
+    ``resolve_id`` (an id to a name) is the older form, ids only."""
     id_rx = _library_id_rx()
-    kept, unknown_ids = [], 0
+    read_rows, unknown, refs = [], 0, {}
     for r in (parsed or {}).get('rows') or []:
         r = list(r)
         subj = str(r[0] if r else '').strip()
-        if id_rx.match(subj):
-            name = None
-            if resolve_id is not None:
-                try:
-                    name = resolve_id(subj)
-                except Exception:
-                    name = None
-            if not name:
-                unknown_ids += 1
-                continue
-            r = [name] + r[1:]
+        kind = name = key = None
+        if resolve_ref is not None:
+            try:
+                kind, name, key = resolve_ref(subj)
+            except Exception:
+                kind = 'unknown' if _looks_like_ref(subj) else None
+        elif id_rx.match(subj):
+            try:
+                name = resolve_id(subj) if resolve_id is not None else None
+            except Exception:
+                name = None
+            kind = 'id' if name else 'unknown'
+        elif _looks_like_ref(subj):
+            kind = 'unknown'                     # a file name nothing here can read
+        if kind in ('id', 'file') and name:
+            read_rows.append((r, name, key))
+        elif kind is not None:
+            unknown += 1
+        else:
+            read_rows.append((r, None, None))
+    # A resolved profile goes on the list under its own name. When that name
+    # is already taken on this list by another file or by a plain name, the
+    # file name itself is the subject, so each file keeps its own row (the
+    # list collapses repeated names).
+    plain = {BP._norm(r[0] if r else '') for r, name, _k in read_rows if name is None}
+    taken, kept = {}, []
+    for r, name, key in read_rows:
+        if name is not None:
+            subject = name
+            k = BP._norm(name)
+            if key and (k in plain or taken.get(k, key) != key) and len(key) <= SUBJECT_MAX_LEN:
+                subject, k = key, BP._norm(key)
+            taken.setdefault(k, key)
+            if key:
+                refs[k] = (key, name)
+            r = [subject] + r[1:]
         kept.append(r)
     rows = [['subject', 'category', 'notes']] + kept
     read = BP.subjects_from_rows(rows)
-    if unknown_ids:
-        read['dropped'] = int(read.get('dropped') or 0) + unknown_ids
+    if unknown:
+        read['dropped'] = int(read.get('dropped') or 0) + unknown
     read['columns'] = {'subject': 'subject', 'category': 'category', 'notes': 'notes', 'run_avid': ''}
+    read['library_refs'] = refs
     return read
+
+
+def with_library_refs(index, read):
+    """The library index for this list: a name that came from a library id
+    or a file name reuses exactly that file. The index alone holds base
+    Total Universes, so without this a cut or a worldwide profile named by
+    its id or file name would be planned as a new build."""
+    out = dict(index or {})
+    for k, v in ((read or {}).get('library_refs') or {}).items():
+        if k and isinstance(v, (tuple, list)) and len(v) == 2 and v[0]:
+            out[k] = (str(v[0]), str(v[1]))
+    return out
 
 
 # ---------------------------------------------------------------- one list at a time
