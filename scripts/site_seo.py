@@ -25,6 +25,10 @@ For every indexable page it sets, in <head>:
     Organization with what it knows about, and the Digital Twins IQ
     service, so an AI assistant can quote the page and name the author.
 
+On every page that uses assets/js/crosswalk.js it also writes the site
+menu and footer as plain HTML (read from crosswalk.js, the one place they
+are edited), so crawlers that do not run JavaScript can follow the links.
+
 Then it writes sitemap.xml (one URL per indexable page, lastmod from
 git), robots.txt (every AI crawler named and allowed), llms.txt (a plain
 summary for AI assistants) and llms-full.txt (the full text of the
@@ -759,18 +763,99 @@ def build_llms_full(pages: list[str]) -> str:
     return "\n".join(parts).rstrip() + "\n"
 
 
+# The site menu and footer. assets/js/crosswalk.js holds the markup and builds
+# it in the browser, and most AI crawlers do not run JavaScript, so to them a
+# page linked almost nowhere (2026-11-23). This pass writes the same markup
+# into every page that uses it, between markers; crosswalk.js stays the one
+# place it is edited, and the script skips a page that has no placeholder left.
+CHROME_JS = SITE / "assets" / "js" / "crosswalk.js"
+CHROME_PLACEHOLDERS = {"nav": '<div id="nav"></div>', "foot": '<div id="foot"></div>'}
+_CHROME_BLOCK = {k: re.compile(r"<!--site-%s-->.*?<!--/site-%s-->" % (k, k), re.S) for k in CHROME_PLACEHOLDERS}
+_JS_ESC = {"n": "\n", "t": "\t", "\\": "\\", "'": "'", '"': '"', "/": "/"}
+
+
+def _js_string_concat(src: str, var: str, env: dict) -> str:
+    """The value of `var NAME = 'a' + CONST + 'b' ...;` in crosswalk.js. Fails
+    loudly on any other shape, so a rewrite of the script never ships a stale
+    or broken menu."""
+    m = re.search(r"\bvar\s+%s\s*=" % re.escape(var), src)
+    if not m:
+        raise SystemExit(f"[site_seo] crosswalk.js: no 'var {var} ='")
+    i, out, want_term = m.end(), [], True
+    while i < len(src):
+        c = src[i]
+        ident = re.match(r"[A-Za-z_$][\w$]*", src[i:]) if want_term else None
+        if c.isspace():
+            i += 1
+        elif src.startswith("//", i):
+            j = src.find("\n", i)
+            i = len(src) if j < 0 else j + 1
+        elif src.startswith("/*", i):
+            i = src.index("*/", i) + 2
+        elif want_term and c in "'\"":
+            j, buf = i + 1, []
+            while src[j] != c:
+                if src[j] == "\\":
+                    buf.append(_JS_ESC.get(src[j + 1], src[j + 1]))
+                    j += 2
+                else:
+                    buf.append(src[j])
+                    j += 1
+            out.append("".join(buf))
+            i, want_term = j + 1, False
+        elif ident and ident.group(0) in env:
+            out.append(env[ident.group(0)])
+            i, want_term = i + len(ident.group(0)), False
+        elif not want_term and c == "+":
+            i, want_term = i + 1, True
+        elif not want_term and c == ";":
+            return "".join(out)
+        else:
+            raise SystemExit(f"[site_seo] crosswalk.js: cannot read 'var {var}' near {src[i:i + 40]!r}")
+    raise SystemExit(f"[site_seo] crosswalk.js: 'var {var}' never ends")
+
+
+def site_chrome() -> dict:
+    src = CHROME_JS.read_text(encoding="utf-8")
+    env = dict(re.findall(r'\bvar\s+([A-Z_]+)\s*=\s*"([^"\\]*)"\s*;', src))
+    return {key: _js_string_concat(src, key, env) for key in CHROME_PLACEHOLDERS}
+
+
+def finish_chrome(html: str, chrome: dict) -> str:
+    """The menu and footer as plain HTML in place of the placeholders."""
+    for key, placeholder in CHROME_PLACEHOLDERS.items():
+        block = f"<!--site-{key}-->{chrome[key]}<!--/site-{key}-->"
+        rx = _CHROME_BLOCK[key]
+        if rx.search(html):
+            html = rx.sub(lambda _m: block, html, count=1)
+        elif placeholder in html:
+            html = html.replace(placeholder, block, 1)
+    return html
+
+
 def run(check: bool = False) -> int:
     pages = indexable_pages()
+    chrome = site_chrome()
     changes: list[str] = []
     for name in pages:
         p = SITE / name
         before = p.read_text(encoding="utf-8")
-        after = finish_page(name, before)
+        after = finish_chrome(finish_page(name, before), chrome)
         if "\u2014" in after or "\u2013" in after:
             print(f"[site_seo] {name}: em or en dash in the page; fix the copy first", file=sys.stderr)
             return 2
         if after != before:
             changes.append(name)
+            if not check:
+                p.write_text(after, encoding="utf-8")
+    # Pages kept out of search (signup, welcome) still carry the same menu.
+    for p in sorted(SITE.glob("*.html")):
+        if p.name in pages:
+            continue
+        before = p.read_text(encoding="utf-8")
+        after = finish_chrome(before, chrome)
+        if after != before:
+            changes.append(p.name)
             if not check:
                 p.write_text(after, encoding="utf-8")
     sitemap = build_sitemap(pages)

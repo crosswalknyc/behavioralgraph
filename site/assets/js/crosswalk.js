@@ -2,6 +2,11 @@
   var DASH = "https://dashboard.crosswalknyc.com";
   function el(html) { var t = document.createElement("template"); t.innerHTML = html.trim(); return t.content; }
 
+  // scripts/site_seo.py copies the menu and footer markup below into every
+  // page as plain HTML, so crawlers that do not run JavaScript see the links.
+  // After editing the markup, run that script. Only a page that still has the
+  // #nav / #foot placeholders gets the markup from here.
+
   var nav =
     '<header class="nav"><div class="wrap nav-in">' +
       '<a class="logo-pill" href="index.html"><img src="assets/logos/crosswalk-logo-black.png" alt="Crosswalk"></a>' +
