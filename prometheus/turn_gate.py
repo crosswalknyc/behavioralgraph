@@ -560,6 +560,20 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             body['bind_subject'] = body.get('bind_subject') or title
             body['surface'] = 'analyze'
             body['_pm_named_title'] = title
+            # the frame of the last full question (platform, metrics, window) rides in the words the read is handed,
+            # with the new subject in its place; the new words' own window wins (Nov 23 2026 ask audit, fix 7)
+            # The words the read core and the model get carry the chain's first question rewritten for the new
+            # subject (platform, metrics, window named); the reader's own words stay the ask for the lanes, the
+            # price and the replay keys, so nothing is priced differently (Nov 23 2026 ask audit, fix 7).
+            try:
+                from . import read_frame as _rf
+                _params = cont.get('params') or {}
+                if _params.get('frame_carry') or ('frame_carry' not in _params and _rf.needs_carry(text, history)):
+                    _carried = _rf.carry(text, history, title, _params.get('window'))
+                    if _carried:
+                        body['frame_text'] = _carried
+            except Exception as _fx:
+                _faults.note('turn_gate.frame_carry', _fx)
             try:
                 host.ask_hint(route='named_title', outcome='bound_named_title', subject=title)
             except Exception as _fx:

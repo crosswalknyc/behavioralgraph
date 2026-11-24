@@ -583,6 +583,14 @@ def points_back(part):
     t = ' '.join(str(part or '').split())
     if not t:
         return False
+    # a part that is only a name ("And Lore Olympus?") names its own subject, on the shelf or not (Nov 23 2026
+    # ask audit, fix 7: "Can we do this same analysis for unOrdinary? And Lore Olympus?" quoted unOrdinary twice)
+    try:
+        from . import read_frame as _rf
+        if _rf.bare_name(t):
+            return False
+    except Exception:
+        pass
     try:
         from . import subject_rules as _sr
         s = _sr.bind(t, None, '')

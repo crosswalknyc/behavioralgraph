@@ -39,7 +39,8 @@ _ANALYZE_PASSTHROUGH = ('bind_subject', 'bind_cohort', 'overall_ranks',
                         'panel_confirm', 'bpiq_inputs', 'bpiq_confirm',
                         'bpiq_wizard',
                         'jiq_inputs', 'jiq_confirm', 'fw_inputs',
-                        'fw_confirm', 'aiq_inputs', 'aiq_confirm')
+                        'fw_confirm', 'aiq_inputs', 'aiq_confirm',
+                        'frame_text')   # "same thing but for X": the chain's first question rewritten for X (2026-11-24)
 
 
 def _now():

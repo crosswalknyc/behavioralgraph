@@ -76,7 +76,10 @@ GOOD_OUTCOMES = frozenset({
     'workorder_status', 'workorder_eta', 'workorder_cancel',
     'queued',   # queued: a deck or read handed to the worker (2026-10-13)
     # a read that landed, a wizard turn, an intake step, a restated answer (the corpus gate, 2026-11-20)
-    'landed', 'turn', 'intake', 'answered_restated'}) | BUILD_DECISIONS
+    'landed', 'turn', 'intake', 'answered_restated',
+    # the turn gate bound the ask's subject and handed it on (the core answers after; the stub core leaves the
+    # gate's outcome standing, 2026-11-24)
+    'bound_named_title', 'bound_original_ask', 'rebound_previous_subject'}) | BUILD_DECISIONS
 
 # Outcomes that depend on state the replay does not have: an empty
 # library, no active build, no recent read to export.

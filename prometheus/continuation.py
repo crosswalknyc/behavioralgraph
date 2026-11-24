@@ -454,6 +454,40 @@ def _classify(text, history, reading=None, page=''):
     if _ACCEPT_RX.match(t):
         out.update(kind='acceptance', confidence=0.9, subject=(deliv or {}).get('subject', ''))
         return out
+    # "same thing but for <another subject>": the last read's question again on the subject the words name, its
+    # frame (platform, metrics, window) carried in the words the read is handed (prometheus.read_frame, Nov 23 2026
+    # ask audit, fix 7: "let's now do the same thing but for Dogma" ran Dogma on a service of the model's choosing)
+    try:
+        from . import read_frame as _rf
+        _last_read = _rf.last_read_subject(history) if prev else ''
+        _sfo = _rf.same_for_other(t) if (_last_read or (deliv and deliv.get('kind') in ('read', 'offer'))) else None
+        # a bare name right after a same-again turn is the same read again, for that name ("Can we do this same
+        # analysis for unOrdinary? And Lore Olympus?": the second part is Lore Olympus, never unOrdinary twice)
+        if not _sfo and (_last_read or (deliv and deliv.get('kind') in ('read', 'offer'))):
+            _bn = _rf.bare_name(t)
+            if _bn and _rf.follows_same_again(history):
+                _sfo = {'subject': _bn, 'window': None}
+    except Exception:
+        _sfo, _last_read = None, ''
+    if _sfo:
+        carried = str(_last_read or (deliv or {}).get('subject') or '').strip()
+        # the title the words name, in the shelf's spelling when it is held (prometheus.named_title); the words'
+        # own short name otherwise; a long tail of words is left to the rules below
+        _new = ''
+        try:
+            from . import named_title as _nt
+            _new = _nt.other_than(t, carried, strict=False, history=history) if carried else ''
+        except Exception:
+            _new = ''
+        if not _new and len(_sfo['subject'].split()) <= 6 and not re.search(r"\b(?:need|want|only|just|please|also|then|and|with|minutes|viewers|hours)\b", _sfo['subject'], re.I):
+            _new = _sfo['subject']
+        if _new and (not carried or _sr._norm(_new) != _sr._norm(carried)):
+            _w = _sfo.get('window')
+            out.update(kind='named_other', confidence=0.85, subject=_new,
+                       window=((_w['start'], _w['end']) if _w else None),
+                       params={'named_title': _new, 'carried': carried, 'was': 'same_for_other',
+                               'frame_carry': _rf.needs_carry(t, history), 'window': _w})
+            return out
     # re-run in a window
     _win = rerun_window(t)
     if _RERUN_RX.match(t) or _SAME_AGAIN_RX.match(t) or (_POINTED_WINDOW_RX.match(t) and (_win or year_window(t))) \

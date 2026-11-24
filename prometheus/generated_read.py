@@ -764,6 +764,18 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # attribution because _pm_ppu was None and the bg thread's
     # _pm_attrib_extras() returned {} from missing request context.
     _pm_read_extras = _C._pm_merge_extras(_C._pm_attrib_extras(), _pm_ppu)
+    # "same thing but for X" (Nov 23 2026 ask audit, fix 7): the chain's first question rewritten for X rides on the
+    # body as frame_text; the read core and the model read it, while the replay keys, the inflight mark, the job
+    # head and the price were settled on the reader's own words
+    text_run = text
+    try:
+        from flask import request as _rq_fr
+        _fb = _rq_fr.get_json(silent=True) or {}
+        _ft = str(_fb.get('frame_text') or '').strip() if isinstance(_fb, dict) else ''
+        if _ft and len(_ft) > len(str(text or '')):
+            text_run = _ft
+    except Exception:
+        text_run = text
     if async_fresh:
         # Same user, same question, while the first copy still runs:
         # hand back the running job's progress instead of a second
@@ -836,8 +848,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _head = {'job_id': job_id, 'user': _pm_user, 'status': 'working',
                  'stage': 'reading the data', 'probe': _probe, 'subject': _promised,
                  'question': text[:300], 'started_at': time.time(),
-                 'resume': _rr.resume_record(          # survives a deploy
-                     text=text, history=history, base=base,
+                 'resume': _rr.resume_record(          # survives a deploy (the frame-carried words, so a resumed copy keeps the frame)
+                     text=text_run, history=history, base=base,
                      panel_charge=panel_charge, probe=_probe,
                      switch_page=switch_page, bind_cohort=bind_cohort)}
         if _mplan:
@@ -846,7 +858,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if _tplan:
             _head['titles'] = {'titles': list(_tplan['titles']), 'platform': _tplan.get('platform') or '',
                                'per_title_windows': bool(_tplan.get('per_title_windows'))}
-        _args = (job_id, _pm_user, _pm_read_extras, text, list(history or [])[-10:],
+        _args = (job_id, _pm_user, _pm_read_extras, text_run, list(history or [])[-10:],
                  mr, base, digest_block, anchors_block, led)
         _kw = {'panel_charge': panel_charge, 'probe': _probe, 'matrix_plan': _mplan, 'title_plan': _tplan}
         _C._pm_read_inflight_mark(_pm_user, text, job_id, _promised)
@@ -867,7 +879,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'reply': _on_it,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     payload = _C._pm_generate_read_core(
-        text=text, history=history, mr=mr, base=base,
+        text=text_run, history=history, mr=mr, base=base,
         digest_block=digest_block, anchors_block=anchors_block,
         led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras,
         switch_page=switch_page)
