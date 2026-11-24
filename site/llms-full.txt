@@ -174,7 +174,7 @@ Each twin stands in for one of the 10 million US panelists who chose to be count
 
 ### What is a digital twin in market research?
 
-A digital twin is a copy of a real person's behavior that can respond to something new. In research it stands in for a survey respondent. Crosswalk builds one from observed behavior over time for each of the 10 million US people in its 30 million-person panel. A question about a plan or a title is answered by how people like that behave.
+A digital twin is a copy of a real person's behavior that can respond to something new. Most digital twins are built to stand in for survey respondents. They repeat what people say, and people often do something else. Crosswalk's twins are behavioral. Crosswalk builds one from observed behavior over time for each of the 10 million US people in its 30 million-person panel. A question about a plan or a title is answered by how people like that behave.
 
 ### What does synthetic data based on real data mean?
 
@@ -556,7 +556,7 @@ Every person in the panel installed the Crosswalk software and agreed to be coun
 
 ### What is a digital twin in market research?
 
-A digital twin is a live copy of a real group of people that you can ask questions. In market research it stands in for a survey respondent or a focus group. Crosswalk builds one from 5+ years of observed behavior on an opted-in panel of 10 million US people.
+A digital twin is a live copy of a real group of people that you can ask questions. Most digital twins are built to stand in for survey respondents, so they repeat what people say. That is a weak guide, because people often say one thing and do another. Crosswalk's twins are behavioral. They are built from 5+ years of what 10 million real US people did, so they answer with what people do.
 
 ### What makes Crosswalk's digital twins different?
 
