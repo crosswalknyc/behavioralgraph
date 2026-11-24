@@ -1740,7 +1740,10 @@ def load_users():
                 c_etag = _users_s3_cache.get('etag')
                 c_raw = _users_s3_cache.get('raw')
             raw_body, etag = None, None
-            if c_etag and c_raw is not None:
+            _bsp_users = __import__('prometheus.brief_speed', fromlist=['users_memo_hit'])   # the same ETag is confirmed with S3 once per request (2026-11-24)
+            if c_etag and c_raw is not None and _bsp_users.users_memo_hit(c_etag):
+                raw_body, etag = c_raw, c_etag
+            elif c_etag and c_raw is not None:
                 try:
                     response = s3_client.get_object(
                         Bucket=S3_BUCKET, Key=S3_USERS_KEY,
@@ -1779,6 +1782,7 @@ def load_users():
             # Remember the exact doc this caller starts from, so a later
             # save_users(data) can replay only the caller's own changes.
             _users_baseline.raw = raw_body
+            _bsp_users.users_memo_mark(etag)
             with _users_s3_cache_lock:
                 _users_s3_cache['etag'] = etag
                 _users_s3_cache['raw'] = raw_body

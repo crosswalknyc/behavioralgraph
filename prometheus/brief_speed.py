@@ -261,6 +261,74 @@ def bounded(fn, label='research', budget=None):
     return box.get('r')
 
 
+# ------------------------------------------------------------ the approve span (2026-11-24, the ~13 s after the estimate)
+# Measured on the first live build order after the split: the span from the estimate mark to the
+# response was 14.9 s; two users.json writes (13.7 MB each: a full read, a full put, two local
+# copies) sat inside it, the credit charge among them. The charge was already post-queue and
+# failure-tolerant ("run continues, usage NOT recorded"), so it moves off the person's wait: it runs
+# on its own thread, the response's remaining balance is the pre-charge balance less the price.
+_charge_threads = []
+
+
+def charge_later(fn, label='charge'):
+    """Run the charge on its own (non-daemon) thread so the interpreter
+    waits for it on shutdown; the failure line prints as before. Returns
+    the thread. Under REGRESSION_TEST_MODE the charge runs inline so the
+    suites see its effect at once."""
+    def _run():
+        try:
+            ok = fn()
+            if ok is False:
+                print(f"[synth_chat_run] WARNING: post-queue credit charge failed ({label}) - run continues, usage NOT recorded")
+        except Exception:
+            traceback.print_exc()
+    if os.environ.get('REGRESSION_TEST_MODE') == '1' or os.environ.get('PM_CHARGE_INLINE') == '1':
+        _run()
+        return None
+    t = threading.Thread(target=_run, daemon=False, name=f'pm-{label}')
+    t.start()
+    _charge_threads.append(t)
+    del _charge_threads[:-50]
+    return t
+
+
+def remaining_after(before, price):
+    """The balance the approve response reports once the charge lands:
+    an unlimited seat stays -1; a balance that covers the price loses it;
+    a balance under the price (the wallet pays) keeps its credits."""
+    try:
+        b = int(before)
+    except (TypeError, ValueError):
+        return before
+    try:
+        p = max(0, int(price or 0))
+    except (TypeError, ValueError):
+        p = 0
+    if b < 0:
+        return -1
+    return b - p if b >= p else b
+
+
+# ------------------------------------------------------------ users.json once per request
+# users.json is 13.7 MB; load_users already answers from an ETag-checked copy, but every call still
+# pays the conditional round trip to S3 (about 100 ms from the web host) and a build brief loads it
+# eight to ten times (the gate, the funds check, the price table, the quote, the seat, the charge, the
+# balance). Within one request the same ETag is confirmed once; later loads reuse the copy. A save in
+# this process moves the ETag, so the memo stops matching on its own.
+def users_memo_hit(etag) -> bool:
+    g = _stash()
+    return g is not None and bool(etag) and getattr(g, '_pm_users_etag_seen', None) == etag
+
+
+def users_memo_mark(etag) -> None:
+    g = _stash()
+    if g is not None and etag:
+        try:
+            g._pm_users_etag_seen = etag
+        except Exception:
+            pass
+
+
 def say_in_hand(spec_draft) -> None:
     """The live line the moment the model returns: the draft is in hand, the checks run next."""
     try:
@@ -282,5 +350,5 @@ def say_pricing(go=True) -> None:
         pass
 
 
-__all__ = ['enabled', 'is_multi', 'merge', 'draft', 'identity_prestart', 'hold_prestart', 'identity_verify', 'bounded', 'say_in_hand', 'say_pricing',
+__all__ = ['enabled', 'is_multi', 'merge', 'draft', 'identity_prestart', 'hold_prestart', 'identity_verify', 'bounded', 'say_in_hand', 'say_pricing', 'charge_later', 'remaining_after', 'users_memo_hit', 'users_memo_mark',
            'SHAPE_KEYS', 'ENV', 'IDENTITY_BUDGET_ENV']

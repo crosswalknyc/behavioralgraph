@@ -1355,11 +1355,11 @@ def _pm_interpret_core(user, body, text, history):
         # step, no identity picker, a fresh build). The reply is the build
         # line plus what the file carries. A paying seat still reads the
         # brief and approves; a probe never queues.
+        _C._pm_ask_stage('at_auto_start', ms=int((time.monotonic() - _t_core) * 1000)); _auto = None
         try:
             _auto = _C._pm_auto_start_order(user, spec_draft, _order_text, _dec_norm, clarify_steps, _chip_options, body)
         except Exception as _fx:
             _faults.note('chat', _fx)
-            _auto = None
         if _auto is not None:
             return _auto
         spec_draft['price_table'] = _ptab = _oq.table_for_draft(_H, None, spec_draft, _C._pm_price_table()); _C._pm_ask_stage('at_return', ms=int((time.monotonic() - _t_core) * 1000))  # money, not credits; its quarter reads inside it

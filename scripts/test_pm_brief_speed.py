@@ -28,7 +28,12 @@ Pins, hermetically (no model, no store, no mail):
    process and never without a medium or platform word;
 5. the wiring: interpret_turn drafts through brief_speed after the
    follow-up read, app.py's two identity research calls go through the
-   budget, the progress labels and the exit-gate mark exist, no em dash.
+   budget, the progress labels and the exit-gate mark exist, no em dash;
+6. the approve span (2026-11-24, the ~13 s after the estimate): the
+   credit charge runs off the person's wait on its own thread (inline in
+   a test process), the response's balance is the pre-charge balance less
+   the price, users.json is confirmed with S3 once per request, the
+   approve gates and tail carry stage marks.
 """
 from __future__ import annotations
 
@@ -181,6 +186,7 @@ def main():
         class G:   # the request's g
             pass
         g = G()
+        _orig_stash = B._stash
         B._stash = lambda: g        # the request stash, hermetically
         try:
             B.hold_prestart(t)
@@ -206,9 +212,58 @@ def main():
             check('a verify past its budget returns None in time (the deterministic floor applies)', r3 is None and time.monotonic() - t0 < 2.0 and slow_started.is_set())
             os.environ.pop(B.IDENTITY_BUDGET_ENV, None)
         finally:
-            del B._stash
+            B._stash = _orig_stash
     finally:
         os.environ['REGRESSION_TEST_MODE'] = '1'
+
+    print('6. the approve span: the charge off the wait, the balance, users.json once per request')
+    check('the balance after the charge: unlimited stays -1, a covering balance loses the price, a short one keeps its credits (the wallet pays)',
+          B.remaining_after(-1, 300) == -1 and B.remaining_after(500, 300) == 200 and B.remaining_after(100, 300) == 100 and B.remaining_after(None, 5) is None
+          and B.remaining_after('x', 5) == 'x' and B.remaining_after(300, 300) == 0)
+    ran = []
+    t = B.charge_later(lambda: ran.append(1) or True, label='t1')
+    check('in a test process the charge runs inline, so a suite sees it at once', t is None and ran == [1])
+    os.environ.pop('REGRESSION_TEST_MODE', None)
+    try:
+        import io, contextlib
+        started = threading.Event(); release = threading.Event()
+
+        def slow_charge():
+            started.set(); release.wait(2); return False
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            t0 = time.monotonic()
+            th = B.charge_later(slow_charge, label='user=x run=y price=3')
+            took = time.monotonic() - t0
+            started.wait(2); release.set(); th.join(3)
+        check('live, the charge runs on its own non-daemon thread and the caller does not wait for it',
+              th is not None and not th.daemon and took < 0.5 and started.is_set() and not th.is_alive())
+        check('a charge that fails still prints the standing warning line', 'post-queue credit charge failed' in buf.getvalue() and 'usage NOT recorded' in buf.getvalue())
+    finally:
+        os.environ['REGRESSION_TEST_MODE'] = '1'
+
+    class G2:
+        pass
+    g2 = G2()
+    _orig_stash2 = B._stash
+    B._stash = lambda: g2
+    try:
+        check('users.json: the first load in a request confirms the ETag with S3, the next loads reuse the copy, a moved ETag asks again',
+              not B.users_memo_hit('e1') and (B.users_memo_mark('e1') or True) and B.users_memo_hit('e1') and not B.users_memo_hit('e2') and not B.users_memo_hit(''))
+    finally:
+        B._stash = _orig_stash2
+    check('outside a request the memo never answers', not B.users_memo_hit('e1'))
+    ar = (WEB / 'prometheus' / 'approve_route.py').read_text(encoding='utf-8')
+    check('the approve path hands the charge to brief_speed after the balance read, reports the balance less the price, and marks its gates and its tail',
+          "_bsp.charge_later(_charge, label=" in ar and "_credits_left = _bsp.remaining_after(_credits_left, price)" in ar
+          and ar.index('_H.check_user_credits(_charge_user)') < ar.index('_bsp.charge_later(') and "'approve_gates'" in ar and "'approve_after'" in ar
+          and ar.index('def _charge():') < ar.index('if not _H.consume_credit(') < ar.index('_bsp.charge_later(_charge')
+          and "addon_cuts=len(_billable_cuts)):" in ar)
+    app = (WEB / 'app.py').read_text(encoding='utf-8')
+    check('load_users confirms the same ETag with S3 once per request and marks what it confirmed',
+          'users_memo_hit(c_etag)' in app and '_bsp_users.users_memo_mark(etag)' in app and app.index('users_memo_hit(c_etag)') < app.index('IfNoneMatch=c_etag'))
+    it2 = (WEB / 'prometheus' / 'interpret_turn.py').read_text(encoding='utf-8')
+    check('the brief tail is marked before the auto-start order', "'at_auto_start'" in it2)
 
     print('5. the wiring')
     it = (WEB / 'prometheus' / 'interpret_turn.py').read_text(encoding='utf-8')

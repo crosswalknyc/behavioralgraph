@@ -405,7 +405,7 @@ def _pm_approve_core(user, body):
     if _df_stop:
         return jsonify({'success': False, 'guidance': True, 'error': _df_stop, 'followups': [], 'data_floor': 'before'})
     spec = _C._spec_from_draft(draft)
-    _C._pm_ask_stage('approve_spec', t0=_t_spec)
+    _C._pm_ask_stage('approve_spec', t0=_t_spec); _t_gates = time.monotonic()
     run_avid = bool(body.get('run_avid', True))
     # Accept a single address or a comma / semicolon / whitespace-
     # separated list. Clean each entry, drop obvious garbage, dedupe
@@ -655,7 +655,7 @@ def _pm_approve_core(user, body):
                 payload['trace_id'] = _g_tr._pm_trace_id
         except Exception as _fx:
             _faults.note('chat', _fx)
-        _t_queue = time.monotonic()
+        _t_queue = time.monotonic(); _C._pm_ask_stage('approve_gates', ms=int((_t_queue - _t_gates) * 1000))   # the decision, the repeat gate, the price and the quote (2026-11-24)
         # What the reply says follows the artifact (2026-11-10, prometheus.order_truth): a run id means it
         # started; a refusal is tried once more and then answered plainly; a timeout or a reply with no run id
         # is never called running. The calm promise is not made for an order that did not start.
@@ -721,8 +721,10 @@ def _pm_approve_core(user, body):
     # carries the real run_id (same check -> queue -> charge order the
     # dashboard IQ routes use). consume_credit records credits_used +
     # credit_usage_history even for unlimited users.
+    _t_after = time.monotonic(); _, _credits_left = _H.check_user_credits(_charge_user)
     if price > 0 and _charge_user:
-        try:
+        # Post-queue and failure-tolerant as before, now on its own thread so the 13.7 MB users.json write is off the person's wait; the response reports the pre-charge balance less the price (brief_speed, 2026-11-24)
+        def _charge():
             if not _H.consume_credit(
                     _charge_user,
                     description=(f"Chatbot Profile IQ [{decision}] - "
@@ -732,12 +734,9 @@ def _pm_approve_core(user, body):
                     credits_used=price,
                     quarter_reads=_quarter_reads,
                     addon_cuts=len(_billable_cuts)):
-                print(f"[synth_chat_run] WARNING: post-queue credit charge "
-                      f"failed user={_charge_user} run={_session_run_id} "
-                      f"price={price} - run continues, usage NOT recorded")
-        except Exception:
-            traceback.print_exc()
-    _, _credits_left = _H.check_user_credits(_charge_user)
+                print(f"[synth_chat_run] WARNING: post-queue credit charge failed user={_charge_user} run={_session_run_id} price={price} - run continues, usage NOT recorded")
+        _bsp = __import__('prometheus.brief_speed', fromlist=['charge_later']); _bsp.charge_later(_charge, label=f"run={_session_run_id}")
+        _credits_left = _bsp.remaining_after(_credits_left, price)
 
     # Cross-session memory (2026-08-27, Jenna): the approved build's
     # confirmed window and any named markets become the user's
@@ -761,7 +760,7 @@ def _pm_approve_core(user, body):
     except Exception as _fx:
         _faults.note('chat', _fx)
 
-    return jsonify({
+    _C._pm_ask_stage('approve_after', t0=_t_after); return jsonify({   # the balance, the charge hand-off, the memory note (2026-11-24)
         'success': True,
         'decision': decision,
         'run_id': _session_run_id,
