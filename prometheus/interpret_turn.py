@@ -132,6 +132,7 @@ def _pm_interpret_core(user, body, text, history):
     parse stay with the callers; everything from here down is the
     surface itself and returns a Flask response exactly as before.
     """
+    _t_core = time.monotonic()   # offsets for the stage marks (brief speed, 2026-11-24)
 
     # Brand Partnership Valuation wizard (Jenna 2026-10-28): the chip
     # must never become a library-comp read on this surface.
@@ -634,18 +635,13 @@ def _pm_interpret_core(user, body, text, history):
         system_prompt, _dropped = _smart.prune_rulebook(system_prompt, text, candidates, reading=body.get('reading'))   # rulebook pruned per ask, Reader-aware (2026-10-13/14)
         user_prompt = _smart.with_reading(user_prompt, body.get('reading'))   # the Reader's understanding rides along (2026-10-14)
         _C._pm_ask_stage('interpret_prep', t0=_t_prep)
-        _t_model = time.monotonic()
-        # Subject verification runs alongside the draft model for the
-        # name the ask plainly carries (2026-10-06, speed): the two
-        # longest steps overlap instead of queuing.
+        _t_model = time.monotonic(); _C._pm_ask_stage('at_model_start', ms=int((_t_model - _t_core) * 1000))
+        # The subject verify (2026-10-06) and the content-identity verify run alongside the draft model for the name the ask plainly
+        # carries; the draft is two parallel halves of one JSON on the same model and rulebook, merged (prometheus.brief_speed, 2026-11-24).
         _preverify = _C._pm_start_preverify(text, candidates)
-        result = _H._run_nflx_claude_agent(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=_smart.draft_output_ceiling(text), temperature=0.4,
-            model=_C._SYNTH_CHAT_INTERPRET_MODEL,
-            salvage_arrays=True,
-        )
+        _bsp = __import__('prometheus.brief_speed', fromlist=['draft']); _bsp.hold_prestart(_bsp.identity_prestart(text, _H))
+        result = _bsp.draft(lambda **_k: _H._run_nflx_claude_agent(**_k), system_prompt=system_prompt, user_prompt=user_prompt, max_tokens=_smart.draft_output_ceiling(text),
+                            temperature=0.4, model=_C._SYNTH_CHAT_INTERPRET_MODEL, text=text, long_ceiling=_smart.draft_output_ceiling.__defaults__[1], stage=_C._pm_ask_stage)
         _C._pm_ask_stage('model', t0=_t_model)
         if not result.get('success'):
             _H._chatbot_error_email(
@@ -686,6 +682,7 @@ def _pm_interpret_core(user, body, text, history):
                     tb='(array salvage produced no valid spec drafts)')
                 return jsonify(_H._chatbot_calm_payload())
 
+        _bsp.say_in_hand(spec_draft)   # the person sees the draft is in hand the moment the model returns; the checks run next (2026-11-24)
         # Subject guards on the draft (prometheus/build_guards, 2026-10-21): placeholder, the entity
         # behind an explicit build order (typo-tolerant, scope-aware), fragment, entity core.
         from prometheus import build_guards as _bgd, guards as _pg_mod
@@ -723,7 +720,7 @@ def _pm_interpret_core(user, body, text, history):
         # binding medium/platform words in the ask win over a famous
         # lookalike name. Verifies suspect content titles via web
         # search; still-ambiguous drafts stash a confirm question.
-        _t_identity = time.monotonic()
+        _t_identity = time.monotonic(); _C._pm_ask_stage('at_identity_start', ms=int((_t_identity - _t_core) * 1000))
         try:
             _H._resolve_subject_identity(spec_draft, text, allow_ask=True) if not _fu else _H._resolve_subject_identity(spec_draft, text, allow_ask=True, **_fur.identity_kwargs(_fu))   # on a follow-up, a name the reader gave earlier in the thread is their own word (2026-11-18)
         except Exception as _id_err:
@@ -771,7 +768,7 @@ def _pm_interpret_core(user, body, text, history):
         _t_verify = time.monotonic()
         _sv_block = _C._pm_chat_subject_verify(spec_draft, candidates, text,
                                             history=history, followup=_fu, preverify=_preverify)
-        _C._pm_ask_stage('verify', t0=_t_verify)
+        _C._pm_ask_stage('verify', t0=_t_verify); _C._pm_ask_stage('at_verify_end', ms=int((time.monotonic() - _t_core) * 1000)); _bsp.say_pricing(_sv_block is None)
         if _sv_block is not None:
             return _sv_block
 
@@ -1228,7 +1225,7 @@ def _pm_interpret_core(user, body, text, history):
         # Jenna): same helper the Partner API quotes from, derived from
         # the exact sample pinned on this draft, so the brief, the
         # partner surfaces, and the delivered file all agree.
-        _t_estimate = time.monotonic()
+        _t_estimate = time.monotonic(); _C._pm_ask_stage('at_estimate_start', ms=int((_t_estimate - _t_core) * 1000))
         try:
             __import__('migration.saved_subject_size', fromlist=['apply_to_draft']).apply_to_draft(spec_draft, text, history=history, decision=_dec_norm)   # a saved audience size starts a fresh build (2026-11-20): the brief quotes it; a size the reader wrote stays theirs
             _est_rng = __import__('prometheus.brief_size_hold', fromlist=['ranged']).ranged(_H._estimated_audience_range, spec_draft,   # a one-service order is sized by the rule before the brief quotes it (2026-11-11); the first size held for a subject and window stands (2026-11-18)
@@ -1365,7 +1362,7 @@ def _pm_interpret_core(user, body, text, history):
             _auto = None
         if _auto is not None:
             return _auto
-        spec_draft['price_table'] = _ptab = _oq.table_for_draft(_H, None, spec_draft, _C._pm_price_table())  # money, not credits; its quarter reads inside it
+        spec_draft['price_table'] = _ptab = _oq.table_for_draft(_H, None, spec_draft, _C._pm_price_table()); _C._pm_ask_stage('at_return', ms=int((time.monotonic() - _t_core) * 1000))  # money, not credits; its quarter reads inside it
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,

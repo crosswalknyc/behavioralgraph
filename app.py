@@ -55106,7 +55106,7 @@ def _v1_interpret_capped(prompt, identity_context=None, actor=None):
         }
     interp = _run_nflx_claude_agent(
         system_prompt=system_prompt, user_prompt=user_prompt,
-        max_tokens=8192, temperature=0.4,
+        max_tokens=14000, temperature=0.4,   # the dashboard's draft ceiling: at 8192 the first attempt was cut off on most partner briefs and the retry doubled the wait (usage log, 2026-11-24)
         usage_tag=(('interpret', 'partner_api', _usage_extras)
                    if _usage_extras else ('interpret', 'partner_api')),
     )
@@ -57276,7 +57276,7 @@ def _guard_short_name_identity(draft, prompt, allow_ask=True):
             return False
         if _sni.has_identity_context(prompt, subject):
             return False
-        research = _verify_short_name_identity(draft, prompt)
+        research = __import__('prometheus.brief_speed', fromlist=['bounded']).bounded(lambda: _verify_short_name_identity(draft, prompt), 'short_name')   # under the identity budget (2026-11-24)
         if not research:
             print(f"[identity] short-name research returned nothing "
                   f"for {subject!r}; keeping the drafted identity")
@@ -57426,7 +57426,7 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True, thread_words=''):
 
     ver = None
     try:
-        ver = _verify_content_identity(draft, _own_words, sig)
+        ver = __import__('prometheus.brief_speed', fromlist=['identity_verify']).identity_verify(draft, _own_words, sig, lambda _d, _p, _s: _verify_content_identity(draft, _own_words, sig))   # the verify started alongside the model when its title is this subject, else now; under the budget (2026-11-24)
     except Exception as e:
         try:
             print(f"[identity] verify call failed: {e}")

@@ -180,6 +180,7 @@ def _ask_logged(surface):
                 # email promise; a build card for a task becomes the
                 # which-audience question.
                 if not _v1_api:
+                    _t_exit = time.monotonic()
                     resp, payload, status_code, outcome, extra = \
                         _C._pm_answer_gate(
                             fn, args, kwargs, resp, payload, status_code,
@@ -187,6 +188,7 @@ def _ask_logged(surface):
                             ask_history,
                             _C._pm_ask_log_user(''),
                             t0)
+                    _C._pm_ask_stage('exit_gate', t0=_t_exit)   # the exit's own time, so the ask log accounts for it (2026-11-24)
                 if user_sig:
                     merged = {'user_signal': user_sig.get('signal'),
                               'rejects': str(user_sig.get('prior_question')
