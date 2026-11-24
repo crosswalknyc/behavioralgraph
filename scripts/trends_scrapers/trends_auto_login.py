@@ -233,8 +233,10 @@ _R = {
         # recipe "could not find the username field". The real form is
         # the MSA auth round trip, which redirects to login.live.com.
         # Modern MSA defaults to a passkey (a WebAuthn security window
-        # that stalls forever headless), so the flow blocks WebAuthn to
-        # force the code / password fork, then steps through
+        # that stalls forever headless), so the headless flow blocks
+        # WebAuthn to force the code / password fork (the --setup
+        # window leaves it on, so the account's own security key works
+        # there), then steps through
         # "Other ways to sign in" -> "Use your password" -> password ->
         # "Stay signed in?". Driven by `_xbox_flow` because none of that
         # fits the generic email-then-password shape.
@@ -410,6 +412,41 @@ def _source_for(domain: str) -> str:
     except Exception:
         pass
     return domain.split(".")[0]
+
+
+def _rail_judges_itself(domain: str) -> bool:
+    """True when a scraper that reads `domain` decides for itself
+    whether its rail is dark and sends the cookie-gap email then.
+
+    This engine's verdict covers one way to a session: the persistent
+    profile. The operator's Chrome donation minutes earlier can carry a
+    perfectly good session for the same domain (2026-11-24: audible.com
+    lit from Chrome while this engine's own sign-in met a wall, and
+    the "needs a sign-in" email went out anyway). The scraper is the
+    one that finds out, so for its domains the email is the scraper's
+    to send; the one-per-day stamp is shared, so nothing doubles. A
+    domain whose scrapers carry forward silently (netflix, hulu, hbomax)
+    keeps the engine's email: there it is the only signal.
+
+    Read off the scraper modules themselves (does the module call
+    notify_cookie_gap?) so a new self-reporting scraper is covered the
+    day it lands, with no list to keep in step.
+    """
+    try:
+        from .refresh_after_donation import DOMAIN_REFRESH_MAP
+        spec = DOMAIN_REFRESH_MAP.get(domain, {})
+        mods = list(spec.get("local") or []) + list(spec.get("runall") or [])
+    except Exception:
+        return False
+    here = Path(__file__).resolve().parent
+    for mod in mods:
+        try:
+            src = (here / f"{mod}.py").read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if "notify_cookie_gap(" in src:
+            return True
+    return False
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -957,7 +994,12 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
     # Hide WebAuthn before any navigation so a passkey-first provider
     # (Microsoft) falls back to the code / password fork instead of
     # stalling on a security window that never resolves headless.
-    if recipe.get("block_webauthn"):
+    # Headless only: in the --setup window a person is present, and an
+    # account that insists on its passkey / security key (2026-11-24,
+    # the Microsoft account behind xbox.com) can only be signed in
+    # with that key. Blocking it there made the one-time setup
+    # impossible for exactly the account that needed it.
+    if recipe.get("block_webauthn") and not headed:
         try:
             page.add_init_script(_BLOCK_WEBAUTHN_JS)
         except Exception as e:
@@ -1059,7 +1101,13 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
 
     # 3) Classify the result. Order matters: a rejected password must be
     # caught BEFORE any retry (there is no retry - one attempt only).
+    # In the --setup window the person at the keyboard gets to finish
+    # instead: type the current password, or sign in with the key the
+    # site is really asking for. Headless, a rejection is final.
     if _error_present(page):
+        if headed:
+            return _wait_for_human(page, recipe,
+                                   "the site rejected the stored password")
         return "auth_failed", "the site rejected the stored password"
     reason = _challenge_reason(page)
     if reason:
@@ -1079,8 +1127,14 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
         if reason:
             return _wait_for_human(page, recipe, reason) if headed \
                 else ("needs_human", reason)
-        return "needs_human", (f"login did not reach a signed-in state "
-                               f"({verdict}: {detail})")
+        # Not signed in and no challenge we recognise. With a person
+        # present, the page may simply be a step this flow does not
+        # know (a passkey sheet, a new verification screen): give them
+        # the window instead of closing it on an unknown.
+        unfinished = (f"login did not reach a signed-in state "
+                      f"({verdict}: {detail})")
+        return _wait_for_human(page, recipe, unfinished) if headed \
+            else ("needs_human", unfinished)
 
     # Element-verified domains (Spotify): the account widget is the
     # proof, on the app page, after the redirect chain settles.
@@ -1093,8 +1147,10 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
         if reason:
             return _wait_for_human(page, recipe, reason) if headed \
                 else ("needs_human", reason)
-        return "needs_human", (f"login did not reach a signed-in state "
-                               f"({verdict}: {detail})")
+        unfinished = (f"login did not reach a signed-in state "
+                      f"({verdict}: {detail})")
+        return _wait_for_human(page, recipe, unfinished) if headed \
+            else ("needs_human", unfinished)
 
     # Legacy domains: give slow SPAs a moment to redirect.
     for _ in range(6):
@@ -1106,7 +1162,9 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
     if reason:
         return _wait_for_human(page, recipe, reason) if headed \
             else ("needs_human", reason)
-    return "needs_human", "login did not reach a signed-in state"
+    unfinished = "login did not reach a signed-in state"
+    return _wait_for_human(page, recipe, unfinished) if headed \
+        else ("needs_human", unfinished)
 
 
 def _wait_for_human(page, recipe, reason: str) -> tuple[str, str]:
@@ -1283,11 +1341,19 @@ def run(domains: list[str], *, headed: bool, dry_run: bool,
 
     # Email fallback for anything that needs a human. auth_failed emails
     # too (the stored password is wrong / expired), but never retries.
+    # A domain whose scraper judges its own rail is left to that
+    # scraper (see _rail_judges_itself): the engine only knows about
+    # one way to a session, and the rail is the outcome.
     if do_email and not dry_run and blocked:
         try:
             from .cookie_gap_notify import notify_cookie_gap
             for domain, status, detail in blocked:
                 if status in ("no_cookies",):
+                    continue
+                if _rail_judges_itself(domain):
+                    print(f"  {domain}: leaving the cookie-gap email to "
+                          f"{_source_for(domain)}, which judges its "
+                          f"live rail")
                     continue
                 notify_cookie_gap(
                     _source_for(domain), domain,

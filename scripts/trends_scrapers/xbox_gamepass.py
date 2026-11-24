@@ -39,6 +39,7 @@ import json
 import logging
 import re
 import sys
+import time
 from typing import Any
 
 from ._base import http_get, run_scraper
@@ -68,6 +69,17 @@ _MAX_RECENTLY_IDS      = 25
 # but the response gets very heavy at that size - 25 keeps each request
 # under ~2MB.
 _HYDRATE_BATCH         = 25
+
+# The /play edge answers a share of requests with a 200 and a 15-byte
+# document (`<!doctype html>`, nothing else, x-cache CONFIG_NOCACHE),
+# in streaks of two or three, signed in or not. Measured 2026-11-24
+# from the residential lane: 6 of 10 fetches whole, the rest the stub.
+# One fetch is a coin flip; a handful spaced a few seconds apart lands
+# the page. The stub is not a block and not a stale session, so it is
+# never a reason to report the rail dark.
+_PAGE_ATTEMPTS         = 6
+_PAGE_RETRY_PAUSE_S    = 5.0
+_STUB_MAX_BYTES        = 2_000
 
 
 def _parse_preloaded_state(html: str) -> dict:
@@ -219,9 +231,50 @@ def _mark_cookie_gap(reason: str = '') -> None:
         logger.info("cookie_gap notify failed for xbox_gamepass: %s", e)
 
 
+def _fetch_play_html() -> tuple[str | None, bool]:
+    """Fetch /play, riding out the edge's empty-document stub.
+
+    Returns `(html, fetched)`: `fetched` is False only when every
+    attempt failed at the HTTP level (None from http_get). A whole
+    page comes back as soon as one attempt carries the preloaded
+    state; the stub (a 200 under `_STUB_MAX_BYTES` with no state)
+    earns a pause and another try, up to `_PAGE_ATTEMPTS`.
+    """
+    html = None
+    fetched = False
+    for attempt in range(1, _PAGE_ATTEMPTS + 1):
+        r = http_get(PLAY_URL, cookie_domain='xbox.com', timeout=30,
+                     retries=2)
+        if r is None:
+            html = None
+        else:
+            fetched = True
+            try:
+                html = r.text if hasattr(r, 'text') else r.decode('utf-8')
+            except Exception:
+                html = ''
+            if 'window.__PRELOADED_STATE__' in html:
+                if attempt > 1:
+                    logger.info("xbox_gamepass: /play answered whole on "
+                                "attempt %d", attempt)
+                return html, True
+            if len(html) >= _STUB_MAX_BYTES:
+                # A real page without the state is a shape change, not
+                # the stub; retrying will not change it.
+                return html, True
+        if attempt < _PAGE_ATTEMPTS:
+            logger.info("xbox_gamepass: /play answered with %s on attempt "
+                        "%d; pausing %.0fs",
+                        ('nothing' if html is None
+                         else f'a {len(html):,}-byte stub'),
+                        attempt, _PAGE_RETRY_PAUSE_S)
+            time.sleep(_PAGE_RETRY_PAUSE_S)
+    return html, fetched
+
+
 def fetch() -> dict[str, Any]:
-    r = http_get(PLAY_URL, cookie_domain='xbox.com', timeout=30, retries=2)
-    if r is None:
+    html, fetched = _fetch_play_html()
+    if not fetched:
         reason = 'xbox_gamepass: /play HTTP fetch returned None'
         logger.warning(reason)
         _mark_cookie_gap(reason=reason)
@@ -231,11 +284,7 @@ def fetch() -> dict[str, Any]:
                      'soft_block_reason': reason}
         return {'national': []}
 
-    try:
-        html = r.text if hasattr(r, 'text') else r.decode('utf-8')
-    except Exception:
-        html = ''
-
+    html = html or ''
     state = _parse_preloaded_state(html)
     if not state:
         reason = (f'xbox_gamepass: no __PRELOADED_STATE__ in {len(html):,}-byte '
