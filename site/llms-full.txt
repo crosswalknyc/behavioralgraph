@@ -617,11 +617,11 @@ The word covers very different things. Some synthetic data is a statistical copy
 
 The input decides the output. A twin built from surveys can tell you what people say. A twin built from behavior can tell you what people do.
 
-| Kind | Built from | Best for | Watch out for |
-|---|---|---|---|
-| Survey-built twins | Past surveys and interviews with real people. One well-known research lineage built an agent from a two-hour interview. It reproduced that person's survey answers at about 85% of the person's own two-week retest (Park and others, Stanford, 2024). | Stated opinion, brand perception, how people describe themselves | Stated intent is not behavior. People say they will subscribe and then do not. |
-| Model-built synthetic respondents | A language model told to answer as a type of person, sometimes tuned on survey data | Fast idea screening, writing survey drafts | The model has never met the audience. It repeats the average of the internet, answers too consistently, and squeezes the extremes. |
-| Behavior-built digital twins | What real people did over time: watched, searched, bought, paid for and cancelled | Predicting what people will do: watch, pay, finish, return, leave | Needs a large, consented, longitudinal panel. Few vendors have one. |
+| Kind | Built from | Watch out for |
+|---|---|---|
+| Survey-built twins | Past surveys and interviews with real people. One well-known research lineage built an agent from a two-hour interview. It reproduced that person's survey answers at about 85% of the person's own two-week retest (Park and others, Stanford, 2024). | Stated intent is not behavior. People say they will subscribe and then do not. |
+| Model-built synthetic respondents | A language model told to answer as a type of person, sometimes tuned on survey data | The model has never met the audience. It repeats the average of the internet, answers too consistently, and squeezes the extremes. |
+| Behavior-built digital twins | What real people did over time: watched, searched, bought, paid for and cancelled | Needs a large panel of people who chose to be counted, followed for years. Few vendors have one. |
 
 Crosswalk's digital twins are behavior-built. The panel sees the entire digital life of 10 million opted-in US people. Each person is one ID across phone, laptop and TV, day by day since January 2021. A twin is built from that history. The synthetic part is what you do with it. You run a plan the audience has not seen yet and read how people like them respond.
 
