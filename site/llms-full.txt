@@ -829,9 +829,9 @@ Not a reliable one. A language model can play a type of person, but it has never
 
 Ask what it is built from and how it is validated. A behavior-built twin names a consented panel, validates against outcomes rather than surveys, dates its calls before the result, and shows you the misses.
 
-### Do I still need a survey?
+### Can I use both kinds?
 
-No. A Crosswalk twin tells you what people will do, and its focus groups tell you why, in each representative's own words. Every answer rests on real behavior, not on what people remember or plan to do.
+You're free to use whatever you'd like, but we recommend using only Crosswalk's behavioral twins. They are built from what real people did, so they tell you what people will do. Their focus groups also tell you why, in each representative's own words. There is no need for a survey or a second kind of twin.
 
 Source: https://www.crosswalknyc.com/synthetic-respondents-vs-behavioral-twins.html
 
