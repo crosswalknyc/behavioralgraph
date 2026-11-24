@@ -101,10 +101,17 @@ DRIVER_CLASS = {
 }
 FIGURE_KEYS = ('total_usd', 'engagement_usd', 'earned_usd', 'lift_usd', 'conversion_usd',
                'attributable_usd', 'incremental_people')
-EVENT_KINDS = ('release', 'premiere', 'launch', 'campaign', 'press_cluster', 'award', 'appearance')
+EVENT_KINDS = ('release', 'premiere', 'launch', 'campaign', 'press_cluster', 'award', 'appearance',
+               # the dated events a time-shifted refresh researches for its new window
+               # (migration/refresh_sway, 2026-11-24)
+               'final_season', 'finale', 'cancellation', 'tour', 'new_show', 'viral', 'scandal',
+               'hiatus', 'ended')
 _EVENT_NOUN = {
     'release': 'release', 'premiere': 'premiere', 'launch': 'launch', 'campaign': 'campaign',
     'press_cluster': 'run of coverage', 'award': 'award', 'appearance': 'appearance',
+    'final_season': 'final season', 'finale': 'finale', 'cancellation': 'cancellation news',
+    'tour': 'tour', 'new_show': 'new show', 'viral': 'viral moment', 'scandal': 'controversy',
+    'hiatus': 'break', 'ended': 'end of the show',
 }
 HELD_LINE = 'These figures sit close to the earlier run on the same pairing and window.'
 

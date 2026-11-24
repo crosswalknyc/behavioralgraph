@@ -33,7 +33,10 @@ When it applies
 * Fresh builds only: ``new_build``, the parent Total Universe of a
   ``cut_needs_parent``, and a refresh that has no parent at all. A
   time-shifted refresh with a parent sizes off it under the refresh clamp,
-  and a cut sizes off its parent; neither is touched here.
+  and a cut sizes off its parent; neither is touched here. A refresh that
+  sways off its parent on dated, researched events in its new window
+  (migration/refresh_sway, 2026-11-24) keeps the size that research set:
+  a saved size never pulls it back, whatever window the saved size is for.
 * The subject is a Total Universe name (no `` - Cut`` suffix), matched case
   and punctuation insensitively with a leading "the" and a trailing "fans"
   or "audience" set aside, or through an alias. A US build of the whole
@@ -734,6 +737,8 @@ def settle(subject, tu, avid, *, decision='new_build', d=None, text='', history=
     Never raises."""
     try:
         dec = str(decision or '').strip().lower()
+        if isinstance(d, dict) and isinstance(d.get('_refresh_sway'), dict) and d['_refresh_sway'].get('applies'):
+            return None         # a swayed refresh keeps the size its research set
         if dec == 'time_shifted_refresh':
             if refresh_locked or parent_s3_key:
                 return None     # the refresh clamp sizes off the parent
@@ -928,7 +933,8 @@ def apply_to_spec(spec, subject, *, decision='new_build', text='', parent_s3_key
         if not isinstance(spec, dict):
             return None
         if spec.get('_refresh_sample_locked') or spec.get('sample_size_user_set') \
-                or spec.get('_saved_size_checked'):
+                or spec.get('_saved_size_checked') \
+                or (isinstance(spec.get('_refresh_sway'), dict) and spec['_refresh_sway'].get('applies')):
             return None
         held = spec.get('sample_size_saved')
         if isinstance(held, dict) and int(held.get('tu') or 0) > 0:

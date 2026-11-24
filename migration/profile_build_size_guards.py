@@ -38,6 +38,11 @@ with no stated reason on the spec re-sizes against the prior. The
 trail records which anchor won. Windows that do not measure the same
 thing (a build window much shorter than the benchmark's, or one that
 does not overlap the Gen Pop window) are compared but not acted on.
+A time-shifted refresh that moved off its parent on dated, researched
+events in its new window (migration/refresh_sway, 2026-11-24) carries
+that move as its stated reason: the prior window never pulls a
+researched decline back up, and a Gen Pop row that covers less than
+half of the new window does not push against the move.
 
 Two wire points in migration/synth_queue_worker._run_new_build:
 ``apply_to_spec`` on the sized spec before either cohort reasons (so
@@ -522,12 +527,49 @@ def guard_applies(spec, subject):
 
 def stated_size_reason(spec):
     """A plain reason on the spec for a universe smaller than the prior
-    window (an explicit narrower ask), or ''."""
+    window (an explicit narrower ask, or a refresh that swayed down on
+    dated, researched events in its new window), or ''."""
     for k in ('sizing_reason', 'size_change_reason', 'universe_change_reason'):
         v = str((spec or {}).get(k) or '').strip()
         if v:
             return v
+    return _sway_size_reason(spec)
+
+
+def _sway_of(spec):
+    """The refresh sway riding the spec (migration/refresh_sway), or {}."""
+    try:
+        from migration import refresh_sway as _rsw
+    except Exception:
+        try:
+            import refresh_sway as _rsw  # type: ignore
+        except Exception:
+            return {}
+    try:
+        return _rsw.active(spec) or {}
+    except Exception:
+        return {}
+
+
+def _sway_size_reason(spec):
+    s = _sway_of(spec)
+    if s and s.get('direction') == 'down':
+        return str(s.get('reason') or 'researched decline in the new window')[:200]
     return ''
+
+
+def _covers(bench_window, build_window):
+    """Share of the build window the benchmark's window covers (1.0 when
+    either is unknown)."""
+    bd = window_days(build_window)
+    if bd <= 0 or not (bench_window and build_window):
+        return 1.0
+    a0, a1 = _d(bench_window.get('start')), _d(bench_window.get('end'))
+    b0, b1 = _d(build_window.get('start')), _d(build_window.get('end'))
+    if not (a0 and a1 and b0 and b1):
+        return 1.0
+    lo, hi = max(a0, b0), min(a1, b1)
+    return ((hi - lo).days + 1) / float(bd) if hi >= lo else 0.0
 
 
 def frame_brand_input(df):
@@ -615,14 +657,21 @@ def anchors_for_draft(draft, subject, stem, audience_type='general', *, s3=None,
         return None, None
 
 
-def benchmark_verdict(projected_people, anchors, *, build_window=None, size_reason=''):
+def benchmark_verdict(projected_people, anchors, *, build_window=None, size_reason='', sway=None):
     """Compare a build's projected US people to its anchors.
 
     Returns None when nothing needs to move, else {'anchor': 'genpop' |
     'prior', 'direction': 'low' | 'high', 'anchor_people', 'ratio',
     'label', 'notes': [...]}. The Gen Pop row wins when it is usable;
     the prior window is the anchor only without one. Always carries the
-    comparison notes so the trail can say what was checked."""
+    comparison notes so the trail can say what was checked.
+
+    ``sway`` (migration/refresh_sway, 2026-11-24): a refresh that moved
+    off its parent on dated, researched events in its new window. A Gen
+    Pop row whose window covers less than half of the build window
+    measures another period, so its side that opposes the sway does not
+    act; the prior window never pulls a researched decline back up. A
+    Gen Pop row that measures the new window governs as always."""
     try:
         have = int(projected_people)
     except (TypeError, ValueError):
@@ -654,6 +703,18 @@ def benchmark_verdict(projected_people, anchors, *, build_window=None, size_reas
             else:
                 verdict = {'anchor': 'genpop', 'direction': 'high', 'anchor_people': int(gp['people']),
                            'ratio': ratio, 'label': gp['label']}
+    sw = sway if isinstance(sway, dict) and sway.get('applies') else None
+    if sw and verdict is not None and verdict.get('anchor') == 'genpop':
+        cover = _covers(gp.get('window'), build_window)
+        opposes = ((sw.get('direction') == 'down' and verdict['direction'] == 'low')
+                   or (sw.get('direction') == 'up' and verdict['direction'] == 'high'))
+        if opposes and cover < 0.5:
+            notes.append(f"the Gen Pop row's window covers {cover:.0%} of the build window, so it measures "
+                         f"another period; the refresh moved {sw.get('direction')} on dated events in the new "
+                         "window and that move stands")
+            verdict = None
+    if sw and sw.get('direction') == 'down' and not size_reason:
+        size_reason = str(sw.get('reason') or 'researched decline in the new window')
     if prior:
         pratio = have / float(prior['people'])
         same_span = window_length_class(build_window, prior.get('window')) != 'shorter'
@@ -749,7 +810,7 @@ def apply_to_spec(spec, subject, *, gp_df=None, s3=None, log=print, exclude_keys
             return None
         verdict = benchmark_verdict(projected_us(old_tu), anchors,
                                     build_window=parse_window(spec.get('date_range')),
-                                    size_reason=stated_size_reason(spec))
+                                    size_reason=stated_size_reason(spec), sway=_sway_of(spec))
         if not verdict:
             return None
         trail = {'stage': 'spec', 'old_sample': old_tu, 'old_people': projected_us(old_tu),
@@ -786,7 +847,10 @@ def apply_to_spec(spec, subject, *, gp_df=None, s3=None, log=print, exclude_keys
                       'new_avid_sample': new_av, 'label': verdict['label']})
         if floor_sample and new_tu == floor_sample:
             trail['notes'].append('held at the corpus floor (a measured subset on a shorter window)')
-        if spec.get('_refresh_sample_locked'):
+        if spec.get('_refresh_sample_locked') and _sway_of(spec):
+            trail['notes'].append('the refresh moved on dated events in its new window and still sits '
+                                  'outside the benchmark band; the benchmark wins')
+        elif spec.get('_refresh_sample_locked'):
             trail['notes'].append('the parent-anchored refresh sample inherited the parent\'s distance '
                                   'from the benchmark; the benchmark wins')
         for n in trail['notes']:
@@ -836,7 +900,7 @@ def apply_to_frame(df, spec, subject, *, gp_df=None, s3=None, log=print, exclude
             return df, None
         verdict = benchmark_verdict(projected_us(old), anchors,
                                     build_window=parse_window((spec or {}).get('date_range')),
-                                    size_reason=stated_size_reason(spec))
+                                    size_reason=stated_size_reason(spec), sway=_sway_of(spec))
         if not verdict or not verdict.get('anchor'):
             return df, None
         floor_sample = 0

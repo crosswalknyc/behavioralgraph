@@ -820,6 +820,18 @@ def saved_people(subject, window=None) -> Optional[int]:
         return None
 
 
+def _refresh_events(subject) -> list:
+    """Dated events a refresh of the subject researched for its new window
+    (migration/refresh_sway), [{date, kind, name}]; [] when none or
+    unavailable. Read by the near-twin holds as their research override.
+    Never raises."""
+    try:
+        from migration import refresh_sway as _rsw
+        return _rsw.recorded_events(subject) if subject else []
+    except Exception:
+        return []
+
+
 def peek_size(subject, question) -> Optional[dict]:
     with _PENDING_LOCK:
         return _PENDING.get('size|' + _pending_key(subject, question))
@@ -887,7 +899,7 @@ def hold_pending(data, *, question='', subject='', store=None):
             return data
         twin = pend.get('twin')
         changed = _twin.changed_windows((twin or {}).get('window') or {}, pend.get('window') or {})
-        event = _twin.event_in_changed_window(changed, pend.get('events') or []) if changed else None
+        event = _twin.event_in_changed_window(changed, list(pend.get('events') or []) + _refresh_events(subject)) if changed else None
         salt = f"twin-read|{_fold(subject)}|{(pend.get('window') or {}).get('start')}|{(pend.get('window') or {}).get('end')}"
         data, rec = _twin.hold_read_metrics(data, twin, salt=salt, event=event)
         if rec and rec.get('verdict') in ('held', 'lifted'):
@@ -1433,7 +1445,8 @@ def subject_facts(subject, *, window=None, pairing=None, extra_subjects=(), attr
     `ceiling` (the subject's whole US audience: no count of it goes
     higher) and `block` (the prompt block every product carries). Never
     raises; every source is optional."""
-    out = {'subject': str(subject or '').strip(), 'size': None, 'figures': [], 'records': [], 'ceiling': None, 'block': '', 'marks': []}
+    out = {'subject': str(subject or '').strip(), 'size': None, 'figures': [], 'records': [], 'ceiling': None, 'block': '', 'marks': [],
+           'events': []}
     if not shared_enabled() or not out['subject']:
         return out
     w0 = window if isinstance(window, dict) else {}
@@ -1565,6 +1578,14 @@ def subject_facts(subject, *, window=None, pairing=None, extra_subjects=(), attr
                     figs.append(fig)
         except Exception as e:
             print(f"[pm-knowledge] attribution campaign skipped: {type(e).__name__}: {e}")
+    # 7. the dated events a refresh of this subject researched for its new
+    #    window (migration/refresh_sway, 2026-11-24): the near-twin holds read
+    #    them as their research override. Internal; never in a reader block.
+    try:
+        from migration import refresh_sway as _rsw
+        out['events'] = _rsw.recorded_events(out['subject'])
+    except Exception as e:
+        print(f"[pm-knowledge] refresh events skipped: {type(e).__name__}: {e}")
     # the whole audience: the ceiling on every count of this subject
     wholes = [f['value'] for f in figs if f['kind'] == 'audience_people' and not f.get('cut')]
     if wholes:
@@ -1632,9 +1653,10 @@ def cross_hold(value, *, kind, facts, window=None, salt='', events=None, label='
     the figure. A people count never exceeds the subject's whole audience
     (reduced under it with a salted inset). A figure of the same kind on
     a nearby window is held inside the near-twin band of the earliest one
-    another product published, unless `events` carries a dated event in
-    the changed part of the window (then it is left, lifted). Pure apart
-    from the record it returns; never raises."""
+    another product published, unless `events` (or the dated events a
+    refresh of the subject recorded, `facts['events']`) carries a dated
+    event in the changed part of the window (then it is left, lifted).
+    Pure apart from the record it returns; never raises."""
     rec = {'kind': kind, 'label': label, 'product': product, 'before': _num(value), 'after': _num(value), 'why': 'kept', 'anchor': None}
     v = _num(value)
     f = facts if isinstance(facts, dict) else {}
@@ -1673,7 +1695,8 @@ def cross_hold(value, *, kind, facts, window=None, salt='', events=None, label='
             lo, hi = anchor['value'] * (1.0 - b), anchor['value'] * (1.0 + b)
             if v < lo or v > hi:
                 changed = _twin.changed_windows(anchor['window'], {'start': str(w.get('start'))[:10], 'end': str(w.get('end'))[:10]})
-                ev = _twin.event_in_changed_window(changed, [e for e in (events or []) if isinstance(e, dict)])
+                ev = _twin.event_in_changed_window(changed, [e for e in (list(events or []) + list(f.get('events') or []))
+                                                             if isinstance(e, dict)])
                 if ev:
                     rec.update(why='lifted', anchor={k: anchor.get(k) for k in ('product', 'value', 'window', 'ref', 'label')}, event=ev)
                 else:
