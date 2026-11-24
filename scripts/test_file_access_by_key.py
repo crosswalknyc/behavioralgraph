@@ -1063,7 +1063,7 @@ REVIEWED = {
     # the chat cores: the body's keys are checked by the request hook
     # (prometheus.key_scope.install) and by _pm_validate_page_context
     ('prometheus/interpret_turn.py', 'api_synth_chat_interpret'): 'page context checked by the hook and _pm_validate_page_context',   # moved out of chat.py (rebuild stage 7)
-    ('prometheus/legacy/chat.py', 'api_synth_chat_analyze'): 'page context checked by the hook and _pm_validate_page_context',
+    ('prometheus/page_analysis.py', 'api_synth_chat_analyze'): 'page context checked by the hook and _pm_validate_page_context',   # moved out of chat.py (rebuild stage 7)
 }
 funcs = SCAN.scan()
 whole = SCAN.doors(funcs, ('whole',))

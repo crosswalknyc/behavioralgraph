@@ -47,7 +47,7 @@ os.environ.setdefault('REGRESSION_TEST_MODE', '1')
 import _pm_legacy_view as LV  # noqa: E402
 
 LEGACY = os.path.join(_WEB, 'prometheus', 'legacy')
-CHAT_RATCHET = 6_550           # chat.py on its own (13,625 after stage 5; 12,777 after stage 7's first move; 10,839 after move 2; 7,838 after move 3; 6,488 after move 4)
+CHAT_RATCHET = 5_450           # chat.py on its own (13,625 after stage 5; 12,777 after stage 7's first move; 10,839 after move 2; 7,838 after move 3; 6,488 after move 4; 5,403 after move 5)
 _MARK = re.compile(r'^# <<extracted: ([A-Za-z0-9_.]+) block (\d+)>>$', re.M)
 
 

@@ -46,8 +46,9 @@ _HOST_ATTR = re.compile(r'(?<![\w.])_C\.(?=\w)')
 # history, model chain and date snapshot families moved out); 14,410 after
 # move 2 (the interpret side: core_interpret.py is gone); 11,409 after move
 # 3 (the clarify and approve routes); 8,209 after move 4 (the read side:
-# core_read.py is gone).
-LEGACY_CEILING = 8_250
+# core_read.py is gone); 5,403 after move 5 (the analyze side: core_analyze.py
+# is gone, and with it the last stage 5 core).
+LEGACY_CEILING = 5_450
 
 
 def legacy_dir() -> str:

@@ -430,6 +430,28 @@ def _free_names(module_src):
     return f.free
 
 
+def _deftime_proxy_reads(module_src, names):
+    """Names from ``names`` an extracted module reads through ``_C.`` at definition time (a decorator, a default, a module-level statement)."""
+    tree = ast.parse(module_src)
+    hits = set()
+
+    class _Proxy(_Rewriter):
+        def __init__(self):
+            super().__init__(set(), {}, set())
+
+        def visit_Attribute(self, node):
+            if self.deftime and isinstance(node.value, ast.Name) and node.value.id == '_C' and node.attr in names:
+                hits.add(node.attr)
+            self.generic_visit(node)
+    v = _Proxy()
+    for st in tree.body:
+        if isinstance(st, (ast.Import, ast.ImportFrom)):
+            continue
+        v.deftime = True
+        v.visit(st)
+    return hits
+
+
 def _deftime_reads(chat_src, names):
     """Names from ``names`` that the chat.py text reads at definition time (a module-level statement, a decorator, a default)."""
     tree = ast.parse(chat_src)
@@ -589,8 +611,31 @@ def plan_moves(plan, dry_run=False):
             sub_plan = [{'module': src_mod, 'doc': doc, 'names': names_left}]
             raise Refuse(f'{src_mod}: a partial move of a stage 5 core is not supported; move its other blocks too '
                          f'({names_left}) or run {json.dumps(sub_plan)} first')
-    # the re-imports at the tail, in plan order
-    new_src = new_src.replace(TAIL_ANCHOR, ''.join(reimports) + TAIL_ANCHOR)
+    # the re-imports at the tail, in plan order. A module already extracted that reads a name
+    # this plan moves at ITS definition time (a route decorated with a helper that moves now)
+    # must import after the new module: the new blocks go before the earliest such re-import.
+    insert_before = None
+    for name in sorted({m.group(2) for m in _lv._MARK_RX.finditer(chat_src)}):
+        if name in consumed_blocks or '.' not in name:
+            continue
+        path = _module_file(name)
+        if not os.path.exists(path):
+            continue
+        hits = _deftime_proxy_reads(open(path, encoding='utf-8').read(), set(moved_all))
+        if not hits:
+            continue
+        block = f'# <<reimport: {name}>>\n'
+        pos = new_src.find(block)
+        if pos < 0:
+            raise Refuse(f'{name} reads {sorted(hits)} at definition time but has no tail re-import in chat.py')
+        if insert_before is None or pos < insert_before[0]:
+            insert_before = (pos, name, sorted(hits))
+    if insert_before is None:
+        new_src = new_src.replace(TAIL_ANCHOR, ''.join(reimports) + TAIL_ANCHOR)
+    else:
+        pos, name, hits = insert_before
+        print(f'[order] {name} reads {hits} at definition time: the new re-imports go before it')
+        new_src = new_src[:pos] + ''.join(reimports) + new_src[pos:]
     compile(new_src, CHAT, 'exec')
     # nothing left in chat.py reads a moved name at definition time
     left = _deftime_reads(new_src, set(moved_all))

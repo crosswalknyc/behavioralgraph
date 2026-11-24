@@ -1,13 +1,15 @@
-"""Page analysis over the open profile: the analyze core.
+"""Page analysis over the open profile: the ask log decorator, the analyze route and its core.
 
-Extracted from prometheus/legacy/chat.py (rebuild stage 5, 2026-11-20) by
+Moved out of prometheus/legacy/chat.py (rebuild stage 7, 2026-11-23) by
 scripts/extract_legacy_core.py, behaviour unchanged. This module reads the
-host through ``_H`` and the rest of the legacy chat module through ``_C``
+host through ``_H`` and the legacy chat namespace through ``_C``
 (prometheus.legacy.C), both bound before it is imported; chat.py imports it
-last and re-exports the moved names. ``_C.globals()`` is chat.py's own
-namespace, the one the lanes this code hands it to expect. The suites read
-the moved text through scripts/_pm_legacy_view.legacy_view(), which splices
-each block back at its marker in chat.py.
+last and re-exports the moved names, so every name chat.py binds is read
+through ``_C.<name>`` at call time exactly as it was when the code lived in
+one file. ``_C.globals()`` is chat.py's own namespace, the one the lanes this
+code hands it to expect. The suites read the moved text through
+scripts/_pm_legacy_view.legacy_view(), which splices each block back at its
+marker in chat.py.
 """
 from prometheus.legacy import H as _H, C as _C  # noqa: E402,F401
 import uuid
@@ -21,86 +23,266 @@ from prometheus import subiq_library as _subiq_library
 from prometheus import digital_twin_lane as _twin_lane
 from prometheus import bpiq_wizard as _bpiq_wiz
 import time
+from functools import wraps
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session, make_response
 from prometheus import seams as _seams, cohort_scope as _cohort_scope, shared_memory as _shared
+from prometheus.ask_outcome import (  # noqa: E402,F401
+    _ask_infer_route_outcome, _ASK_SUBJECT_VIEWS, _ASK_SUBJ_STOP, _ask_mentions_subject)
 from prometheus import kpi_definitions as _kpi
 from prometheus import named_subject as _ns_mod
-from prometheus.legacy.jobs import (  # noqa: E402,F401
-    api_synth_chat_status,
-    _pm_job_owner_ok,
-    _pm_read_status_write,
-    api_synth_chat_read_status,
-    _pm_deck_status_write,
-    _pm_bpiq_status_write,
-    _pm_jiq_status_write,
-    _pm_fw_status_write,
-    _pm_aiq_status_write,
-    api_synth_chat_deck_status,
-    api_synth_chat_bpiq_status,
-    api_synth_chat_jiq_status,
-    api_synth_chat_fw_status,
-    api_synth_chat_aiq_status,
-    api_synth_chat_active_runs,
-    api_synth_chat_health,
-)
-from prometheus.legacy.watch import (  # noqa: E402,F401
-    _PM_WATCH_FLAGGED,
-    _PM_USER_BLOCK_CACHE,
-    _PM_USER_BLOCK_LOCK,
-    _pm_user_block,
-    _pm_catalog_block,
-    _pm_ask_log_user,
-    _pm_probe_caller,
-    _pm_is_probe_user,
-    _PM_COMMON_IDENTITY_WORDS,
-    _pm_thread_confirmed_page,
-    _pm_page_confirm_mark,
-    _pm_page_confirmed_recently,
-    _pm_watch_flag,
-    _pm_record_held_reply,
-    _pm_gate_options,
-    _pm_open_status_line,
-    _pm_price_table,
-    _pm_usd,
-    _pm_usd_label,
-    _pm_money_symbol,
-    _pm_viewership_read_price,
-    _pm_derived_read_price,
-    _pm_viewership_verb,
-    _pm_is_viewership_series_ask,
-    _pm_is_viewership_ask,
-    _pm_consumption_subject,
-    _pm_page_clarify_subject,
-    _pm_panel_price_label,
-    _pm_pending_q_tokens,
-    _pm_stash_pending_question, _pm_pop_pending_question,
-    _pm_safe_user,
-    _pm_s3_json,
-    _pm_s3_put_json,
-    _PM_REPORT_ASK_RE,
-    _pm_looks_report_ask,
-)
-from prometheus.legacy.rankers import (  # noqa: E402,F401  (Rankers boards + multi-year reads, 2026-11-08)
-    _pm_overall_rankers_reply,
-    _PM_RANKER_FAMILIES,
-    _pm_rankers_board_block,
-    _PM_MY_RANGE_RE,
-    _PM_MY_LAST_RE,
-    _PM_MY_NYEAR_RE,
-    _PM_MY_SINCE_RE,
-    _PM_MY_SPAN_RE,
-    _PM_MY_YOY_RE,
-    _pm_detect_multi_year_ask,
-    _pm_year_files_for_subject,
-    _pm_year_package_reply,
-    _pm_trajectory_files,
-    _pm_trajectory_metrics,
-    _pm_trajectory_reply,
-)
 from prometheus import read_recovery as _rr
 
 # <<moved>>
 # <<block: 1>>
+def _ask_logged(surface):
+    """Wrap a chatbot route so every question is recorded to the ask
+    log with route, outcome, and response time. Fire-and-forget."""
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            from flask import g as _g
+            t0 = time.time()
+            question, view, mode = '', '', None
+            log_surface = surface
+            ask_history = []
+            # One trace id per ask (2026-10-06, observability): on the
+            # ask-log record, in the reply, and on the queue job, so a
+            # user's question can be followed from widget to worker.
+            try:
+                _g._pm_trace_id = (str(request.headers.get('X-Prometheus-Trace') or '').strip()[:32]
+                                   or uuid.uuid4().hex[:12])
+            except Exception as _fx:
+                _faults.note('chat', _fx)
+            try:
+                body = request.get_json(force=True, silent=True) or {}
+                question = str(body.get('text') or '').strip()
+                _g._pm_ask_text = question   # the exit scrub reads the ask (I5)
+                ask_history = body.get('history') or []
+                mode = (str(body.get('mode') or '').strip().lower()
+                        or None)
+                pc = body.get('page_context') or {}
+                _g._pm_page_ctx = pc if isinstance(pc, dict) else {}   # the answer gate's calm hold names the page (2026-10-21)
+                vc = (pc.get('view_context') or {}) \
+                    if isinstance(pc, dict) else {}
+                view = str(vc.get('view_id') or '').strip()
+                if not view and isinstance(pc, dict) and pc.get('primary'):
+                    view = 'profileIQ'
+                __import__('prometheus.service', fromlist=['stash_binding']).stash_binding(_C._pm_ask_log_user(''), body.get('thread_id'))   # the thread's project rides the request (2026-10-21)
+            except Exception as _fx:
+                _faults.note('chat', _fx)
+            # What the user did next (2026-10-02): a repeat of the
+            # prior ask or a push-back phrase grades the PRIOR reply
+            # failed. Computed before the handler runs so a route can
+            # read g._pm_user_signal and stop replaying the same
+            # answer (S5); recorded on this ask under extra.
+            user_sig = None
+            try:
+                from prometheus import user_signal as _us
+                user_sig = _us.detect(question, ask_history, body)   # an approval of a quote is a yes, never a repeat
+                _g._pm_user_signal = user_sig
+            except Exception:
+                user_sig = None
+            try:
+                try:
+                    resp = fn(*args, **kwargs)
+                except Exception as _first:
+                    # I4b (2026-10-20): most of a day's faults were binding
+                    # failures; one retry with the binder's subject before
+                    # the calm line, then the ops mail carries the subject.
+                    resp = __import__('prometheus.faults', fromlist=['retry_once']).retry_once(fn, args, kwargs, question, ask_history, _first)
+            except Exception:
+                # 2026-09-30 (Jenna: "make sure they are all being
+                # emailed to me with the replies so I can troubleshoot
+                # in real time"): a route that died mid-request used to
+                # skip the ask log AND the question email, leaving only
+                # the ops failure note. Record and email the ask first,
+                # then re-raise so the calm guard still answers the
+                # user with the working-on-it promise.
+                if question:
+                    try:
+                        import render_usage_log as _rul
+                        _rul.record_ask(
+                            user=_C._pm_ask_log_user(),
+                            view=view, question=question,
+                            surface=log_surface, route='unknown',
+                            outcome='faulted',   # I4b: the calm line is a fault, never 'answered'
+                            ms=int((time.time() - t0) * 1000),
+                            mode=mode, subject=getattr(_g, '_pm_retry_bound', None) or None,
+                            extra={'retried': bool(getattr(_g, '_pm_retried', False))},
+                            stages=getattr(_g, '_pm_ask_stages', None))
+                    except Exception as _fx:
+                        _faults.note('chat', _fx)
+                    try:
+                        _C._pm_watch_notify(
+                            _C._pm_ask_log_user(''), question,
+                            {'reply': _H._CHATBOT_CALM_MESSAGE}, None)
+                    except Exception as _fx:
+                        _faults.note('chat', _fx)
+                raise
+            try:
+                if not question:
+                    return resp
+                status_code, payload = 200, None
+                actual = resp
+                if isinstance(resp, tuple) and resp:
+                    actual = resp[0]
+                    if len(resp) > 1 and isinstance(resp[1], int):
+                        status_code = resp[1]
+                try:
+                    payload = actual.get_json(silent=True)
+                except Exception:
+                    payload = None
+                # Prometheus v1 envelope (2026-10-01): the one-door
+                # route answers {kind, surface, raw}. The log keeps
+                # the legacy surface names and reads the legacy body,
+                # so the weekly reviews and the per-ask notify see
+                # exactly what they saw before.
+                _env_text = ''
+                if isinstance(payload, dict) \
+                        and isinstance(payload.get('raw'), dict) \
+                        and payload.get('surface') in ('interpret',
+                                                       'analyze', 'deck'):
+                    log_surface = payload['surface']
+                    _env_text = str(payload.get('text') or '')   # the reader's line for a job / draft (2026-10-13)
+                    payload = payload['raw']
+                # partner contract (2026-10-14): a v1 response is logged through its legacy view, never rewritten by the gate
+                _v1_api, log_surface, _env_text, payload = __import__('prometheus.contract_v1', fromlist=['log_view']).log_view(payload, log_surface, _env_text)
+                route, outcome, subject = _ask_infer_route_outcome(
+                    log_surface, payload, status_code)
+                route = __import__('prometheus.ask_outcome', fromlist=['route_pick']).route_pick(getattr(_g, '_pm_ask_route', None), route)  # door placeholder yields to the body's route (2026-10-13)
+                outcome = getattr(_g, '_pm_ask_outcome', None) or outcome
+                subject = getattr(_g, '_pm_ask_subject', None) or subject
+                mode = getattr(_g, '_pm_ask_mode', None) or mode
+                # Do not record a subject the view cannot own
+                # (2026-09-14). Week 2026-W37 filed three Trends IQ
+                # asks about DNC news coverage under subject 'shark
+                # tank' and two about MMA under 'the twilight saga',
+                # because the field held the last profile the reader
+                # opened. The weekly review then grouped them and
+                # proposed teaching replay on those pairs, which would
+                # have served a Shark Tank read to a news question.
+                # An ask that names the subject keeps it, and an
+                # unknown view keeps it rather than lose real data.
+                if subject and view and view not in _ASK_SUBJECT_VIEWS \
+                        and not _ask_mentions_subject(question, subject):
+                    subject = None
+                # Failure taxonomy (2026-10-02 RCA): classify what the
+                # user actually received. Legacy outcome names are kept
+                # for answers and build decisions; the states that used
+                # to hide under 'answered' (empty, faulted, clarified,
+                # clarified_repeat, proposed, confirmed) replace it.
+                outcome, extra = _C._pm_ask_apply_taxonomy(
+                    log_surface, payload, status_code, ask_history,
+                    outcome, question,
+                    _C._pm_ask_log_user(''))
+                # Answer gate (2026-10-02 RCA): the only exit. A held
+                # reply is retried once, then replaced with the honest
+                # email promise; a build card for a task becomes the
+                # which-audience question.
+                if not _v1_api:
+                    resp, payload, status_code, outcome, extra = \
+                        _C._pm_answer_gate(
+                            fn, args, kwargs, resp, payload, status_code,
+                            log_surface, outcome, extra, question,
+                            ask_history,
+                            _C._pm_ask_log_user(''),
+                            t0)
+                if user_sig:
+                    merged = {'user_signal': user_sig.get('signal'),
+                              'rejects': str(user_sig.get('prior_question')
+                                             or '')[:120]}
+                    for k, v in (extra or {}).items():
+                        merged.setdefault(k, v)
+                    extra = merged
+                try:
+                    _tid_trace = getattr(_g, '_pm_trace_id', '')
+                    if _tid_trace:
+                        extra = dict(extra or {})
+                        extra['trace_id'] = _tid_trace
+                    extra = __import__('prometheus.understanding', fromlist=['stamp_log']).stamp_log(extra, _g)   # the Reader's reading and the Understanding beside the route (rebuild stage 2 shadow, 2026-11-20)
+                    _tb = getattr(_g, '_pm_thread_binding', None); (_tb or getattr(_g, '_pm_thread_id', None)) and extra.update({'thread': dict((_tb or {}), id=getattr(_g, '_pm_thread_id', None))})   # the project the thread follows (2026-10-21)
+                    _ao = getattr(_g, '_pm_approved_offer', None); _ao and extra.update({'approved_offer': _ao})   # a typed approval bound to a pending priced offer (2026-10-22)
+                except Exception as _fx:
+                    _faults.note('chat', _fx)
+                extra = __import__('prometheus.order_stall', fromlist=['stamp']).stamp(extra, question, payload, ask_history)   # where a priced order stands after this reply (Jenna 2026-11-11)
+                import render_usage_log as _rul
+                _rul.record_ask(
+                    user=_C._pm_ask_log_user(),
+                    view=view, question=question, surface=log_surface,
+                    route=route, outcome=outcome,
+                    ms=int((time.time() - t0) * 1000),
+                    mode=mode, subject=subject, extra=extra,
+                    stages=getattr(_g, '_pm_ask_stages', None),
+                    reply=__import__('prometheus.ask_outcome', fromlist=['reply_text']).reply_text(payload) or _env_text,
+                    job_id=__import__('prometheus.ask_outcome', fromlist=['promised_job']).promised_job(payload))
+                _C._pm_watch_flag(_C._pm_ask_log_user(), question, route, outcome, extra)
+                # A key ask is notified once, at the API door, with the
+                # text the caller actually received (the v1 doc can turn an
+                # empty reply into a decline after this point; 2026-10-21
+                # the copy read 'No written answer' while the partner read
+                # 'That one did not land'). Dashboard asks notify here.
+                if not getattr(_g, '_pm_api_key_owner', None):
+                    _C._pm_watch_notify(
+                        _C._pm_ask_log_user(''), question, payload,
+                        subject, surface=log_surface)
+                # Cross-session memory (2026-08-27, Jenna): every ask
+                # that resolved a subject feeds the per-user memory,
+                # unless the handler already recorded it with richer
+                # detail (cohort + ledger key on the analyze path).
+                try:
+                    if subject and not getattr(_g, '_pm_mem_recorded',
+                                               False) \
+                            and outcome not in ('error', 'clarify',
+                                                'memory_confirm'):
+                        import prometheus_memory as _pmm
+                        _pmm.remember(
+                            (_C._pm_ask_log_user('')).strip(),
+                            question, subject=subject, view=view,
+                            route=route)
+                except Exception as _fx:
+                    _faults.note('chat', _fx)
+            except Exception:
+                traceback.print_exc()
+            return resp
+        return wrapper
+    return deco
+
+
+# <<block: 2>>
+@_H.app.route('/api/brief-chat/analyze', methods=['POST'])
+@_H.requires_auth
+@_H._chatbot_route_guard('brief-chat/analyze')
+@_ask_logged('analyze')
+def api_synth_chat_analyze():
+    """Analyze the data open on the dashboard (primary profile + any
+    checked Data Cuts). First-party digest is the primary evidence.
+
+    Session-authenticated dashboard users only."""
+    user, err = _C._synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    # Prometheus mode gate (2026-09-03, Jenna): analyze is the primary
+    # read surface; 'pull'-only users are blocked here. Runs before
+    # the JSON body parse so an empty pull-only request also gets the
+    # friendly refusal instead of the calm-fallback line.
+    if not _C._pm_gate_analyze(user):
+        return _C._pm_gate_refusal('analyze')
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        _H._chatbot_error_email('brief-chat/analyze', e)
+        return jsonify(_H._chatbot_calm_payload())
+    text = (body.get('text') or '').strip()
+    if not text:
+        _H._chatbot_error_email('brief-chat/analyze',
+                             'empty request text from chat UI',
+                             tb='(request validation)')
+        return jsonify(_H._chatbot_calm_payload())
+    history = body.get('history') or []
+    return _C._pm_analyze_core(user, body, text, history)
+
+
+# <<block: 3>>
 def _pm_analyze_core(user, body, text, history):
     """The analyze surface for an already-gated user.
 
@@ -117,7 +299,7 @@ def _pm_analyze_core(user, body, text, history):
     # things cost gets the answer, free, no model call.
     if _C._pm_pricing_question(text):
         _C._pm_ask_hint(route='pricing_fact', outcome='answered')
-        return jsonify({'success': True, 'reply': _C._pm_pricing_copy(_pm_ask_log_user(''), user)})
+        return jsonify({'success': True, 'reply': _C._pm_pricing_copy(_C._pm_ask_log_user(''), user)})
     # Challenged-number heads-up (2026-09-30): fire-and-continue;
     # the answer path is untouched.
     _C._pm_challenge_headsup(user, text)
@@ -254,17 +436,17 @@ def _pm_analyze_core(user, body, text, history):
             'twin_confirm', 'twin_inputs', 'panel_confirm')):
         try:
             import prometheus_analysis as pma
-            _my_years = _pm_detect_multi_year_ask(text)
+            _my_years = _C._pm_detect_multi_year_ask(text)
             if _my_years:
                 _my_ctx = body.get('page_context') or {}
                 _my_subj = str(((_my_ctx.get('primary') or {})
                                 .get('name')) or '').strip() \
                     or (pma.guess_subject_from_text(text) or '').strip()
                 if _my_subj and not __import__('prometheus.named_title', fromlist=['other_than']).other_than(text, _my_subj):   # never the open profile's year package for a title the words name (2026-11-19)
-                    _have_y, _miss_y = _pm_year_files_for_subject(
+                    _have_y, _miss_y = _C._pm_year_files_for_subject(
                         _my_subj, _my_years)
                     if _miss_y:
-                        _my_reply, _my_chips = _pm_year_package_reply(
+                        _my_reply, _my_chips = _C._pm_year_package_reply(
                             _my_subj, _my_years, _have_y, _miss_y)
                         _C._pm_ask_hint(outcome='year_package_offer',
                                      subject=_my_subj)
@@ -279,7 +461,7 @@ def _pm_analyze_core(user, body, text, history):
                         # answer the series deterministically from the
                         # year files - same ask, same route, same
                         # numbers, every time.
-                        _tj = _pm_trajectory_reply(
+                        _tj = _C._pm_trajectory_reply(
                             (session.get('username')
                              or user.get('username') or ''),
                             _my_subj, _have_y, text)
@@ -356,9 +538,9 @@ def _pm_analyze_core(user, body, text, history):
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': ('That tracking package comes to '
-                          + _pm_usd_label(
-                              _pm_usd('attribution_iq_setup', 500.0)
-                              + _pm_usd('attribution_iq_daily', 100.0) * _adays)
+                          + _C._pm_usd_label(
+                              _C._pm_usd('attribution_iq_setup', 500.0)
+                              + _C._pm_usd('attribution_iq_daily', 100.0) * _adays)
                           + ' and your account cannot cover it '
                           'right now. Add funds or ask your admin, '
                           'and I will set it up the moment you are '
@@ -366,7 +548,7 @@ def _pm_analyze_core(user, body, text, history):
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
         _aiq_extras = _C._pm_merge_extras(_C._pm_attrib_extras(), _pm_ppu)
-        _rr.start_engine_job('aiq', _aiq_job, _bpiq_user, _aiq_confirm, _aiq_extras, _pm_aiq_status_write, _C._pm_run_aiq_job)   # the queue, never a web thread (audit item 5)
+        _rr.start_engine_job('aiq', _aiq_job, _bpiq_user, _aiq_confirm, _aiq_extras, _C._pm_aiq_status_write, _C._pm_run_aiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': (f"On it. Adding the assets to {_aname} now; today's read is recomputed with them in it, and I will confirm here when it is in." if _is_add else
@@ -446,7 +628,7 @@ def _pm_analyze_core(user, body, text, history):
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
         _fw_extras = _C._pm_merge_extras(_C._pm_attrib_extras(), _pm_ppu)
-        _rr.start_engine_job('fw', _fw_job, _bpiq_user, _fw_confirm, _fw_extras, _pm_fw_status_write, _C._pm_run_fw_job)   # the queue, never a web thread (audit item 5)
+        _rr.start_engine_job('fw', _fw_job, _bpiq_user, _fw_confirm, _fw_extras, _C._pm_fw_status_write, _C._pm_run_fw_job)   # the queue, never a web thread (audit item 5)
         try:
             from prometheus import flywheel_wizard as _fw_wiz2
             _fw_line = _fw_wiz2.running_reply(_fw_confirm)
@@ -485,7 +667,7 @@ def _pm_analyze_core(user, body, text, history):
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
         _jiq_extras = _C._pm_merge_extras(_C._pm_attrib_extras(), _pm_ppu)
-        _rr.start_engine_job('jiq', _jiq_job, _bpiq_user, _jiq_confirm, _jiq_extras, _pm_jiq_status_write, _C._pm_run_jiq_job)   # the queue, never a web thread (audit item 5)
+        _rr.start_engine_job('jiq', _jiq_job, _bpiq_user, _jiq_confirm, _jiq_extras, _C._pm_jiq_status_write, _C._pm_run_jiq_job)   # the queue, never a web thread (audit item 5)
         _jiq_line = (f'On it. Building the {_jsubj} journey now - '
                      'it takes a few minutes. '
                      'It lands in the Digital Journey tab, and I '
@@ -544,7 +726,7 @@ def _pm_analyze_core(user, body, text, history):
         import prometheus_analysis as _pma_dr
         _dr = _derived.plan(text, history, ctx if (isinstance(ctx, dict) and not ctx_err) else None, body,
                             pma=_pma_dr, ns=_ns_mod, normalize=_H._normalize_for_match, stop=_C._PM_CLARIFY_STOP_TOKENS,
-                            plausible=_C._pm_plausible_subject, consumption=_pm_consumption_subject)
+                            plausible=_C._pm_plausible_subject, consumption=_C._pm_consumption_subject)
     except Exception:
         traceback.print_exc()
         _dr = None
@@ -564,7 +746,7 @@ def _pm_analyze_core(user, body, text, history):
         _C._pm_ask_hint(route='rankers_overall', outcome='answered')
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': _pm_overall_rankers_reply(),
+            'reply': _C._pm_overall_rankers_reply(),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     # Confirmed memory referent (2026-08-27, Jenna: cross-session
     # memory). The confirm chip re-sends the original ask with the
@@ -578,7 +760,7 @@ def _pm_analyze_core(user, body, text, history):
         try:   # "Yes, {page}": the page is kept for this user's follow-ups
             _pg = str(((ctx or {}).get('primary') or {}).get('name') or '')
             if _pg and _H._normalize_for_match(_pg) == _H._normalize_for_match(_bind_subject):
-                _pm_page_confirm_mark(_pm_ask_log_user(''), _pg)
+                _C._pm_page_confirm_mark(_C._pm_ask_log_user(''), _pg)
         except Exception as _fx:
             _faults.note('chat', _fx)
         _pc_with_bind = body.get('panel_confirm') if isinstance(body.get('panel_confirm'), dict) else None
@@ -1058,7 +1240,7 @@ def _pm_analyze_core(user, body, text, history):
             text = _ca_merged
             try:
                 _C._pm_ask_hint(route='clarify_answer_merge')
-                _pm_page_confirm_mark(_pm_ask_log_user(''), str(
+                _C._pm_page_confirm_mark(_C._pm_ask_log_user(''), str(
                     (ctx.get('primary') or {}).get('name') or ''))
             except Exception as _fx:
                 _faults.note('chat', _fx)
@@ -1114,7 +1296,7 @@ def _pm_analyze_core(user, body, text, history):
                     _own = str(_pma_nc.guess_subject_from_text(text)
                                or '').strip()
                     if not (_own and _C._pm_plausible_subject(_own)):
-                        _own = (_pm_consumption_subject(text)
+                        _own = (_C._pm_consumption_subject(text)
                                 or _ns_mod.mentioned_subject(
                                     text, _nc_lab, _H._normalize_for_match,
                                     _C._PM_CLARIFY_STOP_TOKENS,
@@ -1338,7 +1520,7 @@ def _pm_analyze_core(user, body, text, history):
     try:
         _board_view = str(((ctx.get('view_context') or {})
                            .get('view_id')) or '')
-        _board_block = _pm_rankers_board_block(text, _board_view)
+        _board_block = _C._pm_rankers_board_block(text, _board_view)
         if _board_block:
             xmod_block = (f"{xmod_block}\n\n{_board_block}"
                           if xmod_block else _board_block)
@@ -1447,7 +1629,7 @@ def _pm_analyze_core(user, body, text, history):
     # Corpus catalog (2026-10-05): dashboard figures on the subject
     # ride the binding block ahead of chat-stated ones.
     try:
-        _cat_block = '\n\n'.join(x for x in (_bpiq_wiz.saved_valuation_block(text), _pm_catalog_block(
+        _cat_block = '\n\n'.join(x for x in (_bpiq_wiz.saved_valuation_block(text), _C._pm_catalog_block(
             _led_subj, extra_subjects=[p_meta.get('name') if ctx.get('primary') else ''])) if x)
         if _cat_block:
             _led_block = (_cat_block + '\n' + _led_block) if _led_block else _cat_block
@@ -1456,7 +1638,7 @@ def _pm_analyze_core(user, body, text, history):
     # Who is asking (2026-10-06): company, role, the views they live in,
     # recent subjects, last window. Tone and defaults, never echoed.
     try:
-        _ub = _pm_user_block(_pm_user)
+        _ub = _C._pm_user_block(_pm_user)
         if _ub:
             _led_block = (_led_block + '\n\n' + _ub) if _led_block else _ub
     except Exception as _fx:
@@ -1718,4 +1900,4 @@ def _pm_analyze_core(user, body, text, history):
         'profile': p_meta.get('name')})
 
 
-__all__ = ['_pm_analyze_core']
+__all__ = ['_ask_logged', 'api_synth_chat_analyze', '_pm_analyze_core']

@@ -60,7 +60,10 @@ _MODEL_NAME_RX = re.compile(
     r'PROMPT|CHARTER|RULEBOOK|SYSTEM|INSTRUCTION|GUIDANCE|SCHEMA|RULES|NOTE|REASK|QUESTION|EXAMPLE|BANK|SEED|CANON|LEAK|'
     r'block|prompt|frame|instruction|guidance|rule', re.I)
 _CALL_SKIP = frozenset(('compile', 'search', 'match', 'sub', 'findall', 'fullmatch', 'finditer', 'split',
-                        'print', 'warn', 'warning', 'note', 'debug', 'info', 'error', 'exception'))
+                        'print', 'warn', 'warning', 'note', 'debug', 'info', 'error', 'exception',
+                        # a string handed to a model call is text for the model (the legacy chat's
+                        # calls, in prometheus/ since rebuild stage 7)
+                        '_pm_claude_json', '_pm_claude_data', 'claude_messages', '_run_nflx_claude_agent'))
 _SENTENCE_RX = re.compile(r'^[A-Z"\'(].*[a-z].*[.!?)]\s*$', re.S)
 
 

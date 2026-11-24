@@ -287,218 +287,7 @@ from prometheus.ask_outcome import (  # noqa: E402,F401
 # <<extracted: prometheus.answer_gate block 14>>
 
 
-def _ask_logged(surface):
-    """Wrap a chatbot route so every question is recorded to the ask
-    log with route, outcome, and response time. Fire-and-forget."""
-    def deco(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
-            from flask import g as _g
-            t0 = time.time()
-            question, view, mode = '', '', None
-            log_surface = surface
-            ask_history = []
-            # One trace id per ask (2026-10-06, observability): on the
-            # ask-log record, in the reply, and on the queue job, so a
-            # user's question can be followed from widget to worker.
-            try:
-                _g._pm_trace_id = (str(request.headers.get('X-Prometheus-Trace') or '').strip()[:32]
-                                   or uuid.uuid4().hex[:12])
-            except Exception as _fx:
-                _faults.note('chat', _fx)
-            try:
-                body = request.get_json(force=True, silent=True) or {}
-                question = str(body.get('text') or '').strip()
-                _g._pm_ask_text = question   # the exit scrub reads the ask (I5)
-                ask_history = body.get('history') or []
-                mode = (str(body.get('mode') or '').strip().lower()
-                        or None)
-                pc = body.get('page_context') or {}
-                _g._pm_page_ctx = pc if isinstance(pc, dict) else {}   # the answer gate's calm hold names the page (2026-10-21)
-                vc = (pc.get('view_context') or {}) \
-                    if isinstance(pc, dict) else {}
-                view = str(vc.get('view_id') or '').strip()
-                if not view and isinstance(pc, dict) and pc.get('primary'):
-                    view = 'profileIQ'
-                __import__('prometheus.service', fromlist=['stash_binding']).stash_binding(_pm_ask_log_user(''), body.get('thread_id'))   # the thread's project rides the request (2026-10-21)
-            except Exception as _fx:
-                _faults.note('chat', _fx)
-            # What the user did next (2026-10-02): a repeat of the
-            # prior ask or a push-back phrase grades the PRIOR reply
-            # failed. Computed before the handler runs so a route can
-            # read g._pm_user_signal and stop replaying the same
-            # answer (S5); recorded on this ask under extra.
-            user_sig = None
-            try:
-                from prometheus import user_signal as _us
-                user_sig = _us.detect(question, ask_history, body)   # an approval of a quote is a yes, never a repeat
-                _g._pm_user_signal = user_sig
-            except Exception:
-                user_sig = None
-            try:
-                try:
-                    resp = fn(*args, **kwargs)
-                except Exception as _first:
-                    # I4b (2026-10-20): most of a day's faults were binding
-                    # failures; one retry with the binder's subject before
-                    # the calm line, then the ops mail carries the subject.
-                    resp = __import__('prometheus.faults', fromlist=['retry_once']).retry_once(fn, args, kwargs, question, ask_history, _first)
-            except Exception:
-                # 2026-09-30 (Jenna: "make sure they are all being
-                # emailed to me with the replies so I can troubleshoot
-                # in real time"): a route that died mid-request used to
-                # skip the ask log AND the question email, leaving only
-                # the ops failure note. Record and email the ask first,
-                # then re-raise so the calm guard still answers the
-                # user with the working-on-it promise.
-                if question:
-                    try:
-                        import render_usage_log as _rul
-                        _rul.record_ask(
-                            user=_pm_ask_log_user(),
-                            view=view, question=question,
-                            surface=log_surface, route='unknown',
-                            outcome='faulted',   # I4b: the calm line is a fault, never 'answered'
-                            ms=int((time.time() - t0) * 1000),
-                            mode=mode, subject=getattr(_g, '_pm_retry_bound', None) or None,
-                            extra={'retried': bool(getattr(_g, '_pm_retried', False))},
-                            stages=getattr(_g, '_pm_ask_stages', None))
-                    except Exception as _fx:
-                        _faults.note('chat', _fx)
-                    try:
-                        _pm_watch_notify(
-                            _pm_ask_log_user(''), question,
-                            {'reply': _H._CHATBOT_CALM_MESSAGE}, None)
-                    except Exception as _fx:
-                        _faults.note('chat', _fx)
-                raise
-            try:
-                if not question:
-                    return resp
-                status_code, payload = 200, None
-                actual = resp
-                if isinstance(resp, tuple) and resp:
-                    actual = resp[0]
-                    if len(resp) > 1 and isinstance(resp[1], int):
-                        status_code = resp[1]
-                try:
-                    payload = actual.get_json(silent=True)
-                except Exception:
-                    payload = None
-                # Prometheus v1 envelope (2026-10-01): the one-door
-                # route answers {kind, surface, raw}. The log keeps
-                # the legacy surface names and reads the legacy body,
-                # so the weekly reviews and the per-ask notify see
-                # exactly what they saw before.
-                _env_text = ''
-                if isinstance(payload, dict) \
-                        and isinstance(payload.get('raw'), dict) \
-                        and payload.get('surface') in ('interpret',
-                                                       'analyze', 'deck'):
-                    log_surface = payload['surface']
-                    _env_text = str(payload.get('text') or '')   # the reader's line for a job / draft (2026-10-13)
-                    payload = payload['raw']
-                # partner contract (2026-10-14): a v1 response is logged through its legacy view, never rewritten by the gate
-                _v1_api, log_surface, _env_text, payload = __import__('prometheus.contract_v1', fromlist=['log_view']).log_view(payload, log_surface, _env_text)
-                route, outcome, subject = _ask_infer_route_outcome(
-                    log_surface, payload, status_code)
-                route = __import__('prometheus.ask_outcome', fromlist=['route_pick']).route_pick(getattr(_g, '_pm_ask_route', None), route)  # door placeholder yields to the body's route (2026-10-13)
-                outcome = getattr(_g, '_pm_ask_outcome', None) or outcome
-                subject = getattr(_g, '_pm_ask_subject', None) or subject
-                mode = getattr(_g, '_pm_ask_mode', None) or mode
-                # Do not record a subject the view cannot own
-                # (2026-09-14). Week 2026-W37 filed three Trends IQ
-                # asks about DNC news coverage under subject 'shark
-                # tank' and two about MMA under 'the twilight saga',
-                # because the field held the last profile the reader
-                # opened. The weekly review then grouped them and
-                # proposed teaching replay on those pairs, which would
-                # have served a Shark Tank read to a news question.
-                # An ask that names the subject keeps it, and an
-                # unknown view keeps it rather than lose real data.
-                if subject and view and view not in _ASK_SUBJECT_VIEWS \
-                        and not _ask_mentions_subject(question, subject):
-                    subject = None
-                # Failure taxonomy (2026-10-02 RCA): classify what the
-                # user actually received. Legacy outcome names are kept
-                # for answers and build decisions; the states that used
-                # to hide under 'answered' (empty, faulted, clarified,
-                # clarified_repeat, proposed, confirmed) replace it.
-                outcome, extra = _pm_ask_apply_taxonomy(
-                    log_surface, payload, status_code, ask_history,
-                    outcome, question,
-                    _pm_ask_log_user(''))
-                # Answer gate (2026-10-02 RCA): the only exit. A held
-                # reply is retried once, then replaced with the honest
-                # email promise; a build card for a task becomes the
-                # which-audience question.
-                if not _v1_api:
-                    resp, payload, status_code, outcome, extra = \
-                        _pm_answer_gate(
-                            fn, args, kwargs, resp, payload, status_code,
-                            log_surface, outcome, extra, question,
-                            ask_history,
-                            _pm_ask_log_user(''),
-                            t0)
-                if user_sig:
-                    merged = {'user_signal': user_sig.get('signal'),
-                              'rejects': str(user_sig.get('prior_question')
-                                             or '')[:120]}
-                    for k, v in (extra or {}).items():
-                        merged.setdefault(k, v)
-                    extra = merged
-                try:
-                    _tid_trace = getattr(_g, '_pm_trace_id', '')
-                    if _tid_trace:
-                        extra = dict(extra or {})
-                        extra['trace_id'] = _tid_trace
-                    extra = __import__('prometheus.understanding', fromlist=['stamp_log']).stamp_log(extra, _g)   # the Reader's reading and the Understanding beside the route (rebuild stage 2 shadow, 2026-11-20)
-                    _tb = getattr(_g, '_pm_thread_binding', None); (_tb or getattr(_g, '_pm_thread_id', None)) and extra.update({'thread': dict((_tb or {}), id=getattr(_g, '_pm_thread_id', None))})   # the project the thread follows (2026-10-21)
-                    _ao = getattr(_g, '_pm_approved_offer', None); _ao and extra.update({'approved_offer': _ao})   # a typed approval bound to a pending priced offer (2026-10-22)
-                except Exception as _fx:
-                    _faults.note('chat', _fx)
-                extra = __import__('prometheus.order_stall', fromlist=['stamp']).stamp(extra, question, payload, ask_history)   # where a priced order stands after this reply (Jenna 2026-11-11)
-                import render_usage_log as _rul
-                _rul.record_ask(
-                    user=_pm_ask_log_user(),
-                    view=view, question=question, surface=log_surface,
-                    route=route, outcome=outcome,
-                    ms=int((time.time() - t0) * 1000),
-                    mode=mode, subject=subject, extra=extra,
-                    stages=getattr(_g, '_pm_ask_stages', None),
-                    reply=__import__('prometheus.ask_outcome', fromlist=['reply_text']).reply_text(payload) or _env_text,
-                    job_id=__import__('prometheus.ask_outcome', fromlist=['promised_job']).promised_job(payload))
-                _pm_watch_flag(_pm_ask_log_user(), question, route, outcome, extra)
-                # A key ask is notified once, at the API door, with the
-                # text the caller actually received (the v1 doc can turn an
-                # empty reply into a decline after this point; 2026-10-21
-                # the copy read 'No written answer' while the partner read
-                # 'That one did not land'). Dashboard asks notify here.
-                if not getattr(_g, '_pm_api_key_owner', None):
-                    _pm_watch_notify(
-                        _pm_ask_log_user(''), question, payload,
-                        subject, surface=log_surface)
-                # Cross-session memory (2026-08-27, Jenna): every ask
-                # that resolved a subject feeds the per-user memory,
-                # unless the handler already recorded it with richer
-                # detail (cohort + ledger key on the analyze path).
-                try:
-                    if subject and not getattr(_g, '_pm_mem_recorded',
-                                               False) \
-                            and outcome not in ('error', 'clarify',
-                                                'memory_confirm'):
-                        import prometheus_memory as _pmm
-                        _pmm.remember(
-                            (_pm_ask_log_user('')).strip(),
-                            question, subject=subject, view=view,
-                            route=route)
-                except Exception as _fx:
-                    _faults.note('chat', _fx)
-            except Exception:
-                traceback.print_exc()
-            return resp
-        return wrapper
-    return deco
+# <<extracted: prometheus.page_analysis block 1>>
 
 
 # <<extracted: prometheus.interpret_turn block 1>>
@@ -1192,386 +981,37 @@ def api_internal_intake_canary():
     })
 
 
-_PM_INTENT_HYDRATE_CACHE = {}
+# <<extracted: prometheus.page_context block 1>>
 
 
-def _pm_intent_compact_numbers(doc):
-    """Compact, reader-safe summary of a campaign's latest numbers:
-    journey steps with per-step fall-off, ticket/checkout surfaces,
-    first/last touch and assists, time to convert, and per-audience
-    checkout fall-off. Bounded by construction (a few KB). Returns {}
-    on any shape surprise."""
-    try:
-        if not isinstance(doc, dict) or not doc:
-            return {}
-        ov = (doc or {}).get('overall') or {}
-        pt = ov.get('paths') or {}
-        out = {'campaign': str((doc or {}).get('display_name')
-                               or '')[:80],
-               'as_of': str((doc or {}).get('as_of') or '')[:10]}
-        cr = ov.get('conversion_rate')
-        if isinstance(cr, (int, float)):
-            out['conversion_rate_pct'] = round(cr * 100, 1)
-        steps = []
-        for n in (pt.get('nest') or [])[:6]:
-            if not isinstance(n, dict) or n.get('stage') == '0_tam':
-                continue
-            acc = n.get('us_accounts')
-            if isinstance(acc, (int, float)):
-                steps.append({'step': str(n.get('label') or '')[:90],
-                              'accounts': int(acc)})
-        if steps:
-            out['journey_steps'] = steps
-            drops = []
-            for i in range(1, len(steps)):
-                a, b = steps[i - 1], steps[i]
-                lost = a['accounts'] - b['accounts']
-                if a['accounts'] > 0:
-                    drops.append({
-                        'from': a['step'], 'to': b['step'],
-                        'lost_accounts': lost,
-                        'lost_pct': round(100.0 * lost
-                                          / a['accounts'], 1)})
-            if drops:
-                out['step_falloff'] = drops
-        wh = pt.get('where') or {}
-        if isinstance(wh.get('ticketer_partition'), list):
-            out['ticket_checkout_surfaces'] = [
-                {'surface': s.get('surface'),
-                 'accounts': s.get('us_accounts'), 'pct': s.get('pct')}
-                for s in wh['ticketer_partition'][:8]
-                if isinstance(s, dict)]
-        at = pt.get('attribution') or {}
-        for fld in ('first_touch', 'last_touch', 'assists'):
-            if isinstance(at.get(fld), list):
-                out[fld] = [
-                    {'touchpoint': x.get('touchpoint'),
-                     'accounts': x.get('us_accounts'),
-                     'pct': x.get('pct')}
-                    for x in at[fld][:6] if isinstance(x, dict)]
-        if isinstance(pt.get('time_to_conversion'), list):
-            out['time_to_convert'] = [
-                {'bucket': b.get('bucket'),
-                 'accounts': b.get('us_accounts'), 'pct': b.get('pct')}
-                for b in pt['time_to_conversion'][:6]
-                if isinstance(b, dict)]
-        for f in (pt.get('forks') or [])[:4]:
-            if isinstance(f, dict) and f.get('of_stage') == '3_ticketer':
-                out['compared_multiple_ticket_surfaces'] = {
-                    'yes': f.get('yes'), 'no': f.get('no')}
-        auds = (doc or {}).get('audiences')
-        if isinstance(auds, dict):
-            arows = []
-            for k, a in list(auds.items())[:12]:
-                if not isinstance(a, dict):
-                    continue
-                an = {n.get('stage'): n for n in
-                      ((a.get('paths') or {}).get('nest') or [])
-                      if isinstance(n, dict)}
-                t = (an.get('3_ticketer') or {}).get('us_accounts')
-                c = (an.get('4_paid') or {}).get('us_accounts')
-                if isinstance(t, (int, float)) and t                         and isinstance(c, (int, float)):
-                    arows.append({
-                        'audience': str(k).replace('_', ' ').title(),
-                        'ticket_page_accounts': int(t),
-                        'checkout_accounts': int(c),
-                        'checkout_falloff_pct':
-                            round(100.0 * (t - c) / t, 1)})
-            if arows:
-                arows.sort(
-                    key=lambda r: -r['checkout_falloff_pct'])
-                out['audience_checkout_falloff'] = arows
-        return out if out.get('journey_steps') else {}
-    except Exception:
-        traceback.print_exc()
-        return {}
+# <<extracted: prometheus.page_context block 2>>
 
 
-def _pm_intent_view_hydrate(view_ctx):
-    """Attach the open campaign's own numbers to the intentIQ view
-    context (2026-09-30 Jenna: "where is the fall-off from the ticket
-    checkout page?" on the Attribution view must answer from the
-    campaign on screen). The widget summary carries the campaign name
-    and audience list but none of the journey numbers; this loads the
-    campaign's latest daily numbers server-side, compacts them, and
-    rides them under data.campaign_numbers so a grounded ask answers
-    with real figures. Fail-soft: any miss returns the context
-    unchanged. Cached per (campaign, day)."""
-    data = (view_ctx or {}).get('data') or {}
-    slug = re.sub(r'[^a-z0-9_\-]', '',
-                  str(data.get('title') or '').lower())
-    if not slug:
-        return view_ctx
-    from datetime import date as _pm_ivh_date
-    ck = (slug, _pm_ivh_date.today().isoformat())
-    hit = _PM_INTENT_HYDRATE_CACHE.get(ck)
-    if hit is None:
-        doc = None
-        try:
-            pfx = f'intent/{slug}/mta/coefficients_'
-            resp = _H.s3_client.list_objects_v2(
-                Bucket=_H.S3_BUCKET, Prefix=pfx)
-            keys = sorted(o['Key']
-                          for o in resp.get('Contents', []))
-            if keys:
-                doc = json.loads(_H.s3_client.get_object(
-                    Bucket=_H.S3_BUCKET,
-                    Key=keys[-1])['Body'].read())
-        except Exception:
-            doc = None
-        hit = _pm_intent_compact_numbers(doc) if doc else {}
-        if doc:
-            # The campaign's own words and tables (phases, asset types,
-            # channels, creative formats) ride with the numbers, so an
-            # ask typed from the screen is the screen's ask and the read
-            # answers from the campaign table, never a same-title profile
-            # (2026-10-22, Alexia / The Influencer Project).
-            try:
-                from prometheus import view_base as _vb
-                _assets = _formats = _phases = None
-                try:
-                    _adoc = json.loads(_H.s3_client.get_object(
-                        Bucket=_H.S3_BUCKET, Key=f'intent/{slug}/source/normalized_assets.json')['Body'].read()) or {}
-                    _assets, _phases = _adoc.get('assets'), _adoc.get('phases')   # the phases date the campaign window (2026-10-26)
-                    _formats = json.loads(_H.s3_client.get_object(
-                        Bucket=_H.S3_BUCKET, Key=f'intent/{slug}/mta/creative_formats.json')['Body'].read())
-                except Exception:
-                    pass
-                hit = dict(hit or {}, **_vb.intent_vocabulary(doc, _assets, _formats, phases_in=_phases))
-            except Exception:
-                traceback.print_exc()
-        if len(_PM_INTENT_HYDRATE_CACHE) > 16:
-            _PM_INTENT_HYDRATE_CACHE.clear()
-        _PM_INTENT_HYDRATE_CACHE[ck] = hit
-    if hit:
-        data = dict(data)
-        data['campaign_numbers'] = hit
-        view_ctx = dict(view_ctx)
-        view_ctx['data'] = data
-    return view_ctx
+# <<extracted: prometheus.page_context block 3>>
 
 
-# One list (prometheus/view_base.py). intentIQ is the Attribution IQ view id
-# the widget sends; it was missing here, so a profile left in the picker rode
-# along as `primary` and became the base of a campaign ask (2026-10-22).
-_PM_SELF_CONTAINED_VIEWS = __import__('prometheus.view_base', fromlist=['SELF_CONTAINED']).SELF_CONTAINED
+# <<extracted: prometheus.page_context block 4>>
 
 
-def _pm_primary_key_for_name(name):
-    """The base profile key for a display name the client sent without
-    its key: an exact display-name match in the catalog (the Total
-    Universe when the family has one), never Gen Pop, never a guess.
-    '' when the library does not hold that exact name."""
-    try:
-        n = str(name or '').strip()
-        if not n:
-            return ''
-        _norm = _H._normalize_for_match
-        want = _norm(n)
-        if not want:
-            return ''
-        best, best_score = '', None
-        for e in _profile_catalog_for_chat():
-            key = str(e.get('s3_key') or '').strip()
-            if not key:
-                continue
-            disp = str(e.get('display_name') or '').strip()
-            fam = disp.split(' - ')[0].strip()
-            if _norm(disp) != want and not (_norm(fam) == want and ' - ' not in disp):
-                continue
-            try:
-                from prometheus import named_subject as _ns_chk
-                if _ns_chk.is_gen_pop(fam, _norm):
-                    continue
-            except Exception:
-                pass
-            score = (1 if ' - ' not in disp else 0, str(e.get('last_modified') or e.get('created_at') or ''))
-            if best_score is None or score > best_score:
-                best, best_score = key, score
-        return best
-    except Exception:
-        traceback.print_exc()
-        return ''
+# <<extracted: prometheus.page_context block 5>>
 
 
-def _pm_validate_page_context(page_context):
-    """Access-gate every s3 key in the page context. Returns
-    (clean_ctx_or_None, err_response_or_None). A missing/keyless
-    context is not an error; it means nothing is open.
-
-    2026-08-26 (Jenna): the context may also carry `view_context`, a
-    compact frontend summary of whatever dashboard view is on screen
-    (Subscriber IQ, Trends, Microdramas IQ, ...). It is validated,
-    field-whitelisted, and byte-capped server-side in
-    prometheus_analysis.validate_view_context, and it can stand alone:
-    a user on a data-bearing view with no profile open still gets an
-    analysis grounded in the on-screen data."""
-    if not isinstance(page_context, dict):
-        return None, None
-    view_ctx = None
-    try:
-        import prometheus_analysis as _pma_vc
-        view_ctx = _pma_vc.validate_view_context(
-            page_context.get('view_context'))
-    except Exception:
-        traceback.print_exc()
-        view_ctx = None
-    if view_ctx and str(view_ctx.get('view_id') or '') == 'intentIQ':
-        try:
-            view_ctx = _pm_intent_view_hydrate(view_ctx)
-        except Exception:
-            traceback.print_exc()
-    primary = page_context.get('primary') or {}
-    p_key = str(primary.get('s3_key') or '').strip()
-    if not p_key and isinstance(primary, dict) and str(primary.get('name') or '').strip():
-        # A primary named without its key (a thin client, the golden set:
-        # {"primary": {"name": "Gunna"}}) is the base profile of that
-        # name when the library holds exactly that subject (golden g065,
-        # 2026-11-02: "what is the median age here" quoted a custom read
-        # instead of reading the open profile).
-        p_key = _pm_primary_key_for_name(str(primary.get('name')).strip())
-        if p_key:
-            primary = dict(primary, s3_key=p_key)
-    # Self-contained views (2026-10-05, Alexia): a Digital Journey IQ
-    # or Brand Partnership IQ screen carries its own subject. The
-    # profile left selected in the picker (Netflix, in her case) is
-    # stale context there, not the question; binding it made the chat
-    # ask "Do you mean on Netflix?" about a ticketing journey.
-    if view_ctx and str(view_ctx.get('view_id') or '') in _PM_SELF_CONTAINED_VIEWS:
-        p_key = ''
-    if not p_key:
-        if view_ctx:
-            return {'primary': None, 'cuts': [], 'extras': [],
-                    'view_context': view_ctx}, None
-        return None, None
-    ok, err = _H._require_profile_run_access(p_key)
-    if not ok and _faults.is_probe():
-        ok, err = True, None   # the golden set and the canary run with no session; they read the library as the staff seat they stand in for
-    if not ok:
-        return None, err
-    clean_cuts = []
-    for c in (page_context.get('cuts') or [])[:3]:
-        ck = str((c or {}).get('s3_key') or '').strip()
-        if not ck or ck == p_key:
-            continue
-        c_ok, _c_err = _H._require_profile_run_access(ck)
-        if not c_ok:
-            continue
-        clean_cuts.append({'s3_key': ck,
-                           'name': str((c or {}).get('name') or '')[:200]})
-    # Extras (2026-08-21): independent profiles pulled in for
-    # cross-profile convergence / whitespace analysis (other open tabs
-    # or picker selections). Same access gate as everything else.
-    clean_extras = []
-    seen_extra = set()
-    for c in (page_context.get('extras') or [])[:3]:
-        ck = str((c or {}).get('s3_key') or '').strip()
-        if not ck or ck == p_key or ck in seen_extra:
-            continue
-        c_ok, _c_err = _H._require_profile_run_access(ck)
-        if not c_ok:
-            continue
-        seen_extra.add(ck)
-        clean_extras.append({'s3_key': ck,
-                             'name': str((c or {}).get('name') or '')[:200]})
-    return {'primary': {'s3_key': p_key,
-                        'name': str(primary.get('name') or '')[:200]},
-            'cuts': clean_cuts,
-            'extras': clean_extras,
-            'view_context': view_ctx}, None
+# <<extracted: prometheus.page_context block 6>>
 
 
-def _pm_meter_answer(surface, ppu_extras=None):
-    """Metered-usage record for an answer served from what's already
-    there (insights-ledger replay, cache-served read) with no fresh
-    model call.
-
-    2026-09-14 (Jenna, verbatim: "nothing should EVER be free. if it
-    doesnt have a set price it but is answerable from what's already
-    there that should all be the metered usage."). Replaces the retired
-    _pm_charge_async no-op (2026-09-09, which retired the per-ask
-    credit debit in favor of session metering - do NOT restore a
-    credit debit here). The taxonomy: set-price products charge their
-    set price; every other answered ask is metered. Model-backed asks
-    meter naturally through record_call; replayed answers record no
-    tokens, so without this call they billed nothing. Rate:
-    pricing.json:metered_answer_usd (super-admin editable in
-    /admin/billing next to the markup), billed through the same
-    pay-per-use session sweep as model calls. Subscribed full-tier
-    users: the record carries attribution only (no pay_per_use flag),
-    covered by their tier like their other asks. Never raises."""
-    try:
-        import render_usage_log as _rul
-        extras = _pm_merge_extras(_pm_attrib_extras(), ppu_extras)
-        _rul.record_metered_answer(surface, extras=extras)
-    except Exception:
-        traceback.print_exc()
+# <<extracted: prometheus.page_context block 7>>
 
 
-def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
-    """Set ask-log inference hints on flask.g. Safe outside a request
-    context (tests, threads): failures are swallowed."""
-    try:
-        from flask import g as _g
-        if route:
-            _g._pm_ask_route = route
-        if outcome:
-            _g._pm_ask_outcome = outcome
-        if subject:
-            _g._pm_ask_subject = str(subject)[:120]
-        if mode:
-            _g._pm_ask_mode = mode
-    except Exception as _fx:
-        _faults.note('chat', _fx)
+# <<extracted: prometheus.page_context block 8>>
 
 
-def _pm_ask_stage(key, t0=None, ms=None, count=None):
-    """Accumulate one per-stage duration (or count) on flask.g for the
-    ask-log record (2026-08-28 latency instrumentation). Pass `t0` (a
-    time.monotonic() start) for the common case, or an explicit `ms` /
-    `count`. Safe outside a request context (tests, background
-    threads): failures are swallowed, overhead is one dict write."""
-    __import__('prometheus.progress', fromlist=['stage']).stage(key)   # the live line the widget shows (2026-10-14)
-    try:
-        from flask import g as _g
-        stages = getattr(_g, '_pm_ask_stages', None)
-        if stages is None:
-            stages = {}
-            _g._pm_ask_stages = stages
-        if count is not None:
-            stages[str(key)[:40]] = int(count)
-        elif ms is not None:
-            stages[str(key)[:40]] = int(ms)
-        elif t0 is not None:
-            stages[str(key)[:40]] = int((time.monotonic() - t0) * 1000)
-    except Exception as _fx:
-        _faults.note('chat', _fx)
+# <<extracted: prometheus.page_context block 9>>
 
 
-def _pm_gate_analyze(user):
-    """True when the user may hit an analysis / read / deck route.
-
-    Super admins bypass. Everyone else must resolve to 'analysis' or
-    'both'. Callers hitting the master switch off never reach this
-    helper because `_synth_chat_gate` rejects first."""
-    if not isinstance(user, dict):
-        return False
-    if str(user.get('role') or '').strip().lower() == 'super_admin':
-        return True
-    return _H._prometheus_mode_of(user) in ('analysis', 'both')
+# <<extracted: prometheus.page_context block 10>>
 
 
-def _pm_gate_pull(user):
-    """True when the user may hit a new-profile-pull route.
-
-    Super admins bypass. Everyone else must resolve to 'pull' or
-    'both'. Callers hitting the master switch off never reach this
-    helper because `_synth_chat_gate` rejects first."""
-    if not isinstance(user, dict):
-        return False
-    if str(user.get('role') or '').strip().lower() == 'super_admin':
-        return True
-    return _H._prometheus_mode_of(user) in ('pull', 'both')
+# <<extracted: prometheus.page_context block 11>>
 
 
 # GARBLED-INPUT NORMALIZATION (2026-09-28, Phase 4): "top 1 0 starz
@@ -1874,50 +1314,13 @@ _PM_APPROVE_NO_DRAFT_COPY = (
 from prometheus import kpi_definitions as _kpi  # noqa: E402
 
 
-def _pm_kpi_view(body_or_ctx):
-    """(view_id, on_screen_labels) from a request body or a validated
-    page context. Profile IQ when nothing else is open."""
-    src_ = body_or_ctx if isinstance(body_or_ctx, dict) else {}
-    pc = src_.get('page_context') if 'page_context' in src_ else src_
-    pc = pc if isinstance(pc, dict) else {}
-    vc = pc.get('view_context') if isinstance(pc.get('view_context'), dict) \
-        else {}
-    vid = str(vc.get('view_id') or pc.get('view') or 'profileIQ')
-    try:
-        labels = _kpi.on_screen_labels(vc.get('data') or {})
-    except Exception:
-        labels = []
-    return vid, labels
+# <<extracted: prometheus.page_context block 12>>
 
 
-def _pm_kpi_definition_for(text, body):
-    """The glossary entry a definition-shaped ask names, or None."""
-    try:
-        if not _kpi.is_definition_ask(text):
-            return None
-        vid, labels = _pm_kpi_view(body)
-        return _kpi.find_definition(text, vid, labels)
-    except Exception:
-        return None
+# <<extracted: prometheus.page_context block 13>>
 
 
-def _pm_kpi_prompt_extras(text, history, ctx, led_block):
-    """Append the thread number bank and the view glossary to the
-    binding block on a reconcile or definition ask. Never raises."""
-    try:
-        if not (_kpi.is_reconcile_ask(text) or _kpi.is_definition_ask(text)):
-            return led_block
-        vid, labels = _pm_kpi_view(ctx)
-        parts = [str(led_block or '').strip()]
-        nb = _kpi.numbers_block(history)
-        if nb:
-            parts.append(nb)
-        db = _kpi.view_definitions_block(vid, labels)
-        if db:
-            parts.append(db)
-        return '\n\n'.join(p for p in parts if p)
-    except Exception:
-        return led_block
+# <<extracted: prometheus.page_context block 14>>
 
 
 def _pm_last_agent_asked(history):
@@ -2894,603 +2297,88 @@ def _pm_merge_extras(*parts):
     return out or None
 
 
-_PM_BASE_GENERIC_TOKENS = {
-    'viewers', 'viewer', 'fans', 'fan', 'series', 'audience', 'buyers',
-    'buyer', 'shoppers', 'shopper', 'watchers', 'universe', 'total',
-    'tu', 'the', 'of', 'and', 'a', 'an', 'profile', 'consumers',
-    'consumer', 'customers', 'customer', 'avid', 'casual', 'movie',
-    'show', 'subscribers', 'members', 'users', 'potential',
-    'prospective', 'purchasers', 'purchaser',
-    # 2026-09-24 (PA-09 vs Florida Gubernatorial): audience nouns that
-    # let unrelated electorates / cohorts partial-match on the noun
-    # alone carry no identity.
-    'voters', 'voter', 'listeners', 'listener', 'readers', 'reader',
-}
+# <<extracted: prometheus.base_clarify block 1>>
 
 
-# BASE CLARIFY (2026-09-24 Jenna, verbatim: 'so that this kind of
-# thing doesnt happen if someone makes a request can prometheus say
-# "did you want this on X (whatever is open on the screen) or
-# something else?"'). The rdesocio asks: six Emily in Paris messages
-# sent while the Landman profile was open, answered against Landman.
-# When an ask NAMES a subject in subject position (a profile / journey
-# / data / audience phrase) that shares no distinctive token with the
-# open page, Prometheus asks before answering. The chips ride the
-# existing memory-confirm machinery: the widget re-sends the original
-# ask with bind_subject, which lands a measured read on the picked
-# subject or the build-first offer when that subject has no base yet.
-_PM_CLARIFY_STOP_TOKENS = _PM_BASE_GENERIC_TOKENS | {
-    'this', 'that', 'these', 'those', 'their', 'them', 'they', 'it',
-    'my', 'our', 'your', 'here', 'there', 'iq', 'for', 'in', 'on',
-    'to', 'with', 'about', 'at', 'from', 'by', 'data', 'numbers',
-    'cut', 'cuts', 'file', 'view', 'page', 'one', 'same',
-    # Interrogatives / auxiliaries / ask-verbs: lead-strip fodder so
-    # 'how big is the yellowstone audience' resolves to Yellowstone,
-    # not the whole question.
-    'how', 'what', 'whats', 'who', 'whos', 'when', 'where', 'why',
-    'which', 'is', 'are', 'was', 'were', 'am', 'be', 'been', 'do',
-    'does', 'did', 'can', 'could', 'will', 'would', 'should', 'may',
-    'might', 'have', 'has', 'had', 'give', 'get', 'gets', 'tell',
-    'me', 'please', 'many', 'much', 'i', 'we', 'you', 'us', 'big',
-    'bigger', 'biggest', 'lets', 'let', 'want', 'wants', 'need',
-    'needs', 'see', 'look', 'looks', 'people', 'person', 'folks',
-    'everyone', 'anyone', 'anybody',
-    # Category / metric nouns that sit in subject position on page
-    # questions ('report on their qsr numbers') but never name a
-    # subject on their own.
-    'qsr', 'retailers', 'categories', 'category', 'brands', 'brand',
-    'spend', 'sales', 'revenue', 'churn', 'retention', 'engagement',
-    'penetration', 'reach', 'index', 'indexes', 'metrics', 'kpis',
-    'kpi', 'stats', 'breakdowns', 'summary', 'summaries', 'percent',
-    'percentages', 'share', 'shares', 'split', 'splits', 'totals',
-}
+# <<extracted: prometheus.base_clarify block 2>>
 
 
 # One copy of the subject-position rules: prometheus/named_subject.py.
 from prometheus import named_subject as _ns_mod  # noqa: E402
-_PM_CLARIFY_NAME_RES = _ns_mod.NAME_RES
-_PM_CLARIFY_COMPARE_RE = _ns_mod.COMPARE_CUE_RX
-_PM_CLARIFY_METRIC_RE = _ns_mod.METRIC_RX
+# <<extracted: prometheus.base_clarify block 3>>
+# <<extracted: prometheus.base_clarify block 4>>
+# <<extracted: prometheus.base_clarify block 5>>
 
 
-def _pm_ask_names_its_audiences(text):
-    """True when the ask already names who it is about (two cuts, or a
-    total universe named alongside another audience)."""
-    return _ns_mod.ask_names_its_audiences(text)
+# <<extracted: prometheus.base_clarify block 6>>
 
 
-_PM_FILE_ASK_RE = re.compile(
-    r"\b(?:as|in|into|to)\s+(?:a\s+|an\s+)?(?:csv|spreadsheet|excel|xlsx?)\b"
-    r"|\b(?:provide|give|send|export|download|output)\b[^.?!]{0,40}"
-    r"\b(?:csv|spreadsheet|excel|xlsx?)\b"
-    r"|\bcsv\s+(?:file|format|output|export)\b",
-    re.I)
+# <<extracted: prometheus.base_clarify block 7>>
 
 
-_PM_CLARIFY_TURN_RE = re.compile(
-    r"(?:do|did) you want this on |which audience should i use", re.I)
+# <<extracted: prometheus.base_clarify block 8>>
 
 
-_PM_CLARIFY_DECLINE_WORDS = frozenset((
-    'no', 'nope', 'neither', 'something else', 'not that', 'none',
-    'none of those', 'none of these', 'not those', 'not these',
-    'not that one', 'no thanks', 'not on screen', 'not the screen',
-    'not whats open', "not what's open", 'different audience',
-    'a different one'))
+# <<extracted: prometheus.base_clarify block 9>>
 
-# "answer this now: <question>" and its cousins (2026-10-02 S5, scott
-# on 2026-09-30 typed it after two open-screen questions and got the
-# question a third time). The prefix is a command: do not ask again.
-_PM_ANSWER_NOW_RE = re.compile(
-    r"^\W*(?:(?:just|please|ok|okay)[\s,]+)*"
-    r"(?:answer (?:this|it|me|the question)(?: now| already| please)?"
-    r"|stop asking(?: me)?(?: questions)?|don'?t ask(?: me)?(?: again)?"
-    r"|no (?:more )?questions|skip the question|just tell me)"
-    r"\s*[:,.!-]*\s*", re.I)
+# <<extracted: prometheus.base_clarify block 10>>
 
 
-def _pm_answer_now_strip(text):
-    """Return (clean_text, True) when the ask opens with an answer-now
-    command, else (text, False). Only strips when a real question is
-    left over."""
-    t = str(text or '')
-    m = _PM_ANSWER_NOW_RE.match(t)
-    if not m:
-        return t, False
-    rest = t[m.end():].strip()
-    if len(rest) < 8:
-        return t, False
-    return rest, True
+# <<extracted: prometheus.base_clarify block 11>>
 
 
-def _pm_answer_now_active():
-    try:
-        from flask import g as _g
-        return bool(getattr(_g, '_pm_answer_now', False))
-    except Exception:
-        return False
+# <<extracted: prometheus.base_clarify block 12>>
 
 
-def _pm_clarify_declined(history, text):
-    """True when the previous agent turn was the open-screen or
-    which-audience question and this turn turns it down ("no",
-    "neither", "something else"). The original ask then runs AWAY
-    from the page, never back into the same question (2026-10-02 S5)."""
-    tl = str(text or '').strip().lower().strip(' .!?')
-    if tl not in _PM_CLARIFY_DECLINE_WORDS:
-        return False
-    turns = [h for h in (history or []) if isinstance(h, dict)]
-    for i in range(len(turns) - 1, -1, -1):
-        role = str(turns[i].get('role') or '').lower()
-        if role in ('agent', 'assistant'):
-            last_agent = str(turns[i].get('text')
-                             or turns[i].get('content') or '')
-            return bool(_PM_CLARIFY_TURN_RE.search(last_agent))
-        if role == 'user':
-            return False
-    return False
+# <<extracted: prometheus.base_clarify block 13>>
 
 
-def _pm_clarify_answer_merge(history, text):
-    """When the previous agent turn asked which audience the ask is
-    about, this turn is the answer. Merge it back into the question
-    that triggered the clarify so the original ask is not lost.
-
-    Casey Pearson, 2026-09-29: hours by genre and platform, two cuts,
-    as a csv. Her answer to the which-audience prompt was routed as a
-    brand new ask, the original question fell away, and the confirm
-    fired again. Returns the merged question, or '' when this turn is
-    not a clarify answer."""
-    t = str(text or '').strip()
-    if not t or len(t) > 240 or '?' in t:
-        return ''
-    turns = [h for h in (history or []) if isinstance(h, dict)]
-    last_agent = ''
-    idx = -1
-    for i in range(len(turns) - 1, -1, -1):
-        role = str(turns[i].get('role') or '').lower()
-        if role in ('agent', 'assistant'):
-            last_agent = str(turns[i].get('text')
-                             or turns[i].get('content') or '')
-            idx = i
-            break
-        if role == 'user':
-            break
-    if not last_agent or not _PM_CLARIFY_TURN_RE.search(last_agent):
-        return ''
-    orig = ''
-    for i in range(idx - 1, -1, -1):
-        role = str(turns[i].get('role') or '').lower()
-        if role != 'user':
-            continue
-        cand = str(turns[i].get('text')
-                   or turns[i].get('content') or '').strip()
-        if len(cand) >= 25 and cand.lower() not in (
-                'something else', 'yes', 'no'):
-            orig = cand
-            break
-    if not orig or orig.strip().lower() == t.lower():
-        return ''
-    # A bare yes / no / something-else / open-on-screen answer (typos
-    # included: scott, "open on sceren", 2026-09-29) re-runs the
-    # original question clean - gluing "Audience: no" onto it would
-    # read as an audience named no.
-    tl = t.lower().strip(' .!?')
-    if tl in ('yes', 'yep', 'yeah', 'correct', 'sure', 'no', 'nope',
-              'neither', 'something else', 'not that', 'the screen',
-              'on screen', 'whats open', "what's open",
-              'use the screen') or tl.startswith('open on'):
-        return orig
-    return f"{orig}\n\nAudience: {t}"
+# <<extracted: prometheus.base_clarify block 14>>
 
 
-_PM_SCREEN_DEIXIS_RE = re.compile(
-    r"\b(?:this|that|these|those)\s+(?:audience|profile|cohort|cut|"
-    r"view|page|data|chart|file|group|base|universe|fan\s*base|"
-    r"fans?|viewers?|people|subscribers?|users?|buyers?|shoppers?)\b"
-    r"|\b(?:on|for|from|about)\s+(?:this|the)\s+(?:screen|page|view)\b"
-    r"|\bopen(?:ed)?\s+on\s+(?:my|the|your)\s+screen\b"
-    r"|\b(?:they|them|their|themselves)\b",
-    re.I)
+# <<extracted: prometheus.screen_bind block 1>>
 
 
-_PM_PROFILE_SHAPE_RE = re.compile(
-    r"\b(?:age|gender|income|ethnicit\w*|education|occupation|"
-    r"demograph\w*|demos?|breakdown|split|skew\w*|over.?index\w*|"
-    r"index(?:es|ing)?|penetration|avid|casual)\b", re.I)
+# <<extracted: prometheus.screen_bind block 2>>
 
 
-_PM_MARKET_SCOPE_RE = re.compile(
-    r"\b(?:the\s+us|in\s+the\s+us|u\.s\.|usa|america(?:ns?)?|"
-    r"nationwide|nationally|overall|in\s+general|gen\s?pop|"
-    r"the\s+market|industry|everyone|average\s+(?:person|american|"
-    r"household)|us\s+(?:adults|households|consumers|viewers|"
-    r"population|homes))\b", re.I)
+# <<extracted: prometheus.screen_bind block 3>>
 
 
-_PM_DEFINITE_REF_RE = re.compile(
-    r"\b(?:the|its)\s+(?:show|title|series|movie|film|brand|"
-    r"audience|profile|fan\s*base)\b", re.I)
+# <<extracted: prometheus.screen_bind block 4>>
 
 
-def _pm_screen_bind_verdict(text, page, base, page_key=''):
-    """page | confirm (Jenna 2026-10-06: nothing is inferred from the
-    screen; the page binds only when the ask names it outright)."""
-    return _ns_mod.screen_bind_verdict(text, page, base, page_key,
-                                       _H._normalize_for_match,
-                                       _PM_CLARIFY_STOP_TOKENS)
+# <<extracted: prometheus.screen_bind block 5>>
 
 
-_PM_VIEW_DEIXIS_RE = re.compile(
-    r"\bthis\s+(?:campaign|window|screen|page|view|board|leaderboard|"
-    r"journey|study|chart|table|data|dashboard|report)\b"
-    r"|\bon\s+(?:this|the)\s+screen\b"
-    r"|\bthese\s+(?:numbers|results|rows|trends)\b", re.I)
+# <<extracted: prometheus.screen_bind block 6>>
 
 
-_PM_CAMPAIGN_ASK_RE = re.compile(
-    r"\b(?:campaigns?|attribution|roas|ad\s+spend)\b", re.I)
+# <<extracted: prometheus.screen_bind block 7>>
 
 
-# Journey-step vocabulary (2026-09-30 Jenna: "where is the fall-off
-# from the ticket checkout page?" on the Attribution view drew a
-# profile disambiguation). Anyone asking about a conversion journey
-# uses these nouns whatever the campaign; on the Attribution view they
-# ground the ask, and at the no-base last rung a subjectless hit gets
-# the campaign steer instead of memory options.
-_PM_FUNNEL_ASK_RE = re.compile(
-    r"\b(?:fall[\s-]?offs?|drop[\s-]?offs?|funnel|check[\s-]?outs?|"
-    r"tickets?|ticket(?:ing)?\s+pages?|carts?|purchase\s+pages?|"
-    r"abandon\w*|first[\s-]touch|last[\s-]touch|assists?|"
-    r"retarget\w*|touch[\s-]?points?|converters?|"
-    r"conversion\s+rates?|exposed|info[\s-]?seek\w*)\b", re.I)
+# <<extracted: prometheus.screen_bind block 8>>
 
 
-_PM_VIEW_VOCAB_STOP = frozenset((
-    'this', 'that', 'what', 'where', 'when', 'which', 'with', 'from',
-    'have', 'does', 'data', 'view', 'show', 'tell', 'about', 'many',
-    'much', 'they', 'them', 'then', 'than', 'were', 'will', 'your',
-    'mean', 'like', 'into', 'over', 'under', 'most', 'more', 'less',
-    'here', 'there', 'page', 'pages', 'screen', 'week', 'month',
-    'year', 'window', 'number', 'numbers', 'share', 'total', 'rate',
-    'rates', 'percent', 'account', 'accounts', 'people', 'audience'))
+# <<extracted: prometheus.screen_bind block 9>>
 
 
-def _pm_view_vocab_hit(text, vc):
-    """The ask speaks the open view's own vocabulary: distinctive
-    tokens from the ask that appear in the serialized on-screen data.
-    Two distinctive hits, or one distinctive bigram, bind the view.
-    Never raises; an empty or tiny context never matches."""
-    try:
-        import json as _json
-        blob = _json.dumps(vc, ensure_ascii=False, default=str).lower()
-    except Exception:
-        return False
-    if len(blob) < 80:
-        return False
-    toks = re.findall(r"[a-z][a-z0-9'-]{3,}", str(text or '').lower())
-    distinct = [t for t in toks if t not in _PM_VIEW_VOCAB_STOP]
-    hits = {t for t in distinct if t in blob}
-    if len(hits) >= 2:
-        return True
-    for a, b in zip(toks, toks[1:]):
-        if a in _PM_VIEW_VOCAB_STOP and b in _PM_VIEW_VOCAB_STOP:
-            continue
-        if f"{a} {b}" in blob:
-            return True
-    return False
+# <<extracted: prometheus.screen_bind block 10>>
 
 
-def _pm_foreign_names(text, vc):
-    """Capitalized names in the ask that this view does not carry.
-
-    Shared words are not a subject. Debi Pomerantz, 2026-10-21: she
-    asked about Colin and Samir's Lexus campaign with the NCIS: New
-    York premiere journey open. The journey text contains audience,
-    episode, conversion, and youtube, so the vocabulary overlap bound
-    the view and the reply came back as that journey's conversion.
-    """
-    try:
-        import json as _json
-        blob = _json.dumps(vc, ensure_ascii=False, default=str).lower()
-    except Exception:
-        blob = ''
-    title = str((vc or {}).get('view_title') or '').lower()
-    blob = blob + ' ' + title
-    skip = _PM_VIEW_VOCAB_STOP | frozenset((
-        'have', 'has', 'had', 'this', 'that', 'they', 'them', 'with',
-        'from', 'your', 'what', 'when', 'where', 'which', 'would',
-        'could', 'should', 'there', 'their', 'about', 'after', 'before',
-        'into', 'over', 'under', 'also', 'just', 'only', 'been', 'were',
-        'will', 'each', 'other', 'than', 'then', 'here'))
-    raw = str(text or '')
-    absent = []
-    for m in re.finditer(r'\b([A-Z][A-Za-z0-9&]{3,})\b', raw):
-        w = m.group(1).lower()
-        if w in skip or w in blob:
-            continue
-        # A capital that only exists because it starts a sentence
-        # ("Analyze the data") is not a name. A sentence start still
-        # counts when a second name follows ("Colin and Samir").
-        prev = raw[:m.start()]
-        at_start = (not prev.strip()) or bool(
-            re.search(r'[.!?]\s*$', prev))
-        if at_start:
-            rest = raw[m.end():]
-            if not re.match(
-                    r'\s+(?:and|&)\s+[A-Z]|\s+[A-Z][A-Za-z0-9&]{3,}',
-                    rest):
-                continue
-        absent.append(w)
-    return absent
+# <<extracted: prometheus.screen_bind block 11>>
 
 
-def _pm_view_owns_ask(text, ctx):
-    """True when the on-screen view owns this ask (2026-09-30 Jenna:
-    "What drove conversion in this campaign window?" on the
-    Attribution view must ground in the campaign on screen, never
-    disambiguate between profiles). The view context only exists when
-    the user is on a data-bearing non-profile view, so Profile IQ
-    asks never land here.
-
-    A name the ask brings that the view does not carry wins. The view
-    is not the subject of a different campaign."""
-    if not isinstance(ctx, dict):
-        return False
-    vc = ctx.get('view_context') or {}
-    view_id = str(vc.get('view_id') or '').strip()
-    if not view_id:
-        return False
-    t = str(text or '')
-    # An ask that names the open product's own title or the product itself
-    # is the product's ask; the other capitalized words are its labels
-    # typed from the screen (Trailer Launch, Reviews and Opening Week), not
-    # foreign names (2026-10-22, Alexia). A different subject still wins
-    # through names_other_subject at the call site.
-    try:
-        from prometheus import view_base as _vb
-        if _vb.names_view(t, vc, product_nouns=False):
-            return True
-    except Exception:
-        traceback.print_exc()
-    if _pm_foreign_names(t, vc):
-        return False
-    if _PM_VIEW_DEIXIS_RE.search(t):
-        return True
-    if __import__('prometheus.screen_scope', fromlist=['enabled']).enabled():
-        return bool(__import__('prometheus.screen_scope', fromlist=['view_named']).view_named(t, vc))   # the words name what the view is about or point at it, or the lane asks (Jenna 2026-11-20)
-    if view_id == 'intentIQ' and (
-            _PM_CAMPAIGN_ASK_RE.search(t)
-            or _PM_FUNNEL_ASK_RE.search(t)
-            or re.search(r"\bconversions?\b", t, re.I)):
-        return True
-    # The ask uses words that are literally on the screen (audience
-    # names, journey step labels, surfaces): the view owns it whatever
-    # the phrasing (2026-09-30 Jenna, checkout fall-off follow-up).
-    if _pm_view_vocab_hit(t, vc):
-        return True
-    return False
+# <<extracted: prometheus.screen_bind block 12>>
 
 
-def _pm_open_screen_confirm(text, ctx, history=None):
-    """Route an ask against the profile open on screen.
-
-    Jenna 2026-10-06 (supersedes the 2026-09-29 question-driven
-    default, which itself supersedes the 2026-09-28 always-confirm):
-    "Strip the dashboard assumptions out of the lanes ... just ensure
-    it always asks to confirm." Returns:
-    - {'route': 'bind', 'subject': named} when the ask names its own
-      subject (in the text or as a catalog subject) - the caller
-      answers on it and the first line says so.
-    - None only when no profile is open, the ask names its audiences,
-      another handler owns the ask, or the ask names the open page
-      outright (the user said it; nothing is assumed).
-    - otherwise the one-tap confirm with the page as the first chip,
-      the catalog alternative when one resolved, and "Something else".
-    """
-    page = str((ctx.get('primary') or {}).get('name') or '').strip()
-    if not page:
-        return None
-    # The ask already names its audiences. Do not reduce it to the
-    # profile that happens to be open.
-    if _pm_ask_names_its_audiences(text):
-        return None
-    try:
-        if _pm_titles_ask_needs_scope(text, page):
-            return None
-    except Exception:
-        traceback.print_exc()
-    # A question about the previous answer or a term in it ("what's the
-    # 10 million sample you're mentioning") is a turn in the
-    # conversation, never a reason to offer the page (2026-10-20 Jenna,
-    # Tania Nasr at Paramount+ drew "Do you want this on BET?").
-    try:
-        if _subject_rules.definition_turn(text, page=page):
-            _pm_ask_hint(route='screen_bind', outcome='definition_turn', subject=page)
-            return None
-    except Exception:
-        traceback.print_exc()
-    # One subject, bound once (I1, 2026-10-20): a continuation never
-    # confirms the page, and a subject the words name (any case, inside
-    # "people who watched the Among Us series on Paramount+", even when
-    # the page is named as its platform) binds before any page test.
-    _b_route = _subject_rules.bind_or_continue(text, ctx, history, _pm_ask_hint)
-    if _b_route is not None:
-        return _b_route or None
-    page_key = str((ctx.get('primary') or {}).get('s3_key') or '')
-    # What the user names is not an assumption (2026-10-07 Jenna: Gunna
-    # asked on the Warriors page drew "Golden State or Gen_Pop?"; "a
-    # script for Brock" on the Brock page drew a confirm). A named
-    # library subject binds (its cut when cued); the page named
-    # outright, first name included, binds the page or its named cut.
-    _norm, _stop = _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS
-    try:
-        _ent = _ns_mod.named_entry(text, _profile_catalog_for_chat(),
-                                   _norm, _stop)
-    except Exception:
-        traceback.print_exc()
-        _ent = None
-    _pg_named = _ns_mod.page_named(text, page, _norm, _stop)
-    # On screen, continued (2026-10-13): deixis, the thread's last answer on this page, or a brand that is a row on it binds the page
-    _page_signal = (_ns_mod.view_deixis(text) or _ns_mod.thread_on_page(history or [], page, _norm)
-                    or (bool(_pm_page_brand_named(text, page_key)) and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled()))   # a row named is not a pointer (Jenna 2026-11-20)
-    if _ent and str(_ent.get('s3_key') or '') and _ns_mod.platform_reference(
-            text, str(_ent.get('display_name') or _ent.get('subject') or '').split(' - ')[0]):
-        _ent = None   # "his youtube channel link" names a surface, not the YouTube profile
-    if _ent and str(_ent.get('s3_key') or ''):
-        _ent_name = str(_ent.get('display_name')
-                        or _ent.get('subject') or '').strip()
-        if not _ns_mod.same_family(_ent, page, _norm, _stop):
-            _pm_ask_hint(route='screen_bind', outcome='bound_named_subject',
-                         subject=_ent_name)
-            return {'route': 'bind', 'subject': _ent_name}
-        if _pg_named and str(_ent.get('s3_key')) != page_key:
-            _pm_ask_hint(route='screen_bind', outcome='bound_named_cut',
-                         subject=_ent_name)
-            return {'route': 'bind', 'subject': _ent_name}
-    named = ''
-    if not _pg_named:
-        # The ask names a subject of its own (2026-10-08 Jenna): it binds
-        # that subject, in the library or not. The page is only ever
-        # offered for an ask that names nothing.
-        try:
-            named = _pm_page_clarify_subject(text, page) or _pm_consumption_subject(text)
-            if not named:   # a phrase lifted from prose must read as a name ("Age Or Income" did not, 2026-10-07)
-                named = _ns_mod.mentioned_subject(text, page, _norm, _stop, _pm_plausible_subject)
-                _in_lib = bool(named) and any(_norm(_ns_mod.family_name(e)) == _norm(named)
-                                               for e in _profile_catalog_for_chat())
-                if named and not _ns_mod.alternative_ok(named, text, _in_lib, _pm_plausible_subject):
-                    named = ''
-        except Exception:
-            traceback.print_exc()
-        if not named:
-            # the Reader's own subject for the words wins over the open tab, lowercase or not (2026-10-20 Jay Patel, "the film mutiny")
-            named = _subject_rules.current_reading_subject(page, _norm)
-            if named:
-                _pm_ask_hint(route='screen_bind', outcome='bound_reader_subject', subject=named)
-        if named and _norm(named) != _norm(page):
-            _pm_ask_hint(route='screen_bind', outcome='bound_named_text',
-                         subject=named)
-            return {'route': 'bind', 'subject': named}
-    _alt_named = named
-    attach = True
-    try:
-        base = _pm_generation_base('', text, ctx=ctx, prefer_catalog=True)
-    except Exception:
-        traceback.print_exc()
-        base = None
-    if base and str(base.get('source') or '') != 'page':
-        bkey = str(base.get('s3_key') or '')
-        bsub = _H._normalize_for_match(
-            str(base.get('subject') or '').split(' - ')[0])
-        psub = _H._normalize_for_match(page.split(' - ')[0])
-        same = (bool(page_key) and bkey == page_key) or (
-            bool(bsub) and bool(psub)
-            and (bsub == psub or bsub in psub or psub in bsub))
-        attach = same
-    if not attach:
-        # a catalog subject outside the page's family. Written in the
-        # ask (its distinctive tokens are all there): it binds, the
-        # page is not offered (2026-10-08 Jenna). Only a fuzzy hit
-        # the user did not write still confirms with both chips.
-        _bsub = str((base or {}).get('subject') or '').strip()
-        if _bsub and _ns_mod.platform_reference(text, _bsub.split(' - ')[0]):
-            _bsub = ''
-        _bsub_d = _ns_mod.distinct_tokens(_bsub.split(' - ')[0], _norm, _stop)
-        if _bsub and _bsub_d and _bsub_d <= set(_norm(text).split()):
-            _pm_ask_hint(route='screen_bind', outcome='bound_named_subject',
-                         subject=_bsub)
-            return {'route': 'bind', 'subject': _bsub}
-        if _bsub and (_pg_named or _page_signal):
-            # the page is named or on screen; an unwritten library hit is a near-miss of it, not a second subject (Brock vs Block)
-            _pm_ask_hint(route='screen_bind', outcome='bound_screen',
-                         subject=page)
-            return None
-        if _bsub and not _alt_named:
-            _alt_named = _bsub
-    # Always confirm (2026-10-06 Jenna): nothing named, nothing assumed;
-    # one "Yes, {page}" per thread binds later asks on the same page.
-    verdict = _pm_screen_bind_verdict(text, page, base, page_key)
-    # The open profile is context, never a default subject (2026-10-20
-    # Jenna, Mark at Bent Pixels: three turns into DraftKings users, with
-    # "I am not interested in salish matter" already said, the deck lane
-    # still asked "Do you want this on Salish Matter?"). A page the
-    # reader has said no to in this thread is never the lead chip, never
-    # bound by an earlier confirm, never the answer-now base; the
-    # thread's own subjects come first.
-    _osq = _subject_rules.open_screen_question(text, page, history)
-    if _osq and (_osq['outcome'].endswith('page_rejected') or not _alt_named):
-        _pm_ask_hint(route='open_screen_confirm', outcome=_osq.pop('outcome'), subject=page)
-        return jsonify(_osq)
-    if _alt_named:
-        verdict = 'confirm'
-    elif verdict == 'confirm' and (
-            _page_signal
-            or _pm_thread_confirmed_page(history, page)
-            or (_pm_page_confirmed_recently(_pm_ask_log_user(''), page) and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled())):   # another thread's yes binds nothing here (2026-11-20)
-        _pm_ask_hint(route='screen_bind', outcome='bound_thread_confirmed',
-                     subject=page)
-        return {'route': 'bind', 'subject': page}
-    if verdict == 'confirm' and _pm_answer_now_active():
-        # The reader said answer now: the thing on their screen is
-        # the answer's base, stated in the reply with the other file
-        # as a switch chip. No third question (2026-10-02 S5).
-        verdict = 'page'
-    if verdict == 'confirm' and not __import__('prometheus.screen_scope', fromlist=['enabled']).enabled() and any(   # asked once is not answered once: the question is asked again (Jenna 2026-11-20)
-            str(t.get('role') or '') != 'user' and str(t.get('text') or t.get('content') or '').startswith(f'Do you want this on {page}')
-            for t in (history or [])):
-        # never twice in a thread (2026-10-13 audit); asked once, the page is the base
-        _pm_ask_hint(route='screen_bind', outcome='bound_after_one_confirm', subject=page)
-        verdict = 'page'
-    if verdict == 'page':
-        _pm_ask_hint(route='screen_bind', outcome='bound_screen',
-                     subject=page)
-        return None
-    yes = f'Yes, {page}'
-    _opts = [{'label': yes, 'subject': page}]
-    _alt = _alt_named or str((base or {}).get('subject') or '').strip()
-    if _alt and not _ns_mod.alternative_ok(_alt, text, bool((base or {}).get('s3_key')), _pm_plausible_subject):
-        _alt = ''   # a platform surface or a phrase that is not a name is never a chip (2026-10-13)
-    if _alt and _H._normalize_for_match(_alt) != _H._normalize_for_match(page):
-        _opts.append({'label': f'On {_alt}', 'subject': _alt})
-    _pm_ask_hint(route='open_screen_confirm',
-                 outcome='asked_open_screen', subject=page)
-    return jsonify({
-        'success': True, 'action': 'answer',
-        'reply': (f'Do you want this on {page} (open on your screen)'
-                  + (f' or on {_alt}?' if len(_opts) > 1 else '?')),
-        'followups': [o['label'] for o in _opts] + ['Something else'],
-        'offer_deck': False, 'deck_angle': None,
-        'memory_confirm': {'question': text, 'options': _opts},
-    })
+# <<extracted: prometheus.screen_bind block 13>>
 
 
-def _pm_page_brand_named(text, page_key):   # a brand on the open profile that the ask names, or '' (2026-10-13)
-    return _ns_mod.page_brand_on_file(text, page_key, _H.s3_client, _H.S3_BUCKET, _H._normalize_for_match)
+# <<extracted: prometheus.screen_bind block 14>>
 
 
-def _pm_short_name_identity(toks, raw_text):
-    """Short-name subject identity (2026-09-23 Jenna, 'How many people
-    have watched BET content in the last 12 months' quoted a research
-    report instead of answering from the BET profile).
-
-    The catalog matcher's identity-token floor (distinctive tokens
-    must total >= 4 chars) keeps generic short words from binding
-    wrongly, but it also made 2-5 letter subjects (BET, CNN, NFL, GAP)
-    unmatchable as bases. Mirror of the hostmap initialism rule: a
-    single 2-5 letter subject token IS an identity when the ask
-    carries it as a standalone ALL-CAPS word. 'watched BET content'
-    binds the BET profile; 'how much do people bet' stays unbound."""
-    try:
-        if len(toks) != 1:
-            return False
-        tok = str(toks[0] or '')
-        if not (2 <= len(tok) <= 5) or not tok.isalpha():
-            return False
-        return bool(re.search(r'\b' + re.escape(tok.upper()) + r'\b',
-                              str(raw_text or '')))
-    except Exception:
-        return False
+# <<extracted: prometheus.screen_bind block 15>>
 
 
 # <<extracted: prometheus.subject_verify block 1>>
@@ -4238,40 +3126,10 @@ def _pm_search_demand_response(user, text, history):
 # <<extracted: prometheus.read_jobs block 23>>
 
 
-@_H.app.route('/api/brief-chat/analyze', methods=['POST'])
-@_H.requires_auth
-@_H._chatbot_route_guard('brief-chat/analyze')
-@_ask_logged('analyze')
-def api_synth_chat_analyze():
-    """Analyze the data open on the dashboard (primary profile + any
-    checked Data Cuts). First-party digest is the primary evidence.
-
-    Session-authenticated dashboard users only."""
-    user, err = _synth_chat_gate(allow_api_key=False)
-    if err:
-        return err
-    # Prometheus mode gate (2026-09-03, Jenna): analyze is the primary
-    # read surface; 'pull'-only users are blocked here. Runs before
-    # the JSON body parse so an empty pull-only request also gets the
-    # friendly refusal instead of the calm-fallback line.
-    if not _pm_gate_analyze(user):
-        return _pm_gate_refusal('analyze')
-    try:
-        body = request.get_json(force=True) or {}
-    except Exception as e:
-        _H._chatbot_error_email('brief-chat/analyze', e)
-        return jsonify(_H._chatbot_calm_payload())
-    text = (body.get('text') or '').strip()
-    if not text:
-        _H._chatbot_error_email('brief-chat/analyze',
-                             'empty request text from chat UI',
-                             tb='(request validation)')
-        return jsonify(_H._chatbot_calm_payload())
-    history = body.get('history') or []
-    return _pm_analyze_core(user, body, text, history)
+# <<extracted: prometheus.page_analysis block 2>>
 
 
-# <<extracted: core_analyze block 1>>
+# <<extracted: prometheus.page_analysis block 3>>
 
 
 _PM_DECK_FILE_PREFIX = 'generated_decks/'
@@ -6255,11 +5113,6 @@ from prometheus.legacy.rankers import (  # noqa: E402,F401  (Rankers boards + mu
     _pm_trajectory_metrics,
     _pm_trajectory_reply,
 )
-# <<reimport: core_analyze>>
-from prometheus.legacy.core_analyze import (  # noqa: E402,F401  (stage 5: Page analysis over the open profile: the analyze core)
-    _pm_analyze_core,
-)
-# <</reimport>>
 # <<reimport: prometheus.library_match>>
 from prometheus.library_match import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The saved-profile library as the chat reads it: the catalog, the shortlist of matches for an ask, and the gate that decides whether a match stands)
     SYNTH_CHAT_FRESH_DAYS,
@@ -6353,6 +5206,68 @@ from prometheus.answer_gate import (  # noqa: E402,F401  (rebuild stage 7, 2026-
     _pm_unpack_resp,
     _pm_draft_decision,
     _pm_answer_gate,
+)
+# <</reimport>>
+# <<reimport: prometheus.page_context>>
+from prometheus.page_context import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: The page the chat is looking at: the compact numbers and the hydrated view behind an ask, the primary key for a name, the page context check, the meter and hints, the analyze and pull gates, and the KPI view helpers)
+    _PM_INTENT_HYDRATE_CACHE,
+    _pm_intent_compact_numbers,
+    _pm_intent_view_hydrate,
+    _PM_SELF_CONTAINED_VIEWS,
+    _pm_primary_key_for_name,
+    _pm_validate_page_context,
+    _pm_meter_answer,
+    _pm_ask_hint,
+    _pm_ask_stage,
+    _pm_gate_analyze,
+    _pm_gate_pull,
+    _pm_kpi_view,
+    _pm_kpi_definition_for,
+    _pm_kpi_prompt_extras,
+)
+# <</reimport>>
+# <<reimport: prometheus.base_clarify>>
+from prometheus.base_clarify import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Which audience a question is about when the words do not say: the base clarify tokens and questions, the file ask, the clarify turn and its decline, answer-this-now, and the merge of a clarify answer into the ask)
+    _PM_BASE_GENERIC_TOKENS,
+    _PM_CLARIFY_STOP_TOKENS,
+    _PM_CLARIFY_NAME_RES,
+    _PM_CLARIFY_COMPARE_RE,
+    _PM_CLARIFY_METRIC_RE,
+    _pm_ask_names_its_audiences,
+    _PM_FILE_ASK_RE,
+    _PM_CLARIFY_TURN_RE,
+    _PM_CLARIFY_DECLINE_WORDS,
+    _PM_ANSWER_NOW_RE,
+    _pm_answer_now_strip,
+    _pm_answer_now_active,
+    _pm_clarify_declined,
+    _pm_clarify_answer_merge,
+)
+# <</reimport>>
+# <<reimport: prometheus.screen_bind>>
+from prometheus.screen_bind import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Whether an ask points at the open screen: the deixis, shape and scope patterns, the screen bind verdict, the view vocabulary, foreign names, whether the view owns the ask, the open-screen confirm, and the short-name identity)
+    _PM_SCREEN_DEIXIS_RE,
+    _PM_PROFILE_SHAPE_RE,
+    _PM_MARKET_SCOPE_RE,
+    _PM_DEFINITE_REF_RE,
+    _pm_screen_bind_verdict,
+    _PM_VIEW_DEIXIS_RE,
+    _PM_CAMPAIGN_ASK_RE,
+    _PM_FUNNEL_ASK_RE,
+    _PM_VIEW_VOCAB_STOP,
+    _pm_view_vocab_hit,
+    _pm_foreign_names,
+    _pm_view_owns_ask,
+    _pm_open_screen_confirm,
+    _pm_page_brand_named,
+    _pm_short_name_identity,
+)
+# <</reimport>>
+# <<reimport: prometheus.page_analysis>>
+from prometheus.page_analysis import (  # noqa: E402,F401  (rebuild stage 7, 2026-11-23: Page analysis over the open profile: the ask log decorator, the analyze route and its core)
+    _ask_logged,
+    api_synth_chat_analyze,
+    _pm_analyze_core,
 )
 # <</reimport>>
 # <<reimport: prometheus.interpret_turn>>
