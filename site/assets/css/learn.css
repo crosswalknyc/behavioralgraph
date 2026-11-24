@@ -36,7 +36,8 @@
 .art th, .wide th { text-align: left; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-l); padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule-l); font-weight: 600; }
 .art td, .wide td { vertical-align: top; padding: 12px 12px 12px 0; border-bottom: 1px solid var(--rule-l); color: var(--t2-l); line-height: 1.45; }
 .art td:first-child, .wide td:first-child { color: var(--t1-l); font-weight: 600; }
-.art td.us, .wide td.us { color: var(--t1-l); }
+.art td.us, .wide td.us { color: var(--t1-l); font-weight: 500; }
+.art th.us { color: var(--olive); }
 .wide { margin-top: 36px; }
 .wide th.us { color: var(--olive); }
 @media (max-width: 767px) { .art table, .wide table { display: block; overflow-x: auto; } }

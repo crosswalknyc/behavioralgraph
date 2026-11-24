@@ -118,43 +118,43 @@ PAGES = {
     # body below (kind="learn"); each sits under Digital twins in the crumb.
     "digital-twins-methodology.html": dict(
         title="Digital Twins IQ methodology: how Crosswalk builds a twin and seats a room | Crosswalk",
-        description="How Crosswalk builds a digital twin from 5+ years of observed behavior on 10 million US people, seats one archetype representative per archetype in a room, counts the people behind each answer, scores every count, and tests a pilot on the dial.",
+        description="How Crosswalk builds a digital twin from 5+ years of real behavior on 10 million US people instead of surveys or chatbots: archetypes, people-weighted counts, how firm each count is, pilot testing, and a public record of every call.",
         kind="learn", name="Digital Twins IQ methodology", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("Methodology", "digital-twins-methodology.html")],
         og_image="assets/images/og-digital-twins.png"),
     "what-is-a-digital-twin-audience.html": dict(
         title="What is a digital twin audience? A plain-English guide | Crosswalk",
-        description="A digital twin audience is a working copy of a real group of people you can ask questions. How Crosswalk builds one from observed behavior, what it is made of, what you can ask it, and how you know it is right.",
+        description="A digital twin audience is a working copy of a real group of people you can ask questions. Why twins built from real behavior are better than survey and chatbot twins, and how Crosswalk builds every twin from 10 million real people.",
         kind="learn", name="What is a digital twin audience?", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("What is a digital twin audience?", "what-is-a-digital-twin-audience.html")],
         og_image="assets/images/og-digital-twins.png"),
     "synthetic-data-market-research.html": dict(
         title="Synthetic data in market research: what it is and how to check it | Crosswalk",
-        description="Synthetic data is research produced rather than collected from a live respondent. The three ways it gets made, why buyers use it, six checks before you trust a synthetic number, and how Crosswalk's behavior-built twins answer them.",
+        description="Synthetic data is research produced rather than collected. The three ways it gets made, six checks before you trust it, and why Crosswalk's synthetic data, built on what 10 million real people did, meets all six.",
         kind="learn", name="Synthetic data in market research", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("Synthetic data", "synthetic-data-market-research.html")],
         og_image="assets/images/og-digital-twins.png"),
     "behavioral-panel.html": dict(
         title="What is a behavioral panel? How Crosswalk's 10 million person US panel works | Crosswalk",
-        description="A behavioral panel counts what people do instead of asking. How Crosswalk's opted-in panel of 30 million people (10 million in the US) records an entire digital life under one ID, projects to the country, and protects every panelist.",
+        description="A behavioral panel counts what people do instead of asking. Why Crosswalk's opted-in panel, 10 million US people on every screen under one ID since 2021, sees more than surveys or a platform's own data.",
         kind="learn", name="What is a behavioral panel?", published="2026-11-23",
         crumb=[("The panel", "panel.html"), ("What is a behavioral panel?", "behavioral-panel.html")],
         og_image="assets/images/og-crosswalk.png"),
     "synthetic-respondents-vs-behavioral-twins.html": dict(
         title="Synthetic respondents vs behavioral digital twins: how to tell them apart | Crosswalk",
-        description="Interview twins, survey twins, model-built personas, census-built populations and behavior-built digital twins, side by side: what each is built from, what it predicts, how it is checked, and when to use which.",
+        description="Interview twins, survey twins, chatbot personas, census-built populations and behavior-built twins compared side by side, and ten reasons Crosswalk's behavior-built twins are stronger.",
         kind="learn", name="Synthetic respondents vs behavioral digital twins", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("Synthetic respondents vs behavioral twins", "synthetic-respondents-vs-behavioral-twins.html")],
         og_image="assets/images/og-digital-twins.png"),
     "ai-focus-groups.html": dict(
         title="AI focus groups: how a room of digital twins answers a question | Crosswalk",
-        description="An AI focus group seats one archetype representative per archetype, usually 12 to 16. How a question runs, why the count is people-weighted rather than a show of hands, how firm each count is, and what a room can and cannot tell you.",
+        description="How an AI focus group works and why a Crosswalk room is better than a traditional group: every seat stands for real people, the count adds them up, the same question gives the same count, and every count says how firm it is.",
         kind="learn", name="How an AI focus group works", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("AI focus groups", "ai-focus-groups.html")],
         og_image="assets/images/og-digital-twins.png"),
     "digital-twins-glossary.html": dict(
-        title="Digital Twins IQ glossary: digital twin, archetype, seat, room, confidence score and more | Crosswalk",
-        description="Short plain-English definitions of the words Crosswalk uses for digital twins, synthetic data and the behavioral panel: twin, archetype, archetype representative, seat, room, the count, confidence score, the dial, the norm, penetration, index and more.",
+        title="Digital Twins IQ glossary: digital twin, archetype, seat, room, how firm and more | Crosswalk",
+        description="Plain definitions of the words Crosswalk uses for digital twins, synthetic data and the behavioral panel, from twin, archetype and seat to how firm, the dial, behavior-built twin and chatbot persona.",
         kind="learn", name="Digital Twins IQ glossary", published="2026-11-23",
         crumb=[("Digital twins", "digital-twins.html"), ("Glossary", "digital-twins-glossary.html")],
         og_image="assets/images/og-digital-twins.png"),
@@ -651,8 +651,13 @@ def build_llms_txt(pages: list[str]) -> str:
         "Key facts: 30 million opted-in people worldwide, 10 million in the US, census matched and projected to 329.9 million Americans. "
         "One ID per person across phone, laptop and TV. Recorded day by day since January 2021; yesterday's behavior is on file today. "
         "Digital Twins IQ (also called Twin IQ) builds a digital twin of any audience from 5+ years of observed behavior; a twin is made of 12 to 16 archetypes; "
-        "a focus group seats one archetype representative per archetype; every count carries a range and a confidence score (firm, leaning or early); "
+        "a focus group seats one archetype representative per archetype; every count carries a range and says how firm it is (firm, leaning or early); "
         "every call is dated before its outcome and scored on a public track record.",
+        "",
+        "How it differs from other digital twins and synthetic respondents: it is built from what real people did, not from surveys, interviews or chatbot personas. "
+        "10 million real people stand behind every answer, about 1 in 33 Americans, with more than 2,000 days of history. "
+        "Answers are counted in people, hold steady when the same question is asked the same day, and are checked against real results in public: "
+        "on the first six scored calls, all three winners were called right and the counts landed within 3.2% on average.",
         "",
         f"The full text of the digital twins, synthetic data and panel pages is at {ORIGIN}/llms-full.txt.",
         "",

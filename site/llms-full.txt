@@ -266,9 +266,24 @@ Source: https://www.crosswalknyc.com/twins-track-record.html
 
 # How Crosswalk builds a digital twin and reads what it will do.
 
-Digital Twins IQ lets you ask an audience before you decide. A twin is built from what real people did over 5+ years. It is made of 12 to 16 archetypes, the groups inside the audience. A focus group seats one person for each archetype. You ask the room anything, and the count adds up the real people behind each answer. Every count carries a range and a confidence score. Every call is dated before the result and scored when it lands.
+Digital Twins IQ lets you ask an audience before you decide. Most twins start from a survey, an interview or a chatbot playing a type of person. Crosswalk's start from 5+ years of what 10 million real people did. Each twin holds 12 to 16 archetypes, the groups inside the audience. A focus group seats one person for each, and the count adds up the real people behind every answer. Each call goes on the record before the result. The first six landed within 3.2% on average.
 
 Published November 2026 by Crosswalk Technologies, Inc. · Download the methodology as a PDF · See the public track record
+
+## Why Crosswalk's method is stronger
+
+Most ways of building a twin start from what people say. This one starts from what people did, then checks itself against what happened next.
+
+- Real people stand behind it. The twins draw on 10 million opted-in US people, about 1 in 33 Americans. A typical survey hears from a few thousand.
+- More than 2,000 days of history. The same people have been recorded day by day since January 2021. An interview twin knows one conversation.
+- Every screen counts as one person. Phone, laptop and TV share one ID, so the twin sees the search, the show and the order that came after.
+- Yesterday is already in. New behavior lands every morning. A survey is weeks old before anyone reads it.
+- The audience picks the seats. The archetypes come from the data and are sized by their real people. Most persona tools ask you to choose the personas yourself.
+- Answers are counted in people. One seat in the Prime Video room stands for 16.6 million people. Another stands for 3.6 million. The first counts about 4.6 times as much.
+- Asking twice gives the same count. Ask again on the same day and the number holds. A chatbot persona can change its answer every time.
+- Calls go on the record first. Each one is written down before the outcome, and every miss stays public. Most vendors check their twins against old surveys instead.
+- We can count many results ourselves. The same panel shows who watched a premiere and who came back for episode two. So the forecast and the check come from the same people.
+What this means. You get an answer built on real lives, and a public record that shows how often it was right.
 
 ## 1. What a twin is
 
@@ -341,7 +356,7 @@ What this means. Big archetypes weigh more, but small ones still count.
 
 Each archetype representative answers from what the people it represents did before. A twin is a record of its people's actions over the past 5+ years. That history is what each seat answers from.
 
-It starts with where people are with the subject being studied. As in real life, archetype representatives sit at different levels of engagement with it. Then come their habits. Does this archetype cancel when a show ends? Do they come back for the next season? These habits come from what the people really did, and they shape every answer.
+It starts with where people are with the subject being studied. As in real life, some archetypes know the subject well and some barely know it. Then come their habits. Does this archetype cancel when a show ends? Do they come back for the next season? These habits come from what the people really did, and they shape every answer.
 
 ### What the room leans on, in order
 
@@ -362,7 +377,7 @@ Example: the Prime Video run, November 18, 2026
 
 The business question: which piece of IP that no one has licensed yet would get a person to pay for Prime Video? The verdict: a new weeknight live sports package. 55.7% of the audience, 71,335,955 people, picked it. That is about 4 times the 14.1% who said nothing on the list would get them to pay.
 
-### Every count comes with a range and a confidence score
+### Every count says how firm it is
 
 ### We write down every call before the result is known
 
@@ -370,11 +385,13 @@ We date each call before the result is in. When it lands, we score it, and a mis
 
 As of November 17, 2026: six calls scored, all three calls on a winner right, and counts within 3.2% of the result on average. Each row was dated ahead of its outcome.
 
-What this means. Confidence in every response, and a public record you can check.
+What this means. Every count tells you how firm it is, and the record shows how often we were right.
 
 ## 5. How pilot testing works
 
 Pilot Testing puts the archetype representatives in front of your cut. They watch it, react to it, and answer questions about it as it plays. When the cut ends, every seat fills out the card a network uses to judge a pilot.
+
+A test screening needs a recruiter, a room and a week. Pilot Testing needs the file, and every seat stands for real people.
 
 - Set up the test. Name it and pick the kind: a pilot, an episode, an ad, a feature or a run of episodes. Add the cast list and choose which archetype representatives sit in the room.
 - Add the cut. Upload a file (MP4, MOV, WebM or M4V, from 15 seconds to 4 hours), or paste a link to where it plays.
@@ -424,7 +441,11 @@ Read more on how the panel works and in the Privacy Policy.
 
 ### What is a Crosswalk digital twin built from?
 
-From what real people did. The Crosswalk panel sees the entire digital life of 10 million opted-in US consumers, day by day since January 2021. A twin rests on that history over the past 5+ years. No surveys, no interviews, no language model guessing at a type of person.
+From what real people did. The Crosswalk panel sees the entire digital life of 10 million opted-in US consumers, day by day since January 2021. A twin rests on that history over the past 5+ years. No surveys, no interviews, no chatbot guessing at a type of person.
+
+### Why is this method stronger than a survey or a chatbot persona?
+
+Surveys report what people plan to do, and people often do something else. A chatbot persona has never met your audience. A Crosswalk twin learns from real signups, cancels, second episodes and orders. Those are the same things a forecast is judged on.
 
 ### How many people sit in a Digital Twins IQ focus group?
 
@@ -440,7 +461,7 @@ They say how far the real number could sit from the count. Firm is within about 
 
 ### How accurate are Crosswalk's digital twins?
 
-Every call is dated before the result and scored when it lands, and the misses stay on the record. As of November 17, 2026, six public calls were scored. All three winner calls were right, and the counts landed within 3.2% of the result on average.
+Every call is dated before the result and scored when it lands, and the misses stay on the record. On the first six public calls, all three winner calls were right. The counts landed within 3.2% of the result on average.
 
 ### Will the same question give the same answer?
 
@@ -463,7 +484,7 @@ Source: https://www.crosswalknyc.com/digital-twins-methodology.html
 
 # What is a digital twin audience?
 
-A digital twin audience is a working copy of a real group of people that you can ask questions. It is built from what those people actually did, so it answers the way they would. Crosswalk builds a twin from 5+ years of observed behavior on an opted-in panel of 10 million US people. You ask the twin about a show, a price, a plan or a launch. It tells you what the audience will most likely do, with a range and a confidence score.
+A digital twin audience is a working copy of a real group of people that you can ask questions. The strongest twins are built from what people did, not what they told a survey. Crosswalk builds every twin from 5+ years of behavior on 10 million opted-in US people, about 1 in 33 Americans. Ask it about a show, a price, a plan or a launch. It tells you what the audience will most likely do, and how firm that answer is.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · Read the full methodology
 
@@ -487,7 +508,19 @@ There are three ways a vendor can build a digital twin. The method decides what 
 
 Crosswalk twins are the third kind. Every twin is built from the record of what 10 million opted-in US people did across their entire digital life. That record holds what they watched and streamed, what they searched, what they bought, what they paid for and what they cancelled. It runs day by day since January 2021. Each person is one ID across their phone, laptop and TV.
 
-For the full build, including the twelve habits every twin carries and the five stages of engagement, read the Digital Twins IQ methodology.
+For the full build, including the twelve habits every twin carries and the five stages a person moves through, read the Digital Twins IQ methodology.
+
+## Why Crosswalk's digital twins are better
+
+A twin can only be as good as what it is built from. Crosswalk builds from a record few companies hold: years of what the same real people did, on every screen.
+
+- Real lives behind every answer. The panel holds 10 million opted-in US people. A big survey reaches a few thousand, and a chatbot persona reaches no one.
+- Years of history. Each person's record runs day by day since January 2021. An interview-built twin knows one conversation.
+- The whole day, on every screen. Search, streaming, social, shopping, apps and gaming are joined under one ID across phone, laptop and TV. A platform's own data sees only its own app.
+- Fresh every morning. Yesterday's behavior is in today's twin. A chatbot knows the world as of its training.
+- Counts in people, not just percentages. Each answer carries the number of real US people behind it, so you can plan with it.
+- One question, one count. Ask again on the same day and you get the same number. The answers rest on what people did, so they do not drift.
+- A public record. Every call goes on the record before the result and is scored when it lands. On the first six, three winners were called right.
 
 ## What you can ask a digital twin
 
@@ -504,6 +537,8 @@ A real question on the Prime Video twin, November 18, 2026
 
 You check it against what really happened. Crosswalk dates every call before the result, scores it when the result lands, and keeps the misses on a public page.
 
+Most vendors test a twin against an old survey. That shows the twin can repeat what people said. Crosswalk tests against what happened next, which is the thing you are paying to predict.
+
 Every count also carries a range and one of three words. Firm means the real number should sit within about 5 points. Leaning means within about 12. Early means a wide range, up to about 20 points, and the room still gives a verdict.
 
 As of November 17, 2026, the public track record held six scored calls. All three calls on a winner were right. The counts landed within 3.2% of the result on average. The Texas Senate call, made four days out, was Talarico 54.6% to Paxton 43.3%. The certified result was 55.1% to 43.0%.
@@ -514,7 +549,7 @@ These three words get mixed up. They are not the same thing.
 
 - A persona is a written sketch of a typical customer. It is a story, not data. It cannot answer a new question.
 - A synthetic respondent is a program that answers a survey as if it were a person. Most are built from surveys or from a language model. They tell you what people say.
-- A behavioral digital twin starts from the record of real actions. It tells you what people do, and it can be scored against real outcomes.
+- A behavioral digital twin starts from the record of real actions. It tells you what people do, and it can be scored against real outcomes. Every Crosswalk twin is this kind.
 For a longer side-by-side, read synthetic respondents vs behavioral digital twins.
 
 ## Who is in a digital twin
@@ -529,17 +564,25 @@ Every person in the panel installed the Crosswalk software and agreed to be coun
 
 A digital twin is a live copy of a real group of people that you can ask questions. In market research it stands in for a survey respondent or a focus group. Crosswalk builds one from 5+ years of observed behavior on an opted-in panel of 10 million US people.
 
+### What makes Crosswalk's digital twins different?
+
+They are built from behavior, not surveys or chatbots: years of what 10 million opted-in US people did on every screen. Each answer counts real people and holds steady when asked again the same day. Every call is scored against real results in public.
+
 ### How does a digital twin differ from a persona?
 
-A persona is a written sketch of a typical customer. A digital twin is built from data on real people and can answer a new question. A Crosswalk twin also carries a range and a confidence score on every count.
+A persona is a written sketch of a typical customer. A digital twin is built from data on real people and can answer a new question. A Crosswalk twin also gives a range on every count and says how firm it is.
 
 ### Digital twin audience vs synthetic respondent
 
 Most synthetic respondents are built from surveys or from a language model answering as a type of person. They report what people say. A behavioral digital twin rests on what people did, and it is scored against real outcomes.
 
+### Which kind of digital twin predicts behavior best?
+
+One built from behavior. Surveys and chatbots predict what people say, and people often act differently. Crosswalk's twins learn from years of real signups, cancels, views and orders, and their calls are checked against what happened.
+
 ### How many archetypes are in a digital twin?
 
-Usually 12 to 16, and never fewer than 12. The audience's own mix of engagement stage and life stage decides the number. An archetype smaller than 2.5% of the audience joins the one closest to it.
+Usually 12 to 16, and never fewer than 12. The audience's own mix of stage and age decides the number. An archetype smaller than 2.5% of the audience joins the one closest to it.
 
 ### What can I test on a digital twin?
 
@@ -547,7 +590,7 @@ A show, a pilot, an ad, a trailer, a price, a promotion, a release week, a plan,
 
 ### How accurate are digital twin audiences?
 
-Crosswalk publishes every call before the result and scores it when the result lands. As of November 17, 2026, six public calls had been scored. All three winners were called right, and the counts landed within 3.2% of the result on average.
+Crosswalk publishes every call before the result and scores it when the result lands. On the first six public calls, all three winners were called right, and the counts landed within 3.2% of the result on average.
 
 ### Does a digital twin use personal data?
 
@@ -566,7 +609,7 @@ Source: https://www.crosswalknyc.com/what-is-a-digital-twin-audience.html
 
 # Synthetic data in market research, and how to check it.
 
-Synthetic data is data that was produced rather than observed. In market research it means answers that did not come from a live person in a survey. There are three ways to make it. One starts from past surveys. One starts from a language model playing a type of person. One starts from the observed behavior of real people. Crosswalk makes the third kind. Its digital twins run on 5+ years of what 10 million opted-in US people actually did, and every call is scored in public.
+Synthetic data is data that was produced rather than observed. In market research it means answers that did not come from a live person in a survey. There are three ways to make it. One starts from past surveys. One starts from a language model playing a type of person. One starts from the observed behavior of real people. Crosswalk makes the third kind, the kind that predicts what people will do. It runs on 5+ years of what 10 million opted-in US people did, and every call is scored in public.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 
@@ -582,11 +625,21 @@ The input decides the output. A twin built from surveys can tell you what people
 
 Crosswalk's digital twins are behavior-built. The panel sees the entire digital life of 10 million opted-in US people. Each person is one ID across phone, laptop and TV, day by day since January 2021. A twin is built from that history. The synthetic part is what you do with it. You run a plan the audience has not seen yet and read how people like them respond.
 
+## Why synthetic data built on behavior is better
+
+Synthetic data can only be as good as what goes into it. Surveys and chatbots put in words. Crosswalk puts in five years of what 10 million real people did.
+
+- Behavior is what you pay to predict. Budgets depend on signups, views, cancels and sales. A behavior-built twin learns from exactly those.
+- People say one thing and do another. Someone who says price does not matter may still cancel the week it goes up. A survey records the words; the panel records the cancel.
+- Real people set the shape. Every share traces back to opted-in US people, not to a chatbot's idea of a type.
+- Yesterday is included. The panel refreshes every morning, so a twin knows last week's premiere and yesterday's price change.
+- Each forecast can be checked. A forecast built on behavior can be scored against behavior. That is why every Crosswalk call is published before the result.
+
 ## Why buyers are using synthetic data now
 
 Speed and cost. A survey takes weeks and a focus group takes a room, a recruiter and a moderator. A synthetic read takes minutes, and you can ask the next question right away.
 
-In a May 2026 Qualtrics survey, 41% of market researchers said they already use synthetic data to add to or replace respondents. Another 62% said they intend to. The buyer's question has moved from "should we" to "which kind, and how do we check it."
+In a May 2026 Qualtrics survey, 41% of market researchers said they already use synthetic data to add to or replace respondents. In the same survey, 62% said they plan to. The buyer's question has moved from "should we" to "which kind, and how do we check it."
 
 ## Six checks before you trust a synthetic number
 
@@ -595,23 +648,17 @@ Ask these six questions of any vendor, including Crosswalk. A vendor that cannot
 - What is it built from? Surveys, a model, or observed behavior. Ask to see the source and how many people are behind it.
 - Was the answer checked against real outcomes, or against another survey? Matching a survey proves the twin can repeat what people say. Matching a real result (viewers, signups, votes, sales) proves it can predict what people do.
 - Were the calls dated before the result? A forecast written after the outcome is not a forecast. Look for a public record with dates and the misses kept on it.
-- Does every answer carry a range and a confidence score? A bare percentage hides how sure the system is. A good vendor tells you when a read is firm and when it is early.
+- Does every answer show a range and say how firm it is? A bare percentage hides how sure the system is. A good vendor tells you when a read is firm and when it is early.
 - Can it be scored going forward? Ask for a call on something that has not happened yet, and check it when it lands.
 - Is it disclosed? The ICC/ESOMAR International Code (2025 edition) requires researchers to tell clients when synthetic data or synthetic personas are used. It also asks how much human oversight there was. Your own report should say what rests on real people and what rests on twins.
 
-## How Crosswalk answers those six checks
+## Crosswalk meets all six checks
 
-Every Crosswalk twin is built from observed behavior, scored against real outcomes, and dated before the result. Each count is reported with its range and its word.
+Here are the six checks side by side: what most synthetic data offers, and what Crosswalk's twins offer.
 
-- Built from: 5+ years of behavior on 10 million opted-in US people, inside a worldwide panel of 30 million. Not surveys, not a model guessing.
-- Checked against: certified election results, published audience figures, and the panel's own count of what the audience did. Never against another survey.
-- Dated before the result: every call goes on the public track record with a hash written before the outcome. A call is never rewritten.
-- Range and word: every count carries one of three words. Firm is within about 5 points, leaning within about 12, early up to about 20.
-- Scored going forward: as of November 17, 2026, six public calls were scored. All three winner calls were right and the counts landed within 3.2% of the result on average.
-- Disclosed: the methodology is public, in plain words, with a PDF you can hand to a research team.
 One scored call
 
-NCIS: New York, the week-one audience. Called on October 30, 2026: 10.04 million. The published result on November 5: 10.25 million. The miss was 2.0% under.
+NCIS: New York, the week-one audience. Called on October 30, 2026: 10.04 million. The published result on November 5: 10.25 million. The miss was 2.0% under, about 2 in 100.
 
 ## The four words, defined
 
@@ -623,19 +670,23 @@ The full list is in the Digital Twins IQ glossary.
 
 ### What is synthetic data in market research?
 
-Research results produced by a system rather than collected from a live respondent. The source can be past surveys, a language model playing a type of person, or the recorded actions of real people. The input decides what the output can tell you.
+Research results produced by a system rather than collected from a live respondent. The source can be past surveys, a chatbot acting out a type of person, or the recorded actions of real people. The input decides what the output can tell you.
+
+### Why is Crosswalk's synthetic data more reliable?
+
+Because what goes in is real behavior, not answers or guesses. The twins draw on 5+ years of behavior from 10 million opted-in US people, refreshed every morning. Every call is written down before the result and scored when it lands.
 
 ### Is synthetic data based on real data?
 
-It depends on the vendor. Crosswalk's is. Its twins are built from 5+ years of observed behavior on 10 million opted-in US people. The inputs are real; the output is what those people would do with something they have not seen yet.
+It depends on the vendor. Crosswalk's is. Its twins are built from years of observed behavior on 10 million opted-in US people. The inputs are real; the output is what those people would do with something they have not seen yet.
 
 ### How do you validate synthetic data?
 
-Date the call before the result. Score it against a real outcome, not another survey. Keep the misses. Report a range and a confidence score on every count. Crosswalk does all four on a public track record.
+Date the call before the result. Score it against a real outcome, not another survey. Keep the misses. Show a range and how firm each count is. Crosswalk does all four on a public track record.
 
 ### Are synthetic respondents accurate?
 
-Survey-built ones can repeat what people say fairly well. Model-built ones tend to answer too consistently and miss the extremes. Behavior-built twins are the only kind that can be scored against what people really did.
+Survey-built ones can repeat what people say fairly well. Model-built ones tend to answer too consistently and miss the extremes. Behavior-built twins learn from what people really did, so they can be scored on the same thing.
 
 ### Do I have to disclose synthetic data to my stakeholders?
 
@@ -649,10 +700,6 @@ For questions about what people will do, a behavior-built twin is often a better
 
 The twins a plan would reach, sized, described and projected to the US population. At Crosswalk a synthetic audience is made of 12 to 16 archetypes that add up to the whole audience.
 
-### How is Crosswalk's synthetic data different?
-
-It starts from behavior, not from a survey or a model. The panel sees the entire digital life of each person, one ID across phone, laptop and TV, since January 2021. Every call is dated before the result and scored in public.
-
 Source: https://www.crosswalknyc.com/synthetic-data-market-research.html
 
 
@@ -662,7 +709,7 @@ Source: https://www.crosswalknyc.com/synthetic-data-market-research.html
 
 # Synthetic respondents vs behavioral digital twins.
 
-Four kinds of product now call themselves digital twins or synthetic respondents. They are built from different things, so they answer different questions. Interview twins and survey twins repeat what people say. Model-built personas repeat the average of the internet. Census-built populations match the country's shape but have never watched anything. Behavior-built twins, the kind Crosswalk makes, start from what real people did, so they can be scored against what people do next.
+Four kinds of product now call themselves digital twins or synthetic respondents. They are built from different things, so they answer different questions. Interview twins and survey twins repeat what people say. Model-built personas repeat the average of the internet. Census-built populations match the country's shape but have never watched anything. Behavior-built twins, the kind Crosswalk makes, start from what real people did, so they can be scored against what people do next. When a decision costs real money, that is the kind to use.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 
@@ -685,16 +732,28 @@ Use the instrument that matches the question. Most teams end up using more than 
 - How people describe a brand, or which of two taglines sounds better. An interview twin or a survey twin is fine. The question is about words.
 - Twenty ideas need a first pass before anyone spends time on them. A model-built persona can rank them in an afternoon. Treat the output as a sketch, not a number.
 - A poll-shaped read on the whole country. A census-built population gives you the right shape of respondents, and can be checked against polls.
-- Money rides on how many people will watch, finish, pay, return or leave. Use a behavior-built twin, and ask to see its scored calls.
+- A decision depends on how many people will watch, finish, pay, return or leave. Use a behavior-built twin, and ask to see its scored calls.
+Most decisions that cost money are this last kind. It is the question Crosswalk's twins are built for.
 
-## What makes a Crosswalk twin behavior-built
+## Ten reasons Crosswalk's twins are stronger
 
-Every Crosswalk twin is built from the record of what its people did on an opted-in panel of 10 million US people. It is made of the archetypes inside the audience.
+Every Crosswalk twin is behavior-built. Here is what that gives you, in ten points.
 
-- One ID per person across every screen. Phone, laptop and TV, in order, with the time of day, since January 2021.
-- 12 to 16 archetypes per twin. Each has a person who speaks for it, and each answer counts for the people behind it. Read what a digital twin audience is.
-- Twelve habits, observed. Reacts to price, cancels when the title ends, comes back for the next entry, buys the product, phone in hand while watching. Seven more, each a dial from 0 to 100.
-- A public track record. Six calls scored as of November 17, 2026: all three winners called right, counts within 3.2% of the result on average. See the record.
+- Real people stand behind every answer. The panel holds 10 million opted-in US people, about 1 in 33 Americans. A chatbot persona stands on no one.
+- Five years of history. More than 2,000 days of what the same people did, in order, with timing. A survey or an interview captures one moment.
+- The whole digital life. Search, streaming, social, shopping, apps and gaming on phone, laptop and TV, all under one ID.
+- Fresh every morning. Yesterday's behavior is in today's answer. A chatbot knows the world as of its training.
+- Answers counted in people. Each answer carries the real people behind its seat, so every share comes with a US head count.
+- The audience builds the room. 12 to 16 archetypes come from the data, sized by their people. No one hand-picks personas.
+- Steady answers. The same question on the same day gives the same count, in any room on that twin.
+- Seats with a memory. Each archetype representative remembers what it said in your earlier rooms on that twin, as a real person would.
+- It watches your cut. Pilot Testing reads every seat's dial every 2 to 4 seconds. That is 706 readings per seat on a 43-minute pilot, with faces matched to your cast list.
+- Scored in public, against real results. Every call is dated before the outcome. On the first six, all three winners were called right and the counts landed within 3.2% on average.
+Two calls from the public record
+
+Texas Senate, four days out: Crosswalk said Talarico 54.6%, Paxton 43.3%. The certified result was 55.1% to 43.0%, half a point from the call.
+
+NCIS: New York, the week-one audience: Crosswalk said 10.04 million. The published figure was 10.25 million, about 2 in 100 off.
 
 ## Seven questions to ask any twin vendor
 
@@ -703,10 +762,11 @@ The answers sort the four kinds in a single call.
 - What is the twin built from, and how many real people are behind it?
 - Do you validate against surveys or against outcomes? Show me one of each.
 - Are your calls dated before the result? Where can I read the misses?
-- Does every answer carry a range and a confidence score?
+- Does every answer carry a range, and say how firm it is?
 - How fresh is the data behind an answer today?
 - Can the twin watch my cut and tell me the second it lost the room?
 - Will you put a call on something that has not happened yet, so I can check it myself?
+Crosswalk answers all seven on this site: the method, the record, and the files you get.
 
 ## Synthetic respondents and digital twins, in plain words.
 
@@ -716,15 +776,23 @@ A program that answers a survey as if it were a person. Most are built from past
 
 ### What is a behavioral digital twin?
 
-A copy of a real audience built from what its people actually did over time. Crosswalk's twins run on 5+ years of recorded behavior from 10 million opted-in US people and are scored against real outcomes.
+A copy of a real audience built from what its people did over time. Crosswalk's twins run on 5+ years of recorded behavior from 10 million opted-in US people and are scored against real outcomes.
+
+### Are Crosswalk's twins better than interview-built twins?
+
+For predicting what people will do, yes. An interview-built twin knows one conversation with a person. A Crosswalk twin knows years of what millions of people did, and its calls are scored against real outcomes in public.
 
 ### Which is more accurate, synthetic respondents or behavioral twins?
 
-It depends on the question. For what people will say, a survey-built twin can be close. For what people will do (watch, pay, cancel, return), only a behavior-built twin can be checked against the real result, and Crosswalk publishes those checks.
+It depends on the question. For what people will say, a survey-built twin can be close. For what people will do (watch, pay, cancel, return), a behavior-built twin learns from the real thing, and Crosswalk publishes how its calls landed.
+
+### Why do behavior-built twins predict better?
+
+Actions are a better guide to the next action than words are. A behavior-built twin learns from signups, cancels, second episodes and orders. Those are the same things a forecast is judged on.
 
 ### Where do interview twins come from?
 
-A twin built from a long interview with one real person, so it can answer later surveys the way that person would. A well-known 2024 Stanford study reproduced people's survey answers at about 85% of their own two-week retest this way.
+A twin is built from a long interview with one real person, so it can answer later surveys the way that person would. A well-known 2024 Stanford study reproduced people's survey answers at about 85% of their own two-week retest this way.
 
 ### How does a census-built synthetic population work?
 
@@ -751,7 +819,7 @@ Source: https://www.crosswalknyc.com/synthetic-respondents-vs-behavioral-twins.h
 
 # How an AI focus group works.
 
-An AI focus group is a room of digital twins that you can question the way you would question real people. In Crosswalk's Focus Group IQ, the room seats one person for each archetype in the audience, usually 12 to 16. Every seat speaks in character from its people's real history, then the count adds up the real people behind every answer. You get a share, a people count, a range, a confidence score, and the voices that explain the result. It runs in minutes, and you can ask the next question right away.
+An AI focus group is a room of digital twins that you can question the way you would question real people. In Crosswalk's Focus Group IQ, the room seats one person for each archetype in the audience, usually 12 to 16. Every seat speaks in character from its people's real history, then the count adds up the real people behind every answer. You get a share, a people count, a range, a word for how firm it is, and the voices behind the result. A traditional group takes weeks to recruit and speaks only for the people in its chairs. This room runs in minutes and speaks for the whole audience.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 
@@ -760,6 +828,10 @@ Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 A traditional focus group puts 8 to 12 recruited people in a room with a moderator for two hours. An AI focus group puts the archetypes of an audience in a room, and each one has a seat that answers for it.
 
 The point is the same: hear the audience talk, and count where it lands. The difference is who is in the room and what they answer from. In a Crosswalk room, the seats are archetype representatives built from 5+ years of what real people did. They do not have to be recruited, they are never tired, and every one of them stands for a known number of real people.
+
+## A Crosswalk room next to a traditional focus group
+
+A traditional group hears a dozen people at most. A Crosswalk room hears every archetype in the audience and counts the people behind each answer.
 
 ## Who sits in the room
 
@@ -785,7 +857,7 @@ One question, November 18, 2026
 
 "Which of these would get you most excited if it finally became a show?" Lead answer: a game I play. 9 of 16 seats picked it, standing for 61.8% of the audience. The room's count: 63.1%, or 80,841,387 people, with a range of 51.2% to 75.0%. The word on the count was leaning. Kenji: "A game I play, no contest, because Fallout did exactly that for me." Devin: "A game means nothing to me at my age."
 
-## Why the count is not a show of hands
+## The count adds up people, not seats
 
 Nine of sixteen seats is 56%. The room's count was 63.1%. The gap is the people.
 
@@ -818,6 +890,14 @@ Every room comes back as a CSV and a PDF with every question, split, read and vo
 
 A room of digital twins you can question like real people. In Crosswalk's Focus Group IQ, one seat stands for each archetype in the audience. Each seat answers in character from what its people did, and the count adds up the real people behind every answer.
 
+### Is a Crosswalk room better than a traditional focus group?
+
+For knowing what an audience will do, yes. A traditional group hears a dozen recruited people, and each chair counts the same. A Crosswalk room seats every archetype in the audience, counts the real people behind each answer, and gives the same count twice.
+
+### How is Focus Group IQ different from other AI focus group tools?
+
+The seats come from 5+ years of real behavior on 10 million opted-in US people, not from personas you write. Answers are counted in real people, hold steady when asked again the same day, and say how firm they are.
+
 ### How many people are in an AI focus group?
 
 One per archetype, usually 12 to 16 and never fewer than 12. The audience decides the number. You never pick it.
@@ -826,13 +906,9 @@ One per archetype, usually 12 to 16 and never fewer than 12. The audience decide
 
 Each seat is an archetype representative: a person who stands for one group inside the audience. The group is real people on Crosswalk's opted-in panel, and the seat answers from their 5+ years of behavior. No individual is identified.
 
-### How is the answer counted?
-
-Each answer carries the people behind its seat, so a seat standing for 16.6 million people counts for more than one standing for 3.6 million. Shares add to 100% and people add to the room. The seat tally sits beside the count.
-
 ### How accurate is an AI focus group?
 
-Every count carries a range and one of three words: firm (within about 5 points), leaning (about 12) or early (up to about 20). Crosswalk dates calls before the result and scores them on a public track record; the first six landed within 3.2% on average.
+Every Crosswalk count carries a range and one of three words: firm (within about 5 points), leaning (about 12) or early (up to about 20). Calls are dated before the result and scored in public; the first six landed within 3.2% on average.
 
 ### Will the same question give the same answer twice?
 
@@ -855,7 +931,7 @@ Source: https://www.crosswalknyc.com/ai-focus-groups.html
 
 # What is a behavioral panel?
 
-A behavioral panel is a group of people who agree to have what they do online recorded. Researchers can then count real behavior instead of asking about it. Crosswalk runs an opted-in behavioral panel of 30 million people worldwide, 10 million of them in the US. It sees each person's entire digital life across every screen, under one ID, day by day since January 2021. Clients receive group statistics projected to the US population. No individual is ever identified.
+A behavioral panel is a group of people who agree to have what they do online recorded. Researchers can then count real behavior instead of asking about it. Crosswalk runs an opted-in behavioral panel of 30 million people worldwide, 10 million of them in the US. That is about 1 in 33 Americans. It sees each person's entire digital life across every screen, under one ID, day by day since January 2021. Few panels see that much of a day, for that long. Clients receive group statistics, and no individual is ever identified.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · The panel page · What we track and why
 
@@ -885,7 +961,19 @@ Prometheus never answers about this person. It answers about the 10 million US p
 
 Most audience data sees one slice of a life, or asks people to remember. A single-source behavioral panel sees the whole person.
 
-Because the Crosswalk panel is single source, one question can follow one person from a search to a trailer to a signup to a purchase. That is why the same panel powers audience profiles, subscriber reads, journeys, attribution, and the digital twins.
+Because the Crosswalk panel is single source, one question can follow one person from a search to a trailer to a signup to a purchase. Every Crosswalk report reads that same record, the digital twins included.
+
+## Why the Crosswalk panel sees more
+
+Most audience data sees one slice of a life. The Crosswalk panel sees the whole day, for the same people, for years.
+
+- Big enough to cut small. With 10 million US people, even fans of one show in one city are real people you can count. A survey of a few thousand has only a handful of people in a group that small.
+- Every screen, one person. Phone, laptop and TV join under one ID. The panel links a morning search to the signup that came hours later.
+- Five years of the same people. The record starts in January 2021 and has run every day since. You can watch a habit form, fade and come back.
+- Fresh every morning. Last night's premiere is in today's numbers.
+- Beyond one app. A platform sees only its own app. The panel sees the search before, the rival service after, and the purchase somewhere else.
+- Opted in and revocable. Every person chose to be counted and can leave at any time. Clients see group statistics only.
+- One panel behind every read. The same people power Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ and the digital twins. A twin's forecast can be checked against what the same audience did.
 
 ## How 10 million people stand for the country
 
@@ -920,6 +1008,10 @@ Crosswalk builds a twin of any audience on the panel: a show's viewers, a brand'
 
 A group of people who agree to have what they do online recorded by software. Researchers then count real behavior instead of asking about it. Crosswalk's panel has 30 million opted-in people worldwide and 10 million in the US.
 
+### What makes the Crosswalk panel different from other consumer panels?
+
+Size, depth and time, together. It counts 10 million opted-in US people, about 1 in 33 Americans. It sees each person's whole digital life on every screen under one ID. And it has followed the same people every day for more than five years.
+
 ### How is a behavioral panel different from a survey panel?
 
 A survey panel asks people what they think and what they remember doing. A behavioral panel records what they really did, as it happens, with the time of day. One asks; the other counts.
@@ -934,7 +1026,7 @@ One person, one ID, every screen. The same person's phone, laptop and TV are cou
 
 ### When does the record start?
 
-To January 2021. The same people are recorded day by day. An audience carries five years of history, and a twin rests on 5+ years of behavior.
+In January 2021. The same people are recorded day by day. An audience carries five years of history, and a twin rests on 5+ years of behavior.
 
 ### Is the panel data current?
 
@@ -957,18 +1049,18 @@ Source: https://www.crosswalknyc.com/behavioral-panel.html
 
 # The words we use for digital twins, synthetic data and the panel.
 
-Thirty short definitions, in plain words. A twin is an audience you can ask. An archetype is one group inside it. A seat is the person who speaks for that group in a room. The count adds up the real people behind each answer, and every count carries a confidence score. The rest is below, with a link to the page that explains each one.
+Plain, one-line definitions of the 39 terms we use. A twin is an audience you can ask. An archetype is one group inside it. A seat is the person who speaks for that group in a room. The count adds up the real people behind each answer, and every count says how firm it is. The words also show what makes Crosswalk's twins different: they are behavior-built, counted in real people, and scored in public.
 
 Updated November 2026 · Crosswalk Technologies, Inc. · Read the methodology
 
 **Digital twin**
-A live copy of a real audience that you can ask questions. Crosswalk builds one from the observed behavior of its people over 5+ years, not from surveys. Read what a digital twin audience is.
+A live copy of a real audience that you can ask questions. Crosswalk builds one from 5+ years of what 10 million opted-in US people did, not from surveys or a chatbot. Read what a digital twin audience is.
 
 **Twin**
 Short for digital twin. An audience you can ask, built from 5+ years of what its people did. A twin can be a show's viewers, a service's subscribers, a star's followers, a brand's buyers, or a group you shape.
 
 **Archetype**
-One group inside a twin, such as "older regulars on sport and crime series" or "parents who stopped after the season ended." A twin usually has 12 to 16 archetypes, found by sorting the audience by engagement stage and life stage. Together they add up to the whole audience.
+One group inside a twin, such as "older regulars on sport and crime series" or "parents who stopped after the season ended." A twin usually has 12 to 16 archetypes, found by sorting the audience by where people are with the subject and by age. Together they add up to the whole audience.
 
 **Archetype representative**
 The person who stands for one archetype inside a twin, with a name, an age, a city and a bio. Each twin has 12 to 16. In a room, the archetype representative answers in character from what its people did.
@@ -991,8 +1083,8 @@ The room watches your cut from start to finish: a pilot, an episode, an ad, a fe
 **The count**
 The share, and the number of people, behind each answer. Each answer carries the people behind its seat, so a seat standing for 16.6 million people counts for more than one standing for 3.6 million. Shares add to 100% and people add to the room.
 
-**Confidence score**
-Firm, leaning or early, with a range around the count. Firm is within about 5 points, leaning within about 12, early up to about 20. The room always makes the call; the word says how firm it is.
+**How firm**
+The word on every count: firm, leaning or early, with a range around it. Firm is within about 5 points, leaning within about 12, early up to about 20. The room always makes the call; the word says how firm it is.
 
 **Range**
 How far the real number could sit from the count, shown as a low and a high. A count of 63.1% with a range of 51.2% to 75.0% is leaning.
@@ -1007,7 +1099,7 @@ The 0 to 100 line each seat turns while it watches a cut. It goes up when a scen
 A moment marked on the clock by a seat: loved it, laughed, leaned in, lost, checked out or wow, each with its second and a line in the seat's own words.
 
 **Scorecard**
-The card every seat fills out after a cut: overall rating, would recommend, would finish the episode, would watch a second episode, how soon, and against expectations. Each share counts the people behind the seats and carries a range and a confidence score.
+The card every seat fills out after a cut: overall rating, would recommend, would finish the episode, would watch a second episode, how soon, and against expectations. Each share counts the people behind the seats and carries a range, with a word for how firm it is.
 
 **Total positive**
 Everyone who rates a cut excellent or very good. One of the four numbers at the top of a scorecard, next to excellent, definitely recommend and would finish.
@@ -1019,7 +1111,7 @@ What tests of the same kind usually score. You pick it, from all pilots to one g
 The second where the room's dial sank the most during a cut. The favorite moment is the strongest good reaction in the room.
 
 **Track record**
-The public record of every call the twins made before its outcome, dated and hashed, then scored when the result landed. Misses stay on the page. See the record.
+The public record of every call the twins made before its outcome, dated and never changed after, then scored when the result landed. Few research vendors publish one, and fewer keep their misses on it. See the record.
 
 **Call**
 A forecast or a room count with a real result to check against, put on the record before the result exists: the question, the audience, the figure and its range, the day the result is due and what will settle it. A call is never rewritten.
@@ -1056,6 +1148,18 @@ The twins a plan would reach, sized, described and projected to the US populatio
 
 **Synthetic respondent**
 A program that answers a survey as if it were a person. Most are built from past surveys or from a language model playing a type of person. Crosswalk's archetype representatives answer from behavior instead. Read the comparison.
+
+**Behavior-built twin**
+A twin built from what real people did, not from what they said. It can be scored against what people do next. Every Crosswalk twin is behavior-built. Read the comparison.
+
+**Interview-built twin**
+A twin built from a long interview with one person, so it can answer later surveys the way that person would. It knows one conversation, not years of behavior.
+
+**Chatbot persona**
+A language model told to answer as a type of person, such as "a mother of two in Ohio." It is fast and cheap, but it has never met your audience and can change its answer each time.
+
+**Census-built population**
+Made-up people given real census traits, such as zip code, age, income and job. It matches the country's shape but has never watched a show or paid for one.
 
 **Prometheus**
 Crosswalk's research assistant. Ask it any audience question in plain English and it answers from what 10 million US people do. Ask it to build a twin, open a room, or explain a read.
