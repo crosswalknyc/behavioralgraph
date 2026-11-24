@@ -440,6 +440,15 @@ def build_prompt(text, ctx, history, user, uname):
 
 
 # ------------------------------------------------------------- read
+# A personal pronoun or a bare audience noun the model hands back as a subject names nothing of its own: it points
+# back at the thread. It is dropped from the subjects and the reading carries the flag `refers_to_thread`, so the
+# lanes bind the thread's own subject (2026-11-23, Samantha: "Did his engagement go down" ran as a read on "His",
+# and "Why has his engagement decreased?" drew "Do you mean for <creator>, or His?").
+_THREAD_POINTER_RX = re.compile(
+    r"^(?:he|him|his|she|her|hers|they|them|their|theirs|the (?:same|audience|group|cohort|profile|people|fans|viewers)|"
+    r"these people|those people|this group|that group)$", re.I)
+
+
 def _normalize(d, text, cands):
     if not isinstance(d, dict):
         return None
@@ -472,6 +481,12 @@ def _normalize(d, text, cands):
                 cat = _pp.settle_name(cat, text, _pp.library_names(cand_names.values()))
             except Exception:
                 pass
+        if aw and not cat and _THREAD_POINTER_RX.match(aw):
+            fl = d.get('flags') if isinstance(d.get('flags'), list) else []
+            if 'refers_to_thread' not in fl:
+                fl = list(fl) + ['refers_to_thread']
+            d['flags'] = fl
+            continue
         if aw or cat:
             subs.append({'as_written': aw or cat, 'catalog': cat, 'kind': str(s.get('kind') or 'unknown')[:16]})
     flags = [str(f)[:60] for f in (d.get('flags') or []) if str(f).strip()][:8]

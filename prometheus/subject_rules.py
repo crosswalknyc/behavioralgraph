@@ -430,6 +430,8 @@ def pinned_bind_for(text, history=None, page=''):
 
 
 _READING_RX = re.compile(r"^On it:\s*reading\s+(?P<what>.+?)\s+now\.?", re.I)
+_PRONOUN_NAME_RX = re.compile(r"^(?:he|him|his|she|her|hers|they|them|their|theirs|it|its|this|that|these|those)$", re.I)
+_PRONOUN_LEAD_RX = re.compile(r"^(?:he|him|his|she|her|hers|they|them|their|theirs|it|its)\s*\(", re.I)
 _STARTED_RX = re.compile(r"^Started\s+(?P<what>.+?)\s*(?:\(number|\.|$)", re.I)
 
 
@@ -518,6 +520,8 @@ def thread_subjects(history, page='', limit=4, include_pin=True):
         k = _norm(name)
         if not k or k in seen or (pkey and k == pkey):
             return
+        if _PRONOUN_NAME_RX.match(name) or _PRONOUN_LEAD_RX.match(name):
+            return          # "On it: reading His now" named nobody; "him (Name, url)" is Name, carried on its own turn (2026-11-23)
         if _dropped(name):
             return
         seen.add(k)
@@ -562,6 +566,16 @@ def thread_subjects(history, page='', limit=4, include_pin=True):
                 keys = [_norm(x) for x in parts]
                 parts = [x for x, k in zip(parts, keys)
                          if not any(o != k and o.startswith(k + ' ') for o in keys)]
+                # "reading Paul Rodriguez and YouTube now": the platform is where the audience was read, never a
+                # second subject of the thread (2026-11-23, Armine was asked "Which subject should this be on:
+                # YouTube or Paul Rodriguez?" two turns later). A read on the platform's own audience keeps it.
+                try:
+                    from . import platform_scope as _psc
+                    non_platform = [x for x in parts if not _psc.canon(x)]
+                    if non_platform and len(non_platform) < len(parts):
+                        parts = non_platform
+                except Exception:
+                    pass
             for part in parts:
                 if not part or re.search(r"\b(?:all the|the best|which|what|how)\b", part, re.I):
                     continue

@@ -1467,6 +1467,8 @@ _JUNK_SUBJECT_WORDS = frozenset((
     'mentions', 'results', 'answer', 'numbers', 'figures', 'breakdown', 'trends', 'viewership', 'size',
     'dma', 'county', 'counts', 'panelist', 'panelists', 'related', 'campaign', 'ad', 'read', 'pull', 'profile',
     'waht', 'teh', 'hte', 'wht', 'ont', 'form', 'tihs', 'adn',
+    # a pronoun names nothing of its own (2026-11-23)
+    'his', 'her', 'hers', 'him', 'he', 'she', 'their', 'theirs', 'its',
 ))
 _QUESTION_LEAD_RX = re.compile(r"^(?:what|which|how|who|where|when|why|is|are|do|does|did|can|could|would|should)\b", re.I)
 
@@ -1531,7 +1533,10 @@ _FOLLOWUP_REF_RX = re.compile(
     r"film|title|show|audience|viewers|people|cohort|segment|group|one|ones|breakdown|table|top \d+)\b|"
     r"\byou (?:started|began|opened|led|used|quoted|gave|said|listed|showed|pulled|ran)\b|"
     r"^\W*(?:what|how) about\b|^\W*and (?:the|those|them|it|what|how)\b|\b(?:of|for|among) (?:them|those|these)\b|"
-    r"\bshould (?:\w+ )?be on the list\b|\bexpect (?:\w+ )?(?:on|in) (?:the|that) list\b", re.I)
+    r"\bshould (?:\w+ )?be on the list\b|\bexpect (?:\w+ )?(?:on|in) (?:the|that) list\b|"
+    # a personal pronoun with no audience of its own named points back at the thread's subject ("did his engagement
+    # go down", 2026-11-23); checked after the new-audience test, so "panelists who bought X ... their hours" stays new
+    r"\b(?:his|her|hers|him|he|she|their|theirs)\b", re.I)
 _STRONG_REF_RX = re.compile(
     r"\b(?:of|for|among|within|inside) (?:them|those|these|that (?:group|cohort|audience)|the (?:same )?(?:group|cohort|audience|viewers|people))\b|"
     r"\b(?:those|these) (?:viewers|people|readers|listeners|buyers|fans|users|subscribers)\b|\bthey\b|"
@@ -1649,14 +1654,22 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                                'pull_type': FOLLOWUP_PULL_TYPE, 'label': METERED_LABEL, 'metered': True,
                                'followup_ref': True}
         if kind not in ('derived',) and not looks_like_subject(subj):
-            try:
-                from . import subject_rules as _sr
-                line = _sr.clarify_for(text)
-            except Exception:
-                line = ('Which subject should this be on? Name the show, brand or person '
-                        '(one line is enough) and I will take it from there.')
-            return 'offer', {'success': True, 'action': 'answer', 'reply': line, 'followups': [],
-                             'offer_deck': False, 'deck_angle': None, 'subject': '', 'subject_unclear': True}
+            # A question with no subject of its own, in a thread that holds a delivered read, continues that read:
+            # the thread's subject answers before anyone is asked (2026-11-23, Samantha: "Which videos drove the
+            # April and September reach spikes?" right after her creator read drew "Which subject should this be
+            # on?"). The question is for a thread with nothing to continue.
+            ts = thread_read_subject(history)
+            if ts and looks_like_subject(ts):
+                subj = ts
+            else:
+                try:
+                    from . import subject_rules as _sr
+                    line = _sr.clarify_for(text)
+                except Exception:
+                    line = ('Which subject should this be on? Name the show, brand or person '
+                            '(one line is enough) and I will take it from there.')
+                return 'offer', {'success': True, 'action': 'answer', 'reply': line, 'followups': [],
+                                 'offer_deck': False, 'deck_angle': None, 'subject': '', 'subject_unclear': True}
         # A quote names the subject it will read (Jenna 2026-11-13: "ram's fans" was quoted as typed, approved, and
         # read as Ram Trucks when she meant the Los Angeles Rams). A name that is two different things is asked
         # about first, with each named, and nothing is priced, charged or started until it is answered; a name
