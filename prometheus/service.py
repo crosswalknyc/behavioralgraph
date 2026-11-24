@@ -2252,7 +2252,8 @@ def ask(user, body, *, via='session'):
                 except Exception:
                     _pf_incl = False
                 _pf_raw = _pf.answer(text, price_fn=_pf.price_fn_for(uname),
-                                     has_names_list=lambda: _pf.thread_has_names(uname, tid, host), included=_pf_incl)
+                                     has_names_list=lambda: _pf.thread_has_names(uname, tid, host), included=_pf_incl,
+                                     host=host, user=user)   # the dashboard family reads the live store and the seat's dropdown (2026-11-23)
         except Exception as _fx:
             _faults.note('service.product_facts', _fx)
             _pf_raw = None
@@ -3296,9 +3297,9 @@ def ask(user, body, *, via='session'):
             _own_u = _und_f.on_body(body)
             _own = _routing_f.surface(_own_u, text, has_ctx=has_ctx, open_tabs=open_tabs)
             if _own.get('surface') == 'analyze' and (
-                    str(_own.get('reason') or '') in ('question', 'subiq_lookup', 'capability_question', 'data_open')
+                    str(_own.get('reason') or '') in ('question', 'subiq_lookup', 'capability_question', 'data_open', 'product_fact')
                     or _routing_f.reader_says_answer(_own_u)):
-                forced = ''
+                forced = ''      # product_fact: a question about the product itself typed in the build flow (2026-11-23)
         except Exception as _fx:
             _faults.note('service', _fx)
     # The mirror (Grace Yin 2026-11-10): a client sitting on the analyze

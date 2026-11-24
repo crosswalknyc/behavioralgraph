@@ -202,6 +202,16 @@ def split(text, pma=None):
     """The distinct questions in one message, in order; [] for one.
     A numbered list is its items (riders set aside); otherwise the
     sentence splitter."""
+    try:
+        # one question about the dashboard itself (which Rankers exist and what each ranks, is there a Share of Time
+        # view, which platforms the Social feed covers) is one question however many question marks it carries: the
+        # product facts answer it whole (Liz 2026-11-23: split into three parts, the first drew "Which audience should
+        # I read for this?")
+        from . import product_facts as _pf
+        if _pf.dashboard_ask(text):
+            return []
+    except Exception:
+        pass
     listed = numbered_items(text)
     if len(listed) >= 2:
         items = [normalize_item(it) for it in listed if not is_rider(it)]

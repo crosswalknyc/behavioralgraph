@@ -27,6 +27,20 @@ reads today, with the live prices:
               the floor is told plainly the window would start on the
               floor; one that names a covered year is told it is
               covered. The typo is matched on purpose.
+  dashboard   "list every Ranker in the Rankers product and what each
+              ranks", "does the dashboard have a Share of Time view",
+              "which social platforms does the Social feed in Trends
+              cover", "what tabs does Trends have": the dashboard's own
+              products, tabs, views and feeds, answered from
+              prometheus.dashboard_map, which reads them from the place
+              the dashboard defines them (trends_tabs, trends_iq's
+              platform lists and the live store, the dropdown). Liz
+              2026-11-23: the question was split into three parts, the
+              first drew "Which audience should I read for this?" and
+              the rest the stock read line. Jenna: "should list what
+              products we have within these as shes asking". A single
+              dashboard question is one question: multi_ask never splits
+              it, and a view the dashboard does not have is a plain no.
 
 A question any of these answers never starts a read and never gets the
 working-on-it line: ``read_guard`` is the check the read lane and the
@@ -55,9 +69,10 @@ import re
 from . import rate_card as _rc
 
 __all__ = ['FAMILIES', 'enabled', 'looks_like', 'family_of', 'answer', 'read_guard', 'price_fn_for', 'thread_has_names', 'facts',
-           'positioning_ask', 'positioning_answer', 'POSITIONING_LINES', 'data_history_ask', 'data_history_answer']
+           'positioning_ask', 'positioning_answer', 'POSITIONING_LINES', 'data_history_ask', 'data_history_answer',
+           'dashboard_ask', 'dashboard_answer', 'dashboard_cues']
 
-FAMILIES = ('overview', 'bulk_list', 'valuation', 'twin_pricing', 'positioning', 'data_history')
+FAMILIES = ('overview', 'bulk_list', 'valuation', 'twin_pricing', 'positioning', 'data_history', 'dashboard')
 _MAX_LEN = 320
 
 _LEAD = r"^\W*(?:(?:hi|hey|hello|ok|okay|so|and|also|prometheus|quick question|one more|one more thing)[,!.:\s]+)*"
@@ -245,6 +260,173 @@ def data_history_answer(text=''):
     return base
 
 
+# dashboard: the dashboard's own products, tabs, views and feeds (Liz 2026-11-23). What exists and what each one
+# does; never where it is (that is prometheus.wayfinding, ahead of this lane) and never the data inside a board.
+_DASH_MAX_LEN = 900
+_DASH_SELF_RX = re.compile(
+    r"\b(?:(?:question|ask(?:ing)?)\s+about\s+(?:the\s+)?(?:crosswalk\s+)?dashboard\s+itself|about\s+the\s+dashboard\s+itself|"
+    r"not\s+about\s+a\s+(?:title|subject|show|brand|person))\b", re.I)
+_DASH_NOUN = r"(?:rankers?|ranker\s+tabs?|boards?|tabs?|views?|pages?|screens?|feeds?|products?|sections?|lists?|modules?|lenses)"
+_DASH_PLACE = r"(?:the\s+)?(?:crosswalk\s+)?(?:dashboard|select\s+product\s+(?:dropdown|menu)|product\s+(?:menu|dropdown)|rankers\s+product|trends\s+product|rankers|trends)"
+_DASH_LIST_RX = re.compile(
+    r"\b(?:list|name|show\s+me|tell\s+me|give\s+me|what\s+are|what\s+is|what's|which|how\s+many|enumerate|walk\s+me\s+through|describe)\b"
+    r"[^?.!]{0,40}?\b(?:every|all|each|the|your|our|the\s+full\s+list\s+of|the\s+list\s+of)?\s*" + _DASH_NOUN + r"\b[^?.!]{0,60}?\b(?:in|on|of|inside|within|under|across)\s+" + _DASH_PLACE + r"\b", re.I)
+_DASH_HAVE_RX = re.compile(
+    r"\b(?:what|which)\s+" + _DASH_NOUN + r"\s+(?:do|does|are|is)\s+(?:there|available|offered|live|on|in)\b"
+    r"|\b(?:what|which)\s+" + _DASH_NOUN + r"\s+(?:do\s+(?:you|we)|does\s+(?:the\s+dashboard|rankers|trends|it|crosswalk))\s+(?:have|offer|carry|include|cover|show)\b"
+    r"|\b(?:does|do|is|are)\s+(?:the\s+)?(?:dashboard|rankers|trends|crosswalk|you|we|it)\s+(?:have|has|got|offer|include|carry|show|cover)\s+(?:a|an|any|the)?\s*[^?.!]{1,50}?\b(?:view|tab|page|board|ranker|feed|product|screen|section|lens)s?\b"
+    r"|\bis\s+there\s+(?:a|an|any|still\s+a|still\s+an)\s+[^?.!]{1,50}?\b(?:view|tab|page|board|ranker|feed|product|screen|section|lens)s?\b"
+    r"|\bwhether\s+(?:the\s+)?(?:dashboard|rankers|trends|crosswalk|it|we|you)\s+(?:has|have|offers?|includes?|carr(?:y|ies)|shows?|covers?|still\s+has|still\s+have)\s+(?:a|an|any|the)?\s*[^?.!]{1,50}?\b(?:view|tab|page|board|ranker|feed|product|screen|section|lens)s?\b", re.I)
+_DASH_RANKS_RX = re.compile(
+    r"\bwhat\s+(?:does|do)\s+(?:each|every|the|a)?\s*(?:one|ranker|rankers|board|tab|tabs|list|lists|it|they)\b[^?.!]{0,30}?\brank\b"
+    r"|\bwhat\s+(?:each|every)\s+(?:one|ranker|board|tab|list)\s+(?:ranks|shows|covers|tracks|lists|measures)\b"
+    r"|\bwhat\s+(?:is|are|'s)\s+(?:ranked|covered|tracked|listed)\s+(?:in|on|under)\s+(?:the\s+)?[^?.!]{1,40}?\b(?:ranker|rankers|tab|board)s?\b"
+    r"|\bwhat\s+(?:does|do)\s+(?:the\s+)?[A-Za-z][\w+ ]{1,30}?\s+(?:ranker|tab|board|list)\s+(?:rank|show|cover|track|list|measure)\b", re.I)
+_DASH_FEED_RX = re.compile(
+    r"\b(?:which|what)\s+(?:social\s+)?(?:platforms?|services?|sources?|networks?|apps?|sites?)\s+(?:does|do|are|is)\s+[^?.!]{0,40}?\b(?:feed|tab|board|lens|section|ranker|rankers|trends|dashboard)\b"
+    r"|\b(?:social\s+(?:feed|tab|board|section))\b[^?.!]{0,40}?\b(?:cover|covers|include|includes|track|tracks|pull|pulls|read|reads|platforms?)\b"
+    r"|\bplatforms?\s+(?:the|in|on)\s+(?:the\s+)?social\s+(?:feed|tab|board|section)\b", re.I)
+_DASH_ANY_RX = re.compile(
+    r"\b(?:dashboard|select\s+product|rankers?|trends|share\s+of\s+time|social\s+feed|social\s+tab|tabs?|views?|boards?|product\s+menu|dropdown)\b", re.I)
+# the words the data lanes own: a question about the titles on a board, an audience, a figure
+_DASH_DATA_RX = re.compile(
+    r"\b(?:top\s+\d+|number\s+one|#\s*1|most\s+(?:watched|streamed|played|popular)|trending\s+(?:now|today|right\s+now)|this\s+week|yesterday|"
+    r"how\s+(?:many|much)\s+(?:people|viewers|users|subscribers|streams|views)|audience\s+(?:of|for)|viewers\s+of|profile\s+(?:of|for)|"
+    r"index(?:es)?\b|penetration|reach\s+of|who\s+(?:watches|streams|buys|listens))\b", re.I)
+_DASH_VIEW_NAME_RX = re.compile(
+    r"\b(?:has|have|got|offer|offers|include|includes|carry|carries|show|shows|cover|covers|there\s+(?:a|an|any|still\s+a|still\s+an)|still\s+has|still\s+have|"
+    r"or|and)\s+"
+    r"(?:a|an|any|the|its|your|our)?\s*(?P<name>[A-Za-z][\w+&'/.-]*(?:\s+[A-Za-z0-9][\w+&'/.-]*){0,4}?)\s+(?P<kind>view|tab|page|board|ranker|feed|product|screen|section|lens)s?\b", re.I)
+_DASH_NAME_STOP = frozenset(('which', 'what', 'who', 'how', 'do', 'does', 'is', 'are', 'the', 'a', 'an', 'in', 'on', 'for', 'to',
+                             'platforms', 'platform', 'services', 'sources', 'every', 'each', 'all', 'say', 'whether', 'if', 'me', 'you', 'we'))
+_DASH_CUES = (
+    ('dashboard itself', re.compile(r"\bdashboard\s+itself\b", re.I)),
+    ('list every', re.compile(r"\b(?:list|name)\s+(?:every|all|each)\b", re.I)),
+    ('tabs', re.compile(r"\btabs?\b", re.I)),
+    ('Rankers product', re.compile(r"\brankers?\s+product\b|\brankers\b", re.I)),
+    ('Social feed', re.compile(r"\bsocial\s+(?:feed|tab)\b", re.I)),
+    ('view', re.compile(r"\bviews?\b", re.I)),
+    ('Trends', re.compile(r"\btrends\b", re.I)),
+    ('what each ranks', re.compile(r"\b(?:each|every)\s+(?:one|ranker|tab|board)\b|\brank(?:s|ed)?\b", re.I)),
+)
+
+
+def dashboard_cues(text):
+    """The words that read the ask as a question about the dashboard itself
+    (the Understanding's evidence)."""
+    t = _clean(text)
+    return [name for name, rx in _DASH_CUES if rx.search(t)]
+
+
+def dashboard_ask(text):
+    """The words ask what the dashboard holds: which Rankers or tabs exist,
+    what each ranks, whether a named view exists, which platforms a feed
+    covers. Never a where-is (wayfinding), never the data on a board, never
+    an order."""
+    t = _clean(text)
+    if not t or len(t) > _DASH_MAX_LEN:
+        return False
+    if _DASH_SELF_RX.search(t) and _DASH_ANY_RX.search(t):
+        return True
+    if not _DASH_ANY_RX.search(t):
+        return False
+    if _DASH_DATA_RX.search(t):
+        return False
+    return bool(_DASH_LIST_RX.search(t) or _DASH_HAVE_RX.search(t) or _DASH_RANKS_RX.search(t) or _DASH_FEED_RX.search(t))
+
+
+def _dash_view_names(t):
+    """The views the words ask after by name ('a Share of Time view', 'is
+    there a Books tab'), each (name, kind), in order, deduped."""
+    out, seen = [], set()
+    for m in _DASH_VIEW_NAME_RX.finditer(t):
+        name = ' '.join(m.group('name').split()).strip(" '\"")
+        name = re.sub(r"^(?:a|an|the|any|its|your|our)\s+", '', name, flags=re.I)
+        name = re.sub(r"^(?:still|also|even)\s+", '', name, flags=re.I)
+        low = name.lower()
+        if not low or low in ('dashboard', 'crosswalk', 'this', 'that', 'it', 'the', 'every', 'each', 'all', 'any', 'same', 'such', 'own',
+                              'separate', 'dedicated', 'specific', 'single', 'second', 'another', 'other', 'new'):
+            continue
+        if set(low.split()) & _DASH_NAME_STOP:
+            continue        # "which social platforms the Social feed": a clause, not a view's name
+        if low in seen:
+            continue
+        seen.add(low)
+        out.append((name, m.group('kind').lower()))
+    return out
+
+
+def dashboard_answer(text, *, host=None, user=None):
+    """The facts the words ask for, from prometheus.dashboard_map: the
+    Rankers tabs and what each ranks (with the services inside when they
+    can be read), the Trends tabs, whether a named view exists, which
+    platforms the social feed covers, the products on the dropdown. One
+    plain list; a view the dashboard does not have is a plain no."""
+    from . import dashboard_map as _dm
+    t = _clean(text)
+    low = t.lower()
+    names = _dash_view_names(t)
+    named_lower = {n.lower() for n, _k in names}
+    # "is there a Books ranker" / "does the dashboard have a Gaming board": the named view is the question; the
+    # whole list is read out only when the words ask for it
+    asks_list = bool(_DASH_LIST_RX.search(t) or _DASH_RANKS_RX.search(t) or _DASH_SELF_RX.search(t))
+    wants_rankers = bool(re.search(r"\brankers?\b|\bboards?\b|\bleaderboards?\b|\brank(?:s|ed|ing)?\b", low))
+    wants_trends = bool(re.search(r"\btrends\b", low)) and bool(re.search(r"\b(?:tabs?|sections?|lenses|boards?)\b", low)) and not wants_rankers
+    wants_social = bool(re.search(r"\bsocial\b", low))
+    wants_products = bool(re.search(r"\b(?:what|which|list|name|how\s+many|every|all)\b[^?.!]{0,30}?\b(?:products|modules|options|iqs)\b"
+                                    r"|\b(?:select\s+product|product\s+(?:menu|dropdown|list)|the\s+dropdown|drop\s*down\s+menu)\b", low))
+    parts = []
+    if wants_rankers and (asks_list or not names):
+        tabs = _dm.rankers_tabs()
+        lead = (f"Rankers opens from the {_dm.DROPDOWN} dropdown and has {len(tabs)} tabs across the top. Pick a tab, then a service.")
+        lines = []
+        for tb in tabs:
+            services = [s for s in _dm.section_services(tb['key'], host=host) if s.lower() != tb['label'].lower()]
+            svc = f" The services are {_dm.join_names(services)}." if services else ''
+            lines.append(f"- {tb['label']}: {tb['ranks']}.{svc}")
+        parts.append(lead + "\n\n" + "\n".join(lines))
+        # a Trends tab the words took for a Ranker (Books, Comics, Films ...)
+        elsewhere = [tb['label'] for tb in _dm.trends_tabs() if re.search(r"\b" + re.escape(tb['label'].lower()) + r"\b", low)]
+        elsewhere = [l for l in elsewhere if l.lower() not in named_lower]
+        if elsewhere:
+            verb = 'is a tab' if len(elsewhere) == 1 else 'are tabs'
+            parts.append(f"{_dm.join_names(elsewhere)} {verb} in Trends, not in Rankers. The Trends tabs are "
+                         f"{_dm.join_names([x['label'] for x in _dm.trends_tabs()])}.")
+    if wants_trends:
+        tabs = _dm.trends_tabs()
+        lines = [f"- {tb['label']}: {tb['ranks']}." for tb in tabs]
+        parts.append(f"Trends has {len(tabs)} tabs across the top.\n\n" + "\n".join(lines))
+    for name, kind in names:
+        if name.lower() in ('social', 'social media') and wants_social:
+            continue            # the social paragraph below answers it
+        hit = _dm.view_lookup(name)
+        if hit is None:
+            parts.append(f"{name}: no. The dashboard does not have a {name} {kind} today.")
+        elif hit['kind'] == 'product':
+            parts.append(f"{hit['label']}: yes. It is an option on the {_dm.DROPDOWN} dropdown.")
+        elif hit.get('ranks'):
+            parts.append(f"{hit['label']}: yes. It is a tab in {hit['product']}: {hit['ranks']}.")
+        else:
+            parts.append(f"{hit['label']}: yes. It is in {hit['product']}.")
+    if wants_rankers and names and not asks_list:
+        # the named view was the question; the boards in one line so the reader has the list
+        parts.append(f"The Rankers tabs are {_dm.join_names([x['label'] for x in _dm.rankers_tabs()])}.")
+    if wants_social:
+        plats = _dm.social_platforms()
+        if _dm.social_tab_live():
+            parts.append(f"The Social feed in Trends covers {_dm.join_names(plats)}." if plats else "The Social feed in Trends is live.")
+        else:
+            tail = (f" {_dm.join_names(plats)} still feed the Trending people and Movers tabs behind the scenes." if plats else '')
+            parts.append("The Social feed: Trends has no Social tab today." + tail)
+    if wants_products or not parts:
+        prods = _dm.products_for(user, host)
+        if prods:
+            parts.append(f"The {_dm.DROPDOWN} dropdown holds {_dm.join_names(prods)}.")
+        else:
+            parts.append(f"Your products are on the {_dm.DROPDOWN} dropdown at the top right of the dashboard.")
+    return "\n\n".join(parts)
+
+
 def enabled():
     return str(os.environ.get('PM_PRODUCT_FACTS', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
 
@@ -279,7 +461,11 @@ def family_of(text):
     if not enabled():
         return None
     t = _clean(text)
-    if not t or len(t) > _MAX_LEN:
+    if not t:
+        return None
+    if dashboard_ask(t):
+        return 'dashboard'       # its own length cap: a dashboard question can run long (Liz 2026-11-23)
+    if len(t) > _MAX_LEN:
         return None
     if _OVERVIEW_RX.search(t):
         return 'overview'
@@ -356,15 +542,20 @@ INCLUDED_LINE = "Included with your plan."
 INCLUDED_PHRASE = "included with your plan"
 
 
-def answer(text, *, price_fn=None, has_names_list=None, included=False):
+def answer(text, *, price_fn=None, has_names_list=None, included=False, host=None, user=None):
     """{'reply', 'followups', 'family'} or None. ``has_names_list`` is a
     callable (or bool) saying whether a names sheet sits on the thread:
     a bulk ORDER with the list attached is never answered here.
     ``included`` is an unlimited seat (or Crosswalk staff): every price
-    in the answer reads "included with your plan" (Jenna 2026-11-08)."""
+    in the answer reads "included with your plan" (Jenna 2026-11-08).
+    ``host`` / ``user`` let the dashboard family read the live store and
+    the seat's own dropdown; both optional."""
     fam = family_of(text)
     if not fam:
         return None
+    if fam == 'dashboard':
+        reply = dashboard_answer(text, host=host, user=user)
+        return {'reply': reply, 'followups': ['Open Rankers', 'Open Trends'] if 'Rankers' in reply or 'Trends' in reply else [], 'family': fam}
     if fam == 'data_history':
         # no price in this answer; the line reads the same for every seat
         return {'reply': data_history_answer(text), 'followups': [], 'family': fam}

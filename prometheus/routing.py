@@ -244,6 +244,15 @@ def surface(u, text, *, has_ctx=False, mode=None, extra=None, open_tabs=0, deck_
     except Exception:
         pass
     try:
+        # a question about the product itself (what the dashboard holds, what it can do, how a valuation works, how far
+        # back the data goes): the product facts lane's, never a draft (Liz 2026-11-23, a dashboard question typed as
+        # one message)
+        from . import product_facts as _pf_r
+        if _pf_r.looks_like(t):
+            return done('analyze', 'product_fact')
+    except Exception:
+        pass
+    try:
         if _understand.guards.subiq_lookup_title(t):
             return done('analyze', 'subiq_lookup')
     except Exception:

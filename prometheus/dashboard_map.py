@@ -43,12 +43,29 @@ import functools
 import os
 import re
 
+import trends_tabs as _tt   # the one definition of the Trends and Rankers tabs (app.py gates on the same keys)
+
 __all__ = ['DROPDOWN', 'DROPDOWN_WHERE', 'DASHBOARD_URL', 'PRODUCTS', 'TABS', 'FEATURES', 'ARTIFACTS', 'RAIL', 'PLACEHOLDERS',
            'is_placeholder', 'product', 'product_by_value', 'find_product', 'find_tab', 'find_feature', 'feature', 'strip_feature_words',
            'strip_alias_words', 'alias_pattern', 'find_artifact', 'names_dropdown', 'names_rail', 'access_for', 'hidden_products', 'can_open', 'deep_link', 'where_lands',
-           'picker_of', 'tab_of', 'where_things_are', 'is_product_label', 'strip_icon']
+           'picker_of', 'tab_of', 'where_things_are', 'is_product_label', 'strip_icon',
+           'rankers_tabs', 'trends_tabs', 'social_platforms', 'section_services', 'view_lookup', 'products_for', 'join_names']
 
 DROPDOWN = 'SELECT PRODUCT'
+
+
+def join_names(names):
+    """'A, B and C' from a list, the way a sentence reads them."""
+    names = [str(n) for n in (names or []) if str(n or '').strip()]
+    if not names:
+        return ''
+    if len(names) == 1:
+        return names[0]
+    return ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+_RANKERS_LABELS = tuple(label for _k, label, _r in _tt.RANKERS_TABS)
+_TRENDS_LABELS = tuple(label for _k, label, _r in _tt.TRENDS_TABS)
 DROPDOWN_WHERE = 'the SELECT PRODUCT dropdown at the top right of the dashboard'
 DASHBOARD_URL = str(os.environ.get('PM_DASHBOARD_URL') or 'https://dashboard.crosswalknyc.com').rstrip('/')
 
@@ -181,17 +198,17 @@ PRODUCTS = (
     {'value': 'trendsIQ', 'label': 'Trends', 'rule': _r_trends,
      'aliases': ('trends', 'trends iq', 'trends dashboard', 'the trends tab'),
      'picker': '',
-     'picker_line': "The Trends page opens on today's board; the lenses across the top switch what it shows.",
-     'tabs': (),
+     'picker_line': "The Trends page opens on today's board; the tabs across the top switch what it shows.",
+     'tabs': _TRENDS_LABELS,     # trends_tabs.TRENDS_TABS, the one definition (2026-11-23)
      'lands': '',
-     'blurb': 'Trends is the daily board of what is moving across search, social, streaming, music, podcasts and gaming.'},
+     'blurb': f"Trends is the daily board of what is moving: {join_names(_TRENDS_LABELS)}, each a tab across the top."},
     {'value': 'cultureRankerIQ', 'label': 'Rankers', 'rule': _r_rankers,
      'aliases': ('rankers', 'ranker', 'the rankers tab', 'rankings', 'leaderboards'),
      'picker': '',
-     'picker_line': "Rankers opens on its boards: FAST, Music, Podcasts, Streaming and Gaming, each a tab across the top.",
-     'tabs': ('FAST', 'Music', 'Podcasts', 'Streaming', 'Gaming'),
+     'picker_line': f"Rankers opens on its boards: {join_names(_RANKERS_LABELS)}, each a tab across the top.",
+     'tabs': _RANKERS_LABELS,    # trends_tabs.RANKERS_TABS, the one definition (2026-11-23)
      'lands': '',
-     'blurb': 'Rankers is the ranked media boards: FAST, Music, Podcasts, Streaming and Gaming.'},
+     'blurb': f"Rankers is the ranked media boards: {join_names(_RANKERS_LABELS)}."},
     {'value': 'microdramasIQ', 'label': 'Micro-Series', 'rule': _r_micro,
      'aliases': ('micro-series', 'micro series', 'microseries', 'microdramas', 'micro dramas', 'microdrama', 'vertical shorts', 'short dramas'),
      'picker': '',
@@ -781,3 +798,143 @@ def is_product_label(label):
     f2 = re.sub(r"\s*iq$", '', f).strip()
     return bool(f2) and f2 != f and (f2 in _product_label_keys() or f2 + ' iq' in _product_label_keys())
 
+
+
+# ---------------------------------------------------------------- what the dashboard holds
+#
+# A question about the dashboard's own products, tabs, views and feeds
+# ("list every Ranker and what each ranks", "does the dashboard have a
+# Share of Time view", "which social platforms does the Social feed in
+# Trends cover") is answered from here, never split into a which-audience
+# question (Liz 2026-11-23; Jenna: "should list what products we have
+# within these as shes asking"). Every fact is read from the place the
+# dashboard defines it: the tabs from trends_tabs (app.py gates on the
+# same keys), the services inside a tab from trends_iq's own platform
+# lists and the live store, the social platforms from
+# trends_iq.SOCIAL_PLATFORMS, the views from PRODUCTS / TABS / FEATURES
+# (the dropdown as the page shows it). Nothing here is a second copy.
+
+def rankers_tabs():
+    """The Rankers tabs in strip order: [{'key', 'label', 'ranks', 'product'}]."""
+    return [dict(_tt.tab(k)) for k in _tt.RANKERS_TAB_KEYS]
+
+
+def trends_tabs():
+    """The Trends tabs in strip order: [{'key', 'label', 'ranks', 'product'}]."""
+    return [dict(_tt.tab(k)) for k in _tt.TRENDS_TAB_KEYS]
+
+
+def social_platforms():
+    """The social platforms the Trends engine reads (trends_iq.SOCIAL_PLATFORMS,
+    the one list every surface reads through), by their on-screen names.
+    [] when the engine cannot be imported (never raises)."""
+    try:
+        import trends_iq as _tiq
+        return [str(label) for _slug, label, *_rest in (_tiq.SOCIAL_PLATFORMS or ()) if str(label or '').strip()]
+    except Exception:
+        return []
+
+
+def social_tab_live():
+    """Whether the Trends strip carries a Social tab today (it does not: it
+    came off 2026-08-20; the platforms still feed Trending people and Movers)."""
+    return any(k == 'social' for k in _tt.TRENDS_TAB_KEYS)
+
+
+_STORE_PANELS = {'music': 'music_charts', 'podcasts': 'podcast_charts'}
+_PUBLISHED_PREFIX = 'trends_iq_snapshots/published/'
+
+
+def _store_labels(host, panel):
+    """The source labels of one published Trends panel (the cards the page
+    renders, one per source), read through the host; [] when unbound."""
+    try:
+        if host is None or not host.has('s3_json'):
+            return []
+        doc = host.s3_json(f"{_PUBLISHED_PREFIX}{panel}.json", None) or {}
+        src = doc.get('sources') if isinstance(doc, dict) else None
+        out = []
+        for _k, v in (src or {}).items():
+            if isinstance(v, dict) and (v.get('items') or []) and str(v.get('label') or '').strip():
+                out.append(str(v['label']).strip())
+        return out
+    except Exception:
+        return []
+
+
+def section_services(key, host=None):
+    """The services a Rankers tab ranks, by their on-screen names, from the
+    place the page reads them: trends_iq's platform lists for FAST,
+    Streaming, Gaming and YouTube; the live store's panels for Music and
+    Podcasts (one card per source). [] when nothing can be read."""
+    k = str(key or '').strip().lower()
+    try:
+        import trends_iq as _tiq
+        if k == 'fast':
+            return [str(l) for _s, l, *_r in _tiq.FAST_PLATFORMS]
+        if k == 'streaming':
+            return [str(l) for _s, l, *_r in _tiq.STREAMING_PLATFORMS]
+        if k == 'gaming':
+            out = []
+            for row in _tiq.GAMING_PLATFORMS:
+                label = str(row[1])
+                subs = row[4] if len(row) > 4 else None
+                if subs:
+                    # the store labels its rails 'Top Free' / 'Top Paid' / 'Most Played' / 'Top Sellers'
+                    out.extend(f"{label} {('top ' + str(sub)) if str(sub) in ('free', 'paid') else str(sub).replace('_', ' ')}"
+                               for sub, _src in subs)
+                else:
+                    out.append(label)
+            return out
+        if k == 'youtube':
+            return [str(l) for _s, l, *_r in _tiq.YOUTUBE_PLATFORMS]
+    except Exception:
+        pass
+    if k in _STORE_PANELS:
+        return _store_labels(host, _STORE_PANELS[k])
+    return []
+
+
+def view_lookup(name):
+    """What the dashboard calls a thing the words name: a product on the
+    SELECT PRODUCT dropdown, a tab inside one, a control, a Trends or
+    Rankers tab; None when the dashboard has no such view today (Share of
+    Time came off the dropdown 2026-08-20 and is not on the map)."""
+    n = ' '.join(str(name or '').split())
+    if not n:
+        return None
+    low = n.lower()
+    for t in rankers_tabs() + trends_tabs():
+        if low == t['label'].lower() or low == t['key']:
+            prod = 'Rankers' if t['product'] == 'rankers' else 'Trends'
+            return {'kind': 'tab', 'label': t['label'], 'product': prod, 'ranks': t['ranks']}
+    prod = find_product(n)
+    if prod:
+        return {'kind': 'product', 'label': prod['label'], 'product': prod['label'], 'value': prod.get('value')}
+    tab = find_tab(n)
+    if tab:
+        pl = product(tab['product'])
+        return {'kind': 'tab', 'label': tab['label'], 'product': (pl or {}).get('label') or tab['product']}
+    feat = find_feature(n)
+    if feat:
+        pl = product(feat.get('product'))
+        return {'kind': 'feature', 'label': feat['label'], 'product': (pl or {}).get('label') or feat.get('product')}
+    return None
+
+
+def products_for(user=None, host=None):
+    """The SELECT PRODUCT options this seat can open today, in dropdown
+    order (the admin's hide list and the seat's access applied), as labels."""
+    try:
+        acc = access_for(user, host)
+        hidden = hidden_products(host)
+    except Exception:
+        acc, hidden = {}, {}
+    out = []
+    for p in PRODUCTS:
+        try:
+            if can_open(p['value'], acc, hidden) == 'open':
+                out.append(p['label'])
+        except Exception:
+            continue
+    return out

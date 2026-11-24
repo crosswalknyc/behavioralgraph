@@ -623,6 +623,14 @@ def features(text, ctx=None, history=None, body=None, *, is_order=False, no_buil
             # should this be on?" on "a 3-5 word description for CW prometheus versus AI")
             intent, action, conf = 'capability', 'answer', 0.9
             ev.append('product:' + str(f['product_question'])[:16])
+            if str(f['product_question']) == 'dashboard':
+                # the words that read the ask as a question about the dashboard itself ("question about the dashboard
+                # itself", "list every", "tabs", "Rankers product", "Social feed", "view"): the evidence on the log (Liz 2026-11-23)
+                try:
+                    from . import product_facts as _pf_cues
+                    ev.extend('dash:' + c for c in _pf_cues.dashboard_cues(t)[:4])
+                except Exception:
+                    pass
         elif f.get('brand_fit') and flipped('brand_fit') and not f.get('wizard_start') and not f.get('insight') and not roster_bare:
             # which brands suit a talent, with pitch angles: a read on the talent's audience; it names no pairing to
             # value, so it is never the valuation's and an open order yields to it (Jenna 2026-11-20, her own seat)

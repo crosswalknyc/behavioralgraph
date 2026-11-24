@@ -19326,12 +19326,9 @@ _TIQ_TRENDS_CARD_KEYS = ('movers', 'trending_headlines', 'articles_by_source',
 _TIQ_TRENDS_COUNT_KEYS = ('searches', 'movers', 'headlines', 'people',
                           'books', 'comics', 'broadway', 'films')
 
-_TIQ_TRENDS_TAB_KEYS = (
-    'searches', 'movers', 'headlines', 'people',
-    'books', 'comics', 'broadway', 'films', 'watchlist',
-)
-_TIQ_RANKERS_TAB_KEYS = ('fast', 'music', 'podcasts', 'streaming', 'gaming',
-                         'youtube')
+# The tab catalogs are defined once in trends_tabs.py (2026-11-23): the page's tab strip, these grants and
+# Prometheus's answers about the dashboard all read the same keys and labels.
+from trends_tabs import TRENDS_TAB_KEYS as _TIQ_TRENDS_TAB_KEYS, RANKERS_TAB_KEYS as _TIQ_RANKERS_TAB_KEYS  # noqa: E402
 _TIQ_TAB_CARD_KEYS = {
     'searches':  ('trending_searches', 'trending_searches_by_category'),
     'movers':    ('movers',),
