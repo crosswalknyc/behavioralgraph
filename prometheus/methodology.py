@@ -55,10 +55,16 @@ UNIT = ("Counts are US viewers (persons), any screen, credited at one "
         "second of viewing; they are not comparable to a service's "
         "reported subscriber count, to TV ratings, or to platform view "
         "counts that tally plays instead of people.")
+# Jenna 2026-11-24: a view is one person counted once, a play is every
+# start from one second, and the plays of 30 seconds or more are a separate
+# measure counted in starts, never people and never called views
+# (PLAYS_ORDER carries the same words for the plays block).
 THRESHOLD = ("A title start counts at one second of playback; autoplayed "
              "previews and trailers on the home screen do not count as "
-             "starts. Where a figure depends on that threshold, the 30 "
-             "seconds or more view is shown beside it.")
+             "starts. Where a figure depends on that threshold, the plays "
+             "of 30 seconds or more are shown beside it: a count of starts "
+             "that ran 30 seconds or more, never people and never called "
+             "views.")
 SESSION = ("A session closes after 30 minutes without activity; a "
            "backgrounded app is not an open.")
 CARRIAGE = ("Carriage paths: direct app and site sessions plus channel "

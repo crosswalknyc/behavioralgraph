@@ -214,8 +214,9 @@ def coverage_line():
 def duration_line():
     return ("Yes. Viewing is measured in time, per person and per sitting, so someone who held a video for 80 minutes or more "
             "in one sitting is separated from someone who opened an 80 minute video and left. A title start counts at one "
-            "second of playback, the 30 seconds or more view is shown beside any figure that depends on it, and a sitting "
-            "closes after 30 minutes without activity. A video's own running time rides with the title, so a watch is read "
+            "second of playback, the plays of 30 seconds or more are shown beside any figure that depends on it (a count of "
+            "starts, never people and never called views), and a sitting closes after 30 minutes without activity. A "
+            "video's own running time rides with the title, so a watch is read "
             "against the length of what was watched.")
 
 
