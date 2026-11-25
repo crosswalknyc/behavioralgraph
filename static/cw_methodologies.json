@@ -2218,7 +2218,7 @@
         "title": "Core Metrics",
         "paragraphs": [
           {
-            "text": "Short Form Conversion produces several standardized metrics: • Unique Views: The count of distinct panelists who view at least one SF post on a given platform during the date range. Deduplicated across posts within the platform. • Duplicated Views: The total volume of SF post views on a given platform during the date range, including repeat views. • Converted to Title: The count of distinct panelists on a given platform who completed a qualifying LF interaction within the Attribution Window after their SF view. • Conversion Rate: Converted to Title divided by Unique Views, expressed as a percentage. Reported per platform and overall. • Cross-Platform Overlap: The share of converters who engaged with SF content on more than one platform during the window. Metric definitions are applied consistently across projects to ensure comparability.",
+            "text": "Short Form Conversion produces several standardized metrics: • Unique Views: The count of distinct panelists who view at least one SF post on a given platform during the date range. Deduplicated across posts within the platform. • Total plays: Every play of an SF post on a given platform during the date range, repeat plays included. • Converted to Title: The count of distinct panelists on a given platform who completed a qualifying LF interaction within the Attribution Window after their SF view. • Conversion Rate: Converted to Title divided by Unique Views, expressed as a percentage. Reported per platform and overall. • Cross-Platform Overlap: The share of converters who engaged with SF content on more than one platform during the window. Metric definitions are applied consistently across projects to ensure comparability.",
             "is_list": false,
             "runs": [
               {
@@ -2262,7 +2262,7 @@
                 "bold": false
               },
               {
-                "text": "Duplicated Views",
+                "text": "Total plays",
                 "bold": false
               },
               {
@@ -2274,7 +2274,7 @@
                 "bold": false
               },
               {
-                "text": "The total volume of SF post views on a given platform during the date range, including repeat views. ",
+                "text": "Every play of an SF post on a given platform during the date range, repeat plays included. ",
                 "bold": false
               },
               {
@@ -2998,7 +2998,7 @@
             ]
           },
           {
-            "text": "• Title name.• Primary metric: 28-day reach on Peacock; reads on ReelShort, DramaBox, and GoodShort; current chart position on NetShort.• Secondary metric: episode count, genre, or first observed date.• Current rank on the platform's chart or hub.• Best rank achieved during the window.• A mini bar strip: daily reach curve on Peacock, or rank-over-time on competitor platforms.",
+            "text": "• Title name.• Primary metric: plays in the window you pick, on every platform.• Secondary metric: episode count, genre, or first observed date.• Current rank on the platform's chart or hub.• Best rank achieved during the window.• A trend chart: daily plays over the last 7 days, or rank over time where a platform shows no daily plays.",
             "is_list": false,
             "runs": [
               {
@@ -3006,7 +3006,7 @@
                 "bold": false
               },
               {
-                "text": "• Primary metric: 28-day reach on Peacock; reads on ReelShort, DramaBox, and GoodShort; current chart position on NetShort.",
+                "text": "• Primary metric: plays in the window you pick, on every platform.",
                 "bold": false
               },
               {
@@ -3022,7 +3022,7 @@
                 "bold": false
               },
               {
-                "text": "• A mini bar strip: daily reach curve on Peacock, or rank-over-time on competitor platforms.",
+                "text": "• A trend chart: daily plays over the last 7 days, or rank over time where a platform shows no daily plays.",
                 "bold": false
               }
             ]

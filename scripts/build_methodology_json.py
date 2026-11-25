@@ -60,6 +60,22 @@ PLAY_SLOTS = (
     ('How We Measure a View', 'Viewership', None, None),
 )
 PLAY_BULLET_RX = re.compile(r"(?i)^\W*a play is\b")
+# Jenna 2026-11-24 (rename_plays): the platform video counts on the
+# short-form conversion and Micro-Series screens are plays, and the page
+# names them the way the screens do. What a play is stays the Play entry
+# above (methodology.PLAY_DEFINITION); these runs never restate it.
+# (section title, sub title, the run to rewrite, the words it carries;
+# None means play_count_labels.TOTAL_PLAYS)
+PLAY_LABEL_SLOTS = (
+    ('SHORT FORM CONVERSION', 'Core Metrics', re.compile(r"(?i)^\s*(?:duplicated views|total plays)\s*$"), None),
+    ('SHORT FORM CONVERSION', 'Core Metrics', re.compile(r"(?i)^\s*the total volume of sf post views\b"),
+     'Every play of an SF post on a given platform during the date range, repeat plays included. '),
+    ('MICRODRAMAS', 'Title Cards', re.compile(r"(?i)^\W*primary metric:"),
+     '\u2022 Primary metric: plays in the window you pick, on every platform.'),
+    ('MICRODRAMAS', 'Title Cards', re.compile(r"(?i)^\W*(?:a mini bar strip|a trend chart):"),
+     '\u2022 A trend chart: daily plays over the last 7 days, or rank over time where a platform '
+     'shows no daily plays.'),
+)
 
 
 def _methodology():
@@ -121,6 +137,36 @@ def sync_view_definition(sections, methodology=None):
     play = getattr(meth, 'PLAY_DEFINITION', None)
     if play:
         changes += _sync_play(by_title, play, getattr(meth, 'VIEW_DEFINITION'))
+    changes += sync_play_labels(sections)
+    return changes
+
+
+def sync_play_labels(sections):
+    """Write each PLAY_LABEL_SLOTS run: the short-form and Micro-Series
+    entries call the platform video counts plays. A section the document
+    no longer carries is skipped (there is nothing left to mislabel).
+    Returns a list of (section, sub, before, after) for every change."""
+    webapp = Path(__file__).resolve().parents[1]
+    if str(webapp) not in sys.path:
+        sys.path.insert(0, str(webapp))
+    from play_count_labels import TOTAL_PLAYS
+    changes = []
+    by_title = {s.get('title'): s for s in sections}
+    for sec_title, sub_title, rx, words in PLAY_LABEL_SLOTS:
+        sub = next((s for s in (by_title.get(sec_title) or {}).get('subs') or []
+                    if s.get('title') == sub_title), None)
+        for p in (sub or {}).get('paragraphs') or []:
+            runs = p.get('runs') or []
+            idx = next((i for i, r in enumerate(runs) if rx.search(r.get('text', ''))), None)
+            if idx is None:
+                continue
+            new = TOTAL_PLAYS if words is None else words
+            if runs[idx].get('text') != new:
+                before = p.get('text', '')
+                runs[idx] = {'text': new, 'bold': bool(runs[idx].get('bold'))}
+                p['text'] = _paragraph_text(p)
+                changes.append((sec_title, sub_title, before, p['text']))
+            break
     return changes
 
 
@@ -355,7 +401,7 @@ if __name__ == '__main__':
         rest = [a for a in sys.argv[1:] if not a.startswith('--')]
         target = rest[0] if rest else DEFAULT_OUT
         changed = sync_file(target)
-        print(f'{target}: {len(changed)} view paragraph(s) rewritten from prometheus/methodology.py')
+        print(f'{target}: {len(changed)} paragraph(s) rewritten (view and play wording)')
         for sec, sub, before, after in changed:
             print(f'  - {sec} > {sub}')
         sys.exit(0)

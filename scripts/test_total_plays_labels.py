@@ -22,11 +22,20 @@ Checks:
   plays (prometheus_analysis.render_view_context_block); other screens
   carry no note.
 - app.py relabels the short-form download before it stamps it.
+- No est. / estimated / approx / ~ hedge in a string a reader sees on
+  either screen (no-modeled-or-source-language); the short-form video
+  marker says what its number is.
+- The methodology page (static/cw_methodologies.json) names the
+  short-form and Micro-Series counts plays through the build script's sync
+  (scripts/build_methodology_json.py), without restating what a play is.
 
 Hermetic: no app boot, no network, no store.
 """
 from __future__ import annotations
 
+import copy
+import importlib.util
+import json
 import os
 import re
 import sys
@@ -108,6 +117,68 @@ def header_rows(fn_src):
     return out
 
 
+HEDGE = re.compile(r"(?i)\best\.|\bestimat\w*|\bapprox\w*|\bRaw: ~")
+IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def script_strings(src):
+    """The contents of every quoted string in a script; the code inside a
+    template literal's ${...} is left out."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        q = src[i]
+        if q not in "'\"`":
+            i += 1
+            continue
+        j, buf = i + 1, []
+        while j < n:
+            d = src[j]
+            if d == '\\':
+                buf.append(src[j:j + 2])
+                j += 2
+                continue
+            if q == '`' and src.startswith('${', j):
+                depth, j = 1, j + 2
+                while j < n and depth:
+                    depth += {'{': 1, '}': -1}.get(src[j], 0)
+                    j += 1
+                buf.append(' ')
+                continue
+            if d == q or (q != '`' and d == '\n'):
+                break
+            buf.append(d)
+            j += 1
+        out.append(''.join(buf))
+        i = j + 1
+    return out
+
+
+def markup_strings(src):
+    """Text between tags and the attributes a reader sees on hover."""
+    return (re.findall(r">([^<>]+)<", src)
+            + re.findall(r'\b(?:title|aria-label|placeholder|data-tooltip|alt)="([^"]*)"', src))
+
+
+def reader_strings(markup, script):
+    """The strings a reader can see on a screen, minus bare identifiers and
+    constants (a payload key, a data-source name)."""
+    texts = markup_strings(markup) + script_strings(script)
+    return [t for t in texts if t.strip() and not IDENT.match(t.strip())]
+
+
+def load_builder():
+    spec = importlib.util.spec_from_file_location('build_methodology_json', WEBAPP / 'scripts' / 'build_methodology_json.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def sub_runs(sections, sec_title, sub_title):
+    sec = next((s for s in sections if s.get('title') == sec_title), {}) or {}
+    sub = next((s for s in sec.get('subs') or [] if s.get('title') == sub_title), {}) or {}
+    return [r.get('text', '') for p in sub.get('paragraphs') or [] for r in p.get('runs') or []]
+
+
 def main():
     html = (WEBAPP / 'templates' / 'index.html').read_text(encoding='utf-8')
     text = {}
@@ -137,11 +208,40 @@ def main():
         'background: var(--bg-dark);">Total plays</th>',
         'border-bottom: 1px solid var(--border-color);">Total plays</th>',
         'Total plays:</span>',
-        'public play counts',
     ):
         check(f'short-form: {label!r}', label in sf)
     check('short-form: the tile names viewers when an older report has no plays row',
           "(totalShortFormViewsGenPop > 0 || totalShortFormViewsSample > 0) ? 'Short form plays' : 'Short form viewers'" in sf)
+
+    print('no hedge in what a reader sees')
+    for screen, parts in SCREENS.items():
+        markup, script = (shown(region(html, a, b) or '') for a, b in parts)
+        hits = [t for t in reader_strings(markup, script) if HEDGE.search(t)]
+        check(f'{screen}: no est. / estimated / approx / ~ in a reader string', not hits,
+              repr([h[:90] for h in hits[:4]]))
+    tip = 'Plays: each start of this video, counted across the platform'
+    check('short-form: the video marker says what its number is',
+          f'title="{tip}" aria-label="{tip}"' in sf and '\u24d8</span>' in sf)
+    check('short-form: the marker names no source and no hedge',
+          'Estimated from scraped' not in sf and '>est.</span>' not in sf)
+    check('short-form: the time tile says what it is', '>Avg time to convert</div>' in sf and 'Est. Avg Time' not in sf)
+    check('short-form: the fake views tile carries no hedge', '>Fake Views</div>' in sf and 'Est. Fake Views' not in sf)
+    for label in (
+        "tip: 'Plays over ' + _miqActiveWindowLabel() + ': every start of an episode.",
+        "'Unique viewers on ' + uvPlatformName + ' over ' + uvWindow + ': each person counted once. '",
+        'Raw: payers / total viewers.',
+        'Raw: finishers / payers.',
+        'title="Paying viewers / unique viewers over the active window."',
+        'paying / unique viewers</span>',
+        "' Raw: ' + pcRawStr",
+        'title="Payers who finished the whole series / total payers over the active window."',
+        'finishers / payers</span>',
+        '(daily avg)</span>',
+        'each day shows the daily average',
+    ):
+        check(f'Micro-Series: {label[:70]!r}', label in miq)
+    check('Micro-Series: the plays chip tooltip on all three card grids',
+          miq.count("tip: 'Plays over ' + _miqActiveWindowLabel()") == 3)
 
     print('Micro-Series labels')
     chips = miq.count("label: 'Plays'")
@@ -249,6 +349,44 @@ def main():
               note in block and block.find(note) < block.find('{'), block[:200])
     plain = pma.render_view_context_block({'view_id': 'subscriberIQ', 'view_title': 'Subscriber IQ', 'data': {'show': 'X'}})
     check('subscriberIQ: no count-name note', 'COUNT NAMES ON THIS SCREEN' not in plain and 'DATA CURRENTLY ON SCREEN' in plain)
+
+    print('the methodology page')
+    sections = json.loads((WEBAPP / 'static' / 'cw_methodologies.json').read_text(encoding='utf-8'))
+    sf_runs = sub_runs(sections, 'SHORT FORM CONVERSION', 'Core Metrics')
+    md_runs = sub_runs(sections, 'MICRODRAMAS', 'Title Cards')
+    check('short-form Core Metrics name the play count Total plays', plays.TOTAL_PLAYS in sf_runs)
+    check('short-form Core Metrics describe it as plays',
+          'Every play of an SF post on a given platform during the date range, repeat plays included. ' in sf_runs)
+    check('short-form Core Metrics keep no Duplicated Views wording',
+          not any(re.search(r'(?i)duplicated views|total volume of sf post views', r) for r in sf_runs))
+    check('short-form Core Metrics keep Unique Views, the person count', 'Views' in sf_runs and 'Unique ' in sf_runs)
+    check('Micro-Series title cards name the card metric plays',
+          '\u2022 Primary metric: plays in the window you pick, on every platform.' in md_runs)
+    check('Micro-Series title cards name the trend chart daily plays',
+          any(r.startswith('\u2022 A trend chart: daily plays') for r in md_runs))
+    check('Micro-Series title cards keep no reads or reach wording for the count',
+          not any(re.search(r'(?i)\breads on\b|reach curve|28-day reach', r) for r in md_runs))
+    check('the page restates no definition of a play outside the Play entry',
+          not any(re.search(r'(?i)\ba play is\b', r) for r in sf_runs + md_runs))
+    builder = load_builder()
+    check('the page is in step with the sync (nothing to change)', builder.sync_play_labels(copy.deepcopy(sections)) == [])
+    old = copy.deepcopy(sections)
+    for sec_title, sub_title, before, after in (
+            ('SHORT FORM CONVERSION', 'Core Metrics', plays.TOTAL_PLAYS, 'Duplicated Views'),
+            ('MICRODRAMAS', 'Title Cards', '\u2022 Primary metric: plays in the window you pick, on every platform.',
+             '\u2022 Primary metric: 28-day reach on Peacock; reads on ReelShort, DramaBox, and GoodShort; '
+             'current chart position on NetShort.')):
+        sec = next(s for s in old if s.get('title') == sec_title)
+        sub = next(s for s in sec['subs'] if s.get('title') == sub_title)
+        for p in sub['paragraphs']:
+            for r in p['runs']:
+                if r.get('text') == before:
+                    r['text'] = after
+            p['text'] = ''.join(r['text'] for r in p['runs'])
+    changed = builder.sync_view_definition(old)
+    check('a rebuild from the old words is put back to plays by the sync every build runs',
+          len(changed) == 2 and plays.TOTAL_PLAYS in sub_runs(old, 'SHORT FORM CONVERSION', 'Core Metrics'),
+          repr(changed[:2]))
 
     print('no dash characters in the new copy')
     mod_src = (WEBAPP / 'play_count_labels.py').read_text(encoding='utf-8')

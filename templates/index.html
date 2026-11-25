@@ -33608,7 +33608,7 @@ https://www.instagram.com/p/..."></textarea>
                 <div>Loading microdrama titles...</div>
             </div>
 
-            <!-- All Platforms panel: default landing tab. Aggregated top titles across every platform, sorted by estimated views. -->
+            <!-- All Platforms panel: default landing tab. Aggregated top titles across every platform, sorted by plays. -->
             <div class="miq-panel active" data-panel="all">
                 <div id="microdramasIQAllMeta" class="miq-meta"></div>
                 <div id="microdramasIQAllPlatformRollup" class="miq-platform-rollup"></div>
@@ -50043,7 +50043,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 <div class="kpi-value" id="sfConvKpiRate" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-primary); margin-top: 0.25rem;">-</div>
                             </div>
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
-                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Est. Avg Time</div>
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Avg time to convert</div>
                                 <div class="kpi-value" id="sfConvKpiAvgTime" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange); margin-top: 0.25rem;">-</div>
                             </div>
                             <div class="kpi-card" id="sfConvKpiLFPlatformCard" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color); display: none;">
@@ -50200,7 +50200,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                         </div>
                                         <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05)); border-radius: 12px; padding: 1.25rem; text-align: center; border: 1px solid rgba(245, 158, 11, 0.2); position: relative; overflow: hidden;">
                                             <div style="position: absolute; top: -10px; right: -10px; font-size: 3rem; opacity: 0.1;">👁️</div>
-                                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Est. Fake Views</div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Fake Views</div>
                                             <div id="sfConvFakeViewsPct" style="font-size: 2rem; font-weight: 800; color: #f59e0b;">-</div>
                                         </div>
                                         <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05)); border-radius: 12px; padding: 1.25rem; text-align: center; border: 1px solid rgba(34, 197, 94, 0.2); position: relative; overflow: hidden;">
@@ -64264,7 +64264,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (uniqueViewers != null && uniqueViewers > 0) {
                 var uvWindow = _miqActiveWindowLabel();
                 var uvPlatformName = t.platform_label || (c.source === 'peacock' ? 'Peacock' : 'this platform');
-                var uvTip = 'Estimated unique viewers on ' + uvPlatformName + ' over ' + uvWindow + '. '
+                var uvTip = 'Unique viewers on ' + uvPlatformName + ' over ' + uvWindow + ': each person counted once. '
                           + 'Same window as Plays. Changes with the look-back filter above the grid. '
                           + 'The trend chart below is always the last 7 days.';
                 parts.push('<span class="miq-comp-chip miq-chip-completion" title="' + _miqEscape(uvTip) + '">'
@@ -64302,7 +64302,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _payers = Math.round(_uvForRaw * c.paid_pct / 100);
                 }
                 if (c.paid_pct != null) {
-                    var payTip = 'Share of viewers who watch at least one paid (post-paywall) episode. Raw: est. payers / total viewers.';
+                    var payTip = 'Share of viewers who watch at least one paid (post-paywall) episode. Raw: payers / total viewers.';
                     var payersRaw = '';
                     if (_payers != null && _uvForRaw > 0) {
                         payersRaw = '<span class="miq-comp-chip-raw">'
@@ -64316,7 +64316,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                              + '</span>');
                 }
                 if (c.payer_completion_pct != null) {
-                    var payerCompTip = 'Of viewers who paid at least one ep, share who finish the whole series. Raw: est. finishers / payers.';
+                    var payerCompTip = 'Of viewers who paid at least one ep, share who finish the whole series. Raw: finishers / payers.';
                     var pcRaw = '';
                     if (_payers != null && _payers > 0) {
                         var _pcFin = Math.round(_payers * c.payer_completion_pct / 100);
@@ -64722,7 +64722,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var primary = {
                     label: 'Plays',
                     value: viewsVal != null ? _miqFormatNumber(viewsVal) : '-',
-                    tip: 'Estimated episode-plays over ' + _miqActiveWindowLabel() + '. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
+                    tip: 'Plays over ' + _miqActiveWindowLabel() + ': every start of an episode. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
                 };
                 card.innerHTML = _miqCardHTML(t, 'Peacock', spark, primary);
                 card.addEventListener('click', function(evt) {
@@ -64785,7 +64785,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var primary = {
                     label: 'Plays',
                     value: windowPlays != null ? _miqFormatNumber(windowPlays) : '-',
-                    tip: 'Estimated episode-plays over ' + _miqActiveWindowLabel() + '. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
+                    tip: 'Plays over ' + _miqActiveWindowLabel() + ': every start of an episode. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
                 };
                 card.innerHTML = _miqCardHTML(t, platform.label, spark, primary);
                 card.addEventListener('click', function(evt) {
@@ -65417,8 +65417,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                               +   '<span class="miq-rollup-conv-value">' + p.free_to_paid_pct.toFixed(1) + '%</span>'
                               + '</div>';
                     if (convRawStr) {
-                        convBlock += '<div class="miq-rollup-card-conv-raw" title="Estimated paying viewers / unique viewers over the active window.">'
-                                   +   '<span class="miq-rollup-conv-raw-label">est. paying / unique viewers</span>'
+                        convBlock += '<div class="miq-rollup-card-conv-raw" title="Paying viewers / unique viewers over the active window.">'
+                                   +   '<span class="miq-rollup-conv-raw-label">paying / unique viewers</span>'
                                    +   '<span class="miq-rollup-conv-raw-value">' + convRawStr + '</span>'
                                    + '</div>';
                     }
@@ -65451,14 +65451,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                               + ' payers who finish the entire series. For coin platforms this is the '
                               + 'payer cohort only (viewers who bought at least one paid ep). For Peacock '
                               + 'every viewer is a paying subscriber, so this is the same as series completion.'
-                              + (pcRawStr ? ' Raw: ~' + pcRawStr + ' payers who finished / total payers.' : '');
+                              + (pcRawStr ? ' Raw: ' + pcRawStr + ' payers who finished / total payers.' : '');
                     paidCompBlock = '<div class="miq-rollup-card-conv" title="' + _miqEscape(pcTip) + '">'
                                   +   '<span class="miq-rollup-conv-label">Avg Paid Completion</span>'
                                   +   '<span class="miq-rollup-conv-value">' + p.avg_paid_completion_pct.toFixed(1) + '%</span>'
                                   + '</div>';
                     if (pcRawStr) {
-                        paidCompBlock += '<div class="miq-rollup-card-conv-raw" title="Estimated payers who finished the whole series / total estimated payers over the active window.">'
-                                       +   '<span class="miq-rollup-conv-raw-label">est. finishers / payers</span>'
+                        paidCompBlock += '<div class="miq-rollup-card-conv-raw" title="Payers who finished the whole series / total payers over the active window.">'
+                                       +   '<span class="miq-rollup-conv-raw-label">finishers / payers</span>'
                                        +   '<span class="miq-rollup-conv-raw-value">' + pcRawStr + '</span>'
                                        + '</div>';
                     }
@@ -65609,7 +65609,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var primary = {
                     label: 'Plays',
                     value: viewsStr,
-                    tip: 'Estimated episode-plays over ' + _miqActiveWindowLabel() + '. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
+                    tip: 'Plays over ' + _miqActiveWindowLabel() + ': every start of an episode. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
                 };
 
                 // Aggregated rank pill prepended to the title row.
@@ -65799,7 +65799,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var tableRows = rows.map(function(r) {
                 var v = r.views;
                 var vStr = (v == null) ? '\u2014'
-                    : (_miqFormatNumber(v) + (r.estimated ? '<span style="color:#94a3b8; margin-left:0.35rem;">(est.)</span>' : ''));
+                    : (_miqFormatNumber(v) + (r.estimated ? '<span style="color:#94a3b8; margin-left:0.35rem;">(daily avg)</span>' : ''));
                 var rk = ranksByDate[r.date != null ? r.date : ''];
                 // Try both the shifted (display) date and the unshifted
                 // snapshot date so competitor rank lookups still hit.
@@ -65822,7 +65822,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             var totalLine = _miqFormatNumber(totalViews) + ' plays across ' + rows.length + ' day' + (rows.length === 1 ? '' : 's');
             if (anyEstimated) {
-                totalLine += ' \u00B7 estimated from chart position';
+                totalLine += ' \u00B7 each day shows the daily average';
             }
 
             body.innerHTML =
@@ -74807,7 +74807,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 const convDisplay = r.convertedProj > 0 ? formatGenPop(r.convertedProj) : r.convertedSample.toLocaleString();
                 const dataSourceTag = (u.dataSource === 'SCRAPED_ESTIMATE')
-                    ? `<span title="Estimated from scraped public play counts - panel had no observation for this URL" style="margin-left: 0.4rem; font-size: 0.65rem; color: var(--accent-cyan);">est.</span>`
+                    ? `<span title="Plays: each start of this video, counted across the platform" aria-label="Plays: each start of this video, counted across the platform" style="margin-left: 0.4rem; font-size: 0.65rem; color: var(--accent-cyan);">ⓘ</span>`
                     : '';
                 // Creator | URL display. Creator (when available) is
                 // shown in the same cell as the URL, separated by a soft
