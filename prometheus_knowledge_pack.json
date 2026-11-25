@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "b31e9b8f53f8b46dd9fec4aea918a1a924e6cbabbb1706ca766d153aea26fec3",
- "examples_hash": "1d04ce555e3c66e19ffe9d72233584929dfe47269d0ecef9ad9a1bab4f25d105",
+ "content_hash": "94d78f0a7b8c7007645ab2c9076e8d227a185945c2c634dfc541782ad6da3bac",
+ "examples_hash": "53da5ea808c4b496839572b7f69e8fe4459142c2201ddb400beca969d865862f",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "c967ccc2f282d03b7cb2c35388bbc59b91bb649dff9546cab44690a8c945dc45",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "4003c928a959ce1dc55fc3e3b8e76e2049af8113431024c3dc1f1d992dc6f292",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "086f8c3c2ac83dc634b3d73d04a82e3674a1c018492cc393f0921321bd93588a",
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "03c4cb46bf112dd93bb32d63182cc7e1538d7638f00027598aabf71ad98a804c",
   ".cursor/skills/crosswalk-design/SKILL.md": "0890b74ca58fc3113f3b93210a524e42b4cccb1f02906f3af72bab98c54bf096",
   ".cursor/skills/crosswalk-design/references/company.md": "ac29b7962918715d9b337a01f23befb4990b4af6c7afb3cf50fdb6a493b64d83"
  },
@@ -149,10 +149,10 @@
    "text": "On Olipop:\n\nThe age profile is front-loaded on 25-34: 2,756,599 people, 29.7% of the audience and an index of 225 against the average American.\n\nProjected US audience: 9,281,209, Core 25-44 audience: 4,926,301, Share under 35: 50.6%.\n\nAge band mix, Oct 31 2025 to Oct 31 2026 (share of the projected US audience)\n- 25-34: 29.7% share. largest band, index 225, 2,756,599 people\n- 35-44: 23.4% share. index 173, 2,169,702 people\n- 18-24: 18.3% share. index 188, 1,695,498 people\n- 45-54: 14.2% share. index 111, 1,316,595 people\n- 55-64: 7.7% share. index 62, 715,711 people\n- 65 or older: 4.1% share. index 22, 382,915 ..."
   },
   "audience_sizing": {
-   "subject": "Abbott Elementary, social reach to new episode viewing, Fall 2026 vs Fall 2025",
-   "title": "Abbott Elementary, social reach to new episode viewing, Fall 2026 vs Fall 2025 | Fall 2026 (Aug 12 to Nov 10 2026) vs Fall 2025 (Aug 6 to Nov 4 2025)",
-   "q": "how many of them played a new Season 5 episode for 30 seconds or longer from Oct 1 to Nov 4 2025 on a date after their first social touch. For each year give the people reached, the people who then watched, and that count as a percent of the people reached. Also give everyone who watched a new episo",
-   "text": "On Abbott Elementary, social reach to new episode viewing, Fall 2026 vs Fall 2025:\n\n447,838 of the 11,238,665 people reached by Abbott Elementary on social in Fall 2026, 4.0%, played a new Season 6 episode for 30 seconds or longer after their first social touch, against 387,107 of 10,462,337 reached, 3.7%, in Fall 2025.\n\nPeople reached on social, Aug 12 to Nov 10 2026: 11,238,665, Of those, played a new Season 6 episode, 30 seconds or longer: 447,838, People reached on social, Aug 6 to Nov 4 2025: 10,462,337.\n\nCarriage path, new episode viewers at 30 seconds or longer mix, Fall 2026 (Aug 12 to Nov 10 2026) vs ..."
+   "subject": "The nine Dick Wolf and FBI series on Peacock (Disney+/Hulu migration scenario)",
+   "title": "The nine Dick Wolf and FBI series on Peacock (Disney+/Hulu migration scenario) | Peacock viewers whose viewing is the nine series and little else | Nov 17 2025 to Nov 16 2026",
+   "q": "Scenario: the nine series leave Peacock and stream only on Disney+ and Hulu. Take the Peacock accounts that watch the nine series and little else (the nine are half or more of the account's Peacock minutes, no other title in its top five, no live sports session). Give: how many of them do not have D",
+   "text": "On people who watched The nine Dick Wolf and FBI series on Peacock (Disney+/Hulu migration scenario) in the window (Peacock viewers whose viewing is the nine series and little else):\n\n1,844,854 of the 3,142,867 Peacock viewers who watch the nine series and little else carry no Disney+ or Hulu today (all seasons), and 1,817,902 of 3,086,419 on the library cut, so the migration puts roughly 1.8M people in front of a new subscription decision.\n\nNine-and-little-else viewers with no Disney+ or Hulu, all seasons: 1,844,854, Nine-and-little-else viewers already on Disney+ or Hulu, all seasons: 1,298,013, Share of the ..."
   },
   "category_demand": {
    "subject": "Paw Patrol Series",
@@ -161,10 +161,10 @@
    "text": "Action Figures and Playsets lead toy purchasing among parents of 4-to-6-year-old Paw Patrol viewers at 22.3% of category signals, with Preschool Toys close behind at 19.8%.\n\nShare of audience, parents of kids 4-6: 34.1%, Projected US people, parents of kids 4-6: 5,476,469, Toy purchase signal penetration: 83.7%.\n\nToy category mix, Jul 1 2025 to Jun 30 2026 (Share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 22.3% share, 64.1% penetration. Spin Master Paw Patrol vehicles and figures dominate, followed by Hasbro Transformers and Mattel Jurassic World\n- Preschool Toys: 19.8% share, 57.3% ..."
   },
   "competitive_overlap": {
-   "subject": "Peacock",
-   "title": "Peacock | Nov 17 2025 to Nov 16 2026",
-   "q": "Share of Peacock streaming minutes, window Nov 17 2025 to Nov 16 2026, US. Of all minutes streamed on Peacock in the window, what percent went to each of these groups, which do not overlap: (1) the nine Dick Wolf series combined (Law & Order: Special Victims Unit; Law & Order; Law & Order: Organized",
-   "text": "Live sports took 19.4% of all US Peacock streaming minutes in the window, the largest of the five groups, with the nine Dick Wolf series second at 11.6%.\n\nNine Dick Wolf series, share of Peacock minutes: 11.6%, Seven NBC Wolf series alone, share of Peacock minutes: 10.7%, Live sports, share of Peacock minutes: 19.4%.\n\nPeacock content group mix, Nov 17 2025 to Nov 16 2026 (share of all US Peacock streaming minutes in the window)\n- Everything else on Peacock: 53.7% share. 97,341,228 people; originals, NBC primetime outside Wolf, film, kids, Telemundo and news\n- Live sports: 19.4% share. 48,712,336 people; Milan ..."
+   "subject": "The nine Dick Wolf series on Peacock",
+   "title": "The nine Dick Wolf series on Peacock | Nov 17 2025 to Nov 16 2026",
+   "q": "Who the Peacock viewers of the nine Dick Wolf series are. Compare two groups of people: ALL viewers (played any episode) and LIBRARY viewers (played at least one episode in the LIBRARY scope). For each group give: percent women; median age; the percent in each age band (17 and under, 18 to 24, 25 to",
+   "text": "On people who watched The nine Dick Wolf series on Peacock on Peacock in the window:\n\n12,097,697 US viewers played at least one episode of any scope, 60.6% of them women at a median age of 46.5, and the LIBRARY scope holds 11,442,318 of those same people, a shade more female at 61.2%.\n\nALL viewers (each person once): 12,097,697, ALL, percent women: 60.6%, ALL, median age: 46.\n\nAge band mix, Nov 17 2025 to Nov 16 2026 (share is the band's share of the 12,097,697 ALL viewers; penetration is the same band's share of the 11,442,318)\n- 35 to 44: 20.1% share, 20.4% penetration. ALL 2,431,636 people; LIBRARY 2,334,232, ..."
   },
   "event_impact": {
    "subject": "Abbott Elementary (Hulu app, Hulu on Disney+, HBO Max)",
@@ -191,10 +191,10 @@
    "text": "On Vivian Tu x SoFi:\n\nVivian Tu's audience put 71,243 SoFi applications into flow in the first 12 months of her Chief of Financial Empowerment role and finished 24,793 product opens, with savings and invest carrying two thirds of the mix.\n\nSoFi users inside the Vivian Tu audience: 549,549, Reached sofi.com or a SoFi app surface after a Vivian Tu touchpoint: 312,487, Started a SoFi application flow: 71,243.\n\nSoFi product line mix, Nov 6 2025 to Nov 6 2026 (share of the 24,793 attributed SoFi product opens)\n- SoFi Checking and Savings (high-yield): 41.3% share, 34.7% penetration. the entry product, driven by ..."
   },
   "subscriber_churn": {
-   "subject": "Amazon Prime Video Channels vs direct, premium streaming subscriptions",
-   "title": "Amazon Prime Video Channels vs direct, premium streaming subscriptions | Nov 1 2025 to Oct 31 2026",
-   "q": "per service churn and survival, Amazon Prime Video Channels versus direct",
-   "text": "On Amazon Prime Video Channels vs direct, premium streaming subscriptions:\n\nPeople who sign up for a premium streaming service through Amazon cancel 1.7x as often as people who sign up direct: 7.4% monthly churn through Amazon Prime Video Channels against 4.3% direct, same services, same shows, same price in both stores.\n\nWe followed 6,214,387 subscriptions to ten premium services sold both ways (HBO Max, Peacock, Paramount+, STARZ, Apple TV+, BET+, MGM+, AMC+, BritBox, Acorn TV) from Nov 1 2025 to Oct 31 2026. 33.4% started in Amazon's store (2,075,611 Amazon starts; 4,138,776 direct).\n\n- Monthly churn: 7.4% ..."
+   "subject": "Dick Wolf series on Peacock, signup and reengagement cohort",
+   "title": "Dick Wolf series on Peacock, signup and reengagement cohort | Peacock accounts opened or reengaged after 180 or more days away with a Dick Wolf first play within 7 days | Nov 17 2025 to Nov 16 2026",
+   "q": "Detail on Peacock accounts opened or reengaged (after 180 or more days away) in the window whose first play within 7 days was an episode of one of the nine Dick Wolf series. For ALL (first play was any episode) and for LIBRARY (first play was an episode in the LIBRARY scope) give: (1) of the account",
+   "text": "On Dick Wolf series on Peacock, signup and reengagement cohort - Peacock accounts opened or reengaged after 180 or more days away with a Dick Wolf first play within 7 days:\n\n361,463 US people opened or reengaged a Peacock account in the window and played one of the nine Dick Wolf series first, and 50.9% of them (184,116) started on a Chicago series rather than on a Law & Order or FBI title.\n\nALL scope cohort: 361,463, LIBRARY scope cohort: 334,178, First play was Law & Order: Special Victims Unit (ALL): 31.2%.\n\nService canceled in the 30 days before mix, Nov 17 2025 to Nov 16 2026 (share of ALL-scope cohort ..."
   },
   "talent_value": {
    "subject": "Starz",
@@ -209,5 +209,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-11-18T17:11:06Z"
+ "generated_at": "2026-11-24T23:24:25Z"
 }

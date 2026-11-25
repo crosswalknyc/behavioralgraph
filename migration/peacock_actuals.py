@@ -9,13 +9,15 @@ this to calibrate as we project or do anything for peacock."
 
 What the anchor is
 ------------------
-A client's own monthly report for its series on Peacock: per episode,
+A client's own monthly reports for its series on Peacock: per episode,
 the unique accounts that played it in the month and its content starts
 (a start counts the moment an episode begins playing, no minimum watch
 time; the same definition the views methodology already carries for
-Peacock). The private ledger holds one record per show per month. It
-says nothing about any other service, about linear TV, or about a
-show's audience anywhere else.
+Peacock). The private ledger holds one record per show per month for
+every month a report covers, and, from the client's review deck, each
+series' monthly starts (all seasons, current season, library) for the
+months no report covers. It says nothing about any other service, about
+linear TV, or about a show's audience anywhere else.
 
 The record lives at s3://dashboard-inputs/system/first_party_actuals/
 peacock.json and nowhere else: never in git, never under a prefix a
@@ -43,12 +45,21 @@ How it is read (every figure below is internal)
   people, so plays = starts x the people in front of a start (always
   under the month's people-per-account ratio, since the second person
   is not there for every start).
-* A month the report does not cover scales from the anchored month by
-  release timing: a show with its season on air follows the broadcast
-  calendar (October is the top of it), a library show is close to flat.
-  A window longer than a month counts each person once: the largest
-  month in full, each further month only for the new people it adds,
-  fewer each time. Never October copied flat.
+* A month a report covers is read from that month. A month no report
+  covers follows the show's own curve: its starts come from the deck's
+  series for that month (release timing as it happened), and the
+  accounts each start carries are read between the two nearest report
+  months, by time when both have the season in the same state (on air,
+  or not) and by the month's current-season share when one is on air and
+  the other is not (a finale month reads like the season, a summer month
+  like the library). A month past the newest report is the same month a
+  year earlier times the show's own year-over-year starts; a show with no
+  deck series follows its report months along the library curve the
+  deck's series trace. A show the reports stopped listing is read from
+  the months it appears in only (`show_policy`, observed_only). A window
+  longer than a month counts each person once: the largest month in
+  full, each further month only for the new people it adds, fewer each
+  time. Never one month copied flat.
 * A Peacock title the report does not name takes a correction learned
   from where our own earlier figures sat against the anchored shows, by
   surface and by whether the title's season is on air, shrunk toward no
@@ -89,7 +100,7 @@ from datetime import date, datetime, timedelta, timezone
 BUCKET = "dashboard-inputs"
 KEY = "system/first_party_actuals/peacock.json"
 BACKUP_PREFIX = "system/first_party_actuals/_backups/"
-VERSION = 1
+VERSION = 2
 PANEL_TO_US = 32.99
 
 _TTL_S = 900.0
@@ -104,7 +115,8 @@ PPA_SPAN = 0.20
 PPA_SHAPE = {"procedural": 0.0, "drama": 0.0, "comedy": 0.03, "reality": 0.02, "film": 0.05,
              "kids": 0.28, "family": 0.22, "sports": 0.38, "news": -0.03}
 
-# the calendar a show follows, as an index of its anchored month's kind
+# the calendar a show follows, as an index of its anchored month's kind: the last resort, for a record with no deck
+# series and no year-earlier month (a record that carries the deck's series traces its own calendar, `_calendar`)
 SEASON_ON_AIR = {1: 0.86, 2: 0.84, 3: 0.83, 4: 0.80, 5: 0.82, 6: 0.52, 7: 0.47, 8: 0.46, 9: 0.70, 10: 1.00, 11: 0.93, 12: 0.74}
 LIBRARY = {1: 1.03, 2: 0.97, 3: 0.98, 4: 0.95, 5: 0.94, 6: 0.97, 7: 0.99, 8: 0.98, 9: 0.95, 10: 1.00, 11: 1.00, 12: 1.04}
 
@@ -117,6 +129,13 @@ HEADROOM = {"procedural": 1.10, "drama": 1.20, "series": 1.50, "comedy": 1.60, "
             "film": 1.30, "kids": 1.50, "family": 1.50}
 
 _DOW = (0.93, 0.92, 0.93, 0.95, 1.02, 1.12, 1.13)        # on-demand viewing by weekday, Monday first
+
+# a month no report covers sits at the low end of its reading (calibrate-low-anchor-to-actuals.mdc): report months held
+# out and read back from the rest came in at or above their own reading about two times in three (2026-11-24), so a
+# derived month's accounts sit this far under the central reading, and starts with no deck reading behind them this far
+# (salted per show; the deck's own starts and every report month are left as they are)
+LOW_ACCOUNTS = (0.86, 0.90)
+LOW_STARTS = (0.90, 0.94)
 
 
 # ------------------------------------------------------------------- basics
@@ -312,15 +331,26 @@ def _season_share(rec) -> float:
         return 0.0
 
 
+def _ppa_share(share, key, shape="procedural") -> float:
+    """People per account for a month of this show whose season on air
+    carries `share` of its starts (0 for a month with no season on air)."""
+    base = PPA_FLOOR + PPA_SHAPE.get(str(shape or "procedural"), 0.0)
+    return base + PPA_SPAN * math.sqrt(max(0.0, min(1.0, float(share or 0.0)))) + _band(-0.012, 0.012, key, "ppa")
+
+
 def _ppa(rec, key, shape="procedural") -> float:
     """People per account for a month of this show."""
-    base = PPA_FLOOR + PPA_SHAPE.get(str(shape or "procedural"), 0.0)
-    return base + PPA_SPAN * math.sqrt(_season_share(rec)) + _band(-0.012, 0.012, key, "ppa")
+    return _ppa_share(_season_share(rec), key, shape)
+
+
+def _pps_share(share, key) -> float:
+    """People in front of one start: under the month's ratio."""
+    return 1.0 + (_ppa_share(share, key) - 1.0) * _band(0.52, 0.64, key, "pps")
 
 
 def _pps(rec, key) -> float:
     """People in front of one start: under the month's ratio."""
-    return 1.0 + (_ppa(rec, key) - 1.0) * _band(0.52, 0.64, key, "pps")
+    return _pps_share(_season_share(rec), key)
 
 
 def _accounts_series(rec, key) -> float:
@@ -365,7 +395,227 @@ def _drift(ym, anchor) -> float:
     return max(0.88, 1.0 - 0.009 * back) if back > 0 else 1.0
 
 
-def _month_viewers(doc, key, ym) -> float:
+def _mi(ym: str) -> int:
+    return int(ym[:4]) * 12 + int(ym[5:7]) - 1
+
+
+def _ym_of(mi: int) -> str:
+    return f"{mi // 12:04d}-{mi % 12 + 1:02d}"
+
+
+def _deck_shows(doc) -> dict:
+    sm = doc.get("series_months")
+    return (sm.get("shows") or {}) if isinstance(sm, dict) else {}
+
+
+def _deck_month(doc, key, ym):
+    """The deck's series reading for one show and month ({'all', 'current',
+    'library'} starts), or None."""
+    d = ((_deck_shows(doc).get(key) or {}).get("months") or {}).get(ym)
+    try:
+        return d if isinstance(d, dict) and float(d.get("all") or 0) > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _observed_only(doc, key) -> bool:
+    """A show read from the months it appears in only (no curve, no projection)."""
+    return str((((doc.get("show_policy") or {}).get(key)) or {}).get("months") or "") == "observed_only"
+
+
+def _latest_share(rec) -> float:
+    """The newest season's share of the month's starts, on air or not."""
+    try:
+        total = float(rec.get("starts") or 0)
+        lat = rec.get("latest_season")
+        s = sum(float(x.get("starts") or 0) for x in rec.get("seasons") or [] if isinstance(x, dict) and x.get("season") == lat)
+        return max(0.0, min(1.0, s / total)) if total > 0 else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _starts_on_file(doc, key, ym):
+    rec = _rec(doc, key, ym)
+    try:
+        if rec and float(rec.get("starts") or 0) > 0:
+            return float(rec["starts"])
+    except (TypeError, ValueError):
+        pass
+    d = _deck_month(doc, key, ym)
+    return float(d["all"]) if d else None
+
+
+def _state(doc, key) -> dict:
+    """What one show's report months say, kept for the curve: per month
+    the starts, the accounts (the conservative reading), the newest
+    season's share and whether the season was on air; the share that
+    tells on air from not; the year-over-year starts."""
+    ck = ("state", key)
+    if ck in _INDEX:
+        return _INDEX[ck]
+    rec_m = {}
+    for ym in _months(doc):
+        rec = _rec(doc, key, ym)
+        if not rec:
+            continue
+        s, a = float(rec.get("starts") or 0), _accounts_series(rec, key)
+        if s > 0 and a > 0:
+            rec_m[ym] = {"S": s, "A": a, "c": _latest_share(rec), "on": bool(rec.get("in_season")), "share": _season_share(rec)}
+    on_c = sorted(v["c"] for v in rec_m.values() if v["on"])
+    off_c = sorted(v["c"] for v in rec_m.values() if not v["on"])
+
+    def med(xs):
+        return xs[len(xs) // 2] if len(xs) % 2 else (xs[len(xs) // 2 - 1] + xs[len(xs) // 2]) / 2.0
+
+    thr = (med(on_c) + med(off_c)) / 2.0 if on_c and off_c else (0.5 * med(on_c) if on_c else None)
+    pairs = []
+    for ym in reversed(sorted(rec_m)):
+        a, b = _starts_on_file(doc, key, ym), _starts_on_file(doc, key, _ym_of(_mi(ym) - 12))
+        if a and b:
+            pairs.append((a, b))
+        if len(pairs) == 3:
+            break
+    growth = max(0.67, min(1.5, sum(a for a, _ in pairs) / sum(b for _, b in pairs))) if pairs else None
+    st = {"rec": rec_m, "months": sorted(rec_m), "thr": thr, "growth": growth, "observed_only": _observed_only(doc, key)}
+    _INDEX[ck] = st
+    return st
+
+
+def _calendar(doc, kind) -> dict:
+    """A month-of-year index the deck's series trace ('library': the
+    library lines; 'on_air': the all-seasons lines of shows with a season
+    on air), each month against its own centered year, median across
+    shows and years. The fixed tables only when the record has no deck."""
+    ck = ("calendar", kind)
+    if ck in _INDEX:
+        return _INDEX[ck]
+    tab = SEASON_ON_AIR if kind == "on_air" else LIBRARY
+    ratios = {m: [] for m in range(1, 13)}
+    for rec in _deck_shows(doc).values():
+        months = (rec or {}).get("months") or {}
+        if kind == "on_air" and not any(float(d.get("current") or 0) > 0.2 * float(d.get("all") or 1) for d in months.values()):
+            continue
+        part = "all" if kind == "on_air" else "library"
+        vals = {_mi(ym): float(d.get(part) or 0) for ym, d in months.items()}
+        for t, v in vals.items():
+            win = [vals.get(t + k) for k in range(-6, 7)]
+            if v <= 0 or any(x is None or x <= 0 for x in win):
+                continue
+            ratios[t % 12 + 1].append(v / (sum(win) / 13.0))
+    if all(len(r) >= 3 for r in ratios.values()):
+        med = {m: sorted(r)[len(r) // 2] for m, r in ratios.items()}
+        g = math.exp(sum(math.log(v) for v in med.values()) / 12.0)
+        tab = {m: v / g for m, v in med.items()}
+    _INDEX[ck] = tab
+    return tab
+
+
+def _expected_on(doc, key, st, t):
+    """Whether the season is on air in month t, from the same calendar
+    month in the nearest year on file (release timing); None when no year
+    says."""
+    if st["thr"] is None:
+        return False
+    for k in (-1, 1, -2, 2, -3, 3):
+        ym = _ym_of(t + 12 * k)
+        if ym in st["rec"]:
+            return st["rec"][ym]["on"]
+        d = _deck_month(doc, key, ym)
+        if d:
+            return float(d.get("current") or 0) / float(d["all"]) >= st["thr"]
+    return None
+
+
+def _q_between(st, t, c=None, on=None) -> float:
+    """Accounts per start for a month no report covers, read from the
+    show's report months: between the two nearest, by time when both have
+    the season in the same state; when one is on air and the other is not,
+    by the month's current-season share (or, with no share, like the one
+    in the month's own state); outside them, the same calendar month in
+    the nearest year with the season in the same state, else the nearest
+    month in that state."""
+    rm = st["rec"]
+    ms = [(_mi(m), m) for m in st["months"]]
+    before = [x for x in ms if x[0] < t]
+    after = [x for x in ms if x[0] > t]
+    if before and after:
+        a, b = rm[before[-1][1]], rm[after[0][1]]
+        qa, qb = a["A"] / a["S"], b["A"] / b["S"]
+        w = (t - before[-1][0]) / float(after[0][0] - before[-1][0])
+        if a["on"] != b["on"] and abs(a["c"] - b["c"]) >= 0.05:
+            if c is not None:
+                w = max(0.0, min(1.0, (a["c"] - c) / (a["c"] - b["c"])))
+            elif on is not None:
+                w = 0.0 if a["on"] == on else 1.0
+        return math.exp((1.0 - w) * math.log(qa) + w * math.log(qb))
+    same = [x for x in ms if on is None or rm[x[1]]["on"] == on] or ms
+    cal = [x for x in same if (x[0] - t) % 12 == 0]
+    pick = min(cal or same, key=lambda x: (abs(x[0] - t), x[0]))
+    r = rm[pick[1]]
+    return r["A"] / r["S"]
+
+
+def _month(doc, key, ym):
+    """One show's month: {'S' starts, 'A' accounts, 'share' (the season on
+    air's share of starts, 0 off air), 'on', 'kind'}, or None when only the
+    fixed-calendar fallback can answer (or nothing can, for a show read
+    from its own months only). kind: 'record' (a report month), 'deck'
+    (the deck's starts, accounts per start read between report months),
+    'curve' (no deck series: between report months along the deck's
+    calendar), 'projected' (a year from a month that has a reading, times
+    the show's own year-over-year starts). A month no report covers sits
+    at the low end: its accounts at LOW_ACCOUNTS of the central reading,
+    and starts with no deck reading behind them at LOW_STARTS."""
+    m = _month_raw(doc, key, ym)
+    if not m or m["kind"] == "record":
+        return m
+    m = dict(m, A=m["A"] * _band(LOW_ACCOUNTS[0], LOW_ACCOUNTS[1], key, "low-accounts"))
+    if m["kind"] != "deck":
+        f = _band(LOW_STARTS[0], LOW_STARTS[1], key, "low-starts")
+        m.update(S=m["S"] * f, A=m["A"] * f)
+    return m
+
+
+def _month_raw(doc, key, ym, depth=0):
+    """`_month` at the central reading."""
+    st = _state(doc, key)
+    if ym in st["rec"]:
+        return dict(st["rec"][ym], kind="record")
+    if st["observed_only"] or not st["months"] or depth > 4:
+        return None
+    t, first, last = _mi(ym), _mi(st["months"][0]), _mi(st["months"][-1])
+    dm = _deck_month(doc, key, ym)
+    if dm:
+        s = float(dm["all"])
+        c = max(0.0, min(1.0, float(dm.get("current") or 0) / s))
+        on = st["thr"] is not None and c >= st["thr"]
+        return {"S": s, "A": _q_between(st, t, c, on) * s, "share": c if on else 0.0, "on": on, "c": c, "kind": "deck"}
+    if first < t < last:
+        ms = [_mi(m) for m in st["months"]]
+        ia, ib = max(x for x in ms if x < t), min(x for x in ms if x > t)
+        a, b = st["rec"][_ym_of(ia)], st["rec"][_ym_of(ib)]
+        w = (t - ia) / float(ib - ia)
+        cal = _calendar(doc, "on_air" if (a["on"] or b["on"]) else "library")
+        ls = ((1.0 - w) * (math.log(a["S"]) - math.log(cal[ia % 12 + 1])) + w * (math.log(b["S"]) - math.log(cal[ib % 12 + 1]))
+              + math.log(cal[t % 12 + 1]))
+        s = math.exp(ls)
+        on = a["on"] if a["on"] == b["on"] else _expected_on(doc, key, st, t)
+        if on is None:
+            on = a["on"] if w < 0.5 else b["on"]
+        c = (1.0 - w) * a["c"] + w * b["c"]
+        return {"S": s, "A": _q_between(st, t, None, on) * s, "share": c if on else 0.0, "on": on, "c": c, "kind": "curve"}
+    g = st["growth"]
+    if not g:
+        return None
+    src, f = (t - 12, g) if t > last else (t + 12, 1.0 / g)
+    m = _month_raw(doc, key, _ym_of(src), depth + 1)
+    if not m:
+        return None
+    return dict(m, S=m["S"] * f, A=m["A"] * f, kind="projected")
+
+
+def _fallback_viewers(doc, key, ym) -> float:
+    """The fixed-calendar reading (a record with nothing else to go on)."""
     am = _anchor_month(doc, key, ym)
     if not am:
         return 0.0
@@ -377,7 +627,7 @@ def _month_viewers(doc, key, ym) -> float:
             * (1.0 + _band(-0.02, 0.02, key, ym, "month")))
 
 
-def _month_plays(doc, key, ym) -> float:
+def _fallback_plays(doc, key, ym) -> float:
     am = _anchor_month(doc, key, ym)
     if not am:
         return 0.0
@@ -390,6 +640,26 @@ def _month_plays(doc, key, ym) -> float:
     m, a = int(ym[5:7]), int(am[5:7])
     scaled = cur * SEASON_ON_AIR[m] / SEASON_ON_AIR[a] + lib * LIBRARY[m] / LIBRARY[a]
     return scaled * _drift(ym, am) * _pps(rec, key) * (1.0 + _band(-0.02, 0.02, key, ym, "plays"))
+
+
+def _month_viewers(doc, key, ym) -> float:
+    m = _month(doc, key, ym)
+    if m is None:
+        return 0.0 if _observed_only(doc, key) else _fallback_viewers(doc, key, ym)
+    if m["kind"] == "record":
+        rec = _rec(doc, key, ym)
+        return _accounts_series(rec, key) * _ppa(rec, key)
+    return m["A"] * _ppa_share(m["share"], key) * (1.0 + _band(-0.02, 0.02, key, ym, "month"))
+
+
+def _month_plays(doc, key, ym) -> float:
+    m = _month(doc, key, ym)
+    if m is None:
+        return 0.0 if _observed_only(doc, key) else _fallback_plays(doc, key, ym)
+    if m["kind"] == "record":
+        rec = _rec(doc, key, ym)
+        return float(rec.get("starts") or 0) * _pps(rec, key)
+    return m["S"] * _pps_share(m["share"], key) * (1.0 + _band(-0.02, 0.02, key, ym, "plays"))
 
 
 def _as_date(v):
@@ -422,7 +692,10 @@ def _window(doc, key, start, end):
     e = _band(0.50, 0.60, key, "within-month")
     parts, plays = [], 0.0
     for ym, frac in _window_months(start, end):
-        parts.append(_month_viewers(doc, key, ym) * (frac ** e))
+        v = _month_viewers(doc, key, ym)
+        if v <= 0:
+            continue
+        parts.append(v * (frac ** e))
         plays += _month_plays(doc, key, ym) * frac
     if not parts:
         return 0.0, 0.0
@@ -516,15 +789,22 @@ def daily_views(title, day):
         if not key or not d:
             return None
         ym = _ym(d)
-        am = _anchor_month(doc, key, ym)
-        rec = _rec(doc, key, am)
-        starts = float(rec.get("starts") or 0)
-        cur = starts * _season_share(rec)
-        lib = starts - cur
-        if am != ym:
-            m, a = int(ym[5:7]), int(am[5:7])
-            cur *= SEASON_ON_AIR[m] / SEASON_ON_AIR[a] * _drift(ym, am)
-            lib *= LIBRARY[m] / LIBRARY[a] * _drift(ym, am)
+        mo = _month(doc, key, ym)
+        if mo is not None:
+            cur = mo["S"] * mo["share"]
+            lib = mo["S"] - cur
+        elif _observed_only(doc, key):
+            return None
+        else:
+            am = _anchor_month(doc, key, ym)
+            rec = _rec(doc, key, am)
+            starts = float(rec.get("starts") or 0)
+            cur = starts * _season_share(rec)
+            lib = starts - cur
+            if am != ym:
+                m, a = int(ym[5:7]), int(am[5:7])
+                cur *= SEASON_ON_AIR[m] / SEASON_ON_AIR[a] * _drift(ym, am)
+                lib *= LIBRARY[m] / LIBRARY[a] * _drift(ym, am)
         account_days = cur / _band(1.50, 1.70, key, "starts-per-day-on-air") + lib / _band(2.60, 3.00, key, "starts-per-day-library")
         per_day = account_days / calendar.monthrange(d.year, d.month)[1]
         per_day *= _DOW[d.weekday()] * (1.0 + _band(-0.03, 0.03, key, d.isoformat(), "day"))
@@ -907,6 +1187,11 @@ def record_figures() -> frozenset:
                     if isinstance(row, (list, tuple)):
                         for v in row[2:4]:
                             add(v)
+        for rec in _deck_shows(doc).values():
+            for d in ((rec or {}).get("months") or {}).values():
+                if isinstance(d, dict):
+                    for k in ("all", "current", "library"):
+                        add(d.get(k))
         _INDEX["figures"] = frozenset(figs)
     return _INDEX["figures"]
 

@@ -250,6 +250,50 @@ for fn_name in ('viewers', 'calibrate', 'daily_views', 'episode_viewers'):
     flat = ' '.join(f'{k}={v}' for k, v in r.items())
     check('account' not in flat.lower() and not any(str(n) in flat for n in RECORD_FIGS), f'{fn_name}() hands back nothing from the record')
 
+print('\nseveral months and the deck series (2026-11-24): every surface reads them, none names them')
+MULTI = copy.deepcopy(DOC)
+MULTI['version'] = 2
+MULTI['months']['2025-10'] = copy.deepcopy(DOC['months']['2026-10'])
+MULTI['months']['2025-10']['window'] = {'start': '2025-10-01', 'end': '2025-10-31'}
+MULTI['months']['2025-10']['shows']['harbor precinct']['accounts_top_episode'] = 861_337
+MULTI['months']['2025-10']['shows']['harbor precinct']['starts'] = 13_102_771
+MULTI['months']['2025-10']['shows']['nights on duty'] = show('Nights on Duty', 88_121, 20_207, 2_301_557, False)
+HP_D = {'2025-11': (12_277_303, 0.37), '2025-12': (8_101_907, 0.18), '2026-01': (12_919_441, 0.40), '2026-02': (11_301_229, 0.36),
+        '2026-03': (12_007_117, 0.45), '2026-04': (11_513_903, 0.47), '2026-05': (11_087_211, 0.46), '2026-06': (7_403_119, 0.26), '2026-07': (7_009_337, 0.20)}
+MULTI['series_months'] = {'date': '2026-10-22', 'span': ['2025-11', '2026-07'], 'shows': {'harbor precinct': {'title': 'Harbor Precinct', 'months': {
+    ym: {'all': a, 'library': int(a * (1 - c)), 'current': a - int(a * (1 - c))} for ym, (a, c) in HP_D.items()}}}}
+MULTI['show_policy'] = {'nights on duty': {'months': 'observed_only', 'why': 'listed in some months only'}}
+pk.set_cached(MULTI)
+MFIGS = pk.record_figures()
+DECK_FIGS = {v for d in MULTI['series_months']['shows']['harbor precinct']['months'].values() for v in d.values() if v >= 100_000}
+check(DECK_FIGS <= MFIGS, "the net knows the deck series' figures")
+jq = 'How many viewers watched Harbor Precinct on Peacock from June 2026 to July 2026, and how many accounts?'
+jb = ps.block(jq, {}, {})
+jun = pk.viewers('Harbor Precinct', '2026-06-01', '2026-07-31')
+check(jun and f"{jun['viewers']:,} US viewers" in jb, 'a read on months no report covers is handed the figure on file for them')
+check(pk.leak_hits(jb) == [] and not any(f'{n:,}' in jb or str(n) in jb for n in MFIGS) and pk.VIEWERS_NOT_ACCOUNTS in jb,
+      'and nothing from the record (report or deck) reaches the model; accounts are answered in viewers')
+check(not any(w in jb.lower() for w in ('report', 'calibrat', 'first-party', 'actuals', 'deck', 'usage', 'content starts', 'studio', 'benchmark')),
+      'and no word about where a figure came from')
+check(ps.block('How many viewers watched Harbor Precinct on Hulu in June 2026?', {}, {}) == '', 'a read on another service still gets no block')
+st5 = copy.deepcopy(before)
+tps.apply_to_store(st5, '2026-06-17')
+want5 = pk.daily_views('Harbor Precinct', '2026-06-17')
+got5 = st5['tv:harbor precinct']['by_platform']['peacock']['us_estimate']
+check(want5 and abs(got5 - want5) <= max(110, want5 * 0.002) and st5['tv:harbor precinct']['by_platform']['hulu'] == before['tv:harbor precinct']['by_platform']['hulu'],
+      'the rail reads a month no report covers from the same months, and only on Peacock', f'{got5} vs {want5}')
+ta5 = js._peacock_title_anchor({'subject': 'Harbor Precinct on Peacock', 'platform': 'Peacock', 'start_date': '2026-06-01', 'end_date': '2026-07-31'},
+                               ['Harbor Precinct on Peacock', 'Harbor Precinct'])
+check(ta5 and ta5['us_viewers'] == jun['viewers'], "a journey's watch stage over those months lands on the same figure")
+check(pk.viewers('Nights on Duty', '2026-06-01', '2026-07-31') is None and pk.viewers('Nights on Duty', '2025-10-01', '2025-10-31'),
+      'a show read from its own months only has no figure outside them')
+D_TOP = MULTI['series_months']['shows']['harbor precinct']['months']['2026-06']['all']
+DGOOD = f"Harbor Precinct drew {jun['viewers']:,} US viewers on Peacock in June and July, each person counted once."
+for name, fn in (('a Prometheus reply', pma.scrub_user_text), ('a reply payload field', G.scrub_method_language), ('twin copy', dtc.strip_calibration_language),
+                 ('the Prometheus guard', ps.guard)):
+    out = fn(DGOOD + f' The series logged {D_TOP:,} plays in June.')
+    check(f'{D_TOP:,}' not in out and f"{jun['viewers']:,}" in out, f'{name}: a figure from the deck series is dropped, ours ships')
+
 pk.set_cached(None)
 print()
 if FAILS:
