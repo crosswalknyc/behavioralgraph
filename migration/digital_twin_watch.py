@@ -475,8 +475,12 @@ def _persona_watch_parallel(roster, cards, prior_start, meta, models, budget_s, 
 
 
 WATCH_STORY_SYSTEM = (WATCH_SYSTEM[:WATCH_SYSTEM.rindex('Return JSON only:')] + _STORY.WATCH_CONTEXT + '\n'
-                      + 'Return JSON only: {"seats": [{"seat": <id>, "scenes": [{"id": <scene id>, "dial": <0-100>, "event": "<love|laugh|lean-in|wow|confuse|check-out or empty>", '
-                        '"say": "<line or empty>"}], "act_note": "<one sentence>", "waiting_for": "<what they are waiting to see, or empty>"}]}')
+                      + 'Return compact JSON only, on one line with no indentation. A scene with no event is just {"id": <scene id>, "dial": <0-100>}; '
+                        'give event and say only when an event fires. Shape: {"seats": [{"seat": <id>, "scenes": [{"id": <scene id>, "dial": <0-100>, '
+                        '"event": "<love|laugh|lean-in|wow|confuse|check-out>", "say": "<line>"}], "act_note": "<one sentence>", '
+                        '"waiting_for": "<what they are waiting to see, or empty>"}]}')
+WATCH_TOKENS_PER_ROW = 64       # a scene row as the read writes it, with room for a line; a call is never cut off mid-answer
+WATCH_TOKENS_PER_SEAT = 90      # the seat's part note and what it is waiting for
 
 
 def _persona_watch_story(roster, cards, prior_start, meta, models, budget_s, log, dur, by_act, room, out) -> None:
@@ -541,7 +545,7 @@ def _persona_watch_story(roster, cards, prior_start, meta, models, budget_s, log
             user = _act_user(meta, dur, a, sc, [room_by_seat[sid] for sid in group], starts, story=_STORY.story_for_prompt(st), memories=mem,
                              part_n=i + 1, parts=len(acts))
             n_out = len(group) * len(sc)
-            max_tokens = int(clamp(600 + n_out * 16 + len(group) * 40, 1800, 16000))
+            max_tokens = int(clamp(400 + n_out * WATCH_TOKENS_PER_ROW + len(group) * WATCH_TOKENS_PER_SEAT, 1800, 16000))
             try:
                 data, call = models.call('watch', WATCH_STORY_SYSTEM, user, max_tokens=max_tokens, temperature=0.6, tools=None)
             except Exception as e:

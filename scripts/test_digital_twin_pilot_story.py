@@ -93,6 +93,8 @@ class Recorder:
                 st['who'] = st['who'] + [f"Person {i}: a harbor worker who saw the light on the water late at night" for i in range(30)]
             return st
         if role == 'watch':
+            d['_max_tokens'] = kw.get('max_tokens')
+            d['_system'] = system
             self.watch.append(d)
             story = json.dumps(d.get('story_so_far') or {})
             seats = []
@@ -298,6 +300,10 @@ class Groups(unittest.TestCase):
             self.assertGreater(len(calls), 1, a)
             for d in calls:
                 self.assertLessEqual(len(d['room']) * len(d['scenes']), max(24, len(d['scenes'])), a)
+                # a call always has room to finish its answer (the old read's cap cut big parts off mid-answer)
+                rows = len(d['room']) * len(d['scenes'])
+                self.assertGreaterEqual(d['_max_tokens'], min(16000, 400 + rows * W.WATCH_TOKENS_PER_ROW + len(d['room']) * W.WATCH_TOKENS_PER_SEAT), a)
+                self.assertIn('Return compact JSON only', d['_system'])
         # a seat's memory in a later part is its own line, never a neighbor's
         for d in parts['close']:
             for p in d['room']:
