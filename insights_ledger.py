@@ -3136,14 +3136,40 @@ def fresh_run_requested(question):
         return False
 
 
+_FIGURES_ASK_RX = re.compile(
+    r"\bwhat\s+(?:were|are|was|is)\s+the\s+(?:numbers?|figures?|counts?|totals?|results?|stats?|data)\b"
+    r"|\b(?:give|show|send|pull|share|get)\s+(?:me\s+)?(?:the\s+)?(?:numbers?|figures?|counts?|stats?|results?|table|breakdown)\b"
+    r"|\b(?:numbers?|figures?)\s+(?:for|on|from)\b"
+    r"|\bhow\s+(?:many|much)\b", re.I)
+
+
+def asks_for_figures(question):
+    """True when an ask clearly wants the figures ('what were the numbers
+    for ...', 'show me the figures', 'how many ...')."""
+    return bool(_FIGURES_ASK_RX.search(str(question or '')))
+
+
+def is_definition_style(question):
+    """A definition or how-to-read question (a glossary term, 'what is X',
+    'X vs Y', 'how do I read this') that does not ask for the figures
+    (2026-11-25): the definition lane answers it, never a stored read."""
+    q = str(question or '').strip()
+    return bool(q) and not asks_for_figures(q) and is_explanation_ask(q)
+
+
 def replay_eligible(question):
     """True when the ask is the kind of question a stored read can
     answer verbatim. Commands, generic screen asks, complaints, and
     asks with no distinctive topic words run fresh every time; their
-    stored neighbours still ride the constraint block. Never raises."""
+    stored neighbours still ride the constraint block. A definition or
+    how-to-read question never replays a stored read, by its words or by
+    meaning (it gets the glossary, or a fresh explanation of the page);
+    one that asks for the figures still does. Never raises."""
     try:
         q = str(question or '').strip()
         if not q:
+            return False
+        if is_definition_style(q):
             return False
         if _REPLAY_GENERIC_RX.search(q):
             return False

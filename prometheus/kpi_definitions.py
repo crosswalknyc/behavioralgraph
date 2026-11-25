@@ -540,6 +540,31 @@ def _bare_what_is(text, view_id=''):
     return False
 
 
+_PAIR_SPLIT_RX = re.compile(r"\s+(?:vs\.?|versus|or)\s+", re.I)
+
+
+def _bare_term(part, view_id=''):
+    """True when `part`, minus filler, is exactly one glossary term."""
+    nt = _norm(part)
+    if not nt:
+        return False
+    for d in DEFINITIONS:
+        for alias in _aliases_for(d, view_id):
+            if _alias_in(alias, nt):
+                rest = re.sub(r'(?<![a-z0-9])' + re.escape(_norm(alias)) + r'(?![a-z0-9])', ' ', nt)
+                if not [w for w in rest.split() if w not in _WHAT_IS_FILLER]:
+                    return True
+    return False
+
+
+def _bare_pair(text, view_id=''):
+    """'penetration vs share' style (2026-11-25): two glossary terms set side
+    by side with nothing else asks what each one is. 'penetration or share
+    for Nike' keeps 'nike' and is a data ask."""
+    parts = _PAIR_SPLIT_RX.split(re.sub(r'[?!.\s]+$', '', str(text or '').strip()))
+    return len(parts) == 2 and all(_bare_term(p, view_id) for p in parts)
+
+
 def is_definition_ask(text, view_id=''):
     """A short, single definition question. A message carrying several
     questions, or a long one, is an analysis ask even when one clause
@@ -553,7 +578,7 @@ def is_definition_ask(text, view_id=''):
         return False
     if any(rx.search(t) for rx in _DEFINITION_ASK_RES):
         return True
-    return _bare_what_is(t, view_id)
+    return _bare_what_is(t, view_id) or _bare_pair(t, view_id)
 
 
 def is_reconcile_ask(text):
