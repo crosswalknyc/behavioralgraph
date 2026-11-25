@@ -122,13 +122,49 @@
    "about": {
     "@id": "https://www.crosswalknyc.com/#organization"
    },
-   "inLanguage": "en-US"
+   "inLanguage": "en-US",
+   "video": {
+    "@id": "https://www.crosswalknyc.com/#video"
+   }
+  },
+  {
+   "@type": "VideoObject",
+   "@id": "https://www.crosswalknyc.com/#video",
+   "name": "What Crosswalk is",
+   "description": "Who is in the Crosswalk panel and how they joined, one person's digital day across every screen, five years of history on the same people, the twelve products built on it, who uses them, and how Crosswalk differs from other data. Under eight minutes.",
+   "thumbnailUrl": [
+    "https://www.crosswalknyc.com/assets/images/home/video-poster.jpg"
+   ],
+   "uploadDate": "2026-11-24",
+   "duration": "PT7M40S",
+   "contentUrl": "https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-what-we-are.mp4",
+   "inLanguage": "en-US",
+   "publisher": {
+    "@id": "https://www.crosswalknyc.com/#organization"
+   },
+   "isPartOf": {
+    "@id": "https://www.crosswalknyc.com/#webpage"
+   }
   }
  ]
 }
 </script>
 <link rel="stylesheet" href="assets/css/crosswalk.css">
 <style>
+  .watch { padding: 32px 0 48px; border-bottom: 1px solid var(--rule-d); }
+  .watch-fig { margin: 0 auto; width: min(100%, calc((100vh - 230px) * 16 / 9)); min-width: min(100%, 560px); }
+  @supports (height: 100svh) { .watch-fig { width: min(100%, calc((100svh - 230px) * 16 / 9)); } }
+  .watch-frame { position: relative; container-type: inline-size; border-radius: 14px; overflow: hidden; border: 1px solid var(--rule-d); background: var(--graphite); box-shadow: 0 30px 90px rgba(0,0,0,0.45); }
+  .watch-frame video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+  .watch-play { position: absolute; inset: 0; border: 0; padding: 0; background: transparent; display: grid; place-items: center; cursor: pointer; }
+  .watch-play:focus-visible { outline: none; }
+  .watch-dot { width: clamp(44px, 7vw, 92px); aspect-ratio: 1 / 1; border-radius: 50%; background: var(--green); color: var(--graphite); display: grid; place-items: center; box-shadow: 0 0 0 10px rgba(199,242,62,0.16), 0 14px 40px rgba(0,0,0,0.5); transition: transform 160ms ease-out, box-shadow 160ms ease-out; }
+  @supports (width: 1cqw) { .watch-dot { width: clamp(44px, 7.7cqw, 92px); box-shadow: 0 0 0 clamp(5px, 0.85cqw, 10px) rgba(199,242,62,0.16), 0 14px 40px rgba(0,0,0,0.5); } }
+  .watch-play:hover .watch-dot { transform: scale(1.06); }
+  .watch-play:focus-visible .watch-dot { transform: scale(1.06); box-shadow: 0 0 0 4px var(--cobalt), 0 14px 40px rgba(0,0,0,0.5); }
+  .watch-dot svg { width: 36%; height: 36%; margin-left: 8%; }
+  .watch.is-on .watch-play { display: none; }
+  .watch-fig figcaption { margin-top: 14px; font-size: 13px; color: var(--t3-d); text-align: center; }
   .hero { padding: 104px 0 88px; text-align: center; }
   .hero .orb { display: grid; width: 72px; height: 72px; font-size: 26px; margin: 0 auto 22px; box-shadow: 0 0 60px rgba(142,63,168,0.45); }
   .hero .h-xl { max-width: 14ch; margin: 0 auto; }
@@ -162,6 +198,33 @@
 </head>
 <body>
 <!--site-nav--><header class="nav"><div class="wrap nav-in"><a class="logo-pill" href="index.html"><img src="assets/logos/crosswalk-logo-black.png" alt="Crosswalk"></a><nav class="nav-links"><a href="products.html">Products</a><a href="panel.html">The Panel</a><a href="digital-twins.html">Digital twins</a><a href="prometheus.html">Prometheus</a><a href="https://dashboard.crosswalknyc.com/the-read">The Read</a><a href="company.html">Company</a><a href="clients.html">Clients</a><button class="nav-menu-btn" type="button" aria-expanded="false" aria-controls="navMenu"><i></i>Menu</button><a class="btn btn-ghost" href="https://dashboard.crosswalknyc.com/login">Log in</a><a class="btn btn-green" href="signup.html">Sign up</a></nav></div><div class="nav-menu" id="navMenu"><div class="wrap nav-menu-in"><a href="products.html">Products</a><a href="panel.html">The Panel</a><a href="digital-twins.html">Digital twins</a><a href="prometheus.html">Prometheus</a><a href="https://dashboard.crosswalknyc.com/the-read">The Read</a><a href="company.html">Company</a><a href="clients.html">Clients</a><a href="https://dashboard.crosswalknyc.com/login">Log in</a></div></div></header><!--/site-nav-->
+
+<section class="dark glow watch" id="watch" aria-label="What Crosswalk is">
+  <div class="wrap">
+    <figure class="watch-fig">
+      <div class="watch-frame">
+        <video controls preload="metadata" playsinline poster="assets/images/home/video-poster.jpg" title="What Crosswalk is">
+          <source src="https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-what-we-are.mp4" type="video/mp4">
+          <track kind="captions" src="assets/video/crosswalk.vtt" srclang="en" label="English">
+        </video>
+        <button class="watch-play" type="button" aria-label="Play the video: What Crosswalk is"><span class="watch-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg></span></button>
+      </div>
+      <figcaption>What Crosswalk is: who is in the panel, what we see, what you can do with it, and who uses it. Under eight minutes.</figcaption>
+    </figure>
+  </div>
+</section>
+<script>
+(function () {
+  var s = document.getElementById("watch");
+  var v = s && s.querySelector("video");
+  var b = s && s.querySelector(".watch-play");
+  if (!v || !b) return;
+  v.controls = false;
+  b.addEventListener("click", function () { var p = v.play(); if (p && p.catch) p.catch(function () { v.controls = true; }); });
+  v.addEventListener("play", function () { v.controls = true; s.classList.add("is-on"); });
+  v.addEventListener("ended", function () { s.classList.remove("is-on"); });
+})();
+</script>
 
 <section class="band dark glow hero">
   <div class="wrap">

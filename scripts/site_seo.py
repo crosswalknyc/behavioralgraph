@@ -16,8 +16,10 @@ For every indexable page it sets, in <head>:
   * the title and meta description from PAGES, or the page's own,
   * robots directives, Open Graph and Twitter cards, the favicon,
   * JSON-LD: Organization and WebSite on the homepage, WebPage with a
-    BreadcrumbList on inner pages, Service on product pages. A page
-    that carries its own JSON-LD (digital-twins.html) keeps it.
+    BreadcrumbList on inner pages, Service on product pages, and a
+    VideoObject on a page whose PAGES entry names a video (the homepage
+    intro). A page that carries its own JSON-LD (digital-twins.html)
+    keeps it.
 
   * on a learn page (kind="learn" in PAGES: the digital twins, synthetic
     data and panel reads added 2026-11-23) also Article, FAQPage read from
@@ -71,7 +73,14 @@ PAGES = {
     "index.html": dict(
         title="Crosswalk | Audience data from what 30 million people actually do",
         description="Ask Prometheus any audience question. It answers from 30 million opted-in people worldwide, 10 million in the US, and their entire digital life: what they watch and buy.",
-        kind="home"),
+        kind="home",
+        video=dict(
+            name="What Crosswalk is",
+            description="Who is in the Crosswalk panel and how they joined, one person's digital day across every screen, five years of history on the same people, the twelve products built on it, who uses them, and how Crosswalk differs from other data. Under eight minutes.",
+            thumbnail="assets/images/home/video-poster.jpg",
+            upload_date="2026-11-24",
+            duration="PT7M40S",
+            content_url="https://crosswalk-downloads.s3.us-east-2.amazonaws.com/video/crosswalk-what-we-are.mp4")),
     "products.html": dict(
         title="Products and report pricing | Crosswalk",
         description="Report pricing for Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ, Brand Partnership IQ, Flywheel IQ, Trends IQ, Rankers IQ, Fin IQ, and digital twins.",
@@ -441,11 +450,12 @@ def finish_page(name: str, html: str) -> str:
         graph: list[dict] = []
         if kind == "home":
             graph += [ORG, WEBSITE]
-            graph.append({
+            page_node = {
                 "@type": "WebPage", "@id": url + "#webpage", "url": url, "name": title,
                 "description": description, "isPartOf": {"@id": ORIGIN + "/#website"},
                 "about": {"@id": ORIGIN + "/#organization"}, "inLanguage": "en-US",
-            })
+            }
+            graph.append(page_node)
         else:
             label = spec.get("crumb_label") or spec.get("name") or _page_label(name, title)
             crumb = spec.get("crumb")
@@ -510,6 +520,16 @@ def finish_page(name: str, html: str) -> str:
                     "provider": {"@id": ORIGIN + "/#organization"},
                     "areaServed": {"@type": "Country", "name": "United States"},
                 })
+        video = spec.get("video")
+        if video:
+            page_node["video"] = {"@id": url + "#video"}
+            graph.append({
+                "@type": "VideoObject", "@id": url + "#video", "name": video["name"],
+                "description": video["description"], "thumbnailUrl": [ORIGIN + "/" + video["thumbnail"]],
+                "uploadDate": video["upload_date"], "duration": video["duration"],
+                "contentUrl": video["content_url"], "inLanguage": "en-US",
+                "publisher": {"@id": ORIGIN + "/#organization"}, "isPartOf": {"@id": url + "#webpage"},
+            })
         ld = json.dumps({"@context": "https://schema.org", "@graph": graph}, indent=1, ensure_ascii=False)
         lines.append(f'<script type="application/ld+json" data-seo="site">\n{ld}\n</script>')
 
