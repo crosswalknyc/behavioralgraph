@@ -20,14 +20,151 @@ Subsections are triggered by Heading 2 styled paragraphs.
 
 The preamble (everything before the first section trigger) becomes a
 _preamble_ section.
+
+What we count as a view is written from prometheus/methodology.py on
+every build (sync_view_definition), never from the Word file:
+  python3 scripts/build_methodology_json.py --sync-view-definition [out.json]
+rewrites only those paragraphs in the current JSON.
 """
 import json
+import re
 import sys
 from pathlib import Path
-from docx import Document
-from docx.oxml.ns import qn
+
+try:
+    from docx.oxml.ns import qn
+except ImportError:  # the view sync needs no Word reader
+    qn = None
 
 HEADING1_FONT_SIZE_EMU = 215900  # 17pt - matches both Heading 1 and Glossary/Contacts
+
+# Jenna 2026-11-24 (view_definition = person): a view is one person,
+# counted once, as printed under every answer, and the methodology page
+# says the same. The words live once, in prometheus/methodology.py. Until
+# this date the page said a pause and a restart were two views.
+# (section title, sub title or None for the intro, term label or None for
+# a bullet, the methodology constant the slot carries)
+VIEW_SLOTS = (
+    ('Key Metric Definitions', None, 'View', 'VIEW_DEFINITION'),
+    ('How We Measure a View', 'Viewership', None, 'VIEW_DEFINITION'),
+    ('SUBSCRIBER IQ', 'How These Numbers Are Counted', None, 'VIEW_NOTE_SHORT'),
+)
+# a bullet that defines a view (the one a slot rewrites)
+VIEW_BULLET_RX = re.compile(
+    r"(?i)\b(?:considered a view|counts? as (?:a|one|two|2) views?|a view is|views here are|"
+    r"play over zero seconds)\b")
+# what a play is rides right after what a view is, in the same two places
+# (methodology.PLAY_DEFINITION; skipped when the module has none)
+PLAY_SLOTS = (
+    ('Key Metric Definitions', None, 'Play', 'View'),
+    ('How We Measure a View', 'Viewership', None, None),
+)
+PLAY_BULLET_RX = re.compile(r"(?i)^\W*a play is\b")
+
+
+def _methodology():
+    webapp = Path(__file__).resolve().parents[1]
+    if str(webapp) not in sys.path:
+        sys.path.insert(0, str(webapp))
+    from prometheus import methodology
+    return methodology
+
+
+def _paragraph_text(p):
+    return ''.join(r.get('text', '') for r in p.get('runs') or [])
+
+
+def sync_view_definition(sections, methodology=None):
+    """Write each VIEW_SLOTS paragraph from prometheus/methodology.py.
+    Returns a list of (section, sub, before, after) for every change.
+    Raises ValueError when a slot cannot be found, so a rebuilt document
+    that moved a slot fails loudly instead of keeping the old words."""
+    meth = methodology or _methodology()
+    changes = []
+    by_title = {s.get('title'): s for s in sections}
+    for sec_title, sub_title, term, const in VIEW_SLOTS:
+        words = getattr(meth, const)
+        sec = by_title.get(sec_title)
+        if sec is None:
+            raise ValueError(f'view slot missing: section {sec_title!r}')
+        if sub_title is None:
+            paras = sec.get('intro') or []
+        else:
+            sub = next((s for s in sec.get('subs') or [] if s.get('title') == sub_title), None)
+            if sub is None:
+                raise ValueError(f'view slot missing: {sec_title!r} > {sub_title!r}')
+            paras = sub.get('paragraphs') or []
+        done = False
+        for p in paras:
+            runs = p.get('runs') or []
+            if term is not None:
+                if runs and runs[0].get('bold') and runs[0].get('text', '').strip() == term:
+                    new_runs = [runs[0], {'text': words, 'bold': False}]
+                    done = True
+                else:
+                    continue
+            else:
+                idx = next((i for i, r in enumerate(runs) if VIEW_BULLET_RX.search(r.get('text', ''))), None)
+                if idx is None:
+                    continue
+                new_runs = list(runs)
+                new_runs[idx] = {'text': '• ' + words, 'bold': bool(runs[idx].get('bold'))}
+                done = True
+            before = p.get('text', '')
+            p['runs'] = new_runs
+            p['text'] = _paragraph_text(p)
+            if p['text'] != before:
+                changes.append((sec_title, sub_title or term, before, p['text']))
+            break
+        if not done:
+            raise ValueError(f'view slot missing: {sec_title!r} > {sub_title or term!r}')
+    play = getattr(meth, 'PLAY_DEFINITION', None)
+    if play:
+        changes += _sync_play(by_title, play, getattr(meth, 'VIEW_DEFINITION'))
+    return changes
+
+
+def _sync_play(by_title, play, view_words):
+    """What a play is, right after what a view is: a 'Play' term after the
+    'View' term in Key Metric Definitions, and a bullet after the view
+    bullet in How We Measure a View. Rewritten when present, added when not."""
+    changes = []
+    for sec_title, sub_title, term, after_term in PLAY_SLOTS:
+        sec = by_title.get(sec_title) or {}
+        if sub_title is None:
+            paras = sec.setdefault('intro', [])
+            first = [(p.get('runs') or [{}])[0] for p in paras]
+            at = next((i for i, r in enumerate(first) if r.get('bold') and r.get('text', '').strip() == term), None)
+            new = {'text': term + play, 'is_list': False, 'runs': [{'text': term, 'bold': True}, {'text': play, 'bold': False}]}
+            if at is None:
+                anchor = next((i for i, r in enumerate(first) if r.get('bold') and r.get('text', '').strip() == after_term), None)
+                if anchor is None:
+                    raise ValueError(f'play slot missing: {sec_title!r} > {after_term!r}')
+                paras.insert(anchor + 1, new)
+                changes.append((sec_title, term, '', new['text']))
+            elif paras[at].get('text') != new['text'] or paras[at].get('runs') != new['runs']:
+                before = paras[at].get('text', '')
+                paras[at] = new
+                changes.append((sec_title, term, before, new['text']))
+            continue
+        sub = next((s for s in sec.get('subs') or [] if s.get('title') == sub_title), None)
+        para = next((p for p in (sub or {}).get('paragraphs') or []
+                     if ('• ' + view_words) in [r.get('text') for r in p.get('runs') or []]), None)
+        if para is None:
+            raise ValueError(f'play slot missing: {sec_title!r} > {sub_title!r}')
+        runs = para['runs']
+        bullet = {'text': '• ' + play, 'bold': False}
+        at = next((i for i, r in enumerate(runs) if PLAY_BULLET_RX.search(r.get('text', ''))), None)
+        before = para.get('text', '')
+        if at is None:
+            vi = [r.get('text') for r in runs].index('• ' + view_words)
+            runs.insert(vi + 1, bullet)
+        else:
+            runs[at] = bullet
+        para['text'] = _paragraph_text(para)
+        if para['text'] != before:
+            changes.append((sec_title, sub_title + ' (play)', before, para['text']))
+    return changes
 
 
 def _iter_runs_including_hyperlinks(paragraph):
@@ -135,6 +272,7 @@ def _paragraph_to_obj(p):
 
 
 def convert(docx_path, output_path=None):
+    from docx import Document
     doc = Document(docx_path)
     sections = []
     current_section = None
@@ -181,6 +319,8 @@ def convert(docx_path, output_path=None):
 
         _add_paragraph(p)
 
+    sync_view_definition(sections)
+
     if output_path:
         Path(output_path).write_text(
             json.dumps(sections, indent=2, ensure_ascii=False),
@@ -199,7 +339,27 @@ def _existing_titles(path):
         return []
 
 
+def sync_file(path):
+    """Rewrite the view slots of an existing JSON in place. Returns the
+    changes (empty when the file already carries methodology.py's words)."""
+    p = Path(path)
+    sections = json.loads(p.read_text(encoding='utf-8'))
+    changes = sync_view_definition(sections)
+    if changes:
+        p.write_text(json.dumps(sections, indent=2, ensure_ascii=False), encoding='utf-8')
+    return changes
+
+
 if __name__ == '__main__':
+    if '--sync-view-definition' in sys.argv:
+        rest = [a for a in sys.argv[1:] if not a.startswith('--')]
+        target = rest[0] if rest else DEFAULT_OUT
+        changed = sync_file(target)
+        print(f'{target}: {len(changed)} view paragraph(s) rewritten from prometheus/methodology.py')
+        for sec, sub, before, after in changed:
+            print(f'  - {sec} > {sub}')
+        sys.exit(0)
+
     # The source document must be named. This used to default to one
     # person's Downloads folder, so a bare run regenerated the whole
     # methodology from whatever vintage of the Word file happened to be

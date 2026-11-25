@@ -29744,7 +29744,7 @@ https://www.instagram.com/p/..."></textarea>
                             <div class="subiq-note-eyebrow">How these numbers are counted</div>
                             <ul class="subiq-note-list">
                                 <li>We track no touchpoint to a streaming service for the trailing 6 months to determine subscription/reactivation.</li>
-                                <li>1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.</li>
+                                {% if view_note_short %}<li>{{ view_note_short }}</li>{% endif %}
                                 <li>We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). In the dashboard on the Rankers tab we have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.</li>
                                 <li>Multipliers from accounts to viewers are available upon request.</li>
                             </ul>
@@ -32671,7 +32671,7 @@ https://www.instagram.com/p/..."></textarea>
                 <details class="tiq-methodology no-uppercase" id="tiqRankersMethodology">
                     <summary>Methodology</summary>
                     <ul>
-                        <li>1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.</li>
+                        {% if view_note_short %}<li>{{ view_note_short }}</li>{% endif %}
                         <li>We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). We have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.</li>
                         <li>Multipliers from accounts to viewers vary based on genre and platform and are available upon request.</li>
                     </ul>

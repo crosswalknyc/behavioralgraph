@@ -393,7 +393,7 @@
         ]
       },
       {
-        "text": "ViewA view is counted when a panel member is actively viewing the content, beginning at the one second mark.",
+        "text": "ViewA view is one person, on any screen, who played a title for at least one second inside the window, counted once however many devices or sessions they used. Autoplayed previews and trailers are not views. Counts are US viewers (persons), not accounts, so they are not comparable to a service's reported subscriber count, to TV ratings, or to platform view counts that tally plays instead of people.",
         "is_list": false,
         "runs": [
           {
@@ -401,15 +401,21 @@
             "bold": true
           },
           {
-            "text": "A view ",
+            "text": "A view is one person, on any screen, who played a title for at least one second inside the window, counted once however many devices or sessions they used. Autoplayed previews and trailers are not views. Counts are US viewers (persons), not accounts, so they are not comparable to a service's reported subscriber count, to TV ratings, or to platform view counts that tally plays instead of people.",
             "bold": false
+          }
+        ]
+      },
+      {
+        "text": "PlayA play is one start of a title: it counts the moment playback begins, credited at one second, and autoplayed previews and trailers do not count. One person can have several plays in a window (a start, a stop, a return the next evening), so plays are counted as starts, not people.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Play",
+            "bold": true
           },
           {
-            "text": "is counted when a panel member is actively viewing the content, beginning at the one second mark",
-            "bold": false
-          },
-          {
-            "text": ".",
+            "text": "A play is one start of a title: it counts the moment playback begins, credited at one second, and autoplayed previews and trailers do not count. One person can have several plays in a window (a start, a stop, a return the next evening), so plays are counted as starts, not people.",
             "bold": false
           }
         ]
@@ -490,11 +496,15 @@
         "title": "Viewership",
         "paragraphs": [
           {
-            "text": "• Any play over zero seconds counts as a view. Each press of play or device switch opens a new session, so a one second watch, a pause, and another one second watch count as two views, not one.• Viewing through Prime Video Channels is included in the total. Depending on the service, the Prime Video lane accounts for 40% to 80% of total views; the Rankers tab breaks this out by storefront.• Our total runs higher than a service's own figure because Channels playback happens inside the Prime Video player, not the service's app. The service sees that lane only through Amazon's reports, and a licensor whose title sits inside the channel does not see it at all. Crosswalk observes the viewer at the device level regardless of who billed them, so both lanes are counted.",
+            "text": "• A view is one person, on any screen, who played a title for at least one second inside the window, counted once however many devices or sessions they used. Autoplayed previews and trailers are not views. Counts are US viewers (persons), not accounts, so they are not comparable to a service's reported subscriber count, to TV ratings, or to platform view counts that tally plays instead of people.• A play is one start of a title: it counts the moment playback begins, credited at one second, and autoplayed previews and trailers do not count. One person can have several plays in a window (a start, a stop, a return the next evening), so plays are counted as starts, not people.• Viewing through Prime Video Channels is included in the total. Depending on the service, the Prime Video lane accounts for 40% to 80% of total views; the Rankers tab breaks this out by storefront.• Our total runs higher than a service's own figure because Channels playback happens inside the Prime Video player, not the service's app. The service sees that lane only through Amazon's reports, and a licensor whose title sits inside the channel does not see it at all. Crosswalk observes the viewer at the device level regardless of who billed them, so both lanes are counted.",
             "is_list": false,
             "runs": [
               {
-                "text": "• Any play over zero seconds counts as a view. Each press of play or device switch opens a new session, so a one second watch, a pause, and another one second watch count as two views, not one.",
+                "text": "• A view is one person, on any screen, who played a title for at least one second inside the window, counted once however many devices or sessions they used. Autoplayed previews and trailers are not views. Counts are US viewers (persons), not accounts, so they are not comparable to a service's reported subscriber count, to TV ratings, or to platform view counts that tally plays instead of people.",
+                "bold": false
+              },
+              {
+                "text": "• A play is one start of a title: it counts the moment playback begins, credited at one second, and autoplayed previews and trailers do not count. One person can have several plays in a window (a start, a stop, a return the next evening), so plays are counted as starts, not people.",
                 "bold": false
               },
               {
@@ -1982,7 +1992,7 @@
         "title": "How These Numbers Are Counted",
         "paragraphs": [
           {
-            "text": "• We track no touchpoint to a streaming service for the trailing 6 months to determine subscription/reactivation.• 1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.• We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). In the dashboard on the Rankers tab we have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.• Multipliers from accounts to viewers are available upon request.",
+            "text": "• We track no touchpoint to a streaming service for the trailing 6 months to determine subscription/reactivation.• Views here are US viewers (persons) credited at one second of playback, counted once per person; not comparable to subscriber counts, TV ratings, or play counts.• We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). In the dashboard on the Rankers tab we have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.• Multipliers from accounts to viewers are available upon request.",
             "is_list": false,
             "runs": [
               {
@@ -1990,7 +2000,7 @@
                 "bold": false
               },
               {
-                "text": "• 1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.",
+                "text": "• Views here are US viewers (persons) credited at one second of playback, counted once per person; not comparable to subscriber counts, TV ratings, or play counts.",
                 "bold": false
               },
               {
