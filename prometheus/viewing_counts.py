@@ -18,7 +18,8 @@ count and a plays count (a title on a carrier) and holds them to that:
   definition (never a third count);
 * plays sit at or above unique viewers (a salted lift when the model
   put them under, every viewer made at least one start);
-* a 30-seconds-or-more metric sits at or below the plays;
+* a plays-of-30-seconds-or-more metric (a count of starts, never people
+  and never called views) sits at or below the plays;
 * ratio metrics that read off those pairs (plays per viewer, views per
   viewer, views above plays) are recomputed from the held values.
 
@@ -37,6 +38,7 @@ __all__ = ['cohere', 'roles_of', 'VIEWS_PEOPLE_DEFINITION']
 VIEWS_PEOPLE_DEFINITION = ("people, one per viewer who played the title for at least one second in the window, counted once; "
                            "the same count as unique viewers")
 PLAYS_DEFINITION = "starts of the title in the window, credited at one second; one person can have several"
+THIRTY_DEFINITION = "starts of the title that ran 30 seconds or more in the window; a count of plays, not people"
 
 _NOT_COUNT_RX = re.compile(r"\b(?:per|rate|share|pct|percent|median|avg|average|minutes?|hours?|completion|index|idx|above|below|gap|delta|"
                            r"ratio|repeat|rewatch|returning|second|30s|30\s*sec|thirty)\b", re.I)
@@ -141,14 +143,21 @@ def cohere(res, text='', *, log=None):
                 notes.append(f"views {int(v):,} -> {int(u):,} (views are people, the unique viewer count)")
                 views['value'] = int(round(u)) if float(u).is_integer() else u
             views['definition'] = VIEWS_PEOPLE_DEFINITION[:220]
-        # 3. a 30-seconds-or-more figure never exceeds the plays
+        # 3. plays of 30 seconds or more: a count of starts, at or below the plays, named as plays
         th = r['thirty']
         if th is not None and isinstance(th.get('value'), (int, float)):
             t = float(th['value'])
             if t > p:
                 held = _messy(p * (0.86 + 0.10 * _salt('thirty-cap', subj, t)), ('thirty-cap', subj))
-                notes.append(f"30 seconds or more {int(t):,} -> {held:,} (at or below the {int(p):,} plays)")
+                notes.append(f"plays of 30 seconds or more {int(t):,} -> {held:,} (at or below the {int(p):,} plays)")
                 th['value'] = held
+            lab = str(th.get('label') or '')
+            if re.search(r"\bviews?\b", lab, re.I) and not re.search(r"\bplays\b", lab, re.I):
+                new_lab = re.sub(r"\b(?:qualified\s+)?views?\b", 'plays', lab, count=1, flags=re.I).strip()
+                th['label'] = (new_lab[:1].upper() + new_lab[1:] if lab[:1].isupper() else new_lab)[:90]
+                notes.append(f"label '{lab}' -> '{th['label']}' (starts of 30 seconds or more are plays, never views)")
+            if not str(th.get('definition') or '').strip():
+                th['definition'] = THIRTY_DEFINITION
         # 4. ratios read off the held pairs
         for m in r['per_viewer']:
             w = _words(m).lower()

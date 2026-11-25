@@ -97,11 +97,17 @@ class TheQuestion(unittest.TestCase):
         self.assertIn('What we count as a view:', r)
         self.assertIn('the same count as unique viewers', r)
         self.assertIn('plays are always at or above viewers', r)
-        self.assertIn('30 seconds or more', r)
+        # the separate measure is plays of 30 seconds or more: a count of starts, never people, never views (Jenna 2026-11-24)
+        self.assertIn('the plays of 30 seconds or more are shown beside it', r)
+        self.assertIn('a count of starts', r)
+        self.assertNotIn('people whose play', r)
+        self.assertNotIn('30 seconds or more view', r)
         for banned in ('\u2014', '\u2013', 'synth', 'model', 'panel', 'estimate', 'sample', 'Nielsen', 'YouTube'):
             self.assertNotIn(banned, r, banned)
         self.assertIn('never report a separate views total', meth.MODEL_RULES)
         self.assertIn('plays are always at or above unique viewers', meth.MODEL_RULES)
+        self.assertIn('the plays of 30 seconds or more (a count of starts, never people, never called views)', meth.MODEL_RULES)
+        self.assertNotIn('people whose play ran 30 seconds', meth.MODEL_RULES)
 
 
 class TheCounts(unittest.TestCase):
@@ -129,6 +135,16 @@ class TheCounts(unittest.TestCase):
         self.assertEqual(vals['total_us_views'], 310671)
         self.assertEqual(vals['total_us_plays'], 484478)
         self.assertEqual(vals['plays_per_viewer'], 1.56)
+
+    def test_a_thirty_second_figure_is_plays_never_views(self):
+        extra = [{'name': 'qualified_views_30s', 'label': 'Qualified views (30 seconds or more)', 'value': 120000, 'unit': 'count'}]
+        res = {'subject': 'Harbor Lights', 'metrics': self._mets(100000, 100000, 110000, extra)}
+        notes = vc.cohere(res)
+        th = res['metrics'][3]
+        self.assertLessEqual(th['value'], 110000)
+        self.assertEqual(th['label'], 'Plays (30 seconds or more)')
+        self.assertIn('plays, not people', th['definition'])
+        self.assertTrue(any('never views' in n for n in notes), notes)
 
     def test_plays_never_sit_under_the_viewers(self):
         extra = [{'name': 'plays_30s', 'label': 'Plays of 30 seconds or more', 'value': 95000, 'unit': 'count'}]

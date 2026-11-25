@@ -187,7 +187,8 @@ VIEWS_ARE_PEOPLE = (
 PLAYS_ORDER = (
     "Every viewer made at least one play, so plays are always at or above viewers; the gap between them is "
     "repeat and resumed play, and plays divided by viewers is how often a person came back. Where a figure "
-    "depends on that one-second start, the people whose play ran 30 seconds or more are shown beside it.")
+    "depends on that one-second start, the plays of 30 seconds or more are shown beside it: a count of starts "
+    "that ran 30 seconds or more, never people and never called views.")
 PLAYS_VIEWS_CLOSE = (
     "A views figure above plays is not a people count. Use unique viewers for reach and plays for demand.")
 PLAYS_VIEWS_PART = f"{PLAYS_HEADER} {PLAY_DEFINITION}\n\n{VIEW_HEADER} {VIEWS_ARE_PEOPLE}\n\n{PLAYS_ORDER}\n\n{PLAYS_VIEWS_CLOSE}"
@@ -472,8 +473,9 @@ MODEL_RULES = (
     'a separate views total. Plays are starts (credited at one second), '
     'one person can have several, so plays are always at or above unique '
     'viewers. When the reader asks for unique viewers, views and plays, '
-    'report unique viewers (say they are the views), plays, and the '
-    'people whose play ran 30 seconds or more beside the plays.\n'
+    'report unique viewers (say they are the views), plays, and beside '
+    'the plays the plays of 30 seconds or more (a count of starts, never '
+    'people, never called views).\n'
     '- Name the carriage paths the figure includes when they differ '
     '(direct app and site; channel storefronts such as Prime Video '
     'Channels). Never claim a path the measurement cannot see.\n'
