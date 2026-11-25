@@ -1282,6 +1282,15 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 res.update(window_label=_cw['label'], window_start=_cw['start'], window_end=_cw['end'])
         if _qu.kind == 'named' and _qu.explicit and _is_panel and not str(res.get('universe') or '').strip():
             res['universe'] = _question_universe.universe_label(_qu)   # the opener names the universe the question named (2026-11-06)
+        # Plays, views and unique viewers hold to the house definitions on a
+        # title read (prometheus.viewing_counts, Armine 2026-11-24): views
+        # are people (the unique viewer count), plays are starts at or above
+        # them. Before the stored-figure bind, so what binds is a house figure.
+        try:
+            from prometheus import viewing_counts as _vcounts
+            _vcounts.cohere(res, text, log=lambda _m: print(f"[pm-loop] {_m}"))
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         # Stored figures bind this pass (2026-11-04, Liz's gender by door):
         # a figure already reported for the same subject, definition and
         # window is kept, and the reply says so in one line. The same on

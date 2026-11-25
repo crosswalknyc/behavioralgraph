@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ['bind_to_stored', 'already_reported_line', 'row_definition', 'stamp_definitions']
+__all__ = ['bind_to_stored', 'already_reported_line', 'row_definition', 'stamp_definitions', 'carriers_of']
 
 # the reader asked for a fresh, independent draw: nothing binds
 _FRESH_RX = re.compile(
@@ -153,6 +153,60 @@ def _stored_rows(prior_entries, new_res, ask_text):
     return out
 
 
+_PLUS_SERVICE_RX = re.compile(r"\b([A-Z][A-Za-z0-9]{2,}(?:\s[A-Z][A-Za-z0-9]+)?\+)(?!\w)")
+_ON_SERVICE_RX = re.compile(r"\bon\s+((?:[A-Z][\w'&+.-]*)(?:\s+(?:[A-Z][\w'&+.-]*|&|with|ads|TV))*)")
+_SERVICE_TAIL = frozenset(('free', 'with', 'ads', 'shelf', 'movies', 'tv', 'channel', 'channels', 'section', 'row', 'the', 'its', 'their', 'a', 'an'))
+
+
+def carriers_of(*texts):
+    """The services the words name as where a figure sits: a known platform in any role but an example, a
+    service written with a plus (MovieSphere+, Paramount+), or the capitalized name after 'on' ('on
+    MovieSphere+ across', 'on YouTube Free with ads'). Folded; {} when none. A figure binds to a stored one
+    only when the carriers agree (2026-11-24, Armine: a YouTube read's views and plays were bound to the
+    same title's figures on another service, under the YouTube label)."""
+    out = set()
+    for t in texts:
+        t = str(t or '')
+        if not t.strip():
+            continue
+        try:
+            from . import platform_scope as _ps
+            for name, how in (_ps.named(t) or {}).items():
+                if how != 'example':
+                    out.add(_norm(name).replace(' ', ''))
+        except Exception:
+            pass
+        for m in _PLUS_SERVICE_RX.finditer(t):
+            out.add(re.sub(r"[^a-z0-9+]", '', m.group(1).lower()))
+        for m in _ON_SERVICE_RX.finditer(t):
+            words = [re.sub(r"(?:'s|’s)$", '', w) for w in m.group(1).split() if w.lower() not in _SERVICE_TAIL and w not in ('&',)]
+            if words and words[0][:1].isupper() and not re.match(r"^(?:Nov|Oct|Sep|Dec|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sun|Mon|Tue|Wed|Thu|Fri|Sat)\b", words[0]):
+                out.add(re.sub(r"[^a-z0-9+]", '', words[0].lower()))
+    return out
+
+
+def _carrier_of_entry(entry):
+    try:
+        reply = str(entry.get('reply') or '')
+        head = reply.split('\n\n')[0] if reply else ''
+        if head.startswith('On ') and '\n\n' in reply:
+            head = head + ' ' + reply.split('\n\n')[1][:300]
+        return carriers_of(entry.get('universe'), entry.get('cohort'), head[:400],
+                           *[m.get('label') for m in (entry.get('metrics') or []) if isinstance(m, dict)][:12])
+    except Exception:
+        return set()
+
+
+def _carrier_of_result(new_res, m, ask_text=''):
+    try:
+        own = carriers_of(m.get('label'), m.get('definition'))
+        if own:
+            return own
+        return carriers_of(new_res.get('universe'), new_res.get('cohort'), str(new_res.get('headline') or '')[:300], ask_text)
+    except Exception:
+        return set()
+
+
 def _stored_metrics(prior_entries, new_res, ask_text):
     out = {}
     ents = [e for e in (prior_entries or []) if isinstance(e, dict) and not e.get('retired')]
@@ -161,11 +215,12 @@ def _stored_metrics(prior_entries, new_res, ask_text):
         if not _same_window(new_res, e, ask_text) or not _same_scope(new_res, e, ask_text):
             continue
         coh = _norm(e.get('cohort'))
+        ecar = _carrier_of_entry(e)
         for m in (e.get('metrics') or []):
             if isinstance(m, dict) and isinstance(m.get('value'), (int, float)):
                 k = (coh, _norm(m.get('name')))
                 if k[1] and k not in out:
-                    out[k] = (m, e)
+                    out[k] = (m, e, ecar | carriers_of(m.get('label')))
     return out
 
 
@@ -240,7 +295,10 @@ def bind_to_stored(res, prior_entries, ask_text=''):
             hit = smet.get((new_coh, _norm(m.get('name'))))
             if not hit:
                 continue
-            sm, sentry = hit
+            sm, sentry, scar = hit
+            ncar = _carrier_of_result(res, m, ask_text)
+            if ncar and scar and not (ncar & scar):
+                continue            # the same name on another service is another figure
             if float(sm['value']) != float(m['value']):
                 m['value'] = sm['value']
                 bound.append({'name': str(m.get('label') or m.get('name') or 'figure'), 'ts': str(sentry.get('ts') or '')[:10]})

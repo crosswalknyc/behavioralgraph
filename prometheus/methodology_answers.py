@@ -43,7 +43,8 @@ from __future__ import annotations
 import re
 
 __all__ = ['answer', 'shape_of', 'coverage_line', 'duration_line', 'age_source_line', 'in_data_line',
-           'demographic_count', 'view_definition_line', 'is_view_definition_question']
+           'demographic_count', 'view_definition_line', 'is_view_definition_question',
+           'is_plays_views_question', 'plays_views_line']
 
 TEN_M = 10_000_000
 
@@ -92,6 +93,28 @@ _VIEW_DEF_RX = re.compile(
     r"how (?:is|are) (?:a |your |the )?views? (?:counted|defined|classified|measured|credited)|"
     r"(?:your|crosswalk'?s?|nielsen'?s?|peacock'?s?) (?:definition|threshold) (?:of|for) a view|"
     r"what (?:does|do) (?:a view|views?) mean\b|define a view\b)", re.I)
+# Plays, views and unique viewers on a title read (Armine at Lionsgate,
+# 2026-11-24). "how is the play calculated", "what is a play", "views vs
+# plays", "why are the views higher than plays", "what are scenarios if
+# views is higher than plays", "How is the watch threshold for a qualified
+# view defined?", "difference between unique viewers and views": one house
+# answer from prometheus.methodology, never a model-written definition and
+# never a read on "Views vs Plays" as a subject.
+_PV_TERM = r"(?:plays?|title\s+starts?|starts?|views?|viewers?|unique\s+(?:us\s+|u\.s\.\s+)?viewers?|qualified\s+views?|playbacks?|watch\s+threshold)"
+_PLAYS_VIEWS_RX = re.compile(
+    r"\b(?:how\s+(?:is|are|was|were|do\s+you|does\s+(?:it|crosswalk|prometheus))\s+(?:a\s+|the\s+|your\s+)?(?:plays?|title\s+starts?|playbacks?|qualified\s+views?|watch\s+threshold)\b.{0,40}?"
+    r"\b(?:calculated|counted|defined|measured|computed|credited|determined|derived|tallied)\b|"
+    r"how\s+(?:do|does|did|would)\s+(?:you|we|crosswalk|prometheus|it)\s+(?:count|define|calculate|measure|credit|tally|track)\s+(?:a\s+|the\s+)?(?:plays?|title\s+starts?|playbacks?)\b|"
+    r"how\s+(?:is|are)\s+(?:a\s+|the\s+)?(?:watch\s+|view\s+|play\s+)?threshold\b.{0,60}?\b(?:defined|set|counted|measured|determined)\b|"
+    r"what\s+(?:is|are|counts\s+as|qualifies\s+as|do\s+you\s+count\s+as|does|do)\s+(?:a\s+|the\s+|your\s+)?(?:plays?|title\s+starts?|qualified\s+views?|watch\s+threshold|play\s+counts?)\b(?:\s+mean)?|"
+    r"(?:defin(?:e|ition\s+of)|threshold\s+(?:for|of|behind))\s+(?:a\s+|the\s+)?(?:plays?|qualified\s+views?|views?\s+vs\.?\s+plays?|plays?\s+vs\.?\s+views?)\b|"
+    r"(?:views?|viewers?|plays?)\s+(?:vs\.?|versus|against|and|or|compared\s+(?:to|with))\s+(?:the\s+)?(?:views?|viewers?|plays?)\b.{0,40}?\b(?:mean|differ|difference|different|defined|calculated|counted|measured|explain|scenarios?|cases?)\b|"
+    r"(?:difference|differences|gap|relationship)\s+between\s+(?:the\s+)?(?:total\s+|us\s+|unique\s+)?(?:views?|viewers?|plays?)\s+and\s+(?:the\s+)?(?:total\s+|us\s+|unique\s+)?(?:views?|viewers?|plays?)\b|"
+    r"(?:why|how\s+come|how\s+can|how\s+could|can|could|scenarios?\s+(?:if|when|where))\s+(?:is|are|do|does|did|would|the|it|that|this)?\s*(?:the\s+)?(?:total\s+|us\s+)?(?:views?|plays?|viewers?)\s+(?:be\s+|is\s+|are\s+|run\s+|sit\s+|come\s+in\s+)?(?:higher|lower|more|less|bigger|smaller|greater|above|below|over|under)\s+(?:than\s+)?(?:the\s+)?(?:total\s+|us\s+)?(?:views?|plays?|viewers?)\b|"
+    r"explain\s+(?:the\s+)?(?:plays?|views?)\s+(?:vs\.?|versus|and)\s+(?:views?|plays?|viewers?)\b|"
+    r"what\s+(?:is|are)\s+(?:the\s+)?(?:difference|differences)\s+(?:between|in)\s+(?:the\s+)?(?:views?|plays?|viewers?)\b)", re.I)
+_PV_DATA_RX = re.compile(r"\b(?:how\s+many|number\s+of|count\s+of|size|how\s+big|top|rank|list|per\s+day|by\s+day|by\s+week|break(?:\s+it)?\s+(?:down|out)|"
+                         r"breakdown|split\s+by|for\s+[A-Z][a-z]+\s+(?:on|in|across))\b", re.I)
 _NIELSEN_RX = re.compile(r"\bnielsen(?:'s)?\b", re.I)
 _PEACOCK_RX = re.compile(r"\bpeacock(?:'s)?\b", re.I)
 _COMPARE_RX = re.compile(
@@ -137,11 +160,35 @@ def view_definition_line():
     return _meth.others_part()
 
 
+def is_plays_views_question(text):
+    """True when the question asks what a play is, how the watch
+    threshold is set, or how views, plays and unique viewers relate
+    (including why one sits above another). A question that asks for a
+    figure, a split or a ranking is a read and stays with the lanes."""
+    t = _squash(text)
+    if not t or len(t) > 400 or _DO_WORK_RX.search(t):
+        return False
+    if not _PLAYS_VIEWS_RX.search(t):
+        return False
+    if _PV_DATA_RX.search(t) and not re.search(r"\b(?:mean|defin|calculat|count(?:ed)?\b|measur|threshold|why|scenario)", t, re.I):
+        return False
+    return True
+
+
+def plays_views_line():
+    """Plays, views and unique viewers in the house's own words
+    (prometheus.methodology.PLAYS_VIEWS_PART, one source)."""
+    from prometheus import methodology as _meth
+    return _meth.PLAYS_VIEWS_PART
+
+
 def shape_of(text):
     """'view_definition' | 'coverage' | 'duration' | 'age_source' | 'in_data' | '' for one question."""
     t = _squash(text)
     if not t or len(t) > 700:
         return ''
+    if is_plays_views_question(t):
+        return 'plays_views'
     if is_view_definition_question(t):
         return 'view_definition'
     if _AGE_SOURCE_RX.search(t):
@@ -272,6 +319,8 @@ def in_data_line(text, host=None):
 def _one(text, shape, host=None):
     if shape == 'view_definition':
         return view_definition_line()
+    if shape == 'plays_views':
+        return plays_views_line()
     if shape == 'coverage':
         return coverage_line()
     if shape == 'duration':

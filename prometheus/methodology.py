@@ -165,6 +165,33 @@ VIEW_NOTE_SHORT = ("Views here are US viewers (persons) credited at one second o
                    "playback, counted once per person; not comparable to subscriber "
                    "counts, TV ratings, or play counts.")
 
+# Plays, views and unique viewers on a title read, in the house's own words
+# (Armine at Lionsgate, 2026-11-24: "how is the play calculated", "why are
+# the views higher than plays", "How is the watch threshold for a qualified
+# view defined?" each drew a different model-written definition, and one
+# read printed a views line above its plays line). A view is a person
+# (VIEW_DEFINITION), so the views figure IS the unique viewer count; a play
+# is one start, credited at one second (THRESHOLD), and one person can
+# have several, so plays are never below viewers. The same words answer the
+# question (prometheus.methodology_answers) and hold the figures
+# (prometheus.viewing_counts).
+PLAYS_HEADER = 'What we count as a play:'
+PLAY_DEFINITION = (
+    "A play is one start of a title: it counts the moment playback begins, credited at one second, and "
+    "autoplayed previews and trailers do not count. One person can have several plays in a window (a start, a "
+    "stop, a return the next evening), so plays are counted as starts, not people.")
+VIEWS_ARE_PEOPLE = (
+    "A view is one person who played the title for at least one second inside the window, counted once however "
+    "many times or on however many screens they came back. Views are people, so the views figure is the same "
+    "count as unique viewers.")
+PLAYS_ORDER = (
+    "Every viewer made at least one play, so plays are always at or above viewers; the gap between them is "
+    "repeat and resumed play, and plays divided by viewers is how often a person came back. Where a figure "
+    "depends on that one-second start, the people whose play ran 30 seconds or more are shown beside it.")
+PLAYS_VIEWS_CLOSE = (
+    "A views figure above plays is not a people count. Use unique viewers for reach and plays for demand.")
+PLAYS_VIEWS_PART = f"{PLAYS_HEADER} {PLAY_DEFINITION}\n\n{VIEW_HEADER} {VIEWS_ARE_PEOPLE}\n\n{PLAYS_ORDER}\n\n{PLAYS_VIEWS_CLOSE}"
+
 
 # How others count a view (Jenna 2026-11-11: "where we talk about views in
 # methodology add a part that says how nelisen classifies a view ... and
@@ -439,6 +466,14 @@ MODEL_RULES = (
     '- When a figure depends on a title-start threshold (browse-only, '
     'bounce, started a title, first play), report BOTH the one-second '
     'figure and the 30-seconds-or-more figure, side by side.\n'
+    '- Plays, views and unique viewers: a view is a PERSON (one per '
+    'viewer who played the title for at least one second, counted once), '
+    'so a views figure is the SAME count as unique viewers; never report '
+    'a separate views total. Plays are starts (credited at one second), '
+    'one person can have several, so plays are always at or above unique '
+    'viewers. When the reader asks for unique viewers, views and plays, '
+    'report unique viewers (say they are the views), plays, and the '
+    'people whose play ran 30 seconds or more beside the plays.\n'
     '- Name the carriage paths the figure includes when they differ '
     '(direct app and site; channel storefronts such as Prime Video '
     'Channels). Never claim a path the measurement cannot see.\n'

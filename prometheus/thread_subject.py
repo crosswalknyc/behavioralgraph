@@ -48,7 +48,7 @@ from . import faults as _faults
 
 __all__ = ['statement_subject', 'dropped_names', 'pin_of_thread', 'current', 'pinned_subject', 'pinnable',
            'pinned_source', 'is_dropped', 'stash', 'scope_to_history', 'pin', 'drop', 'note',
-           'last_user_ask', 'STRONG_SOURCES']
+           'last_user_ask', 'STRONG_SOURCES', 'is_metric_phrase']
 
 # A statement or a correction beats what Prometheus itself quoted. An
 # order that names its audience ("query a dataset on UVA consumers")
@@ -239,14 +239,38 @@ def current():
         return None
 
 
+_METRIC_WORDS = frozenset(('view', 'views', 'play', 'plays', 'viewer', 'viewers', 'penetration', 'share', 'shares', 'index', 'reach',
+                           'engagement', 'impressions', 'start', 'starts', 'completion', 'minutes', 'hours', 'watch', 'time', 'rate',
+                           'rates', 'ratio', 'count', 'counts', 'unique', 'total', 'us', 'u.s.', 'plays/views', 'views/plays', 'metric',
+                           'metrics', 'figure', 'figures', 'number', 'numbers', 'churn', 'conversion', 'lift', 'frequency', 'duration'))
+_METRIC_JOIN = frozenset(('vs', 'vs.', 'versus', 'and', 'or', 'the', 'of', 'per', 'by', 'against', 'to', 'v', 'v.', 'a', 'an', 'in'))
+
+
+def is_metric_phrase(name):
+    """True when a would-be subject is only metric words ("Views vs Plays",
+    "plays per viewer", "penetration and share"): a question about the
+    numbers, never an audience (2026-11-24, Armine: a read on "Views vs
+    Plays" pinned it as the thread's subject and quoted a $300 profile of
+    it)."""
+    words = [w.strip(' .,;:!?()"\'').lower() for w in str(name or '').split()]
+    words = [w for w in words if w]
+    if not words:
+        return False
+    body = [w for w in words if w not in _METRIC_JOIN]
+    return bool(body) and all(w in _METRIC_WORDS for w in body)
+
+
 def pinned_subject(strong_only=False):
     """The subject pinned on the current thread, as a reader sees it, or
-    ''. ``strong_only`` ignores a note left by an offer or a draft."""
+    ''. ``strong_only`` ignores a note left by an offer or a draft. A pin
+    that is only metric words never binds (is_metric_phrase)."""
     p = current() or {}
     s = ' '.join(str(p.get('subject') or '').split()).strip(' .,;:')
     if not s:
         return ''
     if strong_only and str(p.get('source') or '') not in STRONG_SOURCES:
+        return ''
+    if is_metric_phrase(s):
         return ''
     return s
 
