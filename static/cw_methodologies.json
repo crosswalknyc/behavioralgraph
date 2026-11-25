@@ -2342,54 +2342,14 @@
         ]
       },
       {
-        "title": "Projection to U.S. Population",
+        "title": "US Counts",
         "paragraphs": [
           {
-            "text": "Panel-observed counts are projected to a U.S. national estimate. Based on Age, Gender, Ethnicity, Income (Nielsen Comps).  DMA penetration is skewed a bit in the Coastal states, for full transparency we provide the CW DMA % compared to the Census DMA penetration.",
+            "text": "Every count in Short Form Conversion is for the whole US. The mix of age, gender, ethnicity and income matches the US. Our audience leans a little toward the coasts. For each local TV market (DMA), we show the share of our audience that lives there next to the US share.",
             "is_list": false,
             "runs": [
               {
-                "text": "Panel-observed counts are projected ",
-                "bold": false
-              },
-              {
-                "text": "to ",
-                "bold": false
-              },
-              {
-                "text": "a ",
-                "bold": false
-              },
-              {
-                "text": "U",
-                "bold": false
-              },
-              {
-                "text": ".S.",
-                "bold": false
-              },
-              {
-                "text": " ",
-                "bold": false
-              },
-              {
-                "text": "national estimate. ",
-                "bold": false
-              },
-              {
-                "text": "Based on Age, Gender, Ethnicity, Income (Nielsen ",
-                "bold": false
-              },
-              {
-                "text": "Comps).  ",
-                "bold": false
-              },
-              {
-                "text": "DMA penetration is skewed a bit in the Coastal states, for full transparency we provide the ",
-                "bold": false
-              },
-              {
-                "text": "CW DMA % compared to the Census DMA penetration.",
+                "text": "Every count in Short Form Conversion is for the whole US. The mix of age, gender, ethnicity and income matches the US. Our audience leans a little toward the coasts. For each local TV market (DMA), we show the share of our audience that lives there next to the US share.",
                 "bold": false
               }
             ]
@@ -2442,7 +2402,7 @@
         "title": "Notes on Interpretation",
         "paragraphs": [
           {
-            "text": "• Short Form Conversion measures observed SF-to-LF behavior within a defined Attribution Window. • Projections are anchored to the U.S. population. • Conversion is credited once per title and attributed to the platform of qualifying SF view. • Results reflect the URL sets, date range and Attribution Window selected at the time of analysis. ",
+            "text": "• Short Form Conversion measures observed SF-to-LF behavior within a defined Attribution Window. • All counts are for the whole US. • Conversion is credited once per title and attributed to the platform of qualifying SF view. • Results reflect the URL sets, date range and Attribution Window selected at the time of analysis. ",
             "is_list": false,
             "runs": [
               {
@@ -2450,15 +2410,7 @@
                 "bold": false
               },
               {
-                "text": "• Projections are anchored to ",
-                "bold": false
-              },
-              {
-                "text": "the ",
-                "bold": false
-              },
-              {
-                "text": "U.S. population. ",
+                "text": "• All counts are for the whole US. ",
                 "bold": false
               },
               {

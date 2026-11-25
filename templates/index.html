@@ -50175,14 +50175,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div>
                                         <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
-                                            <span style="font-size: 1.25rem;">🤖</span> AI Performance Analysis
+                                            <span style="font-size: 1.25rem;">📊</span> Campaign Performance
                                         </h3>
                                         <div id="sfConvAnalysisUrlNote" style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.35rem; display: none;">
                                             📊 Based on top 20 URLs (of <span id="sfConvTotalUrlCount">0</span> total)
                                         </div>
                                     </div>
                                     <button onclick="runSFConvPerformanceAnalysis()" id="sfConvRunAnalysisBtn" style="padding: 0.6rem 1.25rem; font-size: 0.8rem; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(99, 102, 241, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(99, 102, 241, 0.3)';">
-                                        ✨ Analyze Campaign
+                                        📊 Analyze Campaign
                                     </button>
                                 </div>
                             </div>
@@ -50231,10 +50231,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 <!-- Loading State - Animated -->
                                 <div id="sfConvPerformanceLoading" style="display: none; text-align: center; padding: 3rem 2rem;">
                                     <div style="width: 60px; height: 60px; margin: 0 auto 1.5rem; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); animation: pulse 1.5s ease-in-out infinite; display: flex; align-items: center; justify-content: center;">
-                                        <span style="font-size: 1.5rem;">🤖</span>
+                                        <span style="font-size: 1.5rem;">📊</span>
                                     </div>
                                     <div style="color: var(--text-primary); font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem;">Analyzing Campaign...</div>
-                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Our AI is reviewing URLs for click farms, engagement quality, and campaign effectiveness</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Checking each post for click farms, fake views and campaign results</div>
                                     <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 1rem;">⏱️ This typically takes 10-20 seconds</div>
                                 </div>
                                 
@@ -50245,7 +50245,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                     </div>
                                     <div style="font-size: 1.1rem; color: var(--text-primary); font-weight: 600; margin-bottom: 0.75rem;">Ready to Analyze</div>
                                     <div style="font-size: 0.85rem; color: var(--text-secondary); max-width: 400px; margin: 0 auto; line-height: 1.6;">
-                                        Click <strong>"Analyze Campaign"</strong> to get AI-powered insights on click farms, fake views, and campaign effectiveness.
+                                        Click <strong>"Analyze Campaign"</strong> to see click farms, fake views and how well the campaign worked.
                                     </div>
                                     <div style="margin-top: 1.25rem; display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap;">
                                         <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-tertiary);">
@@ -65500,14 +65500,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _isSubPlatform = (p.source === 'peacock');
                     var _newLabel  = _isSubPlatform ? 'New Subscribers' : 'New Free Users';
                     var _lostLabel = _isSubPlatform ? 'Cancellations'   : 'Lapsed Users';
-                    var _flowKind  = _isSubPlatform ? 'subscription events' : 'MAU signups (free-tier)';
+                    var _flowKind  = _isSubPlatform ? 'new subscriptions' : 'new free-tier users';
                     var _lostKind  = _isSubPlatform
                                      ? 'subscription cancellations in this window'
                                      : 'users who stopped opening the app in this window (no subscription to cancel on the free tier)';
                     var flowTip = 'User flow on ' + (p.platform || 'this platform') + ' over ' + flowWindow + '. '
-                                + _newLabel + ' = gross ' + _flowKind + ' in this window. '
+                                + _newLabel + ' = ' + _flowKind + ' in this window. '
                                 + _lostLabel + ' = ' + _lostKind + '. '
-                                + 'Net Growth is ANNUALIZED (projects the observed daily net-add rate to a full year) so it stays stable across window choices and reconciles with published QoQ/YoY growth.';
+                                + 'Net Growth / yr = new minus lost, as a share of all users, scaled to a full year so every window compares.';
                     // Prefer `active_users` (window-scoped microdrama
                     // active-user pool) over `total_users` (platform-
                     // wide MAU / subs snapshot) so the number on the
@@ -74652,7 +74652,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (perfEmptyEl) perfEmptyEl.style.display = 'none';
                 if (perfRunBtn) {
                     perfRunBtn.innerHTML = '🔄 Re-Analyze';
-                    perfRunBtn.title = 'Run a fresh AI analysis';
+                    perfRunBtn.title = 'Check the campaign again';
                 }
                 renderSFConvPerformanceAnalysis(window.sfConvPrecomputedAnalysis);
             } else {
@@ -74660,7 +74660,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (perfResultsEl) perfResultsEl.style.display = 'none';
                 if (perfEmptyEl) perfEmptyEl.style.display = 'block';
                 if (perfLoadingEl) perfLoadingEl.style.display = 'none';
-                if (perfRunBtn) perfRunBtn.innerHTML = '🤖 Analyze Campaign';
+                if (perfRunBtn) perfRunBtn.innerHTML = '📊 Analyze Campaign';
             }
         }
         
@@ -74991,7 +74991,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             .then(resp => {
                 document.getElementById('sfConvPerformanceLoading').style.display = 'none';
                 document.getElementById('sfConvRunAnalysisBtn').disabled = false;
-                document.getElementById('sfConvRunAnalysisBtn').innerHTML = '🤖 Analyze Campaign';
+                document.getElementById('sfConvRunAnalysisBtn').innerHTML = '📊 Analyze Campaign';
                 
                 if (resp.error) {
                     alert('Analysis failed: ' + resp.error);
@@ -75005,7 +75005,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 console.error('Performance analysis error:', err);
                 document.getElementById('sfConvPerformanceLoading').style.display = 'none';
                 document.getElementById('sfConvRunAnalysisBtn').disabled = false;
-                document.getElementById('sfConvRunAnalysisBtn').innerHTML = '🤖 Analyze Campaign';
+                document.getElementById('sfConvRunAnalysisBtn').innerHTML = '📊 Analyze Campaign';
                 document.getElementById('sfConvPerformanceEmpty').style.display = 'block';
                 alert('Analysis failed: ' + err.message);
             });

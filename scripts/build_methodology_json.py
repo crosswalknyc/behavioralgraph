@@ -76,6 +76,32 @@ PLAY_LABEL_SLOTS = (
      '\u2022 A trend chart: daily plays over the last 7 days, or rank over time where a platform '
      'shows no daily plays.'),
 )
+# Jenna 2026-11-24 (no-modeled-or-source-language): the short-form entry
+# says its numbers are US counts, with no estimate, projection or source
+# wording. These are page words, not a definition: methodology.UNIT is the
+# viewing count and BASE_SAMPLE says how a count is made, so neither one
+# is restated here.
+# (section title, the sub title it replaces, the sub title)
+US_COUNT_SUB_TITLES = (
+    ('SHORT FORM CONVERSION', re.compile(r"(?i)^\s*projection to\b"), 'US Counts'),
+)
+# (section title, sub title, the run a span starts on, the text it ends
+# on, the words the span becomes)
+US_COUNT_SLOTS = (
+    ('SHORT FORM CONVERSION', 'US Counts',
+     re.compile(r"(?i)^\s*panel[- ]observed counts are projected\b"), re.compile(r"(?i)penetration\.\s*$"),
+     'Every count in Short Form Conversion is for the whole US. The mix of age, gender, ethnicity '
+     'and income matches the US. Our audience leans a little toward the coasts. For each local TV '
+     'market (DMA), we show the share of our audience that lives there next to the US share.'),
+    ('SHORT FORM CONVERSION', 'Notes on Interpretation',
+     re.compile(r"(?i)^\W*projections are anchored\b"), re.compile(r"(?i)population\.\s*$"),
+     '\u2022 All counts are for the whole US. '),
+)
+# what may never come back anywhere in that section, whatever a rebuilt
+# document says
+US_COUNT_BANNED_RX = re.compile(
+    r"(?i)\bestimat\w*|\bnielsen\b|\bcensus\b|\bprojections? (?:are|is) anchored\b|\bprojected to\b|"
+    r"\bprojection to\b")
 
 
 def _methodology():
@@ -138,6 +164,7 @@ def sync_view_definition(sections, methodology=None):
     if play:
         changes += _sync_play(by_title, play, getattr(meth, 'VIEW_DEFINITION'))
     changes += sync_play_labels(sections)
+    changes += sync_us_counts(sections)
     return changes
 
 
@@ -167,6 +194,55 @@ def sync_play_labels(sections):
                 p['text'] = _paragraph_text(p)
                 changes.append((sec_title, sub_title, before, p['text']))
             break
+    return changes
+
+
+def sync_us_counts(sections):
+    """Write the US_COUNT_SUB_TITLES titles and the US_COUNT_SLOTS spans:
+    the short-form entry says its numbers are US counts. A section the
+    document no longer carries is skipped. Raises ValueError when estimate,
+    projection or source words are still anywhere in the section afterwards
+    (a sub title included), so a rebuilt document that moved a slot fails
+    loudly instead of keeping them.
+    Returns a list of (section, sub, before, after) for every change."""
+    changes = []
+    by_title = {s.get('title'): s for s in sections}
+    for sec_title, old_rx, title in US_COUNT_SUB_TITLES:
+        for sub in (by_title.get(sec_title) or {}).get('subs') or []:
+            before = sub.get('title', '')
+            if old_rx.search(before):
+                sub['title'] = title
+                changes.append((sec_title, title, before, title))
+    for sec_title, sub_title, start_rx, end_rx, words in US_COUNT_SLOTS:
+        sub = next((s for s in (by_title.get(sec_title) or {}).get('subs') or []
+                    if s.get('title') == sub_title), None)
+        for p in (sub or {}).get('paragraphs') or []:
+            runs = p.get('runs') or []
+            start = next((i for i, r in enumerate(runs) if start_rx.search(r.get('text', ''))), None)
+            if start is None:
+                continue
+            seen, end = '', None
+            for j in range(start, len(runs)):
+                seen += runs[j].get('text', '')
+                if end_rx.search(seen):
+                    end = j
+                    break
+            if end is None:
+                continue
+            before = p.get('text', '')
+            p['runs'] = runs[:start] + [{'text': words, 'bold': bool(runs[start].get('bold'))}] + runs[end + 1:]
+            p['text'] = _paragraph_text(p)
+            changes.append((sec_title, sub_title, before, p['text']))
+            break
+    for sec_title in {t for t, *_ in US_COUNT_SUB_TITLES + US_COUNT_SLOTS}:
+        sec = by_title.get(sec_title) or {}
+        blocks = [(None, sec.get('intro') or [])] + [(s.get('title'), s.get('paragraphs') or [])
+                                                     for s in sec.get('subs') or []]
+        for sub_title, paras in blocks:
+            texts = [sub_title or ''] + [p.get('text', '') for p in paras]
+            hit = next((m for m in map(US_COUNT_BANNED_RX.search, texts) if m), None)
+            if hit:
+                raise ValueError(f'{sec_title!r} > {sub_title or "intro"!r} still says {hit.group(0)!r}')
     return changes
 
 
@@ -401,7 +477,7 @@ if __name__ == '__main__':
         rest = [a for a in sys.argv[1:] if not a.startswith('--')]
         target = rest[0] if rest else DEFAULT_OUT
         changed = sync_file(target)
-        print(f'{target}: {len(changed)} paragraph(s) rewritten (view and play wording)')
+        print(f'{target}: {len(changed)} change(s) (view, play and US count wording)')
         for sec, sub, before, after in changed:
             print(f'  - {sec} > {sub}')
         sys.exit(0)

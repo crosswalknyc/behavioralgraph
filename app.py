@@ -35178,7 +35178,7 @@ def run_sf_lf_conversion(job_id):
                 print(f"[SF-LF] cache clone failed: {_clone_err}\n{_tb.format_exc()}")
                 # Fall through to a fresh run.
 
-        update_job_status(job_id, progress=10, message='Connecting to ClickHouse...')
+        update_job_status(job_id, progress=10, message='Connecting to the data...')
 
         conn = _ch_connect()
         print(f"[SF-LF] Connected to ClickHouse")
@@ -35192,7 +35192,7 @@ def run_sf_lf_conversion(job_id):
         # migration and has been removed.
         print(f"[SF-LF] Ready (ClickHouse, default per-query timeout)")
 
-        update_job_status(job_id, progress=15, message='Connected to ClickHouse...')
+        update_job_status(job_id, progress=15, message='Connected to the data...')
         
         results = {
             'project_name': project_name,
@@ -37143,7 +37143,7 @@ def run_sf_lf_conversion(job_id):
                 csv_rows.append({'Column': demo_type.upper(), 'Value': value, 'Metric': '', 'Count': demo_count, 'Percentage': f"{demo_pct:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(demo_count)})
         
         # Performance Analysis Section - Run AI analysis on URLs
-        update_job_status(job_id, progress=90, message='Running AI performance analysis...')
+        update_job_status(job_id, progress=90, message='Checking the posts for click farms and fake views...')
         print(f"[SF-LF] 🤖 Starting AI Performance Analysis on {len(sf_urls[:50])} URLs...")
         try:
             analysis_urls = sf_urls[:50]  # Limit to 50 URLs for analysis

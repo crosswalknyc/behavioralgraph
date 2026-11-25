@@ -28,6 +28,14 @@ Checks:
 - The methodology page (static/cw_methodologies.json) names the
   short-form and Micro-Series counts plays through the build script's sync
   (scripts/build_methodology_json.py), without restating what a play is.
+- No method words (no-modeled-or-source-language): no AI wording on the
+  short-form campaign read, which says what the reader gets, and no AI or
+  system name in the progress lines of the report job behind it; the
+  Micro-Series Net Growth tooltip says what the number is, with no
+  projects / reconciles / published / QoQ / YoY / gross / MAU wording; the
+  methodology page's short-form entry calls its numbers US counts, with no
+  estimate, projection or source words, through the same sync, which fails
+  loudly when a rebuilt document brings them back.
 
 Hermetic: no app boot, no network, no store.
 """
@@ -119,6 +127,18 @@ def header_rows(fn_src):
 
 HEDGE = re.compile(r"(?i)\best\.|\bestimat\w*|\bapprox\w*|\bRaw: ~")
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+AI_WORDS = re.compile(r"\bAI\b|\U0001F916")
+FLOW_METHOD = re.compile(r"(?i)\bprojects?\b|\breconcil\w*|\bpublished\b|\bQoQ\b|\bYoY\b|annuali[sz]ed|\bgross\b|\bMAU\b")
+US_COUNT_TEXT = ('Every count in Short Form Conversion is for the whole US. The mix of age, gender, ethnicity '
+                 'and income matches the US. Our audience leans a little toward the coasts. For each local TV '
+                 'market (DMA), we show the share of our audience that lives there next to the US share.')
+US_COUNT_NOTE = '\u2022 All counts are for the whole US. '
+# the words the page carried before 2026-11-24, split the way Word split them
+OLD_US_COUNT_RUNS = ('Panel-observed counts are projected ', 'to ', 'a ', 'U', '.S.', ' ', 'national estimate. ',
+                     'Based on Age, Gender, Ethnicity, Income (Nielsen ', 'Comps).  ',
+                     'DMA penetration is skewed a bit in the Coastal states, for full transparency we provide the ',
+                     'CW DMA % compared to the Census DMA penetration.')
+OLD_US_COUNT_NOTE_RUNS = ('\u2022 Projections are anchored to ', 'the ', 'U.S. population. ')
 
 
 def script_strings(src):
@@ -242,6 +262,49 @@ def main():
         check(f'Micro-Series: {label[:70]!r}', label in miq)
     check('Micro-Series: the plays chip tooltip on all three card grids',
           miq.count("tip: 'Plays over ' + _miqActiveWindowLabel()") == 3)
+
+    print('no method words in what a reader sees')
+    for screen, parts in SCREENS.items():
+        markup, script = (shown(region(html, a, b) or '') for a, b in parts)
+        strings = reader_strings(markup, script)
+        hits = [t for t in strings if AI_WORDS.search(t)]
+        check(f'{screen}: no AI wording in a reader string', not hits, repr([h[:90] for h in hits[:4]]))
+        if screen == 'Micro-Series':
+            hits = [t for t in strings if FLOW_METHOD.search(t)]
+            check(f'{screen}: no projects / reconciles / published / QoQ / YoY / gross / MAU in a reader string',
+                  not hits, repr([h[:90] for h in hits[:4]]))
+    for label in (
+        '<span style="font-size: 1.25rem;">\U0001F4CA</span> Campaign Performance',
+        'Checking each post for click farms, fake views and campaign results',
+        'Click <strong>"Analyze Campaign"</strong> to see click farms, fake views and how well the campaign worked.',
+        "perfRunBtn.title = 'Check the campaign again';",
+    ):
+        check(f'short-form campaign read: {label[:70]!r}', label in sf)
+    buttons = sf.count('\U0001F4CA Analyze Campaign')
+    check('short-form campaign read: the button carries a chart in every state, never a robot or sparkles',
+          buttons == 4 and '\U0001F916' not in sf and '\u2728 Analyze Campaign' not in sf, f'found {buttons}')
+    job_src = (WEBAPP / 'app.py').read_text(encoding='utf-8')
+    i = job_src.find('def run_sf_lf_conversion(job_id):')
+    ends = [k for k in (job_src.find('\ndef ', i + 10), job_src.find('\n@app.route', i + 10)) if k > 0]
+    job = job_src[i:min(ends)] if i >= 0 and ends else ''
+    msgs = [m.group(2) for m in re.finditer(r"message=f?(['\"])(.*?)\1", job, flags=re.S)]
+    check('short-form report job: its progress lines found', len(msgs) >= 10, f'found {len(msgs)}')
+    bad = [m for m in msgs if re.search(r'(?i)\bAI\b|clickhouse|snowflake|\bmodel', m)]
+    check('short-form report job: no AI or system name in a progress line the reader watches', not bad, repr(bad))
+    check('short-form report job: the campaign check says what it does',
+          'Checking the posts for click farms and fake views...' in msgs)
+    flow = region(html, "var _isSubPlatform = (p.source === 'peacock');", 'flowBlock = ') or ''
+    check('Micro-Series: the user-flow tooltip found', "var flowTip = 'User flow on '" in flow)
+    for label in (
+        "var _flowKind  = _isSubPlatform ? 'new subscriptions' : 'new free-tier users';",
+        "+ _newLabel + ' = ' + _flowKind + ' in this window. '",
+        "+ 'Net Growth / yr = new minus lost, as a share of all users, scaled to a full year so every window compares.';",
+    ):
+        check(f'Micro-Series tooltip: {label[:72]!r}', label in flow)
+    hits = [t for t in script_strings(shown(flow)) if FLOW_METHOD.search(t)]
+    check('Micro-Series tooltip: no method word in any of its strings', not hits, repr(hits[:3]))
+    check('Micro-Series tooltip: names the number the way the card does',
+          '<div class="miq-rollup-flow-label">Net Growth / yr</div>' in miq)
 
     print('Micro-Series labels')
     chips = miq.count("label: 'Plays'")
@@ -387,6 +450,58 @@ def main():
     check('a rebuild from the old words is put back to plays by the sync every build runs',
           len(changed) == 2 and plays.TOTAL_PLAYS in sub_runs(old, 'SHORT FORM CONVERSION', 'Core Metrics'),
           repr(changed[:2]))
+
+    print('the methodology page calls the short-form numbers US counts')
+    sf_sec = next((s for s in sections if s.get('title') == 'SHORT FORM CONVERSION'), {}) or {}
+    titles = [s.get('title') or '' for s in sf_sec.get('subs') or []]
+    check('short-form: the US Counts sub is there', 'US Counts' in titles, repr(titles))
+    check('short-form: no sub title names a projection', not any(re.search(r'(?i)\bprojection', t) for t in titles))
+    check('short-form US Counts: the plain paragraph',
+          US_COUNT_TEXT in sub_runs(sections, 'SHORT FORM CONVERSION', 'US Counts'))
+    check('short-form notes: all counts are for the whole US',
+          US_COUNT_NOTE in sub_runs(sections, 'SHORT FORM CONVERSION', 'Notes on Interpretation'))
+    sf_text = ' '.join([p.get('text', '') for p in sf_sec.get('intro') or []]
+                       + [t for s in sf_sec.get('subs') or []
+                          for t in [s.get('title', '')] + [p.get('text', '') for p in s.get('paragraphs') or []]])
+    for rx in (r'(?i)\bestimat\w*', r'(?i)\bnielsen\b', r'(?i)\bcensus\b', r'(?i)\bprojections? (?:are|is) anchored\b',
+               r'(?i)\bprojected to\b', r'(?i)\bprojection to\b'):
+        m = re.search(rx, sf_text)
+        check(f'short-form entry: no {rx!r}', m is None, repr(sf_text[max(0, m.start() - 60):m.end() + 30]) if m else '')
+    check('the US counts are in step with the sync (nothing to change)',
+          builder.sync_us_counts(copy.deepcopy(sections)) == [])
+    check('the US count words carry no dash',
+          all('\u2014' not in w and '\u2013' not in w for *_, w in builder.US_COUNT_SLOTS))
+    stale = copy.deepcopy(sections)
+    stale_sf = next(s for s in stale if s.get('title') == 'SHORT FORM CONVERSION')
+    for sub in stale_sf['subs']:
+        for p in sub['paragraphs']:
+            texts = [r.get('text') for r in p['runs']]
+            if sub['title'] == 'US Counts' and US_COUNT_TEXT in texts:
+                sub['title'] = 'Projection to U.S. Population'
+                p['runs'] = [{'text': t, 'bold': False} for t in OLD_US_COUNT_RUNS]
+            elif US_COUNT_NOTE in texts:
+                k = texts.index(US_COUNT_NOTE)
+                p['runs'][k:k + 1] = [{'text': t, 'bold': False} for t in OLD_US_COUNT_NOTE_RUNS]
+            else:
+                continue
+            p['text'] = ''.join(r['text'] for r in p['runs'])
+    check('the stale copy carries the old words', 'national estimate' in json.dumps(stale)
+          and 'Projections are anchored' in json.dumps(stale))
+    changed = builder.sync_view_definition(stale)
+    check('a rebuild from the old words is put back to US counts by the sync every build runs',
+          len(changed) == 3 and stale == sections, repr([c[:2] for c in changed]))
+    moved = copy.deepcopy(sections)
+    qa = next(s for s in next(x for x in moved if x.get('title') == 'SHORT FORM CONVERSION')['subs']
+              if s.get('title') == 'Quality Assurance')
+    qa['paragraphs'][0]['runs'].append({'text': ' Counts are weighted to a national estimate.', 'bold': False})
+    qa['paragraphs'][0]['text'] += ' Counts are weighted to a national estimate.'
+    try:
+        builder.sync_view_definition(moved)
+        raised = ''
+    except ValueError as e:
+        raised = str(e)
+    check('a rebuilt document that brings the words back anywhere in the entry fails loudly',
+          'Quality Assurance' in raised and 'estimate' in raised, repr(raised))
 
     print('no dash characters in the new copy')
     mod_src = (WEBAPP / 'play_count_labels.py').read_text(encoding='utf-8')
