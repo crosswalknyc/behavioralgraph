@@ -2015,6 +2015,12 @@ def render_view_context_block(view_context):
         body = json.dumps(data, ensure_ascii=False, indent=1)
     except Exception:
         return ''
+    count_note = ''
+    try:
+        from play_count_labels import screen_count_note
+        count_note = screen_count_note(view_context.get('view_id'))
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return (
         f"DATA CURRENTLY ON SCREEN: {title}\n"
         "=========================\n"
@@ -2025,7 +2031,8 @@ def render_view_context_block(view_context):
         "the answer in it. Counts come in pairs: panel_<key> is the "
         "internal panel count and <key>_us is the US figure. State "
         "only the _us figure, in prose, tables, and CSVs alike.\n"
-        f"{body}\n\n"
+        + (f"{count_note}\n" if count_note else "")
+        + f"{body}\n\n"
     )
 
 

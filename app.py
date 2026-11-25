@@ -37378,7 +37378,13 @@ def download_sf_lf_conversion(s3_key):
             if _is_missing_key_error(_key_e):
                 return jsonify(_nf_body), 404
             raise
-        content = _stamp_csv_bytes(response['Body'].read())
+        raw = response['Body'].read()
+        try:
+            import play_count_labels
+            raw = play_count_labels.relabel_sf_report_bytes(raw)
+        except Exception:
+            traceback.print_exc()
+        content = _stamp_csv_bytes(raw)
         filename = os.path.basename(s3_key)
         return Response(
             content,
