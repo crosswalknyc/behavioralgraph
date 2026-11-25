@@ -166,7 +166,7 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         try:
             _pcat = _page_default.profile_category(page_base.get('s3_key'), page_base.get('subject'),
                                                    _C._profile_catalog_for_chat())
-            if _page_default.person_page_for_title_ask(text, _pcat, page_base.get('subject')):
+            if _page_default.person_page_for_title_ask(text, _pcat, page_base.get('subject'), subject_hint=subject_hint):
                 print(f"[pm-base] page {page_base.get('subject')!r} is a person ({_pcat}); the ask is about "
                       f"viewers of titles, not the person's audience; page base skipped")
                 page_base = None

@@ -235,13 +235,83 @@ _AUDIENCE_NOUNS = frozenset(('audience', 'audiences', 'viewer', 'viewers', 'fan'
                              'us', 'people'))
 
 
+# The words a cohort label adds to its subject's name ("people that searched
+# Paul Rodriguez in the US", "Nike buyers who also shop Target", "the avid
+# tier of Yellowstone viewers"): behavior, who-words and audience nouns.
+# Stripped, a cohort of the base's own subject leaves only that subject's
+# name, spelled as the reader spelled it.
+_COHORT_WORDS = frozenset(('that', 'who', 'whom', 'which', 'those', 'these', 'this', 'their', 'his', 'her', 'its',
+                           'searched', 'search', 'searches', 'searching', 'googled', 'looked', 'up', 'watched', 'watch', 'watching',
+                           'viewed', 'view', 'streamed', 'stream', 'streaming', 'played', 'play', 'playing', 'listened', 'listen',
+                           'read', 'bought', 'buy', 'purchased', 'purchase', 'shopped', 'shop', 'followed', 'follow', 'following',
+                           'engaged', 'engage', 'visited', 'visit', 'clicked', 'liked', 'subscribed', 'subscribe', 'attended', 'went',
+                           'name', 'names', 'tier', 'cut', 'cohort', 'group', 'segment', 'slice', 'set', 'pool', 'base', 'universe',
+                           'audience', 'audiences', 'only', 'just', 'also', 'still', 'already', 'ever', 'once', 'again', 'at', 'least',
+                           'one', 'any', 'all', 'every', 'each', 'most', 'heavy', 'light', 'new', 'returning', 'lapsed', 'active',
+                           'window', 'year', 'month', 'months', 'days', 'last', 'past', 'trailing', 'within', 'during', 'between',
+                           'via', 'through', 'across', 'from', 'into', 'over', 'under', 'about', 'than', 'more', 'less', 'times',
+                           'online', 'digital', 'web', 'app', 'site',
+                           'searchers', 'searcher', 'engagers', 'engager', 'visitors', 'visitor', 'streamers', 'streamer',
+                           'bettors', 'bettor', 'attendees', 'attendee', 'voters', 'voter', 'gamers', 'gamer', 'watchers', 'watcher'))
+
+
+def _token_near(a: str, b: str) -> bool:
+    """Two name tokens are the same word allowing one slip of spelling
+    (Rodriquez / Rodriguez) on a word of five letters or more."""
+    if a == b:
+        return True
+    if min(len(a), len(b)) < 5 or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(1 for x, y in zip(a, b) if x != y) <= 1
+    s_, l_ = (a, b) if len(a) < len(b) else (b, a)
+    for i in range(len(l_)):
+        if l_[:i] + l_[i + 1:] == s_:
+            return True
+    return False
+
+
+def cohort_of_base(named: str, base_subject: str) -> bool:
+    """True when the named subject is a behavioral cohort of the base's
+    own subject: once the cohort words and audience nouns come off, every
+    word left is a word of the base subject's name (one spelling slip
+    allowed). 'people that Searched Paul Rodriquez in the US' is a cohort
+    of 'Paul Rodriguez'; 'Nike fans' on the Paul Rodriguez profile is not
+    (2026-11-24, Armine: that cohort was sized by research at 102,000 US
+    people and every count in the read was cut to it, under a table whose
+    rows still read off the 1,742,869 the thread had stated)."""
+    n = str(named or '').strip()
+    bs = str(base_subject or '').strip().split(' - ')[0]
+    if not n or not bs:
+        return False
+    # a service named as where ('on YouTube', 'via Prime Video') scopes the cohort; it is not a second subject
+    try:
+        from . import platform_scope as _ps
+        for pname in (_ps.named(n) or {}):
+            n = re.sub(r'(?i)(?<![a-z0-9])' + re.escape(str(pname)) + r'(?![a-z0-9])', ' ', n)
+    except Exception:
+        pass
+    alltoks = [w for w in re.split(r'[^a-z0-9]+', n.lower()) if w]
+    ntoks = [w for w in alltoks if w not in _AUDIENCE_NOUNS and w not in _COHORT_WORDS]
+    btoks = [w for w in re.split(r'[^a-z0-9]+', bs.lower()) if w and w not in _AUDIENCE_NOUNS]
+    if not ntoks or not btoks:
+        return False
+    if len(ntoks) == len(alltoks):
+        return False            # only the name: the subject itself, not a cohort of it
+    if not all(any(_token_near(w, b) for b in btoks) for w in ntoks):
+        return False
+    # at least one distinctive word of the base's name is in the label (never a bare 'the US people')
+    return any(len(w) >= 3 and any(_token_near(w, b) for b in btoks) for w in ntoks)
+
+
 def base_is_borrowed(text, named: str, base: Optional[dict]) -> bool:
     """True when the read's base is another subject's profile: the words
     name a subject (`named`), the base is a page, catalog or view base
     for a different name, and the words do not name the base's own
     subject (a distinctive token of it). A resume's pin counts as a
     page base; a base the reader chose by its words
-    (`chosen_by_words`) never counts."""
+    (`chosen_by_words`) never counts. A behavioral cohort of the base's
+    own subject (cohort_of_base) is the base's, never borrowed."""
     b = base if isinstance(base, dict) else {}
     bs = str(b.get('subject') or '').strip()
     if not (named and bs) or b.get('chosen_by_words'):
@@ -249,6 +319,8 @@ def base_is_borrowed(text, named: str, base: Optional[dict]) -> bool:
     if str(b.get('source') or '') not in ('page', 'catalog', 'view', ''):
         return False
     if _twin.same_name(named, bs) or _twin.same_name(named, bs.split(' - ')[0]):
+        return False
+    if cohort_of_base(named, bs):
         return False
     # the named subject inside the base's own name ('Anne Hathaway' on the
     # Anne Hathaway x Shiseido valuation, 'Yellowstone' on its avid cut,
@@ -1270,7 +1342,7 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         r = research_bounded(ask, claude_json, tools, changed_windows=changed or None, call=need_call, stages=stages)
         if r.get('block'):
             parts.append(r['block'])
-        cap, cap_source = None, ''
+        cap, cap_source, cohort_base = None, '', ''
         if researched:
             cap = _twin.anchor_low_people(r.get('anchors') or [])
             cap_source = 'research' if cap else ''
@@ -1282,6 +1354,16 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         elif isinstance(h.get('profile'), dict) and _twin.same_name(h['profile'].get('subject') or ask.get('subject'), ask.get('subject') or ''):
             cap = _num(h['profile'].get('audience_size'))
             cap_source = 'profile' if cap else ''
+        elif named and base_subject and not _twin.same_name(named, base_subject) and cohort_of_base(named, base_subject):
+            # a cohort of the base's own subject: its ceiling is the base profile's whole audience, never a
+            # researched size for the cohort's label (2026-11-24, Armine)
+            try:
+                hb = held(base_subject, window=_win)
+                cap = _num((hb.get('profile') or {}).get('audience_size')) if isinstance(hb.get('profile'), dict) else None
+            except Exception:
+                cap = None
+            cap_source = 'profile' if cap else ''
+            cohort_base = base_subject if cap else ''
         # one set of figures across products (2026-11-23): the subject's saved
         # size, records, valuations, title universe and campaign ride the read
         # as one block, and the whole audience on file caps every count
@@ -1301,7 +1383,7 @@ def read_blocks(text, mr, base, *, pk=None, saved=None, catalog=None, stage=None
         except Exception as e:
             print(f"[pm-knowledge] shared figures skipped: {type(e).__name__}: {e}")
         sb = _twin.size_block(ask.get('subject'), cap, researched=researched,
-                              borrowed_from=(base_subject if borrowed else ''), window=default_win)
+                              borrowed_from=(base_subject if borrowed else ''), window=default_win, cohort_of=cohort_base)
         if sb:
             parts.append(sb)
         if cap or default_win:
@@ -1748,4 +1830,4 @@ __all__ = ['enabled', 'research_enabled', 'ask_from', 'ask_key', 'held', 'stored
            'understanding_on_request', 'named_subject', 'base_is_borrowed', 'leave_size', 'peek_size', 'saved_people',
            'valuation_events', 'RESEARCH_PROMPT', 'ANCHOR_PREFIX', 'ENV', 'ENV_RESEARCH', 'PRODUCTS',
            'shared_enabled', 'figure_kind', 'subject_facts', 'shared_block', 'cross_hold', 'record_cross_hold', 'ENV_SHARED', 'PEOPLE_KINDS',
-           'research_needed', 'research_gate_enabled', 'catalog_anchors', 'filter_held_to_valuation', 'anchor_ttl_s', 'ENV_ANCHOR_TTL', 'ENV_RESEARCH_GATE']
+           'research_needed', 'research_gate_enabled', 'catalog_anchors', 'filter_held_to_valuation', 'anchor_ttl_s', 'ENV_ANCHOR_TTL', 'ENV_RESEARCH_GATE', 'cohort_of_base']

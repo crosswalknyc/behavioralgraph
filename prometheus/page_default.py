@@ -293,16 +293,57 @@ def title_viewing_ask(text, name=''):
     return bool(re.search(rf"\b{_VIEW_VERBS}\b[^.?!]{{0,80}}\bon (?:the )?(?:{_PLATFORMS})\b", t, re.I))
 
 
-def person_page_for_title_ask(text, category, name=''):
+def person_page_for_title_ask(text, category, name='', subject_hint=''):
     """True when a profile of a PERSON would be bound as the base of a
     question about viewers of titles: the profile is not the anchor
     then. False for a brand or title profile, and for a question about
-    the person's own audience."""
+    the person's own audience. ``subject_hint`` is the subject the ask
+    or the thread bound; a cohort of the person's own audience ("people
+    that searched Paul Rodriguez", "Paul Rodriguez searchers") makes the
+    ask one about that audience's viewing, so the profile stays the base
+    (2026-11-24, Armine: "wat about series about skateboarding" on the
+    name-searcher cohort was read as a title-viewing ask, the profile was
+    dropped, and the cohort was sized by research)."""
     if not is_person_category(category):
         return False
     if audience_of_person(text, name):
         return False
+    for label in _cohort_labels(subject_hint):
+        try:
+            from . import knowledge as _kn
+            if _kn.cohort_of_base(label, name):
+                return False
+        except Exception:
+            pass
     return title_viewing_ask(text, name)
+
+
+def _cohort_labels(subject_hint=''):
+    """The subjects the ask or the thread bound, as labels: the hint the
+    caller passed, the Understanding's subjects on the request, and the
+    thread's pinned subject. Pure reads; [] when none."""
+    out = []
+    if str(subject_hint or '').strip():
+        out.append(str(subject_hint).strip())
+    try:
+        from . import knowledge as _kn
+        u = _kn.understanding_on_request() or {}
+        for sd in (u.get('subjects') or []):
+            if isinstance(sd, dict):
+                for k in ('catalog', 'as_written'):
+                    v = str(sd.get(k) or '').strip()
+                    if v and v not in out:
+                        out.append(v)
+    except Exception:
+        pass
+    try:
+        from . import thread_subject as _ts
+        pin = str(_ts.pinned_subject() or '').strip()
+        if pin and pin not in out:
+            out.append(pin)
+    except Exception:
+        pass
+    return out
 
 
 def profile_category(s3_key='', name='', catalog=None):

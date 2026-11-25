@@ -221,7 +221,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             and str(base.get('s3_key') or '').lower().endswith('.csv'):
         try:
             _pcat_b = _page_default.profile_category(base.get('s3_key'), base.get('subject'), _C._profile_catalog_for_chat())
-            if _page_default.person_page_for_title_ask(text, _pcat_b, base.get('subject')):
+            if _page_default.person_page_for_title_ask(text, _pcat_b, base.get('subject'), subject_hint=(bind_subject or subj_hint)):
                 print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} is a person ({_pcat_b}); "
                       f"the ask is about viewers of titles; the profile is not the anchor")
                 _title_person = str(base.get('subject') or '').split(' - ')[0].strip()

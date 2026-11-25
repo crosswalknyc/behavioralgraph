@@ -1415,22 +1415,49 @@ def _tokens(*parts) -> set:
     return out
 
 
-def _companion_share(metrics: list, i: int) -> Optional[float]:
-    """The share (a pct metric) that goes with count metric i: the nearest
-    pct metric sharing a word with it, looking back first."""
-    m = metrics[i]
-    toks = _tokens(m.get('name'), m.get('label'))
-    order = list(range(i - 1, -1, -1)) + list(range(i + 1, len(metrics)))
-    for j in order:
-        o = metrics[j]
+# words that name a measure, a unit or an audience noun, never the thing counted: two metrics that share only
+# these are not a count and its own share (2026-11-24, Armine: 'The Nine Club viewers' and 'Avid series viewers'
+# were paired with 'Series watch rate' on the word 'series', and every count was cut to 59.5% of the cap)
+_GENERIC_TOKENS = frozenset(('viewers', 'viewer', 'watchers', 'watcher', 'people', 'persons', 'users', 'user', 'rate', 'rates', 'share',
+                             'shares', 'pct', 'percent', 'percentage', 'total', 'totals', 'us', 'count', 'counts', 'number', 'unique',
+                             'distinct', 'avid', 'tier', 'the', 'of', 'and', 'in', 'a', 'an', 'who', 'that', 'series', 'title', 'titles',
+                             'show', 'shows', 'plays', 'play', 'views', 'view', 'starts', 'start', 'visits', 'buyers', 'shoppers',
+                             'subscribers', 'fans', 'audience', 'cohort', 'name', 'searchers', 'searched', 'search', 'median', 'avg',
+                             'average', 'per', 'top', 'all', 'any', 'one', 'at', 'least', 'window', 'projected', 'reach', 'penetration'))
+
+
+def _pair_shares(metrics: list) -> dict:
+    """{count index: share value}: the pct metric that is a count's own
+    share. A pct metric pairs with every count that shares a word with
+    it beyond the measure and audience words (the thing counted: 'Beauty
+    category buyers share' goes with the beauty buyers and the beauty
+    audience); when no count shares such a word it pairs with the count
+    right before it (the model's order: a count, then its rate). A word
+    like 'series' or 'viewers' alone never pairs."""
+    out = {}
+    counts = [i for i, m in enumerate(metrics) if isinstance(m, dict) and str(m.get('unit') or '').lower() in _COUNT_UNITS and _num(m.get('value'))]
+    for j, o in enumerate(metrics):
         if not isinstance(o, dict) or str(o.get('unit') or '').lower() not in _PCT_UNITS_GATE:
             continue
         v = _num(o.get('value'))
         if v is None or not (0 < v <= 100):
             continue
-        if toks & _tokens(o.get('name'), o.get('label')):
-            return v
-    return None
+        otoks = _tokens(o.get('name'), o.get('label')) - _GENERIC_TOKENS
+        hits = [i for i in counts if i not in out and otoks
+                and (_tokens(metrics[i].get('name'), metrics[i].get('label')) - _GENERIC_TOKENS) & otoks]
+        if hits:
+            for i in hits:
+                out[i] = v              # the counts the share is named for
+        elif j - 1 in counts and (j - 1) not in out:
+            out[j - 1] = v              # else the count right before it
+    return out
+
+
+def _companion_share(metrics: list, i: int, pairs: Optional[dict] = None) -> Optional[float]:
+    """The share (a pct metric) that is count metric i's own, by
+    _pair_shares; None when the count has none."""
+    pairs = pairs if isinstance(pairs, dict) else _pair_shares(metrics)
+    return pairs.get(i)
 
 
 def size_gate(data: dict, cap, salt: str = '', window: Optional[dict] = None) -> tuple:
@@ -1447,6 +1474,7 @@ def size_gate(data: dict, cap, salt: str = '', window: Optional[dict] = None) ->
         capf = _num(cap)
         metrics = [m for m in (data.get('metrics') or []) if isinstance(m, dict)]
         if capf and capf > 0:
+            pairs = _pair_shares(metrics)
             for i, m in enumerate(metrics):
                 unit = str(m.get('unit') or '').lower()
                 if unit not in _COUNT_UNITS:
@@ -1454,7 +1482,7 @@ def size_gate(data: dict, cap, salt: str = '', window: Optional[dict] = None) ->
                 v = _num(m.get('value'))
                 if v is None or v <= 0:
                     continue
-                share = _companion_share(metrics, i)
+                share = _companion_share(metrics, i, pairs)
                 new = None
                 if share:
                     implied = v / (share / 100.0)
@@ -1467,6 +1495,25 @@ def size_gate(data: dict, cap, salt: str = '', window: Optional[dict] = None) ->
                     rec['moves'].append({'metric': str(m.get('name') or m.get('label') or ''), 'from': int(round(v)), 'to': newi,
                                          'share': share, 'implied': int(round(v / (share / 100.0))) if share else None})
                     m['value'] = newi
+            # the table sits inside the audience too: a row whose people exceed the cap becomes the cap times its
+            # penetration (its share of the audience), else a hair under the cap (2026-11-24, Armine: the metrics
+            # were cut to the cap while the rows under them still read 543,775 against a 60,696 headline)
+            bd = data.get('breakdown') if isinstance(data.get('breakdown'), dict) else None
+            for r_i, row in enumerate((bd or {}).get('rows') or []):
+                if not isinstance(row, dict) or row.get('buckets'):
+                    continue
+                pool = _num(row.get('pool'))
+                if pool is None or pool <= capf:
+                    continue
+                pen = _num(row.get('penetration_pct'))
+                new = capf * pen / 100.0 if pen and 0 < pen <= 100 else capf * (0.93 + 0.05 * _unit(salt, 'size-gate-row', row.get('label')))
+                if new < pool:
+                    newi = _messy_int(salt, ('size-row', row.get('label')), new)
+                    rec['moves'].append({'metric': f"row {str(row.get('label') or r_i)[:60]}", 'from': int(round(pool)), 'to': newi,
+                                         'share': pen, 'implied': None})
+                    row['pool'] = newi
+                    if isinstance(row.get('note'), str) and row['note']:
+                        row['note'] = _rewrite_moved(row['note'], rec['moves'][-1:])
             if rec['moves']:
                 for key in ('headline', 'reads'):
                     val = data.get(key)
@@ -1520,14 +1567,23 @@ def anchor_low_people(anchors: list) -> Optional[int]:
     return None
 
 
-def size_block(subject: str, cap, *, researched: bool, borrowed_from: str = '', window: Optional[dict] = None) -> str:
+def size_block(subject: str, cap, *, researched: bool, borrowed_from: str = '', window: Optional[dict] = None,
+               cohort_of: str = '') -> str:
     """The prompt block that fixes the subject's audience size for a
     read: binding, anchor low; the rows of another profile are never
     the subject's; the window is the trailing twelve months unless the
-    question named one. Prompt text only."""
+    question named one. With `cohort_of` the subject is a part of that
+    base's audience and the cap is the base's whole audience, a ceiling,
+    never the cohort's own size. Prompt text only."""
     who = str(subject or '').strip() or 'the subject'
     lines = []
-    if _num(cap):
+    if _num(cap) and cohort_of:
+        lines.append(f"AUDIENCE CEILING (binding). {who} is a part of {cohort_of}'s audience of {int(round(float(cap))):,} US people "
+                     f"in the window. No count in this read exceeds that figure. The cohort's own size is the count the thread "
+                     f"already stated for it when one was stated, else its share of {cohort_of}'s audience times that audience; "
+                     f"every row of a table sits inside the cohort's own size, and a share of the cohort times the cohort's size is "
+                     f"the row's count.")
+    elif _num(cap):
         lines.append(f"AUDIENCE SIZE (binding, anchor low). {who}: {int(round(float(cap))):,} US people in the window. "
                      f"Every count in this read sits inside that figure; a share of this audience times this size is the count, "
                      f"and no count implies an audience larger than it.")
