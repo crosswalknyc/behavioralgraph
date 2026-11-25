@@ -71,6 +71,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -1259,6 +1260,8 @@ def anchors_for(subject, window=None, products=None, limit=60, with_ledger=True)
             facts = [f for f in (page.get('facts') or []) if isinstance(f, dict)]
             if products:
                 facts = [f for f in facts if f.get('product') in set(products)]
+            # nothing set aside or retired reaches a read (2026-11-24)
+            facts = [f for f in facts if not _fact_held(f, page.get('subject') or subject)]
 
             def _score(f):
                 ov = 0
@@ -1287,8 +1290,8 @@ def anchors_for(subject, window=None, products=None, limit=60, with_ledger=True)
         out['trends'] = []
     if with_ledger:
         try:
-            import insights_ledger as _il
-            led = _il.consult(subject=str(subject))
+            _il = _ledger()
+            led = _il.consult(subject=str(subject))   # held-back rows never reach a read (insights_ledger._feeds_reads)
             out['ledger'] = list(led.get('entries') or [])[:12]
             if led.get('block'):
                 out['ledger_block'] = led['block']
@@ -1611,7 +1614,11 @@ def index_bpiq(key, payload, user='', etag=None):
 
 
 def record_answer(subject, text, user='', thread_id='', product='chat'):
-    """Bank the figures a delivered reply states, under its subject."""
+    """Bank the figures a delivered reply states, under its subject. Never
+    a reply the insights ledger holds back (Jenna 2026-11-24: a set-aside
+    answer never feeds a later read, for anyone): its words were set aside,
+    or it restates figures of a retired read. The write hook and the
+    thread sweep both come through here."""
     if not enabled() or not str(subject or '').strip():
         return ''
     try:
@@ -1622,12 +1629,70 @@ def record_answer(subject, text, user='', thread_id='', product='chat'):
         key = f"thread/{user}/{thread_id}/{hashlib.sha1(str(text).encode('utf-8')).hexdigest()[:10]}"
         if is_retired_source(key):
             return ''       # a reply that was set aside is never banked again (the sweep re-reads its thread)
+        if _held_back(text, subject, user=user, thread_id=thread_id):
+            return ''       # its words were set aside, or it restates a retired read's figures (2026-11-24)
         for f in facts:
             f['source']['key'] = key
         return upsert_source(product, key, subject, facts)
     except Exception as e:
         print(f"[corpus-catalog] record_answer failed: {e}")
         return ''
+
+
+def _ledger():
+    """The insights ledger (what was set aside, what was retired), or None.
+    The catalog runs in the dashboard, beside insights_ledger.py, and on the
+    build server, where the dashboard sits one level down in bg-webapp/."""
+    try:
+        import insights_ledger as _il
+        return _il
+    except Exception:
+        pass
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for d in (root, os.path.join(root, 'bg-webapp')):
+        if os.path.isfile(os.path.join(d, 'insights_ledger.py')) and d not in sys.path:
+            sys.path.append(d)
+    try:
+        import insights_ledger as _il
+        return _il
+    except Exception:
+        return None
+
+
+def _held_back(text, subject, user='', thread_id=''):
+    """insights_ledger.held_back for a reply about to be banked: '' when it
+    may be, else the reason."""
+    il = _ledger()
+    fn = getattr(il, 'held_back', None)
+    if not callable(fn):
+        return ''
+    try:
+        return fn(str(text or ''), subject=str(subject or '') or None, user=user or None,
+                  thread=thread_id or None) or ''
+    except Exception:
+        return ''
+
+
+def _fact_held(f, subject):
+    """A stored fact no read may lean on: its reply was set aside, or it is
+    a chat figure a retired read carried (a count of 10,000 or more on its
+    own, any other figure beside the name the retired read gave it)."""
+    src = str((f.get('source') or {}).get('key') or '')
+    if src and is_retired_source(src):
+        return True
+    if f.get('kind') != 'stated_number':
+        return False
+    il = _ledger()
+    fn = getattr(il, 'quoted_retired_figures', None)
+    vt = getattr(il, 'value_tokens', None)
+    if not callable(fn) or not callable(vt):
+        return False
+    try:
+        tok = vt(f.get('value'))
+        return bool(tok) and bool(fn(str(f.get('note') or f.get('label') or ''), subject,
+                                     min_weight=0.5, must_include=(tok,)))
+    except Exception:
+        return False
 
 
 def retired_sources(force=False):

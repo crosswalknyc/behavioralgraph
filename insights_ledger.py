@@ -1528,6 +1528,405 @@ def set_aside_rows(limit=200):
     return list((_load_set_aside().get('replies') or [])[-int(limit):])
 
 
+# ---------------------------------------------------------------------------
+# A set-aside answer never feeds a later read, for anyone (Jenna 2026-11-24:
+# Armine's retired skateboarding table came back through a page answer's
+# banked figures and through the catalog's chat facts). Every store that
+# writes an answer down asks here first: the shared ring
+# (prometheus.shared_memory), the corpus catalog (record_answer, its thread
+# sweep, anchors_for) and the nightly distiller.
+#   words_set_aside         the words: reply_set_aside, plus the signature of
+#                           every registry row whatever its scope (a stock line
+#                           is never on the registry, so a scope protects
+#                           nothing for a store that writes words down for
+#                           everyone).
+#   quoted_retired_figures  the figures: a text that restates figures a
+#                           retired row of its own subject family carried and
+#                           no live read there carries. A page answer or a
+#                           distilled row repeating a figure never makes it
+#                           live; a share or a rate counts only beside the
+#                           name the retired row gave it ("The Nine Club").
+#   held_back               both, as one answer: '' or the reason.
+# ---------------------------------------------------------------------------
+_FIG_TOKEN_RX = re.compile(
+    r'(?<![\w.,$])(\d{1,3}(?:,\d{3})+)(?![,.]?\d)'
+    r'|(?<![\w.,$])(\d{5,})(?![\w.,])'
+    r'|(?<![\w.,$])(\d{1,3}\.\d{1,2})(?!\d)\s?(%|[MKB](?![A-Za-z])|x(?![A-Za-z]))?')
+_FIG_SEGMENT_RX = re.compile(r'(?<=[.!?])\s+|\n+|\s+-\s+|;\s*')
+_FIG_LABEL_STOP = frozenset((
+    'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'for', 'with', 'by', 'at', 'to', 'from', 'it', 'its', 'this', 'that',
+    'these', 'those', 'their', 'they', 'he', 'she', 'his', 'her', 'we', 'our', 'you', 'your', 'us', 'u.s', 'jan', 'feb',
+    'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec', 'january', 'february', 'march', 'april',
+    'june', 'july', 'august', 'september', 'october', 'november', 'december', 'total', 'unique', 'share', 'penetration',
+    'index', 'reach', 'rate', 'people', 'viewers', 'watched', 'series', 'audience', 'profile', 'read', 'avid', 'fan',
+    'fans', 'cohort', 'window', 'same', 'first', 'second', 'third', 'one', 'two', 'three', 'measured', 'tier', 'row',
+    'rows', 'title', 'titles', 'plays', 'views', 'unique', 'people', 'every', 'each', 'all', 'most', 'other', 'both'))
+_FAMILY_STOP = frozenset((
+    'the', 'and', 'for', 'with', 'from', 'that', 'who', 'all', 'viewers', 'viewer', 'fans', 'fan', 'audience', 'people',
+    'profile', 'show', 'shows', 'series', 'movie', 'film', 'season', 'official', 'buyers', 'customers', 'users',
+    'subscribers', 'watchers', 'searchers', 'searched', 'total', 'universe', 'avid', 'casual', 'cut'))
+_SECONDARY_ROUTES = frozenset(('page_analysis',))
+_fig_family_cache = {'doc': None, 'reg': None, 'ts': 0.0, 'buckets': (), 'registry': ()}
+_entry_fig_memo = {}
+_held_entry_cache = {'gen': None, 'res': {}}
+_registry_sig_cache = {'doc': None, 'sigs': frozenset()}
+
+
+def _num_token(num):
+    try:
+        return ('%.2f' % float(num)).rstrip('0').rstrip('.')
+    except (TypeError, ValueError):
+        return ''
+
+
+def _token_of(m):
+    """(token, weight) for one match of _FIG_TOKEN_RX, or (None, 0)."""
+    if m.group(1) or m.group(2):
+        n = int((m.group(1) or m.group(2)).replace(',', ''))
+        if n < 1000:
+            return None, 0.0
+        return str(n), (1.0 if n >= 10000 else 0.5)
+    num = m.group(3)
+    if len(num.replace('.', '').lstrip('0')) < 3:
+        return None, 0.0
+    suf = (m.group(4) or '').lower()
+    return _num_token(num) + ('' if suf == '%' else suf), 0.5
+
+
+def figure_tokens(text):
+    """{token: weight} for the figures a text states that are specific enough
+    to recognize again: counts of 1,000 and up (10,000 and up weigh 1.0, the
+    rest 0.5) and decimals with three significant digits or more (31.2%,
+    26.3M, 2.15x; 0.5). The percent sign is dropped, so a table's 31.2% and
+    a metric's 31.2 are one figure. Years and prices are never figures."""
+    out = {}
+    for m in _FIG_TOKEN_RX.finditer(str(text or '')):
+        tok, w = _token_of(m)
+        if tok:
+            out[tok] = max(out.get(tok, 0.0), w)
+    return out
+
+
+def value_tokens(value):
+    """The figure_tokens key a stored value is known by ('' when it is not
+    specific enough): 60696 -> '60696', 31.2 -> '31.2'."""
+    try:
+        f = float(str(value).replace(',', ''))
+    except (TypeError, ValueError):
+        return ''
+    if f != f:
+        return ''
+    f = abs(f)
+    if f.is_integer():
+        return str(int(f)) if f >= 1000 else ''
+    s = _num_token(f)
+    return s if len(s.replace('.', '').lstrip('0')) >= 3 else ''
+
+
+def _label_words(segment, skip=frozenset()):
+    out = set()
+    for w in re.findall(r"[A-Z][\w'&+-]{2,}", str(segment or '')):
+        lw = w.lower().strip("'")
+        if lw not in _FIG_LABEL_STOP and lw not in skip:
+            out.add(lw)
+    return frozenset(out)
+
+
+def _family_tokens(*names):
+    toks = set()
+    for nm in names:
+        try:
+            folded = fold_subject(str(nm or ''))
+        except Exception:
+            folded = str(nm or '').lower()
+        for t in re.split(r'[^a-z0-9]+', str(folded).lower()):
+            if len(t) >= 3 and t not in _FAMILY_STOP:
+                toks.add(t)
+    return frozenset(toks)
+
+
+def _entry_figures(e, skip=frozenset()):
+    """{token: (weight, label words)} for one ledger row: its reply, its
+    metrics and its breakdown. A figure from a sentence carries the names
+    that sentence gave it; a stored metric or cell carries its own label."""
+    out = {}
+
+    def _put(tok, w, words):
+        if not tok:
+            return
+        cur = out.get(tok)
+        out[tok] = (max(w, cur[0]) if cur else w, (cur[1] | words) if cur else words)
+
+    for seg in _FIG_SEGMENT_RX.split(str(e.get('reply') or '')):
+        words = None
+        for m in _FIG_TOKEN_RX.finditer(seg):
+            tok, w = _token_of(m)
+            if tok:
+                words = words if words is not None else _label_words(seg, skip)
+                _put(tok, w, words)
+    for m in (e.get('metrics') or []):
+        if isinstance(m, dict):
+            tok = value_tokens(m.get('value'))
+            if tok:
+                _put(tok, 1.0 if '.' not in tok and int(tok) >= 10000 else 0.5,
+                     _label_words(' '.join(str(m.get(k) or '') for k in ('label', 'definition')), skip))
+    bd = e.get('breakdown') if isinstance(e.get('breakdown'), dict) else {}
+    for r in (bd.get('rows') or []):
+        if not isinstance(r, dict):
+            continue
+        words = _label_words(str(r.get('label') or ''), skip)
+        for k in ('share_pct', 'pct', 'count', 'pool', 'value'):
+            tok = value_tokens(r.get(k))
+            if tok:
+                _put(tok, 1.0 if '.' not in tok and int(tok) >= 10000 else 0.5, words)
+    return out
+
+
+def _figure_families():
+    """Per bucket: (key, family tokens, live read tokens, retired rows), and
+    the set-aside registry heads, cached with the index."""
+    doc = _load_index()
+    try:
+        reg = _load_set_aside()
+    except Exception:
+        reg = {}
+    now = time.time()
+    stamp = (str(doc.get('updated') or ''), len(reg.get('replies') or []) if isinstance(reg, dict) else 0)
+    with _cache_lock:
+        c = _fig_family_cache
+        if c['doc'] is doc and c['reg'] is reg and c.get('stamp') == stamp:
+            return c['buckets'], c['registry']
+    buckets = []
+    for bkey, sub in (doc.get('subjects') or {}).items():
+        if not isinstance(sub, dict):
+            continue
+        fam = _family_tokens(str(bkey).replace('_', ' '), sub.get('subject') or '', *list(sub.get('aliases') or [])[:24])
+        live, retired = set(), []
+        for e in (sub.get('entries') or []):
+            if not isinstance(e, dict):
+                continue
+            mk = (str(bkey), str(e.get('k') or ''), str(e.get('ts') or ''), len(str(e.get('reply') or '')))
+            figs = _entry_fig_memo.get(mk)
+            if figs is None:
+                figs = _entry_figures(e, skip=fam)
+                if len(_entry_fig_memo) < 50000:
+                    _entry_fig_memo[mk] = figs
+            if not figs:
+                continue
+            if e.get('retired'):
+                retired.append((f"{e.get('k') or bkey}@{e.get('ts') or ''}", figs))
+            elif str(e.get('route') or '') not in _SECONDARY_ROUTES and str(e.get('prov') or '') != PROV_DISTILLED:
+                live.update(figs)
+        buckets.append((str(bkey), fam, frozenset(live), tuple(retired)))
+    # a registry row with no subject belongs to no family: a figure any live
+    # read carries, anywhere, is never one of its own
+    every_live = frozenset().union(*[b[2] for b in buckets]) if buckets else frozenset()
+    registry = []
+    for r in (reg.get('replies') or []):
+        if isinstance(r, dict) and r.get('head'):
+            fam = _family_tokens(r.get('subject') or '')
+            figs = _entry_figures({'reply': r.get('head')}, skip=fam)
+            if not fam:
+                figs = {t: v for t, v in figs.items() if t not in every_live}
+            if figs:
+                registry.append((fam, f"set-aside:{str(r.get('sig') or '')[:10]}", figs))
+    with _cache_lock:
+        _fig_family_cache.update(doc=doc, reg=reg, ts=now, stamp=stamp, buckets=tuple(buckets), registry=tuple(registry))
+    return tuple(buckets), tuple(registry)
+
+
+def quoted_retired_figures(text, subject, *, exempt=(), min_weight=1.0, must_include=()):
+    """The figures of `text` that a retired row of `subject`'s family (or a
+    set-aside registry row) carried and no live read in that family carries:
+    {'weight', 'figures', 'row'} for the row it restates most, {} when it
+    restates none, or less than `min_weight` (one count of 10,000 or more,
+    or two smaller figures). A count of 10,000 or more is recognized on its
+    own; any other figure only beside a name the retired row gave it.
+    `exempt` are tokens the text read from its own evidence;
+    `must_include` (a stored fact's own value) must be among the figures.
+    A registry row with no subject is matched on counts of 10,000 or more
+    only. Never raises."""
+    try:
+        if not str(subject or '').strip():
+            return {}
+        toks = figure_tokens(text)
+        for t in (exempt or ()):
+            toks.pop(str(t), None)
+        if not toks:
+            return {}
+        view = _family_view(subject)
+        if not view:
+            return {}
+        live, skip, rows = view
+        words = _label_words(text, skip)
+        need = {str(t) for t in (must_include or ()) if t}
+        best = {}
+        for row, figs, big_only in rows:
+            hit = []
+            for tok, w in toks.items():
+                got = figs.get(tok)
+                if not got or tok in live:
+                    continue
+                if w >= 1.0 or (not big_only and got[1] and (got[1] & words)):
+                    hit.append((tok, w))
+            if not hit or (need and not need & {t for t, _w in hit}):
+                continue
+            weight = sum(w for _t, w in hit)
+            if weight >= min_weight and weight > best.get('weight', 0.0):
+                best = {'weight': weight, 'figures': sorted(t for t, _w in hit), 'row': row}
+        return best
+    except Exception:
+        return {}
+
+
+_family_view_cache = {'gen': None, 'views': {}}
+
+
+def _family_view(subject):
+    """(live tokens, words that name the subject, retired rows) for the
+    family of `subject`: every bucket whose subject words hold the
+    subject's or sit inside them (Moonfall and the five-title list it was
+    asked in; Paul Rodriguez and the P-Rod skateboarder bucket). Cached
+    per subject with the index. None when the subject has no words."""
+    fam = _family_tokens(subject)
+    if not fam:
+        return None
+    buckets, registry = _figure_families()
+    with _cache_lock:
+        if _family_view_cache['gen'] is not buckets:
+            _family_view_cache.update(gen=buckets, views={})
+        got = _family_view_cache['views'].get(fam)
+    if got is not None:
+        return got
+    mine = [b for b in buckets if b[1] and (fam <= b[1] or b[1] <= fam)]
+    live, skip = set(), set(fam)
+    for b in mine:
+        live |= b[2]
+        skip |= b[1]
+    rows = [(row, figs, False) for b in mine for row, figs in b[3]]
+    rows += [(row, figs, not rfam) for rfam, row, figs in registry if not rfam or fam <= rfam or rfam <= fam]
+    view = (frozenset(live), frozenset(skip), tuple(rows))
+    with _cache_lock:
+        if _family_view_cache['gen'] is buckets and len(_family_view_cache['views']) < 2000:
+            _family_view_cache['views'][fam] = view
+    return view
+
+
+def words_set_aside(text, *, subject=None, user=None, thread=None):
+    """True when these words were set aside: reply_set_aside (a retired row's
+    words, an unscoped registry row, a scoped row the caller matches), or a
+    registry row of any scope. Never raises."""
+    try:
+        if reply_set_aside(text, subject=subject, user=user, thread=thread):
+            return True
+        want = set(reply_sigs(text))
+        if not want:
+            return False
+        doc = _load_set_aside()
+        with _cache_lock:
+            if _registry_sig_cache['doc'] is not doc:
+                _registry_sig_cache.update(doc=doc, sigs=frozenset(
+                    str(r.get('sig')) for r in (doc.get('replies') or []) if isinstance(r, dict) and r.get('sig')))
+            sigs = _registry_sig_cache['sigs']
+        return bool(want & sigs)
+    except Exception:
+        return False
+
+
+def held_back(text, *, subject=None, user=None, thread=None, exempt=()):
+    """Whether an answer may be written down where a later read will find it:
+    '' when it may, 'set_aside' when the words were set aside,
+    'quotes_retired' when it restates a retired row's figures. Never
+    raises."""
+    try:
+        if words_set_aside(text, subject=subject, user=user, thread=thread):
+            return 'set_aside'
+        if subject and quoted_retired_figures(text, subject, exempt=exempt):
+            return 'quotes_retired'
+    except Exception:
+        pass
+    return ''
+
+
+def entry_held_back(e, subject=None):
+    """held_back for a row already on the ledger: a record, a delivered
+    artifact and every other read keep their figures; only a restatement (a
+    page answer, a distilled row) is checked against the retired rows."""
+    try:
+        if not isinstance(e, dict) or not e.get('reply'):
+            return ''
+        sub = subject or e.get('subject') or ''
+        if words_set_aside(e.get('reply'), subject=sub or None):
+            return 'set_aside'
+        if str(e.get('route') or '') in _SECONDARY_ROUTES or str(e.get('prov') or '') == PROV_DISTILLED:
+            if quoted_retired_figures(e.get('reply'), sub):
+                return 'quotes_retired'
+    except Exception:
+        pass
+    return ''
+
+
+def _held_row(e):
+    """entry_held_back for a stored row, cached per row with the index.
+    Never raises; a check that fails holds nothing back. A retired row is
+    out of every read already."""
+    if not isinstance(e, dict) or e.get('retired'):
+        return False
+    try:
+        gen = _figure_families()[0]
+        with _cache_lock:
+            if _held_entry_cache['gen'] is not gen:
+                _held_entry_cache.update(gen=gen, res={})
+            hit = _held_entry_cache['res'].get(id(e))
+        if hit is None:
+            hit = bool(entry_held_back(e))
+            with _cache_lock:
+                if _held_entry_cache['gen'] is gen:
+                    _held_entry_cache['res'][id(e)] = hit
+        return hit
+    except Exception:
+        return False
+
+
+def _feeds_reads(e):
+    """A stored row a later read may lean on (consult's entries and its
+    block): live, inside the data floor, and not held back (set-aside words,
+    or a restatement of retired figures). Every verbatim replay passes
+    _exact_if_fresh, which holds the same rows back."""
+    if not isinstance(e, dict) or e.get('retired') or before_data_floor(e):
+        return False
+    return not _held_row(e)
+
+
+_EXPLAIN_ASK_RX = re.compile(
+    r"\bhow (?:do|should|can|would) (?:i|we|you) read\b"
+    r"|\bhow to read\b"
+    r"|\bexplain (?:to me )?(?:how to read|what .{1,60}? (?:means?|is|are)\b)"
+    r"|\bexplain (?:how|why) .{1,60}? (?:works?|is (?:calculated|computed|measured|counted|defined)|are (?:calculated|computed|measured|counted|defined))\b"
+    r"|\bwhat (?:does|do) .{1,50}? mean\b"
+    r"|\bwhat(?:'s| is) the difference between\b|\bdifference between .{1,60}? and\b"
+    r"|\bhow (?:is|are|was|were) .{1,50}? (?:calculated|computed|measured|defined|counted)\b"
+    r"|\bwhy (?:is|are|was|were|would|does|do) (?:the )?(?:views?|plays?|unique viewers|viewers|penetration|share|reach|"
+    r"index|sessions|accounts)\b.{0,40}?\b(?:higher|lower|bigger|smaller|larger|more|less|different)\b.{0,12}?\bthan\b",
+    re.I)
+
+
+def is_explanation_ask(question):
+    """True for an ask about what a figure or a measure means (what is share,
+    how do I read this, why are views higher than plays): the answer
+    explains figures already given and is never a measurement of its own."""
+    q = str(question or '').strip()
+    if not q or len(q) > 400:
+        return False
+    try:
+        from prometheus import kpi_definitions as _kpi
+        if _kpi.is_definition_ask(q):
+            return True
+    except Exception:
+        pass
+    return bool(_EXPLAIN_ASK_RX.search(q))
+
+
 def retire_by_reply(text, by='correction', note='', subject=None, window=None):
     """Every live entry whose reply is these words (by signature, leads
     stripped) is stamped retired. With `subject` only that subject's
@@ -1965,7 +2364,7 @@ def _find_exact_anywhere(subjects, question):
         for e in reversed(v.get('entries') or []):
             if isinstance(e, dict) and e.get('retired'):
                 continue
-            if e.get('qn') == qn and e.get('reply') and not is_retired_surface_reply(e.get('reply')):
+            if e.get('qn') == qn and e.get('reply') and not is_retired_surface_reply(e.get('reply')) and not _held_row(e):
                 if best is None or (e.get('ts') or '') > (best.get('ts')
                                                           or ''):
                     best_key, best = k, e
@@ -3239,7 +3638,7 @@ def _find_journey_anywhere(subjects, ask_sig, question=None):
                 continue
             if q_years and not _window_covers(e, q_years):
                 continue
-            if not journey_match(e, ask_sig):
+            if not journey_match(e, ask_sig) or _held_row(e):
                 continue
             r = provenance_rank(e)
             if best is None or r > best_rank or (r == best_rank and (e.get('ts') or '') > (best.get('ts') or '')):
@@ -3539,6 +3938,8 @@ def _exact_if_fresh(e):
     try:
         if e.get('reply') and reply_set_aside(e.get('reply'), subject=e.get('subject')):
             return None          # words a correction set aside never replay (2026-11-23)
+        if _held_row(e):
+            return None          # nor a restatement of them, or of a retired read's figures (2026-11-24)
     except Exception:
         pass
     q = f"{e.get('q') or ''} {e.get('wl') or ''}"
@@ -3798,8 +4199,8 @@ def consult(subject=None, question=None, metric_family=None,
                 return empty
             bucket = subjects.get(gkey) or {}
             entries = [e for e in (bucket.get('entries') or [])
-                       if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
-            if gexact.get('retired') or before_data_floor(gexact):
+                       if isinstance(e, dict) and not _held_row(e) and not e.get('retired') and not before_data_floor(e)]
+            if not _feeds_reads(gexact):
                 return empty
             return {'subject': bucket.get('subject'), 'skey': gkey,
                     'entries': entries, 'block': render_block(entries),
@@ -3808,7 +4209,7 @@ def consult(subject=None, question=None, metric_family=None,
                     'match': 'exact' if _can_replay else None}
         bucket = subjects.get(skey) or {}
         entries = [e for e in (bucket.get('entries') or [])
-                   if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
+                   if isinstance(e, dict) and not _held_row(e) and not e.get('retired') and not before_data_floor(e)]
         if _win_other:
             entries = [e for e in entries if _swm.tracker_file_of(e) not in _win_other]
         if not entries:
@@ -3841,7 +4242,7 @@ def consult(subject=None, question=None, metric_family=None,
                 exact, match = jexact, 'semantic'
                 if jkey and jkey != skey:
                     jb = subjects.get(jkey) or {}
-                    jents = [e for e in (jb.get('entries') or []) if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
+                    jents = [e for e in (jb.get('entries') or []) if isinstance(e, dict) and not _held_row(e) and not e.get('retired') and not before_data_floor(e)]
                     if jents:
                         skey, bucket, entries = jkey, jb, jents
         if not exact:
@@ -3876,7 +4277,7 @@ def consult(subject=None, question=None, metric_family=None,
             rkey = _resolve_subject(doc, subject=None, question=question, live_only=True)
             if rkey and rkey != skey:
                 rb = subjects.get(rkey) or {}
-                rents = [e for e in (rb.get('entries') or []) if isinstance(e, dict) and not e.get('retired') and not before_data_floor(e)]
+                rents = [e for e in (rb.get('entries') or []) if isinstance(e, dict) and not _held_row(e) and not e.get('retired') and not before_data_floor(e)]
                 if any(is_record_entry(e) for e in rents):
                     rexact = find_semantic(rents, question, ask_sig=_ask_sig)
                     if rexact is not None and is_record_entry(rexact):

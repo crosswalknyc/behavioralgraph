@@ -227,6 +227,7 @@ def sweep():
     return banked
 
 
+fresh_ledger()   # the ledger row is live again: the catalog's own set-aside is what this part shows
 check('first pass: both replies are banked', sweep() == 2 and KEY1 in page_keys())
 blk = CC.anchors_block(CC.anchors_for(SUBJ, with_ledger=False))
 check('and the old figure is in the binding block', '238,417' in blk or '238417' in blk, blk[:200])
@@ -247,6 +248,9 @@ check('a new reply on the subject still banks', bool(CC.record_answer(
     SUBJ, 'Harbor Lights Season 2 drove 40,191 new US Northstar signups from Aug 28 to Oct 30, 2026.', user=USER, thread_id=TID)))
 check('setting a reply aside before it was banked keeps it out', CC.retire_answer(USER, 't2', R1, subject=SUBJ) == 0
       and not CC.record_answer(SUBJ, R1, user=USER, thread_id='t2'))
+IL.retire_entries(keys=[K1], by='operator', note='set aside by decision')
+check('a reply the ledger set aside never reaches the catalog, before the catalog is told (2026-11-24)',
+      not CC.record_answer(SUBJ, R1, user=USER, thread_id='t3'))
 CC.set_client(None)
 
 # ---------------------------------------------------------------------------

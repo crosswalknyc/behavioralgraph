@@ -80,11 +80,14 @@ def _run(fn):
 
 
 # --------------------------------------------------------------- figures
-def figures_from_reply(reply, limit=14):
-    """[{name, value, definition}] for every figure a reply states, each
-    with the sentence that carried it (the ledger's binding block shows
-    the sentence, so the next answer reuses the figure in context).
-    Prices, credits and bare years are skipped."""
+def figures_from_reply(reply, limit=14, evidence=None):
+    """[{name, label, value, unit, definition}] for every figure a reply
+    states, each with the sentence that carried it (the ledger's binding
+    block shows the sentence, so the next answer reuses the figure in
+    context). A figure is named only by what the reply or the read's
+    `evidence` ({(value, kind): label}, see _evidence_names) says it
+    measures; one the reply never names has an empty name and is never
+    banked as a metric. Prices, credits and bare years are skipped."""
     out, seen = [], set()
     for sent in _SENT_SPLIT_RX.split(str(reply or '')):
         s = ' '.join(sent.split())
@@ -113,14 +116,147 @@ def figures_from_reply(reply, limit=14):
                 _nm = _AFTER_UNIT_RX.match(s[m.end():])
                 if _nm:
                     unit = _AFTER_UNITS.get(_nm.group(1).lower().rstrip('s'), unit)
-            # a short label: the words right before the figure
-            head = s[:m.start()].strip()
-            label = ' '.join(head.split()[-6:]).strip(' ,;:(') or 'figure'
-            out.append({'name': label[:48] or 'figure', 'label': label[:80], 'value': num,
+            label = _evidence_name(evidence, num, unit, s[m.end():]) or _figure_name(s, m.start(), m.end())
+            out.append({'name': _slug(label), 'label': label[:80], 'value': num,
                         'unit': unit, 'definition': s[:220]})
             if len(out) >= limit:
                 return out
     return out
+
+
+# What a figure measures, as the reply or the read's evidence names it
+# (2026-11-24: 'read: The Nine Club sits at' was stored as a metric name).
+_MEASURE_AFTER_RX = re.compile(r"\s*(penetration|share|index|reach|rate|completion|conversion)\b", re.I)
+_LINK_WORDS = frozenset(('reads', 'read', 'sits', 'sat', 'is', 'are', 'was', 'were', 'at', 'with', 'has', 'had',
+                         'holds', 'held', 'carries', 'carried', 'scores', 'scored', 'hits', 'hit', 'posts', 'posted',
+                         'shows', 'showed', 'lands', 'landed', 'reaches', 'reached', 'of', 'to', 'about', 'around',
+                         'nearly', 'roughly', 'just', 'over', 'under', 'only', 'still', 'now', 'by'))
+_INNER_WORDS = frozenset(('in', 'of', 'on', 'at', 'for', '&', 'and', 'the', 'x'))
+_NOT_A_NAME = frozenset(('its', 'their', 'this', 'that', 'these', 'those', 'it', 'they', 'he', 'she', 'his', 'her',
+                         'our', 'your', 'a', 'an', 'the', 'each', 'every', 'which', 'what', 'but', 'and', 'or', 'so'))
+_VERBISH = frozenset(('is', 'are', 'was', 'were', 'sits', 'sit', 'reads', 'read', 'drew', 'draws', 'has', 'have',
+                      'had', 'holds', 'held', 'carries', 'carried', 'comes', 'came', 'leads', 'led', 'shows',
+                      'showed', 'means', 'mean', 'gets', 'got', 'makes', 'made', 'goes', 'went', 'watched', 'played'))
+_MEASURE_ONLY = frozenset(('penetration', 'share', 'index', 'reach', 'rate', 'figure', 'total', 'count', 'value',
+                           'typed', 'by', 'the', 'model', 'of', 'pct', 'percent', 'us', 'people'))
+
+
+def _slug(label):
+    return re.sub(r'[^a-z0-9]+', '_', str(label or '').lower()).strip('_')[:48]
+
+
+def _figure_name(s, start, end):
+    """'' or what the reply says the figure measures, in one of three shapes:
+    the words before a colon ('Unique US viewers: 416,287'), a name before
+    and a measure after ('Zoom reads 58.0% penetration'), or the noun after
+    a count ('912,447 sessions', '64,638,049,641 hours on YouTube'). Never
+    the run of prose before the figure."""
+    head, tail = s[:start].rstrip(), s[end:]
+    if head.endswith(':'):
+        seg = head[:-1]
+        cut = max(seg.rfind('. '), seg.rfind(' - '), seg.rfind('; '), seg.rfind(', '), seg.rfind('('), seg.rfind(': '))
+        words = (seg[cut + 1:] if cut >= 0 else seg).strip(' -,(').split()
+        if 1 <= len(words) <= 8 and not any(re.search(r'\d', w) for w in words) \
+                and not ({w.lower().strip(',.;:') for w in words} & _VERBISH):
+            return ' '.join(words)
+    mm = _MEASURE_AFTER_RX.match(tail)
+    if mm:
+        words = head.split()
+        while words and words[-1].lower().strip(',;:') in _LINK_WORDS:
+            words.pop()
+        name = []
+        for w in reversed(words):
+            ws = w.strip(',;:()')
+            if ws and ws[0].isupper():
+                name.insert(0, ws)
+            elif name and ws.lower() in _INNER_WORDS:
+                name.insert(0, ws)
+            else:
+                break
+            if len(name) >= 6:
+                break
+        while name and name[0].lower() in _INNER_WORDS - {'the'}:
+            name.pop(0)
+        if any(w.lower() not in _NOT_A_NAME and w.lower() not in _INNER_WORDS for w in name):
+            return f"{' '.join(name)} {mm.group(1).lower()}"
+    named = _count_noun(tail)
+    if named:
+        return named
+    om = _SHARE_OF_RX.match(tail)
+    if om:
+        return f"share of the {om.group(1).lower()}"
+    return ''
+
+
+_COUNT_NOUNS = frozenset((
+    'people', 'persons', 'viewers', 'watchers', 'listeners', 'accounts', 'users', 'individuals', 'subscribers', 'fans',
+    'buyers', 'shoppers', 'members', 'searchers', 'visitors', 'customers', 'readers', 'players', 'hour', 'hours',
+    'minute', 'minutes', 'session', 'sessions', 'visit', 'visits', 'views', 'plays', 'streams', 'episodes', 'orders',
+    'transactions', 'impressions', 'clicks', 'searches', 'posts', 'videos', 'downloads', 'installs', 'signups',
+    'sign-ups', 'tickets', 'engagers'))
+_NOT_A_MODIFIER = frozenset(('of', 'the', 'a', 'an', 'in', 'on', 'and', 'or', 'to', 'were', 'was', 'are', 'is', 'who',
+                             'that', 'which', 'with', 'from', 'at', 'by', 'for', 'than', 'as', 'per', 'across', 'over',
+                             'into', 'out', 'up', 'down', 'had', 'have', 'has', 'did', 'do', 'does', 'more', 'less'))
+_SHARE_OF_RX = re.compile(r"\s+of\s+(?:the|their|this|that|its)\s+(audience|cohort|base|group|panel|universe)\b", re.I)
+_ON_NAME_RX = re.compile(r"\s+(?:on|of|for|in|at|via)\s+(?:the\s+)?[A-Z][\w'&+.-]*(?:\s+[A-Z][\w'&+.-]*){0,3}")
+
+
+def _count_noun(tail):
+    """The noun phrase after a count ('912,447 sessions', '392,312,555
+    insurance-active individuals', '64,638,049,641 hours on YouTube'): up
+    to three modifier words and a noun that counts something, plus an
+    'on <Name>' tail. '' when the words after the count are prose."""
+    words = re.findall(r"\S+", str(tail or '')[:120])
+    for i, w in enumerate(words[:4]):
+        lw = w.lower().strip(',.;:()')
+        if lw in _COUNT_NOUNS:
+            mods = [x.strip(',;:()') for x in words[:i]]
+            if any(re.search(r'\d', x) or x.lower() in _NOT_A_MODIFIER for x in mods):
+                return ''
+            phrase = ' '.join(mods + [w.strip(',.;:()')])
+            if w[-1:] not in ',.;:)':
+                rest = str(tail)[str(tail).find(w) + len(w):]
+                om = _ON_NAME_RX.match(rest)
+                if om:
+                    phrase += om.group(0).rstrip(',.;: ')
+            return ' '.join(phrase.split())
+        if re.search(r'\d', w) or lw in _NOT_A_MODIFIER:
+            return ''
+    return ''
+
+
+def _evidence_names(figures):
+    """{(value, kind): label} for the figures the read's own evidence carries
+    (the composed figure ledger: a real source and a label that names
+    something, never 'typed by the model' or a bare measure word)."""
+    out = {}
+    for f in figures or []:
+        if not isinstance(f, dict) or str(f.get('source') or '') in ('', 'model_typed', 'unsourced'):
+            continue
+        lab = ' '.join(str(f.get('label') or '').split())
+        if not lab or not ({w.lower().strip('(),') for w in lab.split()} - _MEASURE_ONLY):
+            continue
+        try:
+            out.setdefault((round(float(f.get('value')), 4), str(f.get('kind') or '')), lab)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _evidence_name(evidence, num, unit, tail):
+    if not evidence:
+        return ''
+    kind = 'pct' if unit == 'pct' else ('x' if unit == 'x' else 'count')
+    try:
+        lab = evidence.get((round(float(num), 4), kind)) or ''
+    except (TypeError, ValueError):
+        lab = ''
+    if not lab:
+        return ''
+    mm = _MEASURE_AFTER_RX.match(tail or '')
+    if mm and mm.group(1).lower() not in lab.lower():
+        lab = f"{lab} {mm.group(1).lower()}"
+    return lab
 
 
 _SCALE = {'k': 1e3, 'm': 1e6, 'b': 1e9, 'thousand': 1e3, 'million': 1e6, 'billion': 1e9}
@@ -181,12 +317,33 @@ def persist_answer(il, *, subject, question, reply, followups=None,
     """A page answer joins the shared ring: its figures and the reply,
     under the profile's subject and window, so the next ask on that
     page (anyone's) binds to them and an identical ask replays them.
-    Nothing is written for a reply with no figures. `figures` (the
-    composed ledger) puts a source on every metric."""
+    `figures` (the composed ledger) puts a source on every metric and
+    names the figures the read's evidence carries.
+
+    Only a figure the reply or the read's evidence names becomes a binding
+    metric; the reply is kept either way, so an identical ask replays it.
+    Nothing is written for a reply with no figure, for an answer about
+    what a figure means (it restates figures already given), or for a
+    reply the ledger holds back (Jenna 2026-11-24: a set-aside answer never
+    feeds a later read, for anyone): its words were set aside, or it
+    restates figures of a retired read."""
     try:
-        metrics = _with_sources(figures_from_reply(reply), figures)
-        if not metrics or not str(subject or '').strip():
+        if not str(subject or '').strip():
             return False
+        explains = getattr(il, 'is_explanation_ask', None)
+        if callable(explains) and explains(question):
+            return False
+        evidence = _evidence_names(figures)
+        held = getattr(il, 'held_back', None)
+        if callable(held):
+            vt = getattr(il, 'value_tokens', None)
+            exempt = {vt(v) for v, _k in evidence} - {''} if callable(vt) else set()
+            if held(str(reply or ''), subject=str(subject), exempt=exempt):
+                return False
+        stated = figures_from_reply(reply, limit=40, evidence=evidence)
+        if not stated:
+            return False
+        metrics = _with_sources([m for m in stated if m.get('name')][:14], figures)
         family = ''
         try:
             family = il.family_from_question(question) or ''
