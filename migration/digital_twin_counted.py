@@ -160,9 +160,30 @@ def project(raw: int) -> int:
     return v
 
 
+def _peacock_on_file(show: str, platform: str, start: str, end: str) -> Optional[dict]:
+    """A show the Peacock record names, counted on Peacock: the record's
+    own figure for the window (migration/peacock_actuals.py; Jenna
+    2026-11-24, "cover every Peacock title figure": a title on the record
+    uses the record). None for any other title or service, or no record."""
+    try:
+        from datetime import date, timedelta
+        from migration import peacock_actuals as _pk
+        if not _pk.is_peacock(platform):
+            return None
+        last = (date.fromisoformat(str(end)[:10]) - timedelta(days=1)).isoformat()
+        v = _pk.viewers(show, str(start)[:10], last)
+        return {'raw': int(v['sample']), 'people': int(v['viewers'])} if v else None
+    except Exception:
+        return None
+
+
 def title_viewers(show: str, platform: str, start: str, end: str, *, connect: Optional[Callable] = None) -> dict:
     """People who watched the title between start (inclusive) and end
-    (exclusive). {'raw', 'people'}."""
+    (exclusive). {'raw', 'people'}. A show the Peacock record names,
+    counted on Peacock, reads the record's own figure for the window."""
+    on_file = _peacock_on_file(show, platform, start, end)
+    if on_file:
+        return on_file
     rows = mapped(show, platform, connect=connect)
     if not rows:
         raise Unavailable('the title is not in the content map')

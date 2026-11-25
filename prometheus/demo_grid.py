@@ -1035,6 +1035,29 @@ def file_pools(p, res=None):
             c = pk.combined(p['members'], win[0], win[1])
             if c and int(c.get('viewers') or 0) > 0:
                 out[p['combined']] = max(_credit_under(int(c['viewers']), th, 'combined', table), max(out[m] for m in on_file) + 1)
+        # a member the record does not name takes the read lane's correction on the pool the pass drafted for it
+        # (migration/peacock_actuals.title_figure; Jenna 2026-11-24, "cover every Peacock title figure"); a pool
+        # already bound to a figure delivered before stays as it is, and the shows counted together follow
+        rows = {r.get('label'): r for r in (((res or {}).get('breakdown') or {}).get('rows') or []) if isinstance(r, dict)}
+        kind = pk.title_type(p.get('genre'), p.get('category'))
+        drafted, fixed = {}, {}
+        for m in p['members']:
+            r = rows.get(m) or {}
+            d = r.get('pool')
+            if m in out or r.get('bound_from') or r.get('pool_from') or not isinstance(d, (int, float)) or d <= 0:
+                continue
+            fix = pk.title_figure(m, win[0], win[1], int(d), **kind)
+            if fix and int(fix['people']) != int(d):
+                drafted[m], fixed[m] = int(d), int(fix['people'])
+                out[m] = int(fix['people'])
+        cr = rows.get(p.get('combined')) or {}
+        if fixed and p.get('combined') and p['combined'] not in out and not (cr.get('bound_from') or cr.get('pool_from')) \
+                and isinstance(cr.get('pool'), (int, float)) and cr['pool'] > 0:
+            known = {m: out.get(m, rows.get(m, {}).get('pool')) for m in p['members']}
+            if all(isinstance(v, (int, float)) and v > 0 for v in known.values()):
+                was = sum(int(drafted.get(m, known[m])) for m in p['members'])
+                now = sum(int(known[m]) for m in p['members'])
+                out[p['combined']] = max(int(round(float(cr['pool']) * now / float(was))), max(int(v) for v in known.values()) + 1)
         return out
     except Exception:
         return {}

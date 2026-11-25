@@ -39,6 +39,15 @@ No table of shares and no fixed factor: every point inside a range is
 salted (sha256 of the title and the service set), so two titles never
 share a figure and a rerun lands on the same one.
 
+Peacock (2026-11-24, Jenna: "cover every Peacock title figure"): a
+Peacock-title viewers universe takes the read lane's correction from
+the single reader (migration/peacock_actuals.title_figure), whether the
+client named Peacock or the universe was seeded on Peacock pages: a
+show on the record reads its own figure, any other title the
+correction for its type (season on air, library), a live special none.
+A set that names Peacock among others corrects only its Peacock part.
+New builds and refreshes only; cuts keep inheriting from their parent.
+
 The record lives at s3://dashboard-inputs/system/title_service_sizes.json
 (ETag CAS). Silent: nothing a reader sees says any of this.
 
@@ -238,6 +247,13 @@ def _win_dict(win) -> dict:
     return {"start": a.isoformat(), "end": b.isoformat()}
 
 
+def _is_viewers(spec, subject="") -> bool:
+    name = str(subject or spec.get("name") or "")
+    return (str(spec.get("audience_type") or "").strip().lower() in _VIEWER_TYPES
+            or str(spec.get("seed_source") or "").startswith("content_map")
+            or bool(spec.get("content_seed_urls")) or bool(_VIEWER_NAME_RX.search(name)))
+
+
 def is_scoped(spec, subject="") -> bool:
     """A title's audience scoped to named service(s): a title on the
     spec, a viewers-type universe, at least one named service, and the
@@ -248,17 +264,45 @@ def is_scoped(spec, subject="") -> bool:
         title = title_of(spec)
         if not title:
             return False
-        name = str(subject or spec.get("name") or "")
-        viewers = (str(spec.get("audience_type") or "").strip().lower() in _VIEWER_TYPES
-                   or str(spec.get("seed_source") or "").startswith("content_map")
-                   or bool(spec.get("content_seed_urls")) or bool(_VIEWER_NAME_RX.search(name)))
-        if not viewers:
+        if not _is_viewers(spec, subject):
             return False
         svcs = services_of(spec, subject)
         if not svcs:
             return False
         tk = canon_service(title)
         return tk not in svcs
+    except Exception:
+        return False
+
+
+def seeded_services(spec, subject="") -> list:
+    """The services a title viewers universe was seeded on when the
+    client named none (the seed step's platforms), as canonical keys,
+    sorted; [] when a service was named or nothing was seeded."""
+    try:
+        if not isinstance(spec, dict) or services_of(spec, subject):
+            return []
+        out = []
+        for v in (spec.get("content_seed_platforms") or []):
+            k = canon_service(v)
+            if k and k not in out:
+                out.append(k)
+        return sorted(out)
+    except Exception:
+        return []
+
+
+def peacock_seeded(spec, subject="") -> bool:
+    """A title viewers universe the client scoped to no service, seeded
+    on Peacock alone or with others: its size is a Peacock title figure
+    (Jenna 2026-11-24, "cover every Peacock title figure")."""
+    try:
+        if not isinstance(spec, dict) or str(os.environ.get("SERVICE_SCOPE_SIZING", "1")).strip() == "0":
+            return False
+        title = title_of(spec)
+        if not title or not _is_viewers(spec, subject) or canon_service(title) == "peacock":
+            return False
+        return "peacock" in seeded_services(spec, subject)
     except Exception:
         return False
 
@@ -312,6 +356,8 @@ def merge_record(rec, *, title="", whole=None, build=None, facts=None, carriers=
     if isinstance(whole, dict) and int(whole.get("people") or 0) > 0 and not rec.get("whole"):
         rec["whole"] = {"people": int(whole["people"]), "window": dict(whole.get("window") or {}),
                         "set_at": whole.get("set_at") or _now(), "source_key": str(whole.get("source_key") or "")}
+        if whole.get("peacock"):
+            rec["whole"]["peacock"] = True       # already the Peacock figure: a later build never corrects it twice
     if isinstance(build, dict) and int(build.get("people") or 0) > 0:
         builds = [dict(b) for b in (rec.get("builds") or []) if isinstance(b, dict)]
         svcs = sorted(canon_service(s) for s in (build.get("services") or []) if canon_service(s))
@@ -513,6 +559,33 @@ def _peacock():
         return None
 
 
+def _peacock_type(pk, spec) -> dict:
+    """The title's type for the Peacock correction (season on air,
+    library, live special), from what the spec knows."""
+    return pk.title_type(spec.get("genre"), spec.get("brand_category"), spec.get("content_kind"), spec.get("medium"),
+                         cadence=spec.get("content_cadence"), live=bool(spec.get("is_live")) or None)
+
+
+def _peacock_part(pk, title, svcs, win, people, whole_win, facts, kind, notes) -> float:
+    """A set that names Peacock among other services, for a title the
+    record does not name: the set's Peacock part takes the correction its
+    type earns and the rest of the set stays as it was; never under the
+    largest other single service the set names."""
+    part = min(whole_win * share_point(title, ["peacock"], facts)[0], people)
+    if part <= 0:
+        return people
+    fix = pk.title_figure(title, win[0], win[1], part, **kind)
+    if not fix or fix.get("basis") != "factor":
+        return people
+    new = people + (float(fix["people"]) - part)
+    others = [whole_win * share_point(title, [s], facts)[0] for s in svcs if s != "peacock"]
+    floor = max(others) * (1.0 + _margin(title, "+".join(svcs) + ">others", 0.04, 0.11)) if others else 0.0
+    if new < floor:
+        new = min(floor, people)
+    notes.append(f"peacock part {int(part):,} -> {int(fix['people']):,}")
+    return new
+
+
 # ----------------------------------------------------------------- the size
 def size(spec, subject="", *, facts=None, record=None, drafted_people=None) -> dict | None:
     """The rule's verdict for a scoped build, or None when the spec is
@@ -595,27 +668,33 @@ def size(spec, subject="", *, facts=None, record=None, drafted_people=None) -> d
                 people = bn * (1.0 + _margin(title, "full:" + "+".join(bs), 0.04, 0.11))
                 notes.append(f"a full carrier sits over the settled {'+'.join(bs)} slice")
     # A scope on Peacock reads the Peacock figure on file (migration/peacock_actuals.py, 2026-11-18): a show the
-    # record names takes its own figure for this window, any other title on Peacock alone takes the correction the
-    # record taught, and a set that names Peacock among others is at least its Peacock part. A build already
-    # settled on the same window keeps its figure (one number per title and window). Peacock only: no other
-    # service's scope is touched. Silent, and a no-op when the record cannot be read.
+    # record names takes its own figure for this window; any other title on Peacock alone takes the read lane's
+    # correction for its type of title (peacock_actuals.title_figure, 2026-11-24: "cover every Peacock title
+    # figure"); a set that names Peacock among others is at least its Peacock part for a show on file, and has its
+    # Peacock part corrected for any other title. A build already settled on the same window keeps its figure (one
+    # number per title and window), and a whole held from a build already corrected is never corrected twice.
+    # Peacock only: no other service's scope is touched. Silent, and a no-op when the record cannot be read.
     on_file, pk_floor = None, 0.0
     try:
         pk = _peacock()
         if pk is not None and "peacock" in svcs and basis != "anchor":
+            kind = _peacock_type(pk, spec)
+            whole_done = bool(held and held.get("peacock")) and not pk.match(title)
             if svcs == ["peacock"]:
-                on_file = pk.calibrate(title, svcs, win[0], win[1], people, surface="scoped_build",
-                                       kind=pk.kind_of(spec.get("genre"), spec.get("brand_category"), spec.get("content_kind")))
+                on_file = None if whole_done else pk.title_figure(title, win[0], win[1], people, **kind)
                 if on_file:
                     people = float(on_file["people"])
                     basis = "on_file" if on_file["basis"] == "anchor" else "on_file_scaled"
                     notes.append(f"peacock figure on file ({on_file['basis']})")
             else:
                 part = pk.component(title, svcs, win[0], win[1])
-                if part and people < part:
-                    people = part * (1.0 + _margin(title, "+".join(svcs) + ">peacock", 0.04, 0.11))
-                    pk_floor = people
-                    notes.append("lifted over its Peacock part")
+                if part:
+                    if people < part:
+                        people = part * (1.0 + _margin(title, "+".join(svcs) + ">peacock", 0.04, 0.11))
+                        pk_floor = people
+                        notes.append("lifted over its Peacock part")
+                elif not whole_done:
+                    people = _peacock_part(pk, title, svcs, win, people, whole_win, facts, kind, notes)
     except Exception:
         on_file, pk_floor = None, 0.0
     if on_file and on_file.get("basis") == "anchor":
@@ -659,7 +738,7 @@ def apply_to_spec(spec, subject="", *, facts=None, record=None, s3=None, stage="
     build. Never raises; on any failure the spec is left as it was."""
     try:
         if not is_scoped(spec, subject):
-            return None
+            return peacock_universe(spec, subject, facts=facts, stage=stage, log=log)
         if record is None:
             record = load_record(title_of(spec), s3=s3)
         old_tu = int(spec.get("subject_raw_tu") or 0)
@@ -695,6 +774,73 @@ def apply_to_spec(spec, subject="", *, facts=None, record=None, s3=None, stage="
         return None
 
 
+def peacock_universe(spec, subject="", *, facts=None, stage="spec", log=print):
+    """A title viewers universe the client scoped to no service, seeded
+    on Peacock: its size is a Peacock title figure and takes the read
+    lane's correction (peacock_actuals.title_figure; Jenna 2026-11-24,
+    "cover every Peacock title figure"). Seeded on Peacock alone, the
+    whole universe is the figure: a show on the record reads its own
+    figure for the window, any other title its type's correction. Seeded
+    on Peacock among others, a show on the record is at least its
+    Peacock part, and any other title has its Peacock part corrected when
+    the build's carriage facts can tell that part apart (left as drafted
+    when they cannot). Always from the size the draft carried, so a
+    second pass lands on the same figure. Returns the trail, or None.
+    Never raises; on any failure the spec is left as it was."""
+    try:
+        pk = _peacock()
+        if pk is None or not peacock_seeded(spec, subject):
+            return None
+        title = title_of(spec)
+        win = window_of(spec)
+        prev = spec.get("peacock_title_sizing") if isinstance(spec.get("peacock_title_sizing"), dict) else {}
+        drafted = int(prev.get("drafted_sample") or 0) or int(spec.get("subject_raw_tu") or 0)
+        if drafted <= 0:
+            return None
+        people = drafted * PANEL_TO_US
+        kind = _peacock_type(pk, spec)
+        svcs = seeded_services(spec, subject)
+        notes = []
+        if svcs == ["peacock"]:
+            fix = pk.title_figure(title, win[0], win[1], people, **kind)
+            new_people, basis = (float(fix["people"]), fix["basis"]) if fix else (people, "as drafted")
+        else:
+            part = pk.component(title, svcs, win[0], win[1])
+            if part:
+                new_people, basis = max(people, part * (1.0 + _margin(title, "+".join(svcs) + ">peacock", 0.04, 0.11))), "anchor_part"
+            else:
+                f2 = facts if isinstance(facts, dict) and (facts.get("placed") or facts.get("research")) else None
+                if not f2:
+                    return None
+                new_people, basis = _peacock_part(pk, title, svcs, win, people, people, f2, kind, notes), "factor_part"
+        if basis == "as drafted" and not prev:
+            return None
+        sample = int(drafted) if basis == "as drafted" else _messy(subject or spec.get("name"), max(1, int(round(new_people / PANEL_TO_US))))
+        old_tu = int(spec.get("subject_raw_tu") or 0)
+        if old_tu > 0 and sample != old_tu:
+            try:
+                old_av = int(spec.get("subject_raw_avid") or 0)
+            except (TypeError, ValueError):
+                old_av = 0
+            if 0 < old_av < old_tu:
+                spec["subject_raw_avid"] = _messy(f"{subject or spec.get('name')}|avid", max(1, int(round(old_av * sample / float(old_tu)))))
+        spec["subject_raw_tu"] = int(sample)
+        trail = {"sample": int(sample), "people": int(round(sample * PANEL_TO_US)), "drafted_sample": int(drafted),
+                 "basis": basis, "services": svcs, "window": _win_dict(win), "title": title, "kind": kind.get("kind"),
+                 "on_air": kind.get("on_air"), "live": kind.get("live"), "stage": stage, "notes": notes}
+        spec["peacock_title_sizing"] = trail
+        if callable(log):
+            log(f"[service-scope] {subject or spec.get('name')!r} ({stage}): Peacock title universe {drafted:,} -> {sample:,} ({basis})")
+        return trail
+    except Exception as e:
+        try:
+            if callable(log):
+                log(f"[service-scope] Peacock title sizing skipped (non-fatal): {type(e).__name__}: {e}")
+        except Exception:
+            pass
+        return None
+
+
 def settle(spec, subject, s3_key, sample, *, facts=None, s3=None) -> bool:
     """Record a shipped build so the title's later builds read from it.
     A scoped build records itself (and the whole it was read against,
@@ -717,7 +863,11 @@ def settle(spec, subject, s3_key, sample, *, facts=None, s3=None) -> bool:
         name = str(subject or spec.get("name") or "")
         if str(spec.get("seed_source") or "").startswith("content_map") and _VIEWER_NAME_RX.search(name) \
                 and " - " not in name:
-            return save_record(title, whole={"people": people, "window": win, "source_key": s3_key}, facts=facts, s3=s3)
+            whole = {"people": people, "window": win, "source_key": s3_key}
+            pts = spec.get("peacock_title_sizing") if isinstance(spec.get("peacock_title_sizing"), dict) else {}
+            if pts.get("services") == ["peacock"] and pts.get("basis") not in (None, "as drafted"):
+                whole["peacock"] = True
+            return save_record(title, whole=whole, facts=facts, s3=s3)
     except Exception as e:
         print(f"[service-scope] settle skipped (non-fatal): {e}")
     return False
@@ -776,6 +926,7 @@ def normalize_spec(spec, subject=""):
     return spec
 
 
-__all__ = ["canon_service", "title_of", "services_of", "window_of", "is_scoped", "load_record", "merge_record",
-           "save_record", "facts_from_rows", "facts_for_spec", "share_range", "share_point", "window_scale",
-           "size", "apply_to_spec", "apply_to_draft", "settle", "normalize_spec", "STORE_KEY", "PANEL_TO_US"]
+__all__ = ["canon_service", "title_of", "services_of", "window_of", "is_scoped", "seeded_services", "peacock_seeded",
+           "load_record", "merge_record", "save_record", "facts_from_rows", "facts_for_spec", "share_range", "share_point",
+           "window_scale", "size", "apply_to_spec", "apply_to_draft", "peacock_universe", "settle", "normalize_spec",
+           "STORE_KEY", "PANEL_TO_US"]

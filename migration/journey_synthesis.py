@@ -1546,6 +1546,45 @@ def _peacock_title_anchor(inputs: dict, cands: list) -> Optional[dict]:
     return None
 
 
+def _journey_title(inputs: dict) -> str:
+    """The title a journey is about: an explicit title field, else the
+    subject without an ' on <platform>' tail or an audience noun."""
+    for k in ('title', 'anchor_title', 'target_name'):
+        if inputs.get(k):
+            return str(inputs[k]).strip()
+    t = re.sub(r'\s+on\s+.+$', '', str(inputs.get('subject') or '').strip(), flags=re.I).strip()
+    return re.sub(r'\s+(?:viewers|watchers|audience|fans)$', '', t, flags=re.I).strip()
+
+
+def peacock_watch_correction(payload: dict, inputs: dict, seed: str = '') -> dict:
+    """A watch journey on Peacock for a title the record does not name,
+    with no title universe established: its watch stage is a Peacock title
+    figure and takes the read lane's correction for the title's type
+    (migration/peacock_actuals.title_figure; Jenna 2026-11-24, "cover every
+    Peacock title figure"), and the journey scales to it the way it scales
+    to a title anchor. A show on the record already anchors through
+    _peacock_title_anchor; a live special is left as it is. Peacock only;
+    the payload is returned unchanged on any failure."""
+    try:
+        from migration import peacock_actuals as _pk
+        if not _pk.is_peacock(inputs.get('platform')) or journey_family(inputs) != 'watch':
+            return payload
+        spine = ((payload.get('fragrance_shop_journey') or {}).get('spine') or [])
+        have = int((spine[-1] if spine else {}).get('accounts') or 0)
+        title = _journey_title(inputs)
+        if len(spine) < 2 or have <= 0 or not title or _pk.match(title):
+            return payload
+        start, end = _dates(inputs)
+        kind = _pk.title_type(inputs.get('genre'), inputs.get('category'), inputs.get('content_kind'), inputs.get('medium'),
+                              cadence=inputs.get('content_cadence'))
+        fix = _pk.title_figure(title, start, end, have, **kind)
+        if not fix or int(fix['people']) == have:
+            return payload
+        return apply_title_anchor(payload, {'us_viewers': int(fix['people']), 'sample_size': 0, 'source_product': 'peacock'}, seed=seed)
+    except Exception:
+        return payload
+
+
 def apply_title_anchor(payload: dict, ta: dict, seed: str = '') -> dict:
     """Deterministic post-build pass: every count in the journey scales
     by one factor so the watch / conversion stage equals the title
@@ -2332,6 +2371,8 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     if anchors.get('title_anchor'):
         payload = apply_title_anchor(payload, anchors['title_anchor'],
                                      seed=f"{inputs['subject']}|{inputs['platform']}")
+    else:   # a Peacock title the record does not name: the watch stage takes the read lane's correction (2026-11-24)
+        payload = peacock_watch_correction(payload, inputs, seed=f"{inputs['subject']}|{inputs['platform']}")
     if anchors.get('shared'):
         payload = apply_shared_figures(payload, anchors['shared'], inputs,
                                        seed=f"{inputs['subject']}|{inputs['platform']}")

@@ -6,7 +6,12 @@ measurement pass hands the model one block, built here from
 its US viewers and plays for the windows the question carries (and the
 trailing twelve months), and the scale any other Peacock title is read
 against. The block is binding and takes precedence over an earlier
-figure for the same title on Peacock.
+figure for the same title on Peacock. A read that never names Peacock
+gets the same block when it is about a Peacock title (a show on file
+named in the words, the request or the base, or a base seeded on
+Peacock pages), so a Peacock split inside it reads the figures on file
+and the scale (Jenna 2026-11-24, "cover every Peacock title figure"); a
+read that names another service gets none.
 
 What the block carries is ours: viewers (people, each once) and plays.
 It never carries an account figure or a word on where a figure came
@@ -27,6 +32,7 @@ scripts/test_peacock_calibration_wiring.py.
 """
 from __future__ import annotations
 
+import os
 import re
 from datetime import date, datetime, timedelta, timezone
 
@@ -99,10 +105,67 @@ def windows_in(*texts, today=None) -> list:
     return uniq[:4]
 
 
+_OTHER_SERVICE_RX = re.compile(r"\b(?:hulu|netflix|prime video|amazon|hbo|max|paramount|disney|apple tv|youtube|tubi|pluto|roku|"
+                               r"starz|mgm|amc\+|britbox|fubo|sling|discovery\+|bet\+|crunchyroll|vudu|fandango)\b", re.I)
+_AUDIENCE_TAIL_RX = re.compile(r"\s+(?:on\s+peacock|tv series|series|viewers?|watchers?|audience|fans)\s*$", re.I)
+_TITLE_BASE_RX = re.compile(r"\b(?:viewers?|watchers?|streamers?|series|show|season|episodes?|film|movie|special)\b", re.I)
+_SEEDED = {}                 # s3_key -> the base's universe is seeded on Peacock pages (one read per key per process)
+_HEAD_READER = None          # tests hand in a reader: (s3_key) -> the first bytes of the base's file, as text
+_S3 = []
+
+
+def _base_head(key):
+    if _HEAD_READER is not None:
+        return _HEAD_READER(key)
+    if str(os.environ.get('REGRESSION_TEST_MODE', '')).strip() == '1':
+        return ''
+    if not _S3:
+        import boto3
+        _S3.append(boto3.client('s3', region_name=os.environ.get('AWS_REGION') or 'us-east-2'))
+    pk = _pk()
+    body = _S3[0].get_object(Bucket=getattr(pk, 'BUCKET', 'dashboard-inputs'), Key=key, Range='bytes=0-16383')['Body'].read()
+    return body.decode('utf-8', 'replace')
+
+
+def _base_seeded_on_peacock(base) -> bool:
+    """The read's base is a title viewers universe seeded on Peacock pages
+    (its BRAND INPUT carries the Peacock watch addresses). Only a base
+    named like a title's audience is looked at, so a talent, brand or
+    persona read never waits on it."""
+    key = str((base or {}).get('s3_key') or '')
+    if not key.lower().endswith('.csv') or ':' in key or not _TITLE_BASE_RX.search(str((base or {}).get('subject') or '')):
+        return False
+    if key not in _SEEDED:
+        try:
+            head = _base_head(key) or ''
+            line = next((ln for ln in head.splitlines()[1:60] if ln.upper().startswith('BRAND INPUT,')), '')
+            _SEEDED[key] = 'peacocktv' in line.lower()
+        except Exception:
+            return False
+    return bool(_SEEDED.get(key))
+
+
+def _unnamed_peacock_title(pk, hay, base) -> str:
+    """A read that never names Peacock but is about a Peacock title (Jenna
+    2026-11-24, "cover every Peacock title figure"): a show on file named in
+    the words, the request or the base, or a base seeded on Peacock pages.
+    '' when the read names another service, or is about no Peacock title."""
+    if _OTHER_SERVICE_RX.search(hay):
+        return ''
+    named = pk.titles_named(hay)
+    if named:
+        return ' and '.join(pk.display_title(k) or k for k in named)
+    if _base_seeded_on_peacock(base):
+        return _AUDIENCE_TAIL_RX.sub('', str((base or {}).get('subject') or '').strip()).strip() or 'this title'
+    return ''
+
+
 def block(text, metric_request=None, base=None, history=None) -> str:
     """The binding lines for a read on Peacock, or ''. The question, the
     measurement request and the base's own name are read for Peacock,
-    for the shows on file and for windows."""
+    for the shows on file and for windows. A read that never names
+    Peacock gets the same lines when it is about a Peacock title, so a
+    Peacock split inside it reads the figures on file and the scale."""
     try:
         pk = _pk()
         if pk is None or not pk.available():
@@ -112,7 +175,10 @@ def block(text, metric_request=None, base=None, history=None) -> str:
         hay = ' '.join(str(x or '') for x in (text, mr.get('subject'), mr.get('needed'), mr.get('cohort'), mr.get('window'),
                                                b.get('subject'), b.get('universe')))
         if 'peacock' not in hay.lower():
-            return ''
+            title = _unnamed_peacock_title(pk, hay, b)
+            if not title:
+                return ''
+            hay = f"{hay} ({title} on Peacock)"
         return pk.binding_block(hay, windows=windows_in(text, mr.get('window')))
     except Exception:
         return ''

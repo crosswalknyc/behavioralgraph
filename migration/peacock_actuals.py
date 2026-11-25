@@ -65,7 +65,13 @@ How it is read (every figure below is internal)
   surface and by whether the title's season is on air, shrunk toward no
   correction the further the title is from a procedural series, half
   trusted when it would lift a figure, never applied to live sport,
-  events or news.
+  events (an awards show, a live special) or news.
+* One correction reaches every Peacock title figure (Jenna 2026-11-24,
+  "cover every Peacock title figure"): `title_figure` is the read lane's
+  correction, and journeys, profile sizing (a Peacock-title viewers
+  universe, named or seeded), the matrix read, Digital Twins, Pilot
+  Testing and the partner API call it rather than carrying a copy. New
+  reads, builds and refreshes only: nothing already delivered moves.
 * Peacock only. Nothing here moves a figure for another service, for
   linear, or for a show's audience as a whole.
 
@@ -84,7 +90,8 @@ never reads S3; tests hand the module a made-up record with `set_cached`.
 
 Twin: migration/peacock_actuals.py (source) == bg-webapp/migration/
 peacock_actuals.py. Regression: scripts/test_peacock_actuals.py,
-bg-webapp/scripts/test_peacock_calibration_wiring.py.
+bg-webapp/scripts/test_peacock_calibration_wiring.py,
+bg-webapp/scripts/test_peacock_every_surface.py.
 """
 from __future__ import annotations
 
@@ -843,6 +850,9 @@ def episode_viewers(title, days: int = 7):
 _KIND_RXES = (
     ("sports", re.compile(r"\b(?:nfl|nba|mlb|nhl|wwe|premier league|olympics?|sunday night football|golf|nascar|big ten|football|basketball|soccer|live sports?)\b", re.I)),
     ("news", re.compile(r"\b(?:news|msnbc|nbc nightly|today show|meet the press)\b", re.I)),
+    # a live special is never adjusted, whatever else its genre says ("a comedy awards special")
+    ("event", re.compile(r"\b(?:awards?|awards? shows?|ceremon(?:y|ies)|pageants?|telethons?|parades?|concerts?|galas?|"
+                         r"red carpet|live (?:special|event|show|broadcast)s?|special events?)\b", re.I)),
     ("kids", re.compile(r"\b(?:kids|children|preschool|animated family|family animation)\b", re.I)),
     ("film", re.compile(r"\b(?:film|movie|feature)\b", re.I)),
     ("reality", re.compile(r"\b(?:reality|unscripted|competition|dating|housewives|docu[- ]?series|true crime doc)\b", re.I)),
@@ -940,6 +950,45 @@ def calibrate(title, services, start, end, drafted_people=0, *, surface="window_
         return {"people": int(round(sample * PANEL_TO_US)), "sample": int(sample), "plays": None, "basis": "factor", "factor": round(f, 4)}
     except Exception:
         return None
+
+
+_ON_AIR_WORDS = ("weekly", "daily", "airing", "on air", "on-air", "in season", "premiering")
+_LIBRARY_WORDS = ("library", "catalog", "catalogue", "archive", "ended", "binge library")
+
+
+def title_type(*hints, cadence=None, on_air=None, live=None) -> dict:
+    """The type of a Peacock title from whatever a caller knows (a genre,
+    a category, a medium, how its episodes arrive): {'kind', 'on_air',
+    'live'}. on_air is True for a season airing week to week, False for
+    a library title, None when the caller cannot say (the correction then
+    reads both). A live special, sport or news reads as live."""
+    kind = kind_of(*hints)
+    oa = on_air
+    if oa is None and cadence is not None:
+        c = str(cadence or "").strip().lower()
+        if c in _ON_AIR_WORDS:
+            oa = True
+        elif c in _LIBRARY_WORDS:
+            oa = False
+    lv = bool(live) or kind in ("sports", "news", "event", "live")
+    return {"kind": kind, "on_air": oa, "live": lv}
+
+
+def title_figure(title, start, end, drafted_people=0, *, kind="series", on_air=None, live=False, original=False):
+    """The one correction for a Peacock title figure, on every surface
+    (Jenna 2026-11-24: "cover every Peacock title figure"). A show the
+    record names reads its own figure for the window; any other Peacock
+    title reads its drafted figure times the correction its type of title
+    earns (a season on air, a library title, both when the caller cannot
+    say), at the low end: a lift is half trusted, and a figure above the
+    largest anchored show's scale for the window is held under it. A live
+    special, sport or news is never adjusted. The read lane's correction:
+    journeys, profile sizing, the matrix read, Digital Twins, Pilot
+    Testing and the partner API call this, never a copy. None leaves the
+    caller's figure as it is (no record, nothing to change). Never
+    raises. {'people', 'sample', 'basis', 'factor', 'plays'} otherwise."""
+    return calibrate(title, ["peacock"], start, end, drafted_people, surface="window_viewers",
+                     kind=kind, on_air=on_air, original=original, live=live)
 
 
 def ceiling(kind, start, end, *, live=False):
@@ -1316,5 +1365,6 @@ def observation(surface, title, ours, *, start=None, end=None, day=None, note=""
 
 __all__ = ["BUCKET", "KEY", "load", "set_cached", "available", "title_key", "is_peacock", "only_peacock", "includes_peacock",
            "match", "anchored", "display_title", "viewers", "combined", "latest_month_window", "daily_views", "episode_viewers", "kind_of",
-           "trust", "platform_factor", "calibrate", "ceiling", "component", "titles_named", "accounts_ask", "binding_block", "scale_lines",
+           "trust", "platform_factor", "calibrate", "title_type", "title_figure", "ceiling", "component", "titles_named", "accounts_ask",
+           "binding_block", "scale_lines",
            "record_figures", "leak_hits", "scrub", "observation", "VIEWERS_NOT_ACCOUNTS"]

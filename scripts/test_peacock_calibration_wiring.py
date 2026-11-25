@@ -65,7 +65,8 @@ RECORD_FIGS = pk.record_figures()
 
 print('every wire point calls the shared module')
 s_scope = src('migration', 'service_scope_sizing.py')
-check('peacock_actuals' in s_scope and 'pk.calibrate(' in s_scope and 'pk.component(' in s_scope, 'profile and tracker builds scoped to a service (service_scope_sizing.size)')
+check('peacock_actuals' in s_scope and 'pk.title_figure(' in s_scope and 'pk.component(' in s_scope and 'surface="scoped_build"' not in s_scope,
+      'profile and tracker builds scoped to a service (service_scope_sizing.size, the read lane\'s correction)')
 s_svod = src('SVOD_Churn_Attribution.py')
 i_file, i_over = s_svod.find('_pk_scale.calibrate('), s_svod.find("# Explicit override always wins (CLI --reach-us flag)")
 check('from migration import peacock_actuals as _pk_scale' in s_svod and 0 < i_file < i_over, 'Subscriber IQ reach, ahead of the explicit override')

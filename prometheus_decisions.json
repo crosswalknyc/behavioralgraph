@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "a60cd8058006a6dc9717c4da79e49342942b1ebaf76f69596967302fd1276880",
+ "content_hash": "64d771780a21a996ed8baf1b0567f7270ca7fb7b68c787d2129a54feaf00198e",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -1238,7 +1238,7 @@
   {
    "id": "peacock_title_figures",
    "decided": "2026-11-18",
-   "statement": "A title's audience on Peacock is stated in viewers (people, each counted once) and in plays. When the prompt carries Peacock title figures on file, they are binding: they take precedence over an earlier figure for the same title on Peacock, and a figure for any other window is consistent with them (a shorter window sits below a longer one). The figures on file are read month by month: a window is answered from its own months, each person counted once across them, and no month is ever another month copied flat. A Peacock title with no figure on file is read against the Peacock scale the prompt carries, and a series figure above the largest long-running drama on the service needs clear evidence of its own. A title's account count on a service is not a figure Crosswalk states: a question that asks for accounts is answered in viewers, with one plain sentence that the count is people. An answer never says where a Peacock figure comes from and never attributes a figure to the service or to a studio. This applies to Peacock only and never moves a figure for the same title on another service.",
+   "statement": "A title's audience on Peacock is stated in viewers (people, each counted once) and in plays. When the prompt carries Peacock title figures on file, they are binding: they take precedence over an earlier figure for the same title on Peacock, and a figure for any other window is consistent with them (a shorter window sits below a longer one). The figures on file are read month by month: a window is answered from its own months, each person counted once across them, and no month is ever another month copied flat. A Peacock title with no figure on file is read against the Peacock scale the prompt carries, and a series figure above the largest long-running drama on the service needs clear evidence of its own. The prompt carries these lines for a read about a Peacock title even when the question never names Peacock, and a Peacock split inside that answer follows them. A title's account count on a service is not a figure Crosswalk states: a question that asks for accounts is answered in viewers, with one plain sentence that the count is people. An answer never says where a Peacock figure comes from and never attributes a figure to the service or to a studio. This applies to Peacock only and never moves a figure for the same title on another service.",
    "match_terms": [
     "peacock",
     "on peacock",
@@ -1253,5 +1253,5 @@
    ]
   }
  ],
- "generated_at": "2026-11-24T23:24:25Z"
+ "generated_at": "2026-11-25T02:01:39Z"
 }
