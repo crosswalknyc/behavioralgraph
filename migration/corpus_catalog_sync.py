@@ -288,16 +288,19 @@ def sweep_trends(dry_run=False, top_n=25):
 
 def backfill_threads(sources, dry_run=False, max_threads=5000):
     """Every figure Prometheus stated in chat before the write hook
-    existed, banked under the subject its aliases name (2026-10-06).
-    A thread is re-read only when its ETag changed."""
+    existed, banked under the subject the turn is about (2026-10-06;
+    2026-11-25: never a subject whose name merely appears in it, see
+    corpus_catalog.turn_subjects). A turn the conversation marked
+    retired or withdrawn is never banked. A thread is re-read only when
+    its ETag changed."""
     idx = cc.load_index(force=True)
-    aliases = []
+    known = set()
     for skey, ent in (idx.get('subjects') or {}).items():
         for a in (ent.get('aliases') or []) + [ent.get('subject') or '']:
             a = str(a or '').strip()
             if len(a) >= 4:
-                aliases.append((a.lower(), ent.get('subject') or a))
-    aliases.sort(key=lambda x: -len(x[0]))
+                known.add(a)
+    known = sorted(known, key=lambda a: -len(a))
     n_threads = n_turns = 0
     present = set()
     for o in _list('system/synth_chat_threads/'):
@@ -321,6 +324,7 @@ def backfill_threads(sources, dry_run=False, max_threads=5000):
         user = parts[2] if len(parts) >= 4 else ''
         tid = parts[-1][:-5]
         prev_user = ''
+        carried = ''
         banked = 0
         for turn in (turns if isinstance(turns, list) else []):
             if not isinstance(turn, dict):
@@ -329,13 +333,16 @@ def backfill_threads(sources, dry_run=False, max_threads=5000):
             if turn.get('role') == 'user':
                 prev_user = txt
                 continue
-            if not re.search(r'\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?%', txt):
+            meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+            bound = str(meta.get('subject') or turn.get('subject') or '').strip()
+            if not re.search(r'\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?%', txt) or meta.get('retired') or meta.get('withdrawn'):
+                carried = bound or carried
                 continue
-            hay = (prev_user + ' ' + txt).lower()
-            subject = next((disp for low, disp in aliases if low in hay), '')
-            if not subject:
-                continue
-            if cc.record_answer(subject, txt, user=user, thread_id=tid):
+            about = cc.turn_subjects(txt, meta=meta, turn_subject=turn.get('subject') or '', question=prev_user,
+                                     carried=carried, base_subject=cc.subject_for_source(meta.get('s3_key'), sources),
+                                     known=known)
+            carried = bound or carried
+            if any([cc.record_answer(subj, txt, user=user, thread_id=tid, keep=keep) for subj, keep in about]):
                 banked += 1
         n_turns += banked
         # mark the thread as indexed so the next sweep skips it

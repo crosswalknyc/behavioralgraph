@@ -1613,17 +1613,212 @@ def index_bpiq(key, payload, user='', etag=None):
         return ''
 
 
-def record_answer(subject, text, user='', thread_id='', product='chat'):
+# ------------------------------------------------------- what a turn is about
+# A turn's figures are filed under what the turn is about (2026-11-25, after
+# Armine's film reads were filed under Prime Video, MovieSphere+, Tyler Perry,
+# Target and Martin Lawrence because those names appeared in the text): its
+# bound subject first, then its base profile, then the thread's subject when
+# the turn names it; a comparison files each figure under the title its
+# sentence names. With none of these, a figure files only under a known
+# subject that opens its sentence. A name in passing (after on, in, via,
+# than ..., or after the figure, or a common word like 'target') never counts.
+_TURN_SENT_RX = re.compile(r'(?<=[.!?])\s+|\n+')
+_PASSING_RX = re.compile(r"\S.*?\b(?:on|in|via|from|across|at|to|than|vs\.?|versus|with|through|inside|within|by|over|"
+                         r"under|like|including|against|into|onto|starring|featuring|beside|after|before)"
+                         r"\s+(?:the\s+)?$", re.I | re.S)   # mid-sentence only: 'For X,' / 'On X:' open the topic
+_COMPARE_SPLIT_RX = re.compile(r'\s+(?:vs\.?|versus)\s+', re.I)
+_COMPARE_ASK_RX = re.compile(r'\b(?:vs\.?|versus|compare|compared|comparison|against|side by side)\b', re.I)
+_NOT_A_SUBJECT_RX = re.compile(r'^(?:on\s+)?including\b|^(?:unique|total)\s+(?:u\.?s\.?\s+)?(?:viewers|views|plays)\b', re.I)
+
+
+def _plain(s):
+    return str(s or '').replace('\u2019', "'").replace('\u2018', "'")
+
+
+def _clean_subject(name):
+    s = ' '.join(_plain(name).split())
+    if not s or len(s) > 200 or _NOT_A_SUBJECT_RX.search(s) or not subject_key(s):
+        return ''
+    return s
+
+
+def _name_spans(text, name):
+    """Where `name` stands in `text` as a name: word-bounded, case-blind,
+    and written with a capital (so 'a target audience' is not Target)."""
+    nm = _plain(name).strip()
+    if len(nm) < 2:
+        return []
+    t = _plain(text)
+    out = []
+    for m in re.finditer(r'(?<![A-Za-z0-9])' + re.escape(nm) + r'(?![A-Za-z0-9])', t, re.I):
+        if t[m.start()].isupper() or t[m.start()].isdigit():
+            out.append(m)
+    return out
+
+
+def names_subject(text, name):
+    return bool(_name_spans(text, name))
+
+
+def leads_figure(sentence, name, names=()):
+    """True when `name` is the first known name of the sentence, before its
+    first figure and never in passing (after on, in, via, than ...)."""
+    first = _NUM_SENT_RX.search(_plain(sentence))
+    if not first:
+        return False
+    spans = []
+    for nm in set([name] + list(names or [])):
+        for m in _name_spans(sentence, nm):
+            if m.start() < first.start() and not _PASSING_RX.search(_plain(sentence)[:m.start()]):
+                spans.append((m.start(), -len(nm), nm))
+    if not spans:
+        return False
+    return min(spans)[2].lower() == _plain(name).strip().lower()
+
+
+def compared_subjects(name):
+    """['Moonfall', 'Dogma'] for 'Moonfall vs Dogma'; the titles after the
+    colon of a list ('YouTube Movies & TV Free with ads: Forever My Girl,
+    Moonfall, ...'); [] for one subject ('Anne Hathaway x Shiseido' is one
+    pairing)."""
+    s = _clean_subject(name)
+    if not s:
+        return []
+    bare = re.sub(r'\([^)]*\)?', ' ', s)    # '(61 titles: 21 films, 40 series)' is a description, never a list
+    if _COMPARE_SPLIT_RX.search(bare):
+        parts = _COMPARE_SPLIT_RX.split(bare)
+    elif ':' in bare and ',' in bare.split(':', 1)[1]:
+        parts = re.split(r',\s*|\s+and\s+', bare.split(':', 1)[1])
+    else:
+        return []
+    parts = [_clean_subject(p.strip(' .;:')) for p in parts]
+    parts = [p for p in parts if p and not p[0].isdigit()]
+    return parts if len(parts) >= 2 else []
+
+
+def _fact_sentence(f):
+    return str(f.get('note') or f.get('label') or '')
+
+
+def _keep_compared(part, parts):
+    others = [p for p in parts if p != part]
+
+    def keep(f):
+        s = _fact_sentence(f)
+        return names_subject(s, part) or not any(names_subject(s, o) for o in others)
+    return keep
+
+
+def _keep_led_by(name, names):
+    def keep(f):
+        return leads_figure(_fact_sentence(f), name, names)
+    return keep
+
+
+def turn_subjects(text, *, meta=None, turn_subject='', question='', carried='', base_subject='', known=()):
+    """[(subject, keep)] the turn's figures are filed under: `keep` is None
+    (every figure) or a test on each fact. `known` are catalog subject names
+    (display names and aliases). [] when nothing says what the turn is about."""
+    meta = meta if isinstance(meta, dict) else {}
+    bound = _clean_subject(meta.get('subject') or turn_subject or '') or _clean_subject(base_subject)
+    if not bound and carried and _clean_subject(carried) and names_subject(text, carried):
+        bound = _clean_subject(carried)
+    if bound:
+        parts = compared_subjects(bound)
+        if parts:
+            named = [p for p in parts if names_subject(text, p)]
+            if named:
+                return [(p, _keep_compared(p, parts)) for p in named]
+        return [(bound, None)]
+    low = _plain(text).lower()
+    present = [k for k in known if k and _plain(k).lower() in low and names_subject(text, k)]
+    asked = [k for k in present if any(not _PASSING_RX.search(_plain(question)[:m.start()])
+                                       for m in _name_spans(question, k))]   # 'on MovieSphere+' is never a compared title
+    if len(asked) >= 2 and _COMPARE_ASK_RX.search(_plain(question)):
+        return [(k, _keep_compared(k, asked)) for k in asked]
+    sents = [s for s in _TURN_SENT_RX.split(_plain(text)) if _NUM_SENT_RX.search(s)]
+    out, seen = [], set()
+    for k in present:
+        if subject_key(k) in seen:
+            continue
+        if any(leads_figure(s, k, present) for s in sents):
+            seen.add(subject_key(k))
+            out.append((k, _keep_led_by(k, present)))
+    return out
+
+
+def subject_for_source(s3_key, sources=None):
+    """The catalog subject a profile (or any indexed source) is filed under,
+    '' when it is not indexed."""
+    if not s3_key:
+        return ''
+    try:
+        src = (sources if sources is not None else load_sources()) or {}
+        skey = str((src.get(str(s3_key)) or {}).get('subject_key') or '')
+        if not skey:
+            return ''
+        ent = (load_index().get('subjects') or {}).get(skey) or {}
+        return str(ent.get('subject') or skey.replace('_', ' '))
+    except Exception:
+        return ''
+
+
+def unfile_source(key, skey):
+    """Take one source's facts off one subject page (a turn filed under a
+    subject it is not about), the index line following the page. The source
+    is not marked retired: it stays filed wherever it belongs. Returns the
+    number of facts removed."""
+    if not enabled() or not key or not skey:
+        return 0
+    left = {'facts': None, 'n': 0}
+
+    def _mut(doc, _key=key):
+        facts = [f for f in (doc.get('facts') or []) if isinstance(f, dict)]
+        kept = [f for f in facts if (f.get('source') or {}).get('key') != _key]
+        if len(kept) == len(facts):
+            return None
+        left['n'] = len(facts) - len(kept)
+        doc['facts'] = kept
+        doc['updated'] = _now_iso()
+        left['facts'] = list(kept)
+        return doc
+
+    _update_json(_subject_page_key(skey), _mut)
+    if left['facts'] is not None:
+        def _mut_index(doc, _skey=skey, _facts=left['facts']):
+            ent = (doc.get('subjects') or {}).get(_skey)
+            if not isinstance(ent, dict):
+                return None
+            if not _facts:
+                doc['subjects'].pop(_skey, None)
+            else:
+                ent['products'] = sorted({str(f.get('product')) for f in _facts if f.get('product')})
+                ent['n_facts'] = len(_facts)
+                ent['updated'] = _now_iso()
+            doc['updated'] = _now_iso()
+            return doc
+
+        _update_json(INDEX_KEY, _mut_index)
+        with _lock:
+            _state['index_ts'] = 0.0
+            _state['pages'].pop(skey, None)
+    return left['n']
+
+
+def record_answer(subject, text, user='', thread_id='', product='chat', keep=None):
     """Bank the figures a delivered reply states, under its subject. Never
     a reply the insights ledger holds back (Jenna 2026-11-24: a set-aside
     answer never feeds a later read, for anyone): its words were set aside,
     or it restates figures of a retired read. The write hook and the
-    thread sweep both come through here."""
+    thread sweep both come through here. `keep` (the sweep's, see
+    turn_subjects) keeps only the figures that are about this subject."""
     if not enabled() or not str(subject or '').strip():
         return ''
     try:
         facts = facts_from_answer(subject, text, user=user, thread_id=thread_id,
                                   source_label=product)
+        if callable(keep):
+            facts = [f for f in facts if keep(f)]
         if not facts:
             return ''
         key = f"thread/{user}/{thread_id}/{hashlib.sha1(str(text).encode('utf-8')).hexdigest()[:10]}"
