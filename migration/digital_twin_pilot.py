@@ -2460,11 +2460,13 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     read = {}
     act_notes = {}
     failed_acts = []
+    story_rec = None
     persona_on = False
     if cached:
         read = {int(k): {int(sk): sv for sk, sv in v.items()} for k, v in watch['by_seat'].items()}
         act_notes = watch.get('act_notes') or {}
         failed_acts = watch.get('failed_acts') or []
+        story_rec = watch.get('story')
         persona_on = bool(read)
     elif grounded:
         tell('the room is watching')
@@ -2485,6 +2487,9 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
             read = got.get('by_seat') or {}
             act_notes = got.get('act_notes') or {}
             failed_acts = got.get('failed_acts') or []
+            if got.get('mode') == 'story':   # the story so far each part was read with, and each seat's path through the cut (2026-11-24)
+                story_rec = {'stories': got.get('stories') or {}, 'memory': {str(k): v for k, v in (got.get('memory') or {}).items()},
+                             'late': got.get('story_late') or [], 'failed_parts': got.get('failed_parts') or []}
             persona_on = bool(read)
         except Exception as e:
             print(f"[pilot] persona watch skipped: {e}")
@@ -2492,6 +2497,8 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     session['watch'] = {'media_key': media_key, 'roster_sig': rsig, 'source': source, 'persona': persona_on, 'by_seat': {str(k): {str(sk): sv for sk, sv in v.items()} for k, v in read.items()},
                         'act_notes': {str(k): v for k, v in act_notes.items()}, 'failed_acts': failed_acts, 'captions_n': len(captions), 'scenes_n': len(scenes),
                         'tools': an.get('tools') or {}, 'notes': list(an.get('notes') or []), 'at': _now(), 'version': PILOT_VERSION}
+    if story_rec:
+        session['watch']['story'] = story_rec
     # the dials: prior moved by the persona read
     seat_dials = {}
     events = []
@@ -3677,6 +3684,8 @@ def public_session(sess: dict) -> dict:
     out['media'] = media
     w = out.get('watch') if isinstance(out.get('watch'), dict) else {}
     out['watch'] = {'source': w.get('source') or 'clock', 'persona': bool(w.get('persona')), 'scenes_n': w.get('scenes_n'), 'captions_n': w.get('captions_n')}
+    if isinstance(out.get('live'), dict) and ('story' in out['live'] or 'waiting' in out['live']):
+        out['live'] = {k: v for k, v in out['live'].items() if k not in ('story', 'waiting')}   # what the room is reading with stays server-side
     out.pop('transcript_raw', None)
     # the extra assets' reads travel without their caches or file keys; the options without storage keys
     reads = {}

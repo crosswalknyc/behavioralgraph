@@ -35,6 +35,7 @@ from typing import Optional
 
 from migration.digital_twin_room import regression_mode, model_available, scrub
 from migration.digital_twin_watch import EVENTS, TONES, _vision_json
+from migration import digital_twin_story as _STORY
 
 FRAME_MIN_GAP_S = 6.0          # frames closer than this are ignored (the page sends one every ~12 s)
 FRAME_MAX_BYTES = 600_000      # a 512 px JPEG is 20 to 60 KB; anything bigger is refused
@@ -64,7 +65,8 @@ LIVE_SYSTEM = (
     "characters max. Most frames earn 0 or 1 reaction; a quiet frame earns none. Never invent what is not in the frame.\n"
     "The cast: when the notes for this frame list cast on screen (confirmed by face, from the show's cast list), name them by "
     "those names, exactly as given, in the caption and in the seats' lines; anyone the notes do not list is described by what "
-    "the screen shows. Never name an actor the notes do not give for this frame, and never guess a name from a face yourself."
+    "the screen shows. Never name an actor the notes do not give for this frame, and never guess a name from a face yourself.\n"
+    + _STORY.LIVE_CONTEXT
 )
 
 
@@ -103,6 +105,9 @@ def seat_live(sess: dict, twins_by_key: dict) -> dict:
     media = (sess.get('media') or {})
     sess['live'] = {'on': True, 'frames': live.get('frames') or [], 'seat_dials': live.get('seat_dials') or {}, 'events': live.get('events') or [],
                     'started_at': live.get('started_at'), 'finished_at': None, 'finishing_at': None, 'calls': int(live.get('calls') or 0), 'failed': int(live.get('failed') or 0)}
+    for k in ('story', 'waiting'):   # the story so far and what each seat is waiting for outlive a re-seat (2026-11-24)
+        if live.get(k):
+            sess['live'][k] = live[k]
     sess['watch'] = {'source': 'live', 'persona': False, 'captions_n': len(sess['live']['frames']), 'scenes_n': len(sess['live']['frames'])}
     sess['dial'] = {'t': [], 'value': [], 'splits': {}, 'weighting': 'people'}
     sess['seat_dials'] = {}
@@ -304,7 +309,12 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     meta = sess.get('media') or {}
     recent = frames[-4:]
     seed = str(sess.get('id') or '')
-    seats_txt = '\n'.join(f"seat {r.get('seat')}: {r.get('name')}, {r.get('age')}, {r.get('city')}" + (f", cohort: {r.get('segment')}" if r.get('segment') else '') + f"; now at {dials.get(str(r.get('seat')), DEFAULT_DIAL):.0f}. {_seat_line(r)} " + _seat_who(twin, r, seed) for r in roster)
+    # the story so far up to this second and each seat's own watch so far ride on every frame (Jenna 2026-11-24)
+    story_on = _STORY.story_enabled()
+    story_due = story_on and _STORY.live_story_due(live)
+    mem = {str(r.get('seat')): _STORY.live_memory_text(live, str(r.get('seat'))) for r in roster} if story_on else {}
+    seats_txt = '\n'.join(f"seat {r.get('seat')}: {r.get('name')}, {r.get('age')}, {r.get('city')}" + (f", cohort: {r.get('segment')}" if r.get('segment') else '') + f"; now at {dials.get(str(r.get('seat')), DEFAULT_DIAL):.0f}. {_seat_line(r)} " + _seat_who(twin, r, seed)
+                           + (f". Their watch so far: {mem[str(r.get('seat'))].rstrip('.')}." if mem.get(str(r.get('seat'))) else '') for r in roster)
     # the cast on screen, by face (digital_twin_cast): prepared once per test, read on every frame
     cast_hits, cast_note = [], ''
     try:
@@ -317,13 +327,17 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         print(f"[twin-live] cast read skipped: {e}")
     head = (f"The show: {meta.get('title') or sess.get('title') or 'the cut'} ({sess.get('mode') or 'pilot'}" + (f", {sess.get('genre')}" if sess.get('genre') else '') + ")."
             + (f" Logline: {str(sess.get('logline'))[:240]}." if sess.get('logline') else '')
-            + f"\nClock: {_clock(t)}." + (" What the room has seen so far:\n" + '\n'.join(f"{_clock(f.get('t'))}: {f.get('caption')}" for f in recent) if recent else ' This is the first frame.')
+            + f"\nClock: {_clock(t)}."
+            + (_STORY.live_story_block(live) if story_on else (" What the room has seen so far:\n" + '\n'.join(f"{_clock(f.get('t'))}: {f.get('caption')}" for f in recent) if recent else ' This is the first frame.'))
             + cast_note
-            + f"\nThe seats:\n{seats_txt}")
+            + f"\nThe seats:\n{seats_txt}"
+            + ("\nUpdate the story so far with this frame: also return story_so_far and waiting." if story_due else ''))
     data = None
+    model_read = False
     if not (regression_mode() or not model_available()):
         blocks = [{'type': 'text', 'text': head}, {'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': raw}}]
-        data, model, stats = _vision_json(LIVE_SYSTEM, blocks, max_tokens=2200, usage_extras=usage_extras, surface='twin_pilot_live')
+        data, model, stats = _vision_json(LIVE_SYSTEM, blocks, max_tokens=2200 + (700 if story_due else 0), usage_extras=usage_extras, surface='twin_pilot_live')
+        model_read = isinstance(data, dict)
         live['calls'] = int(live.get('calls') or 0) + 1
         if not isinstance(data, dict):
             live['failed'] = int(live.get('failed') or 0) + 1
@@ -337,6 +351,20 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     if cast_hits:
         rec['cast'] = [str(h.get('actor') or '') for h in cast_hits if h.get('actor')]
     frames.append(rec)
+    if story_due:
+        got = data.get('story_so_far') if model_read and isinstance(data.get('story_so_far'), dict) else None
+        if got and not _STORY.is_empty(_STORY.clip_story(got)):
+            live['story'] = {'story': _STORY.clip_story(got), 't': rec['t'], 'frames': len(frames), 'at': _now()}
+        else:
+            live['story'] = {'story': _STORY.live_fallback_story(live, caption, t, rec.get('cast')), 't': rec['t'], 'frames': len(frames), 'at': _now(), 'fallback': True}
+        waiting = data.get('waiting') if model_read and isinstance(data.get('waiting'), dict) else {}
+        if waiting:
+            keep = live.setdefault('waiting', {})
+            for r in roster:
+                sno = str(r.get('seat'))
+                w = waiting.get(sno, waiting.get(int(sno)) if sno.isdigit() else None)
+                if str(w or '').strip():
+                    keep[sno] = _STORY._clean(scrub(str(w)), 12)
     # the dials: every seat moves (a missing seat keeps its reading). The read gives each seat its own thought and
     # the move that follows from it (Jenna 2026-11-03: "each seat should respond the way that persona would respond;
     # each person's dial should match what they would think, then their cohort is the aggregate of that").

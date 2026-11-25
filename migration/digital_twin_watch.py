@@ -35,12 +35,14 @@ from typing import Callable, Optional
 
 from migration.digital_twin_engine import clamp, unit
 from migration.digital_twin_room import Models, scrub, regression_mode, model_available, persona_card, _card_text, MODELS
+from migration import digital_twin_story as _STORY
 
 TONES = ('funny', 'tender', 'tense', 'action', 'wow', 'quiet', 'warm', 'curious')
 EVENTS = ('love', 'laugh', 'lean-in', 'confuse', 'check-out', 'wow')
 GENRES = ('procedural', 'drama', 'comedy', 'action', 'thriller', 'horror', 'romance', 'family', 'animation', 'documentary', 'unscripted')
 ACTS = ('open', 'setup', 'middle', 'turn', 'close', 'end')
-BUDGET_S = {'caption': 240.0, 'act': 170.0, 'battery': 90.0, 'guide': 60.0}
+BUDGET_S = {'caption': 240.0, 'act': 170.0, 'battery': 90.0, 'guide': 60.0,
+            'story': 480.0, 'recap_wait': 90.0}   # the parts in order with the story so far (2026-11-24): the whole read, and the longest a part waits for its recap
 CAPTION_BATCH = 6
 CAPTION_WORKERS = 6
 VISION_MODELS = [m for m in ((os.environ.get('DTIQ_WATCH_VISION_MODEL') or '').strip(), 'claude-sonnet-4-6', 'claude-haiku-5-5') if m]
@@ -330,15 +332,85 @@ def _scene_rows(scenes: list) -> list:
     return rows
 
 
+def _act_user(meta: dict, dur: float, act: str, sc: list, room: list, starts: dict, *, story: Optional[dict] = None,
+              memories: Optional[dict] = None, part_n: int = 0, parts: int = 0) -> str:
+    """One part's call: the cut, the part, its scenes and the seats. With
+    the story so far, the part also carries what came before and each
+    seat's own watch so far (Jenna 2026-11-24)."""
+    body = {'cut': {'title': meta.get('title') or 'the cut', 'genre': meta.get('genre') or '', 'notes': (meta.get('notes') or '')[:300],
+                    'runtime': _clock(dur), 'rough_cut': bool(meta.get('rough_cut'))},
+            'act': {'label': act, 'from': _clock(sc[0].get('t_start')), 'to': _clock(sc[-1].get('t_end'))},
+            'scenes': _scene_rows(sc),
+            'room': [dict(p, dial_at_act_start=starts[p['seat']], **({'your_watch_so_far': memories[p['seat']]} if (memories or {}).get(p['seat']) else {}))
+                     for p in room]}
+    if parts:
+        body['act']['part'] = f"{part_n} of {parts}"
+    if story:
+        body['story_so_far'] = story
+    return json.dumps(body, default=str)
+
+
+def _merge_act(out: dict, data, act: str, ids: set, cards: dict, seats: Optional[list] = None) -> Optional[dict]:
+    """The part's answer into ``out`` (by_seat, act_notes). Returns {seat:
+    {'rows': {scene id: row}, 'note': str, 'waiting_for': str}} for the
+    seats it answered, or None when the call did not answer. The caller
+    holds the lock."""
+    if not isinstance(data, dict) or not isinstance(data.get('seats'), list):
+        return None
+    allowed = set(seats) if seats is not None else None
+    got = {}
+    for row in data['seats']:
+        if not isinstance(row, dict):
+            continue
+        try:
+            seat = int(row.get('seat'))
+        except (TypeError, ValueError):
+            continue
+        if seat not in cards or (allowed is not None and seat not in allowed):
+            continue
+        seat_map = out['by_seat'].setdefault(seat, {})
+        mine = {}
+        n_events = 0
+        for sr in (row.get('scenes') or []):
+            if not isinstance(sr, dict):
+                continue
+            try:
+                sid = int(sr.get('id'))
+                dial = float(sr.get('dial'))
+            except (TypeError, ValueError):
+                continue
+            if sid not in ids:
+                continue
+            ev = str(sr.get('event') or '').strip().lower().replace('_', '-')
+            ev = {'leanin': 'lean-in', 'checkout': 'check-out', 'lost': 'confuse', 'confused': 'confuse', 'loved': 'love', 'laughed': 'laugh'}.get(ev, ev)
+            if ev not in EVENTS:
+                ev = ''
+            if ev:
+                n_events += 1
+            say = scrub(str(sr.get('say') or '').strip())[:160] if ev else ''
+            seat_map[sid] = {'dial': round(clamp(dial, 0.0, 100.0), 1), 'event': ev, 'say': say}
+            mine[sid] = seat_map[sid]
+        note = scrub(str(row.get('act_note') or '').strip())[:200]
+        if note:
+            out['act_notes'].setdefault(seat, {})[act] = note
+        got[seat] = {'rows': mine, 'note': note, 'waiting_for': scrub(str(row.get('waiting_for') or '').strip())[:120]}
+    return got
+
+
 def persona_watch(twin: dict, roster: list, scenes: list, *, cards: Optional[dict] = None, prior_start: Optional[dict] = None, meta: Optional[dict] = None,
-                  models: Optional[Models] = None, session_seed: str = '', budget_s: float = BUDGET_S['act'], usage_extras: Optional[dict] = None,
+                  models: Optional[Models] = None, session_seed: str = '', budget_s: Optional[float] = None, usage_extras: Optional[dict] = None,
                   log: Optional[Callable] = None, duration_s: float = 0) -> dict:
-    """Every seat reads every scene, act by act, all seats in one call
-    per act. Returns {by_seat: {seat: {scene_id: {dial, event, say}}},
-    act_notes: {seat: {act: note}}, acts: n, failed_acts: [..],
-    fallback: bool}. ``prior_start`` = {seat: {act: level}} from the
-    trait curve. Nothing here invents a reaction when the model is off:
-    the caller keeps the prior for those scenes."""
+    """Every seat reads every scene, act by act. Returns {by_seat: {seat:
+    {scene_id: {dial, event, say}}}, act_notes: {seat: {act: note}}, acts:
+    n, failed_acts: [..], fallback: bool}. ``prior_start`` = {seat: {act:
+    level}} from the trait curve. Nothing here invents a reaction when the
+    model is off: the caller keeps the prior for those scenes.
+
+    The parts are read in order (Jenna 2026-11-24): each part carries the
+    story so far and every seat's own watch so far, so a payoff lands
+    against the setup the seat saw (``digital_twin_story``; the result also
+    carries ``stories`` and ``memory``). DTIQ_PILOT_STORY=0 reads every part
+    on its own, all at once, as before."""
     out = {'by_seat': {}, 'act_notes': {}, 'acts': 0, 'failed_acts': [], 'fallback': False}
     if not roster or not scenes:
         out['fallback'] = True
@@ -355,16 +427,23 @@ def persona_watch(twin: dict, roster: list, scenes: list, *, cards: Optional[dic
         by_act.setdefault(a, []).append(s)
     meta = meta or {}
     room = [{'seat': int(r['seat']), 'name': r.get('name'), 'who': _seat_card_text(cards[int(r['seat'])])} for r in roster]
+    if _STORY.story_enabled():
+        _persona_watch_story(roster, cards, prior_start, meta, models, float(budget_s or BUDGET_S['story']), log, dur, by_act, room, out)
+    else:
+        _persona_watch_parallel(roster, cards, prior_start, meta, models, float(budget_s or BUDGET_S['act']), log, dur, by_act, room, out)
+    if not out['by_seat']:
+        out['fallback'] = True
+    return out
+
+
+def _persona_watch_parallel(roster, cards, prior_start, meta, models, budget_s, log, dur, by_act, room, out) -> None:
+    """Every act on its own, all at once (the read before 2026-11-24)."""
     lock = threading.Lock()
 
     def one(act):
         sc = by_act[act]
         starts = {int(r['seat']): round(float(((prior_start or {}).get(int(r['seat'])) or {}).get(act, 50.0)), 1) for r in roster}
-        user = json.dumps({'cut': {'title': meta.get('title') or 'the cut', 'genre': meta.get('genre') or '', 'notes': (meta.get('notes') or '')[:300],
-                                   'runtime': _clock(dur), 'rough_cut': bool(meta.get('rough_cut'))},
-                           'act': {'label': act, 'from': _clock(sc[0].get('t_start')), 'to': _clock(sc[-1].get('t_end'))},
-                           'scenes': _scene_rows(sc),
-                           'room': [dict(p, dial_at_act_start=starts[p['seat']]) for p in room]}, default=str)
+        user = _act_user(meta, dur, act, sc, room, starts)
         n_out = len(roster) * len(sc)
         max_tokens = int(clamp(600 + n_out * 16, 1800, 16000))
         data, call = models.call('watch', WATCH_SYSTEM, user, max_tokens=max_tokens, temperature=0.6, tools=None)
@@ -387,49 +466,128 @@ def persona_watch(twin: dict, roster: list, scenes: list, *, cards: Optional[dic
                 data = None
             with lock:
                 out['acts'] += 1
-                if not isinstance(data, dict) or not isinstance(data.get('seats'), list):
+                if _merge_act(out, data, act, {int(s['id']) for s in by_act[act]}, cards) is None:
                     out['failed_acts'].append(act)
-                    continue
-                ids = {int(s['id']) for s in by_act[act]}
-                for row in data['seats']:
-                    if not isinstance(row, dict):
-                        continue
-                    try:
-                        seat = int(row.get('seat'))
-                    except (TypeError, ValueError):
-                        continue
-                    if seat not in cards:
-                        continue
-                    seat_map = out['by_seat'].setdefault(seat, {})
-                    n_events = 0
-                    for sr in (row.get('scenes') or []):
-                        if not isinstance(sr, dict):
-                            continue
-                        try:
-                            sid = int(sr.get('id'))
-                            dial = float(sr.get('dial'))
-                        except (TypeError, ValueError):
-                            continue
-                        if sid not in ids:
-                            continue
-                        ev = str(sr.get('event') or '').strip().lower().replace('_', '-')
-                        ev = {'leanin': 'lean-in', 'checkout': 'check-out', 'lost': 'confuse', 'confused': 'confuse', 'loved': 'love', 'laughed': 'laugh'}.get(ev, ev)
-                        if ev not in EVENTS:
-                            ev = ''
-                        if ev:
-                            n_events += 1
-                        say = scrub(str(sr.get('say') or '').strip())[:160] if ev else ''
-                        seat_map[sid] = {'dial': round(clamp(dial, 0.0, 100.0), 1), 'event': ev, 'say': say}
-                    note = scrub(str(row.get('act_note') or '').strip())[:200]
-                    if note:
-                        out['act_notes'].setdefault(seat, {})[act] = note
     for f in pending:
         f.cancel()
         out['failed_acts'].append(futures[f])
     pool.shutdown(wait=False)
-    if not out['by_seat']:
-        out['fallback'] = True
-    return out
+
+
+WATCH_STORY_SYSTEM = (WATCH_SYSTEM[:WATCH_SYSTEM.rindex('Return JSON only:')] + _STORY.WATCH_CONTEXT + '\n'
+                      + 'Return JSON only: {"seats": [{"seat": <id>, "scenes": [{"id": <scene id>, "dial": <0-100>, "event": "<love|laugh|lean-in|wow|confuse|check-out or empty>", '
+                        '"say": "<line or empty>"}], "act_note": "<one sentence>", "waiting_for": "<what they are waiting to see, or empty>"}]}')
+
+
+def _persona_watch_story(roster, cards, prior_start, meta, models, budget_s, log, dur, by_act, room, out) -> None:
+    """The parts in order, each with what came before (Jenna 2026-11-24).
+
+    The story so far needs only the scenes, so its chain runs ahead from
+    the start: the story before each part is ready by the time the seats
+    reach it. The seats read in fixed groups, each group its own chain of
+    parts, so a seat's watch so far is always its own and no group waits
+    on another; a big part splits its seats so each call answers in time
+    (``digital_twin_story.ROWS_PER_CALL``)."""
+    acts = [a for a in ACTS if a in by_act]
+    rows_by_act = {a: _scene_rows(by_act[a]) for a in acts}
+    scene_rows = {int(r['id']): r for a in acts for r in rows_by_act[a]}
+    room_by_seat = {p['seat']: p for p in room}
+    lock = threading.Lock()
+    deadline = time.time() + budget_s
+    stories = {acts[0]: _STORY.empty_story()}
+    ready = {a: threading.Event() for a in acts}
+    ready[acts[0]].set()
+    out.update({'stories': {}, 'memory': {}, 'story_late': [], 'failed_parts': [], 'mode': 'story'})
+
+    state = {'closed': False}
+
+    def story_chain():
+        st = _STORY.empty_story()
+        try:
+            for i, a in enumerate(acts[:-1]):
+                if time.time() >= deadline:
+                    break
+                try:
+                    st = _STORY.update_story(st, a, rows_by_act[a], models=models, meta=meta, log=log)
+                except Exception as e:
+                    print(f"[twin-watch] the story after {a} stopped: {e}")
+                with lock:
+                    stories[acts[i + 1]] = st
+                ready[acts[i + 1]].set()
+        finally:
+            for ev in ready.values():   # a recap that stopped never holds a seat: the part reads with the latest story
+                ev.set()
+
+    seat_ids = [int(r['seat']) for r in roster]
+    groups = _STORY.seat_groups(seat_ids, max(len(v) for v in by_act.values()))
+    memory = {sid: _STORY.new_memory(((prior_start or {}).get(sid) or {}).get(acts[0], 50.0)) for sid in seat_ids}
+
+    def chain(group):
+        for i, a in enumerate(acts):
+            left = deadline - time.time()
+            if left <= 2.0:
+                with lock:
+                    out['failed_parts'].append({'part': a, 'seats': list(group)})
+                continue
+            if not ready[a].wait(timeout=max(1.0, min(BUDGET_S['recap_wait'], left - 2.0))):
+                with lock:
+                    if a not in out['story_late']:
+                        out['story_late'].append(a)
+            with lock:
+                st = stories.get(a) or next((stories[b] for b in reversed(acts[:i]) if b in stories), None)
+            sc = by_act[a]
+            starts = {sid: round(float(((prior_start or {}).get(sid) or {}).get(a, 50.0)), 1) for sid in group}
+            mem = {sid: _STORY.memory_text(memory[sid]) for sid in group} if i else {}
+            user = _act_user(meta, dur, a, sc, [room_by_seat[sid] for sid in group], starts, story=_STORY.story_for_prompt(st), memories=mem,
+                             part_n=i + 1, parts=len(acts))
+            n_out = len(group) * len(sc)
+            max_tokens = int(clamp(600 + n_out * 16 + len(group) * 40, 1800, 16000))
+            try:
+                data, call = models.call('watch', WATCH_STORY_SYSTEM, user, max_tokens=max_tokens, temperature=0.6, tools=None)
+            except Exception as e:
+                print(f"[twin-watch] part {a} failed for seats {group}: {e}")
+                data, call = None, None
+            if log and call is not None:
+                log(f"watch:{a}", call)
+            with lock:
+                if state['closed'] or time.time() > deadline:   # past the budget the read is already handed back; a late answer never lands
+                    return
+                out['acts'] += 1
+                out['stories'].setdefault(a, _STORY.story_for_prompt(st))
+                got = _merge_act(out, data, a, {int(s['id']) for s in sc}, cards, seats=group)
+                if got is None:
+                    out['failed_parts'].append({'part': a, 'seats': list(group)})
+                    continue
+                for sid in group:
+                    g = got.get(sid) or {}
+                    memory[sid] = _STORY.add_part(memory[sid], a, g.get('rows') or {}, scene_rows, note=g.get('note') or '', waiting_for=g.get('waiting_for') or '')
+
+    recap = threading.Thread(target=story_chain, name='twin-watch-story', daemon=True)
+    recap.start()
+    pool = ThreadPoolExecutor(max_workers=max(1, min(16, len(groups))))
+    futures = [pool.submit(chain, g) for g in groups]
+    pending = set(futures)
+    while pending and time.time() < deadline:
+        done, pending = wait(pending, timeout=max(0.2, min(1.0, deadline - time.time())), return_when=FIRST_COMPLETED)
+        for f in done:
+            try:
+                f.result()
+            except Exception as e:
+                print(f"[twin-watch] a seat group stopped: {e}")
+    with lock:
+        state['closed'] = True
+        for f in pending:
+            f.cancel()
+        listed = {(fp['part'], sid) for fp in out['failed_parts'] for sid in fp['seats']}
+        for a in acts:   # a seat with no reading for a part (a group still reading at the budget, a seat the answer left out) is on the habit line there
+            ids = {int(x['id']) for x in by_act[a]}
+            missing = [sid for sid in seat_ids if (a, sid) not in listed and not (ids & set((out['by_seat'].get(sid) or {}).keys()))]
+            if missing:
+                out['failed_parts'].append({'part': a, 'seats': missing})
+        out['failed_acts'] = [a for a in acts if any(fp['part'] == a for fp in out['failed_parts'])]
+        out['memory'] = {sid: dict(memory[sid]) for sid in seat_ids}
+        out['stories'] = {a: out['stories'].get(a) for a in acts if a in out['stories']}
+    pool.shutdown(wait=False)
 
 
 # ---------------------------------------------------------- the battery
